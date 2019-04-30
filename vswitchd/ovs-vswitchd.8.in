@@ -319,13 +319,12 @@ limits assume the use of the Linux kernel datapath.
 \fBovs\-vswitchd\fR started through \fBovs\-ctl\fR(8) provides a limit of 65535
 file descriptors.  The limits on the number of bridges and ports is decided by
 the availability of file descriptors.  With the Linux kernel datapath, creation
-of a single bridge consumes three file descriptors and adding a port consumes
-"n-handler-threads" file descriptors per bridge port.  Performance will degrade
-beyond 1,024 ports per bridge due to fixed hash table sizing.  Other platforms
+of a single bridge consumes three file descriptors and each port
+consumes one additional file descriptor.  Other platforms
 may have different limitations.
 .
 .IP \(bu
-2,048 MAC learning entries per bridge, by default.  (This is
+8,192 MAC learning entries per bridge, by default.  (This is
 configurable via \fBother\-config:mac\-table\-size\fR in the
 \fBBridge\fR table.  See \fBovs\-vswitchd.conf.db\fR(5) for details.)
 .
@@ -351,7 +350,10 @@ time linear in the number of flows.
 32 mirrors per bridge.
 .
 .IP \(bu
-15 bytes for the name of a port.  (This is a Linux kernel limitation.)
+15 bytes for the name of a port, for ports implemented in the Linux
+kernel.  Ports implemented in userspace, such as patch ports, do not
+have an arbitrary length limitation.  OpenFlow also limit port names
+to 15 bytes.
 .
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
