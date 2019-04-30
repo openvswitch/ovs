@@ -8,6 +8,7 @@ Post-v2.11.0
    - OpenFlow:
      * Removed support for OpenFlow 1.6 (draft), which ONF abandoned.
      * New action "check_pkt_larger".
+     * Support for OpenFlow 1.5 "meter" action.
    - Userspace datapath:
      * ICMPv6 ND enhancements: support for match and set ND options type
        and reserved fields.
