@@ -32,6 +32,9 @@
 # This is enabled by default for versions of the distribution that
 # have Python 3 by default (Fedora > 22).
 %bcond_with build_python3
+# If there is a need to automatically enable the package after installation,
+# specify the "--with autoenable"
+%bcond_with autoenable
 
 # Enable PIE, bz#955181
 %global _hardened_build 1
@@ -382,12 +385,18 @@ fi
 %endif
 
 %if 0%{?systemd_post:1}
+    # This may not enable openvswitch service or do daemon-reload.
     %systemd_post %{name}.service
 %else
     # Package install, not upgrade
     if [ $1 -eq 1 ]; then
         /bin/systemctl daemon-reload >dev/null || :
     fi
+%endif
+
+%if %{with autoenable}
+    systemctl daemon-reload
+    systemctl enable openvswitch
 %endif
 
 %post selinux-policy
