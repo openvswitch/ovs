@@ -934,7 +934,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
         nc = &connl;
         memset(nc, 0, sizeof *nc);
         memcpy(&nc->key, &ctx->key, sizeof nc->key);
-        nc->rev_key = nc->key;
+        memcpy(&nc->rev_key, &nc->key, sizeof nc->rev_key);
         conn_key_reverse(&nc->rev_key);
 
         if (ct_verify_helper(helper, ct_alg_ctl)) {
@@ -985,7 +985,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
 
                 /* Update nc with nat adjustments made to
                  * conn_for_un_nat_copy by nat_select_range_tuple(). */
-                *nc = *conn_for_un_nat_copy;
+                memcpy(nc, conn_for_un_nat_copy, sizeof *nc);
             }
             conn_for_un_nat_copy->conn_type = CT_CONN_TYPE_UN_NAT;
             conn_for_un_nat_copy->nat_info = NULL;
@@ -1076,8 +1076,8 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
                    long long now, bool alg_un_nat)
 {
     struct conn *nc = xmemdup(conn_for_un_nat_copy, sizeof *nc);
-    nc->key = conn_for_un_nat_copy->rev_key;
-    nc->rev_key = conn_for_un_nat_copy->key;
+    memcpy(&nc->key, &conn_for_un_nat_copy->rev_key, sizeof nc->key);
+    memcpy(&nc->rev_key, &conn_for_un_nat_copy->key, sizeof nc->rev_key);
     uint32_t un_nat_hash = conn_key_hash(&nc->key, ct->hash_basis);
     unsigned un_nat_conn_bucket = hash_to_bucket(un_nat_hash);
     ct_lock_lock(&ct->buckets[un_nat_conn_bucket].lock);
@@ -1266,7 +1266,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
             struct conn_lookup_ctx ctx2;
             ctx2.conn = NULL;
-            ctx2.key = conn->rev_key;
+            memcpy(&ctx2.key, &conn->rev_key, sizeof ctx2.key);
             ctx2.hash = conn_key_hash(&conn->rev_key, ct->hash_basis);
 
             ct_lock_unlock(&ct->buckets[bucket].lock);
@@ -1352,7 +1352,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
     struct conn conn_for_expectation;
     if (OVS_UNLIKELY((ct_alg_ctl != CT_ALG_CTL_NONE) && conn)) {
-        conn_for_expectation = *conn;
+        memcpy(&conn_for_expectation, conn, sizeof conn_for_expectation);
     }
 
     ct_lock_unlock(&ct->buckets[bucket].lock);
@@ -2335,8 +2335,10 @@ nat_conn_keys_insert(struct hmap *nat_conn_keys, const struct conn *nat_conn,
 
     if (!nat_conn_key_node) {
         struct nat_conn_key_node *nat_conn_key = xzalloc(sizeof *nat_conn_key);
-        nat_conn_key->key = nat_conn->rev_key;
-        nat_conn_key->value = nat_conn->key;
+        memcpy(&nat_conn_key->key, &nat_conn->rev_key,
+               sizeof nat_conn_key->key);
+        memcpy(&nat_conn_key->value, &nat_conn->key,
+               sizeof nat_conn_key->value);
         hmap_insert(nat_conn_keys, &nat_conn_key->node,
                     conn_key_hash(&nat_conn_key->key, basis));
         return true;
@@ -2742,7 +2744,8 @@ expectation_create(struct conntrack *ct, ovs_be16 dst_port,
     alg_exp_node->key.dst.port = dst_port;
     alg_exp_node->master_mark = master_conn->mark;
     alg_exp_node->master_label = master_conn->label;
-    alg_exp_node->master_key = master_conn->key;
+    memcpy(&alg_exp_node->master_key, &master_conn->key,
+           sizeof alg_exp_node->master_key);
     /* Take the write lock here because it is almost 100%
      * likely that the lookup will fail and
      * expectation_create() will be called below. */
