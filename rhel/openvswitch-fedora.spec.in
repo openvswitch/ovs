@@ -364,6 +364,12 @@ getent passwd openvswitch >/dev/null || \
     usermod -a -G hugetlbfs openvswitch
 %endif
 %endif
+
+%if %{with autoenable}
+    if [ -x "/etc/init.d/openvswitch" ]; then
+        touch %{_tmppath}/ovs-upgrade-from-sysv
+    fi
+%endif
 exit 0
 
 %post
@@ -397,6 +403,14 @@ fi
 %if %{with autoenable}
     systemctl daemon-reload
     systemctl enable openvswitch
+    # Handle upgrades to this package from the OVS repo's rhel packages.
+    # One "restart" is needed for newer systemd files to see the old running
+    # daemons. Another "restart" (outside the package postinst script) is
+    # needed to actually run new daemons.
+    if [ -e "%{_tmppath}/ovs-upgrade-from-sysv" ]; then
+        systemctl restart openvswitch
+        rm "%{_tmppath}/ovs-upgrade-from-sysv"
+    fi
 %endif
 
 %post selinux-policy
