@@ -72,7 +72,7 @@ struct thread_aux {
     unsigned tid;
 };
 
-static struct conntrack ct;
+static struct conntrack *ct;
 static unsigned long n_threads, n_pkts, batch_size;
 static bool change_conn = false;
 static struct ovs_barrier barrier;
@@ -89,7 +89,7 @@ ct_thread_main(void *aux_)
     pkt_batch = prepare_packets(batch_size, change_conn, aux->tid, &dl_type);
     ovs_barrier_block(&barrier);
     for (i = 0; i < n_pkts; i += batch_size) {
-        conntrack_execute(&ct, pkt_batch, dl_type, false, true, 0, NULL, NULL,
+        conntrack_execute(ct, pkt_batch, dl_type, false, true, 0, NULL, NULL,
                           0, 0, NULL, NULL, now);
     }
     ovs_barrier_block(&barrier);
@@ -124,7 +124,7 @@ test_benchmark(struct ovs_cmdl_context *ctx)
 
     threads = xcalloc(n_threads, sizeof *threads);
     ovs_barrier_init(&barrier, n_threads + 1);
-    conntrack_init(&ct);
+    ct = conntrack_init();
 
     /* Create threads */
     for (i = 0; i < n_threads; i++) {
@@ -144,7 +144,7 @@ test_benchmark(struct ovs_cmdl_context *ctx)
         xpthread_join(threads[i].thread, NULL);
     }
 
-    conntrack_destroy(&ct);
+    conntrack_destroy(ct);
     ovs_barrier_destroy(&barrier);
     free(threads);
 }
@@ -211,7 +211,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
 
     fatal_signal_init();
 
-    conntrack_init(&ct);
+    ct = conntrack_init();
     total_count = 0;
     for (;;) {
         struct dp_packet *packet;
@@ -229,7 +229,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
         if (dp_packet_batch_is_empty(batch)) {
             break;
         }
-        pcap_batch_execute_conntrack(&ct, batch);
+        pcap_batch_execute_conntrack(ct, batch);
 
         DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
             struct ds ds = DS_EMPTY_INITIALIZER;
@@ -244,7 +244,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
 
         dp_packet_delete_batch(batch, true);
     }
-    conntrack_destroy(&ct);
+    conntrack_destroy(ct);
     ovs_pcap_close(pcap);
 }
 
