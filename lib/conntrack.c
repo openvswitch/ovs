@@ -391,6 +391,7 @@ conntrack_destroy(struct conntrack *ct)
     ct_rwlock_unlock(&ct->resources_lock);
     ct_rwlock_destroy(&ct->resources_lock);
     ipf_destroy(ct->ipf);
+    free(ct);
 }
 
 static unsigned hash_to_bucket(uint32_t hash)
