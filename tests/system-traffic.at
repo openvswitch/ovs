@@ -3444,11 +3444,11 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=6),reply=(src=10.1.1.2,dst=10.
 ])
 
 dnl Test UDP from port 2
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000200080000 actions=resubmit(,0)"])
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000300080000 actions=resubmit(,0)"])
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000400080000 actions=resubmit(,0)"])
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000500080000 actions=resubmit(,0)"])
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000600080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000300080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000400080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000500080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000600080000 actions=resubmit(,0)"])
 
 AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,3], [0], [dnl
 default limit=10
