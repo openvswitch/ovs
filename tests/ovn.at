@@ -2883,11 +2883,10 @@ for is in 1 2 3; do
               echo $arp >> $id$jd2$kd.expected
             done
           done
-          if test $(vif_to_hv ${is}${js}${ks}) = $(vif_to_hv ${id}${jd}1); then
-              hmac=8000000000$o4
-              rmac=00000000ff$id$jd
-              echo ${hmac}${rmac}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> ${id}11.expected
-          fi
+
+          hmac=8000000000$o4
+          rmac=00000000ff$id$jd
+          echo ${hmac}${rmac}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> ${id}11.expected
 
           host_mac=8000000000$o4
           lrmac=00000000ff$id$jd
@@ -3207,6 +3206,8 @@ sha=f00000000012
 test_arp 12 $sha $spa $tpa
 OVS_WAIT_UNTIL([ovn-sbctl find mac_binding ip="192.168.1.100" | grep f0:00:00:00:00:12])
 ovn-nbctl --wait=hv sync
+# give to the hv the time to send queued ip packets
+sleep 1
 
 # Send an IP packet from lp21 to 192.168.1.100, which should go to lp12.
 
