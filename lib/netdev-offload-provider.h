@@ -91,11 +91,11 @@ int netdev_register_flow_api_provider(const struct netdev_flow_api *);
 int netdev_unregister_flow_api_provider(const char *type);
 
 #ifdef __linux__
-extern const struct netdev_flow_api netdev_tc_offloads;
+extern const struct netdev_flow_api netdev_offload_tc;
 #endif
 
 #ifdef DPDK_NETDEV
-extern const struct netdev_flow_api netdev_dpdk_offloads;
+extern const struct netdev_flow_api netdev_offload_dpdk;
 #endif
 
 #ifdef  __cplusplus

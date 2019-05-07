@@ -146,7 +146,7 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_tunnel_register();
 
-        netdev_register_flow_api_provider(&netdev_tc_offloads);
+        netdev_register_flow_api_provider(&netdev_offload_tc);
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)
         netdev_register_provider(&netdev_tap_class);

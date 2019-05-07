@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2016 Mellanox Technologies, Ltd.
  *
@@ -40,7 +39,7 @@
 #include "unaligned.h"
 #include "util.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
+VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
@@ -1599,7 +1598,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     return 0;
 }
 
-const struct netdev_flow_api netdev_tc_offloads = {
+const struct netdev_flow_api netdev_offload_tc = {
    .type = "linux_tc",
    .flow_flush = netdev_tc_flow_flush,
    .flow_dump_create = netdev_tc_flow_dump_create,

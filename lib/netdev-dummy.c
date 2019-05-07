@@ -1581,7 +1581,7 @@ netdev_dummy_offloads_init_flow_api(struct netdev *netdev)
     return is_dummy_class(netdev->netdev_class) ? 0 : EOPNOTSUPP;
 }
 
-static const struct netdev_flow_api netdev_dummy_offloads = {
+static const struct netdev_flow_api netdev_offload_dummy = {
     .type = "dummy",
     .flow_put = netdev_dummy_flow_put,
     .flow_del = netdev_dummy_flow_del,
@@ -2034,7 +2034,7 @@ netdev_dummy_register(enum dummy_level level)
     netdev_register_provider(&dummy_internal_class);
     netdev_register_provider(&dummy_pmd_class);
 
-    netdev_register_flow_api_provider(&netdev_dummy_offloads);
+    netdev_register_flow_api_provider(&netdev_offload_dummy);
 
     netdev_vport_tunnel_register();
 }
