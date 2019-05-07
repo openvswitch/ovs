@@ -19,6 +19,8 @@
 #define NETDEV_FLOW_API_PROVIDER_H 1
 
 #include "flow.h"
+#include "netdev-offload.h"
+#include "openvswitch/netdev.h"
 #include "openvswitch/types.h"
 #include "packets.h"
 
@@ -90,6 +92,10 @@ int netdev_unregister_flow_api_provider(const char *type);
 
 #ifdef __linux__
 extern const struct netdev_flow_api netdev_tc_offloads;
+#endif
+
+#ifdef DPDK_NETDEV
+extern const struct netdev_flow_api netdev_dpdk_offloads;
 #endif
 
 #ifdef  __cplusplus

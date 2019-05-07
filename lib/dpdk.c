@@ -34,7 +34,7 @@
 #include "dirs.h"
 #include "fatal-signal.h"
 #include "netdev-dpdk.h"
-#include "netdev-rte-offloads.h"
+#include "netdev-offload-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
 #include "ovs-numa.h"
@@ -455,7 +455,7 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /* Finally, register the dpdk classes */
     netdev_dpdk_register();
-    netdev_dpdk_flow_api_register();
+    netdev_register_flow_api_provider(&netdev_dpdk_offloads);
     return true;
 }
 

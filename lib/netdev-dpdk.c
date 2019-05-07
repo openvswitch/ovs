@@ -47,7 +47,6 @@
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
-#include "netdev-rte-offloads.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"

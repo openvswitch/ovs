@@ -21,6 +21,7 @@
 
 #include "connectivity.h"
 #include "netdev.h"
+#include "netdev-offload.h"
 #include "openvswitch/list.h"
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
@@ -35,19 +36,6 @@ extern "C" {
 
 struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
-
-/* Offload-capable (HW) netdev information */
-struct netdev_hw_info {
-    bool oor;		/* Out of Offload Resources ? */
-    int offload_count;  /* Pending (non-offloaded) flow count */
-    int pending_count;  /* Offloaded flow count */
-};
-
-enum hw_info_type {
-    HW_INFO_TYPE_OOR = 1,		/* OOR state */
-    HW_INFO_TYPE_PEND_COUNT = 2,	/* Pending(non-offloaded) flow count */
-    HW_INFO_TYPE_OFFL_COUNT = 3		/* Offloaded flow count */
-};
 
 /* A network device (e.g. an Ethernet device).
  *
@@ -138,13 +126,6 @@ struct netdev_rxq {
 
 struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
 
-
-struct netdev_flow_dump {
-    struct netdev *netdev;
-    odp_port_t port;
-    bool terse;
-    struct nl_dump *nl_dump;
-};
 
 /* Network device class structure, to be defined by each implementation of a
  * network device.

@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 #include <config.h>
-#include "netdev-rte-offloads.h"
 
 #include <rte_flow.h>
 
@@ -756,14 +755,9 @@ netdev_rte_offloads_init_flow_api(struct netdev *netdev)
     return netdev_dpdk_flow_api_supported(netdev) ? 0 : EOPNOTSUPP;
 }
 
-static const struct netdev_flow_api netdev_dpdk_offloads = {
+const struct netdev_flow_api netdev_dpdk_offloads = {
     .type = "dpdk_flow_api",
     .flow_put = netdev_rte_offloads_flow_put,
     .flow_del = netdev_rte_offloads_flow_del,
     .init_flow_api = netdev_rte_offloads_init_flow_api,
 };
-
-void netdev_dpdk_flow_api_register(void)
-{
-    netdev_register_flow_api_provider(&netdev_dpdk_offloads);
-}
