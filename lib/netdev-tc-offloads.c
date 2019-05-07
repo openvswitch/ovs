@@ -16,7 +16,6 @@
  */
 
 #include <config.h>
-#include "netdev-tc-offloads.h"
 
 #include <errno.h>
 #include <linux/if_ether.h>
@@ -31,6 +30,8 @@
 #include "openvswitch/util.h"
 #include "openvswitch/vlog.h"
 #include "netdev-linux.h"
+#include "netdev-offload-provider.h"
+#include "netdev-provider.h"
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "odp-netlink.h"
@@ -350,7 +351,7 @@ get_block_id_from_netdev(struct netdev *netdev)
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
@@ -368,7 +369,7 @@ netdev_tc_flow_flush(struct netdev *netdev)
     return tc_flush(ifindex, block_id, hook);
 }
 
-int
+static int
 netdev_tc_flow_dump_create(struct netdev *netdev,
                            struct netdev_flow_dump **dump_out)
 {
@@ -395,7 +396,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
 {
     nl_dump_done(dump->nl_dump);
@@ -729,7 +730,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     return 0;
 }
 
-bool
+static bool
 netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
                          struct match *match,
                          struct nlattr **actions,
@@ -1082,7 +1083,7 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
     flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
 }
 
-int
+static int
 netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                    struct nlattr *actions, size_t actions_len,
                    const ovs_u128 *ufid, struct offload_info *info,
@@ -1379,7 +1380,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     return err;
 }
 
-int
+static int
 netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
                    struct match *match,
                    struct nlattr **actions,
@@ -1434,7 +1435,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
                    const ovs_u128 *ufid,
                    struct dpif_flow_stats *stats)
@@ -1554,7 +1555,7 @@ probe_tc_block_support(int ifindex)
     }
 }
 
-int
+static int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
     static struct ovsthread_once multi_mask_once = OVSTHREAD_ONCE_INITIALIZER;
@@ -1566,8 +1567,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "init: failed to get ifindex for %s: %s",
-                    netdev_get_name(netdev), ovs_strerror(-ifindex));
+        VLOG_INFO("init: failed to get ifindex for %s: %s",
+                  netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
 
@@ -1588,8 +1589,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     error = tc_add_del_qdisc(ifindex, true, block_id, hook);
 
     if (error && error != EEXIST) {
-        VLOG_ERR("failed adding ingress qdisc required for offloading: %s",
-                 ovs_strerror(error));
+        VLOG_INFO("failed adding ingress qdisc required for offloading: %s",
+                  ovs_strerror(error));
         return error;
     }
 
@@ -1597,3 +1598,15 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     return 0;
 }
+
+const struct netdev_flow_api netdev_tc_offloads = {
+   .type = "linux_tc",
+   .flow_flush = netdev_tc_flow_flush,
+   .flow_dump_create = netdev_tc_flow_dump_create,
+   .flow_dump_destroy = netdev_tc_flow_dump_destroy,
+   .flow_dump_next = netdev_tc_flow_dump_next,
+   .flow_put = netdev_tc_flow_put,
+   .flow_get = netdev_tc_flow_get,
+   .flow_del = netdev_tc_flow_del,
+   .init_flow_api = netdev_tc_init_flow_api,
+};

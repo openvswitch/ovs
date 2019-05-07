@@ -21,6 +21,7 @@
 
 #include "cmap.h"
 #include "dpif-netdev.h"
+#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "openvswitch/match.h"
 #include "openvswitch/vlog.h"
@@ -28,6 +29,23 @@
 #include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_rte_offloads);
+
+/* Thread-safety
+ * =============
+ *
+ * Below API is NOT thread safe in following terms:
+ *
+ *  - The caller must be sure that none of these functions will be called
+ *    simultaneously.  Even for different 'netdev's.
+ *
+ *  - The caller must be sure that 'netdev' will not be destructed/deallocated.
+ *
+ *  - The caller must be sure that 'netdev' configuration will not be changed.
+ *    For example, simultaneous call of 'netdev_reconfigure()' for the same
+ *    'netdev' is forbidden.
+ *
+ * For current implementation all above restrictions could be fulfilled by
+ * taking the datapath 'port_mutex' in lib/dpif-netdev.c.  */
 
 /*
  * A mapping from ufid to dpdk rte_flow.
@@ -689,7 +707,7 @@ netdev_rte_offloads_destroy_flow(struct netdev *netdev,
     return ret;
 }
 
-int
+static int
 netdev_rte_offloads_flow_put(struct netdev *netdev, struct match *match,
                              struct nlattr *actions, size_t actions_len,
                              const ovs_u128 *ufid, struct offload_info *info,
@@ -719,7 +737,7 @@ netdev_rte_offloads_flow_put(struct netdev *netdev, struct match *match,
                                         actions_len, ufid, info);
 }
 
-int
+static int
 netdev_rte_offloads_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
                              struct dpif_flow_stats *stats OVS_UNUSED)
 {
@@ -730,4 +748,22 @@ netdev_rte_offloads_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
     }
 
     return netdev_rte_offloads_destroy_flow(netdev, ufid, rte_flow);
+}
+
+static int
+netdev_rte_offloads_init_flow_api(struct netdev *netdev)
+{
+    return netdev_dpdk_flow_api_supported(netdev) ? 0 : EOPNOTSUPP;
+}
+
+static const struct netdev_flow_api netdev_dpdk_offloads = {
+    .type = "dpdk_flow_api",
+    .flow_put = netdev_rte_offloads_flow_put,
+    .flow_del = netdev_rte_offloads_flow_del,
+    .init_flow_api = netdev_rte_offloads_init_flow_api,
+};
+
+void netdev_dpdk_flow_api_register(void)
+{
+    netdev_register_flow_api_provider(&netdev_dpdk_offloads);
 }

@@ -4212,6 +4212,27 @@ unlock:
     return err;
 }
 
+bool
+netdev_dpdk_flow_api_supported(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev;
+    bool ret = false;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        goto out;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    if (dev->type == DPDK_DEV_ETH) {
+        /* TODO: Check if we able to offload some minimal flow. */
+        ret = true;
+    }
+    ovs_mutex_unlock(&dev->mutex);
+out:
+    return ret;
+}
+
 int
 netdev_dpdk_rte_flow_destroy(struct netdev *netdev,
                              struct rte_flow *rte_flow,
@@ -4276,8 +4297,7 @@ netdev_dpdk_rte_flow_create(struct netdev *netdev,
     .get_features = netdev_dpdk_get_features,           \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
-    .rxq_recv = netdev_dpdk_rxq_recv,                   \
-    DPDK_FLOW_OFFLOAD_API
+    .rxq_recv = netdev_dpdk_rxq_recv
 
 static const struct netdev_class dpdk_class = {
     .type = "dpdk",

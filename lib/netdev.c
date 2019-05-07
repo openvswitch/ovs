@@ -39,6 +39,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "openvswitch/list.h"
+#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-netlink.h"
@@ -98,6 +99,22 @@ struct netdev_registered_class {
 
 static bool netdev_flow_api_enabled = false;
 
+/* Protects 'netdev_flow_apis'.  */
+static struct ovs_mutex netdev_flow_api_provider_mutex = OVS_MUTEX_INITIALIZER;
+
+/* Contains 'struct netdev_registered_flow_api's. */
+static struct cmap netdev_flow_apis = CMAP_INITIALIZER;
+
+struct netdev_registered_flow_api {
+    struct cmap_node cmap_node; /* In 'netdev_flow_apis', by flow_api->type. */
+    const struct netdev_flow_api *flow_api;
+
+    /* Number of references: one for the flow_api itself and one for every
+     * instance of the netdev that uses it. */
+    struct ovs_refcount refcnt;
+};
+
+
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -146,6 +163,8 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_tunnel_register();
+
+        netdev_register_flow_api_provider(&netdev_tc_offloads);
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)
         netdev_register_provider(&netdev_tap_class);
@@ -275,6 +294,87 @@ netdev_unregister_provider(const char *type)
         error = 0;
     }
     ovs_mutex_unlock(&netdev_class_mutex);
+
+    return error;
+}
+
+static struct netdev_registered_flow_api *
+netdev_lookup_flow_api(const char *type)
+{
+    struct netdev_registered_flow_api *rfa;
+    CMAP_FOR_EACH_WITH_HASH (rfa, cmap_node, hash_string(type, 0),
+                             &netdev_flow_apis) {
+        if (!strcmp(type, rfa->flow_api->type)) {
+            return rfa;
+        }
+    }
+    return NULL;
+}
+
+/* Registers a new netdev flow api provider. */
+int
+netdev_register_flow_api_provider(const struct netdev_flow_api *new_flow_api)
+    OVS_EXCLUDED(netdev_flow_api_provider_mutex)
+{
+    int error = 0;
+
+    if (!new_flow_api->init_flow_api) {
+        VLOG_WARN("attempted to register invalid flow api provider: %s",
+                   new_flow_api->type);
+        error = EINVAL;
+    }
+
+    ovs_mutex_lock(&netdev_flow_api_provider_mutex);
+    if (netdev_lookup_flow_api(new_flow_api->type)) {
+        VLOG_WARN("attempted to register duplicate flow api provider: %s",
+                   new_flow_api->type);
+        error = EEXIST;
+    } else {
+        struct netdev_registered_flow_api *rfa;
+
+        rfa = xmalloc(sizeof *rfa);
+        cmap_insert(&netdev_flow_apis, &rfa->cmap_node,
+                    hash_string(new_flow_api->type, 0));
+        rfa->flow_api = new_flow_api;
+        ovs_refcount_init(&rfa->refcnt);
+        VLOG_DBG("netdev: flow API '%s' registered.", new_flow_api->type);
+    }
+    ovs_mutex_unlock(&netdev_flow_api_provider_mutex);
+
+    return error;
+}
+
+/* Unregisters a netdev flow api provider.  'type' must have been previously
+ * registered and not currently be in use by any netdevs.  After unregistration
+ * netdev flow api of that type cannot be used for netdevs.  (However, the
+ * provider may still be accessible from other threads until the next RCU grace
+ * period, so the caller must not free or re-register the same netdev_flow_api
+ * until that has passed.) */
+int
+netdev_unregister_flow_api_provider(const char *type)
+    OVS_EXCLUDED(netdev_flow_api_provider_mutex)
+{
+    struct netdev_registered_flow_api *rfa;
+    int error;
+
+    ovs_mutex_lock(&netdev_flow_api_provider_mutex);
+    rfa = netdev_lookup_flow_api(type);
+    if (!rfa) {
+        VLOG_WARN("attempted to unregister a flow api provider that is not "
+                  "registered: %s", type);
+        error = EAFNOSUPPORT;
+    } else if (ovs_refcount_unref(&rfa->refcnt) != 1) {
+        ovs_refcount_ref(&rfa->refcnt);
+        VLOG_WARN("attempted to unregister in use flow api provider: %s",
+                  type);
+        error = EBUSY;
+    } else  {
+        cmap_remove(&netdev_flow_apis, &rfa->cmap_node,
+                    hash_string(rfa->flow_api->type, 0));
+        ovsrcu_postpone(free, rfa);
+        error = 0;
+    }
+    ovs_mutex_unlock(&netdev_flow_api_provider_mutex);
 
     return error;
 }
@@ -414,6 +514,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->reconfigure_seq = seq_create();
                 netdev->last_reconfigure_seq =
                     seq_read(netdev->reconfigure_seq);
+                ovsrcu_set(&netdev->flow_api, NULL);
                 netdev->hw_info.oor = false;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
@@ -562,6 +663,8 @@ netdev_unref(struct netdev *dev)
     ovs_assert(dev->ref_cnt);
     if (!--dev->ref_cnt) {
         const struct netdev_class *class = dev->netdev_class;
+        const struct netdev_flow_api *flow_api =
+            ovsrcu_get(const struct netdev_flow_api *, &dev->flow_api);
         struct netdev_registered_class *rc;
 
         dev->netdev_class->destruct(dev);
@@ -576,6 +679,12 @@ netdev_unref(struct netdev *dev)
 
         rc = netdev_lookup_class(class->type);
         ovs_refcount_unref(&rc->refcnt);
+
+        if (flow_api) {
+            struct netdev_registered_flow_api *rfa =
+                                    netdev_lookup_flow_api(flow_api->type);
+            ovs_refcount_unref(&rfa->refcnt);
+        }
     } else {
         ovs_mutex_unlock(&netdev_mutex);
     }
@@ -2148,34 +2257,58 @@ netdev_reconfigure(struct netdev *netdev)
             : EOPNOTSUPP);
 }
 
+static int
+netdev_assign_flow_api(struct netdev *netdev)
+{
+    struct netdev_registered_flow_api *rfa;
+
+    CMAP_FOR_EACH (rfa, cmap_node, &netdev_flow_apis) {
+        if (!rfa->flow_api->init_flow_api(netdev)) {
+            ovs_refcount_ref(&rfa->refcnt);
+            ovsrcu_set(&netdev->flow_api, rfa->flow_api);
+            VLOG_INFO("%s: Assigned flow API '%s'.",
+                      netdev_get_name(netdev), rfa->flow_api->type);
+            return 0;
+        }
+        VLOG_DBG("%s: flow API '%s' is not suitable.",
+                 netdev_get_name(netdev), rfa->flow_api->type);
+    }
+    VLOG_INFO("%s: No suitable flow API found.", netdev_get_name(netdev));
+
+    return -1;
+}
+
 int
 netdev_flow_flush(struct netdev *netdev)
 {
-    const struct netdev_class *class = netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
-    return (class->flow_flush
-            ? class->flow_flush(netdev)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_flush)
+           ? flow_api->flow_flush(netdev)
+           : EOPNOTSUPP;
 }
 
 int
 netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump)
 {
-    const struct netdev_class *class = netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
-    return (class->flow_dump_create
-            ? class->flow_dump_create(netdev, dump)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_dump_create)
+           ? flow_api->flow_dump_create(netdev, dump)
+           : EOPNOTSUPP;
 }
 
 int
 netdev_flow_dump_destroy(struct netdev_flow_dump *dump)
 {
-    const struct netdev_class *class = dump->netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &dump->netdev->flow_api);
 
-    return (class->flow_dump_destroy
-            ? class->flow_dump_destroy(dump)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_dump_destroy)
+           ? flow_api->flow_dump_destroy(dump)
+           : EOPNOTSUPP;
 }
 
 bool
@@ -2184,12 +2317,13 @@ netdev_flow_dump_next(struct netdev_flow_dump *dump, struct match *match,
                       struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
                       struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
 {
-    const struct netdev_class *class = dump->netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &dump->netdev->flow_api);
 
-    return (class->flow_dump_next
-            ? class->flow_dump_next(dump, match, actions, stats, attrs,
-                                    ufid, rbuffer, wbuffer)
-            : false);
+    return (flow_api && flow_api->flow_dump_next)
+           ? flow_api->flow_dump_next(dump, match, actions, stats, attrs,
+                                      ufid, rbuffer, wbuffer)
+           : false;
 }
 
 int
@@ -2198,12 +2332,13 @@ netdev_flow_put(struct netdev *netdev, struct match *match,
                 const ovs_u128 *ufid, struct offload_info *info,
                 struct dpif_flow_stats *stats)
 {
-    const struct netdev_class *class = netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
-    return (class->flow_put
-            ? class->flow_put(netdev, match, actions, act_len, ufid,
-                              info, stats)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_put)
+           ? flow_api->flow_put(netdev, match, actions, act_len, ufid,
+                                info, stats)
+           : EOPNOTSUPP;
 }
 
 int
@@ -2212,36 +2347,43 @@ netdev_flow_get(struct netdev *netdev, struct match *match,
                 struct dpif_flow_stats *stats,
                 struct dpif_flow_attrs *attrs, struct ofpbuf *buf)
 {
-    const struct netdev_class *class = netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
-    return (class->flow_get
-            ? class->flow_get(netdev, match, actions, ufid, stats, attrs, buf)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_get)
+           ? flow_api->flow_get(netdev, match, actions, ufid,
+                                stats, attrs, buf)
+           : EOPNOTSUPP;
 }
 
 int
 netdev_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
                 struct dpif_flow_stats *stats)
 {
-    const struct netdev_class *class = netdev->netdev_class;
+    const struct netdev_flow_api *flow_api =
+        ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
-    return (class->flow_del
-            ? class->flow_del(netdev, ufid, stats)
-            : EOPNOTSUPP);
+    return (flow_api && flow_api->flow_del)
+           ? flow_api->flow_del(netdev, ufid, stats)
+           : EOPNOTSUPP;
 }
 
 int
 netdev_init_flow_api(struct netdev *netdev)
 {
-    const struct netdev_class *class = netdev->netdev_class;
-
     if (!netdev_is_flow_api_enabled()) {
         return EOPNOTSUPP;
     }
 
-    return (class->init_flow_api
-            ? class->init_flow_api(netdev)
-            : EOPNOTSUPP);
+    if (ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api)) {
+        return 0;
+    }
+
+    if (netdev_assign_flow_api(netdev)) {
+        return EOPNOTSUPP;
+    }
+
+    return 0;
 }
 
 uint32_t
@@ -2573,7 +2715,6 @@ netdev_is_offload_rebalance_policy_enabled(void)
     return netdev_offload_rebalance_policy;
 }
 
-#ifdef __linux__
 static void
 netdev_ports_flow_init(void)
 {
@@ -2597,8 +2738,10 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
 
             VLOG_INFO("netdev: Flow API Enabled");
 
+#ifdef __linux__
             tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
                                        TC_POLICY_DEFAULT));
+#endif
 
             if (smap_get_bool(ovs_other_config, "offload-rebalance", false)) {
                 netdev_offload_rebalance_policy = true;
@@ -2610,9 +2753,3 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
         }
     }
 }
-#else
-void
-netdev_set_flow_api_enabled(const struct smap *ovs_other_config OVS_UNUSED)
-{
-}
-#endif
