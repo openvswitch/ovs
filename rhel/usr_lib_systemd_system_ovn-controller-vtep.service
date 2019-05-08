@@ -33,16 +33,16 @@ Requires=openvswitch.service
 After=openvswitch.service
 
 [Service]
-Type=simple
+Type=forking
+PIDFile=/var/run/openvswitch/ovn-controller-vtep.pid
 Restart=on-failure
-Environment=OVS_RUNDIR=%t/openvswitch
 Environment=OVN_DB=unix:%t/openvswitch/ovnsb_db.sock
 Environment=VTEP_DB=unix:%t/openvswitch/db.sock
 EnvironmentFile=-/etc/sysconfig/ovn-controller-vtep
-ExecStart=/usr/bin/ovn-controller-vtep -vconsole:emer -vsyslog:err -vfile:info \
-          --log-file=/var/log/openvswitch/ovn-controller-vtep.log \
-          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller-vtep.pid \
-          --ovnsb-db=${OVN_DB} --vtep-db=${VTEP_DB}
+ExecStart=/usr/share/openvswitch/scripts/ovn-ctl \
+          --db-sb-sock=${OVN_DB} --db-sock=${VTEP_DB} \
+          start_controller_vtep
+ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller_vtep
 
 [Install]
 WantedBy=multi-user.target
