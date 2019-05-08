@@ -450,6 +450,7 @@ stopwatch_thread(void *ign OVS_UNUSED)
                 should_exit = true;
                 break;
             }
+            free(pkt);
         }
         ovs_mutex_unlock(&stopwatches_lock);
 
