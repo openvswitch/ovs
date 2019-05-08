@@ -39,8 +39,10 @@ Restart=on-failure
 Environment=OVN_DB=unix:%t/openvswitch/ovnsb_db.sock
 Environment=VTEP_DB=unix:%t/openvswitch/db.sock
 EnvironmentFile=-/etc/sysconfig/ovn-controller-vtep
+EnvironmentFile=/run/openvswitch.useropts
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl \
           --db-sb-sock=${OVN_DB} --db-sock=${VTEP_DB} \
+          --ovn-user=${OVS_USER_ID} \
           start_controller_vtep
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller_vtep
 
