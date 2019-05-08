@@ -2572,7 +2572,7 @@ conntrack_flush(struct conntrack *ct, const uint16_t *zone)
                 }
             }
         }
-        ct_lock_unlock(&ct->buckets[i].lock);
+        ct_lock_unlock(&ctb->lock);
         ovs_mutex_unlock(&ctb->cleanup_mutex);
     }
 
