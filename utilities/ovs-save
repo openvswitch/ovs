@@ -110,6 +110,17 @@ save_flows () {
         exit 1
     fi
 
+    # OVS 2.7 and earlier do not enable OpenFlow 1.4 (by default) and lack
+    # other features needed to save and restore flows.  Don't try.
+    case `ovs-appctl version | sed 1q` in
+        "ovs-vswitchd (Open vSwitch) 1."*.*)
+            return
+            ;;
+        "ovs-vswitchd (Open vSwitch) 2."[0-7].*)
+            return
+            ;;
+    esac
+
     workdir=$(mktemp -d "${TMPDIR:-/tmp}/ovs-save.XXXXXXXXXX")
     for bridge in "$@"; do
         # Get the highest enabled OpenFlow version
