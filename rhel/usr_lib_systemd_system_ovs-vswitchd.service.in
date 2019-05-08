@@ -14,7 +14,7 @@ Restart=on-failure
 Environment=XDG_RUNTIME_DIR=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
-EnvironmentFile=-/run/openvswitch/useropts
+EnvironmentFile=-/run/openvswitch.useropts
 LimitSTACK=2M
 @begin_dpdk@
 ExecStartPre=-/bin/sh -c '/usr/bin/chown :$${OVS_USER_ID##*:} /dev/hugepages'
