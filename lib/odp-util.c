@@ -67,6 +67,10 @@ struct parse_odp_context {
 
 static int parse_odp_key_mask_attr(struct parse_odp_context *, const char *,
                                    struct ofpbuf *, struct ofpbuf *);
+
+static int parse_odp_key_mask_attr__(struct parse_odp_context *, const char *,
+                                   struct ofpbuf *, struct ofpbuf *);
+
 static void format_odp_key_attr(const struct nlattr *a,
                                 const struct nlattr *ma,
                                 const struct hmap *portno_names, struct ds *ds,
@@ -90,7 +94,10 @@ static void format_u128(struct ds *d, const ovs_32aligned_u128 *key,
                         const ovs_32aligned_u128 *mask, bool verbose);
 static int scan_u128(const char *s, ovs_u128 *value, ovs_u128 *mask);
 
-static int parse_odp_action(const char *s, const struct simap *port_names,
+static int parse_odp_action(struct parse_odp_context *context, const char *s,
+                            struct ofpbuf *actions);
+
+static int parse_odp_action__(struct parse_odp_context *context, const char *s,
                             struct ofpbuf *actions);
 
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
@@ -2183,7 +2190,7 @@ out:
 }
 
 static int
-parse_action_list(const char *s, const struct simap *port_names,
+parse_action_list(struct parse_odp_context *context, const char *s,
                   struct ofpbuf *actions)
 {
     int n = 0;
@@ -2195,7 +2202,7 @@ parse_action_list(const char *s, const struct simap *port_names,
         if (s[n] == ')') {
             break;
         }
-        retval = parse_odp_action(s + n, port_names, actions);
+        retval = parse_odp_action(context, s + n, actions);
         if (retval < 0) {
             return retval;
         }
@@ -2209,9 +2216,30 @@ parse_action_list(const char *s, const struct simap *port_names,
     return n;
 }
 
+
 static int
-parse_odp_action(const char *s, const struct simap *port_names,
+parse_odp_action(struct parse_odp_context *context, const char *s,
                  struct ofpbuf *actions)
+{
+    int retval;
+
+    context->depth++;
+
+    if (context->depth == MAX_ODP_NESTED) {
+        retval = -EINVAL;
+    } else {
+        retval = parse_odp_action__(context, s, actions);
+    }
+
+    context->depth--;
+
+    return retval;
+}
+
+
+static int
+parse_odp_action__(struct parse_odp_context *context, const char *s,
+                   struct ofpbuf *actions)
 {
     {
         uint32_t port;
@@ -2237,11 +2265,11 @@ parse_odp_action(const char *s, const struct simap *port_names,
         }
     }
 
-    if (port_names) {
+    if (context->port_names) {
         int len = strcspn(s, delimiters);
         struct simap_node *node;
 
-        node = simap_find_len(port_names, s, len);
+        node = simap_find_len(context->port_names, s, len);
         if (node) {
             nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, node->data);
             return len;
@@ -2269,12 +2297,9 @@ parse_odp_action(const char *s, const struct simap *port_names,
         struct ofpbuf maskbuf = OFPBUF_STUB_INITIALIZER(mask);
         struct nlattr *nested, *key;
         size_t size;
-        struct parse_odp_context context = (struct parse_odp_context) {
-            .port_names = port_names,
-        };
 
         start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SET);
-        retval = parse_odp_key_mask_attr(&context, s + 4, actions, &maskbuf);
+        retval = parse_odp_key_mask_attr(context, s + 4, actions, &maskbuf);
         if (retval < 0) {
             ofpbuf_uninit(&maskbuf);
             return retval;
@@ -2376,9 +2401,11 @@ parse_odp_action(const char *s, const struct simap *port_names,
 
             actions_ofs = nl_msg_start_nested(actions,
                                               OVS_SAMPLE_ATTR_ACTIONS);
-            int retval = parse_action_list(s + n, port_names, actions);
-            if (retval < 0)
+            int retval = parse_action_list(context, s + n, actions);
+            if (retval < 0) {
                 return retval;
+            }
+
 
             n += retval;
             nl_msg_end_nested(actions, actions_ofs);
@@ -2394,7 +2421,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             int n = 6;
 
             actions_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_CLONE);
-            int retval = parse_action_list(s + n, port_names, actions);
+            int retval = parse_action_list(context, s + n, actions);
             if (retval < 0) {
                 return retval;
             }
@@ -2454,7 +2481,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             if (!strncasecmp(s + n, "drop", 4)) {
                 n += 4;
             } else {
-                retval = parse_action_list(s + n, port_names, actions);
+                retval = parse_action_list(context, s + n, actions);
                 if (retval < 0) {
                     return retval;
                 }
@@ -2473,7 +2500,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             if (!strncasecmp(s + n, "drop", 4)) {
                 n += 4;
             } else {
-                retval = parse_action_list(s + n, port_names, actions);
+                retval = parse_action_list(context, s + n, actions);
                 if (retval < 0) {
                     return retval;
                 }
@@ -2506,6 +2533,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             return n;
         }
     }
+
     return -EINVAL;
 }
 
@@ -2524,6 +2552,10 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
         return 0;
     }
 
+    struct parse_odp_context context = (struct parse_odp_context) {
+        .port_names = port_names,
+    };
+
     old_size = actions->size;
     for (;;) {
         int retval;
@@ -2533,7 +2565,8 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
             return 0;
         }
 
-        retval = parse_odp_action(s, port_names, actions);
+        retval = parse_odp_action(&context, s, actions);
+
         if (retval < 0 || !strchr(delimiters, s[retval])) {
             actions->size = old_size;
             return -retval;
@@ -5591,6 +5624,25 @@ static int
 parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
+    int retval;
+
+    context->depth++;
+
+    if (context->depth == MAX_ODP_NESTED) {
+        retval = -EINVAL;
+    } else {
+        retval = parse_odp_key_mask_attr__(context, s, key, mask);
+    }
+
+    context->depth--;
+
+    return retval;
+}
+
+static int
+parse_odp_key_mask_attr__(struct parse_odp_context *context, const char *s,
+                          struct ofpbuf *key, struct ofpbuf *mask)
+{
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
     SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
     SCAN_SINGLE_FULLY_MASKED("recirc_id(", uint32_t, u32,
@@ -5736,20 +5788,15 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
     /* nsh is nested, it needs special process */
     int ret = parse_odp_nsh_key_mask_attr(s, key, mask);
     if (ret < 0) {
-       return ret;
+        return ret;
     } else {
-       s += ret;
+        s += ret;
     }
 
     /* Encap open-coded. */
     if (!strncmp(s, "encap(", 6)) {
         const char *start = s;
         size_t encap, encap_mask = 0;
-
-        if (context->depth + 1 == MAX_ODP_NESTED) {
-            return -EINVAL;
-        }
-        context->depth++;
 
         encap = nl_msg_start_nested(key, OVS_KEY_ATTR_ENCAP);
         if (mask) {
@@ -5762,7 +5809,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
 
             s += strspn(s, delimiters);
             if (!*s) {
-                context->depth--;
                 return -EINVAL;
             } else if (*s == ')') {
                 break;
@@ -5770,7 +5816,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
 
             retval = parse_odp_key_mask_attr(context, s, key, mask);
             if (retval < 0) {
-                context->depth--;
                 return retval;
             }
 
@@ -5785,7 +5830,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
         if (mask) {
             nl_msg_end_nested(mask, encap_mask);
         }
-        context->depth--;
 
         return s - start;
     }
