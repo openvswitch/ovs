@@ -118,6 +118,7 @@ Dongdong                           dongdong1@huawei.com
 Dongjun                            dongj@dtdream.com
 Duan Jiong                         djduanjiong@gmail.com
 Duffie Cooley
+Dumitru Ceara                      dceara@redhat.com
 Dustin Lundquist                   dustin@null-ptr.net
 Ed Maste                           emaste@freebsd.org
 Ed Swierk                          eswierk@skyportsystems.com
