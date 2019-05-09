@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 
+#include "cmap.h"
 #include "latch.h"
 #include "odp-netlink.h"
 #include "openvswitch/hmap.h"
@@ -38,20 +39,25 @@
  * Usage
  * =====
  *
- *     struct conntrack ct;
+ *     struct conntrack *ct;
  *
  * Initialization:
  *
- *     conntrack_init(&ct);
+ *     ct = conntrack_init();
  *
  * To send a group of packets through the connection tracker:
  *
- *     conntrack_execute(&ct, pkt_batch, ...);
+ *     conntrack_execute(ct, pkt_batch, ...);
  *
- * Thread-safety
- * =============
+ * Thread-safety:
  *
  * conntrack_execute() can be called by multiple threads simultaneoulsy.
+ *
+ * Shutdown:
+ *
+ *    1/ Shutdown packet input to the datapath
+ *    2/ Destroy PMD threads after quiescence.
+ *    3/ conntrack_destroy(ct);
  */
 
 struct dp_packet_batch;
@@ -93,7 +99,7 @@ void conntrack_clear(struct dp_packet *packet);
 struct conntrack_dump {
     struct conntrack *ct;
     unsigned bucket;
-    struct hmap_position bucket_pos;
+    struct cmap_position cm_pos;
     bool filter_zone;
     uint16_t zone;
 };
@@ -114,5 +120,4 @@ int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
 int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
 struct ipf *conntrack_ipf_ctx(struct conntrack *ct);
 
-
 #endif /* conntrack.h */

@@ -73,7 +73,7 @@ struct ct_dpif_timestamp {
     CT_DPIF_TCP_STATE(TIME_WAIT) \
     CT_DPIF_TCP_STATE(MAX_NUM)
 
-enum ct_dpif_tcp_state {
+enum OVS_PACKED_ENUM ct_dpif_tcp_state {
 #define CT_DPIF_TCP_STATE(STATE) CT_DPIF_TCPS_##STATE,
     CT_DPIF_TCP_STATES
 #undef CT_DPIF_TCP_STATE

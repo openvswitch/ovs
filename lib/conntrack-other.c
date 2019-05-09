@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015-2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "conntrack-private.h"
 #include "dp-packet.h"
 
-enum other_state {
+enum OVS_PACKED_ENUM other_state {
     OTHERS_FIRST,
     OTHERS_MULTIPLE,
     OTHERS_BIDIR,
@@ -27,7 +27,7 @@ enum other_state {
 
 struct conn_other {
     struct conn up;
-    enum other_state state;
+    enum other_state state; /* 'conn' lock protected. */
 };
 
 static const enum ct_timeout other_timeouts[] = {
@@ -43,7 +43,7 @@ conn_other_cast(const struct conn *conn)
 }
 
 static enum ct_update_res
-other_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
+other_conn_update(struct conntrack *ct, struct conn *conn_,
                   struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_other *conn = conn_other_cast(conn_);
@@ -54,7 +54,7 @@ other_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
         conn->state = OTHERS_MULTIPLE;
     }
 
-    conn_update_expiration(ctb, &conn->up, other_timeouts[conn->state], now);
+    conn_update_expiration(ct, &conn->up, other_timeouts[conn->state], now);
 
     return CT_UPDATE_VALID;
 }
@@ -66,7 +66,7 @@ other_valid_new(struct dp_packet *pkt OVS_UNUSED)
 }
 
 static struct conn *
-other_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt OVS_UNUSED,
+other_new_conn(struct conntrack *ct, struct dp_packet *pkt OVS_UNUSED,
                long long now)
 {
     struct conn_other *conn;
@@ -74,7 +74,7 @@ other_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt OVS_UNUSED,
     conn = xzalloc(sizeof *conn);
     conn->state = OTHERS_FIRST;
 
-    conn_init_expiration(ctb, &conn->up, other_timeouts[conn->state], now);
+    conn_init_expiration(ct, &conn->up, other_timeouts[conn->state], now);
 
     return &conn->up;
 }

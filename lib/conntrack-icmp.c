@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015-2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,14 +24,14 @@
 #include "conntrack-private.h"
 #include "dp-packet.h"
 
-enum icmp_state {
+enum OVS_PACKED_ENUM icmp_state {
     ICMPS_FIRST,
     ICMPS_REPLY,
 };
 
 struct conn_icmp {
     struct conn up;
-    enum icmp_state state;
+    enum icmp_state state; /* 'conn' lock protected. */
 };
 
 static const enum ct_timeout icmp_timeouts[] = {
@@ -46,16 +46,12 @@ conn_icmp_cast(const struct conn *conn)
 }
 
 static enum ct_update_res
-icmp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
+icmp_conn_update(struct conntrack *ct, struct conn *conn_,
                  struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_icmp *conn = conn_icmp_cast(conn_);
-
-    if (reply && conn->state != ICMPS_REPLY) {
-        conn->state = ICMPS_REPLY;
-    }
-
-    conn_update_expiration(ctb, &conn->up, icmp_timeouts[conn->state], now);
+    conn->state = reply ? ICMPS_REPLY : ICMPS_FIRST;
+    conn_update_expiration(ct, &conn->up, icmp_timeouts[conn->state], now);
 
     return CT_UPDATE_VALID;
 }
@@ -79,15 +75,12 @@ icmp6_valid_new(struct dp_packet *pkt)
 }
 
 static struct conn *
-icmp_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt OVS_UNUSED,
-               long long now)
+icmp_new_conn(struct conntrack *ct, struct dp_packet *pkt OVS_UNUSED,
+              long long now)
 {
-    struct conn_icmp *conn;
-
-    conn = xzalloc(sizeof *conn);
+    struct conn_icmp *conn = xzalloc(sizeof *conn);
     conn->state = ICMPS_FIRST;
-
-    conn_init_expiration(ctb, &conn->up, icmp_timeouts[conn->state], now);
+    conn_init_expiration(ct, &conn->up, icmp_timeouts[conn->state], now);
 
     return &conn->up;
 }
