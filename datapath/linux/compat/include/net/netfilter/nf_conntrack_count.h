@@ -2,6 +2,8 @@
 #define _NF_CONNTRACK_COUNT_WRAPPER_H
 
 #include <linux/list.h>
+#include <net/netfilter/nf_conntrack_tuple.h>
+#include <net/netfilter/nf_conntrack_zones.h>
 
 #ifdef HAVE_UPSTREAM_NF_CONNCOUNT
 #include_next <net/netfilter/nf_conntrack_count.h>
@@ -16,8 +18,6 @@ static inline void rpl_nf_conncount_modexit(void)
 }
 
 #else
-#include <net/netfilter/nf_conntrack_tuple.h>
-#include <net/netfilter/nf_conntrack_zones.h>
 #define CONFIG_NETFILTER_CONNCOUNT 1
 struct nf_conncount_data;
 
