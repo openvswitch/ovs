@@ -104,4 +104,13 @@ static inline bool rpl_nf_ct_delete(struct nf_conn *ct, u32 portid, int report)
 #define nf_ct_delete rpl_nf_ct_delete
 #endif /* HAVE_NF_CONN_TIMER */
 
+#ifndef HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE
+static inline unsigned int
+rpl_nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
+{
+	return nf_conntrack_in(state->net, state->pf, state->hook, skb);
+}
+#define nf_conntrack_in rpl_nf_conntrack_in
+#endif /* HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE */
+
 #endif /* _NF_CONNTRACK_CORE_WRAPPER_H */
