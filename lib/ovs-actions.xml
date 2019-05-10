@@ -532,7 +532,7 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
 
         <dt><code>controller</code></dt>
         <dd>
-          Sends and its metadata the packet to an OpenFlow controller or
+          Sends the packet and its metadata to an OpenFlow controller or
           controllers encapsulated in an OpenFlow ``packet-in'' message.  The
           separate <code>controller</code> action, described below, provides
           more options for output to a controller.
