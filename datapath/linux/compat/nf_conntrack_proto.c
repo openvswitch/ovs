@@ -1,7 +1,9 @@
 #include <linux/types.h>
 
 #include <net/netfilter/nf_conntrack.h>
+#ifdef HAVE_NF_CONNTRACK_L3PROATO_H
 #include <net/netfilter/nf_conntrack_l3proto.h>
+#endif
 
 /*
  * Upstream net-next commmit 7e35ec0e8044
