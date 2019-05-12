@@ -1876,7 +1876,8 @@
       </column>
 
       <column name="other_config" key="priority-tags"
-              type='{"type": "boolean"}'>
+              type='{"type": "string",
+                     "enum": ["set", ["never", "if-nonzero"]]}'>
         <p>
           An 802.1Q header contains two important pieces of information: a VLAN
           ID and a priority.  A frame with a zero VLAN ID, called a
@@ -1889,7 +1890,7 @@
           header at all, even when the VLAN ID is zero.  Therefore, by default
           Open vSwitch does not output priority-tagged frames, instead omitting
           the 802.1Q header entirely if the VLAN ID is zero.  Set this key to
-          <code>true</code> to enable priority-tagged frames on a port.
+          <code>if-nonzero</code> to enable priority-tagged frames on a port.
         </p>
 
         <p>

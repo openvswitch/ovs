@@ -416,6 +416,13 @@ enum port_vlan_mode {
     PORT_VLAN_DOT1Q_TUNNEL
 };
 
+/* The behaviour of the port regarding priority tags */
+enum port_priority_tags_mode {
+    PORT_PRIORITY_TAGS_NEVER = 0,
+    PORT_PRIORITY_TAGS_IF_NONZERO,
+};
+
+/* The behaviour of the port regarding priority tags */
 /* Configuration of bundles. */
 struct ofproto_bundle_settings {
     char *name;                 /* For use in log messages. */
@@ -428,7 +435,8 @@ struct ofproto_bundle_settings {
     int vlan;                   /* VLAN VID, except for PORT_VLAN_TRUNK. */
     unsigned long *trunks;      /* vlan_bitmap, except for PORT_VLAN_ACCESS. */
     unsigned long *cvlans;
-    bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
+    enum port_priority_tags_mode use_priority_tags;
+                                /* Use 802.1p tag for frames in VLAN 0? */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
 
