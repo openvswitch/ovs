@@ -1026,6 +1026,8 @@ port_configure(struct port *port)
     const char *pt = smap_get_def(&cfg->other_config, "priority-tags", "");
     if (!strcmp(pt, "if-nonzero") || !strcmp(pt, "true")) {
         s.use_priority_tags = PORT_PRIORITY_TAGS_IF_NONZERO;
+    } else if (!strcmp(pt, "always")) {
+        s.use_priority_tags = PORT_PRIORITY_TAGS_ALWAYS;
     } else {
         s.use_priority_tags = PORT_PRIORITY_TAGS_NEVER;
     }

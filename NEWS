@@ -21,6 +21,8 @@ Post-v2.11.0
      * New "ovs-appctl dpctl/ipf-get-status" command for userspace datapath
        conntrack fragmentation support.
      * New action "check_pkt_len".
+     * Port configuration with "other-config:priority-tags" now has a mode
+       that retains the 802.1Q header even if VLAN and priority are both zero.
    - OVSDB:
      * OVSDB clients can now resynchronize with clustered servers much more
        quickly after a brief disconnection, saving bandwidth and CPU time.

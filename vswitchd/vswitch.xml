@@ -1877,7 +1877,7 @@
 
       <column name="other_config" key="priority-tags"
               type='{"type": "string",
-                     "enum": ["set", ["never", "if-nonzero"]]}'>
+                     "enum": ["set", ["never", "if-nonzero", "always"]]}'>
         <p>
           An 802.1Q header contains two important pieces of information: a VLAN
           ID and a priority.  A frame with a zero VLAN ID, called a
@@ -1894,8 +1894,10 @@
         </p>
 
         <p>
-          Regardless of this setting, Open vSwitch omits the 802.1Q header on
-          output if both the VLAN ID and priority would be zero.
+          For <code>if-nonzero</code> Open vSwitch omits the 802.1Q header on
+          output if both the VLAN ID and priority would be zero. Set to
+          <code>always</code> to retain the 802.1Q header in such frames as
+          well.
         </p>
 
         <p>
