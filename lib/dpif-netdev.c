@@ -2381,7 +2381,7 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
 
     ovs_mutex_lock(&pmd->dp->port_mutex);
     port = dp_netdev_lookup_port(pmd->dp, in_port);
-    if (!port) {
+    if (!port || netdev_vport_is_vport_class(port->netdev->netdev_class)) {
         ovs_mutex_unlock(&pmd->dp->port_mutex);
         goto err_free;
     }
