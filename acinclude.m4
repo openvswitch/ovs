@@ -151,10 +151,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 18; then
+       if test "$version" = 4 && test "$patchlevel" -le 20; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.18.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.20.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -603,6 +603,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [ndo_change_mtu], [OVS_DEFINE([HAVE_RHEL7_MAX_MTU])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state],
+                        [struct net ], [OVS_DEFINE([HAVE_NF_HOOK_STATE_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
@@ -926,6 +928,17 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_KVMALLOC_ARRAY])])
   OVS_GREP_IFELSE([$KSRC/include/linux/mm.h], [kvmalloc_node],
                   [OVS_DEFINE([HAVE_KVMALLOC_NODE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_l3proto.h],
+                  [nf_conntrack_l3proto],
+                  [OVS_DEFINE([HAVE_NF_CONNTRACK_L3PROATO_H])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_core.h],
+                        [nf_conntrack_in], [nf_hook_state],
+                        [OVS_DEFINE([HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ipv6_frag.h], [IP6_DEFRAG_CONNTRACK_IN],
+                  [OVS_DEFINE([HAVE_IPV6_FRAG_H])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
+                        [nf_ct_helper_ext_add], [nf_conntrack_helper],
+                        [OVS_DEFINE([HAVE_NF_CT_HELPER_EXT_ADD_TAKES_HELPER])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
