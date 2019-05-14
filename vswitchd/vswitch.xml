@@ -406,6 +406,22 @@
         </p>
       </column>
 
+      <column name="other_config" key="vhost-postcopy-support"
+              type='{"type": "boolean"}'>
+        <p>
+          vHost post-copy is a feature which allows switching live migration
+          of VM attached to dpdkvhostuserclient port to post-copy mode if
+          default pre-copy migration can not be converged or takes too long to
+          converge.
+          Setting this value to <code>true</code> enables vHost post-copy
+          support for all dpdkvhostuserclient ports. Available starting from
+          DPDK v18.11 and QEMU 2.12.
+        </p>
+        <p>
+          Changing this value requires restarting the daemon.
+        </p>
+      </column>
+
       <column name="other_config" key="per-port-memory"
               type='{"type": "boolean"}'>
         <p>
