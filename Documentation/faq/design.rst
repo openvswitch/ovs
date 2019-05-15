@@ -73,10 +73,13 @@ Q: Why are there so many different ways to dump flows?
       Linux kernel-based datapath.  In Open vSwitch 1.10 and later,
       ovs-vswitchd merges multiple switches into a single datapath, so it will
       show all the flows on all your kernel-based switches.  This command can
-      occasionally be useful for debugging.
+      occasionally be useful for debugging.  It doesn't dump flows that was
+      offloaded to hardware.
 
     - ``ovs-appctl dpif/dump-flows <br>``, new in Open vSwitch 1.10, dumps
       datapath flows for only the specified bridge, regardless of the type.
+      Supports dumping of HW offloaded flows.  See ovs-vswitchd(8) for
+      details.
 
 Q: How does multicast snooping works with VLANs?
 
