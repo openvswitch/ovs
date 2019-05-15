@@ -466,6 +466,7 @@ static int
 pinctrl_handle_buffered_packets(const struct flow *ip_flow,
                                 struct dp_packet *pkt_in,
                                 const struct match *md, bool is_arp)
+    OVS_REQUIRES(pinctrl_mutex)
 {
     struct buffered_packets *bp;
     struct dp_packet *clone;
@@ -514,7 +515,9 @@ pinctrl_handle_arp(struct rconn *swconn, const struct flow *ip_flow,
         return;
     }
 
+    ovs_mutex_lock(&pinctrl_mutex);
     pinctrl_handle_buffered_packets(ip_flow, pkt_in, md, true);
+    ovs_mutex_unlock(&pinctrl_mutex);
 
     /* Compose an ARP packet. */
     uint64_t packet_stub[128 / 8];
@@ -3139,7 +3142,9 @@ pinctrl_handle_nd_ns(struct rconn *swconn, const struct flow *ip_flow,
         return;
     }
 
+    ovs_mutex_lock(&pinctrl_mutex);
     pinctrl_handle_buffered_packets(ip_flow, pkt_in, md, false);
+    ovs_mutex_unlock(&pinctrl_mutex);
 
     uint64_t packet_stub[128 / 8];
     struct dp_packet packet;
