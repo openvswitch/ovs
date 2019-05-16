@@ -33,9 +33,9 @@ What Is Open vSwitch?
 Overview
 --------
 
-.. NOTE(stephenfin): The below line numbers may need to be updated if the
-   README is modified
+.. NOTE(stephenfin): The below start-after/end-before may need to be updated
+   if the README is modified.
 
 .. include:: ../../README.rst
-   :start-line: 13
-   :end-line: 71
+   :start-after: What is Open vSwitch?
+   :end-before: What other documentation is available?
