@@ -19,11 +19,23 @@ function install_kernel()
         PREFIX="v2.6/longterm/v2.6.32"
     fi
 
-    url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz"
+    base_url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}"
+    # Download page with list of all available kernel versions.
+    wget ${base_url}/
+    # Uncompress in case server returned gzipped page.
+    (file index* | grep ASCII) || (mv index* index.new.gz && gunzip index*)
+    # Get version of the latest stable release.
+    hi_ver=$(echo ${1} | sed 's/\./\\\./')
+    lo_ver=$(cat ./index* | grep -P -o "${hi_ver}\.[0-9]+" | \
+             sed 's/.*\..*\.\(.*\)/\1/' | sort -h | tail -1)
+    version="${1}.${lo_ver}"
+
+    url="${base_url}/linux-${version}.tar.xz"
     # Download kernel sources. Try direct link on CDN failure.
     wget ${url} || wget ${url} || wget ${url/cdn/www}
-    tar xvf linux-${1}.tar.xz > /dev/null
-    cd linux-${1}
+
+    tar xvf linux-${version}.tar.xz > /dev/null
+    cd linux-${version}
     make allmodconfig
 
     # Cannot use CONFIG_KCOV: -fsanitize-coverage=trace-pc is not supported by compiler
