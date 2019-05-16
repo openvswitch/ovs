@@ -19,7 +19,9 @@ function install_kernel()
         PREFIX="v2.6/longterm/v2.6.32"
     fi
 
-    wget https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz
+    url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz"
+    # Download kernel sources. Try direct link on CDN failure.
+    wget ${url} || wget ${url} || wget ${url/cdn/www}
     tar xvf linux-${1}.tar.xz > /dev/null
     cd linux-${1}
     make allmodconfig
