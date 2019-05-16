@@ -1,4 +1,10 @@
 #!/bin/sh
+
+if [ $# -gt 0 ]; then
+    echo "Build from scratch."
+    ./boot.sh
+    ./configure --with-linux=/lib/modules/$(uname -r)/build
+fi
 dmesg -c >/dev/null
 make -j `nproc`
 make install
