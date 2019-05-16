@@ -2386,6 +2386,15 @@ nd_ns {
         </p>
         <p>
           For each configuration in the OVN Northbound database, that asks
+          NOT to change the source IP address of a packet with address
+          <var>A</var> is going to destination <var>B</var> or NOT to change
+          the source IP address of a packet thath belongs to network <var>A</var>
+          that is going to destination <var>B</var>, a priority-100 flow with
+          a match of <code>ip &amp;&amp; ip4.src == <var>A</var> &amp;&amp;
+          ip4.dst == <var>B</var></code> and an action of <code>next;</code>.
+        </p>
+        <p>
+          For each configuration in the OVN Northbound database, that asks
           to change the source IP address of a packet from an IP address of
           <var>A</var> or to change the source IP address of a packet that
           belongs to network <var>A</var> to <var>B</var>, a flow matches

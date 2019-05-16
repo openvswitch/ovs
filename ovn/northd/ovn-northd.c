@@ -6002,6 +6002,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             nat = op->od->nbr->nat[i];
 
+            if (!strcmp(nat->type, "passthrough")) {
+                continue;
+            }
+
             ovs_be32 ip;
             if (!ip_parse(nat->external_ip, &ip) || !ip) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -6359,19 +6363,34 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             ovs_be32 ip, mask;
 
-            char *error = ip_parse_masked(nat->external_ip, &ip, &mask);
-            if (error || mask != OVS_BE32_MAX) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad external ip %s for nat",
-                             nat->external_ip);
-                free(error);
-                continue;
+            /* Check the validity of nat->external_ip. 'external_ip' can
+             * be a subnet when the type is "passthrough". */
+            if (!strcmp(nat->type, "passthrough")) {
+                char *error = ip_parse_masked(nat->external_ip, &ip, &mask);
+                if (error) {
+                    static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(5, 1);
+                    VLOG_WARN_RL(&rl, "bad external ip %s for passthrough",
+                                 nat->external_ip);
+                    free(error);
+                    continue;
+                }
+            } else {
+                char *error = ip_parse_masked(nat->external_ip, &ip, &mask);
+                if (error || mask != OVS_BE32_MAX) {
+                    static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(5, 1);
+                    VLOG_WARN_RL(&rl, "bad external ip %s for nat",
+                                 nat->external_ip);
+                    free(error);
+                    continue;
+                }
             }
 
             /* Check the validity of nat->logical_ip. 'logical_ip' can
-             * be a subnet when the type is "snat". */
-            error = ip_parse_masked(nat->logical_ip, &ip, &mask);
-            if (!strcmp(nat->type, "snat")) {
+             * be a subnet when the type is "snat" or "passthrough". */
+            char *error = ip_parse_masked(nat->logical_ip, &ip, &mask);
+            if (!strcmp(nat->type, "snat") || !strcmp(nat->type, "passthrough")) {
                 if (error) {
                     static struct vlog_rate_limit rl =
                         VLOG_RATE_LIMIT_INIT(5, 1);
@@ -6544,6 +6563,17 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_put_format(&actions, "ct_dnat;");
                 ovn_lflow_add(lflows, od, S_ROUTER_OUT_UNDNAT, 100,
                               ds_cstr(&match), ds_cstr(&actions));
+            }
+
+            /* Egress SNAT table: Skip packets that have a specific 'passthrough'
+             * rule. */
+            if (!strcmp(nat->type, "passthrough")) {
+                ds_clear(&match);
+                ds_put_format(&match, "ip && ip4.src == %s && ip4.dst == %s",
+                              nat->logical_ip,
+                              nat->external_ip);
+                ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT, 100,
+                              ds_cstr(&match), "next;");
             }
 
             /* Egress SNAT table: Packets enter the egress pipeline with

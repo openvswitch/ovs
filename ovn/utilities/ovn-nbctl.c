@@ -3832,6 +3832,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     const char *external_ip = ctx->argv[3];
     const char *logical_ip = ctx->argv[4];
     char *new_logical_ip = NULL;
+    char *new_external_ip = NULL;
 
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
@@ -3840,20 +3841,32 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     }
 
     if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
-            && strcmp(nat_type, "dnat_and_snat")) {
-        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\" and "
+            && strcmp(nat_type, "dnat_and_snat") && strcmp(nat_type, "passthrough")) {
+        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\", \"passthrough\" and "
                   "\"dnat_and_snat\".", nat_type);
         return;
     }
 
     ovs_be32 ipv4 = 0;
     unsigned int plen;
-    if (!ip_parse(external_ip, &ipv4)) {
-        ctl_error(ctx, "%s: should be an IPv4 address.", external_ip);
-        return;
+    if (strcmp("passthrough", nat_type)) {
+        if (!ip_parse(external_ip, &ipv4)) {
+            ctl_error(ctx, "%s: should be an IPv4 address.", external_ip);
+            return;
+        }
+        new_external_ip = xstrdup(external_ip);
+    } else {
+        error = ip_parse_cidr(external_ip, &ipv4, &plen);
+        if (error) {
+            free(error);
+            ctl_error(ctx, "%s: should be an IPv4 address or network.",
+                      external_ip);
+            return;
+        }
+        new_external_ip = normalize_ipv4_prefix(ipv4, plen);
     }
 
-    if (strcmp("snat", nat_type)) {
+    if (strcmp("snat", nat_type) && strcmp("passthrough", nat_type)) {
         if (!ip_parse(logical_ip, &ipv4)) {
             ctl_error(ctx, "%s: should be an IPv4 address.", logical_ip);
             return;
@@ -3911,9 +3924,9 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     for (size_t i = 0; i < lr->n_nat; i++) {
         const struct nbrec_nat *nat = lr->nat[i];
         if (!strcmp(nat_type, nat->type)) {
-            if (!strcmp(is_snat ? new_logical_ip : external_ip,
+            if (!strcmp(is_snat ? new_logical_ip : new_external_ip,
                         is_snat ? nat->logical_ip : nat->external_ip)) {
-                if (!strcmp(is_snat ? external_ip : new_logical_ip,
+                if (!strcmp(is_snat ? new_external_ip : new_logical_ip,
                             is_snat ? nat->external_ip : nat->logical_ip)) {
                         if (may_exist) {
                             nbrec_nat_verify_logical_port(nat);
@@ -3925,7 +3938,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
                         }
                         ctl_error(ctx, "%s, %s: a NAT with this external_ip "
                                   "and logical_ip already exists",
-                                  external_ip, new_logical_ip);
+                                  new_external_ip, new_logical_ip);
                         free(new_logical_ip);
                         return;
                 } else {
@@ -3933,7 +3946,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
                               "already exists",
                               nat_type,
                               is_snat ? "logical_ip" : "external_ip",
-                              is_snat ? new_logical_ip : external_ip);
+                              is_snat ? new_logical_ip : new_external_ip);
                     free(new_logical_ip);
                     return;
                 }
@@ -3944,7 +3957,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     /* Create the NAT. */
     struct nbrec_nat *nat = nbrec_nat_insert(ctx->txn);
     nbrec_nat_set_type(nat, nat_type);
-    nbrec_nat_set_external_ip(nat, external_ip);
+    nbrec_nat_set_external_ip(nat, new_external_ip);
     nbrec_nat_set_logical_ip(nat, new_logical_ip);
     if (logical_port && external_mac) {
         nbrec_nat_set_logical_port(nat, logical_port);
@@ -3982,8 +3995,8 @@ nbctl_lr_nat_del(struct ctl_context *ctx)
 
     const char *nat_type = ctx->argv[2];
     if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
-            && strcmp(nat_type, "dnat_and_snat")) {
-        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\" and "
+            && strcmp(nat_type, "dnat_and_snat") && strcmp(nat_type, "passthrough")) {
+        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\", \"passthrough\" and "
                   "\"dnat_and_snat\".", nat_type);
         return;
     }

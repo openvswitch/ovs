@@ -2030,6 +2030,14 @@
           <ref column="external_ip"/>.
         </li>
         <li>
+          When <ref column="type"/> is <code>passthrough</code>, IP packets
+          with their source IP address that either matches the IP address
+          in <ref column="logical_ip"/> or is in the network provided by
+          <ref column="logical_ip"/> is not SNATed to destination IP address
+          in <ref column="external_ip"/> or destination network provided by
+          <ref column="external_ip"/> and is allowed to pass-through.
+        </li>
+        <li>
           When <ref column="type"/> is <code>dnat_and_snat</code>, the
           externally visible IP address <ref column="external_ip"/> is
           DNATted to the IP address <ref column="logical_ip"/> in the

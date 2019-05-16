@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.16.0",
-    "cksum": "923459061 23095",
+    "version": "5.16.1",
+    "cksum": "2460088216 23171",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -343,6 +343,7 @@
                 "type": {"type": {"key": {"type": "string",
                                            "enum": ["set", ["dnat",
                                                              "snat",
+                                                             "passthrough",
                                                              "dnat_and_snat"
                                                                ]]}}},
                 "external_ids": {
