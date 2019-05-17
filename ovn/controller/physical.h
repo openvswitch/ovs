@@ -64,4 +64,11 @@ void physical_handle_port_binding_changes(
         struct sset *active_tunnels,
         struct ovn_desired_flow_table *);
 
+void physical_handle_mc_group_changes(
+        const struct sbrec_multicast_group_table *,
+        enum mf_field_id mff_ovn_geneve,
+        const struct sbrec_chassis *,
+        const struct simap *ct_zones,
+        const struct hmap *local_datapaths,
+        struct ovn_desired_flow_table *);
 #endif /* ovn/physical.h */
