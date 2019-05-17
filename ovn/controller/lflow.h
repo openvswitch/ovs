@@ -174,6 +174,11 @@ bool lflow_handle_changed_ref(
     uint32_t *conj_id_ofs,
     bool *changed);
 
+void lflow_handle_changed_neighbors(
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_mac_binding_table *,
+    struct ovn_desired_flow_table *);
+
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

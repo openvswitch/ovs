@@ -1329,6 +1329,29 @@ flow_output_sb_logical_flow_handler(struct engine_node *node)
 }
 
 static bool
+flow_output_sb_mac_binding_handler(struct engine_node *node)
+{
+    struct ovsdb_idl_index *sbrec_port_binding_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "name");
+
+    struct sbrec_mac_binding_table *mac_binding_table =
+        (struct sbrec_mac_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_mac_binding", node));
+
+    struct ed_type_flow_output *fo =
+        (struct ed_type_flow_output *)node->data;
+    struct ovn_desired_flow_table *flow_table = &fo->flow_table;
+
+    lflow_handle_changed_neighbors(sbrec_port_binding_by_name,
+            mac_binding_table, flow_table);
+
+    node->changed = true;
+    return true;
+}
+
+static bool
 flow_output_sb_port_binding_handler(struct engine_node *node)
 {
     struct ed_type_runtime_data *data =
@@ -1771,7 +1794,8 @@ main(int argc, char *argv[])
                      flow_output_sb_multicast_group_handler);
     engine_add_input(&en_flow_output, &en_sb_port_binding,
                      flow_output_sb_port_binding_handler);
-    engine_add_input(&en_flow_output, &en_sb_mac_binding, NULL);
+    engine_add_input(&en_flow_output, &en_sb_mac_binding,
+                     flow_output_sb_mac_binding_handler);
     engine_add_input(&en_flow_output, &en_sb_logical_flow,
                      flow_output_sb_logical_flow_handler);
     engine_add_input(&en_flow_output, &en_sb_dhcp_options, NULL);

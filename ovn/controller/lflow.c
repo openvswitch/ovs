@@ -801,6 +801,40 @@ add_neighbor_flows(struct ovsdb_idl_index *sbrec_port_binding_by_name,
         consider_neighbor_flow(sbrec_port_binding_by_name, b, flow_table);
     }
 }
+
+/* Handles neighbor changes in mac_binding table. */
+void
+lflow_handle_changed_neighbors(
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_mac_binding_table *mac_binding_table,
+    struct ovn_desired_flow_table *flow_table)
+{
+
+    const struct sbrec_mac_binding *mb;
+    /* Handle deleted mac_bindings first, to avoid *duplicated flow* problem
+     * when same flow needs to be added. */
+    SBREC_MAC_BINDING_TABLE_FOR_EACH_TRACKED (mb, mac_binding_table) {
+        /* Remove any flows that should be removed. */
+        if (sbrec_mac_binding_is_deleted(mb)) {
+            VLOG_DBG("handle deleted mac_binding "UUID_FMT,
+                     UUID_ARGS(&mb->header_.uuid));
+            ofctrl_remove_flows(flow_table, &mb->header_.uuid);
+        }
+    }
+    SBREC_MAC_BINDING_TABLE_FOR_EACH_TRACKED (mb, mac_binding_table) {
+        if (!sbrec_mac_binding_is_deleted(mb)) {
+            if (!sbrec_mac_binding_is_new(mb)) {
+                VLOG_DBG("handle updated mac_binding "UUID_FMT,
+                         UUID_ARGS(&mb->header_.uuid));
+                ofctrl_remove_flows(flow_table, &mb->header_.uuid);
+            }
+            VLOG_DBG("handle new mac_binding "UUID_FMT,
+                     UUID_ARGS(&mb->header_.uuid));
+            consider_neighbor_flow(sbrec_port_binding_by_name, mb, flow_table);
+        }
+    }
+}
+
 
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
