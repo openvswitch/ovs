@@ -529,16 +529,16 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_external_ids);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_bridges);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_type);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_options);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_ofport);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_type);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_options);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_port);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_interfaces);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_external_ids);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_interfaces);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_bridge);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_ports);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_name);
@@ -642,6 +642,7 @@ main(int argc, char *argv[])
                                   &sbrec_mac_binding_col_logical_port,
                                   &sbrec_mac_binding_col_ip);
 
+    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
 
@@ -898,6 +899,9 @@ main(int argc, char *argv[])
                 }
             }
         }
+
+        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
+        ovsdb_idl_track_clear(ovs_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;
