@@ -357,6 +357,29 @@ port_groups_init(const struct sbrec_port_group_table *port_group_table,
 }
 
 static void
+port_groups_update(const struct sbrec_port_group_table *port_group_table,
+                   struct shash *port_groups, struct sset *new,
+                   struct sset *deleted, struct sset *updated)
+{
+    const struct sbrec_port_group *pg;
+    SBREC_PORT_GROUP_TABLE_FOR_EACH_TRACKED (pg, port_group_table) {
+        if (sbrec_port_group_is_deleted(pg)) {
+            expr_const_sets_remove(port_groups, pg->name);
+            sset_add(deleted, pg->name);
+        } else {
+            expr_const_sets_add(port_groups, pg->name,
+                                (const char *const *) pg->ports,
+                                pg->n_ports, false);
+            if (sbrec_port_group_is_new(pg)) {
+                sset_add(new, pg->name);
+            } else {
+                sset_add(updated, pg->name);
+            }
+        }
+    }
+}
+
+static void
 update_ssl_config(const struct ovsrec_ssl_table *ssl_table)
 {
     const struct ovsrec_ssl *ssl = ovsrec_ssl_table_first(ssl_table);
@@ -791,6 +814,30 @@ en_port_groups_run(struct engine_node *node)
 
     pg->change_tracked = false;
     node->changed = true;
+}
+
+static bool
+port_groups_sb_port_group_handler(struct engine_node *node)
+{
+    struct ed_type_port_groups *pg = (struct ed_type_port_groups *)node->data;
+
+    sset_clear(&pg->new);
+    sset_clear(&pg->deleted);
+    sset_clear(&pg->updated);
+
+    struct sbrec_port_group_table *pg_table =
+        (struct sbrec_port_group_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_group", node));
+
+    port_groups_update(pg_table, &pg->port_groups, &pg->new,
+                     &pg->deleted, &pg->updated);
+
+    node->changed = !sset_is_empty(&pg->new) || !sset_is_empty(&pg->deleted)
+                    || !sset_is_empty(&pg->updated);
+
+    pg->change_tracked = true;
+    node->changed = true;
+    return true;
 }
 
 struct ed_type_runtime_data {
@@ -1436,7 +1483,8 @@ flow_output_sb_multicast_group_handler(struct engine_node *node)
 }
 
 static bool
-flow_output_addr_sets_handler(struct engine_node *node)
+_flow_output_resource_ref_handler(struct engine_node *node,
+                                 enum ref_type ref_type)
 {
     struct ed_type_runtime_data *data =
         (struct ed_type_runtime_data *)engine_get_input(
@@ -1447,11 +1495,6 @@ flow_output_addr_sets_handler(struct engine_node *node)
 
     struct ed_type_addr_sets *as_data =
         (struct ed_type_addr_sets *)engine_get_input("addr_sets", node)->data;
-
-    /* XXX: The change_tracked check may be added to inc-proc framework. */
-    if (!as_data->change_tracked) {
-        return false;
-    }
     struct shash *addr_sets = &as_data->addr_sets;
 
     struct ed_type_port_groups *pg_data =
@@ -1510,10 +1553,35 @@ flow_output_addr_sets_handler(struct engine_node *node)
             engine_get_input("SB_logical_flow", node));
 
     bool changed;
-    const char *as;
+    const char *ref_name;
+    struct sset *new, *updated, *deleted;
 
-    SSET_FOR_EACH (as, &as_data->deleted) {
-        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+    switch (ref_type) {
+        case REF_TYPE_ADDRSET:
+            /* XXX: The change_tracked check may be added to inc-proc
+             * framework. */
+            if (!as_data->change_tracked) {
+                return false;
+            }
+            new = &as_data->new;
+            updated = &as_data->updated;
+            deleted = &as_data->deleted;
+            break;
+        case REF_TYPE_PORTGROUP:
+            if (!pg_data->change_tracked) {
+                return false;
+            }
+            new = &pg_data->new;
+            updated = &pg_data->updated;
+            deleted = &pg_data->deleted;
+            break;
+        default:
+            OVS_NOT_REACHED();
+    }
+
+
+    SSET_FOR_EACH (ref_name, deleted) {
+        if (!lflow_handle_changed_ref(ref_type, ref_name,
                     sbrec_multicast_group_by_name_datapath,
                     sbrec_port_binding_by_name,dhcp_table,
                     dhcpv6_table, logical_flow_table,
@@ -1525,8 +1593,8 @@ flow_output_addr_sets_handler(struct engine_node *node)
         }
         node->changed = changed || node->changed;
     }
-    SSET_FOR_EACH (as, &as_data->updated) {
-        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+    SSET_FOR_EACH (ref_name, updated) {
+        if (!lflow_handle_changed_ref(ref_type, ref_name,
                     sbrec_multicast_group_by_name_datapath,
                     sbrec_port_binding_by_name,dhcp_table,
                     dhcpv6_table, logical_flow_table,
@@ -1538,8 +1606,8 @@ flow_output_addr_sets_handler(struct engine_node *node)
         }
         node->changed = changed || node->changed;
     }
-    SSET_FOR_EACH (as, &as_data->new) {
-        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+    SSET_FOR_EACH (ref_name, new) {
+        if (!lflow_handle_changed_ref(ref_type, ref_name,
                     sbrec_multicast_group_by_name_datapath,
                     sbrec_port_binding_by_name,dhcp_table,
                     dhcpv6_table, logical_flow_table,
@@ -1553,6 +1621,18 @@ flow_output_addr_sets_handler(struct engine_node *node)
     }
 
     return true;
+}
+
+static bool
+flow_output_addr_sets_handler(struct engine_node *node)
+{
+    return _flow_output_resource_ref_handler(node, REF_TYPE_ADDRSET);
+}
+
+static bool
+flow_output_port_groups_handler(struct engine_node *node)
+{
+    return _flow_output_resource_ref_handler(node, REF_TYPE_PORTGROUP);
 }
 
 struct ovn_controller_exit_args {
@@ -1672,11 +1752,13 @@ main(int argc, char *argv[])
 
     engine_add_input(&en_addr_sets, &en_sb_address_set,
                      addr_sets_sb_address_set_handler);
-    engine_add_input(&en_port_groups, &en_sb_port_group, NULL);
+    engine_add_input(&en_port_groups, &en_sb_port_group,
+                     port_groups_sb_port_group_handler);
 
     engine_add_input(&en_flow_output, &en_addr_sets,
                      flow_output_addr_sets_handler);
-    engine_add_input(&en_flow_output, &en_port_groups, NULL);
+    engine_add_input(&en_flow_output, &en_port_groups,
+                     flow_output_port_groups_handler);
     engine_add_input(&en_flow_output, &en_runtime_data, NULL);
     engine_add_input(&en_flow_output, &en_mff_ovn_geneve, NULL);
 

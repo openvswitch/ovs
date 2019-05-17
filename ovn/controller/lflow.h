@@ -70,7 +70,8 @@ struct uuid;
 #define LOG_PIPELINE_LEN 24
 
 enum ref_type {
-    REF_TYPE_ADDRSET
+    REF_TYPE_ADDRSET,
+    REF_TYPE_PORTGROUP
 };
 
 /* Maintains the relationship for a pair of named resource and
