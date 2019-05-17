@@ -962,6 +962,8 @@ struct ed_type_flow_output {
     struct ovn_extend_table meter_table;
     /* conjunction id offset */
     uint32_t conj_id_ofs;
+    /* lflow resource cross reference */
+    struct lflow_resource_ref lflow_resource_ref;
 };
 
 static void
@@ -973,6 +975,7 @@ en_flow_output_init(struct engine_node *node)
     ovn_extend_table_init(&data->group_table);
     ovn_extend_table_init(&data->meter_table);
     data->conj_id_ofs = 1;
+    lflow_resource_init(&data->lflow_resource_ref);
 }
 
 static void
@@ -983,6 +986,7 @@ en_flow_output_cleanup(struct engine_node *node)
     ovn_desired_flow_table_destroy(&data->flow_table);
     ovn_extend_table_destroy(&data->group_table);
     ovn_extend_table_destroy(&data->meter_table);
+    lflow_resource_destroy(&data->lflow_resource_ref);
 }
 
 static void
@@ -1033,6 +1037,7 @@ en_flow_output_run(struct engine_node *node)
     struct ovn_extend_table *group_table = &fo->group_table;
     struct ovn_extend_table *meter_table = &fo->meter_table;
     uint32_t *conj_id_ofs = &fo->conj_id_ofs;
+    struct lflow_resource_ref *lfrr = &fo->lflow_resource_ref;
 
     static bool first_run = true;
     if (first_run) {
@@ -1041,6 +1046,7 @@ en_flow_output_run(struct engine_node *node)
         ovn_desired_flow_table_clear(flow_table);
         ovn_extend_table_clear(group_table, false /* desired */);
         ovn_extend_table_clear(meter_table, false /* desired */);
+        lflow_resource_clear(lfrr);
     }
 
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath =
@@ -1077,7 +1083,8 @@ en_flow_output_run(struct engine_node *node)
               mac_binding_table,
               chassis, local_datapaths, addr_sets,
               port_groups, active_tunnels, local_lport_ids,
-              flow_table, group_table, meter_table, conj_id_ofs);
+              flow_table, group_table, meter_table, lfrr,
+              conj_id_ofs);
 
     struct sbrec_multicast_group_table *multicast_group_table =
         (struct sbrec_multicast_group_table *)EN_OVSDB_GET(
@@ -1139,6 +1146,7 @@ flow_output_sb_logical_flow_handler(struct engine_node *node)
     struct ovn_extend_table *group_table = &fo->group_table;
     struct ovn_extend_table *meter_table = &fo->meter_table;
     uint32_t *conj_id_ofs = &fo->conj_id_ofs;
+    struct lflow_resource_ref *lfrr = &fo->lflow_resource_ref;
 
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath =
         engine_ovsdb_node_get_index(
@@ -1169,7 +1177,8 @@ flow_output_sb_logical_flow_handler(struct engine_node *node)
               logical_flow_table,
               local_datapaths, chassis, addr_sets,
               port_groups, active_tunnels, local_lport_ids,
-              flow_table, group_table, meter_table, conj_id_ofs);
+              flow_table, group_table, meter_table, lfrr,
+              conj_id_ofs);
 
     node->changed = true;
     return handled;
