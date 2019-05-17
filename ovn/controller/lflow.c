@@ -193,6 +193,88 @@ add_logical_flows(
     nd_ra_opts_destroy(&nd_ra_opts);
 }
 
+bool
+lflow_handle_changed_flows(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *dhcp_options_table,
+    const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+    const struct sbrec_logical_flow_table *logical_flow_table,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *chassis,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *flow_table,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    uint32_t *conj_id_ofs)
+{
+    bool ret = true;
+    const struct sbrec_logical_flow *lflow;
+
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_TABLE_FOR_EACH (dhcp_opt_row, dhcp_options_table) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
+
+    const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
+    SBREC_DHCPV6_OPTIONS_TABLE_FOR_EACH (dhcpv6_opt_row,
+                                         dhcpv6_options_table) {
+       dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
+                    dhcpv6_opt_row->type);
+    }
+
+    struct hmap nd_ra_opts = HMAP_INITIALIZER(&nd_ra_opts);
+    nd_ra_opts_init(&nd_ra_opts);
+
+    /* Handle removed flows first, and then other flows, so that when
+     * the flows being added and removed have same match conditions
+     * can be processed in the proper order */
+    SBREC_LOGICAL_FLOW_TABLE_FOR_EACH_TRACKED (lflow, logical_flow_table) {
+        /* Remove any flows that should be removed. */
+        if (sbrec_logical_flow_is_deleted(lflow)) {
+            VLOG_DBG("handle deleted lflow "UUID_FMT,
+                     UUID_ARGS(&lflow->header_.uuid));
+            ofctrl_remove_flows(flow_table, &lflow->header_.uuid);
+        }
+    }
+    SBREC_LOGICAL_FLOW_TABLE_FOR_EACH_TRACKED (lflow, logical_flow_table) {
+        if (!sbrec_logical_flow_is_deleted(lflow)) {
+            /* Now, add/modify existing flows. If the logical
+             * flow is a modification, just remove the flows
+             * for this row, and then add new flows. */
+            if (!sbrec_logical_flow_is_new(lflow)) {
+                VLOG_DBG("handle updated lflow "UUID_FMT,
+                         UUID_ARGS(&lflow->header_.uuid));
+                ofctrl_remove_flows(flow_table, &lflow->header_.uuid);
+            }
+            VLOG_DBG("handle new lflow "UUID_FMT,
+                     UUID_ARGS(&lflow->header_.uuid));
+            if (!consider_logical_flow(sbrec_multicast_group_by_name_datapath,
+                                       sbrec_port_binding_by_name,
+                                       lflow, local_datapaths,
+                                       chassis, &dhcp_opts, &dhcpv6_opts,
+                                       &nd_ra_opts, addr_sets, port_groups,
+                                       active_tunnels, local_lport_ids,
+                                       flow_table, group_table, meter_table,
+                                       conj_id_ofs)) {
+                ret = false;
+                break;
+            }
+        }
+    }
+    dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
+    nd_ra_opts_destroy(&nd_ra_opts);
+    return ret;
+}
+
 static bool
 update_conj_id_ofs(uint32_t *conj_id_ofs, uint32_t n_conjs)
 {

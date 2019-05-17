@@ -83,6 +83,23 @@ void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                struct ovn_extend_table *meter_table,
                uint32_t *conj_id_ofs);
 
+bool lflow_handle_changed_flows(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *,
+    const struct sbrec_dhcpv6_options_table *,
+    const struct sbrec_logical_flow_table *,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    uint32_t *conj_id_ofs);
+
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */
