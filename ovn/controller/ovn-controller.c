@@ -1134,6 +1134,110 @@ flow_output_sb_logical_flow_handler(struct engine_node *node)
     return handled;
 }
 
+static bool
+flow_output_sb_port_binding_handler(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)engine_get_input(
+                "runtime_data", node)->data;
+    struct hmap *local_datapaths = &data->local_datapaths;
+    struct sset *active_tunnels = &data->active_tunnels;
+    struct simap *ct_zones = &data->ct_zones;
+
+    struct ed_type_mff_ovn_geneve *ed_mff_ovn_geneve =
+        (struct ed_type_mff_ovn_geneve *)engine_get_input(
+            "mff_ovn_geneve", node)->data;
+    enum mf_field_id mff_ovn_geneve = ed_mff_ovn_geneve->mff_ovn_geneve;
+
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
+    const char *chassis_id = get_chassis_id(ovs_table);
+
+    struct ovsdb_idl_index *sbrec_chassis_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_chassis", node),
+                "name");
+    const struct sbrec_chassis *chassis = NULL;
+    if (chassis_id) {
+        chassis = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    }
+    ovs_assert(br_int && chassis);
+
+    struct ed_type_flow_output *fo =
+        (struct ed_type_flow_output *)node->data;
+    struct ovn_desired_flow_table *flow_table = &fo->flow_table;
+
+    struct ovsdb_idl_index *sbrec_port_binding_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "name");
+
+    struct sbrec_port_binding_table *port_binding_table =
+        (struct sbrec_port_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_binding", node));
+
+    /* XXX: now we handle port-binding changes for physical flow processing
+     * only, but port-binding change can have impact to logical flow
+     * processing, too, in below circumstances:
+     *
+     *  - When a port-binding for a lport is inserted/deleted but the lflow
+     *    using that lport doesn't change.
+     *
+     *    This can happen only when the lport name is used by ACL match
+     *    condition, which is specified by user. Even in that case, if the port
+     *    is actually bound on the current chassis it will trigger recompute on
+     *    that chassis since ovs interface would be updated. So the only
+     *    situation this would have real impact is when user defines an ACL
+     *    that includes lport that is not on current chassis, and there is a
+     *    port-binding creation/deletion related to that lport.e.g.: an ACL is
+     *    defined:
+     *
+     *    to-lport 1000 'outport=="A" && inport=="B"' allow-related
+     *
+     *    If "A" is on current chassis, but "B" is lport that hasn't been
+     *    created yet. When a lport "B" is created and bound on another
+     *    chassis, the ACL will not take effect on the current chassis until a
+     *    recompute is triggered later. This case doesn't seem to be a problem
+     *    for real world use cases because usually lport is created before
+     *    being referenced by name in ACLs.
+     *
+     *  - When is_chassis_resident(<lport>) is used in lflow. In this case the
+     *    port binding is not a regular VIF. It can be either "patch" or
+     *    "external", with ha-chassis-group assigned.  In current
+     *    "runtime_data" handling, port-binding changes for these types always
+     *    trigger recomputing. So it is fine even if we do not handle it here.
+     *    (due to the ovsdb tracking support for referenced table changes,
+     *    ha-chassis-group changes will appear as port-binding change).
+     *
+     *  - When a mac-binding doesn't change but the port-binding related to
+     *    that mac-binding is deleted. In this case the neighbor flow generated
+     *    for the mac-binding should be deleted. This would not cause any real
+     *    issue for now, since the port-binding related to mac-binding is
+     *    always logical router port, and any change to logical router port
+     *    would just trigger recompute.
+     *
+     * Although there is no correctness issue so far (except the unusual ACL
+     * use case, which doesn't seem to be a real problem), it might be better
+     * to handle this more gracefully, without the need to consider these
+     * tricky scenarios.  One approach is to maintain a mapping between lport
+     * names and the lflows that uses them, and reprocess the related lflows
+     * when related port-bindings change.
+     */
+    physical_handle_port_binding_changes(
+            sbrec_port_binding_by_name,
+            port_binding_table, mff_ovn_geneve,
+            chassis, ct_zones, local_datapaths,
+            active_tunnels, flow_table);
+
+    node->changed = true;
+    return true;
+}
+
 struct ovn_controller_exit_args {
     bool *exiting;
     bool *restart;
@@ -1253,7 +1357,8 @@ main(int argc, char *argv[])
     engine_add_input(&en_flow_output, &en_sb_chassis, NULL);
     engine_add_input(&en_flow_output, &en_sb_encap, NULL);
     engine_add_input(&en_flow_output, &en_sb_multicast_group, NULL);
-    engine_add_input(&en_flow_output, &en_sb_port_binding, NULL);
+    engine_add_input(&en_flow_output, &en_sb_port_binding,
+                     flow_output_sb_port_binding_handler);
     engine_add_input(&en_flow_output, &en_sb_mac_binding, NULL);
     engine_add_input(&en_flow_output, &en_sb_logical_flow,
                      flow_output_sb_logical_flow_handler);

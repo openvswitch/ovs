@@ -54,5 +54,14 @@ void physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                   const struct sset *local_lports,
                   const struct sset *active_tunnels,
                   struct ovn_desired_flow_table *);
+void physical_handle_port_binding_changes(
+        struct ovsdb_idl_index *sbrec_port_binding_by_name,
+        const struct sbrec_port_binding_table *,
+        enum mf_field_id mff_ovn_geneve,
+        const struct sbrec_chassis *,
+        const struct simap *ct_zones,
+        struct hmap *local_datapaths,
+        struct sset *active_tunnels,
+        struct ovn_desired_flow_table *);
 
 #endif /* ovn/physical.h */
