@@ -848,6 +848,44 @@ en_runtime_data_run(struct engine_node *node)
     node->changed = true;
 }
 
+static bool
+runtime_data_sb_port_binding_handler(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)node->data;
+    struct sset *local_lports = &data->local_lports;
+    struct sset *active_tunnels = &data->active_tunnels;
+
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    const char *chassis_id = get_chassis_id(ovs_table);
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
+
+    ovs_assert(br_int && chassis_id);
+
+    struct ovsdb_idl_index *sbrec_chassis_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_chassis", node),
+                "name");
+
+    const struct sbrec_chassis *chassis
+        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    ovs_assert(chassis);
+
+    struct sbrec_port_binding_table *pb_table =
+        (struct sbrec_port_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_binding", node));
+
+    bool changed = binding_evaluate_port_binding_changes(
+        pb_table, br_int, chassis, active_tunnels, local_lports);
+
+    return !changed;
+}
+
 struct ed_type_mff_ovn_geneve {
     enum mf_field_id mff_ovn_geneve;
 };
@@ -1234,7 +1272,8 @@ main(int argc, char *argv[])
     engine_add_input(&en_runtime_data, &en_sb_address_set, NULL);
     engine_add_input(&en_runtime_data, &en_sb_port_group, NULL);
     engine_add_input(&en_runtime_data, &en_sb_datapath_binding, NULL);
-    engine_add_input(&en_runtime_data, &en_sb_port_binding, NULL);
+    engine_add_input(&en_runtime_data, &en_sb_port_binding,
+                     runtime_data_sb_port_binding_handler);
 
     engine_init(&en_flow_output);
 
