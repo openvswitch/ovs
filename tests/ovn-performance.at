@@ -279,6 +279,12 @@ for i in 1 2; do
     )
 done
 
+get_lsp_uuid () {
+    ovn-nbctl lsp-list ls${1#lp} | grep $1 | awk '{ print $1 }'
+}
+
+pg_ports=
+
 for i in 1 2; do
     j=$((i%2 + 1))
     as=as$i
@@ -291,6 +297,9 @@ for i in 1 2; do
         [hv1 hv2], [lflow_run],
         [ovn-nbctl --wait=hv lsp-add $ls $lp]
     )
+
+    pg_ports="$pg_port `get_lsp_uuid $lp`"
+
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],
         [ovn-nbctl --wait=hv lsp-set-addresses $lp "dynamic"]
@@ -341,12 +350,6 @@ for i in 1 2; do
     ls=ls$i
     lp=lp$i
 
-    # Delete port $lp
-    OVN_CONTROLLER_EXPECT_HIT_COND(
-        [hv$i hv$j], [lflow_run], [>0 =0],
-        [ovn-nbctl --wait=hv lsp-del $lp]
-    )
-
     # Delete ACLs for port $lp
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],
@@ -367,6 +370,34 @@ for i in 1 2; do
         [ovn-nbctl --wait=hv destroy Address_Set "$as"]
     )
 done
+
+OVN_CONTROLLER_EXPECT_NO_HIT(
+    [hv1 hv2], [lflow_run],
+    [ovn-nbctl --wait=hv create Port_Group name=pg1 ports=\"$pg_ports\"]
+)
+
+# Add ACLs for port group pg1
+OVN_CONTROLLER_EXPECT_NO_HIT(
+    [hv1 hv2], [lflow_run],
+    [ovn-nbctl --wait=hv acl-add pg1 to-lport 1001 'outport == @pg1 && ip4.src == $pg1_ip4' allow]
+)
+
+for i in 1 2; do
+    j=$((i%2 + 1))
+    lp=lp$i
+
+    # Delete port $lp
+    OVN_CONTROLLER_EXPECT_HIT_COND(
+        [hv$i hv$j], [lflow_run], [>0 =0],
+        [ovn-nbctl --wait=hv lsp-del $lp]
+    )
+done
+
+# Delete port group pg1
+OVN_CONTROLLER_EXPECT_NO_HIT(
+    [hv1 hv2], [lflow_run],
+    [ovn-nbctl --wait=hv destroy Port_Group pg1]
+)
 
 for i in 1 2; do
     ls=ls$i
