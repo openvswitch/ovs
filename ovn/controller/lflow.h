@@ -37,6 +37,7 @@
 
 struct ovn_extend_table;
 struct ovsdb_idl_index;
+struct ovn_desired_flow_table;
 struct hmap;
 struct sbrec_chassis;
 struct sbrec_dhcp_options_table;
@@ -77,9 +78,11 @@ void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                const struct shash *port_groups,
                const struct sset *active_tunnels,
                const struct sset *local_lport_ids,
-               struct hmap *flow_table,
+               struct ovn_desired_flow_table *,
                struct ovn_extend_table *group_table,
-               struct ovn_extend_table *meter_table);
+               struct ovn_extend_table *meter_table,
+               uint32_t *conj_id_ofs);
+
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

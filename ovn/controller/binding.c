@@ -524,6 +524,7 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
         update_local_lport_ids(local_lport_ids, binding_rec);
     }
 
+    ovs_assert(ovnsb_idl_txn);
     if (ovnsb_idl_txn) {
         const char *vif_chassis = smap_get(&binding_rec->options,
                                            "requested-chassis");

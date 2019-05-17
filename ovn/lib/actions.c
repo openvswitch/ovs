@@ -1059,7 +1059,8 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
                       recirc_table, zone_reg);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->group_table, ds_cstr(&ds));
+    table_id = ovn_extend_table_assign_id(ep->group_table, ds_cstr(&ds),
+                                          ep->lflow_uuid);
     ds_destroy(&ds);
     if (table_id == EXT_TABLE_ID_INVALID) {
         return;
@@ -2213,7 +2214,8 @@ encode_LOG(const struct ovnact_log *log,
     uint32_t meter_id = NX_CTLR_NO_METER;
 
     if (log->meter) {
-        meter_id = ovn_extend_table_assign_id(ep->meter_table, log->meter);
+        meter_id = ovn_extend_table_assign_id(ep->meter_table, log->meter,
+                                              ep->lflow_uuid);
         if (meter_id == EXT_TABLE_ID_INVALID) {
             VLOG_WARN("Unable to assign id for log meter: %s", log->meter);
             return;
@@ -2306,7 +2308,8 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
                          "rate=%"PRId64"", cl->rate);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->meter_table, name);
+    table_id = ovn_extend_table_assign_id(ep->meter_table, name,
+                                          ep->lflow_uuid);
     free(name);
     if (table_id == EXT_TABLE_ID_INVALID) {
         return;

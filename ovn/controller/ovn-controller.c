@@ -60,6 +60,7 @@
 #include "timeval.h"
 #include "timer.h"
 #include "stopwatch.h"
+#include "ovn/lib/inc-proc-eng.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
@@ -196,14 +197,26 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     ovsdb_idl_condition_destroy(&dns);
 }
 
+static const char *
+br_int_name(const struct ovsrec_open_vswitch *cfg)
+{
+    return smap_get_def(&cfg->external_ids, "ovn-bridge", DEFAULT_BRIDGE_NAME);
+}
+
 static const struct ovsrec_bridge *
 create_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
-              const struct ovsrec_open_vswitch *cfg,
-              const char *bridge_name)
+              const struct ovsrec_open_vswitch_table *ovs_table)
 {
     if (!ovs_idl_txn) {
         return NULL;
     }
+
+    const struct ovsrec_open_vswitch *cfg;
+    cfg = ovsrec_open_vswitch_table_first(ovs_table);
+    if (!cfg) {
+        return NULL;
+    }
+    const char *bridge_name = br_int_name(cfg);
 
     ovsdb_idl_txn_add_comment(ovs_idl_txn,
             "ovn-controller: creating integration bridge '%s'", bridge_name);
@@ -239,8 +252,7 @@ create_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
 }
 
 static const struct ovsrec_bridge *
-get_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
-           const struct ovsrec_bridge_table *bridge_table,
+get_br_int(const struct ovsrec_bridge_table *bridge_table,
            const struct ovsrec_open_vswitch_table *ovs_table)
 {
     const struct ovsrec_open_vswitch *cfg;
@@ -249,23 +261,32 @@ get_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
         return NULL;
     }
 
-    const char *br_int_name = smap_get_def(&cfg->external_ids, "ovn-bridge",
-                                           DEFAULT_BRIDGE_NAME);
+    return get_bridge(bridge_table, br_int_name(cfg));
+}
 
-    const struct ovsrec_bridge *br = get_bridge(bridge_table, br_int_name);
-    if (!br) {
-        br = create_br_int(ovs_idl_txn, cfg, br_int_name);
+static const struct ovsrec_bridge *
+process_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
+               const struct ovsrec_bridge_table *bridge_table,
+               const struct ovsrec_open_vswitch_table *ovs_table)
+{
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table,
+                                                    ovs_table);
+    if (!br_int) {
+        br_int = create_br_int(ovs_idl_txn, ovs_table);
     }
-    if (br && ovs_idl_txn) {
+    if (br_int && ovs_idl_txn) {
+        const struct ovsrec_open_vswitch *cfg;
+        cfg = ovsrec_open_vswitch_table_first(ovs_table);
+        ovs_assert(cfg);
         const char *datapath_type = smap_get(&cfg->external_ids,
                                              "ovn-bridge-datapath-type");
         /* Check for the datapath_type and set it only if it is defined in
          * cfg. */
-        if (datapath_type && strcmp(br->datapath_type, datapath_type)) {
-            ovsrec_bridge_set_datapath_type(br, datapath_type);
+        if (datapath_type && strcmp(br_int->datapath_type, datapath_type)) {
+            ovsrec_bridge_set_datapath_type(br_int, datapath_type);
         }
     }
-    return br;
+    return br_int;
 }
 
 static const char *
@@ -273,7 +294,8 @@ get_chassis_id(const struct ovsrec_open_vswitch_table *ovs_table)
 {
     const struct ovsrec_open_vswitch *cfg
         = ovsrec_open_vswitch_table_first(ovs_table);
-    const char *chassis_id = cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+    const char *chassis_id = cfg ? smap_get(&cfg->external_ids, "system-id")
+                                 : NULL;
 
     if (!chassis_id) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -476,11 +498,8 @@ restore_ct_zones(const struct ovsrec_bridge_table *bridge_table,
         return;
     }
 
-    const char *br_int_name = smap_get_def(&cfg->external_ids, "ovn-bridge",
-                                           DEFAULT_BRIDGE_NAME);
-
     const struct ovsrec_bridge *br_int;
-    br_int = get_bridge(bridge_table, br_int_name);
+    br_int = get_bridge(bridge_table, br_int_name(cfg));
     if (!br_int) {
         /* If the integration bridge hasn't been defined, assume that
          * any existing ct-zone definitions aren't valid. */
@@ -557,6 +576,452 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     physical_register_ovs_idl(ovs_idl);
 }
 
+#define SB_NODES \
+    SB_NODE(chassis, "chassis") \
+    SB_NODE(encap, "encap") \
+    SB_NODE(address_set, "address_set") \
+    SB_NODE(port_group, "port_group") \
+    SB_NODE(multicast_group, "multicast_group") \
+    SB_NODE(datapath_binding, "datapath_binding") \
+    SB_NODE(port_binding, "port_binding") \
+    SB_NODE(mac_binding, "mac_binding") \
+    SB_NODE(logical_flow, "logical_flow") \
+    SB_NODE(dhcp_options, "dhcp_options") \
+    SB_NODE(dhcpv6_options, "dhcpv6_options") \
+    SB_NODE(dns, "dns")
+
+enum sb_engine_node {
+#define SB_NODE(NAME, NAME_STR) SB_##NAME,
+    SB_NODES
+#undef SB_NODE
+};
+
+#define SB_NODE(NAME, NAME_STR) ENGINE_FUNC_SB(NAME);
+    SB_NODES
+#undef SB_NODE
+
+#define OVS_NODES \
+    OVS_NODE(open_vswitch, "open_vswitch") \
+    OVS_NODE(bridge, "bridge") \
+    OVS_NODE(port, "port") \
+    OVS_NODE(qos, "qos")
+
+enum ovs_engine_node {
+#define OVS_NODE(NAME, NAME_STR) OVS_##NAME,
+    OVS_NODES
+#undef OVS_NODE
+};
+
+#define OVS_NODE(NAME, NAME_STR) ENGINE_FUNC_OVS(NAME);
+    OVS_NODES
+#undef OVS_NODE
+
+struct ed_type_ofctrl_is_connected {
+    bool connected;
+};
+
+static void
+en_ofctrl_is_connected_init(struct engine_node *node)
+{
+    struct ed_type_ofctrl_is_connected *data =
+        (struct ed_type_ofctrl_is_connected *)node->data;
+    data->connected = false;
+}
+
+static void
+en_ofctrl_is_connected_cleanup(struct engine_node *node OVS_UNUSED)
+{
+}
+
+static void
+en_ofctrl_is_connected_run(struct engine_node *node)
+{
+    struct ed_type_ofctrl_is_connected *data =
+        (struct ed_type_ofctrl_is_connected *)node->data;
+    if (data->connected != ofctrl_is_connected()) {
+        data->connected = !data->connected;
+        node->changed = true;
+        return;
+    }
+    node->changed = false;
+}
+
+struct ed_type_runtime_data {
+    /* Contains "struct local_datapath" nodes. */
+    struct hmap local_datapaths;
+
+    /* Contains the name of each logical port resident on the local
+     * hypervisor.  These logical ports include the VIFs (and their child
+     * logical ports, if any) that belong to VMs running on the hypervisor,
+     * l2gateway ports for which options:l2gateway-chassis designates the
+     * local hypervisor, and localnet ports. */
+    struct sset local_lports;
+
+    /* Contains the same ports as local_lports, but in the format:
+     * <datapath-tunnel-key>_<port-tunnel-key> */
+    struct sset local_lport_ids;
+    struct sset active_tunnels;
+    struct shash addr_sets;
+    struct shash port_groups;
+
+    /* connection tracking zones. */
+    unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
+    struct shash pending_ct_zones;
+    struct simap ct_zones;
+};
+
+static void
+en_runtime_data_init(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)node->data;
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    hmap_init(&data->local_datapaths);
+    sset_init(&data->local_lports);
+    sset_init(&data->local_lport_ids);
+    sset_init(&data->active_tunnels);
+    shash_init(&data->addr_sets);
+    shash_init(&data->port_groups);
+    shash_init(&data->pending_ct_zones);
+    simap_init(&data->ct_zones);
+
+    /* Initialize connection tracking zones. */
+    memset(data->ct_zone_bitmap, 0, sizeof data->ct_zone_bitmap);
+    bitmap_set1(data->ct_zone_bitmap, 0); /* Zone 0 is reserved. */
+    restore_ct_zones(bridge_table, ovs_table,
+                     &data->ct_zones, data->ct_zone_bitmap);
+}
+
+static void
+en_runtime_data_cleanup(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)node->data;
+
+    expr_const_sets_destroy(&data->addr_sets);
+    shash_destroy(&data->addr_sets);
+    expr_const_sets_destroy(&data->port_groups);
+    shash_destroy(&data->port_groups);
+
+    sset_destroy(&data->local_lports);
+    sset_destroy(&data->local_lport_ids);
+    sset_destroy(&data->active_tunnels);
+    struct local_datapath *cur_node, *next_node;
+    HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node,
+                        &data->local_datapaths) {
+        free(cur_node->peer_dps);
+        hmap_remove(&data->local_datapaths, &cur_node->hmap_node);
+        free(cur_node);
+    }
+    hmap_destroy(&data->local_datapaths);
+
+    simap_destroy(&data->ct_zones);
+    shash_destroy(&data->pending_ct_zones);
+}
+
+static void
+en_runtime_data_run(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)node->data;
+    struct hmap *local_datapaths = &data->local_datapaths;
+    struct sset *local_lports = &data->local_lports;
+    struct sset *local_lport_ids = &data->local_lport_ids;
+    struct sset *active_tunnels = &data->active_tunnels;
+    struct shash *addr_sets = &data->addr_sets;
+    struct shash *port_groups = &data->port_groups;
+    unsigned long *ct_zone_bitmap = data->ct_zone_bitmap;
+    struct shash *pending_ct_zones = &data->pending_ct_zones;
+    struct simap *ct_zones = &data->ct_zones;
+
+    static bool first_run = true;
+    if (first_run) {
+        /* don't cleanup since there is no data yet */
+        first_run = false;
+    } else {
+        struct local_datapath *cur_node, *next_node;
+        HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, local_datapaths) {
+            free(cur_node->peer_dps);
+            hmap_remove(local_datapaths, &cur_node->hmap_node);
+            free(cur_node);
+        }
+        hmap_clear(local_datapaths);
+        sset_destroy(local_lports);
+        sset_destroy(local_lport_ids);
+        sset_destroy(active_tunnels);
+        expr_const_sets_destroy(addr_sets);
+        expr_const_sets_destroy(port_groups);
+        sset_init(local_lports);
+        sset_init(local_lport_ids);
+        sset_init(active_tunnels);
+    }
+
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    const char *chassis_id = get_chassis_id(ovs_table);
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
+
+    ovs_assert(br_int && chassis_id);
+
+    struct ovsdb_idl_index *sbrec_chassis_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_chassis", node),
+                "name");
+
+    const struct sbrec_chassis *chassis
+        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    ovs_assert(chassis);
+
+    struct ed_type_ofctrl_is_connected *ed_ofctrl_is_connected =
+        (struct ed_type_ofctrl_is_connected *)engine_get_input(
+            "ofctrl_is_connected", node)->data;
+    if (ed_ofctrl_is_connected->connected) {
+        /* Calculate the active tunnels only if have an an active
+         * OpenFlow connection to br-int.
+         * If we don't have a connection to br-int, it could mean
+         * ovs-vswitchd is down for some reason and the BFD status
+         * in the Interface rows could be stale. So its better to
+         * consider 'active_tunnels' set to be empty if it's not
+         * connected. */
+        bfd_calculate_active_tunnels(br_int, active_tunnels);
+    }
+
+    struct ovsrec_port_table *port_table =
+        (struct ovsrec_port_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_port", node));
+
+    struct ovsrec_qos_table *qos_table =
+        (struct ovsrec_qos_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_qos", node));
+
+    struct sbrec_port_binding_table *pb_table =
+        (struct sbrec_port_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_binding", node));
+
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_datapath_binding", node),
+                "key");
+
+    struct ovsdb_idl_index *sbrec_port_binding_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "name");
+
+    struct ovsdb_idl_index *sbrec_port_binding_by_datapath =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "datapath");
+
+    binding_run(engine_get_context()->ovnsb_idl_txn,
+                engine_get_context()->ovs_idl_txn,
+                sbrec_datapath_binding_by_key,
+                sbrec_port_binding_by_datapath,
+                sbrec_port_binding_by_name,
+                port_table, qos_table, pb_table,
+                br_int, chassis,
+                active_tunnels, local_datapaths,
+                local_lports, local_lport_ids);
+
+    struct sbrec_address_set_table *as_table =
+        (struct sbrec_address_set_table *)EN_OVSDB_GET(
+            engine_get_input("SB_address_set", node));
+    addr_sets_init(as_table, addr_sets);
+
+    struct sbrec_port_group_table *pg_table =
+        (struct sbrec_port_group_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_group", node));
+    port_groups_init(pg_table, port_groups);
+
+    update_ct_zones(local_lports, local_datapaths, ct_zones,
+                    ct_zone_bitmap, pending_ct_zones);
+
+    node->changed = true;
+}
+
+struct ed_type_mff_ovn_geneve {
+    enum mf_field_id mff_ovn_geneve;
+};
+
+static void
+en_mff_ovn_geneve_init(struct engine_node *node)
+{
+    struct ed_type_mff_ovn_geneve *data =
+        (struct ed_type_mff_ovn_geneve *)node->data;
+    data->mff_ovn_geneve = 0;
+}
+
+static void
+en_mff_ovn_geneve_cleanup(struct engine_node *node OVS_UNUSED)
+{
+}
+
+static void
+en_mff_ovn_geneve_run(struct engine_node *node)
+{
+    struct ed_type_mff_ovn_geneve *data =
+        (struct ed_type_mff_ovn_geneve *)node->data;
+    enum mf_field_id mff_ovn_geneve = ofctrl_get_mf_field_id();
+    if (data->mff_ovn_geneve != mff_ovn_geneve) {
+        data->mff_ovn_geneve = mff_ovn_geneve;
+        node->changed = true;
+        return;
+    }
+    node->changed = false;
+}
+
+struct ed_type_flow_output {
+    /* desired flows */
+    struct ovn_desired_flow_table flow_table;
+    /* group ids for load balancing */
+    struct ovn_extend_table group_table;
+    /* meter ids for QoS */
+    struct ovn_extend_table meter_table;
+    /* conjunction id offset */
+    uint32_t conj_id_ofs;
+};
+
+static void
+en_flow_output_init(struct engine_node *node)
+{
+    struct ed_type_flow_output *data =
+        (struct ed_type_flow_output *)node->data;
+    ovn_desired_flow_table_init(&data->flow_table);
+    ovn_extend_table_init(&data->group_table);
+    ovn_extend_table_init(&data->meter_table);
+    data->conj_id_ofs = 1;
+}
+
+static void
+en_flow_output_cleanup(struct engine_node *node)
+{
+    struct ed_type_flow_output *data =
+        (struct ed_type_flow_output *)node->data;
+    ovn_desired_flow_table_destroy(&data->flow_table);
+    ovn_extend_table_destroy(&data->group_table);
+    ovn_extend_table_destroy(&data->meter_table);
+}
+
+static void
+en_flow_output_run(struct engine_node *node)
+{
+    struct ed_type_runtime_data *rt_data =
+        (struct ed_type_runtime_data *)engine_get_input(
+            "runtime_data", node)->data;
+    struct hmap *local_datapaths = &rt_data->local_datapaths;
+    struct sset *local_lports = &rt_data->local_lports;
+    struct sset *local_lport_ids = &rt_data->local_lport_ids;
+    struct sset *active_tunnels = &rt_data->active_tunnels;
+    struct shash *addr_sets = &rt_data->addr_sets;
+    struct shash *port_groups = &rt_data->port_groups;
+    struct simap *ct_zones = &rt_data->ct_zones;
+
+    struct ed_type_mff_ovn_geneve *ed_mff_ovn_geneve =
+        (struct ed_type_mff_ovn_geneve *)engine_get_input(
+            "mff_ovn_geneve", node)->data;
+    enum mf_field_id mff_ovn_geneve = ed_mff_ovn_geneve->mff_ovn_geneve;
+
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
+    const char *chassis_id = get_chassis_id(ovs_table);
+
+    struct ovsdb_idl_index *sbrec_chassis_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_chassis", node),
+                "name");
+    const struct sbrec_chassis *chassis = NULL;
+    if (chassis_id) {
+        chassis = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    }
+
+    ovs_assert(br_int && chassis);
+
+    struct ed_type_flow_output *fo =
+        (struct ed_type_flow_output *)node->data;
+    struct ovn_desired_flow_table *flow_table = &fo->flow_table;
+    struct ovn_extend_table *group_table = &fo->group_table;
+    struct ovn_extend_table *meter_table = &fo->meter_table;
+    uint32_t *conj_id_ofs = &fo->conj_id_ofs;
+
+    static bool first_run = true;
+    if (first_run) {
+        first_run = false;
+    } else {
+        ovn_desired_flow_table_clear(flow_table);
+        ovn_extend_table_clear(group_table, false /* desired */);
+        ovn_extend_table_clear(meter_table, false /* desired */);
+    }
+
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_multicast_group", node),
+                "name_datapath");
+
+    struct ovsdb_idl_index *sbrec_port_binding_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "name");
+
+    struct sbrec_dhcp_options_table *dhcp_table =
+        (struct sbrec_dhcp_options_table *)EN_OVSDB_GET(
+            engine_get_input("SB_dhcp_options", node));
+
+    struct sbrec_dhcpv6_options_table *dhcpv6_table =
+        (struct sbrec_dhcpv6_options_table *)EN_OVSDB_GET(
+            engine_get_input("SB_dhcpv6_options", node));
+
+    struct sbrec_logical_flow_table *logical_flow_table =
+        (struct sbrec_logical_flow_table *)EN_OVSDB_GET(
+            engine_get_input("SB_logical_flow", node));
+
+    struct sbrec_mac_binding_table *mac_binding_table =
+        (struct sbrec_mac_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_mac_binding", node));
+
+    *conj_id_ofs = 1;
+    lflow_run(sbrec_multicast_group_by_name_datapath,
+              sbrec_port_binding_by_name,
+              dhcp_table, dhcpv6_table,
+              logical_flow_table,
+              mac_binding_table,
+              chassis, local_datapaths, addr_sets,
+              port_groups, active_tunnels, local_lport_ids,
+              flow_table, group_table, meter_table, conj_id_ofs);
+
+    struct sbrec_multicast_group_table *multicast_group_table =
+        (struct sbrec_multicast_group_table *)EN_OVSDB_GET(
+            engine_get_input("SB_multicast_group", node));
+
+    struct sbrec_port_binding_table *port_binding_table =
+        (struct sbrec_port_binding_table *)EN_OVSDB_GET(
+            engine_get_input("SB_port_binding", node));
+
+    physical_run(sbrec_port_binding_by_name,
+                 multicast_group_table,
+                 port_binding_table,
+                 mff_ovn_geneve,
+                 br_int, chassis, ct_zones,
+                 local_datapaths, local_lports,
+                 active_tunnels,
+                 flow_table);
+
+    node->changed = true;
+}
+
 struct ovn_controller_exit_args {
     bool *exiting;
     bool *restart;
@@ -586,21 +1051,8 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", "", 0, 1, ovn_controller_exit,
                              &exit_args);
 
-    /* Initialize group ids for loadbalancing. */
-    struct ovn_extend_table group_table;
-    ovn_extend_table_init(&group_table);
-    unixctl_command_register("group-table-list", "", 0, 0,
-                             group_table_list, &group_table);
-
-    /* Initialize meter ids for QoS. */
-    struct ovn_extend_table meter_table;
-    ovn_extend_table_init(&meter_table);
-    unixctl_command_register("meter-table-list", "", 0, 0,
-                             meter_table_list, &meter_table);
-
     daemonize_complete();
 
-    ofctrl_init(&group_table, &meter_table);
     pinctrl_init();
     lflow_init();
 
@@ -646,119 +1098,191 @@ main(int argc, char *argv[])
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
 
-    /* Initialize connection tracking zones. */
-    struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
-    struct shash pending_ct_zones = SHASH_INITIALIZER(&pending_ct_zones);
-    unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
-    memset(ct_zone_bitmap, 0, sizeof ct_zone_bitmap);
-    bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
-    restore_ct_zones(ovsrec_bridge_table_get(ovs_idl_loop.idl),
-                     ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
-                     &ct_zones, ct_zone_bitmap);
+    stopwatch_create(CONTROLLER_LOOP_STOPWATCH_NAME, SW_MS);
+
+    /* Define inc-proc-engine nodes. */
+    struct ed_type_runtime_data ed_runtime_data;
+    struct ed_type_mff_ovn_geneve ed_mff_ovn_geneve;
+    struct ed_type_ofctrl_is_connected ed_ofctrl_is_connected;
+    struct ed_type_flow_output ed_flow_output;
+
+    ENGINE_NODE(runtime_data, "runtime_data");
+    ENGINE_NODE(mff_ovn_geneve, "mff_ovn_geneve");
+    ENGINE_NODE(ofctrl_is_connected, "ofctrl_is_connected");
+    ENGINE_NODE(flow_output, "flow_output");
+
+#define SB_NODE(NAME, NAME_STR) ENGINE_NODE_SB(NAME, NAME_STR);
+    SB_NODES
+#undef SB_NODE
+
+#define OVS_NODE(NAME, NAME_STR) ENGINE_NODE_OVS(NAME, NAME_STR);
+    OVS_NODES
+#undef OVS_NODE
+
+    engine_ovsdb_node_add_index(&en_sb_chassis, "name", sbrec_chassis_by_name);
+    engine_ovsdb_node_add_index(&en_sb_multicast_group, "name_datapath",
+                                sbrec_multicast_group_by_name_datapath);
+    engine_ovsdb_node_add_index(&en_sb_port_binding, "name",
+                                sbrec_port_binding_by_name);
+    engine_ovsdb_node_add_index(&en_sb_port_binding, "key",
+                                sbrec_port_binding_by_key);
+    engine_ovsdb_node_add_index(&en_sb_port_binding, "datapath",
+                                sbrec_port_binding_by_datapath);
+    engine_ovsdb_node_add_index(&en_sb_datapath_binding, "key",
+                                sbrec_datapath_binding_by_key);
+
+    /* Add dependencies between inc-proc-engine nodes. */
+    engine_add_input(&en_flow_output, &en_runtime_data, NULL);
+    engine_add_input(&en_flow_output, &en_mff_ovn_geneve, NULL);
+
+    engine_add_input(&en_flow_output, &en_ovs_open_vswitch, NULL);
+    engine_add_input(&en_flow_output, &en_ovs_bridge, NULL);
+
+    engine_add_input(&en_flow_output, &en_sb_chassis, NULL);
+    engine_add_input(&en_flow_output, &en_sb_encap, NULL);
+    engine_add_input(&en_flow_output, &en_sb_multicast_group, NULL);
+    engine_add_input(&en_flow_output, &en_sb_port_binding, NULL);
+    engine_add_input(&en_flow_output, &en_sb_mac_binding, NULL);
+    engine_add_input(&en_flow_output, &en_sb_logical_flow, NULL);
+    engine_add_input(&en_flow_output, &en_sb_dhcp_options, NULL);
+    engine_add_input(&en_flow_output, &en_sb_dhcpv6_options, NULL);
+    engine_add_input(&en_flow_output, &en_sb_dns, NULL);
+
+    engine_add_input(&en_runtime_data, &en_ofctrl_is_connected, NULL);
+
+    engine_add_input(&en_runtime_data, &en_ovs_open_vswitch, NULL);
+    engine_add_input(&en_runtime_data, &en_ovs_bridge, NULL);
+    engine_add_input(&en_runtime_data, &en_ovs_port, NULL);
+    engine_add_input(&en_runtime_data, &en_ovs_qos, NULL);
+
+    engine_add_input(&en_runtime_data, &en_sb_chassis, NULL);
+    engine_add_input(&en_runtime_data, &en_sb_address_set, NULL);
+    engine_add_input(&en_runtime_data, &en_sb_port_group, NULL);
+    engine_add_input(&en_runtime_data, &en_sb_datapath_binding, NULL);
+    engine_add_input(&en_runtime_data, &en_sb_port_binding, NULL);
+
+    engine_init(&en_flow_output);
+
+    ofctrl_init(&ed_flow_output.group_table,
+                &ed_flow_output.meter_table);
+
+    unixctl_command_register("group-table-list", "", 0, 0,
+                             group_table_list, &ed_flow_output.group_table);
+
+    unixctl_command_register("meter-table-list", "", 0, 0,
+                             meter_table_list, &ed_flow_output.meter_table);
+
     unixctl_command_register("ct-zone-list", "", 0, 0,
-                             ct_zone_list, &ct_zones);
+                             ct_zone_list, &ed_runtime_data.ct_zones);
 
     struct pending_pkt pending_pkt = { .conn = NULL };
     unixctl_command_register("inject-pkt", "MICROFLOW", 1, 1, inject_pkt,
                              &pending_pkt);
 
-    stopwatch_create(CONTROLLER_LOOP_STOPWATCH_NAME, SW_MS);
+    uint64_t engine_run_id = 0;
+    uint64_t old_engine_run_id = 0;
+
+    unsigned int ovs_cond_seqno = UINT_MAX;
+    unsigned int ovnsb_cond_seqno = UINT_MAX;
+
     /* Main loop. */
     exiting = false;
     restart = false;
     while (!exiting) {
         update_sb_db(ovs_idl_loop.idl, ovnsb_idl_loop.idl);
         update_ssl_config(ovsrec_ssl_table_get(ovs_idl_loop.idl));
+        old_engine_run_id = engine_run_id;
 
         struct ovsdb_idl_txn *ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop);
+        unsigned int new_ovs_cond_seqno
+            = ovsdb_idl_get_condition_seqno(ovs_idl_loop.idl);
+        if (new_ovs_cond_seqno != ovs_cond_seqno) {
+            if (!new_ovs_cond_seqno) {
+                VLOG_INFO("OVS IDL reconnected, force recompute.");
+                engine_set_force_recompute(true);
+            }
+            ovs_cond_seqno = new_ovs_cond_seqno;
+        }
+
         struct ovsdb_idl_txn *ovnsb_idl_txn
             = ovsdb_idl_loop_run(&ovnsb_idl_loop);
+        unsigned int new_ovnsb_cond_seqno
+            = ovsdb_idl_get_condition_seqno(ovnsb_idl_loop.idl);
+        if (new_ovnsb_cond_seqno != ovnsb_cond_seqno) {
+            if (!new_ovnsb_cond_seqno) {
+                VLOG_INFO("OVNSB IDL reconnected, force recompute.");
+                engine_set_force_recompute(true);
+            }
+            ovnsb_cond_seqno = new_ovnsb_cond_seqno;
+        }
+
+        struct engine_context eng_ctx = {
+            .ovs_idl_txn = ovs_idl_txn,
+            .ovnsb_idl_txn = ovnsb_idl_txn
+        };
+
+        engine_set_context(&eng_ctx);
 
         if (ovsdb_idl_has_ever_connected(ovnsb_idl_loop.idl)) {
-            /* Contains "struct local_datapath" nodes. */
-            struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-
-            /* Contains the name of each logical port resident on the local
-             * hypervisor.  These logical ports include the VIFs (and their
-             * child logical ports, if any) that belong to VMs running on the
-             * hypervisor, l2gateway ports for which options:l2gateway-chassis
-             * designates the local hypervisor, and localnet ports. */
-            struct sset local_lports = SSET_INITIALIZER(&local_lports);
-            /* Contains the same ports as local_lports, but in the format:
-             * <datapath-tunnel-key>_<port-tunnel-key> */
-            struct sset local_lport_ids = SSET_INITIALIZER(&local_lport_ids);
-            struct sset active_tunnels = SSET_INITIALIZER(&active_tunnels);
             /* Contains the transport zones that this Chassis belongs to */
             struct sset transport_zones = SSET_INITIALIZER(&transport_zones);
             sset_from_delimited_string(&transport_zones,
                 get_transport_zones(ovsrec_open_vswitch_table_get(
                                     ovs_idl_loop.idl)), ",");
 
-            const struct ovsrec_bridge *br_int
-                = get_br_int(ovs_idl_txn,
-                             ovsrec_bridge_table_get(ovs_idl_loop.idl),
-                             ovsrec_open_vswitch_table_get(ovs_idl_loop.idl));
-            const char *chassis_id
-                = get_chassis_id(ovsrec_open_vswitch_table_get(
-                                     ovs_idl_loop.idl));
-
+            const struct ovsrec_bridge_table *bridge_table =
+                ovsrec_bridge_table_get(ovs_idl_loop.idl);
+            const struct ovsrec_open_vswitch_table *ovs_table =
+                ovsrec_open_vswitch_table_get(ovs_idl_loop.idl);
+            const struct ovsrec_bridge *br_int =
+                process_br_int(ovs_idl_txn, bridge_table, ovs_table);
+            const char *chassis_id = get_chassis_id(ovs_table);
             const struct sbrec_chassis *chassis = NULL;
             if (chassis_id) {
-                chassis = chassis_run(
-                    ovnsb_idl_txn, sbrec_chassis_by_name,
-                    ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
-                    chassis_id, br_int, &transport_zones);
-                encaps_run(
-                    ovs_idl_txn,
-                    ovsrec_bridge_table_get(ovs_idl_loop.idl), br_int,
-                    sbrec_chassis_table_get(ovnsb_idl_loop.idl), chassis_id,
-                    sbrec_sb_global_first(ovnsb_idl_loop.idl),
-                    &transport_zones);
-
-                if (ofctrl_is_connected()) {
-                    /* Calculate the active tunnels only if have an an active
-                     * OpenFlow connection to br-int.
-                     * If we don't have a connection to br-int, it could mean
-                     * ovs-vswitchd is down for some reason and the BFD status
-                     * in the Interface rows could be stale. So its better to
-                     * consider 'active_tunnels' set to be empty if it's not
-                     * connected. */
-                    bfd_calculate_active_tunnels(br_int, &active_tunnels);
-                }
-
-                binding_run(ovnsb_idl_txn, ovs_idl_txn,
-                            sbrec_datapath_binding_by_key,
-                            sbrec_port_binding_by_datapath,
-                            sbrec_port_binding_by_name,
-                            ovsrec_port_table_get(ovs_idl_loop.idl),
-                            ovsrec_qos_table_get(ovs_idl_loop.idl),
-                            sbrec_port_binding_table_get(ovnsb_idl_loop.idl),
-                            br_int, chassis,
-                            &active_tunnels, &local_datapaths,
-                            &local_lports, &local_lport_ids);
+                chassis = chassis_run(ovnsb_idl_txn, sbrec_chassis_by_name,
+                                      ovs_table, chassis_id, br_int,
+                                      &transport_zones);
             }
 
             if (br_int) {
-                enum mf_field_id mff_ovn_geneve = ofctrl_run(
-                    br_int, &pending_ct_zones);
+                ofctrl_run(br_int, &ed_runtime_data.pending_ct_zones);
 
                 if (chassis) {
-                    struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
-                    addr_sets_init(
-                        sbrec_address_set_table_get(ovnsb_idl_loop.idl),
-                        &addr_sets);
-                    struct shash port_groups = SHASH_INITIALIZER(&port_groups);
-                    port_groups_init(
-                        sbrec_port_group_table_get(ovnsb_idl_loop.idl),
-                        &port_groups);
-
                     patch_run(ovs_idl_txn,
                               ovsrec_bridge_table_get(ovs_idl_loop.idl),
                               ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
                               ovsrec_port_table_get(ovs_idl_loop.idl),
                               sbrec_port_binding_table_get(ovnsb_idl_loop.idl),
                               br_int, chassis);
+                    encaps_run(ovs_idl_txn,
+                               bridge_table, br_int,
+                               sbrec_chassis_table_get(ovnsb_idl_loop.idl),
+                               chassis_id,
+                               sbrec_sb_global_first(ovnsb_idl_loop.idl),
+                               &transport_zones);
 
+                    stopwatch_start(CONTROLLER_LOOP_STOPWATCH_NAME,
+                                    time_msec());
+                    if (ovnsb_idl_txn) {
+                        engine_run(&en_flow_output, ++engine_run_id);
+                    }
+                    stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
+                                   time_msec());
+                    if (ovs_idl_txn) {
+                        commit_ct_zones(br_int,
+                                        &ed_runtime_data.pending_ct_zones);
+                        bfd_run(ovsrec_interface_table_get(ovs_idl_loop.idl),
+                                br_int, chassis,
+                                sbrec_ha_chassis_group_table_get(
+                                    ovnsb_idl_loop.idl),
+                                sbrec_sb_global_table_get(ovnsb_idl_loop.idl));
+                    }
+                    ofctrl_put(&ed_flow_output.flow_table,
+                               &ed_runtime_data.pending_ct_zones,
+                               sbrec_meter_table_get(ovnsb_idl_loop.idl),
+                               get_nb_cfg(sbrec_sb_global_table_get(
+                                              ovnsb_idl_loop.idl)),
+                               en_flow_output.changed);
                     pinctrl_run(ovnsb_idl_txn,
                                 sbrec_datapath_binding_by_key,
                                 sbrec_port_binding_by_datapath,
@@ -767,112 +1291,63 @@ main(int argc, char *argv[])
                                 sbrec_mac_binding_by_lport_ip,
                                 sbrec_dns_table_get(ovnsb_idl_loop.idl),
                                 br_int, chassis,
-                                &local_datapaths, &active_tunnels);
-                    update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
-                                    ct_zone_bitmap, &pending_ct_zones);
-                    if (ovs_idl_txn && ofctrl_can_put()) {
-                        stopwatch_start(CONTROLLER_LOOP_STOPWATCH_NAME,
-                                        time_msec());
+                                &ed_runtime_data.local_datapaths,
+                                &ed_runtime_data.active_tunnels);
 
-                        commit_ct_zones(br_int, &pending_ct_zones);
-
-                        struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-                        lflow_run(
-                            sbrec_multicast_group_by_name_datapath,
-                            sbrec_port_binding_by_name,
-                            sbrec_dhcp_options_table_get(ovnsb_idl_loop.idl),
-                            sbrec_dhcpv6_options_table_get(ovnsb_idl_loop.idl),
-                            sbrec_logical_flow_table_get(ovnsb_idl_loop.idl),
-                            sbrec_mac_binding_table_get(ovnsb_idl_loop.idl),
-                            chassis,
-                            &local_datapaths, &addr_sets,
-                            &port_groups, &active_tunnels, &local_lport_ids,
-                            &flow_table, &group_table, &meter_table);
-
-                        if (chassis_id) {
-                            bfd_run(
-                                ovsrec_interface_table_get(ovs_idl_loop.idl),
-                                br_int, chassis,
-                                sbrec_ha_chassis_group_table_get(
-                                    ovnsb_idl_loop.idl),
-                                sbrec_sb_global_table_get(ovnsb_idl_loop.idl));
-                        }
-                        physical_run(
-                            sbrec_port_binding_by_name,
-                            sbrec_multicast_group_table_get(
-                                ovnsb_idl_loop.idl),
-                            sbrec_port_binding_table_get(ovnsb_idl_loop.idl),
-                            mff_ovn_geneve,
-                            br_int, chassis, &ct_zones,
-                            &local_datapaths, &local_lports,
-                            &active_tunnels,
-                            &flow_table);
-
-                        stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
-                                       time_msec());
-
-                        ofctrl_put(&flow_table, &pending_ct_zones,
-                                   sbrec_meter_table_get(ovnsb_idl_loop.idl),
-                                   get_nb_cfg(sbrec_sb_global_table_get(
-                                                  ovnsb_idl_loop.idl)));
-
-                        hmap_destroy(&flow_table);
+                    if (en_runtime_data.changed) {
+                        update_sb_monitors(ovnsb_idl_loop.idl, chassis,
+                                           &ed_runtime_data.local_lports,
+                                           &ed_runtime_data.local_datapaths);
                     }
-                    if (ovnsb_idl_txn) {
-                        int64_t cur_cfg = ofctrl_get_cur_cfg();
-                        if (cur_cfg && cur_cfg != chassis->nb_cfg) {
-                            sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
-                        }
-                    }
+                }
 
-                    if (pending_pkt.conn) {
-                        char *error = ofctrl_inject_pkt(br_int,
-                                                        pending_pkt.flow_s,
-                                                        &addr_sets,
-                                                        &port_groups);
-                        if (error) {
-                            unixctl_command_reply_error(pending_pkt.conn,
-                                                        error);
-                            free(error);
-                        } else {
-                            unixctl_command_reply(pending_pkt.conn, NULL);
-                        }
-                        pending_pkt.conn = NULL;
-                        free(pending_pkt.flow_s);
-                    }
+            }
+            if (old_engine_run_id == engine_run_id) {
+                if (engine_need_run(&en_flow_output)) {
+                    VLOG_DBG("engine did not run, force recompute next time: "
+                             "br_int %p, chassis %p", br_int, chassis);
+                    engine_set_force_recompute(true);
+                    poll_immediate_wake();
+                } else {
+                    VLOG_DBG("engine did not run, and it was not needed"
+                             " either: br_int %p, chassis %p",
+                             br_int, chassis);
+                }
+            } else {
+                engine_set_force_recompute(false);
+            }
 
-                    update_sb_monitors(ovnsb_idl_loop.idl, chassis,
-                                       &local_lports, &local_datapaths);
-
-                    expr_const_sets_destroy(&addr_sets);
-                    shash_destroy(&addr_sets);
-                    expr_const_sets_destroy(&port_groups);
-                    shash_destroy(&port_groups);
+            if (ovnsb_idl_txn && chassis) {
+                int64_t cur_cfg = ofctrl_get_cur_cfg();
+                if (cur_cfg && cur_cfg != chassis->nb_cfg) {
+                    sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
                 }
             }
 
-            /* If we haven't handled the pending packet insertion
-             * request, the system is not ready. */
+
             if (pending_pkt.conn) {
-                unixctl_command_reply_error(pending_pkt.conn,
-                                            "ovn-controller not ready.");
+                if (br_int && chassis) {
+                    char *error = ofctrl_inject_pkt(
+                        br_int, pending_pkt.flow_s, &ed_runtime_data.addr_sets,
+                        &ed_runtime_data.port_groups);
+                    if (error) {
+                        unixctl_command_reply_error(pending_pkt.conn, error);
+                        free(error);
+                    } else {
+                        unixctl_command_reply(pending_pkt.conn, NULL);
+                    }
+                } else {
+                    VLOG_DBG("Pending_pkt conn but br_int %p or chassis %p not"
+                              " ready. run-id: %"PRIu64, br_int, chassis,
+                              engine_run_id);
+                    unixctl_command_reply_error(pending_pkt.conn,
+                                                "ovn-controller not ready.");
+                }
                 pending_pkt.conn = NULL;
                 free(pending_pkt.flow_s);
             }
 
-            sset_destroy(&local_lports);
-            sset_destroy(&local_lport_ids);
-            sset_destroy(&active_tunnels);
             sset_destroy(&transport_zones);
-
-            struct local_datapath *cur_node, *next_node;
-            HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node,
-                                &local_datapaths) {
-                free(cur_node->peer_dps);
-                hmap_remove(&local_datapaths, &cur_node->hmap_node);
-                free(cur_node);
-            }
-            hmap_destroy(&local_datapaths);
 
             if (br_int) {
                 ofctrl_wait();
@@ -887,14 +1362,18 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        if (!ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop)) {
+            VLOG_INFO("OVNSB commit failed, force recompute next time.");
+            engine_set_force_recompute(true);
+        }
 
         if (ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop) == 1) {
             struct shash_node *iter, *iter_next;
-            SHASH_FOR_EACH_SAFE(iter, iter_next, &pending_ct_zones) {
+            SHASH_FOR_EACH_SAFE (iter, iter_next,
+                                 &ed_runtime_data.pending_ct_zones) {
                 struct ct_zone_pending_entry *ctzpe = iter->data;
                 if (ctzpe->state == CT_ZONE_DB_SENT) {
-                    shash_delete(&pending_ct_zones, iter);
+                    shash_delete(&ed_runtime_data.pending_ct_zones, iter);
                     free(ctzpe);
                 }
             }
@@ -907,6 +1386,9 @@ main(int argc, char *argv[])
             exiting = true;
         }
     }
+
+    engine_set_context(NULL);
+    engine_cleanup(&en_flow_output);
 
     /* It's time to exit.  Clean up the databases if we are not restarting */
     if (!restart) {
@@ -928,8 +1410,7 @@ main(int argc, char *argv[])
             const struct sbrec_port_binding_table *port_binding_table
                 = sbrec_port_binding_table_get(ovnsb_idl_loop.idl);
 
-            const struct ovsrec_bridge *br_int = get_br_int(ovs_idl_txn,
-                                                            bridge_table,
+            const struct ovsrec_bridge *br_int = get_br_int(bridge_table,
                                                             ovs_table);
             const char *chassis_id = get_chassis_id(ovs_table);
             const struct sbrec_chassis *chassis
@@ -956,12 +1437,6 @@ main(int argc, char *argv[])
     lflow_destroy();
     ofctrl_destroy();
     pinctrl_destroy();
-
-    simap_destroy(&ct_zones);
-    shash_destroy(&pending_ct_zones);
-
-    ovn_extend_table_destroy(&group_table);
-    ovn_extend_table_destroy(&meter_table);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
