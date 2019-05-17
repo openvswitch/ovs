@@ -1,0 +1,389 @@
+#
+# Tests targeting performance of OVN components.
+#
+
+m4_divert_push([PREPARE_TESTS])
+
+# vec_cmp VALUE_VEC OP-VALUE_VEC
+#
+# Compares each value from VALUE_VEC to the operator-value pair from the
+# OP-VALUE_VEC.
+#
+# VALUE_VEC must be a list of values separated by a character from $IFS.
+# OP-VALUE_VEC must be a list of operator-value expressions separated by a
+# character from $IFS.  Operator-value expressions cannot contain any characters
+# from $IFS like spaces. '=' is treated as an equality operator ('==') for
+# conciseness.
+#
+# Returns the result of each comparison as a list of boolean values (0 or 1)
+# separated by a new-line character.
+vec_cmp() {
+    local a b i j
+
+    i=0
+    for a in $1; do
+        j=0
+        for b in $2; do
+            if test $i -eq $j; then
+                # Replace assignment '=' with equality comparison '=='
+                case "$b" in
+                =[[0-9]]*) b="=$b" ;;
+                esac
+
+                echo $(($a $b))
+                break
+            fi
+            j=$((j + 1))
+        done
+        i=$((i + 1))
+    done
+}
+
+# vec_sub VEC_A VEC_B
+#
+# Subtracts two vectors:
+#
+#     VEC_A = [a1, a2, ...]
+#     VEC_B = [b1, b2, ...]
+#     OUT = [(a1 - b1), (a2 - b2), ...]
+#
+# VEC_A and VEC_B must be lists of values separated by a character from $IFS.
+vec_sub() {
+    local a b i j
+
+    i=0
+    for a in $1; do
+        j=0
+        for b in $2; do
+            if test $i -eq $j; then
+                echo $((a - b))
+                break
+            fi
+            j=$((j + 1))
+        done
+        i=$((i + 1))
+    done
+}
+
+# vec_fold VEC OP
+#
+# Reduces a vector to a single value by applying the binary operator OP (i.e.,
+# one that requires two arguments) cumulatively to all vector elements from left
+# to right:
+#
+#     VEC = [e1, e2, e3 ...]
+#     OUT = (...((e1 OP e2) OP e3) OP ...)
+#
+# VEC must be a list of values separated by a character from $IFS.
+vec_fold() {
+    local first op prod
+
+    first=1
+    op=$2
+    for a in $1; do
+        if test $first -eq 1; then
+            prod=$a
+            first=0
+        else
+            prod=$((prod $op a))
+        fi
+    done
+    echo $prod
+}
+
+# read_counters SANDBOXES TARGET COUNTER
+#
+# Prints out the coverage COUNTER for the TARGET in each of the SANDBOXES.
+#
+# SANDBOXES must be a list of strings separated by a character from $IFS.
+read_counters() {
+    local sims="$1" target="$2" counter="$3"
+
+    for sim in $sims; do
+        as $sim ovs-appctl -t "$target" coverage/read-counter "$counter" || return 1
+    done
+}
+
+# counter_delta_ SANDBOXES TARGET COUNTER COMMAND
+#
+# Runs the COMMAND and reports the COUNTER change registered during the command
+# run for the given TARGET in each of the SANDBOXES.
+counter_delta_() {
+    local sims="$1" target="$2" counter="$3" cmd="$4"
+    local before after
+
+    before=$(read_counters "$sims" "$target" "$counter") || return 1
+    eval "$cmd" >/dev/null || return 1
+    after=$(read_counters "$sims" "$target" "$counter") || return 1
+
+    vec_sub "$after" "$before"
+}
+
+# counter_delta SANDBOXES TARGET COUNTER COMMAND
+#
+# Same as counter_delta_ but also prints the COUNTER values together with the
+# COMMAND to standard error.
+counter_delta() {
+    local cmd="$4"
+    local v
+
+    v=$(counter_delta_ "$@") || return 1
+
+    # Dump the counters and the command for troubleshooting
+    echo "$v" | tr '\n' '\t' >&2
+    echo "$cmd" >&2
+
+    echo "$v"
+}
+
+# vec_cmp_counter_delta SANDBOXES TARGET COUNTER CONDS COMMAND
+#
+# Check if COUNTER change in the TARGET app in each of the SANDBOXES after
+# running the COMMAND meets the conditions listed as operator-value pairs in
+# CONDS.
+vec_cmp_counter_delta() {
+    local v
+
+    v=$(counter_delta "$1" "$2" "$3" "$5") || return 1
+    v=$(vec_cmp "$v" "$4") || return 1
+    v=$(vec_fold "$v" "&&") || return 1
+
+    echo "$v"
+}
+
+# cmp_counter_delta SANDBOXES TARGET COUNTER COND COMMAND
+#
+# Check if COUNTER change in the TARGET app in each of the SANDBOXES after
+# running the COMMAND meets the COND condition given as a operator-value pair.
+cmp_counter_delta() {
+    local conds=""
+
+    # Use the same condition for each sandbox
+    for _ in $1; do
+        conds="$conds $4"
+    done
+
+    vec_cmp_counter_delta "$1" "$2" "$3" "$conds" "$5"
+}
+
+m4_divert_pop([PREPARE_TESTS])
+
+# CHECK_COUNTER_DELTA_IS_ZERO SANDBOXES TARGET COUNTER COMMAND
+#
+# Runs the COMMAND and checks if the COUNTER value for the TARGET in all of
+# the SANDBOXES did not change.
+m4_define([CHECK_COUNTER_DELTA_IS_ZERO],[
+    rv=$(cmp_counter_delta "$1" "$2" "$3" "=0" "$4")
+    rc=$?
+    AT_CHECK([test $rc -eq 0 -a $rv -eq 1])
+])
+
+# CHECK_COUNTER_DELTA_IS_NOT_ZERO SANDBOXES TARGET COUNTER COMMAND
+#
+# Runs the COMMAND and checks if the COUNTER value for the TARGET in
+# all of the SANDBOXES has changed.
+m4_define([CHECK_COUNTER_DELTA_IS_NOT_ZERO],[
+    rv=$(cmp_counter_delta "$1" "$2" "$3" ">0" "$4")
+    rc=$?
+    AT_CHECK([test $rc -eq 0 -a $rv -eq 1])
+])
+
+# CHECK_COUNTER_DELTA_COND SANDBOXES TARGET COUNTER CONDS COMMAND
+#
+# Runs the COMMAND and checks if the COUNTER value for the TARGET in all of the
+# SANDBOXES satisfies the conditions listed in CONDS.
+m4_define([CHECK_COUNTER_DELTA_COND],[
+    rv=$(vec_cmp_counter_delta "$1" "$2" "$3" "$4" "$5")
+    rc=$?
+    AT_CHECK([test $rc -eq 0 -a $rv -eq 1])
+])
+
+# OVN_CONTROLLER_EXPECT_HIT SANDBOXES COUNTER COMMAND
+#
+# Checks if the COUNTER value has changed for any of the ovn-controller
+# processes in the SANDBOXES when the COMMAND was run.
+m4_define([OVN_CONTROLLER_EXPECT_HIT],[
+    CHECK_COUNTER_DELTA_IS_NOT_ZERO([$1], [ovn-controller], [$2], [$3])
+])
+
+# OVN_CONTROLLER_EXPECT_NO_HIT SANDBOXES COUNTER COMMAND
+#
+# Checks if the COUNTER value has not changed for any of the ovn-controller
+# processes in the SANDBOXES when the COMMAND was run.
+m4_define([OVN_CONTROLLER_EXPECT_NO_HIT],[
+    CHECK_COUNTER_DELTA_IS_ZERO([$1], [ovn-controller], [$2], [$3])
+])
+
+# OVN_CONTROLLER_EXPECT_HIT_COND SANDBOXES COUNTER CONDS COMMAND
+#
+# Checks if the change of the COUNTER value, when the COMMAND was run, of the
+# ovn-controller process in each of the SANDBOXES meets the conditions in
+# CONDS. CONDS must be a list of operator-value pairs, for example "[>0 =0]",
+# following the same order as SANDBOXES.
+m4_define([OVN_CONTROLLER_EXPECT_HIT_COND],[
+    CHECK_COUNTER_DELTA_COND([$1], [ovn-controller], [$2], [$3], [$4])
+])
+
+AT_SETUP([ovn -- ovn-controller incremental processing])
+# Check which operations the trigger full logical flow processing.
+#
+# Create and destroy logical routers, switches, ports, address sets and ACLs
+# while counting calls to lflow_run() in ovn-controller.
+
+ovn_start
+net_add n1
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+done
+
+# Add router lr1
+OVN_CONTROLLER_EXPECT_HIT(
+    [hv1 hv2], [lflow_run],
+    [ovn-nbctl --wait=hv lr-add lr1]
+)
+
+for i in 1 2; do
+    ls=ls$i
+    lsp=$ls-lr1
+    lrp=lr1-$ls
+
+    # Add switch $ls
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv ls-add $ls]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv add Logical_Switch $ls other_config subnet=10.0.$i.0/24]
+    )
+
+    # Add router port to $ls
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lrp-add lr1 $lrp 02:00:00:00:0$i:01 10.0.$i.1/24]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-add $ls $lsp]
+    )
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-set-type $lsp router]
+    )
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-set-addresses $lsp router]
+    )
+done
+
+for i in 1 2; do
+    j=$((i%2 + 1))
+    as=as$i
+    ls=ls$i
+    lp=lp$i
+    vif=vif$i
+
+    # Add port $lp
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-add $ls $lp]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-set-addresses $lp "dynamic"]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl wait-until Logical_Switch_Port $lp dynamic_addresses!=[[]] &&
+         ovn-nbctl --wait=hv sync]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl get Logical_Switch_Port $lp dynamic_addresses &&
+         ovn-nbctl --wait=hv sync]
+    )
+
+    # Add address set $as
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv create Address_Set name="$as"]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv add Address_Set "$as" addresses "10.0.$i.10"]
+    )
+
+    # Add ACLs for port $lp
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv acl-add $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \\$$as' allow]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv acl-add $ls to-lport 1000 'outport == \"$lp\"' drop]
+    )
+
+    # Bind port $lp and wait for it to come up
+    OVN_CONTROLLER_EXPECT_HIT_COND(
+        [hv$i hv$j], [lflow_run], [>0 =0],
+        [as hv$i ovs-vsctl add-port br-int $vif -- set Interface $vif external-ids:iface-id=$lp &&
+         ovn-nbctl wait-until Logical_Switch_Port $lp 'up=true' &&
+         ovn-nbctl --wait=hv sync]
+    )
+done
+
+for i in 1 2; do
+    j=$((i%2 + 1))
+    as=as$i
+    ls=ls$i
+    lp=lp$i
+
+    # Delete port $lp
+    OVN_CONTROLLER_EXPECT_HIT_COND(
+        [hv$i hv$j], [lflow_run], [>0 =0],
+        [ovn-nbctl --wait=hv lsp-del $lp]
+    )
+
+    # Delete ACLs for port $lp
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv acl-del $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \\$$as']
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv acl-del $ls to-lport 1000 'outport == \"$lp\"']
+    )
+
+    # Delete address set $as
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv remove Address_Set "$as" addresses "10.0.$i.10"]
+    )
+    OVN_CONTROLLER_EXPECT_NO_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv destroy Address_Set "$as"]
+    )
+done
+
+for i in 1 2; do
+    ls=ls$i
+
+    # Delete switch $ls
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv ls-del $ls]
+    )
+done
+
+# Delete router lr1
+OVN_CONTROLLER_EXPECT_HIT(
+    [hv1 hv2], [lflow_run],
+    [ovn-nbctl --wait=hv lr-del lr1]
+)
+
+OVN_CLEANUP([hv1], [hv2])
+
+AT_CLEANUP
