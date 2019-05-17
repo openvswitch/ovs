@@ -404,6 +404,111 @@ lflow_handle_changed_flows(
     return ret;
 }
 
+bool
+lflow_handle_changed_ref(
+    enum ref_type ref_type,
+    const char *ref_name,
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *dhcp_options_table,
+    const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+    const struct sbrec_logical_flow_table *logical_flow_table,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *chassis,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *flow_table,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs,
+    bool *changed)
+{
+    struct ref_lflow_node *rlfn = ref_lflow_lookup(&lfrr->ref_lflow_table,
+                                                   ref_type, ref_name);
+    if (!rlfn) {
+        *changed = false;
+        return true;
+    }
+    VLOG_DBG("Handle changed lflow reference for resource type: %d,"
+             " name: %s.", ref_type, ref_name);
+    *changed = false;
+    bool ret = true;
+
+    hmap_remove(&lfrr->ref_lflow_table, &rlfn->node);
+
+    struct lflow_ref_list_node *lrln, *next;
+    /* Detach the rlfn->ref_lflow_head nodes from the lfrr table and clean
+     * up all other nodes related to the lflows that uses the resource,
+     * so that the old nodes won't interfere with updating the lfrr table
+     * when reparsing the lflows. */
+    LIST_FOR_EACH (lrln, ref_list, &rlfn->ref_lflow_head) {
+        ovs_list_remove(&lrln->lflow_list);
+        lflow_resource_destroy_lflow(lfrr, &lrln->lflow_uuid);
+    }
+
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_TABLE_FOR_EACH (dhcp_opt_row, dhcp_options_table) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
+    const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
+    SBREC_DHCPV6_OPTIONS_TABLE_FOR_EACH(dhcpv6_opt_row, dhcpv6_options_table) {
+       dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
+                    dhcpv6_opt_row->type);
+    }
+
+    struct hmap nd_ra_opts = HMAP_INITIALIZER(&nd_ra_opts);
+    nd_ra_opts_init(&nd_ra_opts);
+
+    /* Re-parse the related lflows. */
+    LIST_FOR_EACH (lrln, ref_list, &rlfn->ref_lflow_head) {
+        const struct sbrec_logical_flow *lflow =
+            sbrec_logical_flow_table_get_for_uuid(logical_flow_table,
+                                                  &lrln->lflow_uuid);
+        if (!lflow) {
+            VLOG_DBG("Reprocess lflow "UUID_FMT" for resource type: %d,"
+                     " name: %s - not found.",
+                     UUID_ARGS(&lrln->lflow_uuid),
+                     ref_type, ref_name);
+            continue;
+        }
+        VLOG_DBG("Reprocess lflow "UUID_FMT" for resource type: %d,"
+                 " name: %s.",
+                 UUID_ARGS(&lrln->lflow_uuid),
+                 ref_type, ref_name);
+        ofctrl_remove_flows(flow_table, &lrln->lflow_uuid);
+        if (!consider_logical_flow(sbrec_multicast_group_by_name_datapath,
+                                   sbrec_port_binding_by_name,
+                                   lflow, local_datapaths,
+                                   chassis, &dhcp_opts, &dhcpv6_opts,
+                                   &nd_ra_opts, addr_sets, port_groups,
+                                   active_tunnels, local_lport_ids,
+                                   flow_table, group_table, meter_table,
+                                   lfrr, conj_id_ofs)) {
+            ret = false;
+            break;
+        }
+        *changed = true;
+    }
+
+    LIST_FOR_EACH_SAFE (lrln, next, ref_list, &rlfn->ref_lflow_head) {
+        ovs_list_remove(&lrln->ref_list);
+        free(lrln);
+    }
+    free(rlfn);
+
+    dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
+    nd_ra_opts_destroy(&nd_ra_opts);
+    return ret;
+}
+
 static bool
 update_conj_id_ofs(uint32_t *conj_id_ofs, uint32_t n_conjs)
 {

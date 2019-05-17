@@ -319,6 +319,29 @@ addr_sets_init(const struct sbrec_address_set_table *address_set_table,
     }
 }
 
+static void
+addr_sets_update(const struct sbrec_address_set_table *address_set_table,
+                 struct shash *addr_sets, struct sset *new,
+                 struct sset *deleted, struct sset *updated)
+{
+    const struct sbrec_address_set *as;
+    SBREC_ADDRESS_SET_TABLE_FOR_EACH_TRACKED (as, address_set_table) {
+        if (sbrec_address_set_is_deleted(as)) {
+            expr_const_sets_remove(addr_sets, as->name);
+            sset_add(deleted, as->name);
+        } else {
+            expr_const_sets_add(addr_sets, as->name,
+                                (const char *const *) as->addresses,
+                                as->n_addresses, true);
+            if (sbrec_address_set_is_new(as)) {
+                sset_add(new, as->name);
+            } else {
+                sset_add(updated, as->name);
+            }
+        }
+    }
+}
+
 /* Iterate port groups in the southbound database.  Create and update the
  * corresponding symtab entries as necessary. */
 static void
@@ -648,6 +671,7 @@ en_ofctrl_is_connected_run(struct engine_node *node)
 
 struct ed_type_addr_sets {
     struct shash addr_sets;
+    bool change_tracked;
     struct sset new;
     struct sset deleted;
     struct sset updated;
@@ -658,6 +682,7 @@ en_addr_sets_init(struct engine_node *node)
 {
     struct ed_type_addr_sets *as = (struct ed_type_addr_sets *)node->data;
     shash_init(&as->addr_sets);
+    as->change_tracked = false;
     sset_init(&as->new);
     sset_init(&as->deleted);
     sset_init(&as->updated);
@@ -690,7 +715,32 @@ en_addr_sets_run(struct engine_node *node)
 
     addr_sets_init(as_table, &as->addr_sets);
 
+    as->change_tracked = false;
     node->changed = true;
+}
+
+static bool
+addr_sets_sb_address_set_handler(struct engine_node *node)
+{
+    struct ed_type_addr_sets *as = (struct ed_type_addr_sets *)node->data;
+
+    sset_clear(&as->new);
+    sset_clear(&as->deleted);
+    sset_clear(&as->updated);
+
+    struct sbrec_address_set_table *as_table =
+        (struct sbrec_address_set_table *)EN_OVSDB_GET(
+            engine_get_input("SB_address_set", node));
+
+    addr_sets_update(as_table, &as->addr_sets, &as->new,
+                     &as->deleted, &as->updated);
+
+    node->changed = !sset_is_empty(&as->new) || !sset_is_empty(&as->deleted)
+                    || !sset_is_empty(&as->updated);
+
+    as->change_tracked = true;
+    node->changed = true;
+    return true;
 }
 
 struct ed_type_runtime_data {
@@ -1338,6 +1388,121 @@ flow_output_sb_multicast_group_handler(struct engine_node *node)
 
 }
 
+static bool
+flow_output_addr_sets_handler(struct engine_node *node)
+{
+    struct ed_type_runtime_data *data =
+        (struct ed_type_runtime_data *)engine_get_input(
+                "runtime_data", node)->data;
+    struct hmap *local_datapaths = &data->local_datapaths;
+    struct sset *local_lport_ids = &data->local_lport_ids;
+    struct sset *active_tunnels = &data->active_tunnels;
+    struct shash *port_groups = &data->port_groups;
+    struct ed_type_addr_sets *as_data =
+        (struct ed_type_addr_sets *)engine_get_input("addr_sets", node)->data;
+
+    /* XXX: The change_tracked check may be added to inc-proc framework. */
+    if (!as_data->change_tracked) {
+        return false;
+    }
+    struct shash *addr_sets = &as_data->addr_sets;
+
+    struct ovsrec_open_vswitch_table *ovs_table =
+        (struct ovsrec_open_vswitch_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_open_vswitch", node));
+    struct ovsrec_bridge_table *bridge_table =
+        (struct ovsrec_bridge_table *)EN_OVSDB_GET(
+            engine_get_input("OVS_bridge", node));
+    const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
+    const char *chassis_id = get_chassis_id(ovs_table);
+
+    struct ovsdb_idl_index *sbrec_chassis_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_chassis", node),
+                "name");
+    const struct sbrec_chassis *chassis = NULL;
+    if (chassis_id) {
+        chassis = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    }
+
+    ovs_assert(br_int && chassis);
+
+    struct ed_type_flow_output *fo =
+        (struct ed_type_flow_output *)node->data;
+    struct ovn_desired_flow_table *flow_table = &fo->flow_table;
+    struct ovn_extend_table *group_table = &fo->group_table;
+    struct ovn_extend_table *meter_table = &fo->meter_table;
+    uint32_t *conj_id_ofs = &fo->conj_id_ofs;
+    struct lflow_resource_ref *lfrr = &fo->lflow_resource_ref;
+
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_multicast_group", node),
+                "name_datapath");
+
+    struct ovsdb_idl_index *sbrec_port_binding_by_name =
+        engine_ovsdb_node_get_index(
+                engine_get_input("SB_port_binding", node),
+                "name");
+
+    struct sbrec_dhcp_options_table *dhcp_table =
+        (struct sbrec_dhcp_options_table *)EN_OVSDB_GET(
+            engine_get_input("SB_dhcp_options", node));
+
+    struct sbrec_dhcpv6_options_table *dhcpv6_table =
+        (struct sbrec_dhcpv6_options_table *)EN_OVSDB_GET(
+            engine_get_input("SB_dhcpv6_options", node));
+
+    struct sbrec_logical_flow_table *logical_flow_table =
+        (struct sbrec_logical_flow_table *)EN_OVSDB_GET(
+            engine_get_input("SB_logical_flow", node));
+
+    bool changed;
+    const char *as;
+
+    SSET_FOR_EACH (as, &as_data->deleted) {
+        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+                    sbrec_multicast_group_by_name_datapath,
+                    sbrec_port_binding_by_name,dhcp_table,
+                    dhcpv6_table, logical_flow_table,
+                    local_datapaths, chassis, addr_sets,
+                    port_groups, active_tunnels, local_lport_ids,
+                    flow_table, group_table, meter_table, lfrr,
+                    conj_id_ofs, &changed)) {
+            return false;
+        }
+        node->changed = changed || node->changed;
+    }
+    SSET_FOR_EACH (as, &as_data->updated) {
+        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+                    sbrec_multicast_group_by_name_datapath,
+                    sbrec_port_binding_by_name,dhcp_table,
+                    dhcpv6_table, logical_flow_table,
+                    local_datapaths, chassis, addr_sets,
+                    port_groups, active_tunnels, local_lport_ids,
+                    flow_table, group_table, meter_table, lfrr,
+                    conj_id_ofs, &changed)) {
+            return false;
+        }
+        node->changed = changed || node->changed;
+    }
+    SSET_FOR_EACH (as, &as_data->new) {
+        if (!lflow_handle_changed_ref(REF_TYPE_ADDRSET, as,
+                    sbrec_multicast_group_by_name_datapath,
+                    sbrec_port_binding_by_name,dhcp_table,
+                    dhcpv6_table, logical_flow_table,
+                    local_datapaths, chassis, addr_sets,
+                    port_groups, active_tunnels, local_lport_ids,
+                    flow_table, group_table, meter_table, lfrr,
+                    conj_id_ofs, &changed)) {
+            return false;
+        }
+        node->changed = changed || node->changed;
+    }
+
+    return true;
+}
+
 struct ovn_controller_exit_args {
     bool *exiting;
     bool *restart;
@@ -1451,9 +1616,11 @@ main(int argc, char *argv[])
 
     /* Add dependencies between inc-proc-engine nodes. */
 
-    engine_add_input(&en_addr_sets, &en_sb_address_set, NULL);
+    engine_add_input(&en_addr_sets, &en_sb_address_set,
+                     addr_sets_sb_address_set_handler);
 
-    engine_add_input(&en_flow_output, &en_addr_sets, NULL);
+    engine_add_input(&en_flow_output, &en_addr_sets,
+                     flow_output_addr_sets_handler);
     engine_add_input(&en_flow_output, &en_runtime_data, NULL);
     engine_add_input(&en_flow_output, &en_mff_ovn_geneve, NULL);
 
