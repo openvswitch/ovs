@@ -1268,7 +1268,8 @@ netdev_tx_t rpl_vxlan_xmit(struct sk_buff *skb)
 			return NETDEV_TX_OK;
 		}
 	}
-
+    
+    printk("Jikui %s %u \n", __func__,__LINE__);
 	dev->stats.tx_dropped++;
 	kfree_skb(skb);
 	return NETDEV_TX_OK;
