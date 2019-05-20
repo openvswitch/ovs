@@ -85,19 +85,18 @@ IFS='.\|-' read mainline_major mainline_minor mainline_patch major_rev \
     minor_rev _extra <<<"${current_kernel}"
 # echo mainline_major=$mainline_major mainline_minor=$mainline_minor \
 # mainline_patch=$mainline_patch major_rev=$major_rev minor_rev=$minor_rev
-if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
+if grep -qs "suse" /etc/os-release; then
+    # For SLES or OpenSUSE
+    if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+        %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
+    fi
+elif [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
     if [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ]; then
         # For RHEL 7.2 and 7.4
         if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
             %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
         fi
     fi
-elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ] && \
-     [ "$mainline_patch" -ge "73" ]; then
-     # For SLES 12 SP3
-     if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-         %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
-     fi
 else
     # Ensure that modprobe will find our modules.
     for k in $(cd /lib/modules && /bin/ls); do
