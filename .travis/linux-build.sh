@@ -118,7 +118,7 @@ fi
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
-    # Now we only need to prepare the Makefile wihtout sparse-wrapped CC.
+    # Now we only need to prepare the Makefile without sparse-wrapped CC.
     configure_ovs
 
     export DISTCHECK_CONFIGURE_FLAGS="$OPTS"
