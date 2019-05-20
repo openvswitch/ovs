@@ -1689,7 +1689,7 @@ for i in 1 2; do
         ovn-nbctl lsp-add lsw0 lp$i$j
         ip_addrs="192.168.0.$i$j"
         ovn-nbctl lsp-set-addresses lp$i$j "f0:00:00:00:00:$i$j $ip_addrs"
-        ovn-nbctl lsp-set-port-security lp$i$j f0:00:00:00:00:$i$j
+        ovn-nbctl --wait=hv lsp-set-port-security lp$i$j f0:00:00:00:00:$i$j
     done
 done
 
@@ -2883,11 +2883,10 @@ for is in 1 2 3; do
               echo $arp >> $id$jd2$kd.expected
             done
           done
-          if test $(vif_to_hv ${is}${js}${ks}) = $(vif_to_hv ${id}${jd}1); then
-              hmac=8000000000$o4
-              rmac=00000000ff$id$jd
-              echo ${hmac}${rmac}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> ${id}11.expected
-          fi
+
+          hmac=8000000000$o4
+          rmac=00000000ff$id$jd
+          echo ${hmac}${rmac}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> ${id}11.expected
 
           host_mac=8000000000$o4
           lrmac=00000000ff$id$jd
@@ -3207,6 +3206,8 @@ sha=f00000000012
 test_arp 12 $sha $spa $tpa
 OVS_WAIT_UNTIL([ovn-sbctl find mac_binding ip="192.168.1.100" | grep f0:00:00:00:00:12])
 ovn-nbctl --wait=hv sync
+# give to the hv the time to send queued ip packets
+sleep 1
 
 # Send an IP packet from lp21 to 192.168.1.100, which should go to lp12.
 
@@ -7161,7 +7162,7 @@ ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==84' allow-related
 ovn-nbctl --log acl-add lsw0 to-lport 1000 'tcp.dst==85' allow-related
 
 ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==86' reject
-ovn-nbctl --log --severity=alert --name=reject-flow acl-add lsw0 to-lport 1000 'tcp.dst==87' reject
+ovn-nbctl --wait=hv --log --severity=alert --name=reject-flow acl-add lsw0 to-lport 1000 'tcp.dst==87' reject
 
 ovn-sbctl dump-flows
 
@@ -7268,7 +7269,7 @@ ovn-nbctl --log --severity=alert --meter=http-rl2 --name=http-acl2 acl-add lsw0 
 
 # Add an ACL that doesn't rate-limit logs.
 ovn-nbctl --log --severity=alert --name=http-acl3 acl-add lsw0 to-lport 1000 'tcp.dst==82' drop
-
+ovn-nbctl --wait=hv sync
 
 # For each ACL, send 100 packets.
 for i in `seq 1 100`; do
@@ -12058,7 +12059,7 @@ AT_CHECK([ovn-sbctl get Address_Set pg2_ip6 addresses],
          [0], [[["2001:db8:2::ff:fe00:2", "2001:db8:3::ff:fe00:3"]]
 ])
 
-ovn-nbctl set Logical_Switch ls1 \
+ovn-nbctl --wait=sb set Logical_Switch ls1 \
     other_config:subnet=10.11.0.0/24 other_config:ipv6_prefix="2001:db8:11::"
 
 dnl Check if updated address got propagated to the port group address sets
@@ -13370,7 +13371,7 @@ ovn-nbctl lsp-set-addresses sw1-p5 "unknown"
 ovn-nbctl list logical_switch_port
 
 # Now try to add duplicate addresses on a new port. These should all fail
-ovn-nbctl lsp-add sw1 sw1-p5
+ovn-nbctl --wait=sb lsp-add sw1 sw1-p5
 AT_CHECK([ovn-nbctl lsp-set-addresses sw1-p5 "00:00:00:00:00:04 10.0.0.1"], [1], [],
 [ovn-nbctl: Error on switch sw1: duplicate IPv4 address 10.0.0.1
 ])
@@ -13829,7 +13830,7 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
     ["0a:00:00:a8:01:03 192.168.1.2"
 ])
 
-ovn-nbctl lsp-set-addresses p0 router
+ovn-nbctl --wait=sb lsp-set-addresses p0 router
 
 ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses
 

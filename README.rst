@@ -1,5 +1,6 @@
-.. NOTE(stephenfin): If making changes to this file, ensure that the line
-   numbers found in 'Documentation/intro/what-is-ovs' are kept up-to-date.
+.. NOTE(stephenfin): If making changes to this file, ensure that the
+   start-after/end-before lines found in 'Documentation/intro/what-is-ovs'
+   are kept up-to-date.
 
 ============
 Open vSwitch
@@ -9,6 +10,8 @@ Open vSwitch
     :target: https://travis-ci.org/openvswitch/ovs
 .. image:: https://ci.appveyor.com/api/projects/status/github/openvswitch/ovs?branch=master&svg=true&retina=true
     :target: https://ci.appveyor.com/project/blp/ovs/history
+.. image:: https://api.cirrus-ci.com/github/openvswitch/ovs.svg
+    :target: https://cirrus-ci.com/github/openvswitch/ovs
 
 What is Open vSwitch?
 ---------------------

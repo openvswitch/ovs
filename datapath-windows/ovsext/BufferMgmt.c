@@ -260,14 +260,15 @@ static VOID
 OvsInitNBLContext(POVS_BUFFER_CONTEXT ctx,
                   UINT16 flags,
                   UINT32 origDataLength,
-                  UINT32 srcPortNo)
+                  UINT32 srcPortNo,
+                  UINT16 mru)
 {
     ctx->magic = OVS_CTX_MAGIC;
     ctx->refCount = 1;
     ctx->flags = flags;
     ctx->srcPortNo = srcPortNo;
     ctx->origDataLength = origDataLength;
-    ctx->mru = 0;
+    ctx->mru = mru;
     ctx->pendingSend = 0;
 }
 
@@ -434,7 +435,7 @@ OvsAllocateFixSizeNBL(PVOID ovsContext,
 
     OvsInitNBLContext(ctx, OVS_BUFFER_FROM_FIX_SIZE_POOL |
                       OVS_BUFFER_PRIVATE_FORWARD_CONTEXT, size,
-                      OVS_DPPORT_NUMBER_INVALID);
+                      OVS_DPPORT_NUMBER_INVALID, 0);
     line = __LINE__;
 allocate_done:
     OVS_LOG_LOUD("Allocate Fix NBL: %p, line: %d", nbl, line);
@@ -547,7 +548,7 @@ OvsAllocateVariableSizeNBL(PVOID ovsContext,
     OvsInitNBLContext(ctx, OVS_BUFFER_PRIVATE_MDL | OVS_BUFFER_PRIVATE_DATA |
                            OVS_BUFFER_PRIVATE_FORWARD_CONTEXT |
                            OVS_BUFFER_FROM_ZERO_SIZE_POOL,
-                           size, OVS_DPPORT_NUMBER_INVALID);
+                           size, OVS_DPPORT_NUMBER_INVALID, 0);
 
     OVS_LOG_LOUD("Allocate variable size NBL: %p", nbl);
     return nbl;
@@ -600,7 +601,7 @@ OvsInitExternalNBLContext(PVOID ovsContext,
      * complete.
      */
     OvsInitNBLContext(ctx, flags, NET_BUFFER_DATA_LENGTH(nb),
-                      OVS_DPPORT_NUMBER_INVALID);
+                      OVS_DPPORT_NUMBER_INVALID, 0);
     return ctx;
 }
 
@@ -817,7 +818,7 @@ OvsPartialCopyNBL(PVOID ovsContext,
     srcNb = NET_BUFFER_LIST_FIRST_NB(nbl);
     ASSERT(srcNb);
     OvsInitNBLContext(dstCtx, flags, NET_BUFFER_DATA_LENGTH(srcNb) - copySize,
-                      OVS_DPPORT_NUMBER_INVALID);
+                      OVS_DPPORT_NUMBER_INVALID, srcCtx->mru);
 
     InterlockedIncrement((LONG volatile *)&srcCtx->refCount);
 
@@ -1074,7 +1075,7 @@ OvsFullCopyNBL(PVOID ovsContext,
              OVS_BUFFER_PRIVATE_FORWARD_CONTEXT;
 
     OvsInitNBLContext(dstCtx, flags, NET_BUFFER_DATA_LENGTH(firstNb),
-                      OVS_DPPORT_NUMBER_INVALID);
+                      OVS_DPPORT_NUMBER_INVALID, srcCtx->mru);
 
 #ifdef DBG
     OvsDumpNetBufferList(nbl);

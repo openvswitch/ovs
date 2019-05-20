@@ -13,6 +13,8 @@
  *		only ignore TIME_WAIT or gone connections
  *   (C) CC Computer Consultants GmbH, 2007
  */
+#ifndef HAVE_UPSTREAM_NF_CONNCOUNT
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/in.h>
 #include <linux/in6.h>
@@ -138,7 +140,7 @@ static bool conn_free(struct nf_conncount_list *list,
 
 	if (list->count == 0) {
 		spin_unlock(&list->list_lock);
-                return free_entry;
+		return free_entry;
 	}
 
 	list->count--;
@@ -635,3 +637,5 @@ void rpl_nf_conncount_modexit(void)
 	kmem_cache_destroy(conncount_conn_cachep);
 	kmem_cache_destroy(conncount_rb_cachep);
 }
+
+#endif /* HAVE_UPSTREAM_NF_CONNCOUNT */

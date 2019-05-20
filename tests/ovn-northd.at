@@ -204,7 +204,7 @@ AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
 ovn-nbctl ls-add S1
-ovn-nbctl lsp-add S1 S1-vm1
+ovn-nbctl --wait=sb lsp-add S1 S1-vm1
 AT_CHECK([test x`ovn-nbctl lsp-get-up S1-vm1` = xdown])
 
 ovn-sbctl chassis-add hv1 geneve 127.0.0.1
@@ -224,7 +224,7 @@ ovn-nbctl ls-add S1
 ovn-nbctl lsp-add S1 S1-R1
 ovn-nbctl lsp-set-type S1-R1 router
 ovn-nbctl lsp-set-addresses S1-R1 02:ac:10:01:00:01
-ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+ovn-nbctl --wait=sb lsp-set-options S1-R1 router-port=R1-S1
 AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
 
 AT_CLEANUP
@@ -242,7 +242,7 @@ ovn-nbctl ls-add S1
 ovn-nbctl lsp-add S1 S1-R1
 ovn-nbctl lsp-set-type S1-R1 router
 ovn-nbctl lsp-set-addresses S1-R1 02:ac:10:01:00:01
-ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+ovn-nbctl --wait=sb lsp-set-options S1-R1 router-port=R1-S1
 
 ovn-sbctl lsp-bind S1-R1 gw1
 AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
@@ -263,7 +263,7 @@ ovn-nbctl ls-add S1
 ovn-nbctl lsp-add S1 S1-R1
 ovn-nbctl lsp-set-type S1-R1 router
 ovn-nbctl lsp-set-addresses S1-R1 router
-ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+ovn-nbctl --wait=sb lsp-set-options S1-R1 router-port=R1-S1
 AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
 
 AT_CLEANUP
