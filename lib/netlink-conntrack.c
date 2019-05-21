@@ -717,6 +717,73 @@ nl_ct_parse_protoinfo_tcp(struct nlattr *nla,
     return parsed;
 }
 
+/* Translate netlink SCTP state to CT_DPIF_SCTP state. */
+static uint8_t
+nl_ct_sctp_state_to_dpif(uint8_t state)
+{
+#ifdef _WIN32
+    /* For now, return the CT_DPIF_SCTP state. Not sure what windows does. */
+    return state;
+#else
+    switch (state) {
+    case SCTP_CONNTRACK_COOKIE_WAIT:
+        return CT_DPIF_SCTP_STATE_COOKIE_WAIT;
+    case SCTP_CONNTRACK_COOKIE_ECHOED:
+        return CT_DPIF_SCTP_STATE_COOKIE_ECHOED;
+    case SCTP_CONNTRACK_ESTABLISHED:
+        return CT_DPIF_SCTP_STATE_ESTABLISHED;
+    case SCTP_CONNTRACK_SHUTDOWN_SENT:
+        return CT_DPIF_SCTP_STATE_SHUTDOWN_SENT;
+    case SCTP_CONNTRACK_SHUTDOWN_RECD:
+        return CT_DPIF_SCTP_STATE_SHUTDOWN_RECD;
+    case SCTP_CONNTRACK_SHUTDOWN_ACK_SENT:
+        return CT_DPIF_SCTP_STATE_SHUTDOWN_ACK_SENT;
+    case SCTP_CONNTRACK_HEARTBEAT_SENT:
+        return CT_DPIF_SCTP_STATE_HEARTBEAT_SENT;
+    case SCTP_CONNTRACK_HEARTBEAT_ACKED:
+        return CT_DPIF_SCTP_STATE_HEARTBEAT_ACKED;
+    case SCTP_CONNTRACK_CLOSED:
+        /* Fall Through. */
+    case SCTP_CONNTRACK_NONE:
+        /* Fall Through. */
+    default:
+        return CT_DPIF_SCTP_STATE_CLOSED;
+    }
+#endif
+}
+
+static bool
+nl_ct_parse_protoinfo_sctp(struct nlattr *nla,
+                           struct ct_dpif_protoinfo *protoinfo)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_PROTOINFO_SCTP_STATE] = { .type = NL_A_U8, .optional = false },
+        [CTA_PROTOINFO_SCTP_VTAG_ORIGINAL] = { .type = NL_A_U32,
+                                               .optional = false },
+        [CTA_PROTOINFO_SCTP_VTAG_REPLY] = { .type = NL_A_U32,
+                                            .optional = false },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+    bool parsed;
+
+    parsed = nl_parse_nested(nla, policy, attrs, ARRAY_SIZE(policy));
+    if (parsed) {
+        protoinfo->proto = IPPROTO_SCTP;
+
+        protoinfo->sctp.state = nl_ct_sctp_state_to_dpif(
+            nl_attr_get_u8(attrs[CTA_PROTOINFO_SCTP_STATE]));
+        protoinfo->sctp.vtag_orig = nl_attr_get_u32(
+            attrs[CTA_PROTOINFO_SCTP_VTAG_ORIGINAL]);
+        protoinfo->sctp.vtag_reply = nl_attr_get_u32(
+            attrs[CTA_PROTOINFO_SCTP_VTAG_REPLY]);
+    } else {
+        VLOG_ERR_RL(&rl, "Could not parse nested SCTP protoinfo options. "
+                    "Possibly incompatible Linux kernel version.");
+    }
+
+    return parsed;
+}
+
 static bool
 nl_ct_parse_protoinfo(struct nlattr *nla, struct ct_dpif_protoinfo *protoinfo)
 {
@@ -737,7 +804,8 @@ nl_ct_parse_protoinfo(struct nlattr *nla, struct ct_dpif_protoinfo *protoinfo)
             parsed = nl_ct_parse_protoinfo_tcp(attrs[CTA_PROTOINFO_TCP],
                                                protoinfo);
         } else if (attrs[CTA_PROTOINFO_SCTP]) {
-            VLOG_WARN_RL(&rl, "SCTP protoinfo not yet supported!");
+            parsed = nl_ct_parse_protoinfo_sctp(attrs[CTA_PROTOINFO_SCTP],
+                                                protoinfo);
         } else {
             VLOG_WARN_RL(&rl, "Empty protoinfo!");
         }
