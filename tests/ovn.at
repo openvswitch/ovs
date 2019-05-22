@@ -6408,6 +6408,9 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 as northd
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
+as northd-backup
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
 AT_CLEANUP
 
 AT_SETUP([ovn -- ipam connectivity])
