@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-================================
-Monitoring VM Trafic Using sFlow
-================================
+=================================
+Monitoring VM Traffic Using sFlow
+=================================
 
 This document describes how to use Open vSwitch is to monitor traffic sent
 between two VMs on the same host using an sFlow collector.
