@@ -956,7 +956,10 @@ conn_update_state(struct conntrack *ct, struct dp_packet *pkt,
             break;
         case CT_UPDATE_NEW:
             ovs_mutex_lock(&ct->ct_lock);
-            conn_clean(ct, conn);
+            uint32_t hash = conn_key_hash(&conn->key, ct->hash_basis);
+            if (conn_key_lookup(ct, &conn->key, hash, now, NULL, NULL)) {
+                conn_clean(ct, conn);
+            }
             ovs_mutex_unlock(&ct->ct_lock);
             create_new_conn = true;
             break;
@@ -1089,11 +1092,15 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     bool create_new_conn = false;
     conn_key_lookup(ct, &ctx->key, ctx->hash, now, &ctx->conn, &ctx->reply);
     struct conn *conn = ctx->conn;
+    uint32_t hash;
 
     /* Delete found entry if in wrong direction. 'force' implies commit. */
     if (OVS_UNLIKELY(force && ctx->reply && conn)) {
         ovs_mutex_lock(&ct->ct_lock);
-        conn_clean(ct, conn);
+        hash = conn_key_hash(&conn->key, ct->hash_basis);
+        if (conn_key_lookup(ct, &conn->key, hash, now, NULL, NULL)) {
+            conn_clean(ct, conn);
+        }
         ovs_mutex_unlock(&ct->ct_lock);
         conn = NULL;
     }
@@ -1103,7 +1110,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
             ctx->reply = true;
             struct conn *rev_conn = conn;  /* Save for debugging. */
-            uint32_t hash = conn_key_hash(&conn->rev_key, ct->hash_basis);
+            hash = conn_key_hash(&conn->rev_key, ct->hash_basis);
             conn_key_lookup(ct, &ctx->key, hash, now, &conn, &ctx->reply);
 
             if (!conn) {
@@ -1158,8 +1165,11 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
         ovs_rwlock_unlock(&ct->resources_lock);
 
         ovs_mutex_lock(&ct->ct_lock);
-        conn = conn_not_found(ct, pkt, ctx, commit, now, nat_action_info,
-                              helper, alg_exp, ct_alg_ctl);
+        hash = conn_key_hash(&ctx->key, ct->hash_basis);
+        if (!conn_key_lookup(ct, &ctx->key, hash, now, NULL, NULL)) {
+            conn = conn_not_found(ct, pkt, ctx, commit, now, nat_action_info,
+                                  helper, alg_exp, ct_alg_ctl);
+        }
         ovs_mutex_unlock(&ct->ct_lock);
     }
 
