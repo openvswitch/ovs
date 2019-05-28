@@ -271,7 +271,7 @@ line.
 .IP
 \fBconditions\fR is a JSON array of <condition> as defined in RFC 7047 5.1
 with the following change: A condition can be either a 3-element JSON array
-as deescribed in the RFC or a boolean value..
+as described in the RFC or a boolean value.
 .IP
 If \fB\-\-detach\fR is used with \fBmonitor\fR, \fBmonitor\-cond\fR or
 \fBmonitor\-cond\-since\fR, then \fBovsdb\-client\fR detaches after it has

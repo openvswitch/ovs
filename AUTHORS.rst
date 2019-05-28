@@ -222,6 +222,7 @@ Li RongQing                        lirongqing@baidu.com
 Lian-min Wang                      liang-min.wang@intel.com
 Lilijun                            jerry.lilijun@huawei.com
 Lili Huang                         huanglili.huang@huawei.com
+Liliia Butorina                    l.butorina@partner.samsung.com
 Linda Sun                          lsun@vmware.com
 Lior Neudorfer                     lior@guardicore.com
 Liu Chang                          txfh2007@aliyun.com
@@ -530,6 +531,7 @@ Kevin Mancuso                   kevin.mancuso@rackspace.com
 Kiran Shanbhog                  kiran@vmware.com
 Kirill Kabardin
 Kirkland Spector                kspector@salesforce.com
+Klemens Nanni                   klemens@posteo.de
 Koichi Yagishita                yagishita.koichi@jrc.co.jp
 Konstantin Khorenko             khorenko@openvz.org
 Kris zhang                      zhang.kris@gmail.com

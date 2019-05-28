@@ -44,6 +44,8 @@ static unsigned int idx_count = 0;
 static void coverage_read(struct svec *);
 static unsigned int coverage_array_sum(const unsigned int *arr,
                                        const unsigned int len);
+static bool coverage_read_counter(const char *name,
+                                  unsigned long long int *count);
 
 /* Registers a coverage counter with the coverage core */
 void
@@ -72,11 +74,32 @@ coverage_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     svec_destroy(&lines);
 }
 
+static void
+coverage_unixctl_read_counter(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                              const char *argv[], void *aux OVS_UNUSED)
+{
+    unsigned long long count;
+    char *reply;
+    bool ok;
+
+    ok = coverage_read_counter(argv[1], &count);
+    if (!ok) {
+        unixctl_command_reply_error(conn, "No such counter");
+        return;
+    }
+
+    reply = xasprintf("%llu\n", count);
+    unixctl_command_reply(conn, reply);
+    free(reply);
+}
+
 void
 coverage_init(void)
 {
     unixctl_command_register("coverage/show", "", 0, 0,
                              coverage_unixctl_show, NULL);
+    unixctl_command_register("coverage/read-counter", "COUNTER", 1, 1,
+                             coverage_unixctl_read_counter, NULL);
 }
 
 /* Sorts coverage counters in descending order by total, within equal
@@ -371,4 +394,23 @@ coverage_array_sum(const unsigned int *arr, const unsigned int len)
     }
     ovs_mutex_unlock(&coverage_mutex);
     return sum;
+}
+
+static bool
+coverage_read_counter(const char *name, unsigned long long int *count)
+{
+    for (size_t i = 0; i < n_coverage_counters; i++) {
+        struct coverage_counter *c = coverage_counters[i];
+
+        if (!strcmp(c->name, name)) {
+            ovs_mutex_lock(&coverage_mutex);
+            c->total += c->count();
+            *count = c->total;
+            ovs_mutex_unlock(&coverage_mutex);
+
+            return true;
+        }
+    }
+
+    return false;
 }

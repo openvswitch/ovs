@@ -181,7 +181,7 @@ void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
                       const char *name, enum port_vlan_mode,
                       uint16_t qinq_ethtype, int vlan,
                       unsigned long *trunks, unsigned long *cvlans,
-                      bool use_priority_tags,
+                      enum port_priority_tags_mode,
                       const struct bond *, const struct lacp *,
                       bool floodable, bool protected);
 void xlate_bundle_remove(struct ofbundle *);

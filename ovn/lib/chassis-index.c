@@ -30,7 +30,7 @@ chassis_lookup_by_name(struct ovsdb_idl_index *sbrec_chassis_by_name,
 {
     struct sbrec_chassis *target = sbrec_chassis_index_init_row(
         sbrec_chassis_by_name);
-    sbrec_chassis_set_name(target, name);
+    sbrec_chassis_index_set_name(target, name);
 
     struct sbrec_chassis *retval = sbrec_chassis_index_find(
         sbrec_chassis_by_name, target);
@@ -55,7 +55,7 @@ ha_chassis_group_lookup_by_name(
 {
     struct sbrec_ha_chassis_group *target =
         sbrec_ha_chassis_group_index_init_row(sbrec_ha_chassis_grp_by_name);
-    sbrec_ha_chassis_group_set_name(target, name);
+    sbrec_ha_chassis_group_index_set_name(target, name);
 
     struct sbrec_ha_chassis_group *retval =
         sbrec_ha_chassis_group_index_find(sbrec_ha_chassis_grp_by_name,

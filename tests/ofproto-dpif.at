@@ -3467,18 +3467,18 @@ OVS_VSWITCHD_START(
    add-port br0 p1                                  trunks=10,12 -- \
    add-port br0 p2                           tag=10              -- \
    add-port br0 p3                           tag=12              \
-                   other-config:priority-tags=true               -- \
+                   other-config:priority-tags=if-nonzero         -- \
    add-port br0 p4                           tag=12              -- \
    add-port br0 p5 vlan_mode=native-tagged   tag=10              -- \
    add-port br0 p6 vlan_mode=native-tagged   tag=10 trunks=10,12 -- \
    add-port br0 p7 vlan_mode=native-untagged tag=12              -- \
    add-port br0 p8 vlan_mode=native-untagged tag=12 trunks=10,12 \
-                   other-config:priority-tags=true               -- \
+                   other-config:priority-tags=if-nonzero         -- \
    add-port br0 p9 vlan_mode=dot1q-tunnel    tag=10              other-config:qinq-ethtype=802.1q  -- \
    add-port br0 p10 vlan_mode=dot1q-tunnel   tag=10 cvlans=10,12 other-config:qinq-ethtype=802.1q  -- \
    add-port br0 p11 vlan_mode=dot1q-tunnel   tag=12              other-config:qinq-ethtype=802.1q  -- \
    add-port br0 p12 vlan_mode=dot1q-tunnel   tag=12              other-config:qinq-ethtype=802.1q  \
-                   other-config:priority-tags=true               -- \
+                   other-config:priority-tags=if-nonzero         -- \
    set Interface p1 type=dummy -- \
    set Interface p2 type=dummy -- \
    set Interface p3 type=dummy -- \

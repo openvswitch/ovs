@@ -19,6 +19,7 @@
 
 #include "bitmap.h"
 #include "hash.h"
+#include "lib/uuid.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/extend-table.h"
 
@@ -90,9 +91,10 @@ ovn_extend_table_clear(struct ovn_extend_table *table, bool existing)
     }
 }
 
+/* Remove an entry from existing table */
 void
-ovn_extend_table_remove(struct ovn_extend_table *table,
-                        struct ovn_extend_table_info *existing)
+ovn_extend_table_remove_existing(struct ovn_extend_table *table,
+                                 struct ovn_extend_table_info *existing)
 {
     /* Remove 'existing' from 'groups->existing' */
     hmap_remove(&table->existing, &existing->hmap_node);
@@ -103,21 +105,50 @@ ovn_extend_table_remove(struct ovn_extend_table *table,
     free(existing);
 }
 
+/* Remove entries in desired table that are created by the lflow_uuid */
 void
-ovn_extend_table_move(struct ovn_extend_table *table)
+ovn_extend_table_remove_desired(struct ovn_extend_table *table,
+                                const struct uuid *lflow_uuid)
+{
+    struct ovn_extend_table_info *e, *next_e;
+    HMAP_FOR_EACH_SAFE (e, next_e, hmap_node, &table->desired) {
+        if (uuid_equals(&e->lflow_uuid, lflow_uuid)) {
+            hmap_remove(&table->desired, &e->hmap_node);
+            free(e->name);
+            if (e->new_table_id) {
+                bitmap_set0(table->table_ids, e->table_id);
+            }
+            free(e);
+        }
+    }
+
+}
+
+static struct ovn_extend_table_info*
+ovn_extend_info_clone(struct ovn_extend_table_info *source)
+{
+    struct ovn_extend_table_info *clone = xmalloc(sizeof *clone);
+    clone->name = xstrdup(source->name);
+    clone->table_id = source->table_id;
+    clone->new_table_id = source->new_table_id;
+    clone->hmap_node.hash = source->hmap_node.hash;
+    clone->lflow_uuid = source->lflow_uuid;
+    return clone;
+}
+
+void
+ovn_extend_table_sync(struct ovn_extend_table *table)
 {
     struct ovn_extend_table_info *desired, *next;
 
-    /* Move the contents of desired to existing. */
+    /* Copy the contents of desired to existing. */
     HMAP_FOR_EACH_SAFE (desired, next, hmap_node, &table->desired) {
-        hmap_remove(&table->desired, &desired->hmap_node);
-
         if (!ovn_extend_table_lookup(&table->existing, desired)) {
-            hmap_insert(&table->existing, &desired->hmap_node,
-                        desired->hmap_node.hash);
-        } else {
-           free(desired->name);
-           free(desired);
+            desired->new_table_id = false;
+            struct ovn_extend_table_info *clone =
+                ovn_extend_info_clone(desired);
+            hmap_insert(&table->existing, &clone->hmap_node,
+                        clone->hmap_node.hash);
         }
     }
 }
@@ -125,7 +156,8 @@ ovn_extend_table_move(struct ovn_extend_table *table)
 /* Assign a new table ID for the table information from the bitmap.
  * If it already exists, return the old ID. */
 uint32_t
-ovn_extend_table_assign_id(struct ovn_extend_table *table, const char *name)
+ovn_extend_table_assign_id(struct ovn_extend_table *table, const char *name,
+                           struct uuid lflow_uuid)
 {
     uint32_t table_id = 0, hash;
     struct ovn_extend_table_info *table_info;
@@ -134,7 +166,8 @@ ovn_extend_table_assign_id(struct ovn_extend_table *table, const char *name)
 
     /* Check whether we have non installed but allocated group_id. */
     HMAP_FOR_EACH_WITH_HASH (table_info, hmap_node, hash, &table->desired) {
-        if (!strcmp(table_info->name, name)) {
+        if (!strcmp(table_info->name, name) &&
+            table_info->new_table_id) {
             return table_info->table_id;
         }
     }
@@ -166,6 +199,7 @@ ovn_extend_table_assign_id(struct ovn_extend_table *table, const char *name)
     table_info->table_id = table_id;
     table_info->hmap_node.hash = hash;
     table_info->new_table_id = new_table_id;
+    table_info->lflow_uuid = lflow_uuid;
 
     hmap_insert(&table->desired,
                 &table_info->hmap_node, table_info->hmap_node.hash);
