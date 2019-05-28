@@ -4,9 +4,9 @@ set -o errexit
 set -x
 
 KERNELSRC=""
-CFLAGS="-Werror"
+CFLAGS=""
 SPARSE_FLAGS=""
-EXTRA_OPTS=""
+EXTRA_OPTS="--enable-Werror"
 TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
@@ -47,7 +47,7 @@ function install_kernel()
 
     KERNELSRC=$(pwd)
     if [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
-        EXTRA_OPTS="--with-linux=$(pwd)"
+        EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
     fi
     echo "Installed kernel source in $(pwd)"
     cd ..
@@ -99,9 +99,6 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
-fi
-if [ "$CC" != "clang" ]; then
-    SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
 OPTS="$EXTRA_OPTS $*"
