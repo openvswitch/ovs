@@ -343,6 +343,7 @@ conn_clean(struct conntrack *ct, struct conn *conn)
         cmap_remove(&ct->conns, &conn->nat_conn->cm_node, hash);
     }
     ovs_list_remove(&conn->exp_node);
+    conn->cleaned = true;
     ovsrcu_postpone(delete_conn, conn);
     atomic_count_dec(&ct->n_conn);
 }
@@ -354,6 +355,7 @@ conn_clean_one(struct conntrack *ct, struct conn *conn)
     conn_clean_cmn(ct, conn);
     if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
         ovs_list_remove(&conn->exp_node);
+        conn->cleaned = true;
         atomic_count_dec(&ct->n_conn);
     }
     ovsrcu_postpone(delete_conn_one, conn);
