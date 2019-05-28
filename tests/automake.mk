@@ -21,7 +21,8 @@ EXTRA_DIST += \
 COMMON_MACROS_AT = \
 	tests/ovsdb-macros.at \
 	tests/ovs-macros.at \
-	tests/ofproto-macros.at
+	tests/ofproto-macros.at \
+	tests/ovn-macros.at
 
 TESTSUITE_AT = \
 	tests/testsuite.at \
@@ -109,7 +110,8 @@ TESTSUITE_AT = \
 	tests/ovn-controller-vtep.at \
 	tests/mcast-snooping.at \
 	tests/packet-type-aware.at \
-	tests/nsh.at
+	tests/nsh.at \
+	tests/ovn-performance.at
 
 EXTRA_DIST += $(FUZZ_REGRESSION_TESTS)
 FUZZ_REGRESSION_TESTS = \

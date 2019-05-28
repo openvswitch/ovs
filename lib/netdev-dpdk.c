@@ -4147,6 +4147,11 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
             vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
         }
 
+        /* Enable POSTCOPY support, if explicitly requested. */
+        if (dpdk_vhost_postcopy_enabled()) {
+            vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
+        }
+
         zc_enabled = dev->vhost_driver_flags
                      & RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
         /* Enable zero copy flag, if requested */

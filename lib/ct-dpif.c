@@ -428,6 +428,12 @@ const char *ct_dpif_tcp_state_string[] = {
 #undef CT_DPIF_TCP_STATE
 };
 
+const char *ct_dpif_sctp_state_string[] = {
+#define CT_DPIF_SCTP_STATE(STATE) [CT_DPIF_SCTP_STATE_##STATE] = #STATE,
+    CT_DPIF_SCTP_STATES
+#undef CT_DPIF_SCTP_STATE
+};
+
 static void
 ct_dpif_format_enum__(struct ds *ds, const char *title, unsigned int state,
                       const char *names[], unsigned int max)
@@ -498,6 +504,16 @@ ct_dpif_format_protoinfo_tcp_verbose(struct ds *ds,
 }
 
 static void
+ct_dpif_format_protoinfo_sctp(struct ds *ds,
+                              const struct ct_dpif_protoinfo *protoinfo)
+{
+    ct_dpif_format_enum(ds, "state=", protoinfo->sctp.state,
+                        ct_dpif_sctp_state_string);
+    ds_put_format(ds, ",vtag_orig=%" PRIu32 ",vtag_reply=%" PRIu32,
+                  protoinfo->sctp.vtag_orig, protoinfo->sctp.vtag_reply);
+}
+
+static void
 ct_dpif_format_protoinfo(struct ds *ds, const char *title,
                          const struct ct_dpif_protoinfo *protoinfo,
                          bool verbose)
@@ -513,6 +529,9 @@ ct_dpif_format_protoinfo(struct ds *ds, const char *title,
             } else {
                 ct_dpif_format_protoinfo_tcp(ds, protoinfo);
             }
+            break;
+        case IPPROTO_SCTP:
+            ct_dpif_format_protoinfo_sctp(ds, protoinfo);
             break;
         }
         if (title) {

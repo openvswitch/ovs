@@ -236,6 +236,14 @@ start_nb_ovsdb() {
 }
 
 start_sb_ovsdb() {
+    # Increase the limit on the number of open file descriptors, because
+    # SB DB may connect to large number of chassises, on top of connections
+    # for cluster members, northd, and serveral local unix sockets.
+    MAXFD=8192
+    if [ $(ulimit -n) -lt $MAXFD ]; then
+        ulimit -n $MAXFD
+    fi
+
     start_ovsdb__ SB sb OVN_Southbound SB_Global
 }
 

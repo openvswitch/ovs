@@ -34,10 +34,15 @@
  */
 
 #include <stdint.h>
+#include "openvswitch/hmap.h"
+#include "openvswitch/uuid.h"
+#include "openvswitch/list.h"
 
 struct ovn_extend_table;
 struct ovsdb_idl_index;
+struct ovn_desired_flow_table;
 struct hmap;
+struct hmap_node;
 struct sbrec_chassis;
 struct sbrec_dhcp_options_table;
 struct sbrec_dhcpv6_options_table;
@@ -64,6 +69,53 @@ struct uuid;
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 24
 
+enum ref_type {
+    REF_TYPE_ADDRSET,
+    REF_TYPE_PORTGROUP
+};
+
+/* Maintains the relationship for a pair of named resource and
+ * a lflow, indexed by both ref_lflow_table and lflow_ref_table. */
+struct lflow_ref_list_node {
+    struct ovs_list lflow_list; /* list for same lflow */
+    struct ovs_list ref_list; /* list for same ref */
+    enum ref_type type;
+    char *ref_name;
+    struct uuid lflow_uuid;
+};
+
+struct ref_lflow_node {
+    struct hmap_node node;
+    enum ref_type type; /* key */
+    char *ref_name; /* key */
+    struct ovs_list ref_lflow_head;
+};
+
+struct lflow_ref_node {
+    struct hmap_node node;
+    struct uuid lflow_uuid; /* key */
+    struct ovs_list lflow_ref_head;
+};
+
+struct lflow_resource_ref {
+    /* A map from a referenced resource type & name (e.g. address_set AS1)
+     * to a list of lflows that are referencing the named resource. Data
+     * type of each node in this hmap is struct ref_lflow_node. The
+     * ref_lflow_head in each node points to a list of
+     * lflow_ref_list_node.ref_list. */
+    struct hmap ref_lflow_table;
+
+    /* A map from a lflow uuid to a list of named resources that are
+     * referenced by the lflow. Data type of each node in this hmap is
+     * struct lflow_ref_node. The lflow_ref_head in each node points to
+     * a list of lflow_ref_list_node.lflow_list. */
+    struct hmap lflow_ref_table;
+};
+
+void lflow_resource_init(struct lflow_resource_ref *);
+void lflow_resource_destroy(struct lflow_resource_ref *);
+void lflow_resource_clear(struct lflow_resource_ref *);
+
 void lflow_init(void);
 void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -77,9 +129,56 @@ void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                const struct shash *port_groups,
                const struct sset *active_tunnels,
                const struct sset *local_lport_ids,
-               struct hmap *flow_table,
+               struct ovn_desired_flow_table *,
                struct ovn_extend_table *group_table,
-               struct ovn_extend_table *meter_table);
+               struct ovn_extend_table *meter_table,
+               struct lflow_resource_ref *,
+               uint32_t *conj_id_ofs);
+
+bool lflow_handle_changed_flows(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *,
+    const struct sbrec_dhcpv6_options_table *,
+    const struct sbrec_logical_flow_table *,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *,
+    uint32_t *conj_id_ofs);
+
+bool lflow_handle_changed_ref(
+    enum ref_type,
+    const char *ref_name,
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *,
+    const struct sbrec_dhcpv6_options_table *,
+    const struct sbrec_logical_flow_table *,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *,
+    uint32_t *conj_id_ofs,
+    bool *changed);
+
+void lflow_handle_changed_neighbors(
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_mac_binding_table *,
+    struct ovn_desired_flow_table *);
+
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

@@ -33,8 +33,8 @@ bfd_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
     /* NOTE: this assumes that binding.c has added the
      * ovsrec_interface table */
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
 }
 
 void

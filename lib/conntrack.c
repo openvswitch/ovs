@@ -2241,7 +2241,7 @@ tuple_to_conn_key(const struct ct_dpif_tuple *tuple, uint16_t zone,
 
 static void
 conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
-                      long long now, int bkt)
+                      long long now)
 {
     memset(entry, 0, sizeof *entry);
     conn_key_to_tuple(&conn->key, &entry->tuple_orig);
@@ -2252,23 +2252,16 @@ conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
     ovs_mutex_lock(&conn->lock);
     entry->mark = conn->mark;
     memcpy(&entry->labels, &conn->label, sizeof entry->labels);
-    ovs_mutex_unlock(&conn->lock);
 
-    /* Not implemented yet */
-    entry->timestamp.start = 0;
-    entry->timestamp.stop = 0;
-
-    ovs_mutex_lock(&conn->lock);
     long long expiration = conn->expiration - now;
-    ovs_mutex_unlock(&conn->lock);
-    entry->timeout = (expiration > 0) ? expiration / 1000 : 0;
 
     struct ct_l4_proto *class = l4_protos[conn->key.nw_proto];
     if (class->conn_get_protoinfo) {
         class->conn_get_protoinfo(conn, &entry->protoinfo);
     }
+    ovs_mutex_unlock(&conn->lock);
 
-    entry->bkt = bkt;
+    entry->timeout = (expiration > 0) ? expiration / 1000 : 0;
 
     if (conn->alg) {
         /* Caller is responsible for freeing. */
@@ -2314,7 +2307,7 @@ conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
         INIT_CONTAINER(conn, cm_node, cm_node);
         if ((!dump->filter_zone || conn->key.zone == dump->zone) &&
             (conn->conn_type != CT_CONN_TYPE_UN_NAT)) {
-            conn_to_ct_dpif_entry(conn, entry, now, 0);
+            conn_to_ct_dpif_entry(conn, entry, now);
             return 0;
         }
     }

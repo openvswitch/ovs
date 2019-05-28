@@ -149,7 +149,8 @@ struct xbundle {
                                     * NULL if all VLANs are trunked. */
     unsigned long *cvlans;         /* Bitmap of allowed customer vlans,
                                     * NULL if all VLANs are allowed */
-    bool use_priority_tags;        /* Use 802.1p tag for frames in VLAN 0? */
+    enum port_priority_tags_mode use_priority_tags;
+                                   /* Use 802.1p tag for frames in VLAN 0? */
     bool floodable;                /* No port has OFPUTIL_PC_NO_FLOOD set? */
     bool protected;                /* Protected port mode */
 };
@@ -548,7 +549,8 @@ static void xvlan_copy(struct xvlan *dst, const struct xvlan *src);
 static void xvlan_pop(struct xvlan *src);
 static void xvlan_push_uninit(struct xvlan *src);
 static void xvlan_extract(const struct flow *, struct xvlan *);
-static void xvlan_put(struct flow *, const struct xvlan *);
+static void xvlan_put(struct flow *, const struct xvlan *,
+                      enum port_priority_tags_mode);
 static void xvlan_input_translate(const struct xbundle *,
                                   const struct xvlan *in,
                                   struct xvlan *xvlan);
@@ -604,7 +606,7 @@ static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode,
                               uint16_t qinq_ethtype, int vlan,
                               unsigned long *trunks, unsigned long *cvlans,
-                              bool use_priority_tags,
+                              enum port_priority_tags_mode,
                               const struct bond *bond, const struct lacp *lacp,
                               bool floodable, bool protected);
 static void xlate_xport_set(struct xport *xport, odp_port_t odp_port,
@@ -999,7 +1001,7 @@ static void
 xlate_xbundle_set(struct xbundle *xbundle,
                   enum port_vlan_mode vlan_mode, uint16_t qinq_ethtype,
                   int vlan, unsigned long *trunks, unsigned long *cvlans,
-                  bool use_priority_tags,
+                  enum port_priority_tags_mode use_priority_tags,
                   const struct bond *bond, const struct lacp *lacp,
                   bool floodable, bool protected)
 {
@@ -1316,7 +1318,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  const char *name, enum port_vlan_mode vlan_mode,
                  uint16_t qinq_ethtype, int vlan,
                  unsigned long *trunks, unsigned long *cvlans,
-                 bool use_priority_tags,
+                 enum port_priority_tags_mode use_priority_tags,
                  const struct bond *bond, const struct lacp *lacp,
                  bool floodable, bool protected)
 {
@@ -2269,13 +2271,15 @@ xvlan_extract(const struct flow *flow, struct xvlan *xvlan)
 
 /* Put VLAN information (headers) to flow */
 static void
-xvlan_put(struct flow *flow, const struct xvlan *xvlan)
+xvlan_put(struct flow *flow, const struct xvlan *xvlan,
+          enum port_priority_tags_mode use_priority_tags)
 {
     ovs_be16 tci;
     int i;
     for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
         tci = htons(xvlan->v[i].vid | (xvlan->v[i].pcp & VLAN_PCP_MASK));
-        if (tci) {
+        if (tci || ((use_priority_tags == PORT_PRIORITY_TAGS_ALWAYS) &&
+            xvlan->v[i].tpid)) {
             tci |= htons(VLAN_CFI);
             flow->vlans[i].tpid = xvlan->v[i].tpid ?
                                   htons(xvlan->v[i].tpid) :
@@ -2449,7 +2453,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     }
 
     memcpy(&old_vlans, &ctx->xin->flow.vlans, sizeof(old_vlans));
-    xvlan_put(&ctx->xin->flow, &out_xvlan);
+    xvlan_put(&ctx->xin->flow, &out_xvlan, out_xbundle->use_priority_tags);
 
     compose_output_action(ctx, xport->ofp_port, use_recirc ? &xr : NULL,
                           false, false);
