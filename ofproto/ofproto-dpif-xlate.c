@@ -7584,6 +7584,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             && xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
+            WC_MASK_FIELD(ctx.wc, nw_proto);
+            WC_MASK_FIELD(ctx.wc, tp_src);
+            WC_MASK_FIELD(ctx.wc, tp_dst);
+            WC_MASK_FIELD(ctx.wc, dl_type);
             compose_output_action(&ctx, OFPP_LOCAL, NULL, false, false);
         }
 
