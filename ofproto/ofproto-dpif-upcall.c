@@ -2678,9 +2678,12 @@ revalidate(struct revalidator *revalidator)
             }
             if (kill_them_all || (used && used < now - max_idle)) {
                 result = UKEY_DELETE;
-            } else {
+            /*Only validate the ukey if the flow's action is not drop.Since for the drop flows, there might be not validated.*/
+            } else if (f->actions_len > 0) {
                 result = revalidate_ukey(udpif, ukey, &f->stats, &odp_actions,
                                          reval_seq, &recircs);
+            } else {
+                result = UKEY_KEEP;
             }
             ukey->dump_seq = dump_seq;
 
