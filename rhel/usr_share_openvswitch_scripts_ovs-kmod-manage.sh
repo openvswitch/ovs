@@ -17,10 +17,16 @@
 # This script is intended to be used on the following kernels.
 #   - 3.10.0 major revision 327 (RHEL 7.2)
 #   - 3.10.0 major revision 693 (RHEL 7.4)
+#   - 3.10.0 major revision 957 (RHEL 7.6)
 #   - 4.4.x,  x >= 73           (SLES 12 SP3)
 #   - 4.12.x, x >= 14           (SLES 12 SP4).
 # It is packaged in the openvswitch kmod RPM and run in the post-install
 # scripts.
+#
+# For kernel 3.10.0-957,
+# due to some backward incompatible changes introduced in minor revision 12.1,
+# kernel modules built against kernels newer than 12.1 cannot be loaded on
+# system running kernels older than 12.1, vice versa.
 #
 # For kernel 3.10.0-693,
 # due to some backward incompatible changes introduced in minor revision 17.1,
@@ -77,6 +83,11 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
     elif [ "$major_rev" = "693" ]; then
 #        echo "rhel74"
         comp_ver=11
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "957" ]; then
+#        echo "rhel76"
+        comp_ver=10
         ver_offset=4
         installed_ver="$minor_rev"
     fi
