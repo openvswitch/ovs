@@ -53,7 +53,7 @@ extern "C" {
 /**
  * ESP Header
  */
-struct esp_hdr {
+struct rte_esp_hdr {
 	ovs_be32 spi;  /**< Security Parameters Index */
 	ovs_be32 seq;  /**< packet sequence number */
 } __attribute__((__packed__));

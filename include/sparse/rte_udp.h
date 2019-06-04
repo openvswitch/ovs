@@ -89,7 +89,7 @@ extern "C" {
 /**
  * UDP Header
  */
-struct udp_hdr {
+struct rte_udp_hdr {
 	ovs_be16 src_port;    /**< UDP source port. */
 	ovs_be16 dst_port;    /**< UDP destination port. */
 	ovs_be16 dgram_len;   /**< UDP datagram length */

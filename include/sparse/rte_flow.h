@@ -479,8 +479,8 @@ static const struct rte_flow_item_raw rte_flow_item_raw_mask = {
  * Matches an Ethernet header.
  */
 struct rte_flow_item_eth {
-	struct ether_addr dst; /**< Destination MAC. */
-	struct ether_addr src; /**< Source MAC. */
+	struct rte_ether_addr dst; /**< Destination MAC. */
+	struct rte_ether_addr src; /**< Source MAC. */
 	rte_be16_t type; /**< EtherType. */
 };
 
@@ -523,7 +523,7 @@ static const struct rte_flow_item_vlan rte_flow_item_vlan_mask = {
  * Note: IPv4 options are handled by dedicated pattern items.
  */
 struct rte_flow_item_ipv4 {
-	struct ipv4_hdr hdr; /**< IPv4 header definition. */
+	struct rte_ipv4_hdr hdr; /**< IPv4 header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_IPV4. */
@@ -544,7 +544,7 @@ static const struct rte_flow_item_ipv4 rte_flow_item_ipv4_mask = {
  * Note: IPv6 options are handled by dedicated pattern items.
  */
 struct rte_flow_item_ipv6 {
-	struct ipv6_hdr hdr; /**< IPv6 header definition. */
+	struct rte_ipv6_hdr hdr; /**< IPv6 header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_IPV6. */
@@ -567,7 +567,7 @@ static const struct rte_flow_item_ipv6 rte_flow_item_ipv6_mask = {
  * Matches an ICMP header.
  */
 struct rte_flow_item_icmp {
-	struct icmp_hdr hdr; /**< ICMP header definition. */
+	struct rte_icmp_hdr hdr; /**< ICMP header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_ICMP. */
@@ -586,7 +586,7 @@ static const struct rte_flow_item_icmp rte_flow_item_icmp_mask = {
  * Matches a UDP header.
  */
 struct rte_flow_item_udp {
-	struct udp_hdr hdr; /**< UDP header definition. */
+	struct rte_udp_hdr hdr; /**< UDP header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_UDP. */
@@ -605,7 +605,7 @@ static const struct rte_flow_item_udp rte_flow_item_udp_mask = {
  * Matches a TCP header.
  */
 struct rte_flow_item_tcp {
-	struct tcp_hdr hdr; /**< TCP header definition. */
+	struct rte_tcp_hdr hdr; /**< TCP header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_TCP. */
@@ -624,7 +624,7 @@ static const struct rte_flow_item_tcp rte_flow_item_tcp_mask = {
  * Matches a SCTP header.
  */
 struct rte_flow_item_sctp {
-	struct sctp_hdr hdr; /**< SCTP header definition. */
+	struct rte_sctp_hdr hdr; /**< SCTP header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_SCTP. */
@@ -806,7 +806,7 @@ static const struct rte_flow_item_gtp rte_flow_item_gtp_mask = {
  * Matches an ESP header.
  */
 struct rte_flow_item_esp {
-	struct esp_hdr hdr; /**< ESP header definition. */
+	struct rte_esp_hdr hdr; /**< ESP header definition. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_ESP. */

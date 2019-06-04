@@ -89,7 +89,7 @@ extern "C" {
 /**
  * TCP Header
  */
-struct tcp_hdr {
+struct rte_tcp_hdr {
 	ovs_be16 src_port;  /**< TCP source port. */
 	ovs_be16 dst_port;  /**< TCP destination port. */
 	ovs_be32 sent_seq;  /**< TX data sequence number. */

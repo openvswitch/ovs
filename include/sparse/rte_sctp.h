@@ -89,7 +89,7 @@ extern "C" {
 /**
  * SCTP Header
  */
-struct sctp_hdr {
+struct rte_sctp_hdr {
 	ovs_be16 src_port; /**< Source port. */
 	ovs_be16 dst_port; /**< Destin port. */
 	ovs_be32 tag;      /**< Validation tag. */
