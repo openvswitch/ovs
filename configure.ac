@@ -81,7 +81,6 @@ AC_SEARCH_LIBS([pthread_rwlock_tryrdlock], [pthread])
 AC_SEARCH_LIBS([pthread_rwlockattr_destroy], [pthread])
 AC_FUNC_STRERROR_R
 
-OVS_CHECK_ESX
 OVS_CHECK_WIN64
 OVS_CHECK_WIN32
 OVS_CHECK_VISUAL_STUDIO_DDK

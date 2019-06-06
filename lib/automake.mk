@@ -442,12 +442,6 @@ else
 lib_libopenvswitch_la_SOURCES += lib/async-append-null.c
 endif
 
-if ESX
-lib_libopenvswitch_la_SOURCES += \
-	lib/route-table-stub.c \
-	lib/if-notifier-stub.c
-endif
-
 if HAVE_IF_DL
 lib_libopenvswitch_la_SOURCES += \
 	lib/if-notifier-bsd.c \

@@ -359,7 +359,7 @@ test_parse_expr(const char *input)
     simap_put(&ports, "lsp3", 0x13);
 
     expr = expr_parse_string(input, &symtab, &addr_sets,
-                             &port_groups, &error);
+                             &port_groups, NULL, &error);
     if (!error) {
         expr = expr_annotate(expr, &symtab, &error);
     }
