@@ -102,11 +102,12 @@ struct conn {
     /* Mutable data. */
     struct ovs_mutex lock; /* Guards all mutable fields. */
     ovs_u128 label;
-    uint32_t mark;
     long long expiration;
+    uint32_t mark;
     int seq_skew;
     bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
                         * control messages; true if reply direction. */
+    bool cleaned; /* True if cleaned from expiry lists. */
 
     /* Immutable data. */
     bool alg_related; /* True if alg data connection. */
@@ -218,9 +219,11 @@ conn_update_expiration(struct conntrack *ct, struct conn *conn,
 
     ovs_mutex_lock(&ct->ct_lock);
     ovs_mutex_lock(&conn->lock);
-    conn->expiration = now + ct_timeout_val[tm];
-    ovs_list_remove(&conn->exp_node);
-    ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
+    if (!conn->cleaned) {
+        conn->expiration = now + ct_timeout_val[tm];
+        ovs_list_remove(&conn->exp_node);
+        ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
+    }
     ovs_mutex_unlock(&conn->lock);
     ovs_mutex_unlock(&ct->ct_lock);
 

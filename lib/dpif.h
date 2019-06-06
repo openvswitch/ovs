@@ -68,9 +68,9 @@
  * datapath implements these (e.g. as the Linux and netdev datapaths do), then
  * Open vSwitch's ovs-vswitchd daemon can directly control what ports are used
  * for switching.  Some datapaths might not implement them, or implement them
- * with restrictions on the types of ports that can be added or removed
- * (e.g. on ESX), on systems where port membership can only be changed by some
- * external entity.
+ * with restrictions on the types of ports that can be added or removed,
+ * on systems where port membership can only be changed by some external
+ * entity.
  *
  * Each datapath must have a port, sometimes called the "local port", whose
  * name is the same as the datapath itself, with port number 0.  The local port
