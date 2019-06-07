@@ -1911,12 +1911,18 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 #define MAX_LIVENESS_RECURSION 128 /* Arbitrary limit */
 
 static bool
-bucket_is_alive(const struct xlate_ctx *ctx,
-                struct ofputil_bucket *bucket, int depth)
+bucket_is_alive(const struct xlate_ctx *ctx, const struct group_dpif *group,
+                const struct ofputil_bucket *bucket, int depth)
 {
     if (depth >= MAX_LIVENESS_RECURSION) {
         xlate_report_error(ctx, "bucket chaining exceeded %d links",
                            MAX_LIVENESS_RECURSION);
+        return false;
+    }
+
+    /* In "select" groups, buckets with weight 0 are not used.
+     * In other kinds of groups, weight does not matter. */
+    if (group->up.type == OFPGT11_SELECT && bucket->weight == 0) {
         return false;
     }
 
@@ -1960,7 +1966,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
 {
     struct ofputil_bucket *bucket;
     LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
-        if (bucket_is_alive(ctx, bucket, depth)) {
+        if (bucket_is_alive(ctx, group, bucket, depth)) {
             return bucket;
         }
         xlate_report_bucket_not_live(ctx, bucket);
@@ -1979,7 +1985,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
 
     struct ofputil_bucket *bucket;
     LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
-        if (bucket_is_alive(ctx, bucket, 0)) {
+        if (bucket_is_alive(ctx, group, bucket, 0)) {
             uint32_t score =
                 (hash_int(bucket->bucket_id, basis) & 0xffff) * bucket->weight;
             if (score >= best_score) {
@@ -4742,7 +4748,7 @@ pick_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
         for (int i = 0; i <= hash_mask; i++) {
             struct ofputil_bucket *b =
                     group->hash_map[(dp_hash + i) & hash_mask];
-            if (bucket_is_alive(ctx, b, 0)) {
+            if (bucket_is_alive(ctx, group, b, 0)) {
                 return b;
             }
         }
