@@ -154,6 +154,7 @@ static struct slave *slave_lookup(const struct lacp *, const void *slave)
     OVS_REQUIRES(mutex);
 static bool info_tx_equal(struct lacp_info *, struct lacp_info *)
     OVS_REQUIRES(mutex);
+static bool slave_may_enable__(struct slave *slave) OVS_REQUIRES(mutex);
 
 static unixctl_cb_func lacp_unixctl_show;
 static unixctl_cb_func lacp_unixctl_show_stats;
@@ -324,7 +325,7 @@ lacp_is_active(const struct lacp *lacp) OVS_EXCLUDED(mutex)
 /* Processes 'packet' which was received on 'slave_'.  This function should be
  * called on all packets received on 'slave_' with Ethernet Type ETH_TYPE_LACP.
  */
-void
+bool
 lacp_process_packet(struct lacp *lacp, const void *slave_,
                     const struct dp_packet *packet)
     OVS_EXCLUDED(mutex)
@@ -333,6 +334,7 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     const struct lacp_pdu *pdu;
     long long int tx_rate;
     struct slave *slave;
+    bool lacp_may_enable = false;
 
     lacp_lock();
     slave = slave_lookup(lacp, slave_);
@@ -362,8 +364,14 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
         slave->partner = pdu->actor;
     }
 
+    /* Evaluate may_enable here to avoid dropping of packets till main thread
+     * sets may_enable to true. */
+    lacp_may_enable = slave_may_enable__(slave);
+
 out:
     lacp_unlock();
+
+    return lacp_may_enable;
 }
 
 /* Returns the lacp_status of the given 'lacp' object (which may be NULL). */

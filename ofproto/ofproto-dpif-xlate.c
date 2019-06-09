@@ -3312,6 +3312,7 @@ process_special(struct xlate_ctx *ctx, const struct xport *xport)
     const struct xbridge *xbridge = ctx->xbridge;
     const struct dp_packet *packet = ctx->xin->packet;
     enum slow_path_reason slow;
+    bool lacp_may_enable;
 
     if (!xport) {
         slow = 0;
@@ -3332,7 +3333,14 @@ process_special(struct xlate_ctx *ctx, const struct xport *xport)
     } else if (xport->xbundle && xport->xbundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
         if (packet) {
-            lacp_process_packet(xport->xbundle->lacp, xport->ofport, packet);
+            lacp_may_enable = lacp_process_packet(xport->xbundle->lacp,
+                                                  xport->ofport, packet);
+            /* Update LACP status in bond-slave to avoid packet-drops until
+             * LACP state machine is run by the main thread. */
+            if (xport->xbundle->bond && lacp_may_enable) {
+                bond_slave_set_may_enable(xport->xbundle->bond, xport->ofport,
+                                          lacp_may_enable);
+            }
         }
         slow = SLOW_LACP;
     } else if ((xbridge->stp || xbridge->rstp) &&

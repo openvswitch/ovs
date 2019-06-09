@@ -46,7 +46,7 @@ struct lacp *lacp_ref(const struct lacp *);
 void lacp_configure(struct lacp *, const struct lacp_settings *);
 bool lacp_is_active(const struct lacp *);
 
-void lacp_process_packet(struct lacp *, const void *slave,
+bool lacp_process_packet(struct lacp *, const void *slave,
                          const struct dp_packet *packet);
 enum lacp_status lacp_status(const struct lacp *);
 
