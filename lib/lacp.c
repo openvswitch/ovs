@@ -122,6 +122,7 @@ struct slave {
 
     enum slave_status status;     /* Slave status. */
     bool attached;                /* Attached. Traffic may flow. */
+    bool carrier_up;              /* Carrier state of link. */
     struct lacp_info partner;     /* Partner information. */
     struct lacp_info ntt_actor;   /* Used to decide if we Need To Transmit. */
     struct timer tx;              /* Next message transmission timer. */
@@ -350,6 +351,16 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
         goto out;
     }
 
+    /* On some NICs L1 state reporting is slow. In case LACP packets are
+     * received while carrier (L1) state is still down, drop the LACP PDU and
+     * trigger re-checking of L1 state. */
+    if (!slave->carrier_up) {
+        VLOG_INFO_RL(&rl, "%s: carrier state is DOWN,"
+                     " dropping received LACP PDU.", slave->name);
+        seq_change(connectivity_seq_get());
+        goto out;
+    }
+
     slave->status = LACP_CURRENT;
     tx_rate = lacp->fast ? LACP_FAST_TIME_TX : LACP_SLOW_TIME_TX;
     timer_set_duration(&slave->rx, LACP_RX_MULTIPLIER * tx_rate);
@@ -456,7 +467,8 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
 /* This function should be called whenever the carrier status of 'slave_' has
  * changed.  If 'lacp' is null, this function has no effect.*/
 void
-lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
+lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_,
+                           bool carrier_up)
     OVS_EXCLUDED(mutex)
 {
     struct slave *slave;
@@ -473,7 +485,11 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
     if (slave->status == LACP_CURRENT || slave->lacp->active) {
         slave_set_expired(slave);
     }
-    slave->count_carrier_changed++;
+
+    if (slave->carrier_up != carrier_up) {
+        slave->carrier_up = carrier_up;
+        slave->count_carrier_changed++;
+    }
 
 out:
     lacp_unlock();
@@ -498,11 +514,18 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
 {
     if (lacp) {
         struct slave *slave;
-        bool ret;
+        bool ret = false;
 
         lacp_lock();
         slave = slave_lookup(lacp, slave_);
-        ret = slave ? slave_may_enable__(slave) : false;
+        if (slave) {
+            /* It is only called when carrier is up. So, enable slave's
+             * carrier state if it is currently down. */
+            if (!slave->carrier_up) {
+                slave->carrier_up = true;
+            }
+            ret = slave_may_enable__(slave);
+        }
         lacp_unlock();
         return ret;
     } else {
@@ -820,7 +843,9 @@ slave_get_priority(struct slave *slave, struct lacp_info *priority)
 static bool
 slave_may_tx(const struct slave *slave) OVS_REQUIRES(mutex)
 {
-    return slave->lacp->active || slave->status != LACP_DEFAULTED;
+    /* Check for L1 state as well as LACP state. */
+    return (slave->carrier_up) && ((slave->lacp->active) ||
+            (slave->status != LACP_DEFAULTED));
 }
 
 static struct slave *

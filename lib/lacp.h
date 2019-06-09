@@ -60,7 +60,8 @@ struct lacp_slave_settings {
 void lacp_slave_register(struct lacp *, void *slave_,
                          const struct lacp_slave_settings *);
 void lacp_slave_unregister(struct lacp *, const void *slave);
-void lacp_slave_carrier_changed(const struct lacp *, const void *slave);
+void lacp_slave_carrier_changed(const struct lacp *, const void *slave,
+                                bool carrier_up);
 bool lacp_slave_may_enable(const struct lacp *, const void *slave);
 bool lacp_slave_is_current(const struct lacp *, const void *slave_);
 
