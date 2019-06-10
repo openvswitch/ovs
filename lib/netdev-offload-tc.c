@@ -1571,8 +1571,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         return -ifindex;
     }
 
-    /* make sure there is no ingress qdisc */
-    tc_add_del_qdisc(ifindex, false, 0, TC_INGRESS);
+    /* make sure there is no ingress/egress qdisc */
+    tc_add_del_qdisc(ifindex, false, 0, hook);
 
     if (ovsthread_once_start(&block_once)) {
         probe_tc_block_support(ifindex);
