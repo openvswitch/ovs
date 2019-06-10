@@ -92,6 +92,7 @@ Clint Byrum                        clint@fewbar.com
 Cong Wang                          amwang@redhat.com
 Conner Herriges                    conner.herriges@ibm.com
 Damien Millescamps                 damien.millescamps@6wind.com
+Damijan Skvarc                     damjan.skvarc@gmail.com
 Dan Carpenter                      dan.carpenter@oracle.com
 Dan McGregor                       dan.mcgregor@usask.ca
 Dan Wendlandt
@@ -170,6 +171,7 @@ Iman Tabrizian                     tabrizian@outlook.com
 Isaku Yamahata                     yamahata@valinux.co.jp
 Ivan Dyukov                        i.dyukov@samsung.com
 IWASE Yusuke                       iwase.yusuke@gmail.com
+Jaime Caamaño Ruiz                 jcaamano@suse.com
 Jakub Libosvar                     libosvar@redhat.com
 Jakub Sitnicki                     jsitnicki@gmail.com
 James P.                           roampune@gmail.com
@@ -222,6 +224,7 @@ Li RongQing                        lirongqing@baidu.com
 Lian-min Wang                      liang-min.wang@intel.com
 Lilijun                            jerry.lilijun@huawei.com
 Lili Huang                         huanglili.huang@huawei.com
+Liliia Butorina                    l.butorina@partner.samsung.com
 Linda Sun                          lsun@vmware.com
 Lior Neudorfer                     lior@guardicore.com
 Liu Chang                          txfh2007@aliyun.com
@@ -233,6 +236,7 @@ Lucian Petrut                      lpetrut@cloudbasesolutions.com
 Luigi Rizzo                        rizzo@iet.unipi.it
 Luis E. P.                         l31g@hotmail.com
 Lukasz Rzasik                      lukasz.rzasik@gmail.com
+Maciej Józefczyk                   mjozefcz@redhat.com
 Madhu Challa                       challa@noironetworks.com
 Manohar K C                        manukc@gmail.com
 Marcin Mirecki                     mmirecki@redhat.com
@@ -530,6 +534,7 @@ Kevin Mancuso                   kevin.mancuso@rackspace.com
 Kiran Shanbhog                  kiran@vmware.com
 Kirill Kabardin
 Kirkland Spector                kspector@salesforce.com
+Klemens Nanni                   klemens@posteo.de
 Koichi Yagishita                yagishita.koichi@jrc.co.jp
 Konstantin Khorenko             khorenko@openvz.org
 Kris zhang                      zhang.kris@gmail.com

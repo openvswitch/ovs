@@ -66,6 +66,7 @@ struct flow;
 struct ofpbuf;
 struct shash;
 struct simap;
+struct sset;
 
 /* "Measurement level" of a field.  See "Level of Measurement" in the large
  * comment on struct expr_symbol below for more information. */
@@ -388,10 +389,12 @@ void expr_format(const struct expr *, struct ds *);
 void expr_print(const struct expr *);
 struct expr *expr_parse(struct lexer *, const struct shash *symtab,
                         const struct shash *addr_sets,
-                        const struct shash *port_groups);
+                        const struct shash *port_groups,
+                        struct sset *addr_sets_ref);
 struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                const struct shash *addr_sets,
                                const struct shash *port_groups,
+                               struct sset *addr_sets_ref,
                                char **errorp);
 
 struct expr *expr_clone(struct expr *);

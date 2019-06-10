@@ -14,10 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This version of the script is intended to be used on kernel version 3.10.0
-# major revision 327 (RHEL 7.2) and 693 (RHEL 7.4), and kernel version 4.4.x,
-# x >= 73 (SLES 12 SP3) only. It is packaged in the openvswitch kmod RPM
-# and run in the post-install scripts.
+# This script is intended to be used on the following kernels.
+#   - 3.10.0 major revision 327 (RHEL 7.2)
+#   - 3.10.0 major revision 693 (RHEL 7.4)
+#   - 3.10.0 major revision 957 (RHEL 7.6)
+#   - 4.4.x,  x >= 73           (SLES 12 SP3)
+#   - 4.12.x, x >= 14           (SLES 12 SP4).
+# It is packaged in the openvswitch kmod RPM and run in the post-install
+# scripts.
+#
+# For kernel 3.10.0-957,
+# due to some backward incompatible changes introduced in minor revision 12.1,
+# kernel modules built against kernels newer than 12.1 cannot be loaded on
+# system running kernels older than 12.1, vice versa.
 #
 # For kernel 3.10.0-693,
 # due to some backward incompatible changes introduced in minor revision 17.1,
@@ -33,6 +42,10 @@
 # kernel modules built with 4.4.73 can run on systems with kernel versions from
 # 4.4.73 to 4.4.114; modules built against 4.4.120 can run on systems from
 # 4.4.120 onwards.
+#
+# For kernel 4.12.x, x>=14,
+# kernel modules built with the oldest compatible kernel 4.12.14-94.41.1 can
+# run on all versions onwards.
 #
 # This script checks the current running kernel version, and update symlinks
 # for the openvswitch kernel modules in the appropriate kernel directory,
@@ -72,11 +85,23 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
         comp_ver=11
         ver_offset=4
         installed_ver="$minor_rev"
+    elif [ "$major_rev" = "957" ]; then
+#        echo "rhel76"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
     fi
 elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ]; then
     if [ "$mainline_patch" -ge "73" ]; then
 #        echo "sles12sp3"
         comp_ver=114
+        ver_offset=2
+        installed_ver="$mainline_patch"
+    fi
+elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
+    if [ "$mainline_patch" -ge "14" ]; then
+#        echo "sles12sp4"
+        comp_ver=14
         ver_offset=2
         installed_ver="$mainline_patch"
     fi

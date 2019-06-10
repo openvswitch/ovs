@@ -1,0 +1,180 @@
+# OVN_CLEANUP_VSWITCH(sim)
+#
+# Gracefully terminate vswitch daemons in the
+# specified sandbox.
+m4_define([OVN_CLEANUP_VSWITCH],[
+    as $1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+])
+
+# OVN_CLEANUP_SBOX(sbox)
+#
+# Gracefully terminate OVN daemons in the specified
+# sandbox instance. The sandbox name "vtep" is treated
+# as a special case, and is assumed to have ovn-controller-vtep
+# and ovs-vtep daemons running instead of ovn-controller.
+m4_define([OVN_CLEANUP_SBOX],[
+    as $1
+    if test "$1" = "vtep"; then
+        OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+        OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+    else
+        OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    fi
+    OVN_CLEANUP_VSWITCH([$1])
+])
+
+# OVN_CLEANUP(sim [, sim ...])
+#
+# Gracefully terminate all OVN daemons, including those in the
+# specified sandbox instances.
+m4_define([OVN_CLEANUP],[
+    m4_foreach([sbox], [$@], [
+        OVN_CLEANUP_SBOX([sbox])
+    ])
+    as ovn-sb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as ovn-nb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as northd
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+    as northd-backup
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+    OVN_CLEANUP_VSWITCH([main])
+])
+
+m4_divert_push([PREPARE_TESTS])
+
+# ovn_init_db DATABASE
+#
+# Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb"),
+# starts its ovsdb-server instance, and sets the appropriate environment
+# variable (OVN_SB_DB or OVN_NB_DB) so that ovn-sbctl or ovn-nbctl uses the
+# database by default.
+#
+# Usually invoked from ovn_start.
+ovn_init_db () {
+    echo "creating $1 database"
+    local d=$ovs_base/$1
+    mkdir "$d" || return 1
+    : > "$d"/.$1.db.~lock~
+    as $1 ovsdb-tool create "$d"/$1.db "$abs_top_srcdir"/ovn/$1.ovsschema
+    as $1 start_daemon ovsdb-server --remote=punix:"$d"/$1.sock "$d"/$1.db
+    local var=`echo $1_db | tr a-z- A-Z_`
+    AS_VAR_SET([$var], [unix:$ovs_base/$1/$1.sock]); export $var
+}
+
+# ovn_start
+#
+# Creates and initializes ovn-sb and ovn-nb databases and starts their
+# ovsdb-server instance, sets appropriate environment variables so that
+# ovn-sbctl and ovn-nbctl use them by default, and starts ovn-northd running
+# against them.
+ovn_start () {
+    ovn_init_db ovn-sb; ovn-sbctl init
+    ovn_init_db ovn-nb; ovn-nbctl init
+
+    echo "starting ovn-northd"
+    mkdir "$ovs_base"/northd
+    as northd start_daemon ovn-northd -v \
+               --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
+               --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+
+    echo "starting backup ovn-northd"
+    mkdir "$ovs_base"/northd-backup
+    as northd-backup start_daemon ovn-northd -v \
+               --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
+               --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+}
+
+# Interconnection networks.
+#
+# When multiple sandboxed Open vSwitch instances exist, one will inevitably
+# want to connect them together.  These commands allow for that.  Conceptually,
+# an interconnection network is a switch for which these functions make it easy
+# to plug into other switches in other sandboxed Open vSwitch instances.
+# Interconnection networks are implemented as bridges in a switch named "main",
+# so to use interconnection networks please avoid working with that switch
+# directly.
+
+# net_add NETWORK
+#
+# Creates a new interconnection network named NETWORK.
+net_add () {
+    test -d "$ovs_base"/main || sim_add main || return 1
+    as main ovs-vsctl add-br "$1"
+}
+
+# net_attach NETWORK BRIDGE
+#
+# Adds a new port to BRIDGE in the default sandbox (as set with as()) and plugs
+# it into the NETWORK interconnection network.  NETWORK must already have been
+# created by a previous invocation of net_add.  The default sandbox must not be
+# "main".
+net_attach () {
+    local net=$1 bridge=$2
+
+    local port=${sandbox}_$bridge
+    as main ovs-vsctl \
+        -- add-port $net $port \
+        -- set Interface $port options:pstream="punix:$ovs_base/main/$port.sock" options:rxq_pcap="$ovs_base/main/$port-rx.pcap" options:tx_pcap="$ovs_base/main/$port-tx.pcap" \
+        || return 1
+
+    ovs-vsctl \
+        -- set Interface $bridge options:tx_pcap="$ovs_base/$sandbox/$bridge-tx.pcap" options:rxq_pcap="$ovs_base/$sandbox/$bridge-rx.pcap" \
+        -- add-port $bridge ${bridge}_$net \
+        -- set Interface ${bridge}_$net options:stream="unix:$ovs_base/main/$port.sock" options:rxq_pcap="$ovs_base/$sandbox/${bridge}_$net-rx.pcap" options:tx_pcap="$ovs_base/$sandbox/${bridge}_$net-tx.pcap" \
+        || return 1
+}
+
+# ovn_attach NETWORK BRIDGE IP [MASKLEN]
+#
+# First, this command attaches BRIDGE to interconnection network NETWORK, just
+# like "net_attach NETWORK BRIDGE".  Second, it configures (simulated) IP
+# address IP (with network mask length MASKLEN, which defaults to 24) on
+# BRIDGE.  Finally, it configures the Open vSwitch database to work with OVN
+# and starts ovn-controller.
+ovn_attach() {
+    local net=$1 bridge=$2 ip=$3 masklen=${4-24}
+    net_attach $net $bridge || return 1
+
+    mac=`ovs-vsctl get Interface $bridge mac_in_use | sed s/\"//g`
+    arp_table="$arp_table $sandbox,$bridge,$ip,$mac"
+    ovs-appctl netdev-dummy/ip4addr $bridge $ip/$masklen >/dev/null || return 1
+    ovs-appctl ovs/route/add $ip/$masklen $bridge >/dev/null || return 1
+    ovs-vsctl \
+        -- set Open_vSwitch . external-ids:system-id=$sandbox \
+        -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
+        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve,vxlan \
+        -- set Open_vSwitch . external-ids:ovn-encap-ip=$ip \
+        -- add-br br-int \
+        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true \
+        || return 1
+    start_daemon ovn-controller || return 1
+}
+
+# OVN_POPULATE_ARP
+#
+# This pre-populates the ARP tables of all of the OVN instances that have been
+# started with ovn_attach().  That means that packets sent from one hypervisor
+# to another never get dropped or delayed by ARP resolution, which makes
+# testing easier.
+ovn_populate_arp__() {
+    for e1 in $arp_table; do
+        set `echo $e1 | sed 's/,/ /g'`; sb1=$1 br1=$2 ip=$3 mac=$4
+        for e2 in $arp_table; do
+            set `echo $e2 | sed 's/,/ /g'`; sb2=$1 br2=$2
+            if test $sb1,$br1 != $sb2,$br2; then
+                as $sb2 ovs-appctl tnl/neigh/set $br2 $ip $mac || return 1
+            fi
+        done
+    done
+}
+m4_divert_pop([PREPARE_TESTS])
+
+m4_define([OVN_POPULATE_ARP], [AT_CHECK(ovn_populate_arp__, [0], [ignore])])

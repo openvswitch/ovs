@@ -11,3 +11,5 @@ debugging.
 Displays the averaged per-second rates for the last few seconds, the
 last minute and the last hour, and the total counts of all of the
 coverage counters.
+.IP "\fBcoverage/read-counter\fR \fIcounter\fR"
+Displays the total count for the given coverage \fIcounter\fR.

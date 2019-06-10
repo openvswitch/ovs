@@ -1395,8 +1395,11 @@ netdev_dpdk_destruct(struct netdev *netdev)
          * device are closed.
          */
         if (!remove_on_close || !netdev_dpdk_get_num_ports(rte_dev)) {
-            if (rte_dev_remove(rte_dev) < 0) {
-                VLOG_ERR("Device '%s' can not be detached", dev->devargs);
+            int ret = rte_dev_remove(rte_dev);
+
+            if (ret < 0) {
+                VLOG_ERR("Device '%s' can not be detached: %s.",
+                         dev->devargs, rte_strerror(-ret));
             } else {
                 /* Device was closed and detached. */
                 VLOG_INFO("Device '%s' has been removed and detached",
@@ -4145,6 +4148,11 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         /* Enable IOMMU support, if explicitly requested. */
         if (dpdk_vhost_iommu_enabled()) {
             vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
+        }
+
+        /* Enable POSTCOPY support, if explicitly requested. */
+        if (dpdk_vhost_postcopy_enabled()) {
+            vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
         }
 
         zc_enabled = dev->vhost_driver_flags

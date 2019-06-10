@@ -561,6 +561,9 @@ struct ovnact_encode_params {
     /* A struct to figure out the meter_id for meter actions. */
     struct ovn_extend_table *meter_table;
 
+    /* The logical flow uuid that drove this action. */
+    struct uuid lflow_uuid;
+
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this
      * mapping and data related to flow tables:

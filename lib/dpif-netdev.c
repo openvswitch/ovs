@@ -2381,9 +2381,9 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
 
     ovs_mutex_lock(&pmd->dp->port_mutex);
     port = dp_netdev_lookup_port(pmd->dp, in_port);
-    if (!port) {
+    if (!port || netdev_vport_is_vport_class(port->netdev->netdev_class)) {
         ovs_mutex_unlock(&pmd->dp->port_mutex);
-        return -1;
+        goto err_free;
     }
     ret = netdev_flow_put(port->netdev, &offload->match,
                           CONST_CAST(struct nlattr *, offload->actions),
@@ -2392,20 +2392,22 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
     ovs_mutex_unlock(&pmd->dp->port_mutex);
 
     if (ret) {
-        if (!modification) {
-            flow_mark_free(mark);
-        } else {
-            mark_to_flow_disassociate(pmd, flow);
-        }
-        return -1;
+        goto err_free;
     }
 
     if (!modification) {
         megaflow_to_mark_associate(&flow->mega_ufid, mark);
         mark_to_flow_associate(mark, flow);
     }
-
     return 0;
+
+err_free:
+    if (!modification) {
+        flow_mark_free(mark);
+    } else {
+        mark_to_flow_disassociate(pmd, flow);
+    }
+    return -1;
 }
 
 static void *
@@ -5098,7 +5100,7 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
     uint64_t improvement = 0;
     uint32_t num_pmds;
     uint32_t *pmd_corelist;
-    struct rxq_poll *poll, *poll_next;
+    struct rxq_poll *poll;
     bool ret;
 
     num_pmds = cmap_count(&dp->poll_threads);
@@ -5124,13 +5126,14 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
         /* Estimate the cycles to cover all intervals. */
         total_cycles *= PMD_RXQ_INTERVAL_MAX;
 
-        HMAP_FOR_EACH_SAFE (poll, poll_next, node, &pmd->poll_list) {
-            uint64_t proc_cycles = 0;
+        ovs_mutex_lock(&pmd->port_mutex);
+        HMAP_FOR_EACH (poll, node, &pmd->poll_list) {
             for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
-                proc_cycles += dp_netdev_rxq_get_intrvl_cycles(poll->rxq, i);
+                total_proc += dp_netdev_rxq_get_intrvl_cycles(poll->rxq, i);
             }
-            total_proc += proc_cycles;
         }
+        ovs_mutex_unlock(&pmd->port_mutex);
+
         if (total_proc) {
             curr_pmd_usage[num_pmds] = (total_proc * 100) / total_cycles;
         }

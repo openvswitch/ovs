@@ -1104,8 +1104,8 @@ put_arp(inport, arp.spa, arp.sha);
 # put_dhcp_opts
 reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1);
     encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.40.01.02.03.04.03.04.0a.00.00.01,pause)
-reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org",wpad="https://example.org",bootfile_name="https://127.0.0.1/boot.ipxe",path_prefix="/tftpboot");
-    formats as reg2[5] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.254.0, mtu = 1400, domain = "ovn.org", wpad = "https://example.org", bootfile_name = "https://127.0.0.1/boot.ipxe", path_prefix = "/tftpboot");
+reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain_name="ovn.org",wpad="https://example.org",bootfile_name="https://127.0.0.1/boot.ipxe",path_prefix="/tftpboot");
+    formats as reg2[5] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.254.0, mtu = 1400, domain_name = "ovn.org", wpad = "https://example.org", bootfile_name = "https://127.0.0.1/boot.ipxe", path_prefix = "/tftpboot");
     encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67.fc.13.68.74.74.70.73.3a.2f.2f.65.78.61.6d.70.6c.65.2e.6f.72.67.43.1b.68.74.74.70.73.3a.2f.2f.31.32.37.2e.30.2e.30.2e.31.2f.62.6f.6f.74.2e.69.70.78.65.d2.09.2f.74.66.74.70.62.6f.6f.74,pause)
 reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0,tftp_server_address={10.0.0.4,10.0.0.5});
     formats as reg0[15] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.255.0, mtu = 1400, ip_forward_enable = 1, default_ttl = 121, dns_server = {8.8.8.8, 7.7.7.7}, classless_static_route = {30.0.0.0/24, 10.0.0.4, 40.0.0.0/16, 10.0.0.6, 0.0.0.0/0, 10.0.0.1}, ethernet_encap = 1, router_discovery = 0, tftp_server_address = {10.0.0.4, 10.0.0.5});
@@ -1125,8 +1125,8 @@ reg1[0] = put_dhcp_opts(offerip=1.2.3.4, xyzzy);
     Syntax error at `xyzzy' expecting DHCPv4 option name.
 reg1[0] = put_dhcp_opts(offerip="xyzzy");
     DHCPv4 option offerip requires numeric value.
-reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4);
-    DHCPv4 option domain requires string value.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain_name=1.2.3.4);
+    DHCPv4 option domain_name requires string value.
 
 # nd_ns
 nd_ns { nd.target = xxreg0; output; };
@@ -3857,24 +3857,7 @@ echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${d
 
 OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
-
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -4808,23 +4791,7 @@ OVS_WAIT_UNTIL([test 8 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 # vif1-tx.pcap should have received the DHCPv4 request packet
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -5096,23 +5063,7 @@ trim_zeros > 5.packets
 cat 5.expected | cut -c 1-120,125- > expout
 AT_CHECK([cat 5.packets | cut -c 1-120,125- ], [0], [expout])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -6406,6 +6357,9 @@ as ovn-nb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as northd-backup
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
 AT_CLEANUP
@@ -8036,25 +7990,7 @@ expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}00351
 echo $expected > expected
 OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [expected])
 
-for sim in hv1 hv2 hv3; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
@@ -8468,23 +8404,8 @@ reset_pcap_file hv1-vif2 hv1/vif2
 rm -f 1.expected
 rm -f 2.expected
 
-as hv1
- OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4 HV, 1 LS, 1 LR, packet test with HA distributed router gateway port])
@@ -13252,6 +13173,81 @@ logical_port=ls1-lp_ext1`
     test "$chassis" = "$hv1_uuid"])
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
+AT_CLEANUP
+
+AT_SETUP([ovn -- Address Set Incremental Processing])
+AT_KEYWORDS([ovn_as_inc])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.10
+
+ovn-nbctl ls-add ls1
+for i in 1 2; do
+    ovn-nbctl lsp-add ls1 lp$i \
+        -- lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.1.$i"
+    as hv1 ovs-vsctl \
+        -- add-port br-int vif$i \
+        -- set Interface vif$i \
+            external-ids:iface-id=lp$i
+done
+
+for i in 1 2 3; do
+    as1_uuid=`ovn-nbctl --wait=hv create addr name=as1`
+    as2_uuid=`ovn-nbctl --wait=hv create addr name=as2`
+    ovn-nbctl --wait=hv acl-add ls1 to-lport 200 \
+            'outport=="lp1" && ip4 && ip4.src == {$as1, $as2}' allow-related
+    ovn-nbctl --wait=hv set addr as1 addresses="10.1.2.10"
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.10"], [0], [ignore])
+
+    # Update address set as1
+    ovn-nbctl --wait=hv set addr as1 addresses="10.1.2.10 10.1.2.11"
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.11"], [0], [ignore])
+
+    # Update address set as2
+    ovn-nbctl --wait=hv set addr as2 addresses="10.1.2.12 10.1.2.13"
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.12"], [0], [ignore])
+
+    # Add another ACL referencing as1
+    n_flows_before=`ovs-ofctl dump-flows br-int | grep "10.1.2.10" | wc -l`
+    ovn-nbctl --wait=hv acl-add ls1 to-lport 200 \
+            'outport=="lp2" && ip4 && ip4.src == $as1' allow-related
+    n_flows_after=`ovs-ofctl dump-flows br-int | grep "10.1.2.10" | wc -l`
+    AT_CHECK([test $(expr $n_flows_before \* 2) = $n_flows_after], [0], [ignore])
+
+    # Remove an ACL
+    ovn-nbctl --wait=hv acl-del ls1 to-lport 200 \
+            'outport=="lp2" && ip4 && ip4.src == $as1'
+    n_flows_after=`ovs-ofctl dump-flows br-int | grep "10.1.2.10" | wc -l`
+    AT_CHECK([test $n_flows_before = $n_flows_after], [0], [ignore])
+
+    # Remove as1 while it is still used by an ACL, the lflows should be reparsed and
+    # parsing should fail.
+    echo "before del as1"
+    ovn-nbctl list addr | grep as1
+    ovn-nbctl --wait=hv destroy addr $as1_uuid
+    echo "after del as1"
+    ovn-nbctl list addr | grep as1
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.10"], [1], [ignore])
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.12"], [1], [ignore])
+
+    # Recreate as1
+    as1_uuid=`ovn-nbctl --wait=hv create addr name=as1`
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.12"], [0], [ignore])
+
+    # Remove ACLs and address sets
+    ovn-nbctl --wait=hv destroy addr $as1_uuid -- destroy addr $as2_uuid
+    AT_CHECK([ovs-ofctl dump-flows br-int | grep "10.1.2.12"], [1], [ignore])
+
+    ovn-nbctl --wait=hv acl-del ls1
+done
+
+# Gracefully terminate daemons
+OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ovn-controller restart])

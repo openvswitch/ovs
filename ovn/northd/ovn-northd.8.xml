@@ -341,7 +341,7 @@
       </li>
 
       <li>
-        A priority-65535 flow that drops all trafic in the reply direction
+        A priority-65535 flow that drops all traffic in the reply direction
         with <code>ct_label.blocked</code> set meaning that the connection
         should no longer be allowed due to a policy change.  Packets
         in the request direction are skipped here to let a newly created

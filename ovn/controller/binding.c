@@ -53,16 +53,16 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_ports);
 
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_port);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_interfaces);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_qos);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_interfaces);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_qos);
 
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_external_ids);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_status);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_external_ids);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_status);
 
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_qos);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_qos_col_type);
@@ -427,6 +427,41 @@ sbrec_get_port_encap(const struct sbrec_chassis *chassis_rec,
     return best_encap;
 }
 
+static bool
+is_our_chassis(const struct sbrec_chassis *chassis_rec,
+               const struct sbrec_port_binding *binding_rec,
+               const struct sset *active_tunnels,
+               const struct shash *lport_to_iface,
+               const struct sset *local_lports)
+{
+    const struct ovsrec_interface *iface_rec
+        = shash_find_data(lport_to_iface, binding_rec->logical_port);
+
+    bool our_chassis = false;
+    if (iface_rec
+        || (binding_rec->parent_port && binding_rec->parent_port[0] &&
+            sset_contains(local_lports, binding_rec->parent_port))) {
+        /* This port is in our chassis unless it is a localport. */
+        our_chassis = strcmp(binding_rec->type, "localport");
+    } else if (!strcmp(binding_rec->type, "l2gateway")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "l2gateway-chassis");
+        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
+    } else if (!strcmp(binding_rec->type, "chassisredirect") ||
+               !strcmp(binding_rec->type, "external")) {
+        our_chassis = ha_chassis_group_contains(binding_rec->ha_chassis_group,
+                                                chassis_rec) &&
+                      ha_chassis_group_is_active(binding_rec->ha_chassis_group,
+                                                 active_tunnels, chassis_rec);
+    } else if (!strcmp(binding_rec->type, "l3gateway")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "l3gateway-chassis");
+        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
+    }
+
+    return our_chassis;
+}
+
 static void
 consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
                         struct ovsdb_idl_txn *ovs_idl_txn,
@@ -445,7 +480,8 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
     const struct ovsrec_interface *iface_rec
         = shash_find_data(lport_to_iface, binding_rec->logical_port);
 
-    bool our_chassis = false;
+    bool our_chassis = is_our_chassis(chassis_rec, binding_rec, active_tunnels,
+                                      lport_to_iface, local_lports);
     if (iface_rec
         || (binding_rec->parent_port && binding_rec->parent_port[0] &&
             sset_contains(local_lports, binding_rec->parent_port))) {
@@ -460,14 +496,7 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
         if (iface_rec && qos_map && ovs_idl_txn) {
             get_qos_params(binding_rec, qos_map);
         }
-        /* This port is in our chassis unless it is a localport. */
-        if (strcmp(binding_rec->type, "localport")) {
-            our_chassis = true;
-        }
     } else if (!strcmp(binding_rec->type, "l2gateway")) {
-        const char *chassis_id = smap_get(&binding_rec->options,
-                                          "l2gateway-chassis");
-        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
         if (our_chassis) {
             sset_add(local_lports, binding_rec->logical_port);
             add_local_datapath(sbrec_datapath_binding_by_key,
@@ -478,19 +507,12 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
     } else if (!strcmp(binding_rec->type, "chassisredirect")) {
         if (ha_chassis_group_contains(binding_rec->ha_chassis_group,
                                       chassis_rec)) {
-            our_chassis = ha_chassis_group_is_active(
-                binding_rec->ha_chassis_group,
-                active_tunnels, chassis_rec);
-
             add_local_datapath(sbrec_datapath_binding_by_key,
                                sbrec_port_binding_by_datapath,
                                sbrec_port_binding_by_name,
                                binding_rec->datapath, false, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "l3gateway")) {
-        const char *chassis_id = smap_get(&binding_rec->options,
-                                          "l3gateway-chassis");
-        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
         if (our_chassis) {
             add_local_datapath(sbrec_datapath_binding_by_key,
                                sbrec_port_binding_by_datapath,
@@ -501,14 +523,9 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
         /* Add all localnet ports to local_lports so that we allocate ct zones
          * for them. */
         sset_add(local_lports, binding_rec->logical_port);
-        our_chassis = false;
     } else if (!strcmp(binding_rec->type, "external")) {
         if (ha_chassis_group_contains(binding_rec->ha_chassis_group,
                                       chassis_rec)) {
-            our_chassis = ha_chassis_group_is_active(
-                binding_rec->ha_chassis_group,
-                active_tunnels, chassis_rec);
-
             add_local_datapath(sbrec_datapath_binding_by_key,
                                sbrec_port_binding_by_datapath,
                                sbrec_port_binding_by_name,
@@ -524,6 +541,7 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
         update_local_lport_ids(local_lport_ids, binding_rec);
     }
 
+    ovs_assert(ovnsb_idl_txn);
     if (ovnsb_idl_txn) {
         const char *vif_chassis = smap_get(&binding_rec->options,
                                            "requested-chassis");
@@ -661,6 +679,49 @@ binding_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     shash_destroy(&lport_to_iface);
     sset_destroy(&egress_ifaces);
     hmap_destroy(&qos_map);
+}
+
+/* Returns true if port-binding changes potentially require flow changes on
+ * the current chassis. Returns false if we are sure there is no impact. */
+bool
+binding_evaluate_port_binding_changes(
+        const struct sbrec_port_binding_table *pb_table,
+        const struct ovsrec_bridge *br_int,
+        const struct sbrec_chassis *chassis_rec,
+        struct sset *active_tunnels,
+        struct sset *local_lports)
+{
+    if (!chassis_rec) {
+        return true;
+    }
+
+    const struct sbrec_port_binding *binding_rec;
+    struct shash lport_to_iface = SHASH_INITIALIZER(&lport_to_iface);
+    struct sset egress_ifaces = SSET_INITIALIZER(&egress_ifaces);
+    if (br_int) {
+        get_local_iface_ids(br_int, &lport_to_iface, local_lports,
+                            &egress_ifaces);
+    }
+    SBREC_PORT_BINDING_TABLE_FOR_EACH_TRACKED (binding_rec, pb_table) {
+        /* XXX: currently OVSDB change tracking doesn't support getting old
+         * data when the operation is update, so if a port-binding moved from
+         * this chassis to another, there is no easy way to find out the
+         * change. To workaround this problem, we just makes sure if
+         * any port *related to* this chassis has any change, then trigger
+         * recompute.
+         *
+         * - If a regular VIF is unbound from this chassis, the local ovsdb
+         *   interface table will be updated, which will trigger recompute.
+         *
+         * - If the port is not a regular VIF, always trigger recompute. */
+        if (binding_rec->chassis == chassis_rec
+            || is_our_chassis(chassis_rec, binding_rec,
+                              active_tunnels, &lport_to_iface, local_lports)
+            || strcmp(binding_rec->type, "")) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* Returns true if the database is all cleaned up, false if more work is

@@ -4,9 +4,9 @@ set -o errexit
 set -x
 
 KERNELSRC=""
-CFLAGS="-Werror"
+CFLAGS=""
 SPARSE_FLAGS=""
-EXTRA_OPTS=""
+EXTRA_OPTS="--enable-Werror"
 TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
@@ -19,7 +19,9 @@ function install_kernel()
         PREFIX="v2.6/longterm/v2.6.32"
     fi
 
-    wget https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz
+    url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz"
+    # Download kernel sources. Try direct link on CDN failure.
+    wget ${url} || wget ${url} || wget ${url/cdn/www}
     tar xvf linux-${1}.tar.xz > /dev/null
     cd linux-${1}
     make allmodconfig
@@ -45,7 +47,7 @@ function install_kernel()
 
     KERNELSRC=$(pwd)
     if [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
-        EXTRA_OPTS="--with-linux=$(pwd)"
+        EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
     fi
     echo "Installed kernel source in $(pwd)"
     cd ..
@@ -97,9 +99,6 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
-elif [ "$CC" != "clang" ]; then
-    # DPDK headers currently trigger sparse errors
-    SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
 OPTS="$EXTRA_OPTS $*"
@@ -116,7 +115,7 @@ fi
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
-    # Now we only need to prepare the Makefile wihtout sparse-wrapped CC.
+    # Now we only need to prepare the Makefile without sparse-wrapped CC.
     configure_ovs
 
     export DISTCHECK_CONFIGURE_FLAGS="$OPTS"

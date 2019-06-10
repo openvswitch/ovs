@@ -61,7 +61,7 @@ struct condition_aux {
     const struct sset *active_tunnels;
 };
 
-static void consider_logical_flow(
+static bool consider_logical_flow(
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const struct sbrec_logical_flow *,
@@ -74,10 +74,11 @@ static void consider_logical_flow(
     const struct shash *port_groups,
     const struct sset *active_tunnels,
     const struct sset *local_lport_ids,
-    uint32_t *conj_id_ofs,
-    struct hmap *flow_table,
+    struct ovn_desired_flow_table *,
     struct ovn_extend_table *group_table,
-    struct ovn_extend_table *meter_table);
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs);
 
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
@@ -133,6 +134,128 @@ is_switch(const struct sbrec_datapath_binding *ldp)
 
 }
 
+void
+lflow_resource_init(struct lflow_resource_ref *lfrr)
+{
+    hmap_init(&lfrr->ref_lflow_table);
+    hmap_init(&lfrr->lflow_ref_table);
+}
+
+void
+lflow_resource_destroy(struct lflow_resource_ref *lfrr)
+{
+    struct ref_lflow_node *rlfn, *rlfn_next;
+    HMAP_FOR_EACH_SAFE (rlfn, rlfn_next, node, &lfrr->ref_lflow_table) {
+        free(rlfn->ref_name);
+        struct lflow_ref_list_node *lrln, *next;
+        LIST_FOR_EACH_SAFE (lrln, next, ref_list, &rlfn->ref_lflow_head) {
+            ovs_list_remove(&lrln->ref_list);
+            ovs_list_remove(&lrln->lflow_list);
+            free(lrln);
+        }
+        hmap_remove(&lfrr->ref_lflow_table, &rlfn->node);
+        free(rlfn);
+    }
+    hmap_destroy(&lfrr->ref_lflow_table);
+
+    struct lflow_ref_node *lfrn, *lfrn_next;
+    HMAP_FOR_EACH_SAFE (lfrn, lfrn_next, node, &lfrr->lflow_ref_table) {
+        hmap_remove(&lfrr->lflow_ref_table, &lfrn->node);
+        free(lfrn);
+    }
+    hmap_destroy(&lfrr->lflow_ref_table);
+}
+
+void
+lflow_resource_clear(struct lflow_resource_ref *lfrr)
+{
+    lflow_resource_destroy(lfrr);
+    lflow_resource_init(lfrr);
+}
+
+static struct ref_lflow_node*
+ref_lflow_lookup(struct hmap *ref_lflow_table,
+                 enum ref_type type, const char *ref_name)
+{
+    struct ref_lflow_node *rlfn;
+
+    HMAP_FOR_EACH_WITH_HASH (rlfn, node, hash_string(ref_name, type),
+                             ref_lflow_table) {
+        if (rlfn->type == type && !strcmp(rlfn->ref_name, ref_name)) {
+            return rlfn;
+        }
+    }
+    return NULL;
+}
+
+static struct lflow_ref_node*
+lflow_ref_lookup(struct hmap *lflow_ref_table,
+                 const struct uuid *lflow_uuid)
+{
+    struct lflow_ref_node *lfrn;
+
+    HMAP_FOR_EACH_WITH_HASH (lfrn, node, uuid_hash(lflow_uuid),
+                             lflow_ref_table) {
+        if (uuid_equals(&lfrn->lflow_uuid, lflow_uuid)) {
+            return lfrn;
+        }
+    }
+    return NULL;
+}
+
+static void
+lflow_resource_add(struct lflow_resource_ref *lfrr, enum ref_type type,
+                   const char *ref_name, const struct uuid *lflow_uuid)
+{
+    struct ref_lflow_node *rlfn = ref_lflow_lookup(&lfrr->ref_lflow_table,
+                                                   type, ref_name);
+    if (!rlfn) {
+        rlfn = xzalloc(sizeof *rlfn);
+        rlfn->node.hash = hash_string(ref_name, type);
+        rlfn->type = type;
+        rlfn->ref_name = xstrdup(ref_name);
+        ovs_list_init(&rlfn->ref_lflow_head);
+        hmap_insert(&lfrr->ref_lflow_table, &rlfn->node, rlfn->node.hash);
+    }
+
+    struct lflow_ref_node *lfrn = lflow_ref_lookup(&lfrr->lflow_ref_table,
+                                                   lflow_uuid);
+    if (!lfrn) {
+        lfrn = xzalloc(sizeof *lfrn);
+        lfrn->node.hash = uuid_hash(lflow_uuid);
+        lfrn->lflow_uuid = *lflow_uuid;
+        ovs_list_init(&lfrn->lflow_ref_head);
+        hmap_insert(&lfrr->lflow_ref_table, &lfrn->node, lfrn->node.hash);
+    }
+
+    struct lflow_ref_list_node *lrln = xzalloc(sizeof *lrln);
+    lrln->type = type;
+    lrln->ref_name = xstrdup(ref_name);
+    lrln->lflow_uuid = *lflow_uuid;
+    ovs_list_push_back(&rlfn->ref_lflow_head, &lrln->ref_list);
+    ovs_list_push_back(&lfrn->lflow_ref_head, &lrln->lflow_list);
+}
+
+static void
+lflow_resource_destroy_lflow(struct lflow_resource_ref *lfrr,
+                            const struct uuid *lflow_uuid)
+{
+    struct lflow_ref_node *lfrn = lflow_ref_lookup(&lfrr->lflow_ref_table,
+                                                   lflow_uuid);
+    if (!lfrn) {
+        return;
+    }
+
+    hmap_remove(&lfrr->lflow_ref_table, &lfrn->node);
+    struct lflow_ref_list_node *lrln, *next;
+    LIST_FOR_EACH_SAFE (lrln, next, lflow_list, &lfrn->lflow_ref_head) {
+        ovs_list_remove(&lrln->ref_list);
+        ovs_list_remove(&lrln->lflow_list);
+        free(lrln);
+    }
+    free(lfrn);
+}
+
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
 add_logical_flows(
@@ -147,11 +270,12 @@ add_logical_flows(
     const struct shash *port_groups,
     const struct sset *active_tunnels,
     const struct sset *local_lport_ids,
-    struct hmap *flow_table,
+    struct ovn_desired_flow_table *flow_table,
     struct ovn_extend_table *group_table,
-    struct ovn_extend_table *meter_table)
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs)
 {
-    uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
 
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
@@ -174,13 +298,18 @@ add_logical_flows(
     nd_ra_opts_init(&nd_ra_opts);
 
     SBREC_LOGICAL_FLOW_TABLE_FOR_EACH (lflow, logical_flow_table) {
-        consider_logical_flow(sbrec_multicast_group_by_name_datapath,
-                              sbrec_port_binding_by_name,
-                              lflow, local_datapaths,
-                              chassis, &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
-                              addr_sets, port_groups, active_tunnels,
-                              local_lport_ids, &conj_id_ofs,
-                              flow_table, group_table, meter_table);
+        if (!consider_logical_flow(sbrec_multicast_group_by_name_datapath,
+                                   sbrec_port_binding_by_name,
+                                   lflow, local_datapaths,
+                                   chassis, &dhcp_opts, &dhcpv6_opts,
+                                   &nd_ra_opts, addr_sets, port_groups,
+                                   active_tunnels, local_lport_ids,
+                                   flow_table, group_table, meter_table,
+                                   lfrr, conj_id_ofs)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+            VLOG_ERR_RL(&rl, "Conjunction id overflow when processing lflow "
+                        UUID_FMT, UUID_ARGS(&lflow->header_.uuid));
+        }
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -188,7 +317,210 @@ add_logical_flows(
     nd_ra_opts_destroy(&nd_ra_opts);
 }
 
-static void
+bool
+lflow_handle_changed_flows(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *dhcp_options_table,
+    const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+    const struct sbrec_logical_flow_table *logical_flow_table,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *chassis,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *flow_table,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs)
+{
+    bool ret = true;
+    const struct sbrec_logical_flow *lflow;
+
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_TABLE_FOR_EACH (dhcp_opt_row, dhcp_options_table) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
+
+    const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
+    SBREC_DHCPV6_OPTIONS_TABLE_FOR_EACH (dhcpv6_opt_row,
+                                         dhcpv6_options_table) {
+       dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
+                    dhcpv6_opt_row->type);
+    }
+
+    struct hmap nd_ra_opts = HMAP_INITIALIZER(&nd_ra_opts);
+    nd_ra_opts_init(&nd_ra_opts);
+
+    /* Handle removed flows first, and then other flows, so that when
+     * the flows being added and removed have same match conditions
+     * can be processed in the proper order */
+    SBREC_LOGICAL_FLOW_TABLE_FOR_EACH_TRACKED (lflow, logical_flow_table) {
+        /* Remove any flows that should be removed. */
+        if (sbrec_logical_flow_is_deleted(lflow)) {
+            VLOG_DBG("handle deleted lflow "UUID_FMT,
+                     UUID_ARGS(&lflow->header_.uuid));
+            ofctrl_remove_flows(flow_table, &lflow->header_.uuid);
+            /* Delete entries from lflow resource reference. */
+            lflow_resource_destroy_lflow(lfrr, &lflow->header_.uuid);
+        }
+    }
+    SBREC_LOGICAL_FLOW_TABLE_FOR_EACH_TRACKED (lflow, logical_flow_table) {
+        if (!sbrec_logical_flow_is_deleted(lflow)) {
+            /* Now, add/modify existing flows. If the logical
+             * flow is a modification, just remove the flows
+             * for this row, and then add new flows. */
+            if (!sbrec_logical_flow_is_new(lflow)) {
+                VLOG_DBG("handle updated lflow "UUID_FMT,
+                         UUID_ARGS(&lflow->header_.uuid));
+                ofctrl_remove_flows(flow_table, &lflow->header_.uuid);
+                /* Delete entries from lflow resource reference. */
+                lflow_resource_destroy_lflow(lfrr, &lflow->header_.uuid);
+            }
+            VLOG_DBG("handle new lflow "UUID_FMT,
+                     UUID_ARGS(&lflow->header_.uuid));
+            if (!consider_logical_flow(sbrec_multicast_group_by_name_datapath,
+                                       sbrec_port_binding_by_name,
+                                       lflow, local_datapaths,
+                                       chassis, &dhcp_opts, &dhcpv6_opts,
+                                       &nd_ra_opts, addr_sets, port_groups,
+                                       active_tunnels, local_lport_ids,
+                                       flow_table, group_table, meter_table,
+                                       lfrr, conj_id_ofs)) {
+                ret = false;
+                break;
+            }
+        }
+    }
+    dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
+    nd_ra_opts_destroy(&nd_ra_opts);
+    return ret;
+}
+
+bool
+lflow_handle_changed_ref(
+    enum ref_type ref_type,
+    const char *ref_name,
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_dhcp_options_table *dhcp_options_table,
+    const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+    const struct sbrec_logical_flow_table *logical_flow_table,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *chassis,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct ovn_desired_flow_table *flow_table,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs,
+    bool *changed)
+{
+    struct ref_lflow_node *rlfn = ref_lflow_lookup(&lfrr->ref_lflow_table,
+                                                   ref_type, ref_name);
+    if (!rlfn) {
+        *changed = false;
+        return true;
+    }
+    VLOG_DBG("Handle changed lflow reference for resource type: %d,"
+             " name: %s.", ref_type, ref_name);
+    *changed = false;
+    bool ret = true;
+
+    hmap_remove(&lfrr->ref_lflow_table, &rlfn->node);
+
+    struct lflow_ref_list_node *lrln, *next;
+    /* Detach the rlfn->ref_lflow_head nodes from the lfrr table and clean
+     * up all other nodes related to the lflows that uses the resource,
+     * so that the old nodes won't interfere with updating the lfrr table
+     * when reparsing the lflows. */
+    LIST_FOR_EACH (lrln, ref_list, &rlfn->ref_lflow_head) {
+        ovs_list_remove(&lrln->lflow_list);
+        lflow_resource_destroy_lflow(lfrr, &lrln->lflow_uuid);
+    }
+
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_TABLE_FOR_EACH (dhcp_opt_row, dhcp_options_table) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
+    const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
+    SBREC_DHCPV6_OPTIONS_TABLE_FOR_EACH(dhcpv6_opt_row, dhcpv6_options_table) {
+       dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
+                    dhcpv6_opt_row->type);
+    }
+
+    struct hmap nd_ra_opts = HMAP_INITIALIZER(&nd_ra_opts);
+    nd_ra_opts_init(&nd_ra_opts);
+
+    /* Re-parse the related lflows. */
+    LIST_FOR_EACH (lrln, ref_list, &rlfn->ref_lflow_head) {
+        const struct sbrec_logical_flow *lflow =
+            sbrec_logical_flow_table_get_for_uuid(logical_flow_table,
+                                                  &lrln->lflow_uuid);
+        if (!lflow) {
+            VLOG_DBG("Reprocess lflow "UUID_FMT" for resource type: %d,"
+                     " name: %s - not found.",
+                     UUID_ARGS(&lrln->lflow_uuid),
+                     ref_type, ref_name);
+            continue;
+        }
+        VLOG_DBG("Reprocess lflow "UUID_FMT" for resource type: %d,"
+                 " name: %s.",
+                 UUID_ARGS(&lrln->lflow_uuid),
+                 ref_type, ref_name);
+        ofctrl_remove_flows(flow_table, &lrln->lflow_uuid);
+        if (!consider_logical_flow(sbrec_multicast_group_by_name_datapath,
+                                   sbrec_port_binding_by_name,
+                                   lflow, local_datapaths,
+                                   chassis, &dhcp_opts, &dhcpv6_opts,
+                                   &nd_ra_opts, addr_sets, port_groups,
+                                   active_tunnels, local_lport_ids,
+                                   flow_table, group_table, meter_table,
+                                   lfrr, conj_id_ofs)) {
+            ret = false;
+            break;
+        }
+        *changed = true;
+    }
+
+    LIST_FOR_EACH_SAFE (lrln, next, ref_list, &rlfn->ref_lflow_head) {
+        ovs_list_remove(&lrln->ref_list);
+        free(lrln);
+    }
+    free(rlfn);
+
+    dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
+    nd_ra_opts_destroy(&nd_ra_opts);
+    return ret;
+}
+
+static bool
+update_conj_id_ofs(uint32_t *conj_id_ofs, uint32_t n_conjs)
+{
+    if (*conj_id_ofs + n_conjs < *conj_id_ofs) {
+        /* overflow */
+        return false;
+    }
+    *conj_id_ofs += n_conjs;
+    return true;
+}
+
+static bool
 consider_logical_flow(
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -202,20 +534,25 @@ consider_logical_flow(
     const struct shash *port_groups,
     const struct sset *active_tunnels,
     const struct sset *local_lport_ids,
-    uint32_t *conj_id_ofs,
-    struct hmap *flow_table,
+    struct ovn_desired_flow_table *flow_table,
     struct ovn_extend_table *group_table,
-    struct ovn_extend_table *meter_table)
+    struct ovn_extend_table *meter_table,
+    struct lflow_resource_ref *lfrr,
+    uint32_t *conj_id_ofs)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
     bool ingress = !strcmp(lflow->pipeline, "ingress");
 
     const struct sbrec_datapath_binding *ldp = lflow->logical_datapath;
     if (!ldp) {
-        return;
+        VLOG_DBG("lflow "UUID_FMT" has no datapath binding, skip",
+                 UUID_ARGS(&lflow->header_.uuid));
+        return true;
     }
     if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
-        return;
+        VLOG_DBG("lflow "UUID_FMT" is not for local datapath, skip",
+                 UUID_ARGS(&lflow->header_.uuid));
+        return true;
     }
 
     /* Determine translation of logical table IDs to physical table IDs. */
@@ -253,15 +590,23 @@ consider_logical_flow(
         free(error);
         ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
-        return;
+        return true;
     }
 
     /* Translate OVN match into table of OpenFlow matches. */
     struct hmap matches;
     struct expr *expr;
 
+    struct sset addr_sets_ref = SSET_INITIALIZER(&addr_sets_ref);
     expr = expr_parse_string(lflow->match, &symtab, addr_sets, port_groups,
-                             &error);
+                             &addr_sets_ref, &error);
+    const char *addr_set_name;
+    SSET_FOR_EACH (addr_set_name, &addr_sets_ref) {
+        lflow_resource_add(lfrr, REF_TYPE_ADDRSET, addr_set_name,
+                           &lflow->header_.uuid);
+    }
+    sset_destroy(&addr_sets_ref);
+
     if (!error) {
         if (prereqs) {
             expr = expr_combine(EXPR_T_AND, expr, prereqs);
@@ -277,7 +622,7 @@ consider_logical_flow(
         free(error);
         ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
-        return;
+        return true;
     }
 
     struct lookup_port_aux aux = {
@@ -298,10 +643,12 @@ consider_logical_flow(
     expr_destroy(expr);
 
     if (hmap_is_empty(&matches)) {
+        VLOG_DBG("lflow "UUID_FMT" matches are empty, skip",
+                 UUID_ARGS(&lflow->header_.uuid));
         ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
         expr_matches_destroy(&matches);
-        return;
+        return true;
     }
 
     /* Encode OVN logical actions into OpenFlow. */
@@ -313,6 +660,7 @@ consider_logical_flow(
         .is_switch = is_switch(ldp),
         .group_table = group_table,
         .meter_table = meter_table,
+        .lflow_uuid = lflow->header_.uuid,
 
         .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
         .ingress_ptable = OFTABLE_LOG_INGRESS_PIPELINE,
@@ -341,13 +689,18 @@ consider_logical_flow(
                 char buf[16];
                 snprintf(buf, sizeof(buf), "%"PRId64"_%"PRId64, dp_id, port_id);
                 if (!sset_contains(local_lport_ids, buf)) {
+                    VLOG_DBG("lflow "UUID_FMT
+                             " port %s in match is not local, skip",
+                             UUID_ARGS(&lflow->header_.uuid),
+                             buf);
                     continue;
                 }
             }
         }
         if (!m->n) {
             ofctrl_add_flow(flow_table, ptable, lflow->priority,
-                            lflow->header_.uuid.parts[0], &m->match, &ofpacts);
+                            lflow->header_.uuid.parts[0], &m->match, &ofpacts,
+                            &lflow->header_.uuid);
         } else {
             uint64_t conj_stubs[64 / 8];
             struct ofpbuf conj;
@@ -363,7 +716,7 @@ consider_logical_flow(
                 dst->n_clauses = src->n_clauses;
             }
             ofctrl_add_flow(flow_table, ptable, lflow->priority, 0, &m->match,
-                            &conj);
+                            &conj, &lflow->header_.uuid);
             ofpbuf_uninit(&conj);
         }
     }
@@ -371,7 +724,7 @@ consider_logical_flow(
     /* Clean up. */
     expr_matches_destroy(&matches);
     ofpbuf_uninit(&ofpacts);
-    *conj_id_ofs += n_conjs;
+    return update_conj_id_ofs(conj_id_ofs, n_conjs);
 }
 
 static void
@@ -389,7 +742,7 @@ put_load(const uint8_t *data, size_t len,
 static void
 consider_neighbor_flow(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                        const struct sbrec_mac_binding *b,
-                       struct hmap *flow_table)
+                       struct ovn_desired_flow_table *flow_table)
 {
     const struct sbrec_port_binding *pb
         = lport_lookup_by_name(sbrec_port_binding_by_name, b->logical_port);
@@ -431,7 +784,8 @@ consider_neighbor_flow(struct ovsdb_idl_index *sbrec_port_binding_by_name,
     uint64_t stub[1024 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
     put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
-    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, 0, &match, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, 0, &match, &ofpacts,
+                    &b->header_.uuid);
     ofpbuf_uninit(&ofpacts);
 }
 
@@ -440,13 +794,47 @@ consider_neighbor_flow(struct ovsdb_idl_index *sbrec_port_binding_by_name,
 static void
 add_neighbor_flows(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                    const struct sbrec_mac_binding_table *mac_binding_table,
-                   struct hmap *flow_table)
+                   struct ovn_desired_flow_table *flow_table)
 {
     const struct sbrec_mac_binding *b;
     SBREC_MAC_BINDING_TABLE_FOR_EACH (b, mac_binding_table) {
         consider_neighbor_flow(sbrec_port_binding_by_name, b, flow_table);
     }
 }
+
+/* Handles neighbor changes in mac_binding table. */
+void
+lflow_handle_changed_neighbors(
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
+    const struct sbrec_mac_binding_table *mac_binding_table,
+    struct ovn_desired_flow_table *flow_table)
+{
+
+    const struct sbrec_mac_binding *mb;
+    /* Handle deleted mac_bindings first, to avoid *duplicated flow* problem
+     * when same flow needs to be added. */
+    SBREC_MAC_BINDING_TABLE_FOR_EACH_TRACKED (mb, mac_binding_table) {
+        /* Remove any flows that should be removed. */
+        if (sbrec_mac_binding_is_deleted(mb)) {
+            VLOG_DBG("handle deleted mac_binding "UUID_FMT,
+                     UUID_ARGS(&mb->header_.uuid));
+            ofctrl_remove_flows(flow_table, &mb->header_.uuid);
+        }
+    }
+    SBREC_MAC_BINDING_TABLE_FOR_EACH_TRACKED (mb, mac_binding_table) {
+        if (!sbrec_mac_binding_is_deleted(mb)) {
+            if (!sbrec_mac_binding_is_new(mb)) {
+                VLOG_DBG("handle updated mac_binding "UUID_FMT,
+                         UUID_ARGS(&mb->header_.uuid));
+                ofctrl_remove_flows(flow_table, &mb->header_.uuid);
+            }
+            VLOG_DBG("handle new mac_binding "UUID_FMT,
+                     UUID_ARGS(&mb->header_.uuid));
+            consider_neighbor_flow(sbrec_port_binding_by_name, mb, flow_table);
+        }
+    }
+}
+
 
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
@@ -463,9 +851,11 @@ lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
           const struct shash *port_groups,
           const struct sset *active_tunnels,
           const struct sset *local_lport_ids,
-          struct hmap *flow_table,
+          struct ovn_desired_flow_table *flow_table,
           struct ovn_extend_table *group_table,
-          struct ovn_extend_table *meter_table)
+          struct ovn_extend_table *meter_table,
+          struct lflow_resource_ref *lfrr,
+          uint32_t *conj_id_ofs)
 {
     COVERAGE_INC(lflow_run);
 
@@ -474,7 +864,7 @@ lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                       dhcpv6_options_table, logical_flow_table,
                       local_datapaths, chassis, addr_sets, port_groups,
                       active_tunnels, local_lport_ids, flow_table, group_table,
-                      meter_table);
+                      meter_table, lfrr, conj_id_ofs);
     add_neighbor_flows(sbrec_port_binding_by_name, mac_binding_table,
                        flow_table);
 }

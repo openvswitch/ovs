@@ -212,6 +212,21 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
                [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
 ])
 
+dnl OVS_CHECK_LINUX_SCTP_CT
+dnl
+dnl Checks for kernels which need additional SCTP state
+AC_DEFUN([OVS_CHECK_LINUX_SCTP_CT], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/netfilter/nfnetlink.h>
+#include <linux/netfilter/nfnetlink_conntrack.h>
+#include <linux/netfilter/nf_conntrack_common.h>
+#include <linux/netfilter/nf_conntrack_sctp.h>], [
+        int x = SCTP_CONNTRACK_HEARTBEAT_SENT;
+    ])],
+    [AC_DEFINE([HAVE_SCTP_CONNTRACK_HEARTBEATS], [1],
+               [Define to 1 if SCTP_CONNTRACK_HEARTBEAT_SENT is available.])])
+])
+
 dnl OVS_FIND_DEPENDENCY(FUNCTION, SEARCH_LIBS, NAME_TO_PRINT)
 dnl
 dnl Check for a function in a library list.
@@ -1125,6 +1140,16 @@ AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
      [x86], [SPARSEFLAGS= CGCCFLAGS="-target=i86 -target=host_os_specs"],
      [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS="-target=x86_64 -target=host_os_specs"],
      [SPARSEFLAGS= CGCCFLAGS=])
+
+   dnl Get the the default defines for vector instructions from compiler to
+   dnl allow "sparse" correctly check the same code that will be built.
+   dnl Required for checking DPDK headers.
+   AC_MSG_CHECKING([vector options for cgcc])
+   VECTOR=$($CC -dM -E - < /dev/null | grep -E "MMX|SSE|AVX" | \
+            cut -c 9- | sed 's/ /=/' | sed 's/^/-D/' | tr '\n' ' ')
+   AC_MSG_RESULT([$VECTOR])
+   CGCCFLAGS="$CGCCFLAGS $VECTOR"
+
    AC_SUBST([SPARSEFLAGS])
    AC_SUBST([CGCCFLAGS])])
 

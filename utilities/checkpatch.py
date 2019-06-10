@@ -839,6 +839,11 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                 continue
             if current_file.startswith('include/linux'):
                 continue
+            # "sparse" includes could be copy-pasted from different sources
+            # like DPDK or Linux and could contain workarounds not suitable
+            # for a common style.
+            if current_file.startswith('include/sparse'):
+                continue
             run_checks(current_file, cmp_line, lineno)
 
     run_file_checks(text)

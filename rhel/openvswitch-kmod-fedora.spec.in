@@ -12,8 +12,8 @@
 # Use the kversion macro such as
 # RPMBUILD_OPT='-D "kversion 3.10.0-693.1.1.el7.x86_64 3.10.0-693.17.1.el7.x86_64"'
 # to build package for mulitple kernel versions in the same package
-# This only works for kernel 3.10.0 major revision 693 (RHEL 7.4)
-# and major revision 327 (RHEL 7.2)
+# This only works for kernel 3.10.0 major revision 957 (RHEL 7.6),
+# major revision 693 (RHEL 7.4) and major revision 327 (RHEL 7.2).
 # By default, build against the current running kernel version
 #%define kernel 3.1.5-1.fc16.x86_64
 #define kernel %{kernel_source}
@@ -85,19 +85,19 @@ IFS='.\|-' read mainline_major mainline_minor mainline_patch major_rev \
     minor_rev _extra <<<"${current_kernel}"
 # echo mainline_major=$mainline_major mainline_minor=$mainline_minor \
 # mainline_patch=$mainline_patch major_rev=$major_rev minor_rev=$minor_rev
-if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
-    if [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ]; then
-        # For RHEL 7.2 and 7.4
+if grep -qs "suse" /etc/os-release; then
+    # For SLES or OpenSUSE
+    if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+        %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
+    fi
+elif [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
+    if [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ] || \
+       [ "$major_rev" = "957" ]; then
+        # For RHEL 7.2, 7.4 and 7.6
         if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
             %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
         fi
     fi
-elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ] && \
-     [ "$mainline_patch" -ge "73" ]; then
-     # For SLES 12 SP3
-     if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-         %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
-     fi
 else
     # Ensure that modprobe will find our modules.
     for k in $(cd /lib/modules && /bin/ls); do

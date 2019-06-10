@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2014,6 +2014,8 @@ ofputil_encode_ofp11_group_mod(enum ofp_version ofp_version,
     ogm->type = gm->type;
     ogm->group_id = htonl(gm->group_id);
 
+    ofpmsg_update_length(b);
+
     return b;
 }
 
@@ -2080,6 +2082,7 @@ ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
     }
 
     id_pool_destroy(bucket_ids);
+    ofpmsg_update_length(b);
     return b;
 }
 

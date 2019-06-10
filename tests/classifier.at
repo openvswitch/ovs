@@ -297,12 +297,10 @@ AT_CHECK([ovs-ofctl add-flow br0 'actions=conjunction(3,1/2),note:41.42.43.44.45
 AT_CHECK([ovs-ofctl add-flow br0 'actions=note:41.42.43.44.45.46,conjunction(3,1/2)'])
 # It's not OK to use "conjunction" actions with other types of actions.
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' add-flow br0 'actions=output:1,conjunction(3,1/2)'], [1], [], [dnl
-ofp_actions|WARN|"conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
-ovs-ofctl: Incorrect instruction ordering
+ovs-ofctl: "conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
 ])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' add-flow br0 'actions=conjunction(3,1/2),output:1'], [1], [], [dnl
-ofp_actions|WARN|"conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
-ovs-ofctl: Incorrect instruction ordering
+ovs-ofctl: "conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
