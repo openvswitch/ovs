@@ -695,6 +695,8 @@ binding_evaluate_port_binding_changes(
         return true;
     }
 
+    bool changed = false;
+
     const struct sbrec_port_binding *binding_rec;
     struct shash lport_to_iface = SHASH_INITIALIZER(&lport_to_iface);
     struct sset egress_ifaces = SSET_INITIALIZER(&egress_ifaces);
@@ -718,10 +720,14 @@ binding_evaluate_port_binding_changes(
             || is_our_chassis(chassis_rec, binding_rec,
                               active_tunnels, &lport_to_iface, local_lports)
             || strcmp(binding_rec->type, "")) {
-            return true;
+            changed = true;
+            break;
         }
     }
-    return false;
+
+    shash_destroy(&lport_to_iface);
+    sset_destroy(&egress_ifaces);
+    return changed;
 }
 
 /* Returns true if the database is all cleaned up, false if more work is
