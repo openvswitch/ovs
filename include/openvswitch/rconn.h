@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
 #include "openvswitch/types.h"
 
 /* A wrapper around vconn that provides queuing and optionally reliability.
@@ -88,8 +87,8 @@ int rconn_failure_duration(const struct rconn *);
 int rconn_get_version(const struct rconn *);
 
 const char *rconn_get_state(const struct rconn *);
-time_t rconn_get_last_connection(const struct rconn *);
-time_t rconn_get_last_disconnect(const struct rconn *);
+long long int rconn_get_last_connection(const struct rconn *);
+long long int rconn_get_last_disconnect(const struct rconn *);
 unsigned int rconn_get_connection_seqno(const struct rconn *);
 int rconn_get_last_error(const struct rconn *);
 unsigned int rconn_count_txqlen(const struct rconn *);

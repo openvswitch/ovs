@@ -85,12 +85,15 @@ state_name(enum state state)
 
 /* A reliable connection to an OpenFlow switch or controller.
  *
+ * Members of type 'long long int' are times in milliseconds on the monotonic
+ * clock, as returned by time_msec().  Other times are durations in seconds.
+ *
  * See the large comment in rconn.h for more information. */
 struct rconn {
     struct ovs_mutex mutex;
 
     enum state state;
-    time_t state_entered;
+    long long int state_entered;
 
     struct vconn *vconn;
     char *name;                 /* Human-readable descriptive name. */
@@ -99,11 +102,11 @@ struct rconn {
 
     struct ovs_list txq;        /* Contains "struct ofpbuf"s. */
 
-    int backoff;
-    int max_backoff;
-    time_t backoff_deadline;
-    time_t last_connected;
-    time_t last_disconnected;
+    long long int backoff;      /* Current backoff, in milliseconds. */
+    long long int max_backoff;  /* Limit for backoff, in milliseconds. */
+    long long int backoff_deadline;
+    long long int last_connected;
+    long long int last_disconnected;
     unsigned int seqno;
     int last_error;
 
@@ -116,7 +119,7 @@ struct rconn {
      * last_admitted reports the last time we believe such a positive admission
      * control decision was made. */
     bool probably_admitted;
-    time_t last_admitted;
+    long long int last_admitted; /* Milliseconds on monotonic clock. */
 
     /* Throughout this file, "probe" is shorthand for "inactivity probe".  When
      * no activity has been observed from the peer for a while, we send out an
@@ -126,7 +129,7 @@ struct rconn {
      * "Activity" is defined as either receiving an OpenFlow message from the
      * peer or successfully sending a message that had been in 'txq'. */
     int probe_interval;         /* Secs of inactivity before sending probe. */
-    time_t last_activity;       /* Last time we saw some activity. */
+    long long int last_activity;       /* Last time we saw some activity. */
 
     uint8_t dscp;
 
@@ -152,9 +155,9 @@ uint32_t rconn_get_allowed_versions(const struct rconn *rconn)
     return rconn->allowed_versions;
 }
 
-static unsigned int elapsed_in_this_state(const struct rconn *rc)
+static long long int elapsed_in_this_state(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex);
-static unsigned int timeout(const struct rconn *rc) OVS_REQUIRES(rc->mutex);
+static long long int timeout(const struct rconn *rc) OVS_REQUIRES(rc->mutex);
 static bool timed_out(const struct rconn *rc) OVS_REQUIRES(rc->mutex);
 static void state_transition(struct rconn *rc, enum state)
     OVS_REQUIRES(rc->mutex);
@@ -247,7 +250,7 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
     ovs_mutex_init(&rc->mutex);
 
     rc->state = S_VOID;
-    rc->state_entered = time_now();
+    rc->state_entered = time_msec();
 
     rc->vconn = NULL;
     rc->name = xstrdup("void");
@@ -257,16 +260,16 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
     ovs_list_init(&rc->txq);
 
     rc->backoff = 0;
-    rc->max_backoff = max_backoff ? max_backoff : 8;
-    rc->backoff_deadline = TIME_MIN;
-    rc->last_connected = TIME_MIN;
-    rc->last_disconnected = TIME_MIN;
+    rc->max_backoff = max_backoff ? llsat_mul(1000, max_backoff) : 8000;
+    rc->backoff_deadline = LLONG_MIN;
+    rc->last_connected = LLONG_MIN;
+    rc->last_disconnected = LLONG_MIN;
     rc->seqno = 0;
 
     rc->probably_admitted = false;
-    rc->last_admitted = time_now();
+    rc->last_admitted = time_msec();
 
-    rc->last_activity = time_now();
+    rc->last_activity = time_msec();
 
     rconn_set_probe_interval(rc, probe_interval);
     rconn_set_dscp(rc, dscp);
@@ -284,11 +287,13 @@ rconn_set_max_backoff(struct rconn *rc, int max_backoff)
     OVS_EXCLUDED(rc->mutex)
 {
     ovs_mutex_lock(&rc->mutex);
-    rc->max_backoff = MAX(1, max_backoff);
-    if (rc->state == S_BACKOFF && rc->backoff > max_backoff) {
-        rc->backoff = max_backoff;
-        if (rc->backoff_deadline > time_now() + max_backoff) {
-            rc->backoff_deadline = time_now() + max_backoff;
+    rc->max_backoff = llsat_mul(1000, MAX(1, max_backoff));
+    if (rc->state == S_BACKOFF && rc->backoff > rc->max_backoff) {
+        rc->backoff = rc->max_backoff;
+
+        long long int max_deadline = llsat_add(time_msec(), rc->max_backoff);
+        if (rc->backoff_deadline > max_deadline) {
+            rc->backoff_deadline = max_deadline;
         }
     }
     ovs_mutex_unlock(&rc->mutex);
@@ -297,7 +302,9 @@ rconn_set_max_backoff(struct rconn *rc, int max_backoff)
 int
 rconn_get_max_backoff(const struct rconn *rc)
 {
-    return rc->max_backoff;
+    /* rc->max_backoff is 1000 times some 'int', so dividing by 1000 will yield
+     * a value in the range of 'int', therefore this is safe. */
+    return rc->max_backoff / 1000;
 }
 
 void
@@ -396,7 +403,7 @@ rconn_disconnect__(struct rconn *rc)
         rc->reliable = false;
 
         rc->backoff = 0;
-        rc->backoff_deadline = TIME_MIN;
+        rc->backoff_deadline = LLONG_MIN;
 
         state_transition(rc, S_VOID);
     }
@@ -434,11 +441,11 @@ rconn_destroy(struct rconn *rc)
     }
 }
 
-static unsigned int
+static long long int
 timeout_VOID(const struct rconn *rc OVS_UNUSED)
     OVS_REQUIRES(rc->mutex)
 {
-    return UINT_MAX;
+    return LLONG_MAX;
 }
 
 static void
@@ -460,17 +467,17 @@ reconnect(struct rconn *rc)
     retval = vconn_open(rc->target, rc->allowed_versions, rc->dscp,
                         &rc->vconn);
     if (!retval) {
-        rc->backoff_deadline = time_now() + rc->backoff;
+        rc->backoff_deadline = llsat_add(time_msec(), rc->backoff);
         state_transition(rc, S_CONNECTING);
     } else {
         VLOG_WARN("%s: connection failed (%s)",
                   rc->name, ovs_strerror(retval));
-        rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
+        rc->backoff_deadline = LLONG_MAX; /* Prevent resetting backoff. */
         disconnect(rc, retval);
     }
 }
 
-static unsigned int
+static long long int
 timeout_BACKOFF(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
@@ -486,11 +493,11 @@ run_BACKOFF(struct rconn *rc)
     }
 }
 
-static unsigned int
+static long long int
 timeout_CONNECTING(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    return MAX(2, rc->backoff);
+    return MAX(1000, rc->backoff);
 }
 
 static void
@@ -513,7 +520,7 @@ run_CONNECTING(struct rconn *rc)
         if (rconn_logging_connection_attempts__(rc)) {
             VLOG_INFO("%s: connection timed out", rc->name);
         }
-        rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
+        rc->backoff_deadline = LLONG_MAX; /* Prevent resetting backoff. */
         disconnect(rc, ETIMEDOUT);
     }
 }
@@ -530,23 +537,23 @@ do_tx_work(struct rconn *rc)
         if (error) {
             break;
         }
-        rc->last_activity = time_now();
+        rc->last_activity = time_msec();
     }
     if (ovs_list_is_empty(&rc->txq)) {
         poll_immediate_wake();
     }
 }
 
-static unsigned int
+static long long int
 timeout_ACTIVE(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
     if (rc->probe_interval) {
-        unsigned int base = MAX(rc->last_activity, rc->state_entered);
-        unsigned int arg = base + rc->probe_interval - rc->state_entered;
-        return arg;
+        long long int base = MAX(rc->last_activity, rc->state_entered);
+        long long int probe = llsat_mul(rc->probe_interval, 1000);
+        return llsat_sub(llsat_add(base, probe), rc->state_entered);
     }
-    return UINT_MAX;
+    return LLONG_MAX;
 }
 
 static void
@@ -554,9 +561,9 @@ run_ACTIVE(struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
     if (timed_out(rc)) {
-        unsigned int base = MAX(rc->last_activity, rc->state_entered);
-        VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
-                 rc->name, (unsigned int) (time_now() - base));
+        long long int base = MAX(rc->last_activity, rc->state_entered);
+        VLOG_DBG("%s: idle %lld seconds, sending inactivity probe",
+                 rc->name, (time_msec() - base) / 1000);
 
         /* Ordering is important here: rconn_send() can transition to BACKOFF,
          * and we don't want to transition back to IDLE if so, because then we
@@ -572,11 +579,11 @@ run_ACTIVE(struct rconn *rc)
     do_tx_work(rc);
 }
 
-static unsigned int
+static long long int
 timeout_IDLE(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    return rc->probe_interval;
+    return llsat_mul(rc->probe_interval, 1000);
 }
 
 static void
@@ -584,20 +591,20 @@ run_IDLE(struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
     if (timed_out(rc)) {
-        VLOG_ERR("%s: no response to inactivity probe after %u "
+        VLOG_ERR("%s: no response to inactivity probe after %lld "
                  "seconds, disconnecting",
-                 rc->name, elapsed_in_this_state(rc));
+                 rc->name, elapsed_in_this_state(rc) / 1000);
         disconnect(rc, ETIMEDOUT);
     } else {
         do_tx_work(rc);
     }
 }
 
-static unsigned int
+static long long int
 timeout_DISCONNECTED(const struct rconn *rc OVS_UNUSED)
     OVS_REQUIRES(rc->mutex)
 {
-    return UINT_MAX;
+    return LLONG_MAX;
 }
 
 static void
@@ -665,9 +672,6 @@ void
 rconn_run_wait(struct rconn *rc)
     OVS_EXCLUDED(rc->mutex)
 {
-    unsigned int timeo;
-    size_t i;
-
     ovs_mutex_lock(&rc->mutex);
     if (rc->vconn) {
         vconn_run_wait(rc->vconn);
@@ -675,16 +679,12 @@ rconn_run_wait(struct rconn *rc)
             vconn_wait(rc->vconn, WAIT_SEND);
         }
     }
-    for (i = 0; i < rc->n_monitors; i++) {
+    for (size_t i = 0; i < rc->n_monitors; i++) {
         vconn_run_wait(rc->monitors[i]);
         vconn_recv_wait(rc->monitors[i]);
     }
 
-    timeo = timeout(rc);
-    if (timeo != UINT_MAX) {
-        long long int expires = sat_add(rc->state_entered, timeo);
-        poll_timer_wait_until(expires * 1000);
-    }
+    poll_timer_wait_until(llsat_add(rc->state_entered, timeout(rc)));
     ovs_mutex_unlock(&rc->mutex);
 }
 
@@ -703,11 +703,11 @@ rconn_recv(struct rconn *rc)
         if (!error) {
             copy_to_monitor(rc, buffer);
             if (rc->probably_admitted || is_admitted_msg(buffer)
-                || time_now() - rc->last_connected >= 30) {
+                || time_msec() - rc->last_connected >= 30 * 1000) {
                 rc->probably_admitted = true;
-                rc->last_admitted = time_now();
+                rc->last_admitted = time_msec();
             }
-            rc->last_activity = time_now();
+            rc->last_activity = time_msec();
             if (rc->state == S_IDLE) {
                 state_transition(rc, S_ACTIVE);
             }
@@ -927,7 +927,7 @@ rconn_failure_duration(const struct rconn *rconn)
     ovs_mutex_lock(&rconn->mutex);
     duration = (rconn_is_admitted__(rconn)
                 ? 0
-                : time_now() - rconn->last_admitted);
+                : (time_msec() - rconn->last_admitted) / 1000);
     ovs_mutex_unlock(&rconn->mutex);
 
     return duration;
@@ -960,16 +960,16 @@ rconn_get_state(const struct rconn *rc)
 }
 
 /* Returns the time at which the last successful connection was made by
- * 'rc'. Returns TIME_MIN if never connected. */
-time_t
+ * 'rc'. Returns LLONG_MIN if never connected. */
+long long int
 rconn_get_last_connection(const struct rconn *rc)
 {
     return rc->last_connected;
 }
 
-/* Returns the time at which 'rc' was last disconnected. Returns TIME_MIN
+/* Returns the time at which 'rc' was last disconnected. Returns LLONG_MIN
  * if never disconnected. */
-time_t
+long long int
 rconn_get_last_disconnect(const struct rconn *rc)
 {
     return rc->last_disconnected;
@@ -1187,20 +1187,20 @@ disconnect(struct rconn *rc, int error)
         vconn_close(rc->vconn);
         rc->vconn = NULL;
     }
-    if (rc->reliable) {
-        time_t now = time_now();
 
+    long long int now = time_msec();
+    if (rc->reliable) {
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
             rc->last_disconnected = now;
             flush_queue(rc);
         }
 
         if (now >= rc->backoff_deadline) {
-            rc->backoff = 1;
+            rc->backoff = 1000;
         } else if (rc->backoff < rc->max_backoff / 2) {
-            rc->backoff = MAX(1, 2 * rc->backoff);
-            VLOG_INFO("%s: waiting %d seconds before reconnect",
-                      rc->name, rc->backoff);
+            rc->backoff = MAX(1000, 2 * rc->backoff);
+            VLOG_INFO("%s: waiting %lld seconds before reconnect",
+                      rc->name, rc->backoff / 1000);
         } else {
             if (rconn_logging_connection_attempts__(rc)) {
                 VLOG_INFO("%s: continuing to retry connections in the "
@@ -1209,10 +1209,10 @@ disconnect(struct rconn *rc, int error)
             }
             rc->backoff = rc->max_backoff;
         }
-        rc->backoff_deadline = now + rc->backoff;
+        rc->backoff_deadline = llsat_add(now, rc->backoff);
         state_transition(rc, S_BACKOFF);
     } else {
-        rc->last_disconnected = time_now();
+        rc->last_disconnected = now;
         state_transition(rc, S_DISCONNECTED);
     }
 }
@@ -1238,14 +1238,14 @@ flush_queue(struct rconn *rc)
     poll_immediate_wake();
 }
 
-static unsigned int
+static long long int
 elapsed_in_this_state(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    return time_now() - rc->state_entered;
+    return time_msec() - rc->state_entered;
 }
 
-static unsigned int
+static long long int
 timeout(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
@@ -1262,7 +1262,7 @@ static bool
 timed_out(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    return time_now() >= sat_add(rc->state_entered, timeout(rc));
+    return time_msec() >= llsat_add(rc->state_entered, timeout(rc));
 }
 
 static void
@@ -1275,7 +1275,7 @@ state_transition(struct rconn *rc, enum state state)
     }
     VLOG_DBG("%s: entering %s", rc->name, state_name(state));
     rc->state = state;
-    rc->state_entered = time_now();
+    rc->state_entered = time_msec();
 }
 
 static void
