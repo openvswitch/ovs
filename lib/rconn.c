@@ -118,12 +118,6 @@ struct rconn {
     bool probably_admitted;
     time_t last_admitted;
 
-    /* These values are simply for statistics reporting, not used directly by
-     * anything internal to the rconn (or ofproto for that matter). */
-    unsigned int n_attempted_connections, n_successful_connections;
-    time_t creation_time;
-    unsigned long int total_time_connected;
-
     /* Throughout this file, "probe" is shorthand for "inactivity probe".  When
      * no activity has been observed from the peer for a while, we send out an
      * echo request as an inactivity probe packet.  We should receive back a
@@ -271,11 +265,6 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
 
     rc->probably_admitted = false;
     rc->last_admitted = time_now();
-
-    rc->n_attempted_connections = 0;
-    rc->n_successful_connections = 0;
-    rc->creation_time = time_now();
-    rc->total_time_connected = 0;
 
     rc->last_activity = time_now();
 
@@ -468,7 +457,6 @@ reconnect(struct rconn *rc)
     if (rconn_logging_connection_attempts__(rc)) {
         VLOG_INFO("%s: connecting...", rc->name);
     }
-    rc->n_attempted_connections++;
     retval = vconn_open(rc->target, rc->allowed_versions, rc->dscp,
                         &rc->vconn);
     if (!retval) {
@@ -512,7 +500,6 @@ run_CONNECTING(struct rconn *rc)
     int retval = vconn_connect(rc->vconn);
     if (!retval) {
         VLOG(rc->reliable ? VLL_INFO : VLL_DBG, "%s: connected", rc->name);
-        rc->n_successful_connections++;
         state_transition(rc, S_ACTIVE);
         rc->version = vconn_get_version(rc->vconn);
         rc->last_connected = rc->state_entered;
@@ -1285,9 +1272,6 @@ state_transition(struct rconn *rc, enum state state)
     rc->seqno += is_connected_state(rc->state) != is_connected_state(state);
     if (is_connected_state(state) && !is_connected_state(rc->state)) {
         rc->probably_admitted = false;
-    }
-    if (rconn_is_connected(rc)) {
-        rc->total_time_connected += elapsed_in_this_state(rc);
     }
     VLOG_DBG("%s: entering %s", rc->name, state_name(state));
     rc->state = state;
