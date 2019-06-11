@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "command-line.h"
 #include "ovstest.h"
 #include "random.h"
+#include "sat-math.h"
 #include "openvswitch/vlog.h"
 
 static void
@@ -1138,6 +1139,44 @@ test_snprintf(struct ovs_cmdl_context *ctx OVS_UNUSED)
     ovs_assert(snprintf(NULL, 0, "abcde") == 5);
 }
 
+static void
+check_sat(long long int x, long long int y, const char *op,
+          long long int r_a, long long int r_b)
+{
+    if (r_a != r_b) {
+        fprintf(stderr, "%lld %s %lld saturates differently: %lld vs %lld\n",
+                x, op, y, r_a, r_b);
+        abort();
+    }
+}
+
+static void
+test_sat_math(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    long long int values[] = {
+        LLONG_MIN, LLONG_MIN + 1, LLONG_MIN + 2, LLONG_MIN + 3,
+        LLONG_MIN + 4, LLONG_MIN + 5, LLONG_MIN + 6, LLONG_MIN + 7,
+        LLONG_MIN / 2, LLONG_MIN / 3, LLONG_MIN / 4, LLONG_MIN / 5,
+        -1000, -50, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 50, 1000,
+        LLONG_MAX / 5, LLONG_MAX / 4, LLONG_MAX / 3, LLONG_MAX / 2,
+        LLONG_MAX - 7, LLONG_MAX - 6, LLONG_MAX - 5, LLONG_MAX - 4,
+        LLONG_MAX - 3, LLONG_MAX - 2, LLONG_MAX - 1, LLONG_MAX,
+    };
+
+    /* Compare the behavior of our local implementation of these functions
+     * against the compiler implementation or its fallback.  (If the fallback
+     * is in use then this is comparing the fallback to itself, so this test is
+     * only really useful if the compiler has an implementation.) */
+    for (long long int *x = values; x < values + ARRAY_SIZE(values); x++) {
+        for (long long int *y = values; y < values + ARRAY_SIZE(values); y++) {
+            check_sat(*x, *y, "+", llsat_add(*x, *y), llsat_add__(*x, *y));
+            check_sat(*x, *y, "-", llsat_sub(*x, *y), llsat_sub__(*x, *y));
+            check_sat(*x, *y, "*", llsat_mul(*x, *y), llsat_mul__(*x, *y));
+        }
+    }
+}
+
 #ifndef _WIN32
 static void
 test_file_name(struct ovs_cmdl_context *ctx)
@@ -1174,6 +1213,7 @@ static const struct ovs_cmdl_command commands[] = {
     {"assert", NULL, 0, 0, test_assert, OVS_RO},
     {"ovs_scan", NULL, 0, 0, test_ovs_scan, OVS_RO},
     {"snprintf", NULL, 0, 0, test_snprintf, OVS_RO},
+    {"sat_math", NULL, 0, 0, test_sat_math, OVS_RO},
 #ifndef _WIN32
     {"file_name", NULL, 1, INT_MAX, test_file_name, OVS_RO},
 #endif
