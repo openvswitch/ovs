@@ -344,7 +344,8 @@ nsh_get_si(const struct nsh_hdr *nsh)
 static inline ovs_be32
 nsh_path_hdr_to_spi(ovs_be32 path_hdr)
 {
-    return htonl((ntohl(path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT);
+    uint32_t hv = (ntohl(path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT;
+    return htonl(hv);
 }
 
 static inline uint32_t
@@ -368,8 +369,9 @@ nsh_spi_si_to_path_hdr(uint32_t spi, uint8_t si)
 static inline void
 nsh_set_flags_and_ttl(struct nsh_hdr *nsh, uint8_t flags, uint8_t ttl)
 {
+    uint32_t hv = ntohs(nsh->ver_flags_ttl_len);
     nsh->ver_flags_ttl_len
-        = htons((ntohs(nsh->ver_flags_ttl_len)
+        = htons((hv
                  & ~(NSH_FLAGS_MASK | NSH_TTL_MASK))
                 | ((flags << NSH_FLAGS_SHIFT)& NSH_FLAGS_MASK)
                 | ((ttl << NSH_TTL_SHIFT) & NSH_TTL_MASK));
@@ -379,8 +381,9 @@ static inline void
 nsh_set_flags_ttl_len(struct nsh_hdr *nsh, uint8_t flags, uint8_t ttl,
                       uint16_t len)
 {
+    uint32_t hv = ntohs(nsh->ver_flags_ttl_len);
     nsh->ver_flags_ttl_len
-        = htons((ntohs(nsh->ver_flags_ttl_len)
+        = htons((hv
                  & ~(NSH_FLAGS_MASK | NSH_TTL_MASK | NSH_LEN_MASK))
                 | ((flags << NSH_FLAGS_SHIFT)& NSH_FLAGS_MASK)
                 | ((ttl << NSH_TTL_SHIFT) & NSH_TTL_MASK)
@@ -390,14 +393,17 @@ nsh_set_flags_ttl_len(struct nsh_hdr *nsh, uint8_t flags, uint8_t ttl,
 static inline void
 nsh_path_hdr_set_spi(ovs_be32 *path_hdr, ovs_be32 spi)
 {
-    *path_hdr = htonl((ntohl(*path_hdr) & ~NSH_SPI_MASK) |
-                      ((ntohl(spi) << NSH_SPI_SHIFT) & NSH_SPI_MASK));
+    uint32_t hvph  = ntohl(*path_hdr);
+    uint32_t hvspi = ntohl(spi);
+    *path_hdr = htonl(( hvph & ~NSH_SPI_MASK) |
+                      ((hvspi << NSH_SPI_SHIFT) & NSH_SPI_MASK));
 }
 
 static inline void
 nsh_path_hdr_set_si(ovs_be32 *path_hdr, uint8_t si)
 {
-    *path_hdr = htonl((ntohl(*path_hdr) & ~NSH_SI_MASK) |
+    uint32_t hvph  = ntohl(*path_hdr);
+    *path_hdr = htonl((hvph & ~NSH_SI_MASK) |
                       ((si << NSH_SI_SHIFT) & NSH_SI_MASK));
 }
 

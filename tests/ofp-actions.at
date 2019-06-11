@@ -910,3 +910,212 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 add-flow br0 'ip,actions=set_field:2->ip_ecn']
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([action parsing errors])
+bad_action () {
+  AT_CHECK_UNQUOTED([ovs-ofctl parse-flow "actions=$1"], [1], [],
+    [ovs-ofctl: $2
+])
+}
+
+# output
+bad_action 'output(port=xyzzy,max_len=5)' \
+  "output to unknown truncate port: xyzzy"
+bad_action 'output(port=all,max_len=64)' \
+  "output to unsupported truncate port: all"
+bad_action 'output(port=local,max_len=64,foo=bar)' \
+  "invalid key 'foo' in output_trunc argument"
+bad_action 'output(port=local,max_len=5)' \
+  "max_len 5 is less than the minimum value 14"
+
+# controller
+bad_action 'controller(reason=asdf)' 'unknown reason "asdf"'
+bad_action 'controller(foo=bar)' 'unknown key "foo" parsing controller action'
+bad_action 'controller(userdata=123x456)' \
+  'bad hex digit in `controller'\'' action `userdata'\'
+
+# enqueue
+bad_action 'enqueue:123' \
+  '"enqueue" syntax is "enqueue:PORT:QUEUE" or "enqueue(PORT,QUEUE)"'
+bad_action 'enqueue:asdf:123' 'asdf: enqueue to unknown port'
+
+# bundle
+bad_action 'bundle:123' '123: not enough arguments to bundle action'
+bad_action 'bundle(symmetric_l4,60,hrw,ofport,ports:1,2,3,4,5)' \
+  "symmetric_l4,60,hrw,ofport,ports:1,2,3,4,5: missing slave delimiter, expected \`slaves' got \`ports'"
+bad_action 'bundle(symmetric_l4,60,hrw,ofport,slaves:xyzzy,2,3,4,5)' \
+  'xyzzy: bad port number'
+bad_action 'bundle(asymmetric_l4,60,hrw,ofport,slaves:1,2,3,4,5)' \
+  "asymmetric_l4,60,hrw,ofport,slaves:1,2,3,4,5: unknown fields \`asymmetric_l4'"
+bad_action 'bundle(symmetric_l4,60,hrt,ofport,slaves:1,2,3,4,5)' \
+  "symmetric_l4,60,hrt,ofport,slaves:1,2,3,4,5: unknown algorithm \`hrt'"
+bad_action 'bundle(symmetric_l4,60,hrw,odpport,slaves:1,2,3,4,5)' \
+  "symmetric_l4,60,hrw,odpport,slaves:1,2,3,4,5: unknown slave_type \`odpport'"
+bad_action 'bundle_load(symmetric_l4,60,hrw,ofport,actset_output,slaves:1,2,3,4,5)' \
+  "symmetric_l4,60,hrw,ofport,actset_output,slaves:1,2,3,4,5: experimenter OXM field 'actset_output' not supported"
+
+# mod_vlan_vid
+bad_action 'mod_vlan_vid:6000' '6000: not a valid VLAN VID'
+
+# mod_vlan_pcp
+bad_action 'mod_vlan_pcp:8' '8: not a valid VLAN PCP'
+
+# push_vlan
+bad_action 'push_vlan(0x1234)' '0x1234: not a valid VLAN ethertype'
+
+# mod_nw_tos
+bad_action 'mod_nw_tos(1)' '1: not a valid TOS'
+
+# mod_nw_ecn
+bad_action 'mod_nw_ecn(5)' '5: not a valid ECN'
+
+# set_field
+bad_action 'set_field:1' "1: missing \`->'"
+bad_action 'set_field:1->' "1->: missing field name following \`->'"
+bad_action 'set_field:1->x' 'x is not a valid OXM field name'
+bad_action 'set_field:1->eth_type' 'eth_type is read-only'
+bad_action 'set_field:1->eth_src' '1: invalid Ethernet address'
+bad_action 'set_field:0xffff->ip_dscp' '0xffff: value too large for 1-byte field ip_dscp'
+bad_action 'set_field:0xff->ip_dscp' '0xff is not a valid value for field ip_dscp'
+
+# reg_load
+bad_action 'load:xyzzy->eth_src' 'xyzzy->eth_src: cannot parse integer value'
+bad_action 'load:0xff->eth_src[[1..5]]' '0xff->eth_src[[1..5]]: value 00:00:00:00:00:ff does not fit into 5 bits'
+
+# push/pop
+bad_action 'push(eth_dst[[]]x)' 'x: trailing garbage following push or pop'
+
+# dec_ttl
+bad_action 'dec_ttl(,)' 'dec_ttl_cnt_ids: expected at least one controller id.'
+
+# set_mpls_label
+bad_action 'set_mpls_label' 'set_mpls_label: expected label.'
+
+# set_mpls_tc
+bad_action 'set_mpls_tc' 'set_mpls_tc: expected tc.'
+
+# set_mpls_ttl
+bad_action 'set_mpls_ttl' 'set_mpls_ttl: expected ttl.'
+
+# fin_timeout
+bad_action 'fin_timeout(foo=bar)' "invalid key 'foo' in 'fin_timeout' argument"
+
+# encap
+bad_action 'encap(,)' 'Missing encap hdr: ,'
+bad_action 'encap(x(y))' 'Encap hdr not supported: y'
+bad_action 'encap(nsh(type=1))' 'Invalid property: type'
+bad_action 'encap(nsh(md_type))' 'Value missing for encap property'
+bad_action 'encap(nsh(md_type=3))' 'invalid md_type'
+bad_action 'encap(nsh(tlv(,,)))' 'Invalid NSH TLV header: ,,'
+
+# decap
+bad_action 'decap(packet_type(x))' 'Missing packet_type attribute ns'
+bad_action 'decap(packet_type(ns=99))' 'Unsupported ns value: 99'
+bad_action 'decap(packet_type(ns=0))' 'Missing packet_type attribute type'
+bad_action 'decap(foo=bar)' 'Invalid decap argument: foo'
+
+# resubmit
+bad_action 'resubmit(asdf)' 'asdf: resubmit to unknown port'
+bad_action 'resubmit(,asdf)' 'asdf: resubmit to unknown table'
+bad_action 'resubmit(1,2,xyzzy)' 'xyzzy: unknown parameter'
+bad_action 'resubmit(in_port,255)' 'at least one "in_port" or "table" must be specified on resubmit'
+
+# learn
+bad_action 'learn(load:123->actset_output)' \
+  "123->actset_output: experimenter OXM field 'actset_output' not supported"
+bad_action 'learn(load:1234->eth_dst[[0..5]])' \
+  '1234->eth_dst[[0..5]]: value does not fit into 6 bits'
+bad_action 'learn(actset_output=0x1000)' \
+  "actset_output=0x1000: experimenter OXM field 'actset_output' not supported"
+bad_action 'learn(eth_type[[5]]=xyzzy)' \
+  "eth_type[[5]]=xyzzy: eth_type[[5]] value xyzzy cannot be parsed as a subfield (xyzzy: unknown field \`xyzzy') or an immediate value (eth_type[[5]]=xyzzy: cannot parse integer value)"
+bad_action 'learn(eth_type[[0]]=eth_type[[1..2]])' \
+  'eth_type[[0]]=eth_type[[1..2]]: bit widths of eth_type[[0]] (2) and eth_type[[1..2]] (1) differ'
+bad_action 'learn(load:->)' "load: missing source before \`->' in \`->'"
+bad_action 'learn(load:x)' "load: missing \`->' in \`x'"
+bad_action 'learn(load:1x->foo)' "load: garbage before \`->' in \`1x->foo'"
+bad_action 'learn(foo)' 'foo: unknown keyword foo'
+bad_action 'learn(table=foo)' 'unknown table "foo"'
+bad_action 'learn(table=255)' "table=255: table id 255 not valid for \`learn' action"
+bad_action 'learn(result_dst=tcp_flags)' 'tcp_flags is read-only'
+bad_action 'learn(result_dst=eth_dst)' "result_dst in 'learn' action must be a single bit"
+
+# conjunction
+bad_action 'conjunction(1, 1/1)' 'conjunction must have at least 2 clauses'
+bad_action 'conjunction(1, 1/65)' 'conjunction must have at most 64 clauses'
+bad_action 'conjunction(1, 0/2)' 'clause index must be positive'
+bad_action 'conjunction(1, 3/2)' \
+  'clause index must be less than or equal to number of clauses'
+
+# multipath
+bad_action 'multipath(1,2,3,4)' \
+  '1,2,3,4: not enough arguments to multipath action'
+bad_action 'multipath(xyzzy,50,modulo_n,1,0,NXM_NX_REG0[[]])' \
+  "xyzzy,50,modulo_n,1,0,NXM_NX_REG0[[]]: unknown fields \`xyzzy'"
+bad_action 'multipath(eth_src,50,fubar,1,0,NXM_NX_REG0[[]])' \
+  "eth_src,50,fubar,1,0,NXM_NX_REG0[[]]: unknown algorithm \`fubar'"
+bad_action 'multipath(eth_src,50,modulo_n,0,0,NXM_NX_REG0[[]])' \
+  "eth_src,50,modulo_n,0,0,NXM_NX_REG0[[]]: n_links 0 is not in valid range 1 to 65536"
+bad_action 'multipath(eth_src,50,modulo_n,1024,0,actset_output)' \
+  "eth_src,50,modulo_n,1024,0,actset_output: experimenter OXM field 'actset_output' not supported"
+bad_action 'multipath(eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]])' \
+  "eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]]: 8-bit destination field has 256 possible values, less than specified n_links 1024"
+
+# note
+bad_action 'note:x' "bad hex digit in \`note' argument"
+
+# unroll_xlate
+bad_action 'unroll_xlate' "UNROLL is an internal action that shouldn't be used via OpenFlow"
+
+# sample
+bad_action 'sample(probability=0)' 'invalid probability value "0"'
+bad_action 'sample(sampling_port=asdf)' 'asdf: unknown port'
+bad_action 'sample(foo=bar)' 'invalid key "foo" in "sample" argument'
+bad_action 'sample' 'non-zero "probability" must be specified on sample'
+
+# ct
+bad_action 'ct(table=asdf)' 'unknown table asdf'
+bad_action 'ct(table=255)' 'invalid table 0xff'
+bad_action 'ct(foo=bar)' 'invalid argument to "ct" action: `foo'\'
+bad_action 'ct(force)' '"force" flag requires "commit" flag.'
+
+# nat
+bad_action 'nat(src=1.2.3.4x)' 'garbage (x) after nat range "1.2.3.4x" (pos: 7)'
+bad_action 'nat(src=1.2.3.4-0.1.2.3)' 'invalid nat range "1.2.3.4-0.1.2.3"'
+bad_action 'nat(foo=bar)' 'invalid key "foo" in "nat" argument'
+bad_action 'nat(src=1.2.3.4,dst=2.3.4.5)' 'May only specify one of "src" or "dst".'
+bad_action 'nat(persistent)' 'Flags allowed only with "src" or "dst".'
+bad_action 'nat(src=1.2.3.4,hash,random)' 'Both "hash" and "random" are not allowed.'
+
+# check_pkt_larger
+bad_action 'check_pkt_larger(1500)->reg0' \
+  'Only 1-bit destination field is allowed'
+
+# goto_table
+bad_action 'goto_table:asdf' 'unknown table "asdf"'
+
+# nested actions
+bad_action 'set_field:1234->ct_mark' \
+  "cannot set CT fields outside of ct action"
+bad_action 'nat' 'Cannot have NAT action outside of "ct" action'
+bad_action 'ct(commit,exec(push_vlan(0x8100)))' \
+  "ct action doesn't support nested action push_vlan"
+bad_action 'ct(commit,exec(set_field:12:34:56:78:9a:bc->eth_dst))' \
+  "ct action doesn't support nested modification of eth_dst"
+bad_action 'conjunction(1, 2/3),ct_clear' \
+  '"conjunction" actions may be used along with "note" but not any other kind of action (such as the "ct_clear" action used here)'
+
+# instructions
+bad_action 'goto_table:5,goto_table:5' \
+  'duplicate goto_table instruction not allowed, for OpenFlow 1.1+ compatibility'
+bad_action 'goto_table:5,clone()' \
+  'invalid instruction ordering: apply_actions must appear before goto_table, for OpenFlow 1.1+ compatibility'
+AT_CHECK([ovs-ofctl parse-group 'group_id=1,type=select,bucket=actions=clear_actions'], [1], [],
+  [ovs-ofctl: clear_actions instruction not allowed here
+])
+
+# ofpacts_parse__()
+bad_action 'apply_actions' 'apply_actions is the default instruction'
+bad_action 'xyzzy' 'unknown action xyzzy'
+bad_action 'drop,3' '"drop" must not be accompanied by any other action or instruction'
+
+AT_CLEANUP

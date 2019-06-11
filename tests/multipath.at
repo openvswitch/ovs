@@ -279,36 +279,6 @@ AT_CHECK([[ovstest test-multipath 'eth_src,50,iter_hash,1,0,NXM_NX_REG0[]']],
 #63 -> 64: disruption=0.02 (perfect=0.02); stddev/expected=0.0307
 AT_CLEANUP
 
-AT_SETUP([multipath action missing argument])
-AT_CHECK([ovs-ofctl parse-flow actions=multipath], [1], [],
-  [ovs-ofctl: : not enough arguments to multipath action
-])
-AT_CLEANUP
-
-AT_SETUP([multipath action bad fields])
-AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(xyzzy,50,modulo_n,1,0,NXM_NX_REG0[[]])'], [1], [],
-  [ovs-ofctl: xyzzy,50,modulo_n,1,0,NXM_NX_REG0[[]]: unknown fields `xyzzy'
-])
-AT_CLEANUP
-
-AT_SETUP([multipath action bad algorithm])
-AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,fubar,1,0,NXM_NX_REG0[[]])'], [1], [],
-  [ovs-ofctl: eth_src,50,fubar,1,0,NXM_NX_REG0[[]]: unknown algorithm `fubar'
-])
-AT_CLEANUP
-
-AT_SETUP([multipath action bad n_links])
-AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,0,0,NXM_NX_REG0[[]])'], [1], [],
-  [ovs-ofctl: eth_src,50,modulo_n,0,0,NXM_NX_REG0[[]]: n_links 0 is not in valid range 1 to 65536
-])
-AT_CLEANUP
-
-AT_SETUP([multipath action destination too narrow])
-AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]])'], [1], [],
-  [ovs-ofctl: eth_src,50,modulo_n,1024,0,NXM_NX_REG0[[0..7]]: 8-bit destination field has 256 possible values, less than specified n_links 1024
-])
-AT_CLEANUP
-
 AT_SETUP([modulo_n multipath symmetric_l3 link selection])
 AT_CHECK([[ovstest test-multipath 'symmetric_l3,50,modulo_n,1,0,NXM_NX_REG0[]']],
   [0], [ignore])

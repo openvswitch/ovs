@@ -166,7 +166,7 @@ create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
     dhcp_opt_add(dhcp_opts, "dns_server", 6, "ipv4");
     dhcp_opt_add(dhcp_opts, "log_server", 7, "ipv4");
     dhcp_opt_add(dhcp_opts, "lpr_server",  9, "ipv4");
-    dhcp_opt_add(dhcp_opts, "domain", 15, "str");
+    dhcp_opt_add(dhcp_opts, "domain_name", 15, "str");
     dhcp_opt_add(dhcp_opts, "swap_server", 16, "ipv4");
     dhcp_opt_add(dhcp_opts, "policy_filter", 21, "ipv4");
     dhcp_opt_add(dhcp_opts, "router_solicitation",  32, "ipv4");

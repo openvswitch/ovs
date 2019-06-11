@@ -48,6 +48,7 @@
 
 #include <rte_arp.h>
 #include <rte_ether.h>
+#include <rte_eth_ctrl.h>
 #include <rte_icmp.h>
 #include <rte_ip.h>
 #include <rte_sctp.h>
@@ -497,19 +498,20 @@ static const struct rte_flow_item_eth rte_flow_item_eth_mask = {
  *
  * Matches an 802.1Q/ad VLAN tag.
  *
- * This type normally follows either RTE_FLOW_ITEM_TYPE_ETH or
- * RTE_FLOW_ITEM_TYPE_VLAN.
+ * The corresponding standard outer EtherType (TPID) values are
+ * ETHER_TYPE_VLAN or ETHER_TYPE_QINQ. It can be overridden by the preceding
+ * pattern item.
  */
 struct rte_flow_item_vlan {
-	rte_be16_t tpid; /**< Tag protocol identifier. */
 	rte_be16_t tci; /**< Tag control information. */
+	rte_be16_t inner_type; /**< Inner EtherType or TPID. */
 };
 
 /** Default mask for RTE_FLOW_ITEM_TYPE_VLAN. */
 #ifndef __cplusplus
 static const struct rte_flow_item_vlan rte_flow_item_vlan_mask = {
-	.tpid = RTE_BE16(0x0000),
-	.tci = RTE_BE16(0xffff),
+	.tci = RTE_BE16(0x0fff),
+	.inner_type = RTE_BE16(0x0000),
 };
 #endif
 
@@ -1074,16 +1076,49 @@ struct rte_flow_action_dup {
  * Similar to QUEUE, except RSS is additionally performed on packets to
  * spread them among several queues according to the provided parameters.
  *
+ * Unlike global RSS settings used by other DPDK APIs, unsetting the
+ * @p types field does not disable RSS in a flow rule. Doing so instead
+ * requests safe unspecified "best-effort" settings from the underlying PMD,
+ * which depending on the flow rule, may result in anything ranging from
+ * empty (single queue) to all-inclusive RSS.
+ *
  * Note: RSS hash result is stored in the hash.rss mbuf field which overlaps
  * hash.fdir.lo. Since the MARK action sets the hash.fdir.hi field only,
  * both can be requested simultaneously.
- *
- * Terminating by default.
  */
 struct rte_flow_action_rss {
-	const struct rte_eth_rss_conf *rss_conf; /**< RSS parameters. */
-	uint16_t num; /**< Number of entries in queue[]. */
-	uint16_t queue[]; /**< Queues indices to use. */
+	enum rte_eth_hash_function func; /**< RSS hash function to apply. */
+	/**
+	 * Packet encapsulation level RSS hash @p types apply to.
+	 *
+	 * - @p 0 requests the default behavior. Depending on the packet
+	 *   type, it can mean outermost, innermost, anything in between or
+	 *   even no RSS.
+	 *
+	 *   It basically stands for the innermost encapsulation level RSS
+	 *   can be performed on according to PMD and device capabilities.
+	 *
+	 * - @p 1 requests RSS to be performed on the outermost packet
+	 *   encapsulation level.
+	 *
+	 * - @p 2 and subsequent values request RSS to be performed on the
+	 *   specified inner packet encapsulation level, from outermost to
+	 *   innermost (lower to higher values).
+	 *
+	 * Values other than @p 0 are not necessarily supported.
+	 *
+	 * Requesting a specific RSS level on unrecognized traffic results
+	 * in undefined behavior. For predictable results, it is recommended
+	 * to make the flow rule pattern match packet headers up to the
+	 * requested encapsulation level so that only matching traffic goes
+	 * through.
+	 */
+	uint32_t level;
+	uint64_t types; /**< Specific RSS hash types (see ETH_RSS_*). */
+	uint32_t key_len; /**< Hash key length in bytes. */
+	uint32_t queue_num; /**< Number of entries in @p queue. */
+	const uint8_t *key; /**< Hash key. */
+	const uint16_t *queue; /**< Queue indices to use. */
 };
 
 /**

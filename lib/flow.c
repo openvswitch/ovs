@@ -2368,10 +2368,10 @@ flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
         /* Revert to hashing L2 headers */
         return flow_hash_symmetric_l2(flow, basis);
     }
-
     hash = hash_add(hash, flow->nw_proto);
-    if (flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP ||
-         (inc_udp_ports && flow->nw_proto == IPPROTO_UDP)) {
+    if (!(flow->nw_frag & FLOW_NW_FRAG_MASK)
+        && (flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP ||
+            (inc_udp_ports && flow->nw_proto == IPPROTO_UDP))) {
         hash = hash_add(hash,
                         (OVS_FORCE uint16_t) (flow->tp_src ^ flow->tp_dst));
     }
@@ -2484,9 +2484,9 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
             wc->masks.vlans[i].tci |= htons(VLAN_VID_MASK | VLAN_CFI);
         }
         break;
-
     case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP:
-        if (is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP) {
+        if (is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP
+            && !(flow->nw_frag & FLOW_NW_FRAG_MASK)) {
             memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
         }
@@ -2501,9 +2501,9 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         } else {
             break; /* non-IP flow */
         }
-
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-        if (flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP) {
+        if ((flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP)
+             && !(flow->nw_frag & FLOW_NW_FRAG_MASK)) {
             memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
         }

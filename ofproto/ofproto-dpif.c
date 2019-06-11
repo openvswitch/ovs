@@ -3607,11 +3607,6 @@ ofport_update_peer(struct ofport_dpif *ofport)
 static bool
 may_enable_port(struct ofport_dpif *ofport)
 {
-    /* Carrier must be up. */
-    if (!netdev_get_carrier(ofport->up.netdev)) {
-        return false;
-    }
-
     /* If CFM or BFD is enabled, then at least one of them must report that the
      * port is up. */
     if ((ofport->bfd || ofport->cfm)
@@ -3637,12 +3632,17 @@ port_run(struct ofport_dpif *ofport)
 {
     long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
     bool carrier_changed = carrier_seq != ofport->carrier_seq;
+    bool enable = netdev_get_carrier(ofport->up.netdev);
+
     ofport->carrier_seq = carrier_seq;
     if (carrier_changed && ofport->bundle) {
-        lacp_slave_carrier_changed(ofport->bundle->lacp, ofport);
+        lacp_slave_carrier_changed(ofport->bundle->lacp, ofport, enable);
     }
 
-    bool enable = may_enable_port(ofport);
+    if (enable) {
+        enable = may_enable_port(ofport);
+    }
+
     if (ofport->up.may_enable != enable) {
         ofproto_port_set_enable(&ofport->up, enable);
 

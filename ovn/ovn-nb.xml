@@ -2355,6 +2355,14 @@
             that matches with this requirement is option 66 (tftp_server).
           </p>
         </column>
+
+        <column name="options" key="domain_name">
+          <p>
+            The DHCPv4 option code for this option is 15. This option
+            specifies the domain name that client should use when
+            resolving hostnames via the Domain Name System.
+          </p>
+        </column>
       </group>
     </group>
 

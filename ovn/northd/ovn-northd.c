@@ -8226,6 +8226,7 @@ static struct gen_opts_map supported_dhcp_opts[] = {
     DHCP_OPT_BOOTFILE,
     DHCP_OPT_PATH_PREFIX,
     DHCP_OPT_TFTP_SERVER_ADDRESS,
+    DHCP_OPT_DOMAIN_NAME,
 };
 
 static struct gen_opts_map supported_dhcpv6_opts[] = {
