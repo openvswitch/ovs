@@ -323,4 +323,14 @@ static inline void netif_keep_dst(struct net_device *dev)
 }
 #endif
 
+#ifndef HAVE_DEV_CHANGE_FLAGS_TAKES_EXTACK
+static inline int rpl_dev_change_flags(struct net_device *dev,
+				       unsigned int flags,
+				       struct netlink_ext_ack *extack)
+{
+	return dev_change_flags(dev, flags);
+}
+#define dev_change_flags rpl_dev_change_flags
+#endif
+
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */
