@@ -150,12 +150,14 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     fi
     AC_MSG_RESULT([$kversion])
 
-    if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 20; then
-          : # Linux 4.x
+    if test "$version" -ge 5; then
+       if test "$version" = 5 && test "$patchlevel" -le 0; then
+          : # Linux 5.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.20.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 5.0.x is not supported (please refer to the FAQ for advice)])
        fi
+    elif test "$version" = 4; then
+       : # Linux 4.x
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
     else

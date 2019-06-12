@@ -10,7 +10,9 @@ TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
 {
-    if [[ "$1" =~ ^4.* ]]; then
+    if [[ "$1" =~ ^5.* ]]; then
+        PREFIX="v5.x"
+    elif [[ "$1" =~ ^4.* ]]; then
         PREFIX="v4.x"
     elif [[ "$1" =~ ^3.* ]]; then
         PREFIX="v3.x"

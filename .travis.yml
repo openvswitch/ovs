@@ -35,6 +35,7 @@ env:
   - TESTSUITE=1 DPDK=1
   - DPDK_SHARED=1
   - DPDK_SHARED=1 OPTS="--enable-shared"
+  - KERNEL=5.0
   - KERNEL=4.20
   - KERNEL=4.19
   - KERNEL=4.18
