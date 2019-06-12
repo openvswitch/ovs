@@ -15,6 +15,7 @@
 
 #include <config.h>
 #include "bfd.h"
+#include "encaps.h"
 #include "lport.h"
 #include "ovn-controller.h"
 
@@ -72,14 +73,16 @@ bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,
                         const char *id = smap_get(&port_rec->external_ids,
                                                   "ovn-chassis-id");
                         if (id) {
-                            char *chassis_name;
-                            char *save_ptr = NULL;
-                            char *tokstr = xstrdup(id);
-                            chassis_name = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM, &save_ptr);
-                            if (chassis_name && !sset_contains(active_tunnels, chassis_name)) {
-                                sset_add(active_tunnels, chassis_name);
+                            char *chassis_name = NULL;
+
+                            if (encaps_tunnel_id_parse(id, &chassis_name,
+                                                       NULL)) {
+                                if (!sset_contains(active_tunnels,
+                                                   chassis_name)) {
+                                    sset_add(active_tunnels, chassis_name);
+                                }
+                                free(chassis_name);
                             }
-                            free(tokstr);
                         }
                     }
                 }
@@ -193,17 +196,17 @@ bfd_run(const struct ovsrec_interface_table *interface_table,
         const char *tunnel_id = smap_get(&br_int->ports[k]->external_ids,
                                           "ovn-chassis-id");
         if (tunnel_id) {
-            char *chassis_name;
-            char *save_ptr = NULL;
-            char *tokstr = xstrdup(tunnel_id);
+            char *chassis_name = NULL;
             char *port_name = br_int->ports[k]->name;
 
             sset_add(&tunnels, port_name);
-            chassis_name = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM, &save_ptr);
-            if (chassis_name && sset_contains(&bfd_chassis, chassis_name)) {
-                sset_add(&bfd_ifaces, port_name);
+
+            if (encaps_tunnel_id_parse(tunnel_id, &chassis_name, NULL)) {
+                if (sset_contains(&bfd_chassis, chassis_name)) {
+                    sset_add(&bfd_ifaces, port_name);
+                }
+                free(chassis_name);
             }
-            free(tokstr);
         }
     }
 

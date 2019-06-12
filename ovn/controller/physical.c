@@ -16,6 +16,7 @@
 #include <config.h>
 #include "binding.h"
 #include "byte-order.h"
+#include "encaps.h"
 #include "flow.h"
 #include "ha-chassis.h"
 #include "lflow.h"
@@ -80,38 +81,27 @@ struct chassis_tunnel {
 /*
  * This function looks up the list of tunnel ports (provided by
  * ovn-chassis-id ports) and returns the tunnel for the given chassid-id and
- * encap-ip. The ovn-chassis-id is formed using the chassis-id and encap-ip as
- * <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip>. The list is hashed using
- * the chassis-id. If the encap-ip is not specified, it means we'll just
- * return a tunnel for that chassis-id, i.e. we just check for chassis-id and
- * if there is a match, we'll return the tunnel. If encap-ip is also provided we
- * use <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip> to do a more specific
- * lookup.
+ * encap-ip. The ovn-chassis-id is formed using the chassis-id and encap-ip.
+ * The list is hashed using the chassis-id. If the encap-ip is not specified,
+ * it means we'll just return a tunnel for that chassis-id, i.e. we just check
+ * for chassis-id and if there is a match, we'll return the tunnel.
+ * If encap-ip is also provided we use both chassis-id and encap-ip to do
+ * a more specific lookup.
  */
 static struct chassis_tunnel *
 chassis_tunnel_find(const char *chassis_id, char *encap_ip)
 {
-    char *chassis_tunnel_entry;
-
     /*
      * If the specific encap_ip is given, look for the chassisid_ip entry,
      * else return the 1st found entry for the chassis.
      */
-    if (encap_ip != NULL) {
-        chassis_tunnel_entry = xasprintf("%s%s%s", chassis_id,
-            OVN_MVTEP_CHASSISID_DELIM, encap_ip);
-    } else {
-        chassis_tunnel_entry = xasprintf("%s", chassis_id);
-    }
     struct chassis_tunnel *tun = NULL;
     HMAP_FOR_EACH_WITH_HASH (tun, hmap_node, hash_string(chassis_id, 0),
                              &tunnels) {
-        if (strstr(tun->chassis_id, chassis_tunnel_entry) != NULL) {
-            free (chassis_tunnel_entry);
+        if (encaps_tunnel_id_match(tun->chassis_id, chassis_id, encap_ip)) {
             return tun;
         }
     }
-    free (chassis_tunnel_entry);
     return NULL;
 }
 
@@ -1064,8 +1054,9 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
         }
 
         const char *tunnel_id = smap_get(&port_rec->external_ids,
-                                          "ovn-chassis-id");
-        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
+                                         "ovn-chassis-id");
+        if (tunnel_id &&
+                encaps_tunnel_id_match(tunnel_id, chassis->name, NULL)) {
             continue;
         }
 
@@ -1121,16 +1112,10 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                  * where we need to tunnel to the chassis, but won't
                  * have the encap-ip specifically.
                  */
-                char *tokstr = xstrdup(tunnel_id);
-                char *save_ptr = NULL;
-                char *hash_id = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM,
-                                &save_ptr);
-                char *ip = strtok_r(NULL, "", &save_ptr);
-                /*
-                 * If the value has morphed into something other than
-                 * chassis-id>delim>encap-ip, ignore.
-                 */
-                if (!hash_id || !ip) {
+                char *hash_id = NULL;
+                char *ip = NULL;
+
+                if (!encaps_tunnel_id_parse(tunnel_id, &hash_id, &ip)) {
                     continue;
                 }
                 struct chassis_tunnel *tun = chassis_tunnel_find(hash_id, ip);
@@ -1151,7 +1136,8 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                     tun->type = tunnel_type;
                     physical_map_changed = true;
                 }
-                free(tokstr);
+                free(hash_id);
+                free(ip);
                 break;
             } else {
                 const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -1256,7 +1242,8 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
             struct match match = MATCH_CATCHALL_INITIALIZER;
 
             if (!binding->chassis ||
-                strstr(tun->chassis_id, binding->chassis->name) == NULL) {
+                !encaps_tunnel_id_match(tun->chassis_id,
+                                        binding->chassis->name, NULL)) {
                 continue;
             }
 

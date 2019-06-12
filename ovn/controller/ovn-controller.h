@@ -81,11 +81,4 @@ enum chassis_tunnel_type {
 
 uint32_t get_tunnel_type(const char *name);
 
-/*
- * Given there could be multiple tunnels with different IPs to the same
- * chassis we annotate the ovn-chassis-id with
- * <chassis_name>OVN_MVTEP_CHASSISID_DELIM<IP>.
- */
-#define	OVN_MVTEP_CHASSISID_DELIM	"@"
-
 #endif /* ovn/ovn-controller.h */
