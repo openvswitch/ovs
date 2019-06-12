@@ -681,6 +681,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                                    [rcu_read_lock_held])])
   OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h], [lockdep_rtnl_is_held])
   OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h], [net_rwsem])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/rtnetlink.h],
+                        [rtnl_create_link], [extack],
+                        [OVS_DEFINE([HAVE_RTNL_CREATE_LINK_TAKES_EXTACK])])
 
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
