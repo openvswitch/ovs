@@ -511,6 +511,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/if_link.h], [rtnl_link_stats64])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_set_encap_proto])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_hwaccel_push_inside])
+  OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [__vlan_hwaccel_clear_tag])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [ipv4_is_multicast])
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [proto_ports_offset])
@@ -925,6 +926,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/skbuff.h], [sk_buff],
                         [csum_valid],
                         [OVS_DEFINE([HAVE_SKBUFF_CSUM_VALID])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/skbuff.h], [sk_buff],
+                        [vlan_present],
+                        [OVS_DEFINE([HAVE_SKBUFF_VLAN_PRESENT])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
                   [skb_checksum_simple_validate])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h],
