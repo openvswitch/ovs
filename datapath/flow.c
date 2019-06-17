@@ -327,7 +327,7 @@ static int parse_vlan_tag(struct sk_buff *skb, struct vlan_head *key_vh,
 		return -ENOMEM;
 
 	vh = (struct vlan_head *)skb->data;
-	key_vh->tci = vh->tci | htons(VLAN_TAG_PRESENT);
+	key_vh->tci = vh->tci | htons(VLAN_CFI_MASK);
 	key_vh->tpid = vh->tpid;
 
 	if (unlikely(untag_vlan)) {
@@ -365,7 +365,7 @@ static int parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 	key->eth.cvlan.tpid = 0;
 
 	if (skb_vlan_tag_present(skb)) {
-		key->eth.vlan.tci = htons(skb->vlan_tci);
+		key->eth.vlan.tci = htons(skb->vlan_tci) | htons(VLAN_CFI_MASK);
 		key->eth.vlan.tpid = skb->vlan_proto;
 	} else {
 		/* Parse outer vlan tag in the non-accelerated case. */
@@ -604,7 +604,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 		 * skb_vlan_pop(), which will later shift the ethertype into
 		 * skb->protocol.
 		 */
-		if (key->eth.cvlan.tci & htons(VLAN_TAG_PRESENT))
+		if (key->eth.cvlan.tci & htons(VLAN_CFI_MASK))
 			skb->protocol = key->eth.cvlan.tpid;
 		else
 			skb->protocol = key->eth.type;

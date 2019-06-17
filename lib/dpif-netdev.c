@@ -50,6 +50,7 @@
 #include "ipf.h"
 #include "latch.h"
 #include "netdev.h"
+#include "netdev-offload.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink.h"

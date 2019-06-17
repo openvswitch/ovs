@@ -32,7 +32,11 @@ static inline struct net_device *rpl_rtnl_create_link(struct net *net, const cha
                                     const struct rtnl_link_ops *ops,
                                     struct nlattr *tb[])
 {
+#ifdef HAVE_RTNL_CREATE_LINK_TAKES_EXTACK
+	return rtnl_create_link(net, (char *) ifname, name_assign_type, ops, tb, NULL);
+#else
 	return rtnl_create_link(net, (char *) ifname, name_assign_type, ops, tb);
+#endif
 }
 #endif
 

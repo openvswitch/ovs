@@ -384,6 +384,7 @@ William Tu                         u9012063@gmail.com
 Xiao Liang                         shaw.leon@gmail.com
 xu rong                            xu.rong@zte.com.cn
 YAMAMOTO Takashi                   yamamoto@midokura.com
+Yanqin Wei                         Yanqin.Wei@arm.com
 Yasuhito Takamiya                  yasuhito@gmail.com
 Yi-Hung Wei                        yihung.wei@gmail.com
 Yifeng Sun                         pkusunyifeng@gmail.com
@@ -551,6 +552,7 @@ Martin Vizvary                  vizvary@ics.muni.cz
 Marvin Pascual                  marvin@pascual.com.ph
 Maxime Brun                     m.brun@alphalink.fr
 Madhu Venugopal                 mavenugo@gmail.com
+Malvika Gupta                   malvika.gupta@arm.com
 Michael A. Collins              mike.a.collins@ark-net.org
 Michael Ben-Ami                 mbenami@digitalocean.com
 Michael Hu                      humichael@vmware.com

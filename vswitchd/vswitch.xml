@@ -208,6 +208,11 @@
           available, Open vSwitch may not be able to offload
           functionality to hardware.
         </p>
+        <p>
+          In order to dump HW offloaded flows use
+          <code>ovs-appctl dpctl/dump-flows</code>, <code>ovs-dpctl</code>
+          doesn't support this functionality. See ovs-vswitchd(8) for details.
+        </p>
       </column>
 
       <column name="other_config" key="tc-policy"
