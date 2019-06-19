@@ -45,7 +45,6 @@
 #include "openvswitch/vlog.h"
 #include "lib/netdev-provider.h"
 
-#define MAX_QUEUE_LENGTH 512
 #define UPCALL_MAX_BATCH 64
 #define REVALIDATE_MAX_BATCH 50
 
