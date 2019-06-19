@@ -1299,7 +1299,7 @@ static bool validate_checksum(struct sk_buff *skb)
 	skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr, skb->len,
 				       IPPROTO_TCP, 0);
 
-	return __tcp_checksum_complete(skb) == 0;
+	return __skb_checksum_complete(skb) == 0;
 }
 
 static bool set_offloads(struct sk_buff *skb)

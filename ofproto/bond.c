@@ -794,6 +794,7 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
 {
     enum bond_verdict verdict = BV_DROP;
     struct bond_slave *slave;
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
     ovs_rwlock_rdlock(&rwlock);
     slave = bond_slave_lookup(bond, slave_);
@@ -811,7 +812,11 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
      * drop all incoming traffic except if lacp_fallback_ab is enabled. */
     switch (bond->lacp_status) {
     case LACP_NEGOTIATED:
-        verdict = slave->enabled ? BV_ACCEPT : BV_DROP;
+        /* To reduce packet-drops due to delay in enabling of slave (post
+         * LACP-SYNC), from main thread, check for may_enable as well.
+         * When may_enable is TRUE, it means LACP is UP and waiting for the
+         * main thread to run LACP state machine and enable the slave. */
+        verdict = (slave->enabled || slave->may_enable) ? BV_ACCEPT : BV_DROP;
         goto out;
     case LACP_CONFIGURED:
         if (!bond->lacp_fallback_ab) {
@@ -847,8 +852,6 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         /* Drop all packets which arrive on backup slaves.  This is similar to
          * how Linux bonding handles active-backup bonds. */
         if (bond->active_slave != slave) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
             VLOG_DBG_RL(&rl, "active-backup bond received packet on backup"
                         " slave (%s) destined for " ETH_ADDR_FMT,
                         slave->name, ETH_ADDR_ARGS(eth_dst));
@@ -870,6 +873,19 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
 
     OVS_NOT_REACHED();
 out:
+    if (slave && (verdict != BV_ACCEPT)) {
+        VLOG_DBG_RL(&rl, "slave (%s): Admissibility verdict is to drop pkt %s."
+                    "active slave: %s, may_enable: %s enable: %s "
+                    "LACP status:%d",
+                    slave->name,
+                    (verdict == BV_DROP_IF_MOVED) ?
+                        "as different port is learned" : "",
+                    (bond->active_slave == slave) ? "true" : "false",
+                    slave->may_enable ? "true" : "false",
+                    slave->enabled ? "true" : "false",
+                    bond->lacp_status);
+    }
+
     ovs_rwlock_unlock(&rwlock);
     return verdict;
 

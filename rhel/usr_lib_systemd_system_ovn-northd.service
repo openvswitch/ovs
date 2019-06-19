@@ -25,7 +25,7 @@ RemainAfterExit=yes
 Environment=OVS_RUNDIR=%t/openvswitch OVS_DBDIR=/var/lib/openvswitch
 EnvironmentFile=-/etc/sysconfig/ovn-northd
 EnvironmentFile=/run/openvswitch.useropts
-ExecStartPre=/usr/bin/chown -R ${OVS_USER_ID} ${OVS_DBDIR}
+ExecStartPre=-/usr/bin/chown -R ${OVS_USER_ID} ${OVS_DBDIR}
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl \
           --ovs-user=${OVS_USER_ID} --ovn-user=${OVS_USER_ID} \
           start_northd $OVN_NORTHD_OPTS

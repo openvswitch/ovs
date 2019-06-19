@@ -29,6 +29,9 @@
 #include "compiler.h"
 #include "util.h"
 #include "openvswitch/util.h"
+#if defined(__aarch64__) && __GNUC__ >= 6
+#include <arm_neon.h>
+#endif
 
 extern char *program_name;
 
@@ -356,8 +359,10 @@ log_2_ceil(uint64_t n)
 static inline unsigned int
 count_1bits(uint64_t x)
 {
-#if __GNUC__ >= 4 && __POPCNT__
+#if (__GNUC__ >= 4 && __POPCNT__) || (defined(__aarch64__) && __GNUC__ >= 7)
     return __builtin_popcountll(x);
+#elif defined(__aarch64__) && __GNUC__ >= 6
+    return vaddv_u8(vcnt_u8(vcreate_u8(x)));
 #else
     /* This portable implementation is the fastest one we know of for 64
      * bits, and about 3x faster than GCC 4.7 __builtin_popcountll(). */

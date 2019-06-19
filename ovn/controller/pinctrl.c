@@ -22,6 +22,7 @@
 #include "csum.h"
 #include "dirs.h"
 #include "dp-packet.h"
+#include "encaps.h"
 #include "flow.h"
 #include "ha-chassis.h"
 #include "lport.h"
@@ -2728,7 +2729,8 @@ get_localnet_vifs_l3gwports(
         }
         const char *tunnel_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
+        if (tunnel_id &&
+                encaps_tunnel_id_match(tunnel_id, chassis->name, NULL)) {
             continue;
         }
         const char *localnet = smap_get(&port_rec->external_ids,

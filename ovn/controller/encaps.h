@@ -39,4 +39,10 @@ void encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
 bool encaps_cleanup(struct ovsdb_idl_txn *ovs_idl_txn,
                     const struct ovsrec_bridge *br_int);
 
+char *encaps_tunnel_id_create(const char *chassis_id, const char *encap_ip);
+bool  encaps_tunnel_id_parse(const char *tunnel_id, char **chassis_id,
+                             char **encap_ip);
+bool  encaps_tunnel_id_match(const char *tunnel_id, const char *chassis_id,
+                             const char *encap_ip);
+
 #endif /* ovn/encaps.h */
