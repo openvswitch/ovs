@@ -65,16 +65,16 @@ function install_kernel()
 
 function install_dpdk()
 {
-    if [ -n "$DPDK_GIT" ]; then
-        git clone $DPDK_GIT dpdk-$1
-        cd dpdk-$1
-        git checkout tags/v$1
+    if [ "${1##refs/*/}" != "${1}" ]; then
+        DPDK_GIT=${DPDK_GIT:-https://dpdk.org/git/dpdk}
+        git clone --single-branch $DPDK_GIT dpdk-git -b "${1##refs/*/}"
+        cd dpdk-git
+        git log -1 --oneline
     else
         wget https://fast.dpdk.org/rel/dpdk-$1.tar.xz
         tar xvf dpdk-$1.tar.xz > /dev/null
         DIR_NAME=$(tar -tf dpdk-$1.tar.xz | head -1 | cut -f1 -d"/")
-        if [ $DIR_NAME != "dpdk-$1"  ]; then mv $DIR_NAME dpdk-$1; fi
-        cd dpdk-$1
+        cd $DIR_NAME
     fi
 
     make config CC=gcc T=$TARGET
@@ -89,6 +89,7 @@ function install_dpdk()
     sed -i '/CONFIG_RTE_KNI_KMOD=y/s/=y/=n/' build/.config
 
     make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
     cd ..
 }
@@ -111,7 +112,6 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
-    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
 fi
 
 OPTS="$EXTRA_OPTS $*"
