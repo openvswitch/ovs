@@ -76,8 +76,6 @@ function install_dpdk()
         if [ $DIR_NAME != "dpdk-$1"  ]; then mv $DIR_NAME dpdk-$1; fi
         cd dpdk-$1
     fi
-    echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
-    sed -ri '/EXECENV_CFLAGS  = -pthread -fPIC/{s/$/\nelse ifeq ($(CONFIG_RTE_BUILD_FPIC),y)/;s/$/\nEXECENV_CFLAGS  = -pthread -fPIC/}' mk/exec-env/linuxapp/rte.vars.mk
 
     make config CC=gcc T=$TARGET
 
@@ -90,7 +88,7 @@ function install_dpdk()
     sed -i '/CONFIG_RTE_EAL_IGB_UIO=y/s/=y/=n/' build/.config
     sed -i '/CONFIG_RTE_KNI_KMOD=y/s/=y/=n/' build/.config
 
-    make -j4 CC=gcc
+    make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
     echo "Installed DPDK source in $(pwd)"
     cd ..
 }
