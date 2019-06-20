@@ -301,6 +301,14 @@
       See <code>ovn-controller</code>(8) for more information.
     </column>
 
+    <column name="external_ids" key="ovn-chassis-mac-mappings">
+      <code>ovn-controller</code> populates this key with the set of options
+      configured in the <ref table="Open_vSwitch"
+      column="external_ids:ovn-chassis-mac-mappings"/> column of the
+      Open_vSwitch database's <ref table="Open_vSwitch" db="Open_vSwitch"/>
+      table. See <code>ovn-controller</code>(8) for more information.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

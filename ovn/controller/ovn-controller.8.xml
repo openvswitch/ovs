@@ -196,6 +196,16 @@
           transport zone.
         </p>
       </dd>
+      <dt><code>external_ids:ovn-chassis-mac-mappings</code></dt>
+      <dd>
+        A list of key-value pairs that map a chassis specific mac to
+        a physical network name. An example
+        value mapping two chassis macs to two physical network names would be:
+        <code>physnet1:aa:bb:cc:dd:ee:ff,physnet2:a1:b2:c3:d4:e5:f6</code>.
+        These are the macs that ovn-controller will replace a router port
+        mac with, if packet is going from a distributed router port on
+        vlan type logical switch.
+      </dd>
     </dl>
 
     <p>
