@@ -23,48 +23,22 @@
 
       Avoid deeper levels because they do not render well.
 
-=========
-Deep Dive
-=========
+================
+What is Fuzzing?
+================
 
-How Open vSwitch and OVN are implemented and, where necessary, why it was
-implemented that way.
 
-OVS
----
+Usually, software teams do functional testing (which is great) but not
+security testing of their code. For example::
 
-.. toctree::
-   :maxdepth: 2
+  func_add(int x, int y) { return x+y; }
 
-   design
-   datapath
-   fuzzing/index
-   integration
-   porting
-   openflow
-   bonding
-   networking-namespaces
-   ovsdb-replication
-   dpdk/index
-   windows
-   language-bindings
-   testing
-   tracing
-   idl-compound-indexes
+may have a unit test like so::
 
-OVN
----
+  ASSERT((func_add(4,5)==9))
 
-.. toctree::
-   :maxdepth: 2
+However, corner cases are usually not tested so that `x=INT_MAX; y=1`
+demonstrates a problem in the implementation.
 
-   high-availability
-   role-based-access-control
-   ovn-news-2.8
-
-.. list-table::
-
-   * - ovn-architecture(7)
-     - `(pdf) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.pdf>`__
-     - `(html) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.html>`__
-     - `(plain text) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.txt>`__
+Fuzz testing is routinely used to probabilistically generate such corner
+cases and feed them to program APIs to test their behavior.
