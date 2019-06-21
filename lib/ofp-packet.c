@@ -420,6 +420,7 @@ enum nx_continuation_prop_type {
     NXCPT_COOKIE,
     NXCPT_ACTIONS,
     NXCPT_ACTION_SET,
+    NXCPT_ODP_PORT,
 };
 
 /* Only NXT_PACKET_IN2 (not NXT_RESUME) should include NXCPT_USERDATA, so this
@@ -504,6 +505,10 @@ ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
         ofpacts_put_openflow_actions(pin->action_set,
                                      pin->action_set_len, msg, version);
         ofpprop_end(msg, start);
+    }
+
+    if (pin->odp_port) {
+        ofpprop_put_u32(msg, NXCPT_ODP_PORT, odp_to_u32(pin->odp_port));
     }
 
     if (msg->size > inner_ofs) {
@@ -875,6 +880,13 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
             error = parse_actions_property(&payload, oh->version, &action_set);
             break;
 
+        case NXCPT_ODP_PORT: {
+            uint32_t value;
+            error = ofpprop_parse_u32(&payload, &value);
+            pin->odp_port = u32_to_odp(value);
+            break;
+         }
+
         default:
             error = OFPPROP_UNKNOWN(loose, "continuation", type);
             break;
@@ -1007,6 +1019,11 @@ ofputil_packet_in_private_format(struct ds *s,
     if (pin->action_set_len) {
         ds_put_cstr(s, " continuation.action_set=");
         ofpacts_format(pin->action_set, pin->action_set_len, &fp);
+        ds_put_char(s, '\n');
+    }
+
+    if (pin->odp_port) {
+        ds_put_format(s, " continuation.odp_port=%"PRIu32, pin->odp_port);
         ds_put_char(s, '\n');
     }
 
