@@ -7437,6 +7437,7 @@ dpif_netdev_ipf_dump_done(struct dpif *dpif OVS_UNUSED, void *ipf_dump_ctx)
 
 const struct dpif_class dpif_netdev_class = {
     "netdev",
+    true,                       /* cleanup_required */
     dpif_netdev_init,
     dpif_netdev_enumerate,
     dpif_netdev_port_open_type,

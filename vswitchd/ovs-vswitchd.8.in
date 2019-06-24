@@ -110,6 +110,10 @@ how to configure Open vSwitch.
 Causes \fBovs\-vswitchd\fR to gracefully terminate. If \fI--cleanup\fR
 is specified, release datapath resources configured by \fBovs\-vswitchd\fR.
 Otherwise, datapath flows and other resources remains undeleted.
+Resources of datapaths that are integrated into \fBovs\-vswitchd\fR (e.g.
+the \fBnetdev\fR datapath type) are always released regardless of
+\fI--cleanup\fR except for ports with \fBinternal\fR type. Use \fI--cleanup\fR
+to release \fBinternal\fR ports too.
 .
 .IP "\fBqos/show-types\fR \fIinterface\fR"
 Queries the interface for a list of Quality of Service types that are

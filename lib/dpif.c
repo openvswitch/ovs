@@ -498,6 +498,13 @@ dpif_type(const struct dpif *dpif)
     return dpif->dpif_class->type;
 }
 
+/* Checks if datapath 'dpif' requires cleanup. */
+bool
+dpif_cleanup_required(const struct dpif *dpif)
+{
+    return dpif->dpif_class->cleanup_required;
+}
+
 /* Returns the fully spelled out name for the given datapath 'type'.
  *
  * Normalized type string can be compared with strcmp().  Unnormalized type
