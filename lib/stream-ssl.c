@@ -1210,7 +1210,7 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
                             const char *certificate_file)
 {
     if (update_ssl_config(&private_key, private_key_file)
-        || update_ssl_config(&certificate, certificate_file)) {
+        && update_ssl_config(&certificate, certificate_file)) {
         stream_ssl_set_certificate_file__(certificate_file);
         stream_ssl_set_private_key_file__(private_key_file);
     }
