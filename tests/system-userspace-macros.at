@@ -36,7 +36,9 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
 m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
   [OVS_VSWITCHD_STOP([dnl
 $1";/netdev_linux.*obtaining netdev stats via vport failed/d
-/dpif_netlink.*Generic Netlink family 'ovs_datapath' does not exist. The Open vSwitch kernel module is probably not loaded./d"])
+/dpif_netlink.*Generic Netlink family 'ovs_datapath' does not exist. The Open vSwitch kernel module is probably not loaded./d
+/dpif_netdev(revalidator.*)|ERR|internal error parsing flow key.*proto=2.*/d
+/dpif(revalidator.*)|WARN|netdev@ovs-netdev: failed to.*proto=2.*/d"])
    AT_CHECK([:; $2])
   ])
 
