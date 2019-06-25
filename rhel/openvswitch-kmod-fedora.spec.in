@@ -80,6 +80,15 @@ if [ "$1" = 0 ]; then  # Erase, not upgrade
     fi
 fi
 
+%posttrans
+# The upgrade path from the older kmod-openvswitch SysV package to
+# the newer openvswitch-kmod systemd package will end up removing
+# the symlinks to the weak-updates/openvswitch drivers because of
+# it's %postun section.  We add this section to handle that case.
+if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+    %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
+fi
+
 %files
 %defattr(0644,root,root)
 /lib/modules/%{kernel}/extra/*.ko
