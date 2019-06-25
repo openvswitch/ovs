@@ -156,6 +156,7 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     struct smap options = SMAP_INITIALIZER(&options);
     smap_add(&options, "remote_ip", encap->ip);
     smap_add(&options, "key", "flow");
+    const char *dst_port = smap_get(&encap->options, "dst_port");
     const char *csum = smap_get(&encap->options, "csum");
     char *tunnel_entry_id = NULL;
 
@@ -168,6 +169,9 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     tunnel_entry_id = encaps_tunnel_id_create(new_chassis_id, encap->ip);
     if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
         smap_add(&options, "csum", csum);
+    }
+    if (dst_port) {
+        smap_add(&options, "dst_port", dst_port);
     }
 
     /* Add auth info if ipsec is enabled. */
