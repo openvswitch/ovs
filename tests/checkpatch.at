@@ -30,7 +30,7 @@ try_checkpatch__() {
         :
     elif test -s expout; then
         AT_CHECK([$2 $top_srcdir/utilities/checkpatch.py -q test.patch],
-                 [255], [stdout])
+                 [1], [stdout])
         AT_CHECK([sed '/^Lines checked:/,$d' stdout], [0], [expout])
     else
         AT_CHECK([$2 $top_srcdir/utilities/checkpatch.py -q test.patch])

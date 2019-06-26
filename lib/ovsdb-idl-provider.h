@@ -73,6 +73,7 @@ struct ovsdb_idl_row {
     struct ovs_list dst_arcs;   /* Backward arcs (ovsdb_idl_arc.dst_node). */
     struct ovsdb_idl_table *table; /* Containing table. */
     struct ovsdb_datum *old_datum; /* Committed data (null if orphaned). */
+    bool parsed; /* Whether the row is parsed. */
 
     /* Transactional data. */
     struct ovsdb_datum *new_datum; /* Modified data (null to delete row). */
@@ -88,6 +89,7 @@ struct ovsdb_idl_row {
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_node; /* Rows modified/added/deleted by IDL */
     unsigned long int *updated; /* Bitmap of columns updated by IDL */
+    struct ovsdb_datum *tracked_old_datum; /* Old deleted data. */
 };
 
 struct ovsdb_idl_column {

@@ -45,6 +45,8 @@ Summary: Open Virtual Network support
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
 Version: @VERSION@
+Obsoletes: openvswitch-ovn-common < %{?epoch:%{epoch}:}%{version}-%{release}
+Provides: openvswitch-ovn-common = %{?epoch:%{epoch}:}%{version}-%{release}
 
 # Nearly all of openvswitch is ASL 2.0.  The bugtool is LGPLv2+, and the
 # lib/sflow*.[ch] files are SISSL
@@ -89,7 +91,7 @@ overlays and security groups.
 %package central
 Summary: Open Virtual Network support
 License: ASL 2.0
-Requires: ovn ovn-common
+Requires: ovn
 Requires: firewalld-filesystem
 Obsoletes: openvswitch-ovn-central
 Provides: openvswitch-ovn-central = %{?epoch:%{epoch}:}%{version}-%{release}
@@ -100,7 +102,7 @@ OVN DB servers and ovn-northd running on a central node.
 %package host
 Summary: Open Virtual Network support
 License: ASL 2.0
-Requires: ovn ovn-common
+Requires: ovn
 Requires: firewalld-filesystem
 Obsoletes: openvswitch-ovn-host
 Provides: openvswitch-ovn-host = %{?epoch:%{epoch}:}%{version}-%{release}
@@ -111,27 +113,17 @@ OVN controller running on each host.
 %package vtep
 Summary: Open Virtual Network support
 License: ASL 2.0
-Requires: ovn ovn-common
+Requires: ovn
 Obsoletes: openvswitch-ovn-vtep
 Provides: openvswitch-ovn-vtep = %{?epoch:%{epoch}:}%{version}-%{release}
 
 %description vtep
 OVN vtep controller
 
-%package common
-Summary: Open Virtual Network support
-License: ASL 2.0
-Requires: ovn
-Obsoletes: openvswitch-ovn-common
-Provides: openvswitch-ovn-common = %{?epoch:%{epoch}:}%{version}-%{release}
-
-%description common
-Utilities that are use to diagnose and manage the OVN components.
-
 %package docker
 Summary: Open Virtual Network support
 License: ASL 2.0
-Requires: ovn ovn-common  %{_py2}-openvswitch
+Requires: ovn %{_py2}-openvswitch
 Obsoletes: openvswitch-ovn-docker
 Provides: openvswitch-ovn-docker = %{?epoch:%{epoch}:}%{version}-%{release}
 
@@ -393,12 +385,6 @@ if [ $1 -eq 1 ]; then
 fi
 
 %files
-
-%files docker
-%{_bindir}/ovn-docker-overlay-driver
-%{_bindir}/ovn-docker-underlay-driver
-
-%files common
 %{_bindir}/ovn-nbctl
 %{_bindir}/ovn-sbctl
 %{_bindir}/ovn-trace
@@ -417,6 +403,10 @@ fi
 %{_mandir}/man5/ovn-nb.5*
 %{_mandir}/man5/ovn-sb.5*
 %{_prefix}/lib/ocf/resource.d/ovn/ovndb-servers
+
+%files docker
+%{_bindir}/ovn-docker-overlay-driver
+%{_bindir}/ovn-docker-underlay-driver
 
 %files central
 %{_bindir}/ovn-northd

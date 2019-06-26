@@ -25,6 +25,7 @@ struct ovsrec_bridge_table;
 struct sbrec_chassis_table;
 struct sbrec_sb_global;
 struct ovsrec_open_vswitch_table;
+struct sset;
 
 void encaps_register_ovs_idl(struct ovsdb_idl *);
 void encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
@@ -32,9 +33,16 @@ void encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
                 const struct ovsrec_bridge *br_int,
                 const struct sbrec_chassis_table *,
                 const char *chassis_id,
-                const struct sbrec_sb_global *);
+                const struct sbrec_sb_global *,
+                const struct sset *transport_zones);
 
 bool encaps_cleanup(struct ovsdb_idl_txn *ovs_idl_txn,
                     const struct ovsrec_bridge *br_int);
+
+char *encaps_tunnel_id_create(const char *chassis_id, const char *encap_ip);
+bool  encaps_tunnel_id_parse(const char *tunnel_id, char **chassis_id,
+                             char **encap_ip);
+bool  encaps_tunnel_id_match(const char *tunnel_id, const char *chassis_id,
+                             const char *encap_ip);
 
 #endif /* ovn/encaps.h */

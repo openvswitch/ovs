@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -150,12 +150,14 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     fi
     AC_MSG_RESULT([$kversion])
 
-    if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 18; then
-          : # Linux 4.x
+    if test "$version" -ge 5; then
+       if test "$version" = 5 && test "$patchlevel" -le 0; then
+          : # Linux 5.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.18.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 5.0.x is not supported (please refer to the FAQ for advice)])
        fi
+    elif test "$version" = 4; then
+       : # Linux 4.x
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
     else
@@ -203,6 +205,37 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
     ])],
     [AC_DEFINE([HAVE_TCA_PEDIT_KEY_EX_HDR_TYPE_UDP], [1],
                [Define to 1 if TCA_PEDIT_KEY_EX_HDR_TYPE_UDP is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/tc_act/tc_skbedit.h>], [
+        int x = TCA_SKBEDIT_FLAGS;
+    ])],
+    [AC_DEFINE([HAVE_TCA_SKBEDIT_FLAGS], [1],
+               [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
+])
+
+dnl OVS_CHECK_LINUX_SCTP_CT
+dnl
+dnl Checks for kernels which need additional SCTP state
+AC_DEFUN([OVS_CHECK_LINUX_SCTP_CT], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/netfilter/nfnetlink.h>
+#include <linux/netfilter/nfnetlink_conntrack.h>
+#include <linux/netfilter/nf_conntrack_common.h>
+#include <linux/netfilter/nf_conntrack_sctp.h>], [
+        int x = SCTP_CONNTRACK_HEARTBEAT_SENT;
+    ])],
+    [AC_DEFINE([HAVE_SCTP_CONNTRACK_HEARTBEATS], [1],
+               [Define to 1 if SCTP_CONNTRACK_HEARTBEAT_SENT is available.])])
+])
+
+dnl OVS_FIND_DEPENDENCY(FUNCTION, SEARCH_LIBS, NAME_TO_PRINT)
+dnl
+dnl Check for a function in a library list.
+AC_DEFUN([OVS_FIND_DEPENDENCY], [
+  AC_SEARCH_LIBS([$1], [$2], [], [
+    AC_MSG_ERROR([unable to find $3, install the dependency package])
+  ])
 ])
 
 dnl OVS_CHECK_DPDK
@@ -255,117 +288,58 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_MSG_ERROR([unable to find rte_config.h in $with_dpdk])
     ], [AC_INCLUDES_DEFAULT])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_VHOST_NUMA) || defined(RTE_EAL_NUMA_AWARE_HUGEPAGES)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([get_mempolicy],[numa],[],[AC_MSG_ERROR([unable to find libnuma, install the dependency package])])
-       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])])
+    AC_CHECK_DECLS([RTE_LIBRTE_VHOST_NUMA, RTE_EAL_NUMA_AWARE_HUGEPAGES], [
+      OVS_FIND_DEPENDENCY([get_mempolicy], [numa], [libnuma])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if RTE_LIBRTE_PMD_PCAP
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([pcap_dump],[pcap],[],[AC_MSG_ERROR([unable to find libpcap, install the dependency package])])
-       AC_COMPILE_IFELSE([
-         AC_LANG_PROGRAM(
-           [
-             #include <rte_config.h>
-#if RTE_LIBRTE_PDUMP
-#error
-#endif
-         ], [])
-       ], [],
-       [AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])])
-     ])
+    AC_CHECK_DECL([RTE_LIBRTE_VHOST_NUMA], [
+      AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if RTE_LIBRTE_MLX5_PMD
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mnl_attr_put],[mnl],[],[AC_MSG_ERROR([unable to find libmnl, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
+      OVS_FIND_DEPENDENCY([pcap_dump], [pcap], [libpcap])
+      AC_CHECK_DECL([RTE_LIBRTE_PDUMP], [
+        AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])
+      ], [], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX5_PMD) && !defined(RTE_LIBRTE_MLX5_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mlx5dv_create_wq],[mlx5],[],[AC_MSG_ERROR([unable to find libmlx5, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
+      OVS_FIND_DEPENDENCY([mnl_attr_put], [mnl], [libmnl])
+      AC_CHECK_DECL([RTE_LIBRTE_MLX5_DLOPEN_DEPS], [], [dnl not found
+        OVS_FIND_DEPENDENCY([mlx5dv_create_wq], [mlx5], [libmlx5])
+        OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
+      ], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mlx4dv_init_obj],[mlx4],[],[AC_MSG_ERROR([unable to find libmlx4, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_MLX4_PMD], [dnl found
+      AC_CHECK_DECL([RTE_LIBRTE_MLX4_DLOPEN_DEPS], [], [dnl not found
+        OVS_FIND_DEPENDENCY([mlx4dv_init_obj], [mlx4], [libmlx4])
+        OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
+      ], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX5_PMD) && !defined(RTE_LIBRTE_MLX5_DLOPEN_DEPS)
-#error
-#endif
-#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([verbs_init_cq],[ibverbs],[],[AC_MSG_ERROR([unable to find libibverbs, install the dependency package])])])
+    # DPDK uses dlopen to load plugins.
+    OVS_FIND_DEPENDENCY([dlopen], [dl], [libdl])
 
-    # On some systems we have to add -ldl to link with dpdk
-    #
-    # This code, at first, tries to link without -ldl (""),
-    # then adds it and tries again.
-    # Before each attempt the search cache must be unset,
-    # otherwise autoconf will stick with the old result
+    AC_MSG_CHECKING([whether linking with dpdk works])
+    LIBS="$DPDK_LIB $LIBS"
+    AC_LINK_IFELSE(
+      [AC_LANG_PROGRAM([#include <rte_config.h>
+                        #include <rte_eal.h>],
+                       [int rte_argc; char ** rte_argv;
+                        rte_eal_init(rte_argc, rte_argv);])],
+      [AC_MSG_RESULT([yes])
+       DPDKLIB_FOUND=true],
+      [AC_MSG_RESULT([no])
+       if test "$DPDK_AUTO_DISCOVER" = "true"; then
+         AC_MSG_ERROR(m4_normalize([
+            Could not find DPDK library in default search path, Use --with-dpdk
+            to specify the DPDK library installed in non-standard location]))
+       else
+         AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
+       fi
+      ])
 
-    DPDKLIB_FOUND=false
-    save_LIBS=$LIBS
-    for extras in "" "-ldl"; do
-        LIBS="$DPDK_LIB $extras $save_LIBS"
-        AC_LINK_IFELSE(
-           [AC_LANG_PROGRAM([#include <rte_config.h>
-                             #include <rte_eal.h>],
-                            [int rte_argc; char ** rte_argv;
-                             rte_eal_init(rte_argc, rte_argv);])],
-           [DPDKLIB_FOUND=true])
-        if $DPDKLIB_FOUND; then
-            break
-        fi
-    done
-
-    # If linking unsuccessful
-    if test "$DPDKLIB_FOUND" = "false" ; then
-      if $DPDK_AUTO_DISCOVER; then
-        AC_MSG_ERROR([Could not find DPDK library in default search path, Use --with-dpdk to specify the DPDK library installed in non-standard location])
-      else
-        AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
-      fi
-    fi
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
     if test "$DPDK_AUTO_DISCOVER" = "false"; then
@@ -539,6 +513,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/if_link.h], [rtnl_link_stats64])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_set_encap_proto])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_hwaccel_push_inside])
+  OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [__vlan_hwaccel_clear_tag])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [ipv4_is_multicast])
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [proto_ports_offset])
@@ -644,8 +619,13 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [max_mtu])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_ops_extended],
                         [ndo_change_mtu], [OVS_DEFINE([HAVE_RHEL7_MAX_MTU])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/linux/netdevice.h],
+                        [dev_change_flags], [extack],
+                        [OVS_DEFINE([HAVE_DEV_CHANGE_FLAGS_TAKES_EXTACK])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state],
+                        [struct net ], [OVS_DEFINE([HAVE_NF_HOOK_STATE_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
@@ -707,6 +687,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                                    [rcu_read_lock_held])])
   OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h], [lockdep_rtnl_is_held])
   OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h], [net_rwsem])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/rtnetlink.h],
+                        [rtnl_create_link], [extack],
+                        [OVS_DEFINE([HAVE_RTNL_CREATE_LINK_TAKES_EXTACK])])
 
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
@@ -948,6 +931,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/skbuff.h], [sk_buff],
                         [csum_valid],
                         [OVS_DEFINE([HAVE_SKBUFF_CSUM_VALID])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/skbuff.h], [sk_buff],
+                        [vlan_present],
+                        [OVS_DEFINE([HAVE_SKBUFF_VLAN_PRESENT])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
                   [skb_checksum_simple_validate])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h],
@@ -961,6 +947,25 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
                         [rnd],
                         [OVS_DEFINE([HAVE_INET_FRAGS_RND])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/overflow.h], [__LINUX_OVERFLOW_H],
+                  [OVS_DEFINE([HAVE_OVERFLOW_H])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/overflow.h], [struct_size],
+                  [OVS_DEFINE([HAVE_STRUCT_SIZE])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/mm.h], [kvmalloc_array],
+                  [OVS_DEFINE([HAVE_KVMALLOC_ARRAY])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/mm.h], [kvmalloc_node],
+                  [OVS_DEFINE([HAVE_KVMALLOC_NODE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_l3proto.h],
+                  [nf_conntrack_l3proto],
+                  [OVS_DEFINE([HAVE_NF_CONNTRACK_L3PROATO_H])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_core.h],
+                        [nf_conntrack_in], [nf_hook_state],
+                        [OVS_DEFINE([HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ipv6_frag.h], [IP6_DEFRAG_CONNTRACK_IN],
+                  [OVS_DEFINE([HAVE_IPV6_FRAG_H])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
+                        [nf_ct_helper_ext_add], [nf_conntrack_helper],
+                        [OVS_DEFINE([HAVE_NF_CT_HELPER_EXT_ADD_TAKES_HELPER])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
@@ -1144,9 +1149,19 @@ AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
        [x86_64-*], [ac_cv_sparse_target=x86_64],
        [ac_cv_sparse_target=other])])
    AS_CASE([$ac_cv_sparse_target],
-     [x86], [SPARSEFLAGS= CGCCFLAGS=-target=i86],
-     [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS=-target=x86_64],
+     [x86], [SPARSEFLAGS= CGCCFLAGS="-target=i86 -target=host_os_specs"],
+     [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS="-target=x86_64 -target=host_os_specs"],
      [SPARSEFLAGS= CGCCFLAGS=])
+
+   dnl Get the the default defines for vector instructions from compiler to
+   dnl allow "sparse" correctly check the same code that will be built.
+   dnl Required for checking DPDK headers.
+   AC_MSG_CHECKING([vector options for cgcc])
+   VECTOR=$($CC -dM -E - < /dev/null | grep -E "MMX|SSE|AVX" | \
+            cut -c 9- | sed 's/ /=/' | sed 's/^/-D/' | tr '\n' ' ')
+   AC_MSG_RESULT([$VECTOR])
+   CGCCFLAGS="$CGCCFLAGS $VECTOR"
+
    AC_SUBST([SPARSEFLAGS])
    AC_SUBST([CGCCFLAGS])])
 

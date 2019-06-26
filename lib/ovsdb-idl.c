@@ -260,6 +260,7 @@ struct ovsdb_idl {
 
     uint64_t min_index;
     bool leader_only;
+    bool shuffle_remotes;
 };
 
 static void ovsdb_idl_transition_at(struct ovsdb_idl *, enum ovsdb_idl_state,
@@ -485,6 +486,7 @@ ovsdb_idl_create_unconnected(const struct ovsdb_idl_class *class,
     idl->state_seqno = UINT_MAX;
     idl->request_id = NULL;
     idl->leader_only = true;
+    idl->shuffle_remotes = true;
 
     /* Monitor the Database table in the _Server database.
      *
@@ -528,6 +530,9 @@ ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote, bool retry)
         if (remote) {
             struct svec remotes = SVEC_EMPTY_INITIALIZER;
             ovsdb_session_parse_remote(remote, &remotes, &idl->cid);
+            if (idl->shuffle_remotes) {
+                svec_shuffle(&remotes);
+            }
             idl->session = jsonrpc_session_open_multiple(&remotes, retry);
             svec_destroy(&remotes);
 
@@ -536,6 +541,15 @@ ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote, bool retry)
             idl->remote = xstrdup(remote);
         }
     }
+}
+
+/* Set whether the order of remotes should be shuffled, when there
+ * are more than one remotes.  The setting doesn't take effect
+ * until the next time when ovsdb_idl_set_remote() is called. */
+void
+ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *idl, bool shuffle)
+{
+    idl->shuffle_remotes = shuffle;
 }
 
 static void
@@ -1814,7 +1828,16 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
                 }
                 ovs_list_remove(&row->track_node);
                 ovs_list_init(&row->track_node);
-                if (ovsdb_idl_row_is_orphan(row)) {
+                if (ovsdb_idl_row_is_orphan(row) && row->tracked_old_datum) {
+                    ovsdb_idl_row_unparse(row);
+                    const struct ovsdb_idl_table_class *class =
+                                                        row->table->class_;
+                    for (size_t c = 0; c < class->n_columns; c++) {
+                        ovsdb_datum_destroy(&row->tracked_old_datum[c],
+                                            &class->columns[c].type);
+                    }
+                    free(row->tracked_old_datum);
+                    row->tracked_old_datum = NULL;
                     free(row);
                 }
             }
@@ -1888,7 +1911,7 @@ ovsdb_idl_check_server_db(struct ovsdb_idl *idl)
             VLOG_WARN("%s: clustered database server has stale data; "
                       "trying another server", server_name);
         } else {
-            idl->min_index = MAX(idl->min_index, index);
+            idl->min_index = index;
             ok = true;
         }
     } else {
@@ -2651,10 +2674,14 @@ ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
     const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
+    if (row->parsed) {
+        ovsdb_idl_row_unparse(row);
+    }
     for (i = 0; i < class->n_columns; i++) {
         const struct ovsdb_idl_column *c = &class->columns[i];
         (c->parse)(row, &row->old_datum[i]);
     }
+    row->parsed = true;
 }
 
 static void
@@ -2663,10 +2690,14 @@ ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
     const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
+    if (!row->parsed) {
+        return;
+    }
     for (i = 0; i < class->n_columns; i++) {
         const struct ovsdb_idl_column *c = &class->columns[i];
         (c->unparse)(row);
     }
+    row->parsed = false;
 }
 
 /* The OVSDB-IDL Compound Indexes feature allows for the creation of custom
@@ -2994,13 +3025,18 @@ ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
     ovs_assert(row->old_datum == row->new_datum);
     if (!ovsdb_idl_row_is_orphan(row)) {
-        const struct ovsdb_idl_table_class *class = row->table->class_;
-        size_t i;
+        if (ovsdb_idl_track_is_set(row->table)) {
+            row->tracked_old_datum = row->old_datum;
+        } else {
+            const struct ovsdb_idl_table_class *class = row->table->class_;
+            size_t i;
 
-        for (i = 0; i < class->n_columns; i++) {
-            ovsdb_datum_destroy(&row->old_datum[i], &class->columns[i].type);
+            for (i = 0; i < class->n_columns; i++) {
+                ovsdb_datum_destroy(&row->old_datum[i],
+                                    &class->columns[i].type);
+            }
+            free(row->old_datum);
         }
-        free(row->old_datum);
         row->old_datum = row->new_datum = NULL;
     }
 }
@@ -3173,6 +3209,7 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl_db *db)
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
                 if (!ovsdb_idl_track_is_set(row->table)) {
                     ovs_list_remove(&row->track_node);
+                    ovsdb_idl_row_unparse(row);
                     free(row);
                 }
             }
@@ -3203,7 +3240,6 @@ static void
 ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 {
     ovsdb_idl_remove_from_indexes(row);
-    ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_clear_old(row);
     if (ovs_list_is_empty(&row->dst_arcs)) {

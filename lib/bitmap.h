@@ -61,7 +61,7 @@ bitmap_init1(unsigned long *bitmap, size_t n_bits)
 
     memset(bitmap, 0xff, n_bytes);
     if (r_bits) {
-        bitmap[n_longs - 1] >>= BITMAP_ULONG_BITS - r_bits;
+        bitmap[n_longs - 1] = (1UL << r_bits) - 1;
     }
     return bitmap;
 }

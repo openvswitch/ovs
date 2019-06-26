@@ -161,6 +161,16 @@ OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
 
     ASSERT(switchContext->dataFlowState == OvsSwitchRunning);
 
+    POVS_BUFFER_CONTEXT ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(netBufferLists);
+    LONG refCount = 1, exchange = 0;
+    InterlockedCompareExchange((LONG volatile *)&refCount, exchange, (LONG)ctx->refCount);
+    if (refCount != exchange) {
+        InterlockedExchange((LONG volatile *)&ctx->sendFlags, sendFlags);
+        InterlockedExchange16((SHORT volatile *)&ctx->pendingSend, 1);
+        return;
+    }
+
+    InterlockedExchange16((SHORT volatile *)&ctx->pendingSend, 0);
     NdisFSendNetBufferLists(switchContext->NdisFilterHandle, netBufferLists,
                             NDIS_DEFAULT_PORT_NUMBER, sendFlags);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,7 +202,7 @@ multipath_parse__(struct ofpact_multipath *mp, const char *s_, char *s)
     }
     if (!mf_nxm_header(mp->dst.field->id)) {
         return xasprintf("%s: experimenter OXM field '%s' not supported",
-                         s, dst);
+                         s_, dst);
     }
     if (mp->dst.n_bits < 16 && n_links > (1u << mp->dst.n_bits)) {
         return xasprintf("%s: %d-bit destination field has %u possible "

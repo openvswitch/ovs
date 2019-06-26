@@ -63,6 +63,9 @@ DEFINE_PER_THREAD_MALLOCED_DATA(char *, subprogram_name);
 /* --version option output. */
 static char *program_version;
 
+/* 'true' if mlockall() succeeded. */
+static bool is_memory_locked = false;
+
 /* Buffer used by ovs_strerror() and ovs_format_message(). */
 DEFINE_STATIC_PER_THREAD_DATA(struct { char s[128]; },
                               strerror_buffer,
@@ -92,6 +95,18 @@ ovs_assert_failure(const char *where, const char *function,
     default:
         abort();
     }
+}
+
+void
+set_memory_locked(void)
+{
+    is_memory_locked = true;
+}
+
+bool
+memory_locked(void)
+{
+    return is_memory_locked;
 }
 
 void

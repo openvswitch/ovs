@@ -278,10 +278,10 @@ AT_CHECK([ovs-appctl dpctl/ipf-get-status -m | FORMAT_FRAG_LIST()], [], [dnl
 ])
 ])
 
-# OVS_CHECK_KERNEL([minversion], [maxversion], [minsublevel], [maxsublevel])
+# OVS_CHECK_MIN_KERNEL([minversion], [maxversion])
 #
 # The userspace skips all tests that check kernel version.
-m4_define([OVS_CHECK_KERNEL],
+m4_define([OVS_CHECK_MIN_KERNEL],
 [
     AT_SKIP_IF([:])
 ])

@@ -65,6 +65,7 @@ struct ovn_extend_table;
     OVNACT(CLONE,             ovnact_nest)            \
     OVNACT(ARP,               ovnact_nest)            \
     OVNACT(ICMP4,             ovnact_nest)            \
+    OVNACT(ICMP4_ERROR,       ovnact_nest)            \
     OVNACT(ICMP6,             ovnact_nest)            \
     OVNACT(TCP_RESET,         ovnact_nest)            \
     OVNACT(ND_NA,             ovnact_nest)            \
@@ -80,7 +81,9 @@ struct ovn_extend_table;
     OVNACT(LOG,               ovnact_log)             \
     OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)        \
     OVNACT(ND_NS,             ovnact_nest)            \
-    OVNACT(SET_METER,         ovnact_set_meter)
+    OVNACT(SET_METER,         ovnact_set_meter)       \
+    OVNACT(OVNFIELD_LOAD,     ovnact_load)            \
+    OVNACT(CHECK_PKT_LARGER,  ovnact_check_pkt_larger)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -142,6 +145,20 @@ ovnact_end(const struct ovnact *ovnacts, size_t ovnacts_len)
 #define OVNACT_FOR_EACH(POS, OVNACTS, OVNACTS_LEN)                      \
     for ((POS) = (OVNACTS); (POS) < ovnact_end(OVNACTS, OVNACTS_LEN);  \
          (POS) = ovnact_next(POS))
+
+static inline int
+ovnacts_count(const struct ovnact *ovnacts, size_t ovnacts_len)
+{
+    uint8_t n_ovnacts = 0;
+    if (ovnacts) {
+        const struct ovnact *a;
+
+        OVNACT_FOR_EACH (a, ovnacts, ovnacts_len) {
+            n_ovnacts++;
+        }
+    }
+    return n_ovnacts;
+}
 
 /* Action structure for each OVNACT_*. */
 
@@ -292,6 +309,13 @@ struct ovnact_set_meter {
     struct ovnact ovnact;
     uint64_t rate;                   /* rate field, in kbps. */
     uint64_t burst;                  /* burst rate field, in kbps. */
+};
+
+/* OVNACT_CHECK_IP_PKT_LARGER. */
+struct ovnact_check_pkt_larger {
+    struct ovnact ovnact;
+    uint16_t pkt_len;
+    struct expr_field dst;      /* 1-bit destination field. */
 };
 
 /* Internal use by the helpers below. */
@@ -452,6 +476,16 @@ enum action_opcode {
         * The actions, in OpenFlow 1.3 format, follow the action_header.
         */
     ACTION_OPCODE_ND_NA_ROUTER,
+
+     /* MTU value (to put in the icmp4 header field - frag_mtu) follow the
+     * action header. */
+    ACTION_OPCODE_PUT_ICMP4_FRAG_MTU,
+
+    /* "icmp4_error { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ICMP4_ERROR,
 };
 
 /* Header. */
@@ -460,6 +494,12 @@ struct action_header {
     uint8_t pad[4];
 };
 BUILD_ASSERT_DECL(sizeof(struct action_header) == 8);
+
+OVS_PACKED(
+struct ovnfield_act_header {
+    ovs_be16 id; /* one of enum ovnfield_id. */
+    ovs_be16 len; /* Length of the ovnfield data. */
+});
 
 struct ovnact_parse_params {
     /* A table of "struct expr_symbol"s to support (as one would provide to
@@ -520,6 +560,9 @@ struct ovnact_encode_params {
 
     /* A struct to figure out the meter_id for meter actions. */
     struct ovn_extend_table *meter_table;
+
+    /* The logical flow uuid that drove this action. */
+    struct uuid lflow_uuid;
 
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this

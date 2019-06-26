@@ -30,12 +30,38 @@ chassis_lookup_by_name(struct ovsdb_idl_index *sbrec_chassis_by_name,
 {
     struct sbrec_chassis *target = sbrec_chassis_index_init_row(
         sbrec_chassis_by_name);
-    sbrec_chassis_set_name(target, name);
+    sbrec_chassis_index_set_name(target, name);
 
     struct sbrec_chassis *retval = sbrec_chassis_index_find(
         sbrec_chassis_by_name, target);
 
     sbrec_chassis_index_destroy_row(target);
+
+    return retval;
+}
+
+struct ovsdb_idl_index *
+ha_chassis_group_index_create(struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_index_create1(idl, &sbrec_ha_chassis_group_col_name);
+}
+
+/* Finds and returns the HA chassis group with the given 'name', or NULL
+ * if no such HA chassis group exists. */
+const struct sbrec_ha_chassis_group *
+ha_chassis_group_lookup_by_name(
+    struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name,
+    const char *name)
+{
+    struct sbrec_ha_chassis_group *target =
+        sbrec_ha_chassis_group_index_init_row(sbrec_ha_chassis_grp_by_name);
+    sbrec_ha_chassis_group_index_set_name(target, name);
+
+    struct sbrec_ha_chassis_group *retval =
+        sbrec_ha_chassis_group_index_find(sbrec_ha_chassis_grp_by_name,
+                                          target);
+
+    sbrec_ha_chassis_group_index_destroy_row(target);
 
     return retval;
 }

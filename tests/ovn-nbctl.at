@@ -1353,6 +1353,63 @@ IPv6 Routes
 
 dnl ---------------------------------------------------------------------
 
+OVN_NBCTL_TEST([ovn_nbctl_policies], [policies], [
+AT_CHECK([ovn-nbctl lr-add lr0])
+
+dnl Add policies with allow and drop actions
+AT_CHECK([ovn-nbctl lr-policy-add lr0 100 "ip4.src == 1.1.1.0/24" drop])
+AT_CHECK([ovn-nbctl lr-policy-add lr0 100 "ip4.src == 1.1.2.0/24" allow])
+AT_CHECK([ovn-nbctl lr-policy-add lr0 101 "ip4.src == 2.1.1.0/24" allow])
+AT_CHECK([ovn-nbctl lr-policy-add lr0 101 "ip4.src == 2.1.2.0/24" drop])
+AT_CHECK([ovn-nbctl lr-policy-add lr0 101 "ip6.src == 2002::/64" drop])
+
+dnl Add duplicated policy
+AT_CHECK([ovn-nbctl lr-policy-add lr0 100 "ip4.src == 1.1.1.0/24" drop], [1], [],
+  [ovn-nbctl: Same routing policy already existed on the logical router lr0.
+])
+
+dnl Add duplicated policy
+AT_CHECK([ovn-nbctl lr-policy-add lr0 103 "ip4.src == 1.1.1.0/24" deny], [1], [],
+  [ovn-nbctl: deny: action must be one of "allow", "drop", and "reroute"
+])
+
+dnl Delete by priority and match string
+AT_CHECK([ovn-nbctl lr-policy-del lr0 100 "ip4.src == 1.1.1.0/24"])
+AT_CHECK([ovn-nbctl lr-policy-list lr0], [0], [dnl
+Routing Policies
+       101                              ip4.src == 2.1.1.0/24           allow
+       101                              ip4.src == 2.1.2.0/24            drop
+       101                               ip6.src == 2002::/64            drop
+       100                              ip4.src == 1.1.2.0/24           allow
+])
+
+dnl Delete all policies for given priority
+AT_CHECK([ovn-nbctl lr-policy-del lr0 101])
+AT_CHECK([ovn-nbctl lr-policy-list lr0], [0], [dnl
+Routing Policies
+       100                              ip4.src == 1.1.2.0/24           allow
+])
+
+dnl Add policy with reroute action
+AT_CHECK([ovn-nbctl lr-policy-add lr0 102 "ip4.src == 3.1.2.0/24" reroute 3.3.3.3])
+
+dnl Add policy with invalid reroute ip
+AT_CHECK([ovn-nbctl lr-policy-add lr0 103 "ip4.src == 3.1.2.0/24" reroute 3.3.3.x], [1], [],
+  [ovn-nbctl: bad next hop argument: 3.3.3.x
+])
+
+dnl Add policy with reroute action
+AT_CHECK([ovn-nbctl lr-policy-add lr0 104 "ip6.src == 2001::/64" reroute 2002::5])
+
+dnl Add policy with invalid reroute ip
+AT_CHECK([ovn-nbctl lr-policy-add lr0 105 "ip6.src == 2001::/64" reroute 2002::x], [1], [],
+  [ovn-nbctl: bad next hop argument: 2002::x
+])
+
+])
+
+dnl ---------------------------------------------------------------------
+
 OVN_NBCTL_TEST([ovn_nbctl_lsp_types], [lsp types], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])

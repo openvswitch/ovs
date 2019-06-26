@@ -353,6 +353,53 @@
           <dd>
             A port to a logical switch on a VTEP gateway.
           </dd>
+
+          <dt><code>external</code></dt>
+          <dd>
+            <p>
+              Represents a logical port which is external and not having
+              an OVS port in the integration bridge.
+              <code>OVN</code> will never receive any traffic from this port or
+              send any traffic to this port. <code>OVN</code> can support
+              native services like DHCPv4/DHCPv6/DNS for this port.
+              If <ref column="ha_chassis_group"/> is defined,
+              <code>ovn-controller</code> running in the master chassis of
+              the HA chassis group will bind this port to provide these native
+              services. It is expected that this port belong to a bridged
+              logical switch (with a <code>localnet</code> port).
+            </p>
+
+            <p>
+              It is recommended to use the same HA chassis group for all the
+              external ports of a logical switch. Otherwise, the physical
+              switch might see MAC flap issue when different chassis provide
+              the native services. For example when supporting native DHCPv4
+              service, DHCPv4 server mac (configured in
+              <ref column="options:server_mac" table="DHCP_Options"
+              db="OVN_NB"/> column in table <ref table="DHCP_Options"/>)
+              originating from different ports can cause MAC flap issue.
+              The MAC of the logical router IP(s) can also flap if the
+              same HA chassis group is not set for all the external ports
+              of a logical switch.
+            </p>
+
+            <p>
+              Below are some of the use cases where <code>external</code>
+              ports can be used.
+            </p>
+
+            <ul>
+              <li>
+                VMs connected to SR-IOV nics - Traffic from these VMs by passes
+                the kernel stack and local <code>ovn-controller</code> do not
+                bind these ports and cannot serve the native services.
+              </li>
+
+              <li>
+                When CMS supports provisioning baremetal servers.
+              </li>
+            </ul>
+          </dd>
         </dl>
       </column>
     </group>
@@ -718,6 +765,30 @@
             </dl>
           </dd>
 
+          <dt><code>Keyword "dynamic" followed by an IPv4/IPv6 address</code></dt>
+          <dd>
+
+            <p>
+              The keyword <code>dynamic</code> followed by an IPv4/IPv6
+              address indicates that <code>ovn-northd</code> should choose
+              a dynamic ethernet address and use the provided IPv4/IPv6 address
+              as network address.
+            </p>
+
+            <p>
+              Examples:
+            </p>
+
+            <dl>
+              <dt><code>dynamic 192.168.0.1 2001::1</code></dt>
+              <dd>
+                This indicates that <code>ovn-northd</code> should allocate
+                a unique MAC address and use the provided IPv4/IPv6 address
+                for the related port
+              </dd>
+            </dl>
+          </dd>
+
           <dt><code>router</code></dt>
           <dd>
             <p>
@@ -900,6 +971,15 @@
         Please see the <ref table="DHCP_Options"/> table.
       </column>
     </group>
+
+    <column name="ha_chassis_group">
+      References a row in the OVN Northbound database's
+      <ref table="HA_Chassis_Group" db="OVN_Northbound"/> table.
+      It indicates the HA chassis group to use if the
+      <ref column="type"/> is set to <code>external</code>.
+      If <ref column="type"/> is not <code>external</code>, this
+      column is ignored.
+    </column>
 
     <group title="Naming">
       <column name="external_ids" key="neutron:port_name">
@@ -1241,6 +1321,10 @@
       Zero or more static routes for the router.
     </column>
 
+    <column name="policies">
+      Zero or more routing policies for the router.
+    </column>
+
     <column name="enabled">
       This column is used to administratively set router state.  If this column
       is empty or is set to <code>true</code>, the router is enabled.  If this
@@ -1523,6 +1607,12 @@
 
     <column name="gateway_chassis">
       <p>
+        This column is ignored if the column
+        <ref column="ha_chassis_group" table="Logical_Router_Port"/>.
+        is set.
+      </p>
+
+      <p>
         If set, this indicates that this logical router port represents
         a distributed gateway port that connects this router to a logical
         switch with a localnet port.  There may be at most one such
@@ -1546,6 +1636,24 @@
         another gateway will become active.
         The <ref column="priority" table="Gateway_Chassis"/> column
         specifies the order that gateways will be chosen by OVN.
+      </p>
+    </column>
+
+    <column name="ha_chassis_group">
+      <p>
+        If set, this indicates that this logical router port represents
+        a distributed gateway port that connects this router to a logical
+        switch with a localnet port.  There may be at most one such
+        logical router port on each logical router. The HA chassis which
+        are part of the HA chassis group will provide the gateway high
+        availability. Please see the <ref table="HA_Chassis_Group"/> for
+        more details.
+      </p>
+
+      <p>
+        When this column is set, the column
+        <ref column="gateway_chassis" table="Logical_Router_Port"/> will
+        be ignored.
       </p>
     </column>
 
@@ -1839,6 +1947,66 @@
       </column>
     </group>
 
+  </table>
+
+  <table name="Logical_Router_Policy" title="Logical router policies">
+    <p>
+      Each row in this table represents one routing policy for a logical router
+      that points to it through its <ref column="policies"/> column.  The <ref
+      column="action"/> column for the highest-<ref column="priority"/>
+      matching row in this table determines a packet's treatment.  If no row
+      matches, packets are allowed by default. (Default-deny treatment is
+      possible: add a rule with <ref column="priority"/> 0, <code>1</code> as
+      <ref column="match"/>, and <code>drop</code> as <ref column="action"/>.)
+    </p>
+
+    <column name="priority">
+      <p>
+        The routing policy's priority.  Rules with numerically higher priority
+        take precedence over those with lower. A rule is uniquely identified
+        by the priority and match string.
+      </p>
+    </column>
+
+    <column name="match">
+      <p>
+        The packets that the routing policy should match,
+        in the same expression language used for the
+        <ref column="match" table="Logical_Flow" db="OVN_Southbound"/>
+        column in the OVN Southbound database's
+        <ref table="Logical_Flow" db="OVN_Southbound"/> table.
+      </p>
+
+      <p>
+        By default all traffic is allowed.  When writing a more
+        restrictive policy, it is important to remember to allow flows
+        such as ARP and IPv6 neighbor discovery packets.
+      </p>
+    </column>
+
+    <column name="action">
+      <p>The action to take when the routing policy matches:</p>
+      <ul>
+        <li>
+          <code>allow</code>: Forward the packet.
+        </li>
+
+        <li>
+          <code>drop</code>: Silently drop the packet.
+        </li>
+
+        <li>
+          <code>reroute</code>: Reroute packet to <ref column="nexthop"/>.
+        </li>
+      </ul>
+    </column>
+
+    <column name="nexthop">
+      <p>
+        Next-hop IP address for this route, which should be the IP
+        address of a connected router port or the IP address of a logical port.
+      </p>
+    </column>
   </table>
 
   <table name="NAT" title="NAT rules">
@@ -2185,6 +2353,14 @@
             contains one or more IPv4 addresses that the client MAY
             use. This option is Cisco proprietary, the IEEE standard
             that matches with this requirement is option 66 (tftp_server).
+          </p>
+        </column>
+
+        <column name="options" key="domain_name">
+          <p>
+            The DHCPv4 option code for this option is 15. This option
+            specifies the domain name that client should use when
+            resolving hostnames via the Domain Name System.
           </p>
         </column>
       </group>
@@ -2622,4 +2798,55 @@
     </group>
   </table>
 
+  <table name="HA_Chassis_Group">
+    <p>
+      Table representing a group of chassis which can provide High availability
+      services. Each chassis in the group is represented by the table
+      <ref table="HA_Chassis"/>. The HA chassis with highest priority will
+      be the master of this group. If the master chassis failover is detected,
+      the HA chassis with the next higher priority takes over the
+      responsibility of providing the HA. If a distributed gateway router port
+      references a row in this table, then the master HA chassis in this group
+      provides the gateway functionality.
+    </p>
+
+    <column name="name">
+      Name of the <ref table="HA_Chassis_Group"/>. Name should be unique.
+    </column>
+
+    <column name="ha_chassis">
+      A list of HA chassis which belongs to this group.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="HA_Chassis">
+    <column name="chassis_name">
+      <p>
+        Name of the chassis which is part of the HA chassis group.
+        The value must match the
+        <ref db="OVN_Southbound" table="Chassis" column="name"/> column
+        of the <ref db="OVN_Southbound" table="Chassis"/> table in the
+        <ref db="OVN_Southbound"/> database.
+      </p>
+    </column>
+
+    <column name="priority">
+      <p>
+        Priority of the chassis. Chassis with highest priority will be
+        the master.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
 </database>

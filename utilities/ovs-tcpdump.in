@@ -372,6 +372,11 @@ def argv_tuples(lst):
         pass
 
 
+def py_which(executable):
+    return any(os.access(os.path.join(path, executable), os.X_OK)
+               for path in os.environ["PATH"].split(os.pathsep))
+
+
 def main():
     db_sock = 'unix:@RUNDIR@/db.sock'
     interface = None
@@ -414,6 +419,10 @@ def main():
 
     if interface is None:
         print("Error: must at least specify an interface with '-i' option")
+        sys.exit(1)
+
+    if not py_which(dump_cmd):
+        print("Error: unable to execute '%s' (check PATH)" % dump_cmd)
         sys.exit(1)
 
     if '-l' not in tcpdargs:

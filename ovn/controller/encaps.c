@@ -26,19 +26,26 @@
 
 VLOG_DEFINE_THIS_MODULE(encaps);
 
+/*
+ * Given there could be multiple tunnels with different IPs to the same
+ * chassis we annotate the ovn-chassis-id with
+ * <chassis_name>OVN_MVTEP_CHASSISID_DELIM<IP>.
+ */
+#define	OVN_MVTEP_CHASSISID_DELIM '@'
+
 void
 encaps_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_bridge);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_ports);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_port);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_interfaces);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_external_ids);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_interfaces);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_type);
-    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_options);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_name);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_type);
+    ovsdb_idl_track_add_column(ovs_idl, &ovsrec_interface_col_options);
 }
 
 /* Enough context to create a new tunnel, using tunnel_add(). */
@@ -78,6 +85,70 @@ tunnel_create_name(struct tunnel_ctx *tc, const char *chassis_id)
     return NULL;
 }
 
+/*
+ * Returns a tunnel-id of the form 'chassis_id'-delimiter-'encap_ip'.
+ */
+char *
+encaps_tunnel_id_create(const char *chassis_id, const char *encap_ip)
+{
+    return xasprintf("%s%c%s", chassis_id, OVN_MVTEP_CHASSISID_DELIM,
+                     encap_ip);
+}
+
+/*
+ * Parses a 'tunnel_id' of the form <chassis_name><delimiter><IP>.
+ * If the 'chassis_id' argument is not NULL the function will allocate memory
+ * and store the chassis-id part of the tunnel-id at '*chassis_id'.
+ * If the 'encap_ip' argument is not NULL the function will allocate memory
+ * and store the encapsulation IP part of the tunnel-id at '*encap_ip'.
+ */
+bool
+encaps_tunnel_id_parse(const char *tunnel_id, char **chassis_id,
+                       char **encap_ip)
+{
+    /* Find the delimiter.  Fail if there is no delimiter or if <chassis_name>
+     * or <IP> is the empty string.*/
+    const char *d = strchr(tunnel_id, OVN_MVTEP_CHASSISID_DELIM);
+    if (d == tunnel_id || !d || !d[1]) {
+        return false;
+    }
+
+    if (chassis_id) {
+        *chassis_id = xmemdup0(tunnel_id, d - tunnel_id);
+    }
+    if (encap_ip) {
+        *encap_ip = xstrdup(d + 1);
+    }
+    return true;
+}
+
+/*
+ * Returns true if 'tunnel_id' contains 'chassis_id' and, if specified, the
+ * given 'encap_ip'. Returns false otherwise.
+ */
+bool
+encaps_tunnel_id_match(const char *tunnel_id, const char *chassis_id,
+                       const char *encap_ip)
+{
+    while (*tunnel_id == *chassis_id) {
+        if (!*tunnel_id) {
+            /* 'tunnel_id' and 'chassis_id' are equal strings.  This is a
+             * mismatch because 'tunnel_id' is missing the delimiter and IP. */
+            return false;
+        }
+        tunnel_id++;
+        chassis_id++;
+    }
+
+    /* We found the first byte that disagrees between 'tunnel_id' and
+     * 'chassis_id'.  If we consumed all of 'chassis_id' and arrived at the
+     * delimiter in 'tunnel_id' (and if 'encap_ip' is correct, if it was
+     * supplied), it's a match. */
+    return (*tunnel_id == OVN_MVTEP_CHASSISID_DELIM
+            && *chassis_id == '\0'
+            && (!encap_ip || !strcmp(tunnel_id + 1, encap_ip)));
+}
+
 static void
 tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
            const char *new_chassis_id, const struct sbrec_encap *encap)
@@ -94,8 +165,7 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
      * combination of the chassis_name and the encap-ip to identify
      * a specific tunnel to the chassis.
      */
-    tunnel_entry_id = xasprintf("%s%s%s", new_chassis_id,
-                                OVN_MVTEP_CHASSISID_DELIM, encap->ip);
+    tunnel_entry_id = encaps_tunnel_id_create(new_chassis_id, encap->ip);
     if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
         smap_add(&options, "csum", csum);
     }
@@ -195,13 +265,36 @@ chassis_tunnel_add(const struct sbrec_chassis *chassis_rec, const struct sbrec_s
     return tuncnt;
 }
 
+/*
+* Returns true if transport_zones and chassis_rec->transport_zones
+* have at least one common transport zone.
+*/
+static bool
+chassis_tzones_overlap(const struct sset *transport_zones,
+                       const struct sbrec_chassis *chassis_rec)
+{
+    /* If neither Chassis belongs to any transport zones, return true to
+     * form a tunnel between them */
+    if (!chassis_rec->n_transport_zones && sset_is_empty(transport_zones)) {
+        return true;
+    }
+
+    for (int i = 0; i < chassis_rec->n_transport_zones; i++) {
+        if (sset_contains(transport_zones, chassis_rec->transport_zones[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void
 encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
            const struct ovsrec_bridge_table *bridge_table,
            const struct ovsrec_bridge *br_int,
            const struct sbrec_chassis_table *chassis_table,
            const char *chassis_id,
-           const struct sbrec_sb_global *sbg)
+           const struct sbrec_sb_global *sbg,
+           const struct sset *transport_zones)
 {
     if (!ovs_idl_txn || !br_int) {
         return;
@@ -251,7 +344,15 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
 
     SBREC_CHASSIS_TABLE_FOR_EACH (chassis_rec, chassis_table) {
         if (strcmp(chassis_rec->name, chassis_id)) {
-            /* Create tunnels to the other chassis. */
+            /* Create tunnels to the other Chassis belonging to the
+             * same transport zone */
+            if (!chassis_tzones_overlap(transport_zones, chassis_rec)) {
+                VLOG_DBG("Skipping encap creation for Chassis '%s' because "
+                         "it belongs to different transport zones",
+                         chassis_rec->name);
+                continue;
+            }
+
             if (chassis_tunnel_add(chassis_rec, sbg, &tc) == 0) {
                 VLOG_INFO("Creating encap for '%s' failed", chassis_rec->name);
                 continue;

@@ -101,12 +101,9 @@ static bool should_log_flow_message(const struct vlog_module *module,
 struct seq *tnl_conf_seq;
 
 static bool
-dpif_is_internal_port(const char *type)
+dpif_is_tap_port(const char *type)
 {
-    /* For userspace datapath, tap devices are the equivalent
-     * of internal devices in the kernel datapath, so both
-     * these types are 'internal' devices. */
-    return !strcmp(type, "internal") || !strcmp(type, "tap");
+    return !strcmp(type, "tap");
 }
 
 static void
@@ -359,7 +356,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
             struct netdev *netdev;
             int err;
 
-            if (dpif_is_internal_port(dpif_port.type)) {
+            if (dpif_is_tap_port(dpif_port.type)) {
                 continue;
             }
 
@@ -434,7 +431,7 @@ dpif_remove_netdev_ports(struct dpif *dpif) {
         struct dpif_port dpif_port;
 
         DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-            if (!dpif_is_internal_port(dpif_port.type)) {
+            if (!dpif_is_tap_port(dpif_port.type)) {
                 netdev_ports_remove(dpif_port.port_no, dpif->dpif_class);
             }
         }
@@ -582,7 +579,7 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu32,
                     dpif_name(dpif), netdev_name, port_no);
 
-        if (!dpif_is_internal_port(netdev_get_type(netdev))) {
+        if (!dpif_is_tap_port(netdev_get_type(netdev))) {
 
             struct dpif_port dpif_port;
 
@@ -1269,6 +1266,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_POP_NSH:
     case OVS_ACTION_ATTR_CT_CLEAR:
     case OVS_ACTION_ATTR_UNSPEC:
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }

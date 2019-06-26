@@ -137,8 +137,10 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/namemap.c \
 	lib/netdev-dpdk.h \
 	lib/netdev-dummy.c \
+	lib/netdev-offload.c \
+	lib/netdev-offload.h \
+	lib/netdev-offload-provider.h \
 	lib/netdev-provider.h \
-	lib/netdev-rte-offloads.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
 	lib/netdev-vport-private.h \
@@ -392,8 +394,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
-	lib/netdev-tc-offloads.c \
-	lib/netdev-tc-offloads.h \
+	lib/netdev-offload-tc.c \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \
 	lib/netlink-notifier.c \
@@ -413,7 +414,7 @@ if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk.c \
 	lib/netdev-dpdk.c \
-	lib/netdev-rte-offloads.c
+	lib/netdev-offload-dpdk.c
 else
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpdk-stub.c
@@ -440,12 +441,6 @@ if HAVE_POSIX_AIO
 lib_libopenvswitch_la_SOURCES += lib/async-append-aio.c
 else
 lib_libopenvswitch_la_SOURCES += lib/async-append-null.c
-endif
-
-if ESX
-lib_libopenvswitch_la_SOURCES += \
-	lib/route-table-stub.c \
-	lib/if-notifier-stub.c
 endif
 
 if HAVE_IF_DL

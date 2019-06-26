@@ -131,6 +131,8 @@ typedef struct _OVS_SWITCH_CONTEXT
                                                      * vport */
     INT32                   countInternalVports;    /* the number of internal
                                                      * vports */
+    UINT32                  ipHelperBoundVportNo;   /* vportNo bound to
+                                                     * IpHelper */
 
     /*
      * 'portIdHashArray' ONLY contains ports that exist on the Hyper-V switch,

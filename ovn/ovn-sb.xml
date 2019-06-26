@@ -293,6 +293,14 @@
       See <code>ovn-controller</code>(8) for more information.
     </column>
 
+    <column name="transport_zones">
+      <code>ovn-controller</code> populates this key with the transport
+      zones configured in the <ref table="Open_vSwitch"
+      column="external_ids:ovn-transport-zones"/> column of the Open_vSwitch
+      database's <ref table="Open_vSwitch" db="Open_vSwitch"/> table.
+      See <code>ovn-controller</code>(8) for more information.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
@@ -1103,6 +1111,39 @@
           </p>
         </dd>
 
+        <dt><code><var>ovn_field</var> = <var>constant</var>;</code></dt>
+        <dd>
+          <p>
+            Sets OVN field <var>ovn_field</var> to constant value
+            <var>constant</var>.
+          </p>
+
+          <p>
+            <code>OVN</code> supports setting the values of certain fields
+            which are not yet supported in OpenFlow to set or modify them.
+          </p>
+
+          <p>
+            Below are the supported <code>OVN fields</code>:
+          </p>
+
+          <ul>
+            <li>
+              <code>icmp4.frag_mtu</code>
+              <p>
+                This field sets the low-order 16 bits of the ICMP4 header field
+                that is labelled "unused" in the ICMP specification as defined
+                in the RFC 1191 with the value specified in
+                <var>constant</var>.
+              </p>
+
+              <p>
+                Eg. icmp4.frag_mtu = 1500;
+              </p>
+            </li>
+          </ul>
+        </dd>
+
         <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
         <dd>
           <p>
@@ -1766,6 +1807,27 @@
 
           <p><b>Example:</b> <code>set_meter(100, 1000);</code></p>
         </dd>
+
+        <dt><code><var>R</var> = check_pkt_larger(<var>L</var>)</code></dt>
+        <dd>
+          <p>
+            <b>Parameters</b>: packet length <var>L</var> to check for
+            in bytes.
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            This is a logical equivalent of the OpenFlow
+            <code>check_pkt_larger</code> action. If the packet is larger
+            than the length specified in <var>L</var>, it stores 1 in the
+            subfield <var>R</var>.
+          </p>
+
+          <p><b>Example: </b><code>reg0[6] = check_pkt_larger(1000);</code></p>
+        </dd>
       </dl>
 
       <dl>
@@ -1820,19 +1882,22 @@
 
       <dl>
         <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
+        <dt>
+          <code>icmp4_error { <var>action</var>; </code>...<code> };</code>
+        </dt>
         <dd>
           <p>
             Temporarily replaces the IPv4 packet being processed by an ICMPv4
             packet and executes each nested <var>action</var> on the ICMPv4
-            packet.  Actions following the <var>icmp4</var> action, if any,
+            packet.  Actions following these actions, if any,
             apply to the original, unmodified packet.
           </p>
 
           <p>
-            The ICMPv4 packet that this action operates on is initialized based
-            on the IPv4 packet being processed, as follows.  These are default
-            values that the nested actions will probably want to change.
-            Ethernet and IPv4 fields not listed here are not changed:
+            The ICMPv4 packet that these actions operates on is initialized
+            based on the IPv4 packet being processed, as follows.  These are
+            default values that the nested actions will probably want to
+            change. Ethernet and IPv4 fields not listed here are not changed:
           </p>
 
           <ul>
@@ -1843,6 +1908,13 @@
             <li><code>icmp4.code = 1</code> (host unreachable)</li>
           </ul>
 
+          <p>
+              <code>icmp4_error</code> action is expected to be used to
+              generate an ICMPv4 packet in response to an error in original
+              IP packet. When this action generates the ICMPv4 packet, it
+              also copies the original IP datagram following the ICMPv4 header
+              as per RFC 1122: 3.2.2.
+          </p>
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
@@ -2243,6 +2315,16 @@ tcp.flags = RST;
           <ref column="type"/> set to <code>chassisredirect</code>.
           This column defines the list of chassis used as gateways where
           traffic will be redirected through.
+        </p>
+      </column>
+
+      <column name="ha_chassis_group">
+        <p>
+          This should only be populated for ports with
+          <ref column="type"/> set to <code>chassisredirect</code>.
+          This column defines the HA chassis group with a list of
+          HA chassis used as gateways where traffic will be redirected
+          through.
         </p>
       </column>
 
@@ -3337,6 +3419,59 @@ tcp.flags = RST;
       Columns</code> at the beginning of this document.
 
       <column name="external_ids"/>
+    </group>
+  </table>
+
+  <table name="HA_Chassis">
+    <column name="chassis">
+      <p>
+        The <ref table="Chassis"/> which provides the HA functionality.
+        </p>
+    </column>
+
+    <column name="priority">
+      <p>
+        Priority of the HA chassis. Chassis with highest priority will be
+        the master in the HA chassis group.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="HA_Chassis_Group">
+    <p>
+      Table representing a group of chassis which can provide High availability
+      services. Each chassis in the group is represented by the table
+      <ref table="HA_Chassis"/>. The HA chassis with highest priority will
+      be the master of this group. If the master chassis failover is detected,
+      the HA chassis with the next higher priority takes over the
+      responsibility of providing the HA. If <ref db="OVN_Southbound"
+      table="Port_Binding" column="ha_chassis_group"/> column of the table
+      <ref db="OVN_Southbound" table="Port_Binding"/> references this table,
+      then this HA chassis group provides the gateway functionality and
+      redirects the gateway traffic to the master of this group.
+    </p>
+    <column name="name">
+      Name of the <ref table="HA_Chassis_Group"/>. Name should be unique.
+    </column>
+
+    <column name="ha_chassis">
+      A list of <ref table="HA_Chassis"/> which belongs to this group.
+    </column>
+
+    <column name="ref_chassis">
+      A list of <ref table="chassis"/> which references this HA chassis group.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
     </group>
   </table>
 </database>

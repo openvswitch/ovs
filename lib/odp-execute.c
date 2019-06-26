@@ -674,6 +674,49 @@ odp_execute_clone(void *dp, struct dp_packet_batch *batch, bool steal,
     }
 }
 
+static void
+odp_execute_check_pkt_len(void *dp, struct dp_packet *packet, bool steal,
+                          const struct nlattr *action,
+                          odp_execute_cb dp_execute_action)
+{
+    static const struct nl_policy ovs_cpl_policy[] = {
+        [OVS_CHECK_PKT_LEN_ATTR_PKT_LEN] = { .type = NL_A_U16 },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] = { .type = NL_A_NESTED },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]
+            = { .type = NL_A_NESTED },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(ovs_cpl_policy)];
+
+    if (!nl_parse_nested(action, ovs_cpl_policy, attrs, ARRAY_SIZE(attrs))) {
+        OVS_NOT_REACHED();
+    }
+
+    const struct nlattr *a;
+    struct dp_packet_batch pb;
+
+    a = attrs[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN];
+    bool is_greater = dp_packet_size(packet) > nl_attr_get_u16(a);
+    if (is_greater) {
+        a = attrs[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
+    } else {
+        a = attrs[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL];
+    }
+
+    if (!steal) {
+        /* The 'subactions' may modify the packet, but the modification
+         * should not propagate beyond this action. Make a copy
+         * the packet in case we don't own the packet, so that the
+         * 'subactions' are only applid to check_pkt_len. 'odp_execute_actions'
+         * will free the clone.  */
+        packet = dp_packet_clone(packet);
+    }
+    /* If nl_attr_get(a) is NULL, the packet will be freed by
+     * odp_execute_actions. */
+    dp_packet_batch_init_packet(&pb, packet);
+    odp_execute_actions(dp, &pb, true, nl_attr_get(a), nl_attr_get_size(a),
+                        dp_execute_action);
+}
+
 static bool
 requires_datapath_assistance(const struct nlattr *a)
 {
@@ -705,6 +748,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_NSH:
     case OVS_ACTION_ATTR_POP_NSH:
     case OVS_ACTION_ATTR_CT_CLEAR:
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -929,6 +973,19 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
         case OVS_ACTION_ATTR_CT_CLEAR:
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 conntrack_clear(packet);
+            }
+            break;
+
+        case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                odp_execute_check_pkt_len(dp, packet, steal && last_action, a,
+                                          dp_execute_action);
+            }
+
+            if (last_action) {
+                /* We do not need to free the packets.
+                 * odp_execute_check_pkt_len() has stolen them. */
+                return;
             }
             break;
 

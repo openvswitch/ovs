@@ -47,7 +47,6 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
-#include "netdev-tc-offloads.h"
 #ifdef __linux__
 #include "netdev-linux.h"
 #endif
@@ -189,22 +188,34 @@ netdev_vport_alloc(void)
 int
 netdev_vport_construct(struct netdev *netdev_)
 {
+    const struct netdev_class *class = netdev_get_class(netdev_);
+    const char *dpif_port = netdev_vport_class_get_dpif_port(class);
     struct netdev_vport *dev = netdev_vport_cast(netdev_);
+    const char *p, *name = netdev_get_name(netdev_);
     const char *type = netdev_get_type(netdev_);
+    uint16_t port = 0;
 
     ovs_mutex_init(&dev->mutex);
     eth_addr_random(&dev->etheraddr);
 
-    /* Add a default destination port for tunnel ports if none specified. */
+    if (name && dpif_port && (strlen(name) > strlen(dpif_port) + 1) &&
+        (!strncmp(name, dpif_port, strlen(dpif_port)))) {
+        p = name + strlen(dpif_port) + 1;
+        port = atoi(p);
+    }
+
+    /* If a destination port for tunnel ports is specified in the netdev
+     * name, use it instead of the default one. Otherwise, use the default
+     * destination port */
     if (!strcmp(type, "geneve")) {
-        dev->tnl_cfg.dst_port = htons(GENEVE_DST_PORT);
+        dev->tnl_cfg.dst_port = port ? htons(port) : htons(GENEVE_DST_PORT);
     } else if (!strcmp(type, "vxlan")) {
-        dev->tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
+        dev->tnl_cfg.dst_port = port ? htons(port) : htons(VXLAN_DST_PORT);
         update_vxlan_global_cfg(netdev_, NULL, &dev->tnl_cfg);
     } else if (!strcmp(type, "lisp")) {
-        dev->tnl_cfg.dst_port = htons(LISP_DST_PORT);
+        dev->tnl_cfg.dst_port = port ? htons(port) : htons(LISP_DST_PORT);
     } else if (!strcmp(type, "stt")) {
-        dev->tnl_cfg.dst_port = htons(STT_DST_PORT);
+        dev->tnl_cfg.dst_port = port ? htons(port) : htons(STT_DST_PORT);
     }
 
     dev->tnl_cfg.dont_fragment = true;
@@ -1104,10 +1115,8 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
 }
 
 #define NETDEV_VPORT_GET_IFINDEX netdev_vport_get_ifindex
-#define NETDEV_FLOW_OFFLOAD_API , LINUX_FLOW_OFFLOAD_API
 #else /* !__linux__ */
 #define NETDEV_VPORT_GET_IFINDEX NULL
-#define NETDEV_FLOW_OFFLOAD_API
 #endif /* __linux__ */
 
 #define VPORT_FUNCTIONS_COMMON                      \
@@ -1121,8 +1130,7 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
     .get_etheraddr = netdev_vport_get_etheraddr,    \
     .get_stats = netdev_vport_get_stats,            \
     .get_pt_mode = netdev_vport_get_pt_mode,        \
-    .update_flags = netdev_vport_update_flags       \
-    NETDEV_FLOW_OFFLOAD_API
+    .update_flags = netdev_vport_update_flags
 
 #define TUNNEL_FUNCTIONS_COMMON                     \
     VPORT_FUNCTIONS_COMMON,                         \

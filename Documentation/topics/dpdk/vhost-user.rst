@@ -111,7 +111,8 @@ the guest. There are two ways to do this: using QEMU directly, or using
 libvirt.
 
 .. note::
-   IOMMU is not supported with vhost-user ports.
+
+   IOMMU and Post-copy Live Migration are not supported with vhost-user ports.
 
 Adding vhost-user ports to the guest (QEMU)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -301,6 +302,52 @@ The default value is false.
     QEMU). Starting with QEMU v2.9.1, vhost-iommu-support can safely be
     enabled, even without having an IOMMU device, with no performance penalty.
 
+vhost-user-client Post-copy Live Migration Support (experimental)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``Post-copy`` migration is the migration mode where the destination CPUs are
+started before all the memory has been transferred. The main advantage is the
+predictable migration time. Mostly used as a second phase after the normal
+'pre-copy' migration in case it takes too long to converge.
+
+More information can be found in QEMU `docs`_.
+
+.. _`docs`: https://git.qemu.org/?p=qemu.git;a=blob;f=docs/devel/migration.rst
+
+Post-copy support may be enabled via a global config value
+``vhost-postcopy-support``. Setting this to ``true`` enables Post-copy support
+for all vhost-user-client ports::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:vhost-postcopy-support=true
+
+The default value is ``false``.
+
+.. important::
+
+    Changing this value requires restarting the daemon.
+
+.. important::
+
+    DPDK Post-copy migration mode uses userfaultfd syscall to communicate with
+    the kernel about page fault handling and uses shared memory based on huge
+    pages. So destination host linux kernel should support userfaultfd over
+    shared hugetlbfs. This feature only introduced in kernel upstream version
+    4.11.
+
+    Post-copy feature supported in DPDK since 18.11.0 version and in QEMU
+    since 2.12.0 version. But it's suggested to use QEMU >= 3.0.1 because
+    migration recovery was fixed for post-copy in 3.0 and few additional bug
+    fixes (like userfaulfd leak) was released in 3.0.1.
+
+    DPDK Post-copy feature requires avoiding to populate the guest memory
+    (application must not call mlock* syscall). So enabling mlockall and
+    dequeue zero-copy features is mis-compatible with post-copy feature.
+
+    Note that during migration of vhost-user device, PMD threads hang for the
+    time of faulted pages download from source host. Transferring 1GB hugepage
+    across a 10Gbps link possibly unacceptably slow. So recommended hugepage
+    size is 2MB.
+
 .. _dpdk-testpmd:
 
 DPDK in the Guest
@@ -320,9 +367,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-18.11.tar.xz
-    $ tar xf dpdk-18.11.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-18.11
+    $ wget http://fast.dpdk.org/rel/dpdk-18.11.1.tar.xz
+    $ tar xf dpdk-18.11.1.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-18.11.1
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -499,6 +546,10 @@ QEMU versions v2.10 and greater). This value can be set like so::
       tx_queue_size=1024
 
 Because of this limitation, this feature is considered 'experimental'.
+
+.. note::
+
+   Post-copy Live Migration is not compatible with dequeue zero copy.
 
 Further information can be found in the
 `DPDK documentation

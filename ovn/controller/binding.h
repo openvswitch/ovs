@@ -33,7 +33,6 @@ struct sset;
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
                  struct ovsdb_idl_txn *ovs_idl_txn,
-                 struct ovsdb_idl_index *sbrec_chassis_by_name,
                  struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                  struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
                  struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -48,5 +47,11 @@ void binding_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
 bool binding_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
                      const struct sbrec_port_binding_table *,
                      const struct sbrec_chassis *);
+bool binding_evaluate_port_binding_changes(
+        const struct sbrec_port_binding_table *,
+        const struct ovsrec_bridge *br_int,
+        const struct sbrec_chassis *,
+        struct sset *active_tunnels,
+        struct sset *local_lports);
 
 #endif /* ovn/binding.h */

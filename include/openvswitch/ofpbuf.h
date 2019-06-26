@@ -162,6 +162,7 @@ char *ofpbuf_to_string(const struct ofpbuf *, size_t maxbytes);
 static inline struct ofpbuf *ofpbuf_from_list(const struct ovs_list *);
 void ofpbuf_list_delete(struct ovs_list *);
 static inline bool ofpbuf_equal(const struct ofpbuf *, const struct ofpbuf *);
+static inline bool ofpbuf_oversized(const struct ofpbuf *ofpacts);
 
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
@@ -270,6 +271,11 @@ static inline bool ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
 {
     return a->size == b->size &&
            memcmp(a->data, b->data, a->size) == 0;
+}
+
+static inline bool ofpbuf_oversized(const struct ofpbuf *ofpacts)
+{
+    return (char *)ofpbuf_tail(ofpacts) - (char *)ofpacts->header > UINT16_MAX;
 }
 
 #ifdef  __cplusplus

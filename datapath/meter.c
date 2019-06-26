@@ -13,11 +13,13 @@
 #include <linux/ip.h>
 #include <linux/kernel.h>
 #include <linux/openvswitch.h>
+#include <linux/overflow.h>
 #include <linux/netlink.h>
 #include <linux/rculist.h>
 
 #include <net/netlink.h>
 #include <net/genetlink.h>
+#include <linux/mm.h>
 
 #include "datapath.h"
 #include "meter.h"
@@ -216,8 +218,7 @@ static struct dp_meter *dp_meter_create(struct nlattr **a)
 			return ERR_PTR(-EINVAL);
 
 	/* Allocate and set up the meter before locking anything. */
-	meter = kzalloc(n_bands * sizeof(struct dp_meter_band) +
-			sizeof(*meter), GFP_KERNEL);
+	meter = kzalloc(struct_size(meter, bands, n_bands), GFP_KERNEL);
 	if (!meter)
 		return ERR_PTR(-ENOMEM);
 

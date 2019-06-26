@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "netdev-tc-offloads.h"
 
 #include <errno.h>
 #include <linux/if_ether.h>
@@ -30,6 +29,8 @@
 #include "openvswitch/util.h"
 #include "openvswitch/vlog.h"
 #include "netdev-linux.h"
+#include "netdev-offload-provider.h"
+#include "netdev-provider.h"
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "odp-netlink.h"
@@ -38,7 +39,7 @@
 #include "unaligned.h"
 #include "util.h"
 
-VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
+VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
@@ -51,6 +52,18 @@ struct netlink_field {
     int flower_offset;
     int size;
 };
+
+static bool
+is_internal_port(const char *type)
+{
+    return !strcmp(type, "internal");
+}
+
+static enum tc_qdisc_hook
+get_tc_qdisc_hook(struct netdev *netdev)
+{
+    return is_internal_port(netdev_get_type(netdev)) ? TC_EGRESS : TC_INGRESS;
+}
 
 static struct netlink_field set_flower_map[][4] = {
     [OVS_KEY_ATTR_IPV4] = {
@@ -178,11 +191,12 @@ del_ufid_tc_mapping(const ovs_u128 *ufid)
 /* Wrapper function to delete filter and ufid tc mapping */
 static int
 del_filter_and_ufid_mapping(int ifindex, int prio, int handle,
-                            uint32_t block_id, const ovs_u128 *ufid)
+                            uint32_t block_id, const ovs_u128 *ufid,
+                            enum tc_qdisc_hook hook)
 {
     int err;
 
-    err = tc_del_filter(ifindex, prio, handle, block_id);
+    err = tc_del_filter(ifindex, prio, handle, block_id, hook);
     del_ufid_tc_mapping(ufid);
 
     return err;
@@ -336,9 +350,10 @@ get_block_id_from_netdev(struct netdev *netdev)
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
+    enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     int ifindex = netdev_get_ifindex(netdev);
     uint32_t block_id = 0;
 
@@ -350,13 +365,14 @@ netdev_tc_flow_flush(struct netdev *netdev)
 
     block_id = get_block_id_from_netdev(netdev);
 
-    return tc_flush(ifindex, block_id);
+    return tc_flush(ifindex, block_id, hook);
 }
 
-int
+static int
 netdev_tc_flow_dump_create(struct netdev *netdev,
                            struct netdev_flow_dump **dump_out)
 {
+    enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     struct netdev_flow_dump *dump;
     uint32_t block_id = 0;
     int ifindex;
@@ -372,14 +388,14 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     dump = xzalloc(sizeof *dump);
     dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
     dump->netdev = netdev_ref(netdev);
-    tc_dump_flower_start(ifindex, dump->nl_dump, block_id);
+    tc_dump_flower_start(ifindex, dump->nl_dump, block_id, hook);
 
     *dump_out = dump;
 
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
 {
     nl_dump_done(dump->nl_dump);
@@ -682,8 +698,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             }
             break;
             case TC_ACT_OUTPUT: {
-                if (action->ifindex_out) {
-                    outport = netdev_ifindex_to_odp_port(action->ifindex_out);
+                if (action->out.ifindex_out) {
+                    outport =
+                        netdev_ifindex_to_odp_port(action->out.ifindex_out);
                     if (!outport) {
                         return ENOENT;
                     }
@@ -712,7 +729,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     return 0;
 }
 
-bool
+static bool
 netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
                          struct match *match,
                          struct nlattr **actions,
@@ -1065,13 +1082,14 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
     flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
 }
 
-int
+static int
 netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                    struct nlattr *actions, size_t actions_len,
                    const ovs_u128 *ufid, struct offload_info *info,
                    struct dpif_flow_stats *stats OVS_UNUSED)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     struct tc_flower flower;
     const struct flow *key = &match->flow;
     struct flow *mask = &match->wc.masks;
@@ -1128,6 +1146,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     }
     mask->mpls_lse[0] = 0;
 
+    if (eth_type_vlan(key->vlans[0].tpid)) {
+        flower.key.encap_eth_type[0] = flower.key.eth_type;
+        flower.key.eth_type = key->vlans[0].tpid;
+    }
     if (mask->vlans[0].tci) {
         ovs_be16 vid_mask = mask->vlans[0].tci & htons(VLAN_VID_MASK);
         ovs_be16 pcp_mask = mask->vlans[0].tci & htons(VLAN_PCP_MASK);
@@ -1148,8 +1170,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 VLOG_DBG_RL(&rl, "vlan_prio[0]: %d\n",
                             flower.key.vlan_prio[0]);
             }
-            flower.key.encap_eth_type[0] = flower.key.eth_type;
-            flower.key.eth_type = key->vlans[0].tpid;
         } else if (mask->vlans[0].tci == htons(0xffff) &&
                    ntohs(key->vlans[0].tci) == 0) {
             /* exact && no vlan */
@@ -1159,6 +1179,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
+    if (eth_type_vlan(key->vlans[1].tpid)) {
+        flower.key.encap_eth_type[1] = flower.key.encap_eth_type[0];
+        flower.key.encap_eth_type[0] = key->vlans[1].tpid;
+    }
     if (mask->vlans[1].tci) {
         ovs_be16 vid_mask = mask->vlans[1].tci & htons(VLAN_VID_MASK);
         ovs_be16 pcp_mask = mask->vlans[1].tci & htons(VLAN_PCP_MASK);
@@ -1178,8 +1202,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 flower.mask.vlan_prio[1] = vlan_tci_to_pcp(mask->vlans[1].tci);
                 VLOG_DBG_RL(&rl, "vlan_prio[1]: %d", flower.key.vlan_prio[1]);
             }
-            flower.key.encap_eth_type[1] = flower.key.encap_eth_type[0];
-            flower.key.encap_eth_type[0] = key->vlans[1].tpid;
         } else if (mask->vlans[1].tci == htons(0xffff) &&
                    ntohs(key->vlans[1].tci) == 0) {
             /* exact && no vlan */
@@ -1286,7 +1308,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             odp_port_t port = nl_attr_get_odp_port(nla);
             struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
 
-            action->ifindex_out = netdev_get_ifindex(outdev);
+            action->out.ifindex_out = netdev_get_ifindex(outdev);
+            action->out.ingress = is_internal_port(netdev_get_type(outdev));
             action->type = TC_ACT_OUTPUT;
             flower.action_count++;
             netdev_close(outdev);
@@ -1333,7 +1356,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     handle = get_ufid_tc_mapping(ufid, &prio, NULL);
     if (handle && prio) {
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
-        del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid);
+        del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid,
+                                    hook);
     }
 
     if (!prio) {
@@ -1347,7 +1371,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     flower.act_cookie.data = ufid;
     flower.act_cookie.len = sizeof *ufid;
 
-    err = tc_replace_flower(ifindex, prio, handle, &flower, block_id);
+    err = tc_replace_flower(ifindex, prio, handle, &flower, block_id, hook);
     if (!err) {
         add_ufid_tc_mapping(ufid, flower.prio, flower.handle, netdev, ifindex);
     }
@@ -1355,7 +1379,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     return err;
 }
 
-int
+static int
 netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
                    struct match *match,
                    struct nlattr **actions,
@@ -1367,6 +1391,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct netdev *dev;
     struct tc_flower flower;
+    enum tc_qdisc_hook hook;
     uint32_t block_id = 0;
     odp_port_t in_port;
     int prio = 0;
@@ -1379,6 +1404,8 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
         return ENOENT;
     }
 
+    hook = get_tc_qdisc_hook(dev);
+
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
         VLOG_ERR_RL(&error_rl, "flow_get: failed to get ifindex for %s: %s",
@@ -1390,7 +1417,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
     block_id = get_block_id_from_netdev(dev);
     VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d block_id %d)",
                 netdev_get_name(dev), prio, handle, block_id);
-    err = tc_get_flower(ifindex, prio, handle, &flower, block_id);
+    err = tc_get_flower(ifindex, prio, handle, &flower, block_id, hook);
     netdev_close(dev);
     if (err) {
         VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
@@ -1407,12 +1434,13 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
     return 0;
 }
 
-int
+static int
 netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
                    const ovs_u128 *ufid,
                    struct dpif_flow_stats *stats)
 {
     struct tc_flower flower;
+    enum tc_qdisc_hook hook;
     uint32_t block_id = 0;
     struct netdev *dev;
     int prio = 0;
@@ -1424,6 +1452,8 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
     if (!handle) {
         return ENOENT;
     }
+
+    hook = get_tc_qdisc_hook(dev);
 
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
@@ -1437,14 +1467,15 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 
     if (stats) {
         memset(stats, 0, sizeof *stats);
-        if (!tc_get_flower(ifindex, prio, handle, &flower, block_id)) {
+        if (!tc_get_flower(ifindex, prio, handle, &flower, block_id, hook)) {
             stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
             stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
             stats->used = flower.lastused;
         }
     }
 
-    error = del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid);
+    error = del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid,
+                                        hook);
 
     netdev_close(dev);
 
@@ -1458,7 +1489,7 @@ probe_multi_mask_per_prio(int ifindex)
     int block_id = 0;
     int error;
 
-    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
+    error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
     if (error) {
         return;
     }
@@ -1470,7 +1501,7 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
     memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
 
-    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id);
+    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id, TC_INGRESS);
     if (error) {
         goto out;
     }
@@ -1478,57 +1509,70 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.src_mac, 0x11, sizeof flower.key.src_mac);
     memset(&flower.mask.src_mac, 0xff, sizeof flower.mask.src_mac);
 
-    error = tc_replace_flower(ifindex, 1, 2, &flower, block_id);
-    tc_del_filter(ifindex, 1, 1, block_id);
+    error = tc_replace_flower(ifindex, 1, 2, &flower, block_id, TC_INGRESS);
+    tc_del_filter(ifindex, 1, 1, block_id, TC_INGRESS);
 
     if (error) {
         goto out;
     }
 
-    tc_del_filter(ifindex, 1, 2, block_id);
+    tc_del_filter(ifindex, 1, 2, block_id, TC_INGRESS);
 
     multi_mask_per_prio = true;
     VLOG_INFO("probe tc: multiple masks on single tc prio is supported.");
 
 out:
-    tc_add_del_ingress_qdisc(ifindex, false, block_id);
+    tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
 }
 
 static void
 probe_tc_block_support(int ifindex)
 {
+    struct tc_flower flower;
     uint32_t block_id = 1;
     int error;
 
-    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
+    error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
     if (error) {
         return;
     }
 
-    tc_add_del_ingress_qdisc(ifindex, false, block_id);
+    memset(&flower, 0, sizeof flower);
 
-    block_support = true;
-    VLOG_INFO("probe tc: block offload is supported.");
+    flower.key.eth_type = htons(ETH_P_IP);
+    flower.mask.eth_type = OVS_BE16_MAX;
+    memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
+    memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
+
+    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id, TC_INGRESS);
+
+    tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
+
+    if (!error) {
+        block_support = true;
+        VLOG_INFO("probe tc: block offload is supported.");
+    }
 }
 
-int
+static int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
     static struct ovsthread_once multi_mask_once = OVSTHREAD_ONCE_INITIALIZER;
     static struct ovsthread_once block_once = OVSTHREAD_ONCE_INITIALIZER;
+    enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     uint32_t block_id = 0;
     int ifindex;
     int error;
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "init: failed to get ifindex for %s: %s",
-                    netdev_get_name(netdev), ovs_strerror(-ifindex));
+        VLOG_INFO("init: failed to get ifindex for %s: %s",
+                  netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
 
-    /* make sure there is no ingress qdisc */
-    tc_add_del_ingress_qdisc(ifindex, false, 0);
+    /* make sure there is no ingress/egress qdisc */
+    tc_add_del_qdisc(ifindex, false, 0, hook);
 
     if (ovsthread_once_start(&block_once)) {
         probe_tc_block_support(ifindex);
@@ -1541,11 +1585,11 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     }
 
     block_id = get_block_id_from_netdev(netdev);
-    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
+    error = tc_add_del_qdisc(ifindex, true, block_id, hook);
 
     if (error && error != EEXIST) {
-        VLOG_ERR("failed adding ingress qdisc required for offloading: %s",
-                 ovs_strerror(error));
+        VLOG_INFO("failed adding ingress qdisc required for offloading: %s",
+                  ovs_strerror(error));
         return error;
     }
 
@@ -1553,3 +1597,15 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     return 0;
 }
+
+const struct netdev_flow_api netdev_offload_tc = {
+   .type = "linux_tc",
+   .flow_flush = netdev_tc_flow_flush,
+   .flow_dump_create = netdev_tc_flow_dump_create,
+   .flow_dump_destroy = netdev_tc_flow_dump_destroy,
+   .flow_dump_next = netdev_tc_flow_dump_next,
+   .flow_put = netdev_tc_flow_put,
+   .flow_get = netdev_tc_flow_get,
+   .flow_del = netdev_tc_flow_del,
+   .init_flow_api = netdev_tc_init_flow_api,
+};

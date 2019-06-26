@@ -127,4 +127,16 @@ rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type, gfp_t flags)
 }
 #define metadata_dst_alloc rpl_metadata_dst_alloc
 
+#ifndef DST_METADATA 
+#define DST_METADATA		0x0200
+#endif
+
+static inline bool rpl_skb_valid_dst(const struct sk_buff *skb)
+{
+	struct dst_entry *dst = skb_dst(skb);
+
+	return dst && !(dst->flags & DST_METADATA);
+}
+#define skb_valid_dst rpl_skb_valid_dst
+
 #endif /* __NET_DST_METADATA_WRAPPER_H */

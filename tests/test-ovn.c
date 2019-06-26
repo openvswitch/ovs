@@ -31,7 +31,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
-#include "ovn/lib/logical-fields.h"
+#include "ovn/logical-fields.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/extend-table.h"
 #include "ovs-thread.h"
@@ -166,7 +166,7 @@ create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
     dhcp_opt_add(dhcp_opts, "dns_server", 6, "ipv4");
     dhcp_opt_add(dhcp_opts, "log_server", 7, "ipv4");
     dhcp_opt_add(dhcp_opts, "lpr_server",  9, "ipv4");
-    dhcp_opt_add(dhcp_opts, "domain", 15, "str");
+    dhcp_opt_add(dhcp_opts, "domain_name", 15, "str");
     dhcp_opt_add(dhcp_opts, "swap_server", 16, "ipv4");
     dhcp_opt_add(dhcp_opts, "policy_filter", 21, "ipv4");
     dhcp_opt_add(dhcp_opts, "router_solicitation",  32, "ipv4");
@@ -285,7 +285,7 @@ test_parse_expr__(int steps)
         char *error;
 
         expr = expr_parse_string(ds_cstr(&input), &symtab, &addr_sets,
-                                 &port_groups, &error);
+                                 &port_groups, NULL, &error);
         if (!error && steps > 0) {
             expr = expr_annotate(expr, &symtab, &error);
         }
@@ -409,7 +409,8 @@ test_evaluate_expr(struct ovs_cmdl_context *ctx)
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
 
-        expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, NULL, &error);
+        expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, NULL, NULL,
+                                 &error);
         if (!error) {
             expr = expr_annotate(expr, &symtab, &error);
         }
@@ -884,7 +885,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
 
             char *error;
             modified = expr_parse_string(ds_cstr(&s), symtab, NULL,
-                                         NULL, &error);
+                                         NULL, NULL, &error);
             if (error) {
                 fprintf(stderr, "%s fails to parse (%s)\n",
                         ds_cstr(&s), error);

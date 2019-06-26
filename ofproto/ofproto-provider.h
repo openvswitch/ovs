@@ -1076,6 +1076,17 @@ struct ofproto_class {
     int (*port_get_stats)(const struct ofport *port,
                           struct netdev_stats *stats);
 
+    /* Get status of the virtual port (ex. tunnel, patch).
+     *
+     * Returns '0' if 'port' is not a virtual port or has no errors.
+     * Otherwise, stores the error string in '*errp' and returns positive errno
+     * value. The caller is responsible for freeing '*errp' (with free()).
+     *
+     * This function may be a null pointer if the ofproto implementation does
+     * not support any virtual ports or their states.
+     */
+    int (*vport_get_status)(const struct ofport *port, char **errp);
+
     /* Port iteration functions.
      *
      * The client might not be entirely in control of the ports within an
@@ -1318,8 +1329,8 @@ struct ofproto_class {
     struct rule *(*rule_alloc)(void);
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    void (*rule_insert)(struct rule *rule, struct rule *old_rule,
-                        bool forward_counts)
+    enum ofperr (*rule_insert)(struct rule *rule, struct rule *old_rule,
+                               bool forward_counts)
         /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
@@ -1973,7 +1984,7 @@ enum ofperr ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_flow_mod_learn_revert(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
-void ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
+enum ofperr ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
                                           struct ofproto *orig_ofproto)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,

@@ -83,6 +83,10 @@ OVS_NO_RETURN static void nbctl_exit(int status);
 /* --leader-only, --no-leader-only: Only accept the leader in a cluster. */
 static int leader_only = true;
 
+/* --shuffle-remotes, --no-shuffle-remotes: Shuffle the order of remotes that
+ * are specified in the connetion method string. */
+static int shuffle_remotes = true;
+
 /* --unixctl-path: Path to use for unixctl server, for "monitor" and "snoop"
      commands. */
 static char *unixctl_path;
@@ -182,8 +186,11 @@ main(int argc, char *argv[])
         }
         daemon_mode = true;
     }
-    /* Initialize IDL. "retry" is true iff in daemon mode. */
-    idl = the_idl = ovsdb_idl_create(db, &nbrec_idl_class, true, daemon_mode);
+    /* Initialize IDL. */
+    idl = the_idl = ovsdb_idl_create_unconnected(&nbrec_idl_class, true);
+    ovsdb_idl_set_shuffle_remotes(idl, shuffle_remotes);
+    /* "retry" is true iff in daemon mode. */
+    ovsdb_idl_set_remote(idl, db, daemon_mode);
     ovsdb_idl_set_leader_only(idl, leader_only);
 
     if (daemon_mode) {
@@ -304,6 +311,8 @@ enum {
     OPT_OPTIONS,
     OPT_LEADER_ONLY,
     OPT_NO_LEADER_ONLY,
+    OPT_SHUFFLE_REMOTES,
+    OPT_NO_SHUFFLE_REMOTES,
     OPT_BOOTSTRAP_CA_CERT,
     MAIN_LOOP_OPTION_ENUMS,
     DAEMON_OPTION_ENUMS,
@@ -405,6 +414,8 @@ get_all_options(void)
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"leader-only", no_argument, NULL, OPT_LEADER_ONLY},
         {"no-leader-only", no_argument, NULL, OPT_NO_LEADER_ONLY},
+        {"shuffle-remotes", no_argument, NULL, OPT_SHUFFLE_REMOTES},
+        {"no-shuffle-remotes", no_argument, NULL, OPT_NO_SHUFFLE_REMOTES},
         {"version", no_argument, NULL, 'V'},
         MAIN_LOOP_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
@@ -507,6 +518,14 @@ apply_options_direct(const struct ovs_cmdl_parsed_option *parsed_options,
 
         case OPT_NO_LEADER_ONLY:
             leader_only = false;
+            break;
+
+        case OPT_SHUFFLE_REMOTES:
+            shuffle_remotes = true;
+            break;
+
+        case OPT_NO_SHUFFLE_REMOTES:
+            shuffle_remotes = false;
             break;
 
         case 'V':
@@ -645,6 +664,13 @@ Route commands:\n\
                             remove routes from ROUTER\n\
   lr-route-list ROUTER      print routes for ROUTER\n\
 \n\
+Policy commands:\n\
+  lr-policy-add ROUTER PRIORITY MATCH ACTION [NEXTHOP]\n\
+                            add a policy to router\n\
+  lr-policy-del ROUTER [PRIORITY [MATCH]]\n\
+                            remove policies from ROUTER\n\
+  lr-policy-list ROUTER     print policies for ROUTER\n\
+\n\
 NAT commands:\n\
   lr-nat-add ROUTER TYPE EXTERNAL_IP LOGICAL_IP [LOGICAL_PORT EXTERNAL_MAC]\n\
                             add a NAT to ROUTER\n\
@@ -692,7 +718,17 @@ set the SSL configuration\n\
 Port group commands:\n\
   pg-add PG [PORTS]           Create port group PG with optional PORTS\n\
   pg-set-ports PG PORTS       Set PORTS on port group PG\n\
-  pg-del PG                   Delete port group PG\n\
+  pg-del PG                   Delete port group PG\n\n",
+            program_name, program_name);
+    printf("\
+HA chassis group commands:\n\
+  ha-chassis-group-add GRP  Create an HA chassis group GRP\n\
+  ha-chassis-group-del GRP  Delete the HA chassis group GRP\n\
+  ha-chassis-group-list     List the HA chassis groups\n\
+  ha-chassis-group-add-chassis GRP CHASSIS [PRIORITY] Adds an HA\
+chassis with optional PRIORITY to the HA chassis group GRP\n\
+  ha-chassis-group-del-chassis GRP CHASSIS Deletes the HA chassis\
+CHASSIS from the HA chassis group GRP\n\
 \n\
 %s\
 %s\
@@ -705,12 +741,13 @@ Options:\n\
                               (default: %s)\n\
   --no-wait, --wait=none      do not wait for OVN reconfiguration (default)\n\
   --no-leader-only            accept any cluster member, not just the leader\n\
+  --no-shuffle-remotes        do not shuffle the order of remotes\n\
   --wait=sb                   wait for southbound database update\n\
   --wait=hv                   wait for all chassis to catch up\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(),
+           ctl_get_db_cmd_usage(),
            ctl_list_db_tables_usage(), default_nb_db());
     table_usage();
     daemon_usage();
@@ -1533,6 +1570,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
 
     int i;
     for (i = 2; i < ctx->argc; i++) {
+        char ipv6_s[IPV6_SCAN_LEN + 1];
         struct eth_addr ea;
         ovs_be32 ip;
 
@@ -1540,6 +1578,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
             && strcmp(ctx->argv[i], "router")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))
+            && !ovs_scan(ctx->argv[i], "dynamic "IPV6_SCAN_FMT, ipv6_s)
             && !ovs_scan(ctx->argv[i], "dynamic "IP_SCAN_FMT,
                          IP_SCAN_ARGS(&ip))) {
             ctl_error(ctx, "%s: Invalid address format. See ovn-nb(5). "
@@ -3425,6 +3464,197 @@ normalize_prefix_str(const char *orig_prefix)
         return normalize_ipv6_prefix(ipv6, plen);
     }
 }
+
+static void
+nbctl_lr_policy_add(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    int64_t priority = 0;
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+    error = parse_priority(ctx->argv[2], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+    const char *action = ctx->argv[4];
+    char *next_hop = NULL;
+
+    /* Validate action. */
+    if (strcmp(action, "allow") && strcmp(action, "drop")
+        && strcmp(action, "reroute")) {
+        ctl_error(ctx, "%s: action must be one of \"allow\", \"drop\", "
+                  "and \"reroute\"", action);
+    }
+    if (!strcmp(action, "reroute")) {
+        if (ctx->argc < 6) {
+            ctl_error(ctx, "Nexthop is required when action is reroute.");
+        }
+    }
+
+    /* Check if same routing policy already exists.
+     * A policy is uniquely identified by priority and match */
+    for (int i = 0; i < lr->n_policies; i++) {
+        const struct nbrec_logical_router_policy *policy = lr->policies[i];
+        if (policy->priority == priority &&
+            !strcmp(policy->match, ctx->argv[3])) {
+            ctl_error(ctx, "Same routing policy already existed on the "
+                      "logical router %s.", ctx->argv[1]);
+        }
+    }
+    if (ctx->argc == 6) {
+        next_hop = normalize_prefix_str(ctx->argv[5]);
+        if (!next_hop) {
+            ctl_error(ctx, "bad next hop argument: %s", ctx->argv[5]);
+        }
+    }
+
+    struct nbrec_logical_router_policy *policy;
+    policy = nbrec_logical_router_policy_insert(ctx->txn);
+    nbrec_logical_router_policy_set_priority(policy, priority);
+    nbrec_logical_router_policy_set_match(policy, ctx->argv[3]);
+    nbrec_logical_router_policy_set_action(policy, action);
+    if (ctx->argc == 6) {
+        nbrec_logical_router_policy_set_nexthop(policy, next_hop);
+    }
+    nbrec_logical_router_verify_policies(lr);
+    struct nbrec_logical_router_policy **new_policies
+        = xmalloc(sizeof *new_policies * (lr->n_policies + 1));
+    memcpy(new_policies, lr->policies,
+           sizeof *new_policies * lr->n_policies);
+    new_policies[lr->n_policies] = policy;
+    nbrec_logical_router_set_policies(lr, new_policies,
+                                      lr->n_policies + 1);
+    free(new_policies);
+    if (next_hop != NULL) {
+        free(next_hop);
+    }
+}
+
+static void
+nbctl_lr_policy_del(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    int64_t priority = 0;
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    if (ctx->argc == 2) {
+        /* If a priority is not specified, delete all policies. */
+        nbrec_logical_router_set_policies(lr, NULL, 0);
+        return;
+    }
+
+    error = parse_priority(ctx->argv[2], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+    /* If match is not specified, delete all routing policies with the
+     * specified priority. */
+    if (ctx->argc == 3) {
+        struct nbrec_logical_router_policy **new_policies
+            = xmemdup(lr->policies,
+                      sizeof *new_policies * lr->n_policies);
+        int n_policies = 0;
+        for (int i = 0; i < lr->n_policies; i++) {
+            if (priority != lr->policies[i]->priority) {
+                new_policies[n_policies++] = lr->policies[i];
+            }
+        }
+        nbrec_logical_router_verify_policies(lr);
+        nbrec_logical_router_set_policies(lr, new_policies, n_policies);
+        free(new_policies);
+        return;
+    }
+
+    /* Delete policy that has the same priority and match string */
+    for (int i = 0; i < lr->n_policies; i++) {
+        struct nbrec_logical_router_policy *routing_policy = lr->policies[i];
+        if (priority == routing_policy->priority &&
+            !strcmp(ctx->argv[3], routing_policy->match)) {
+            struct nbrec_logical_router_policy **new_policies
+                = xmemdup(lr->policies,
+                          sizeof *new_policies * lr->n_policies);
+            new_policies[i] = lr->policies[lr->n_policies - 1];
+            nbrec_logical_router_verify_policies(lr);
+            nbrec_logical_router_set_policies(lr, new_policies,
+                                              lr->n_policies - 1);
+            free(new_policies);
+            return;
+        }
+    }
+}
+
+ struct routing_policy {
+    int priority;
+    char *match;
+    const struct nbrec_logical_router_policy *policy;
+};
+
+static int
+routing_policy_cmp(const void *policy1_, const void *policy2_)
+{
+    const struct routing_policy *policy1p = policy1_;
+    const struct routing_policy *policy2p = policy2_;
+    if (policy1p->priority != policy2p->priority) {
+        return policy1p->priority > policy2p->priority ? -1 : 1;
+    } else {
+        return strcmp(policy1p->match, policy2p->match);
+    }
+}
+
+static void
+print_routing_policy(const struct nbrec_logical_router_policy *policy,
+                     struct ds *s)
+{
+    if (policy->nexthop != NULL) {
+        char *next_hop = normalize_prefix_str(policy->nexthop);
+        ds_put_format(s, "%10"PRId64" %50s %15s %25s", policy->priority,
+                      policy->match, policy->action, next_hop);
+        free(next_hop);
+    } else {
+        ds_put_format(s, "%10"PRId64" %50s %15s", policy->priority,
+                      policy->match, policy->action);
+    }
+    ds_put_char(s, '\n');
+}
+
+static void
+nbctl_lr_policy_list(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    struct routing_policy *policies;
+    size_t n_policies = 0;
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+    policies = xmalloc(sizeof *policies * lr->n_policies);
+     for (int i = 0; i < lr->n_policies; i++) {
+        const struct nbrec_logical_router_policy *policy
+            = lr->policies[i];
+        policies[n_policies].priority = policy->priority;
+        policies[n_policies].match = policy->match;
+        policies[n_policies].policy = policy;
+        n_policies++;
+    }
+    qsort(policies, n_policies, sizeof *policies, routing_policy_cmp);
+    if (n_policies) {
+        ds_put_cstr(&ctx->output, "Routing Policies\n");
+    }
+    for (int i = 0; i < n_policies; i++) {
+        print_routing_policy(policies[i].policy, &ctx->output);
+    }
+    free(policies);
+}
 
 static void
 nbctl_lr_route_add(struct ctl_context *ctx)
@@ -4756,6 +4986,201 @@ cmd_pg_del(struct ctl_context *ctx)
     nbrec_port_group_delete(pg);
 }
 
+static const struct nbrec_ha_chassis_group*
+ha_chassis_group_by_name_or_uuid(struct ctl_context *ctx, const char *id,
+                                 bool must_exist)
+{
+    struct uuid ch_grp_uuid;
+    const struct nbrec_ha_chassis_group *ha_ch_grp = NULL;
+    bool is_uuid = uuid_from_string(&ch_grp_uuid, id);
+    if (is_uuid) {
+        ha_ch_grp = nbrec_ha_chassis_group_get_for_uuid(ctx->idl,
+                                                        &ch_grp_uuid);
+    }
+
+    if (!ha_ch_grp) {
+        const struct nbrec_ha_chassis_group *iter;
+        NBREC_HA_CHASSIS_GROUP_FOR_EACH (iter, ctx->idl) {
+            if (!strcmp(iter->name, id)) {
+                ha_ch_grp = iter;
+                break;
+            }
+        }
+    }
+
+    if (!ha_ch_grp && must_exist) {
+        ctx->error = xasprintf("%s: ha_chassi_group %s not found",
+                               id, is_uuid ? "UUID" : "name");
+    }
+
+    return ha_ch_grp;
+}
+
+static void
+cmd_ha_ch_grp_add(struct ctl_context *ctx)
+{
+    const char *name = ctx->argv[1];
+    struct nbrec_ha_chassis_group *ha_ch_grp =
+        nbrec_ha_chassis_group_insert(ctx->txn);
+    nbrec_ha_chassis_group_set_name(ha_ch_grp, name);
+}
+
+static void
+cmd_ha_ch_grp_del(struct ctl_context *ctx)
+{
+    const char *name_or_id = ctx->argv[1];
+
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, name_or_id, true);
+
+    if (ha_ch_grp) {
+        nbrec_ha_chassis_group_delete(ha_ch_grp);
+    }
+}
+
+static void
+cmd_ha_ch_grp_list(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp;
+
+    NBREC_HA_CHASSIS_GROUP_FOR_EACH (ha_ch_grp, ctx->idl) {
+        ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
+                      UUID_ARGS(&ha_ch_grp->header_.uuid), ha_ch_grp->name);
+        const struct nbrec_ha_chassis *ha_ch;
+        for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+            ha_ch = ha_ch_grp->ha_chassis[i];
+            ds_put_format(&ctx->output,
+                          "    "UUID_FMT " (%s)\n"
+                          "    priority %"PRId64"\n\n",
+                          UUID_ARGS(&ha_ch->header_.uuid), ha_ch->chassis_name,
+                          ha_ch->priority);
+        }
+        ds_put_cstr(&ctx->output, "\n");
+    }
+}
+
+static void
+cmd_ha_ch_grp_add_chassis(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    int64_t priority;
+    char *error = parse_priority(ctx->argv[3], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            break;
+        }
+    }
+
+    if (ha_chassis) {
+        nbrec_ha_chassis_set_priority(ha_chassis, priority);
+        return;
+    }
+
+    ha_chassis = nbrec_ha_chassis_insert(ctx->txn);
+    nbrec_ha_chassis_set_chassis_name(ha_chassis, chassis_name);
+    nbrec_ha_chassis_set_priority(ha_chassis, priority);
+
+    nbrec_ha_chassis_group_verify_ha_chassis(ha_ch_grp);
+
+    struct nbrec_ha_chassis **new_ha_chs =
+        xmalloc(sizeof *new_ha_chs * (ha_ch_grp->n_ha_chassis + 1));
+    nullable_memcpy(new_ha_chs, ha_ch_grp->ha_chassis,
+                    sizeof *new_ha_chs * ha_ch_grp->n_ha_chassis);
+    new_ha_chs[ha_ch_grp->n_ha_chassis] =
+        CONST_CAST(struct nbrec_ha_chassis *, ha_chassis);
+    nbrec_ha_chassis_group_set_ha_chassis(ha_ch_grp, new_ha_chs,
+                                          ha_ch_grp->n_ha_chassis + 1);
+    free(new_ha_chs);
+}
+
+static void
+cmd_ha_ch_grp_remove_chassis(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+    size_t idx = 0;
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            idx = i;
+            break;
+        }
+    }
+
+    if (!ha_chassis) {
+        ctx->error = xasprintf("%s: ha chassis not found in %s ha "
+                               "chassis group", chassis_name, ctx->argv[1]);
+        return;
+    }
+
+    struct nbrec_ha_chassis **new_ha_ch
+        = xmemdup(ha_ch_grp->ha_chassis,
+                  sizeof *new_ha_ch * ha_ch_grp->n_ha_chassis);
+    new_ha_ch[idx] = new_ha_ch[ha_ch_grp->n_ha_chassis - 1];
+    nbrec_ha_chassis_group_verify_ha_chassis(ha_ch_grp);
+    nbrec_ha_chassis_group_set_ha_chassis(ha_ch_grp, new_ha_ch,
+                                          ha_ch_grp->n_ha_chassis - 1);
+    free(new_ha_ch);
+    nbrec_ha_chassis_delete(ha_chassis);
+}
+
+static void
+cmd_ha_ch_grp_set_chassis_prio(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    int64_t priority;
+    char *error = parse_priority(ctx->argv[3], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            break;
+        }
+    }
+
+    if (!ha_chassis) {
+        ctx->error = xasprintf("%s: ha chassis not found in %s ha "
+                               "chassis group", chassis_name, ctx->argv[1]);
+        return;
+    }
+
+    nbrec_ha_chassis_set_priority(ha_chassis, priority);
+}
+
 static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     [NBREC_TABLE_DHCP_OPTIONS].row_ids
     = {{&nbrec_logical_switch_port_col_name, NULL,
@@ -4790,6 +5215,9 @@ static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     = {&nbrec_port_group_col_name, NULL, NULL},
 
     [NBREC_TABLE_ACL].row_ids[0] = {&nbrec_acl_col_name, NULL, NULL},
+
+    [NBREC_TABLE_HA_CHASSIS_GROUP].row_ids[0]
+    = {&nbrec_ha_chassis_group_col_name, NULL, NULL},
 };
 
 static char *
@@ -5174,6 +5602,14 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,
       "", RO },
 
+    /* Policy commands */
+    { "lr-policy-add", 4, 5, "ROUTER PRIORITY MATCH ACTION [NEXTHOP]", NULL,
+        nbctl_lr_policy_add, NULL, "", RW },
+    { "lr-policy-del", 1, 3, "ROUTER [PRIORITY [MATCH]]", NULL,
+        nbctl_lr_policy_del, NULL, "", RW },
+    { "lr-policy-list", 1, 1, "ROUTER", NULL, nbctl_lr_policy_list, NULL,
+       "", RO },
+
     /* NAT commands. */
     { "lr-nat-add", 4, 6,
       "ROUTER TYPE EXTERNAL_IP LOGICAL_IP [LOGICAL_PORT EXTERNAL_MAC]", NULL,
@@ -5229,6 +5665,20 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     {"pg-add", 1, INT_MAX, "", NULL, cmd_pg_add, NULL, "", RW },
     {"pg-set-ports", 2, INT_MAX, "", NULL, cmd_pg_set_ports, NULL, "", RW },
     {"pg-del", 1, 1, "", NULL, cmd_pg_del, NULL, "", RW },
+
+    /* HA chassis group commands. */
+    {"ha-chassis-group-add", 1, 1, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_add, NULL, "", RW },
+    {"ha-chassis-group-del", 1, 1, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_del, NULL, "", RW },
+    {"ha-chassis-group-list", 0, 0, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_list, NULL, "", RO },
+    {"ha-chassis-group-add-chassis", 3, 3, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_add_chassis, NULL, "", RW },
+    {"ha-chassis-group-remove-chassis", 2, 2, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_remove_chassis, NULL, "", RW },
+    {"ha-chassis-group-set-chassis-prio", 3, 3, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_set_chassis_prio, NULL, "", RW },
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };
@@ -5532,6 +5982,8 @@ nbctl_client(const char *socket_name,
 
         case OPT_LEADER_ONLY:
         case OPT_NO_LEADER_ONLY:
+        case OPT_SHUFFLE_REMOTES:
+        case OPT_NO_SHUFFLE_REMOTES:
         case OPT_BOOTSTRAP_CA_CERT:
         STREAM_SSL_CASES
         DAEMON_OPTION_CASES

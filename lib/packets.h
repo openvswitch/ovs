@@ -978,9 +978,6 @@ struct ovs_nd_prefix_opt {
 };
 BUILD_ASSERT_DECL(ND_PREFIX_OPT_LEN == sizeof(struct ovs_nd_prefix_opt));
 
-#define ND_PREFIX_ON_LINK            0x80
-#define ND_PREFIX_AUTONOMOUS_ADDRESS 0x40
-
 /* Neighbor Discovery option: MTU. */
 #define ND_MTU_OPT_LEN 8
 #define ND_MTU_DEFAULT 0

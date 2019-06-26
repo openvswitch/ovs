@@ -2287,6 +2287,12 @@ mf_set(const struct mf_field *mf,
         *err_str = NULL;
     }
 
+    /* The cases where 'mask' is all-1-bits or all-0-bits were already handled
+     * above[*], so the code below only needs to work for the remaining cases
+     * of a nontrivial mask.
+     *
+     * [*] Except where the field is a tunnel metadata field and 'mask' is
+     *     all-0-bits; see above. */
     switch (mf->id) {
     case MFF_CT_ZONE:
     case MFF_CT_NW_PROTO:

@@ -39,6 +39,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "openvswitch/list.h"
+#include "netdev-offload-provider.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-netlink.h"
@@ -96,8 +97,6 @@ struct netdev_registered_class {
     struct ovs_refcount refcnt;
 };
 
-static bool netdev_flow_api_enabled = false;
-
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -146,6 +145,8 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_tunnel_register();
+
+        netdev_register_flow_api_provider(&netdev_offload_tc);
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)
         netdev_register_provider(&netdev_tap_class);
@@ -414,6 +415,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->reconfigure_seq = seq_create();
                 netdev->last_reconfigure_seq =
                     seq_read(netdev->reconfigure_seq);
+                ovsrcu_set(&netdev->flow_api, NULL);
                 netdev->hw_info.oor = false;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
@@ -563,6 +565,8 @@ netdev_unref(struct netdev *dev)
     if (!--dev->ref_cnt) {
         const struct netdev_class *class = dev->netdev_class;
         struct netdev_registered_class *rc;
+
+        netdev_uninit_flow_api(dev);
 
         dev->netdev_class->destruct(dev);
 
@@ -2148,411 +2152,6 @@ netdev_reconfigure(struct netdev *netdev)
             : EOPNOTSUPP);
 }
 
-int
-netdev_flow_flush(struct netdev *netdev)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->flow_flush
-            ? class->flow_flush(netdev)
-            : EOPNOTSUPP);
-}
-
-int
-netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->flow_dump_create
-            ? class->flow_dump_create(netdev, dump)
-            : EOPNOTSUPP);
-}
-
-int
-netdev_flow_dump_destroy(struct netdev_flow_dump *dump)
-{
-    const struct netdev_class *class = dump->netdev->netdev_class;
-
-    return (class->flow_dump_destroy
-            ? class->flow_dump_destroy(dump)
-            : EOPNOTSUPP);
-}
-
-bool
-netdev_flow_dump_next(struct netdev_flow_dump *dump, struct match *match,
-                      struct nlattr **actions, struct dpif_flow_stats *stats,
-                      struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
-                      struct ofpbuf *rbuffer, struct ofpbuf *wbuffer)
-{
-    const struct netdev_class *class = dump->netdev->netdev_class;
-
-    return (class->flow_dump_next
-            ? class->flow_dump_next(dump, match, actions, stats, attrs,
-                                    ufid, rbuffer, wbuffer)
-            : false);
-}
-
-int
-netdev_flow_put(struct netdev *netdev, struct match *match,
-                struct nlattr *actions, size_t act_len,
-                const ovs_u128 *ufid, struct offload_info *info,
-                struct dpif_flow_stats *stats)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->flow_put
-            ? class->flow_put(netdev, match, actions, act_len, ufid,
-                              info, stats)
-            : EOPNOTSUPP);
-}
-
-int
-netdev_flow_get(struct netdev *netdev, struct match *match,
-                struct nlattr **actions, const ovs_u128 *ufid,
-                struct dpif_flow_stats *stats,
-                struct dpif_flow_attrs *attrs, struct ofpbuf *buf)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->flow_get
-            ? class->flow_get(netdev, match, actions, ufid, stats, attrs, buf)
-            : EOPNOTSUPP);
-}
-
-int
-netdev_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
-                struct dpif_flow_stats *stats)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->flow_del
-            ? class->flow_del(netdev, ufid, stats)
-            : EOPNOTSUPP);
-}
-
-int
-netdev_init_flow_api(struct netdev *netdev)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    if (!netdev_is_flow_api_enabled()) {
-        return EOPNOTSUPP;
-    }
-
-    return (class->init_flow_api
-            ? class->init_flow_api(netdev)
-            : EOPNOTSUPP);
-}
-
-uint32_t
-netdev_get_block_id(struct netdev *netdev)
-{
-    const struct netdev_class *class = netdev->netdev_class;
-
-    return (class->get_block_id
-            ? class->get_block_id(netdev)
-            : 0);
-}
-
-/*
- * Get the value of the hw info parameter specified by type.
- * Returns the value on success (>= 0). Returns -1 on failure.
- */
-int
-netdev_get_hw_info(struct netdev *netdev, int type)
-{
-    int val = -1;
-
-    switch (type) {
-    case HW_INFO_TYPE_OOR:
-        val = netdev->hw_info.oor;
-        break;
-    case HW_INFO_TYPE_PEND_COUNT:
-        val = netdev->hw_info.pending_count;
-        break;
-    case HW_INFO_TYPE_OFFL_COUNT:
-        val = netdev->hw_info.offload_count;
-        break;
-    default:
-        break;
-    }
-
-    return val;
-}
-
-/*
- * Set the value of the hw info parameter specified by type.
- */
-void
-netdev_set_hw_info(struct netdev *netdev, int type, int val)
-{
-    switch (type) {
-    case HW_INFO_TYPE_OOR:
-        if (val == 0) {
-            VLOG_DBG("Offload rebalance: netdev: %s is not OOR", netdev->name);
-        }
-        netdev->hw_info.oor = val;
-        break;
-    case HW_INFO_TYPE_PEND_COUNT:
-        netdev->hw_info.pending_count = val;
-        break;
-    case HW_INFO_TYPE_OFFL_COUNT:
-        netdev->hw_info.offload_count = val;
-        break;
-    default:
-        break;
-    }
-}
-
-/*
- * Find if any netdev is in OOR state. Return true if there's at least
- * one netdev that's in OOR state; otherwise return false.
- */
-bool
-netdev_any_oor(void)
-    OVS_EXCLUDED(netdev_mutex)
-{
-    struct shash_node *node;
-    bool oor = false;
-
-    ovs_mutex_lock(&netdev_mutex);
-    SHASH_FOR_EACH (node, &netdev_shash) {
-        struct netdev *dev = node->data;
-
-        if (dev->hw_info.oor) {
-            oor = true;
-            break;
-        }
-    }
-    ovs_mutex_unlock(&netdev_mutex);
-
-    return oor;
-}
-
-bool
-netdev_is_flow_api_enabled(void)
-{
-    return netdev_flow_api_enabled;
-}
-
-/* Protects below port hashmaps. */
-static struct ovs_mutex netdev_hmap_mutex = OVS_MUTEX_INITIALIZER;
-
-static struct hmap port_to_netdev OVS_GUARDED_BY(netdev_hmap_mutex)
-    = HMAP_INITIALIZER(&port_to_netdev);
-static struct hmap ifindex_to_port OVS_GUARDED_BY(netdev_hmap_mutex)
-    = HMAP_INITIALIZER(&ifindex_to_port);
-
-struct port_to_netdev_data {
-    struct hmap_node portno_node; /* By (dpif_class, dpif_port.port_no). */
-    struct hmap_node ifindex_node; /* By (dpif_class, ifindex). */
-    struct netdev *netdev;
-    struct dpif_port dpif_port;
-    const struct dpif_class *dpif_class;
-    int ifindex;
-};
-
-static uint32_t
-netdev_ports_hash(odp_port_t port, const struct dpif_class *dpif_class)
-{
-    return hash_int(odp_to_u32(port), hash_pointer(dpif_class, 0));
-}
-
-static struct port_to_netdev_data *
-netdev_ports_lookup(odp_port_t port_no, const struct dpif_class *dpif_class)
-    OVS_REQUIRES(netdev_hmap_mutex)
-{
-    struct port_to_netdev_data *data;
-
-    HMAP_FOR_EACH_WITH_HASH (data, portno_node,
-                             netdev_ports_hash(port_no, dpif_class),
-                             &port_to_netdev) {
-        if (data->dpif_class == dpif_class
-            && data->dpif_port.port_no == port_no) {
-            return data;
-        }
-    }
-    return NULL;
-}
-
-int
-netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
-                    struct dpif_port *dpif_port)
-{
-    struct port_to_netdev_data *data;
-    int ifindex = netdev_get_ifindex(netdev);
-
-    if (ifindex < 0) {
-        return ENODEV;
-    }
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    if (netdev_ports_lookup(dpif_port->port_no, dpif_class)) {
-        ovs_mutex_unlock(&netdev_hmap_mutex);
-        return EEXIST;
-    }
-
-    data = xzalloc(sizeof *data);
-    data->netdev = netdev_ref(netdev);
-    data->dpif_class = dpif_class;
-    dpif_port_clone(&data->dpif_port, dpif_port);
-    data->ifindex = ifindex;
-
-    hmap_insert(&port_to_netdev, &data->portno_node,
-                netdev_ports_hash(dpif_port->port_no, dpif_class));
-    hmap_insert(&ifindex_to_port, &data->ifindex_node, ifindex);
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    netdev_init_flow_api(netdev);
-
-    return 0;
-}
-
-struct netdev *
-netdev_ports_get(odp_port_t port_no, const struct dpif_class *dpif_class)
-{
-    struct port_to_netdev_data *data;
-    struct netdev *ret = NULL;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    data = netdev_ports_lookup(port_no, dpif_class);
-    if (data) {
-        ret = netdev_ref(data->netdev);
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    return ret;
-}
-
-int
-netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
-{
-    struct port_to_netdev_data *data;
-    int ret = ENOENT;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-
-    data = netdev_ports_lookup(port_no, dpif_class);
-    if (data) {
-        dpif_port_destroy(&data->dpif_port);
-        netdev_close(data->netdev); /* unref and possibly close */
-        hmap_remove(&port_to_netdev, &data->portno_node);
-        hmap_remove(&ifindex_to_port, &data->ifindex_node);
-        free(data);
-        ret = 0;
-    }
-
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    return ret;
-}
-
-odp_port_t
-netdev_ifindex_to_odp_port(int ifindex)
-{
-    struct port_to_netdev_data *data;
-    odp_port_t ret = 0;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH_WITH_HASH (data, ifindex_node, ifindex, &ifindex_to_port) {
-        if (data->ifindex == ifindex) {
-            ret = data->dpif_port.port_no;
-            break;
-        }
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    return ret;
-}
-
-void
-netdev_ports_flow_flush(const struct dpif_class *dpif_class)
-{
-    struct port_to_netdev_data *data;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (data->dpif_class == dpif_class) {
-            netdev_flow_flush(data->netdev);
-        }
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-}
-
-struct netdev_flow_dump **
-netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports)
-{
-    struct port_to_netdev_data *data;
-    struct netdev_flow_dump **dumps;
-    int count = 0;
-    int i = 0;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (data->dpif_class == dpif_class) {
-            count++;
-        }
-    }
-
-    dumps = count ? xzalloc(sizeof *dumps * count) : NULL;
-
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (data->dpif_class == dpif_class) {
-            if (netdev_flow_dump_create(data->netdev, &dumps[i])) {
-                continue;
-            }
-
-            dumps[i]->port = data->dpif_port.port_no;
-            i++;
-        }
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    *ports = i;
-    return dumps;
-}
-
-int
-netdev_ports_flow_del(const struct dpif_class *dpif_class,
-                      const ovs_u128 *ufid,
-                      struct dpif_flow_stats *stats)
-{
-    struct port_to_netdev_data *data;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (data->dpif_class == dpif_class
-            && !netdev_flow_del(data->netdev, ufid, stats)) {
-            ovs_mutex_unlock(&netdev_hmap_mutex);
-            return 0;
-        }
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-
-    return ENOENT;
-}
-
-int
-netdev_ports_flow_get(const struct dpif_class *dpif_class, struct match *match,
-                      struct nlattr **actions, const ovs_u128 *ufid,
-                      struct dpif_flow_stats *stats,
-                      struct dpif_flow_attrs *attrs, struct ofpbuf *buf)
-{
-    struct port_to_netdev_data *data;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-        if (data->dpif_class == dpif_class
-            && !netdev_flow_get(data->netdev, match, actions,
-                                ufid, stats, attrs, buf)) {
-            ovs_mutex_unlock(&netdev_hmap_mutex);
-            return 0;
-        }
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-    return ENOENT;
-}
-
 void
 netdev_free_custom_stats_counters(struct netdev_custom_stats *custom_stats)
 {
@@ -2564,55 +2163,3 @@ netdev_free_custom_stats_counters(struct netdev_custom_stats *custom_stats)
         }
     }
 }
-
-static bool netdev_offload_rebalance_policy = false;
-
-bool
-netdev_is_offload_rebalance_policy_enabled(void)
-{
-    return netdev_offload_rebalance_policy;
-}
-
-#ifdef __linux__
-static void
-netdev_ports_flow_init(void)
-{
-    struct port_to_netdev_data *data;
-
-    ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
-       netdev_init_flow_api(data->netdev);
-    }
-    ovs_mutex_unlock(&netdev_hmap_mutex);
-}
-
-void
-netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
-{
-    if (smap_get_bool(ovs_other_config, "hw-offload", false)) {
-        static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-        if (ovsthread_once_start(&once)) {
-            netdev_flow_api_enabled = true;
-
-            VLOG_INFO("netdev: Flow API Enabled");
-
-            tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
-                                       TC_POLICY_DEFAULT));
-
-            if (smap_get_bool(ovs_other_config, "offload-rebalance", false)) {
-                netdev_offload_rebalance_policy = true;
-            }
-
-            netdev_ports_flow_init();
-
-            ovsthread_once_done(&once);
-        }
-    }
-}
-#else
-void
-netdev_set_flow_api_enabled(const struct smap *ovs_other_config OVS_UNUSED)
-{
-}
-#endif

@@ -20,11 +20,13 @@
 
 #include <errno.h>
 #include <linux/if_ether.h>
+#include <linux/if_packet.h>
 #include <linux/rtnetlink.h>
 #include <linux/tc_act/tc_csum.h>
 #include <linux/tc_act/tc_gact.h>
 #include <linux/tc_act/tc_mirred.h>
 #include <linux/tc_act/tc_pedit.h>
+#include <linux/tc_act/tc_skbedit.h>
 #include <linux/tc_act/tc_tunnel_key.h>
 #include <linux/tc_act/tc_vlan.h>
 #include <linux/gen_stats.h>
@@ -199,13 +201,20 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
     return error;
 }
 
-/* Adds or deletes a root ingress qdisc on device with specified ifindex.
+/* Adds or deletes a root qdisc on device with specified ifindex.
  *
- * This function is equivalent to running the following when 'add' is true:
+ * The tc_qdisc_hook parameter determines if the qdisc is added on device
+ * ingress or egress.
+ *
+ * If tc_qdisc_hook is TC_INGRESS, this function is equivalent to running the
+ * following when 'add' is true:
  *     /sbin/tc qdisc add dev <devname> handle ffff: ingress
  *
  * This function is equivalent to running the following when 'add' is false:
  *     /sbin/tc qdisc del dev <devname> handle ffff: ingress
+ *
+ * If tc_qdisc_hook is TC_EGRESS, this function is equivalent to:
+ *     /sbin/tc qdisc (add|del) dev <devname> handle ffff: clsact
  *
  * Where dev <devname> is the device with specified ifindex name.
  *
@@ -219,7 +228,8 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
  * Returns 0 if successful, otherwise a positive errno value.
  */
 int
-tc_add_del_ingress_qdisc(int ifindex, bool add, uint32_t block_id)
+tc_add_del_qdisc(int ifindex, bool add, uint32_t block_id,
+                 enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -228,11 +238,19 @@ tc_add_del_ingress_qdisc(int ifindex, bool add, uint32_t block_id)
     int flags = add ? NLM_F_EXCL | NLM_F_CREATE : 0;
 
     tcmsg = tc_make_request(ifindex, type, flags, &request);
-    tcmsg->tcm_handle = TC_H_MAKE(TC_H_INGRESS, 0);
-    tcmsg->tcm_parent = TC_H_INGRESS;
-    nl_msg_put_string(&request, TCA_KIND, "ingress");
+
+    if (hook == TC_EGRESS) {
+        tcmsg->tcm_handle = TC_H_MAKE(TC_H_CLSACT, 0);
+        tcmsg->tcm_parent = TC_H_CLSACT;
+        nl_msg_put_string(&request, TCA_KIND, "clsact");
+    } else {
+        tcmsg->tcm_handle = TC_H_MAKE(TC_H_INGRESS, 0);
+        tcmsg->tcm_parent = TC_H_INGRESS;
+        nl_msg_put_string(&request, TCA_KIND, "ingress");
+    }
+
     nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
-    if (block_id) {
+    if (hook == TC_INGRESS && block_id) {
         nl_msg_put_u32(&request, TCA_INGRESS_BLOCK, block_id);
     }
 
@@ -1151,14 +1169,20 @@ nl_parse_act_mirred(struct nlattr *options, struct tc_flower *flower)
     mirred_parms = mirred_attrs[TCA_MIRRED_PARMS];
     m = nl_attr_get_unspec(mirred_parms, sizeof *m);
 
-    if (m->eaction != TCA_EGRESS_REDIR && m->eaction != TCA_EGRESS_MIRROR) {
+    if (m->eaction != TCA_EGRESS_REDIR && m->eaction != TCA_EGRESS_MIRROR &&
+        m->eaction != TCA_INGRESS_REDIR && m->eaction != TCA_INGRESS_MIRROR) {
         VLOG_ERR_RL(&error_rl, "unknown mirred action: %d, %d, %d",
                     m->action, m->eaction, m->ifindex);
         return EINVAL;
     }
 
     action = &flower->actions[flower->action_count++];
-    action->ifindex_out = m->ifindex;
+    action->out.ifindex_out = m->ifindex;
+    if (m->eaction == TCA_INGRESS_REDIR || m->eaction == TCA_INGRESS_MIRROR) {
+        action->out.ingress = true;
+    } else {
+        action->out.ingress = false;
+    }
     action->type = TC_ACT_OUTPUT;
 
     mirred_tm = mirred_attrs[TCA_MIRRED_TM];
@@ -1301,6 +1325,8 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
         err = nl_parse_act_pedit(act_options, flower);
     } else if (!strcmp(act_kind, "csum")) {
         nl_parse_act_csum(act_options, flower);
+    } else if (!strcmp(act_kind, "skbedit")) {
+        /* Added for TC rule only (not in OvS rule) so ignore. */
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         err = EINVAL;
@@ -1445,7 +1471,8 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
 }
 
 int
-tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
+tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id,
+                     enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1453,7 +1480,8 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_DUMP, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = TC_H_UNSPEC;
     tcmsg->tcm_handle = 0;
 
@@ -1464,7 +1492,7 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
 }
 
 int
-tc_flush(int ifindex, uint32_t block_id)
+tc_flush(int ifindex, uint32_t block_id, enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1472,14 +1500,16 @@ tc_flush(int ifindex, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ACK, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = TC_H_UNSPEC;
 
     return tc_transact(&request, NULL);
 }
 
 int
-tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
+tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id,
+              enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1489,7 +1519,8 @@ tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -1502,7 +1533,7 @@ tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
 
 int
 tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
-              uint32_t block_id)
+              uint32_t block_id, enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1512,7 +1543,8 @@ tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -1729,6 +1761,22 @@ nl_msg_put_act_drop(struct ofpbuf *request)
 }
 
 static void
+nl_msg_put_act_skbedit_to_host(struct ofpbuf *request)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "skbedit");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
+    {
+        struct tc_skbedit s = { .action = TC_ACT_PIPE };
+
+        nl_msg_put_unspec(request, TCA_SKBEDIT_PARMS, &s, sizeof s);
+        nl_msg_put_be16(request, TCA_SKBEDIT_PTYPE, PACKET_HOST);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
 nl_msg_put_act_mirred(struct ofpbuf *request, int ifindex, int action,
                       int eaction)
 {
@@ -1916,6 +1964,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
     uint16_t act_index = 1;
     struct tc_action *action;
     int i, ifindex = 0;
+    bool ingress;
 
     offset = nl_msg_start_nested(request, TCA_FLOWER_ACT);
     {
@@ -1977,19 +2026,39 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             }
             break;
             case TC_ACT_OUTPUT: {
-                ifindex = action->ifindex_out;
+                ingress = action->out.ingress;
+                ifindex = action->out.ifindex_out;
                 if (ifindex < 1) {
                     VLOG_ERR_RL(&error_rl, "%s: invalid ifindex: %d, type: %d",
                                 __func__, ifindex, action->type);
                     return EINVAL;
                 }
+
+                if (ingress) {
+                    /* If redirecting to ingress (internal port) ensure
+                     * pkt_type on skb is set to PACKET_HOST. */
+                    act_offset = nl_msg_start_nested(request, act_index++);
+                    nl_msg_put_act_skbedit_to_host(request);
+                    nl_msg_end_nested(request, act_offset);
+                }
+
                 act_offset = nl_msg_start_nested(request, act_index++);
                 if (i == flower->action_count - 1) {
-                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
-                                          TCA_EGRESS_REDIR);
+                    if (ingress) {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
+                                              TCA_INGRESS_REDIR);
+                    } else {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
+                                              TCA_EGRESS_REDIR);
+                    }
                 } else {
-                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
-                                          TCA_EGRESS_MIRROR);
+                    if (ingress) {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
+                                              TCA_INGRESS_MIRROR);
+                    } else {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
+                                              TCA_EGRESS_MIRROR);
+                    }
                 }
                 nl_msg_put_act_cookie(request, &flower->act_cookie);
                 nl_msg_end_nested(request, act_offset);
@@ -2232,7 +2301,8 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
 int
 tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
-                  struct tc_flower *flower, uint32_t block_id)
+                  struct tc_flower *flower, uint32_t block_id,
+                  enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -2245,7 +2315,8 @@ tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_NEWTFILTER, NLM_F_CREATE | NLM_F_ECHO,
                             &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 

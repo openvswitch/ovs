@@ -3,15 +3,16 @@
 set -o errexit
 set -x
 
-KERNELSRC=""
-CFLAGS="-Werror"
+CFLAGS=""
 SPARSE_FLAGS=""
-EXTRA_OPTS=""
+EXTRA_OPTS="--enable-Werror"
 TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
 {
-    if [[ "$1" =~ ^4.* ]]; then
+    if [[ "$1" =~ ^5.* ]]; then
+        PREFIX="v5.x"
+    elif [[ "$1" =~ ^4.* ]]; then
         PREFIX="v4.x"
     elif [[ "$1" =~ ^3.* ]]; then
         PREFIX="v3.x"
@@ -19,9 +20,23 @@ function install_kernel()
         PREFIX="v2.6/longterm/v2.6.32"
     fi
 
-    wget https://cdn.kernel.org/pub/linux/kernel/${PREFIX}/linux-${1}.tar.xz
-    tar xvf linux-${1}.tar.xz > /dev/null
-    cd linux-${1}
+    base_url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}"
+    # Download page with list of all available kernel versions.
+    wget ${base_url}/
+    # Uncompress in case server returned gzipped page.
+    (file index* | grep ASCII) || (mv index* index.new.gz && gunzip index*)
+    # Get version of the latest stable release.
+    hi_ver=$(echo ${1} | sed 's/\./\\\./')
+    lo_ver=$(cat ./index* | grep -P -o "${hi_ver}\.[0-9]+" | \
+             sed 's/.*\..*\.\(.*\)/\1/' | sort -h | tail -1)
+    version="${1}.${lo_ver}"
+
+    url="${base_url}/linux-${version}.tar.xz"
+    # Download kernel sources. Try direct link on CDN failure.
+    wget ${url} || wget ${url} || wget ${url/cdn/www}
+
+    tar xvf linux-${version}.tar.xz > /dev/null
+    cd linux-${version}
     make allmodconfig
 
     # Cannot use CONFIG_KCOV: -fsanitize-coverage=trace-pc is not supported by compiler
@@ -43,37 +58,38 @@ function install_kernel()
         make net/bridge/
     fi
 
-    KERNELSRC=$(pwd)
-    if [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
-        EXTRA_OPTS="--with-linux=$(pwd)"
-    fi
+    EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
     echo "Installed kernel source in $(pwd)"
     cd ..
 }
 
 function install_dpdk()
 {
-    if [ -n "$DPDK_GIT" ]; then
-        git clone $DPDK_GIT dpdk-$1
-        cd dpdk-$1
-        git checkout tags/v$1
+    if [ "${1##refs/*/}" != "${1}" ]; then
+        DPDK_GIT=${DPDK_GIT:-https://dpdk.org/git/dpdk}
+        git clone --single-branch $DPDK_GIT dpdk-git -b "${1##refs/*/}"
+        cd dpdk-git
+        git log -1 --oneline
     else
         wget https://fast.dpdk.org/rel/dpdk-$1.tar.xz
         tar xvf dpdk-$1.tar.xz > /dev/null
         DIR_NAME=$(tar -tf dpdk-$1.tar.xz | head -1 | cut -f1 -d"/")
-        if [ $DIR_NAME != "dpdk-$1"  ]; then mv $DIR_NAME dpdk-$1; fi
-        cd dpdk-$1
+        cd $DIR_NAME
     fi
-    find ./ -type f | xargs sed -i 's/max-inline-insns-single=100/max-inline-insns-single=400/'
-    find ./ -type f | xargs sed -i 's/-Werror/-Werror -Wno-error=inline/'
-    echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
-    sed -ri '/EXECENV_CFLAGS  = -pthread -fPIC/{s/$/\nelse ifeq ($(CONFIG_RTE_BUILD_FPIC),y)/;s/$/\nEXECENV_CFLAGS  = -pthread -fPIC/}' mk/exec-env/linuxapp/rte.vars.mk
+
+    make config CC=gcc T=$TARGET
+
     if [ "$DPDK_SHARED" ]; then
-        sed -i '/CONFIG_RTE_BUILD_SHARED_LIB=n/s/=n/=y/' config/common_base
+        sed -i '/CONFIG_RTE_BUILD_SHARED_LIB=n/s/=n/=y/' build/.config
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/$TARGET/lib
     fi
-    make config CC=gcc T=$TARGET
-    make -j4 CC=gcc RTE_KERNELDIR=$KERNELSRC
+
+    # Disable building DPDK kernel modules. Not needed for OVS build or tests.
+    sed -i '/CONFIG_RTE_EAL_IGB_UIO=y/s/=y/=n/' build/.config
+    sed -i '/CONFIG_RTE_KNI_KMOD=y/s/=y/=n/' build/.config
+
+    make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
     cd ..
 }
@@ -83,23 +99,19 @@ function configure_ovs()
     ./boot.sh && ./configure $* || { cat config.log; exit 1; }
 }
 
-if [ "$KERNEL" ] || [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
+if [ "$KERNEL" ]; then
     install_kernel $KERNEL
 fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="18.11"
+        DPDK_VER="18.11.1"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
-    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
-elif [ "$CC" != "clang" ]; then
-    # DPDK headers currently trigger sparse errors
-    SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
 OPTS="$EXTRA_OPTS $*"
@@ -116,7 +128,7 @@ fi
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
-    # Now we only need to prepare the Makefile wihtout sparse-wrapped CC.
+    # Now we only need to prepare the Makefile without sparse-wrapped CC.
     configure_ovs
 
     export DISTCHECK_CONFIGURE_FLAGS="$OPTS"
@@ -130,7 +142,7 @@ else
     make selinux-policy
 
     # Only build datapath if we are testing kernel w/o running testsuite
-    if [ "$KERNEL" ] && [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
+    if [ "$KERNEL" ]; then
         cd datapath
     fi
     make -j4

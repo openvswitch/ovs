@@ -17,7 +17,6 @@
 #include <config.h>
 #include "byte-order.h"
 #include "openvswitch/json.h"
-#include "logical-fields.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
@@ -26,6 +25,7 @@
 #include "openvswitch/shash.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/logical-fields.h"
 #include "simap.h"
 #include "sset.h"
 #include "util.h"
@@ -467,6 +467,7 @@ struct expr_context {
     const struct shash *symtab;    /* Symbol table. */
     const struct shash *addr_sets; /* Address set table. */
     const struct shash *port_groups; /* Port group table. */
+    struct sset *addr_sets_ref;       /* The set of address set referenced. */
     bool not;                    /* True inside odd number of NOT operators. */
     unsigned int paren_depth;    /* Depth of nested parentheses. */
 };
@@ -735,6 +736,10 @@ static bool
 parse_addr_sets(struct expr_context *ctx, struct expr_constant_set *cs,
                 size_t *allocated_values)
 {
+    if (ctx->addr_sets_ref) {
+        sset_add(ctx->addr_sets_ref, ctx->lexer->token.s);
+    }
+
     struct expr_constant_set *addr_sets
         = (ctx->addr_sets
            ? shash_find_data(ctx->addr_sets, ctx->lexer->token.s)
@@ -1277,12 +1282,14 @@ expr_parse__(struct expr_context *ctx)
 struct expr *
 expr_parse(struct lexer *lexer, const struct shash *symtab,
            const struct shash *addr_sets,
-           const struct shash *port_groups)
+           const struct shash *port_groups,
+           struct sset *addr_sets_ref)
 {
     struct expr_context ctx = { .lexer = lexer,
                                 .symtab = symtab,
                                 .addr_sets = addr_sets,
-                                .port_groups = port_groups };
+                                .port_groups = port_groups,
+                                .addr_sets_ref = addr_sets_ref };
     return lexer->error ? NULL : expr_parse__(&ctx);
 }
 
@@ -1296,13 +1303,15 @@ struct expr *
 expr_parse_string(const char *s, const struct shash *symtab,
                   const struct shash *addr_sets,
                   const struct shash *port_groups,
+                  struct sset *addr_sets_ref,
                   char **errorp)
 {
     struct lexer lexer;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    struct expr *expr = expr_parse(&lexer, symtab, addr_sets, port_groups);
+    struct expr *expr = expr_parse(&lexer, symtab, addr_sets, port_groups,
+                                   addr_sets_ref);
     lexer_force_end(&lexer);
     *errorp = lexer_steal_error(&lexer);
     if (*errorp) {
@@ -1381,6 +1390,8 @@ expr_symbol_format(const struct expr_symbol *symbol, struct ds *s)
         expr_field_format(&f, s);
     } else if (symbol->predicate) {
         ds_put_cstr(s, symbol->predicate);
+    } else if (symbol->ovn_field) {
+        ds_put_cstr(s, symbol->name);
     } else {
         nx_format_field_name(symbol->field->id, OFP13_VERSION, s);
     }
@@ -1526,7 +1537,7 @@ expr_get_level(const struct expr *expr)
 static enum expr_level
 expr_parse_level(const char *s, const struct shash *symtab, char **errorp)
 {
-    struct expr *expr = expr_parse_string(s, symtab, NULL, NULL, errorp);
+    struct expr *expr = expr_parse_string(s, symtab, NULL, NULL, NULL, errorp);
     enum expr_level level = expr ? expr_get_level(expr) : EXPR_L_NOMINAL;
     expr_destroy(expr);
     return level;
@@ -1553,6 +1564,19 @@ expr_symtab_add_predicate(struct shash *symtab, const char *name,
 
     symbol = add_symbol(symtab, name, 1, NULL, level, false, false);
     symbol->predicate = xstrdup(expansion);
+    return symbol;
+}
+
+struct expr_symbol *
+expr_symtab_add_ovn_field(struct shash *symtab, const char *name,
+                          enum ovn_field_id id)
+{
+    const struct ovn_field *ovn_field = ovn_field_from_id(id);
+    struct expr_symbol *symbol;
+
+    symbol = add_symbol(symtab, name, ovn_field->n_bits, NULL,
+                        EXPR_L_NOMINAL, false, true);
+    symbol->ovn_field = ovn_field;
     return symbol;
 }
 
@@ -1684,7 +1708,7 @@ parse_and_annotate(const char *s, const struct shash *symtab,
     char *error;
     struct expr *expr;
 
-    expr = expr_parse_string(s, symtab, NULL, NULL, &error);
+    expr = expr_parse_string(s, symtab, NULL, NULL, NULL, &error);
     if (expr) {
         expr = expr_annotate_(expr, symtab, nesting, &error);
     }
@@ -3408,7 +3432,7 @@ expr_parse_microflow(const char *s, const struct shash *symtab,
     lexer_init(&lexer, s);
     lexer_get(&lexer);
 
-    struct expr *e = expr_parse(&lexer, symtab, addr_sets, port_groups);
+    struct expr *e = expr_parse(&lexer, symtab, addr_sets, port_groups, NULL);
     lexer_force_end(&lexer);
 
     if (e) {

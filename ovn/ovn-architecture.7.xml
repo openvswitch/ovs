@@ -1678,6 +1678,77 @@
     </li>
   </ol>
 
+  <h2>Native OVN services for external logical ports</h2>
+
+  <p>
+    To support OVN native services (like DHCP/IPv6 RA/DNS lookup) to the
+    cloud resources which are external, OVN supports <code>external</code>
+    logical ports.
+  </p>
+
+  <p>
+    Below are some of the use cases where <code>external</code> ports can be
+    used.
+  </p>
+
+  <ul>
+    <li>
+      VMs connected to SR-IOV nics - Traffic from these VMs by passes the
+      kernel stack and local <code>ovn-controller</code> do not bind these
+      ports and cannot serve the native services.
+    </li>
+    <li>
+      When CMS supports provisioning baremetal servers.
+    </li>
+  </ul>
+
+  <p>
+    OVN will provide the native services if CMS has done the below
+    configuration in the <dfn>OVN Northbound Database</dfn>.
+  </p>
+
+  <ul>
+    <li>
+      A row is created in <code>Logical_Switch_Port</code>, configuring the
+      <ref column="addresses" table="Logical_Switch_Port" db="OVN_NB"/> column
+      and setting the <ref column="type" table="Logical_Switch_Port"
+      db="OVN_NB"/> to <code>external</code>.
+    </li>
+
+    <li>
+      <ref column="ha_chassis_group" table="Logical_Switch_Port"
+      db="OVN_NB"/> column is configured.
+    </li>
+
+    <li>
+      The HA chassis which belongs to the HA chassis group has the
+      <code>ovn-bridge-mappings</code> configured and has proper L2
+      connectivity so that it can receive the DHCP and other related request
+      packets from these external resources.
+    </li>
+
+    <li>
+      The Logical_Switch of this port has a <code>localnet</code> port.
+    </li>
+
+    <li>
+      Native OVN services are enabled by configuring the DHCP and other
+      options like the way it is done for the normal logical ports.
+    </li>
+  </ul>
+
+  <p>
+    It is recommended to use the same HA chassis group for all the external
+    ports of a logical switch. Otherwise, the physical switch might see MAC
+    flap issue when different chassis provide the native services. For
+    example when supporting native DHCPv4 service, DHCPv4 server mac
+    (configured in <ref column="options:server_mac" table="DHCP_Options"
+    db="OVN_NB"/> column in table <ref table="DHCP_Options"/>) originating
+    from different ports can cause MAC flap issue.
+    The MAC of the logical router IP(s) can also flap if the same HA chassis
+    group is not set for all the external ports of a logical switch.
+  </p>
+
   <h1>Security</h1>
 
   <h2>Role-Based Access Controls for the Soutbound DB</h2>

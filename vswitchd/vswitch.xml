@@ -208,6 +208,11 @@
           available, Open vSwitch may not be able to offload
           functionality to hardware.
         </p>
+        <p>
+          In order to dump HW offloaded flows use
+          <code>ovs-appctl dpctl/dump-flows</code>, <code>ovs-dpctl</code>
+          doesn't support this functionality. See ovs-vswitchd(8) for details.
+        </p>
       </column>
 
       <column name="other_config" key="tc-policy"
@@ -400,6 +405,22 @@
           protocol, (on which vHost IOMMU relies) prior to v2.9.1. Setting this
           value to <code>true</code> enables vHost IOMMU support for vHost User
           Client ports in OvS-DPDK, starting from DPDK v17.11.
+        </p>
+        <p>
+          Changing this value requires restarting the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="vhost-postcopy-support"
+              type='{"type": "boolean"}'>
+        <p>
+          vHost post-copy is a feature which allows switching live migration
+          of VM attached to dpdkvhostuserclient port to post-copy mode if
+          default pre-copy migration can not be converged or takes too long to
+          converge.
+          Setting this value to <code>true</code> enables vHost post-copy
+          support for all dpdkvhostuserclient ports. Available starting from
+          DPDK v18.11 and QEMU 2.12.
         </p>
         <p>
           Changing this value requires restarting the daemon.
@@ -1248,16 +1269,9 @@
       </column>
 
       <column name="protocols">
-        <p>
-          List of OpenFlow protocols that may be used when negotiating
-          a connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, and
-          1.4 are enabled by default if this column is empty.
-        </p>
-
-        <p>
-          OpenFlow 1.5 is not enabled by default because its
-          implementations is missing features.
-        </p>
+        List of OpenFlow protocols that may be used when negotiating a
+        connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and
+        1.5 are enabled by default if this column is empty.
       </column>
     </group>
 
@@ -1860,7 +1874,8 @@
       </column>
 
       <column name="other_config" key="priority-tags"
-              type='{"type": "boolean"}'>
+              type='{"type": "string",
+                     "enum": ["set", ["never", "if-nonzero", "always"]]}'>
         <p>
           An 802.1Q header contains two important pieces of information: a VLAN
           ID and a priority.  A frame with a zero VLAN ID, called a
@@ -1873,12 +1888,14 @@
           header at all, even when the VLAN ID is zero.  Therefore, by default
           Open vSwitch does not output priority-tagged frames, instead omitting
           the 802.1Q header entirely if the VLAN ID is zero.  Set this key to
-          <code>true</code> to enable priority-tagged frames on a port.
+          <code>if-nonzero</code> to enable priority-tagged frames on a port.
         </p>
 
         <p>
-          Regardless of this setting, Open vSwitch omits the 802.1Q header on
-          output if both the VLAN ID and priority would be zero.
+          For <code>if-nonzero</code> Open vSwitch omits the 802.1Q header on
+          output if both the VLAN ID and priority would be zero. Set to
+          <code>always</code> to retain the 802.1Q header in such frames as
+          well.
         </p>
 
         <p>

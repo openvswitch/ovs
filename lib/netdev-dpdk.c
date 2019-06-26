@@ -47,7 +47,6 @@
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
-#include "netdev-rte-offloads.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
@@ -390,7 +389,12 @@ struct netdev_dpdk {
         enum dpdk_dev_type type;
         enum netdev_flags flags;
         int link_reset_cnt;
-        char *devargs;  /* Device arguments for dpdk ports */
+        union {
+            /* Device arguments for dpdk ports. */
+            char *devargs;
+            /* Identifier used to distinguish vhost devices from each other. */
+            char *vhost_id;
+        };
         struct dpdk_tx_queue *tx_q;
         struct rte_eth_link link;
     );
@@ -405,11 +409,6 @@ struct netdev_dpdk {
         /* True if vHost device is 'up' and has been reconfigured at least once */
         bool vhost_reconfigured;
         /* 3 pad bytes here. */
-    );
-
-    PADDED_MEMBERS(CACHE_LINE_SIZE,
-        /* Identifier used to distinguish vhost devices from each other. */
-        char vhost_id[PATH_MAX];
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1265,8 +1264,7 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
      */
-    snprintf(dev->vhost_id, sizeof dev->vhost_id, "%s/%s",
-             dpdk_get_vhost_sock_dir(), name);
+    dev->vhost_id = xasprintf("%s/%s", dpdk_get_vhost_sock_dir(), name);
 
     dev->vhost_driver_flags &= ~RTE_VHOST_USER_CLIENT;
     err = rte_vhost_driver_register(dev->vhost_id, dev->vhost_driver_flags);
@@ -1312,6 +1310,11 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     }
 
 out:
+    if (err) {
+        free(dev->vhost_id);
+        dev->vhost_id = NULL;
+    }
+
     ovs_mutex_unlock(&dpdk_mutex);
     VLOG_WARN_ONCE("dpdkvhostuser ports are considered deprecated;  "
                    "please migrate to dpdkvhostuserclient ports.");
@@ -1391,8 +1394,11 @@ netdev_dpdk_destruct(struct netdev *netdev)
          * device are closed.
          */
         if (!remove_on_close || !netdev_dpdk_get_num_ports(rte_dev)) {
-            if (rte_dev_remove(rte_dev) < 0) {
-                VLOG_ERR("Device '%s' can not be detached", dev->devargs);
+            int ret = rte_dev_remove(rte_dev);
+
+            if (ret < 0) {
+                VLOG_ERR("Device '%s' can not be detached: %s.",
+                         dev->devargs, rte_strerror(-ret));
             } else {
                 /* Device was closed and detached. */
                 VLOG_INFO("Device '%s' has been removed and detached",
@@ -1440,13 +1446,14 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
                  "socket '%s' must be restarted.", dev->vhost_id);
     }
 
-    vhost_id = xstrdup(dev->vhost_id);
+    vhost_id = dev->vhost_id;
+    dev->vhost_id = NULL;
 
     common_destruct(dev);
 
     ovs_mutex_unlock(&dpdk_mutex);
 
-    if (!vhost_id[0]) {
+    if (!vhost_id) {
         goto out;
     }
 
@@ -1895,8 +1902,9 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
         path = smap_get(args, "vhost-server-path");
-        if (path && strcmp(path, dev->vhost_id)) {
-            strcpy(dev->vhost_id, path);
+        if (!nullable_string_is_equal(path, dev->vhost_id)) {
+            free(dev->vhost_id);
+            dev->vhost_id = nullable_xstrdup(path);
             /* check zero copy configuration */
             if (smap_get_bool(args, "dq-zero-copy", false)) {
                 dev->vhost_driver_flags |= RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
@@ -3473,8 +3481,8 @@ new_device(int vid)
     /* Add device to the vhost port with the same name as that passed down. */
     LIST_FOR_EACH(dev, list_node, &dpdk_list) {
         ovs_mutex_lock(&dev->mutex);
-        if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
-            uint32_t qp_num = rte_vhost_get_vring_num(vid)/VIRTIO_QNUM;
+        if (nullable_string_is_equal(ifname, dev->vhost_id)) {
+            uint32_t qp_num = rte_vhost_get_vring_num(vid) / VIRTIO_QNUM;
 
             /* Get NUMA information */
             newnode = rte_vhost_get_numa_node(vid);
@@ -3602,7 +3610,7 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
         ovs_mutex_lock(&dev->mutex);
-        if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
+        if (nullable_string_is_equal(ifname, dev->vhost_id)) {
             if (enable) {
                 dev->tx_q[qid].map = qid;
             } else {
@@ -4132,14 +4140,18 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
      *  1. Device hasn't been registered yet.
      *  2. A path has been specified.
      */
-    if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)
-            && strlen(dev->vhost_id)) {
+    if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT) && dev->vhost_id) {
         /* Register client-mode device. */
         vhost_flags |= RTE_VHOST_USER_CLIENT;
 
         /* Enable IOMMU support, if explicitly requested. */
         if (dpdk_vhost_iommu_enabled()) {
             vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
+        }
+
+        /* Enable POSTCOPY support, if explicitly requested. */
+        if (dpdk_vhost_postcopy_enabled()) {
+            vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
         }
 
         zc_enabled = dev->vhost_driver_flags
@@ -4197,6 +4209,27 @@ unlock:
     ovs_mutex_unlock(&dev->mutex);
 
     return err;
+}
+
+bool
+netdev_dpdk_flow_api_supported(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev;
+    bool ret = false;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        goto out;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    if (dev->type == DPDK_DEV_ETH) {
+        /* TODO: Check if we able to offload some minimal flow. */
+        ret = true;
+    }
+    ovs_mutex_unlock(&dev->mutex);
+out:
+    return ret;
 }
 
 int
@@ -4263,8 +4296,7 @@ netdev_dpdk_rte_flow_create(struct netdev *netdev,
     .get_features = netdev_dpdk_get_features,           \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
-    .rxq_recv = netdev_dpdk_rxq_recv,                   \
-    DPDK_FLOW_OFFLOAD_API
+    .rxq_recv = netdev_dpdk_rxq_recv
 
 static const struct netdev_class dpdk_class = {
     .type = "dpdk",

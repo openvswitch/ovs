@@ -14,7 +14,7 @@ Restart=on-failure
 Environment=XDG_RUNTIME_DIR=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
-EnvironmentFile=-/run/openvswitch/useropts
+EnvironmentFile=-/run/openvswitch.useropts
 LimitSTACK=2M
 @begin_dpdk@
 ExecStartPre=-/bin/sh -c '/usr/bin/chown :$${OVS_USER_ID##*:} /dev/hugepages'
@@ -22,11 +22,11 @@ ExecStartPre=-/usr/bin/chmod 0775 /dev/hugepages
 @end_dpdk@
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovsdb-server --no-monitor --system-id=random \
-          ${OVSUSER} \
+          ${OVS_USER_OPT} \
           start $OPTIONS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server \
           --no-monitor --system-id=random \
-          ${OVSUSER} \
+          ${OVS_USER_OPT} \
           restart $OPTIONS
 TimeoutSec=300

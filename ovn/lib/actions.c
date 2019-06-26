@@ -23,7 +23,6 @@
 #include "ovn-l7.h"
 #include "hash.h"
 #include "lib/packets.h"
-#include "logical-fields.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/hmap.h"
@@ -239,7 +238,7 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
     struct expr *expr;
     char *error;
 
-    expr = expr_parse_string(prerequisite, ctx->pp->symtab, NULL, NULL,
+    expr = expr_parse_string(prerequisite, ctx->pp->symtab, NULL, NULL, NULL,
                              &error);
     ovs_assert(!error);
     ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
@@ -367,7 +366,13 @@ static void
 parse_LOAD(struct action_context *ctx, const struct expr_field *lhs)
 {
     size_t ofs = ctx->ovnacts->size;
-    struct ovnact_load *load = ovnact_put_LOAD(ctx->ovnacts);
+    struct ovnact_load *load;
+    if (lhs->symbol->ovn_field) {
+        load = ovnact_put_OVNFIELD_LOAD(ctx->ovnacts);
+    } else {
+        load = ovnact_put_LOAD(ctx->ovnacts);
+    }
+
     load->dst = *lhs;
 
     char *error = expr_type_check(lhs, lhs->n_bits, true);
@@ -1054,7 +1059,8 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
                       recirc_table, zone_reg);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->group_table, ds_cstr(&ds));
+    table_id = ovn_extend_table_assign_id(ep->group_table, ds_cstr(&ds),
+                                          ep->lflow_uuid);
     ds_destroy(&ds);
     if (table_id == EXT_TABLE_ID_INVALID) {
         return;
@@ -1149,6 +1155,12 @@ parse_ICMP4(struct action_context *ctx)
 }
 
 static void
+parse_ICMP4_ERROR(struct action_context *ctx)
+{
+    parse_nested_action(ctx, OVNACT_ICMP4_ERROR, "ip4");
+}
+
+static void
 parse_ICMP6(struct action_context *ctx)
 {
     parse_nested_action(ctx, OVNACT_ICMP6, "ip6");
@@ -1203,6 +1215,12 @@ static void
 format_ICMP4(const struct ovnact_nest *nest, struct ds *s)
 {
     format_nested_action(nest, "icmp4", s);
+}
+
+static void
+format_ICMP4_ERROR(const struct ovnact_nest *nest, struct ds *s)
+{
+    format_nested_action(nest, "icmp4_error", s);
 }
 
 static void
@@ -1280,6 +1298,14 @@ encode_ICMP4(const struct ovnact_nest *on,
              struct ofpbuf *ofpacts)
 {
     encode_nested_actions(on, ep, ACTION_OPCODE_ICMP, ofpacts);
+}
+
+static void
+encode_ICMP4_ERROR(const struct ovnact_nest *on,
+                   const struct ovnact_encode_params *ep,
+                   struct ofpbuf *ofpacts)
+{
+    encode_nested_actions(on, ep, ACTION_OPCODE_ICMP4_ERROR, ofpacts);
 }
 
 static void
@@ -1954,12 +1980,6 @@ parse_put_nd_ra_opts(struct action_context *ctx, const struct expr_field *dst,
         return;
     }
 
-    if (addr_mode_stateful && prefix_set) {
-        lexer_error(ctx->lexer, "prefix option can't be"
-                    " set when address mode is dhcpv6_stateful.");
-        return;
-    }
-
     if (!addr_mode_stateful && !prefix_set) {
         lexer_error(ctx->lexer, "prefix option needs "
                     "to be set when address mode is slaac/dhcpv6_stateless.");
@@ -1978,18 +1998,21 @@ format_PUT_ND_RA_OPTS(const struct ovnact_put_opts *po,
 
 static void
 encode_put_nd_ra_option(const struct ovnact_gen_option *o,
-                        struct ofpbuf *ofpacts, struct ovs_ra_msg *ra)
+                        struct ofpbuf *ofpacts, ptrdiff_t ra_offset)
 {
     const union expr_constant *c = o->value.values;
 
     switch (o->option->code) {
     case ND_RA_FLAG_ADDR_MODE:
+    {
+        struct ovs_ra_msg *ra = ofpbuf_at(ofpacts, ra_offset, sizeof *ra);
         if (!strcmp(c->string, "dhcpv6_stateful")) {
             ra->mo_flags = IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG;
         } else if (!strcmp(c->string, "dhcpv6_stateless")) {
             ra->mo_flags = IPV6_ND_RA_FLAG_OTHER_ADDR_CONFIG;
         }
         break;
+    }
 
     case ND_OPT_SOURCE_LINKADDR:
     {
@@ -2017,10 +2040,14 @@ encode_put_nd_ra_option(const struct ovnact_gen_option *o,
         struct ovs_nd_prefix_opt *prefix_opt =
             ofpbuf_put_uninit(ofpacts, sizeof *prefix_opt);
         uint8_t prefix_len = ipv6_count_cidr_bits(&c->mask.ipv6);
+        struct ovs_ra_msg *ra = ofpbuf_at(ofpacts, ra_offset, sizeof *ra);
         prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
         prefix_opt->len = 4;
         prefix_opt->prefix_len = prefix_len;
-        prefix_opt->la_flags = IPV6_ND_RA_OPT_PREFIX_FLAGS;
+        prefix_opt->la_flags = IPV6_ND_RA_OPT_PREFIX_ON_LINK;
+        if (!(ra->mo_flags & IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG)) {
+            prefix_opt->la_flags |= IPV6_ND_RA_OPT_PREFIX_AUTONOMOUS;
+        }
         put_16aligned_be32(&prefix_opt->valid_lifetime,
                            htonl(IPV6_ND_RA_OPT_PREFIX_VALID_LIFETIME));
         put_16aligned_be32(&prefix_opt->preferred_lifetime,
@@ -2051,6 +2078,7 @@ encode_PUT_ND_RA_OPTS(const struct ovnact_put_opts *po,
      * pinctrl module receives the ICMPv6 Router Solicitation packet
      * it can copy the userdata field AS IS and resume the packet.
      */
+    size_t ra_offset = ofpacts->size;
     struct ovs_ra_msg *ra = ofpbuf_put_zeros(ofpacts, sizeof *ra);
     ra->icmph.icmp6_type = ND_ROUTER_ADVERT;
     ra->cur_hop_limit = IPV6_ND_RA_CUR_HOP_LIMIT;
@@ -2059,7 +2087,7 @@ encode_PUT_ND_RA_OPTS(const struct ovnact_put_opts *po,
 
     for (const struct ovnact_gen_option *o = po->options;
          o < &po->options[po->n_options]; o++) {
-        encode_put_nd_ra_option(o, ofpacts, ra);
+        encode_put_nd_ra_option(o, ofpacts, ra_offset);
     }
 
     encode_finish_controller_op(oc_offset, ofpacts);
@@ -2186,7 +2214,8 @@ encode_LOG(const struct ovnact_log *log,
     uint32_t meter_id = NX_CTLR_NO_METER;
 
     if (log->meter) {
-        meter_id = ovn_extend_table_assign_id(ep->meter_table, log->meter);
+        meter_id = ovn_extend_table_assign_id(ep->meter_table, log->meter,
+                                              ep->lflow_uuid);
         if (meter_id == EXT_TABLE_ID_INVALID) {
             VLOG_WARN("Unable to assign id for log meter: %s", log->meter);
             return;
@@ -2279,7 +2308,8 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
                          "rate=%"PRId64"", cl->rate);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->meter_table, name);
+    table_id = ovn_extend_table_assign_id(ep->meter_table, name,
+                                          ep->lflow_uuid);
     free(name);
     if (table_id == EXT_TABLE_ID_INVALID) {
         return;
@@ -2292,6 +2322,92 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
 
 static void
 ovnact_set_meter_free(struct ovnact_set_meter *ct OVS_UNUSED)
+{
+}
+
+static void
+format_OVNFIELD_LOAD(const struct ovnact_load *load , struct ds *s)
+{
+    const struct ovn_field *f = ovn_field_from_name(load->dst.symbol->name);
+    switch (f->id) {
+    case OVN_ICMP4_FRAG_MTU:
+        ds_put_format(s, "%s = %u;", f->name,
+                      ntohs(load->imm.value.be16_int));
+        break;
+
+    case OVN_FIELD_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
+encode_OVNFIELD_LOAD(const struct ovnact_load *load,
+            const struct ovnact_encode_params *ep OVS_UNUSED,
+            struct ofpbuf *ofpacts)
+{
+    const struct ovn_field *f = ovn_field_from_name(load->dst.symbol->name);
+    switch (f->id) {
+    case OVN_ICMP4_FRAG_MTU: {
+        size_t oc_offset = encode_start_controller_op(
+            ACTION_OPCODE_PUT_ICMP4_FRAG_MTU, true, NX_CTLR_NO_METER,
+            ofpacts);
+        ofpbuf_put(ofpacts, &load->imm.value.be16_int, sizeof(ovs_be16));
+        encode_finish_controller_op(oc_offset, ofpacts);
+        break;
+    }
+    case OVN_FIELD_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
+parse_check_pkt_larger(struct action_context *ctx,
+                       const struct expr_field *dst,
+                       struct ovnact_check_pkt_larger *cipl)
+{
+     /* Validate that the destination is a 1-bit, modifiable field. */
+    char *error = expr_type_check(dst, 1, true);
+    if (error) {
+        lexer_error(ctx->lexer, "%s", error);
+        free(error);
+        return;
+    }
+
+    int pkt_len;
+    lexer_get(ctx->lexer); /* Skip check_pkt_len. */
+    if (!lexer_force_match(ctx->lexer, LEX_T_LPAREN)
+        || !lexer_get_int(ctx->lexer, &pkt_len)
+        || !lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
+        return;
+    }
+
+    cipl->dst = *dst;
+    cipl->pkt_len = pkt_len;
+}
+
+static void
+format_CHECK_PKT_LARGER(const struct ovnact_check_pkt_larger *cipl,
+                        struct ds *s)
+{
+    expr_field_format(&cipl->dst, s);
+    ds_put_format(s, " = check_pkt_larger(%d);", cipl->pkt_len);
+}
+
+static void
+encode_CHECK_PKT_LARGER(const struct ovnact_check_pkt_larger *cipl,
+                        const struct ovnact_encode_params *ep OVS_UNUSED,
+                        struct ofpbuf *ofpacts)
+{
+    struct ofpact_check_pkt_larger *check_pkt_larger =
+        ofpact_put_CHECK_PKT_LARGER(ofpacts);
+    check_pkt_larger->pkt_len = cipl->pkt_len;
+    check_pkt_larger->dst = expr_resolve_field(&cipl->dst);
+}
+
+static void
+ovnact_check_pkt_larger_free(struct ovnact_check_pkt_larger *cipl OVS_UNUSED)
 {
 }
 
@@ -2324,6 +2440,10 @@ parse_set_action(struct action_context *ctx)
                 && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
             parse_put_nd_ra_opts(ctx, &lhs,
                                  ovnact_put_PUT_ND_RA_OPTS(ctx->ovnacts));
+        } else if (!strcmp(ctx->lexer->token.s, "check_pkt_larger")
+                && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            parse_check_pkt_larger(ctx, &lhs,
+                                   ovnact_put_CHECK_PKT_LARGER(ctx->ovnacts));
         } else {
             parse_assignment_action(ctx, false, &lhs);
         }
@@ -2368,6 +2488,8 @@ parse_action(struct action_context *ctx)
         parse_ARP(ctx);
     } else if (lexer_match_id(ctx->lexer, "icmp4")) {
         parse_ICMP4(ctx);
+    } else if (lexer_match_id(ctx->lexer, "icmp4_error")) {
+        parse_ICMP4_ERROR(ctx);
     } else if (lexer_match_id(ctx->lexer, "icmp6")) {
         parse_ICMP6(ctx);
     } else if (lexer_match_id(ctx->lexer, "tcp_reset")) {

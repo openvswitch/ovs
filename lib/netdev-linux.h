@@ -29,14 +29,4 @@ int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
                                   const char *flag_name, bool enable);
 int linux_get_ifindex(const char *netdev_name);
 
-#define LINUX_FLOW_OFFLOAD_API                          \
-   .flow_flush = netdev_tc_flow_flush,                  \
-   .flow_dump_create = netdev_tc_flow_dump_create,      \
-   .flow_dump_destroy = netdev_tc_flow_dump_destroy,    \
-   .flow_dump_next = netdev_tc_flow_dump_next,          \
-   .flow_put = netdev_tc_flow_put,                      \
-   .flow_get = netdev_tc_flow_get,                      \
-   .flow_del = netdev_tc_flow_del,                      \
-   .init_flow_api = netdev_tc_init_flow_api
-
 #endif /* netdev-linux.h */

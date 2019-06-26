@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2015-2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 
+#include "cmap.h"
 #include "conntrack.h"
 #include "ct-dpif.h"
+#include "ipf.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/types.h"
@@ -57,12 +59,6 @@ struct conn_key {
     uint8_t nw_proto;
 };
 
-struct nat_conn_key_node {
-    struct hmap_node node;
-    struct conn_key key;
-    struct conn_key value;
-};
-
 /* This is used for alg expectations; an expectation is a
  * context created in preparation for establishing a data
  * connection. The expectation is created by the control
@@ -87,25 +83,35 @@ struct alg_exp_node {
     bool nat_rpl_dst;
 };
 
+enum OVS_PACKED_ENUM ct_conn_type {
+    CT_CONN_TYPE_DEFAULT,
+    CT_CONN_TYPE_UN_NAT,
+};
+
 struct conn {
+    /* Immutable data. */
     struct conn_key key;
     struct conn_key rev_key;
-    /* Only used for orig_tuple support. */
-    struct conn_key master_key;
-    long long expiration;
+    struct conn_key master_key; /* Only used for orig_tuple support. */
     struct ovs_list exp_node;
-    struct hmap_node node;
-    ovs_u128 label;
-    /* XXX: consider flattening. */
+    struct cmap_node cm_node;
     struct nat_action_info_t *nat_info;
     char *alg;
-    int seq_skew;
+    struct conn *nat_conn; /* The NAT 'conn' context, if there is one. */
+
+    /* Mutable data. */
+    struct ovs_mutex lock; /* Guards all mutable fields. */
+    ovs_u128 label;
+    long long expiration;
     uint32_t mark;
-    uint8_t conn_type;
-    /* TCP sequence skew due to NATTing of FTP control messages. */
-    uint8_t seq_skew_dir;
-    /* True if alg data connection. */
-    uint8_t alg_related;
+    int seq_skew;
+    bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
+                        * control messages; true if reply direction. */
+    bool cleaned; /* True if cleaned from expiry lists. */
+
+    /* Immutable data. */
+    bool alg_related; /* True if alg data connection. */
+    enum ct_conn_type conn_type;
 };
 
 enum ct_update_res {
@@ -114,44 +120,114 @@ enum ct_update_res {
     CT_UPDATE_NEW,
 };
 
-enum ct_conn_type {
-    CT_CONN_TYPE_DEFAULT,
-    CT_CONN_TYPE_UN_NAT,
+/* Timeouts: all the possible timeout states passed to update_expiration()
+ * are listed here. The name will be prefix by CT_TM_ and the value is in
+ * milliseconds */
+#define CT_TIMEOUTS \
+    CT_TIMEOUT(TCP_FIRST_PACKET, 30 * 1000) \
+    CT_TIMEOUT(TCP_OPENING, 30 * 1000) \
+    CT_TIMEOUT(TCP_ESTABLISHED, 24 * 60 * 60 * 1000) \
+    CT_TIMEOUT(TCP_CLOSING, 15 * 60 * 1000) \
+    CT_TIMEOUT(TCP_FIN_WAIT, 45 * 1000) \
+    CT_TIMEOUT(TCP_CLOSED, 30 * 1000) \
+    CT_TIMEOUT(OTHER_FIRST, 60 * 1000) \
+    CT_TIMEOUT(OTHER_MULTIPLE, 60 * 1000) \
+    CT_TIMEOUT(OTHER_BIDIR, 30 * 1000) \
+    CT_TIMEOUT(ICMP_FIRST, 60 * 1000) \
+    CT_TIMEOUT(ICMP_REPLY, 30 * 1000)
+
+/* The smallest of the above values: it is used as an upper bound for the
+ * interval between two rounds of cleanup of expired entries */
+#define CT_TM_MIN (30 * 1000)
+
+#define CT_TIMEOUT(NAME, VAL) BUILD_ASSERT_DECL(VAL >= CT_TM_MIN);
+    CT_TIMEOUTS
+#undef CT_TIMEOUT
+
+enum ct_timeout {
+#define CT_TIMEOUT(NAME, VALUE) CT_TM_##NAME,
+    CT_TIMEOUTS
+#undef CT_TIMEOUT
+    N_CT_TM
 };
 
-struct ct_l4_proto {
-    struct conn *(*new_conn)(struct conntrack_bucket *, struct dp_packet *pkt,
-                             long long now);
-    bool (*valid_new)(struct dp_packet *pkt);
-    enum ct_update_res (*conn_update)(struct conn *conn,
-                                      struct conntrack_bucket *,
-                                      struct dp_packet *pkt, bool reply,
-                                      long long now);
-    void (*conn_get_protoinfo)(const struct conn *,
-                               struct ct_dpif_protoinfo *);
+struct conntrack {
+    struct ovs_mutex ct_lock; /* Protects 2 following fields. */
+    struct cmap conns OVS_GUARDED;
+    struct ovs_list exp_lists[N_CT_TM] OVS_GUARDED;
+    uint32_t hash_basis; /* Salt for hashing a connection key. */
+    pthread_t clean_thread; /* Periodically cleans up connection tracker. */
+    struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
+
+    /* Counting connections. */
+    atomic_count n_conn; /* Number of connections currently tracked. */
+    atomic_uint n_conn_limit; /* Max connections tracked. */
+
+    /* Expectations for application level gateways (created by control
+     * connections to help create data connections, e.g. for FTP). */
+    struct ovs_rwlock resources_lock; /* Protects fields below. */
+    struct hmap alg_expectations OVS_GUARDED; /* Holds struct
+                                               * alg_exp_nodes. */
+    struct hindex alg_expectation_refs OVS_GUARDED; /* For lookup from
+                                                     * control context.  */
+
+    /* Fragmentation handling context. */
+    struct ipf *ipf;
 };
+
+/* Lock acquisition order:
+ *    1. 'ct_lock'
+ *    2. 'conn->lock'
+ *    3. 'resources_lock'
+ */
 
 extern struct ct_l4_proto ct_proto_tcp;
 extern struct ct_l4_proto ct_proto_other;
 extern struct ct_l4_proto ct_proto_icmp4;
 extern struct ct_l4_proto ct_proto_icmp6;
 
+struct ct_l4_proto {
+    struct conn *(*new_conn)(struct conntrack *ct, struct dp_packet *pkt,
+                             long long now);
+    bool (*valid_new)(struct dp_packet *pkt);
+    enum ct_update_res (*conn_update)(struct conntrack *ct, struct conn *conn,
+                                      struct dp_packet *pkt, bool reply,
+                                      long long now);
+    void (*conn_get_protoinfo)(const struct conn *,
+                               struct ct_dpif_protoinfo *);
+};
+
 extern long long ct_timeout_val[];
 
+
+/* ct_lock must be held. */
 static inline void
-conn_init_expiration(struct conntrack_bucket *ctb, struct conn *conn,
-                        enum ct_timeout tm, long long now)
+conn_init_expiration(struct conntrack *ct, struct conn *conn,
+                     enum ct_timeout tm, long long now)
 {
     conn->expiration = now + ct_timeout_val[tm];
-    ovs_list_push_back(&ctb->exp_lists[tm], &conn->exp_node);
+    ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
 }
 
+/* The conn entry lock must be held on entry and exit. */
 static inline void
-conn_update_expiration(struct conntrack_bucket *ctb, struct conn *conn,
+conn_update_expiration(struct conntrack *ct, struct conn *conn,
                        enum ct_timeout tm, long long now)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    ovs_list_remove(&conn->exp_node);
-    conn_init_expiration(ctb, conn, tm, now);
+    ovs_mutex_unlock(&conn->lock);
+
+    ovs_mutex_lock(&ct->ct_lock);
+    ovs_mutex_lock(&conn->lock);
+    if (!conn->cleaned) {
+        conn->expiration = now + ct_timeout_val[tm];
+        ovs_list_remove(&conn->exp_node);
+        ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
+    }
+    ovs_mutex_unlock(&conn->lock);
+    ovs_mutex_unlock(&ct->ct_lock);
+
+    ovs_mutex_lock(&conn->lock);
 }
 
 static inline uint32_t

@@ -182,7 +182,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br1 in_port=1,ip,actions=dec_ttl,push
 dnl MPLS push+pop
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=10.1.1.22,dst=10.0.0.3,proto=6,tos=0,ttl=64,frag=no),tcp(src=53295,dst=8080)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: set(ipv4(ttl=63)),push_mpls(label=0,tc=0,ttl=63,bos=1,eth_type=0x8847),3,pop_mpls(eth_type=0x800),set(ipv4(tos=0/0xfc,ttl=64)),1,1
+  [Datapath actions: set(ipv4(ttl=63)),push_mpls(label=0,tc=0,ttl=63,bos=1,eth_type=0x8847),3,pop_mpls(eth_type=0x800),set(ipv4(ttl=64)),1,1
 ])
 
 OVS_VSWITCHD_STOP

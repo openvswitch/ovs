@@ -94,6 +94,8 @@ main(int argc, char *argv[])
 #ifdef HAVE_MLOCKALL
         if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
             VLOG_ERR("mlockall failed: %s", ovs_strerror(errno));
+        } else {
+            set_memory_locked();
         }
 #else
         VLOG_ERR("mlockall not supported on this system");

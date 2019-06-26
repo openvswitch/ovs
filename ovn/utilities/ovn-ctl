@@ -236,6 +236,14 @@ start_nb_ovsdb() {
 }
 
 start_sb_ovsdb() {
+    # Increase the limit on the number of open file descriptors, because
+    # SB DB may connect to large number of chassises, on top of connections
+    # for cluster members, northd, and serveral local unix sockets.
+    MAXFD=8192
+    if [ $(ulimit -n) -lt $MAXFD ]; then
+        ulimit -n $MAXFD
+    fi
+
     start_ovsdb__ SB sb OVN_Southbound SB_Global
 }
 
@@ -346,7 +354,7 @@ start_controller () {
 }
 
 start_controller_vtep () {
-    set ovn-controller-vtep "unix:$DB_SOCK"
+    set ovn-controller-vtep
     set "$@" -vconsole:emer -vsyslog:err -vfile:info
     if test X"$OVN_CONTROLLER_SSL_KEY" != X; then
         set "$@" --private-key=$OVN_CONTROLLER_SSL_KEY
@@ -359,6 +367,12 @@ start_controller_vtep () {
     fi
     if test X"$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT" != X; then
         set "$@" --bootstrap-ca-cert=$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT
+    fi
+    if test X"$DB_SOCK" != X; then
+        set "$@" --vtep-db=$DB_SOCK
+    fi
+    if test X"$DB_SB_SOCK" != X; then
+        set "$@" --ovnsb-db=$DB_SB_SOCK
     fi
 
     [ "$OVN_USER" != "" ] && set "$@" --user "$OVN_USER"
@@ -598,6 +612,8 @@ Options:
 
 File location options:
   --db-sock=SOCKET     JSON-RPC socket name (default: $DB_SOCK)
+  --db-nb-sock=SOCKET  OVN_Northbound db socket (default: $DB_NB_SOCK)
+  --db-sb-scok=SOCKET  OVN_Southbound db socket (default: $DB_SB_SOCK)
   --db-nb-file=FILE    OVN_Northbound db file (default: $DB_NB_FILE)
   --db-sb-file=FILE    OVN_Southbound db file (default: $DB_SB_FILE)
   --db-nb-schema=FILE  OVN_Northbound db file (default: $DB_NB_SCHEMA)

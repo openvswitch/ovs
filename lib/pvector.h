@@ -54,6 +54,13 @@
  * 'temp' may contain NULL pointers and it may be in unsorted order.  It is
  * sorted before it is published at 'impl', which also removes the NULLs from
  * the published vector.
+ *
+ * Since the vector is RCU protected, the entry destruction after removal must
+ * be RCU postponed.  Also, if it happens before changes published with
+ * pvector_publish(), destruction must be double postponed, i.e., the second
+ * ovsrcu_postpone() call to destruct the entry should be called from the first
+ * RCU callback.  This is required because readers could still obtain the
+ * unmodified vector until updated version is published.
  */
 
 struct pvector_entry {

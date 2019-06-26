@@ -43,6 +43,7 @@
 #include "uuid.h"
 #include "openvswitch/vlog.h"
 #include "openvswitch/match.h"
+#include "odp-netlink-macros.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
 
@@ -66,6 +67,10 @@ struct parse_odp_context {
 
 static int parse_odp_key_mask_attr(struct parse_odp_context *, const char *,
                                    struct ofpbuf *, struct ofpbuf *);
+
+static int parse_odp_key_mask_attr__(struct parse_odp_context *, const char *,
+                                   struct ofpbuf *, struct ofpbuf *);
+
 static void format_odp_key_attr(const struct nlattr *a,
                                 const struct nlattr *ma,
                                 const struct hmap *portno_names, struct ds *ds,
@@ -89,7 +94,10 @@ static void format_u128(struct ds *d, const ovs_32aligned_u128 *key,
                         const ovs_32aligned_u128 *mask, bool verbose);
 static int scan_u128(const char *s, ovs_u128 *value, ovs_u128 *mask);
 
-static int parse_odp_action(const char *s, const struct simap *port_names,
+static int parse_odp_action(struct parse_odp_context *context, const char *s,
+                            struct ofpbuf *actions);
+
+static int parse_odp_action__(struct parse_odp_context *context, const char *s,
                             struct ofpbuf *actions);
 
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
@@ -131,6 +139,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_CLONE: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_PUSH_NSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_POP_NSH: return 0;
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN: return ATTR_LEN_VARIABLE;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -1043,6 +1052,42 @@ format_odp_set_nsh(struct ds *ds, const struct nlattr *attr)
     ds_put_cstr(ds, "))");
 }
 
+static void
+format_odp_check_pkt_len_action(struct ds *ds, const struct nlattr *attr,
+                                const struct hmap *portno_names OVS_UNUSED)
+{
+    static const struct nl_policy ovs_cpl_policy[] = {
+        [OVS_CHECK_PKT_LEN_ATTR_PKT_LEN] = { .type = NL_A_U16 },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] = { .type = NL_A_NESTED },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]
+            = { .type = NL_A_NESTED },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_cpl_policy)];
+    ds_put_cstr(ds, "check_pkt_len");
+    if (!nl_parse_nested(attr, ovs_cpl_policy, a, ARRAY_SIZE(a))) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    if (!a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] ||
+        !a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    uint16_t pkt_len = nl_attr_get_u16(a[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN]);
+    ds_put_format(ds, "(size=%u,gt(", pkt_len);
+    const struct nlattr *acts;
+    acts = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
+    format_odp_actions(ds, nl_attr_get(acts), nl_attr_get_size(acts),
+                       portno_names);
+
+    ds_put_cstr(ds, "),le(");
+    acts = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL];
+    format_odp_actions(ds, nl_attr_get(acts), nl_attr_get_size(acts),
+                           portno_names);
+    ds_put_cstr(ds, "))");
+}
 
 static void
 format_odp_action(struct ds *ds, const struct nlattr *a,
@@ -1181,6 +1226,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
     }
     case OVS_ACTION_ATTR_POP_NSH:
         ds_put_cstr(ds, "pop_nsh()");
+        break;
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+        format_odp_check_pkt_len_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -2142,7 +2190,7 @@ out:
 }
 
 static int
-parse_action_list(const char *s, const struct simap *port_names,
+parse_action_list(struct parse_odp_context *context, const char *s,
                   struct ofpbuf *actions)
 {
     int n = 0;
@@ -2154,7 +2202,7 @@ parse_action_list(const char *s, const struct simap *port_names,
         if (s[n] == ')') {
             break;
         }
-        retval = parse_odp_action(s + n, port_names, actions);
+        retval = parse_odp_action(context, s + n, actions);
         if (retval < 0) {
             return retval;
         }
@@ -2168,9 +2216,30 @@ parse_action_list(const char *s, const struct simap *port_names,
     return n;
 }
 
+
 static int
-parse_odp_action(const char *s, const struct simap *port_names,
+parse_odp_action(struct parse_odp_context *context, const char *s,
                  struct ofpbuf *actions)
+{
+    int retval;
+
+    context->depth++;
+
+    if (context->depth == MAX_ODP_NESTED) {
+        retval = -EINVAL;
+    } else {
+        retval = parse_odp_action__(context, s, actions);
+    }
+
+    context->depth--;
+
+    return retval;
+}
+
+
+static int
+parse_odp_action__(struct parse_odp_context *context, const char *s,
+                   struct ofpbuf *actions)
 {
     {
         uint32_t port;
@@ -2196,11 +2265,11 @@ parse_odp_action(const char *s, const struct simap *port_names,
         }
     }
 
-    if (port_names) {
+    if (context->port_names) {
         int len = strcspn(s, delimiters);
         struct simap_node *node;
 
-        node = simap_find_len(port_names, s, len);
+        node = simap_find_len(context->port_names, s, len);
         if (node) {
             nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, node->data);
             return len;
@@ -2228,12 +2297,9 @@ parse_odp_action(const char *s, const struct simap *port_names,
         struct ofpbuf maskbuf = OFPBUF_STUB_INITIALIZER(mask);
         struct nlattr *nested, *key;
         size_t size;
-        struct parse_odp_context context = (struct parse_odp_context) {
-            .port_names = port_names,
-        };
 
         start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SET);
-        retval = parse_odp_key_mask_attr(&context, s + 4, actions, &maskbuf);
+        retval = parse_odp_key_mask_attr(context, s + 4, actions, &maskbuf);
         if (retval < 0) {
             ofpbuf_uninit(&maskbuf);
             return retval;
@@ -2335,9 +2401,11 @@ parse_odp_action(const char *s, const struct simap *port_names,
 
             actions_ofs = nl_msg_start_nested(actions,
                                               OVS_SAMPLE_ATTR_ACTIONS);
-            int retval = parse_action_list(s + n, port_names, actions);
-            if (retval < 0)
+            int retval = parse_action_list(context, s + n, actions);
+            if (retval < 0) {
                 return retval;
+            }
+
 
             n += retval;
             nl_msg_end_nested(actions, actions_ofs);
@@ -2353,7 +2421,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             int n = 6;
 
             actions_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_CLONE);
-            int retval = parse_action_list(s + n, port_names, actions);
+            int retval = parse_action_list(context, s + n, actions);
             if (retval < 0) {
                 return retval;
             }
@@ -2399,6 +2467,52 @@ parse_odp_action(const char *s, const struct simap *port_names,
     }
 
     {
+        uint16_t pkt_len;
+        int n = -1;
+        if (ovs_scan(s, "check_pkt_len(size=%"SCNi16",gt(%n", &pkt_len, &n)) {
+            size_t cpl_ofs, actions_ofs;
+            cpl_ofs = nl_msg_start_nested(actions,
+                                          OVS_ACTION_ATTR_CHECK_PKT_LEN);
+            nl_msg_put_u16(actions, OVS_CHECK_PKT_LEN_ATTR_PKT_LEN, pkt_len);
+            actions_ofs = nl_msg_start_nested(
+                actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
+
+            int retval;
+            if (!strncasecmp(s + n, "drop", 4)) {
+                n += 4;
+            } else {
+                retval = parse_action_list(context, s + n, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+
+                n += retval;
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            retval = -1;
+            if (!ovs_scan(s + n, "),le(%n", &retval)) {
+                return -EINVAL;
+            }
+            n += retval;
+
+            actions_ofs = nl_msg_start_nested(
+                actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL);
+            if (!strncasecmp(s + n, "drop", 4)) {
+                n += 4;
+            } else {
+                retval = parse_action_list(context, s + n, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+                n += retval;
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            nl_msg_end_nested(actions, cpl_ofs);
+            return s[n + 1] == ')' ? n + 2 : -EINVAL;
+        }
+    }
+
+    {
         int retval;
 
         retval = parse_conntrack_action(s, actions);
@@ -2419,6 +2533,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             return n;
         }
     }
+
     return -EINVAL;
 }
 
@@ -2437,6 +2552,10 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
         return 0;
     }
 
+    struct parse_odp_context context = (struct parse_odp_context) {
+        .port_names = port_names,
+    };
+
     old_size = actions->size;
     for (;;) {
         int retval;
@@ -2446,7 +2565,8 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
             return 0;
         }
 
-        retval = parse_odp_action(s, port_names, actions);
+        retval = parse_odp_action(&context, s, actions);
+
         if (retval < 0 || !strchr(delimiters, s[retval])) {
             actions->size = old_size;
             return -retval;
@@ -5504,6 +5624,25 @@ static int
 parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
+    int retval;
+
+    context->depth++;
+
+    if (context->depth == MAX_ODP_NESTED) {
+        retval = -EINVAL;
+    } else {
+        retval = parse_odp_key_mask_attr__(context, s, key, mask);
+    }
+
+    context->depth--;
+
+    return retval;
+}
+
+static int
+parse_odp_key_mask_attr__(struct parse_odp_context *context, const char *s,
+                          struct ofpbuf *key, struct ofpbuf *mask)
+{
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
     SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
     SCAN_SINGLE_FULLY_MASKED("recirc_id(", uint32_t, u32,
@@ -5649,20 +5788,15 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
     /* nsh is nested, it needs special process */
     int ret = parse_odp_nsh_key_mask_attr(s, key, mask);
     if (ret < 0) {
-       return ret;
+        return ret;
     } else {
-       s += ret;
+        s += ret;
     }
 
     /* Encap open-coded. */
     if (!strncmp(s, "encap(", 6)) {
         const char *start = s;
         size_t encap, encap_mask = 0;
-
-        if (context->depth + 1 == MAX_ODP_NESTED) {
-            return -EINVAL;
-        }
-        context->depth++;
 
         encap = nl_msg_start_nested(key, OVS_KEY_ATTR_ENCAP);
         if (mask) {
@@ -5675,7 +5809,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
 
             s += strspn(s, delimiters);
             if (!*s) {
-                context->depth--;
                 return -EINVAL;
             } else if (*s == ')') {
                 break;
@@ -5683,7 +5816,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
 
             retval = parse_odp_key_mask_attr(context, s, key, mask);
             if (retval < 0) {
-                context->depth--;
                 return retval;
             }
 
@@ -5698,7 +5830,6 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
         if (mask) {
             nl_msg_end_nested(mask, encap_mask);
         }
-        context->depth--;
 
         return s - start;
     }
@@ -5818,6 +5949,11 @@ static void
 odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
                          bool export_mask, struct ofpbuf *buf)
 {
+    /* New "struct flow" fields that are visible to the datapath (including all
+     * data fields) should be translated into equivalent datapath flow fields
+     * here (you will have to add a OVS_KEY_ATTR_* for them). */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     struct ovs_key_ethernet *eth_key;
     size_t encap[FLOW_MAX_VLAN_HEADERS] = {0};
     size_t max_vlans;
@@ -6899,6 +7035,11 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
                        struct flow *flow, const struct flow *src_flow,
                        char **errorp)
 {
+    /* New "struct flow" fields that are visible to the datapath (including all
+     * data fields) should be translated from equivalent datapath flow fields
+     * here (you will have to add a OVS_KEY_ATTR_* for them).  */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     enum odp_key_fitness fitness = ODP_FIT_ERROR;
     if (errorp) {
         *errorp = NULL;
@@ -7361,12 +7502,49 @@ commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
     }
 }
 
+struct offsetof_sizeof {
+    int offset;
+    int size;
+};
+
+/* Compares each of the fields in 'key0' and 'key1'.  The fields are specified
+ * in 'offsetof_sizeof_arr', which is an array terminated by a 0-size field.
+ * Returns true if all of the fields are equal, false if at least one differs.
+ * As a side effect, for each field that is the same in 'key0' and 'key1',
+ * zeros the corresponding bytes in 'mask'. */
+static bool
+keycmp_mask(const void *key0, const void *key1,
+            struct offsetof_sizeof *offsetof_sizeof_arr, void *mask)
+{
+    bool differ = false;
+
+    for (int field = 0 ; ; field++) {
+        int size = offsetof_sizeof_arr[field].size;
+        int offset = offsetof_sizeof_arr[field].offset;
+        if (size == 0) {
+            break;
+        }
+
+        char *pkey0 = ((char *)key0) + offset;
+        char *pkey1 = ((char *)key1) + offset;
+        char *pmask = ((char *)mask) + offset;
+        if (memcmp(pkey0, pkey1, size) == 0) {
+            memset(pmask, 0, size);
+        } else {
+            differ = true;
+        }
+    }
+
+    return differ;
+}
+
 static bool
 commit(enum ovs_key_attr attr, bool use_masked_set,
        const void *key, void *base, void *mask, size_t size,
+       struct offsetof_sizeof *offsetof_sizeof_arr,
        struct ofpbuf *odp_actions)
 {
-    if (memcmp(key, base, size)) {
+    if (keycmp_mask(key, base, offsetof_sizeof_arr, mask)) {
         bool fully_masked = odp_mask_is_exact(attr, mask, size);
 
         if (use_masked_set && !fully_masked) {
@@ -7408,7 +7586,8 @@ commit_set_ether_action(const struct flow *flow, struct flow *base_flow,
                         bool use_masked)
 {
     struct ovs_key_ethernet key, base, mask;
-
+    struct offsetof_sizeof ovs_key_ethernet_offsetof_sizeof_arr[] =
+        OVS_KEY_ETHERNET_OFFSETOF_SIZEOF_ARR;
     if (flow->packet_type != htonl(PT_ETH)) {
         return;
     }
@@ -7418,7 +7597,8 @@ commit_set_ether_action(const struct flow *flow, struct flow *base_flow,
     get_ethernet_key(&wc->masks, &mask);
 
     if (commit(OVS_KEY_ATTR_ETHERNET, use_masked,
-               &key, &base, &mask, sizeof key, odp_actions)) {
+               &key, &base, &mask, sizeof key,
+               ovs_key_ethernet_offsetof_sizeof_arr, odp_actions)) {
         put_ethernet_key(&base, base_flow);
         put_ethernet_key(&mask, &wc->masks);
     }
@@ -7544,6 +7724,8 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base_flow,
                        bool use_masked)
 {
     struct ovs_key_ipv4 key, mask, base;
+    struct offsetof_sizeof ovs_key_ipv4_offsetof_sizeof_arr[] =
+        OVS_KEY_IPV4_OFFSETOF_SIZEOF_ARR;
 
     /* Check that nw_proto and nw_frag remain unchanged. */
     ovs_assert(flow->nw_proto == base_flow->nw_proto &&
@@ -7561,7 +7743,7 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base_flow,
     }
 
     if (commit(OVS_KEY_ATTR_IPV4, use_masked, &key, &base, &mask, sizeof key,
-               odp_actions)) {
+               ovs_key_ipv4_offsetof_sizeof_arr, odp_actions)) {
         put_ipv4_key(&base, base_flow, false);
         if (mask.ipv4_proto != 0) { /* Mask was changed by commit(). */
             put_ipv4_key(&mask, &wc->masks, true);
@@ -7599,6 +7781,8 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base_flow,
                        bool use_masked)
 {
     struct ovs_key_ipv6 key, mask, base;
+    struct offsetof_sizeof ovs_key_ipv6_offsetof_sizeof_arr[] =
+        OVS_KEY_IPV6_OFFSETOF_SIZEOF_ARR;
 
     /* Check that nw_proto and nw_frag remain unchanged. */
     ovs_assert(flow->nw_proto == base_flow->nw_proto &&
@@ -7617,7 +7801,7 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base_flow,
     }
 
     if (commit(OVS_KEY_ATTR_IPV6, use_masked, &key, &base, &mask, sizeof key,
-               odp_actions)) {
+               ovs_key_ipv6_offsetof_sizeof_arr, odp_actions)) {
         put_ipv6_key(&base, base_flow, false);
         if (mask.ipv6_proto != 0) { /* Mask was changed by commit(). */
             put_ipv6_key(&mask, &wc->masks, true);
@@ -7653,13 +7837,15 @@ commit_set_arp_action(const struct flow *flow, struct flow *base_flow,
                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct ovs_key_arp key, mask, base;
+    struct offsetof_sizeof ovs_key_arp_offsetof_sizeof_arr[] =
+        OVS_KEY_ARP_OFFSETOF_SIZEOF_ARR;
 
     get_arp_key(flow, &key);
     get_arp_key(base_flow, &base);
     get_arp_key(&wc->masks, &mask);
 
     if (commit(OVS_KEY_ATTR_ARP, true, &key, &base, &mask, sizeof key,
-               odp_actions)) {
+               ovs_key_arp_offsetof_sizeof_arr, odp_actions)) {
         put_arp_key(&base, base_flow);
         put_arp_key(&mask, &wc->masks);
         return SLOW_ACTION;
@@ -7688,6 +7874,8 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
                        struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct ovs_key_icmp key, mask, base;
+    struct offsetof_sizeof ovs_key_icmp_offsetof_sizeof_arr[] =
+        OVS_KEY_ICMP_OFFSETOF_SIZEOF_ARR;
     enum ovs_key_attr attr;
 
     if (is_icmpv4(flow, NULL)) {
@@ -7702,7 +7890,8 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
     get_icmp_key(base_flow, &base);
     get_icmp_key(&wc->masks, &mask);
 
-    if (commit(attr, false, &key, &base, &mask, sizeof key, odp_actions)) {
+    if (commit(attr, false, &key, &base, &mask, sizeof key,
+               ovs_key_icmp_offsetof_sizeof_arr, odp_actions)) {
         put_icmp_key(&base, base_flow);
         put_icmp_key(&mask, &wc->masks);
         return SLOW_ACTION;
@@ -7752,13 +7941,15 @@ commit_set_nd_action(const struct flow *flow, struct flow *base_flow,
                      struct flow_wildcards *wc, bool use_masked)
 {
     struct ovs_key_nd key, mask, base;
+    struct offsetof_sizeof ovs_key_nd_offsetof_sizeof_arr[] =
+        OVS_KEY_ND_OFFSETOF_SIZEOF_ARR;
 
     get_nd_key(flow, &key);
     get_nd_key(base_flow, &base);
     get_nd_key(&wc->masks, &mask);
 
     if (commit(OVS_KEY_ATTR_ND, use_masked, &key, &base, &mask, sizeof key,
-               odp_actions)) {
+               ovs_key_nd_offsetof_sizeof_arr, odp_actions)) {
         put_nd_key(&base, base_flow);
         put_nd_key(&mask, &wc->masks);
         return SLOW_ACTION;
@@ -7774,13 +7965,16 @@ commit_set_nd_extensions_action(const struct flow *flow,
                                 struct flow_wildcards *wc, bool use_masked)
 {
     struct ovs_key_nd_extensions key, mask, base;
+    struct offsetof_sizeof ovs_key_nd_extensions_offsetof_sizeof_arr[] =
+        OVS_KEY_ND_EXTENSIONS_OFFSETOF_SIZEOF_ARR;
 
     get_nd_extensions_key(flow, &key);
     get_nd_extensions_key(base_flow, &base);
     get_nd_extensions_key(&wc->masks, &mask);
 
-    if (commit(OVS_KEY_ATTR_ND_EXTENSIONS, use_masked, &key,
-               &base, &mask, sizeof key, odp_actions)) {
+    if (commit(OVS_KEY_ATTR_ND_EXTENSIONS, use_masked, &key, &base, &mask,
+               sizeof key, ovs_key_nd_extensions_offsetof_sizeof_arr,
+               odp_actions)) {
         put_nd_extensions_key(&base, base_flow);
         put_nd_extensions_key(&mask, &wc->masks);
         return SLOW_ACTION;
@@ -7997,6 +8191,8 @@ commit_set_port_action(const struct flow *flow, struct flow *base_flow,
 {
     enum ovs_key_attr key_type;
     union ovs_key_tp key, mask, base;
+    struct offsetof_sizeof ovs_key_tp_offsetof_sizeof_arr[] =
+        OVS_KEY_TCP_OFFSETOF_SIZEOF_ARR;
 
     /* Check if 'flow' really has an L3 header. */
     if (!flow->nw_proto) {
@@ -8022,7 +8218,7 @@ commit_set_port_action(const struct flow *flow, struct flow *base_flow,
     get_tp_key(&wc->masks, &mask);
 
     if (commit(key_type, use_masked, &key, &base, &mask, sizeof key,
-               odp_actions)) {
+               ovs_key_tp_offsetof_sizeof_arr, odp_actions)) {
         put_tp_key(&base, base_flow);
         put_tp_key(&mask, &wc->masks);
     }
@@ -8035,13 +8231,17 @@ commit_set_priority_action(const struct flow *flow, struct flow *base_flow,
                            bool use_masked)
 {
     uint32_t key, mask, base;
+    struct offsetof_sizeof ovs_key_prio_offsetof_sizeof_arr[] = {
+        {0, sizeof(uint32_t)},
+        {0, 0}
+    };
 
     key = flow->skb_priority;
     base = base_flow->skb_priority;
     mask = wc->masks.skb_priority;
 
     if (commit(OVS_KEY_ATTR_PRIORITY, use_masked, &key, &base, &mask,
-               sizeof key, odp_actions)) {
+               sizeof key, ovs_key_prio_offsetof_sizeof_arr, odp_actions)) {
         base_flow->skb_priority = base;
         wc->masks.skb_priority = mask;
     }
@@ -8054,13 +8254,18 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
                            bool use_masked)
 {
     uint32_t key, mask, base;
+    struct offsetof_sizeof ovs_key_pkt_mark_offsetof_sizeof_arr[] = {
+        {0, sizeof(uint32_t)},
+        {0, 0}
+    };
 
     key = flow->pkt_mark;
     base = base_flow->pkt_mark;
     mask = wc->masks.pkt_mark;
 
     if (commit(OVS_KEY_ATTR_SKB_MARK, use_masked, &key, &base, &mask,
-               sizeof key, odp_actions)) {
+               sizeof key, ovs_key_pkt_mark_offsetof_sizeof_arr,
+               odp_actions)) {
         base_flow->pkt_mark = base;
         wc->masks.pkt_mark = mask;
     }
@@ -8165,14 +8370,25 @@ commit_encap_decap_action(const struct flow *flow,
  * in addition to this function if needed.  Sets fields in 'wc' that are
  * used as part of the action.
  *
- * Returns a reason to force processing the flow's packets into the userspace
- * slow path, if there is one, otherwise 0. */
+ * In the common case, this function returns 0.  If the flow key modification
+ * requires the flow's packets to be forced into the userspace slow path, this
+ * function returns SLOW_ACTION.  This only happens when there is no ODP action
+ * to modify some field that was actually modified.  For example, there is no
+ * ODP action to modify any ARP field, so such a modification triggers
+ * SLOW_ACTION.  (When this happens, packets that need such modification get
+ * flushed to userspace and handled there, which works OK but much more slowly
+ * than if the datapath handled it directly.) */
 enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
                    bool use_masked, bool pending_encap, bool pending_decap,
                    struct ofpbuf *encap_data)
 {
+    /* If you add a field that OpenFlow actions can change, and that is visible
+     * to the datapath (including all data fields), then you should also add
+     * code here to commit changes to the field. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;
 

@@ -8,8 +8,8 @@ ovn_controller_ovn_controller_SOURCES = \
 	ovn/controller/chassis.h \
 	ovn/controller/encaps.c \
 	ovn/controller/encaps.h \
-	ovn/controller/gchassis.c \
-	ovn/controller/gchassis.h \
+	ovn/controller/ha-chassis.c \
+	ovn/controller/ha-chassis.h \
 	ovn/controller/lflow.c \
 	ovn/controller/lflow.h \
 	ovn/controller/lport.c \

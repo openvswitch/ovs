@@ -458,7 +458,7 @@
         the <ref table="DHCP_Options" /> table.
       </dd>
 
-      <dt><code>lsp-get-dhcpv4-optoins</code> <var>port</var></dt>
+      <dt><code>lsp-get-dhcpv4-options</code> <var>port</var></dt>
       <dd>
         Get the configured DHCPv4 options for the logical port.
       </dd>
@@ -471,7 +471,7 @@
           in the <ref table="DHCP_Options" /> table.
       </dd>
 
-      <dt><code>lsp-get-dhcpv6-optoins</code> <var>port</var></dt>
+      <dt><code>lsp-get-dhcpv6-options</code> <var>port</var></dt>
       <dd>
         Get the configured DHCPv6 options for the logical port.
       </dd>
@@ -908,6 +908,47 @@
       </dd>
     </dl>
 
+    <h1> HA Chassis Group commands</h1>
+
+    <dl>
+      <dt><code>ha-chassis-group-add</code> <var>group</var></dt>
+      <dd>
+        Creates a new HA chassis group in the <code>HA_Chassis_Group</code>
+        table named <code>group</code>.
+      </dd>
+
+      <dt><code>ha-chassis-group-del</code> <var>group</var></dt>
+      <dd>
+        Deletes the HA chassis group <code>group</code>. It is an error if
+        <code>group</code> does not exist.
+      </dd>
+
+      <dt><code>ha-chassis-group-list</code></dt>
+      <dd>
+        Lists the HA chassis group <code>group</code> along with the
+        <code>HA chassis</code> if any associated with it.
+      </dd>
+
+      <dt><code>ha-chassis-group-add-chassis</code> <var>group</var>
+      <var>chassis</var> <var>priority</var></dt>
+      <dd>
+        Adds a new HA chassis <code>chassis</code> to the
+        HA Chassis group <code>group</code> with the specified priority.
+        If the <code>chassis</code> already exists, then the
+        <code>priority</code> is updated.
+        The <code>chassis</code> should be the name of the chassis in the
+        <code>OVN_Southbound</code>.
+      </dd>
+
+      <dt><code>ha-chassis-group-remove-chassis</code> <var>group</var>
+      <var>chassis</var></dt>
+      <dd>
+        Removes the HA chassis <code>chassis</code> from the HA chassis
+        group <code>group</code>. It is an error if <code>chassis</code> does
+        not exist.
+      </dd>
+    </dl>
+
     <h1>Database Commands</h1>
     <p>These commands query and modify the contents of <code>ovsdb</code> tables.
     They are a slight abstraction of the <code>ovsdb</code> interface and
@@ -1141,6 +1182,23 @@
       serialized even with <code>--no-leader-only</code>).  Refer to
       <code>Understanding Cluster Consistency</code> in <code>ovsdb</code>(7)
       for more information.
+    </dd>
+
+    <dt><code>--shuffle-remotes</code></dt>
+    <dt><code>--no-shuffle-remotes</code></dt>
+    <dd>
+      By default, or with <code>--shuffle-remotes</code>, when there are
+      multiple remotes specified in the OVSDB connection string specified by
+      <code>--db</code> or the <env>OVN_NB_DB</env> environment variable,
+      the order of the remotes will be shuffled before the client tries to
+      connect.  The remotes will be shuffled only once to a new order before
+      the first connection attempt.  The following retries, if any, will
+      follow the same new order.  The default behavior is to make sure
+      clients of a clustered database can distribute evenly to all memembers
+      of the cluster.  With <code>--no-shuffle-remotes</code>,
+      <code>ovn-nbctl</code> will use the original order specified in the
+      connection string to connect.  This allows user to specify the
+      preferred order, which is particularly useful for testing.
     </dd>
     </dl>
 

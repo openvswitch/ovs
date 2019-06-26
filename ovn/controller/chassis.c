@@ -19,6 +19,7 @@
 #include "chassis.h"
 
 #include "lib/smap.h"
+#include "lib/sset.h"
 #include "lib/vswitch-idl.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
@@ -73,17 +74,39 @@ get_cms_options(const struct smap *ext_ids)
     return smap_get_def(ext_ids, "ovn-cms-options", "");
 }
 
-/* Returns this chassis's Chassis record, if it is available and is currently
- * amenable to a transaction. */
+static void
+update_chassis_transport_zones(const struct sset *transport_zones,
+                               const struct sbrec_chassis *chassis_rec)
+{
+    struct sset chassis_tzones_set = SSET_INITIALIZER(&chassis_tzones_set);
+    for (int i = 0; i < chassis_rec->n_transport_zones; i++) {
+        sset_add(&chassis_tzones_set, chassis_rec->transport_zones[i]);
+    }
+
+    /* Only update the transport zones if something changed */
+    if (!sset_equals(transport_zones, &chassis_tzones_set)) {
+        const char **ls_arr = sset_array(transport_zones);
+        sbrec_chassis_set_transport_zones(chassis_rec, ls_arr,
+                                          sset_count(transport_zones));
+        free(ls_arr);
+    }
+
+    sset_destroy(&chassis_tzones_set);
+}
+
+/* Returns this chassis's Chassis record, if it is available. */
 const struct sbrec_chassis *
 chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_chassis_by_name,
             const struct ovsrec_open_vswitch_table *ovs_table,
             const char *chassis_id,
-            const struct ovsrec_bridge *br_int)
+            const struct ovsrec_bridge *br_int,
+            const struct sset *transport_zones)
 {
+    const struct sbrec_chassis *chassis_rec
+        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     if (!ovnsb_idl_txn) {
-        return NULL;
+        return chassis_rec;
     }
 
     const struct ovsrec_open_vswitch *cfg;
@@ -148,8 +171,6 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     ds_chomp(&iface_types, ',');
     const char *iface_types_str = ds_cstr(&iface_types);
 
-    const struct sbrec_chassis *chassis_rec
-        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     const char *encap_csum = smap_get_def(&cfg->external_ids,
                                           "ovn-encap-csum", "true");
     int n_encaps = count_1bits(req_tunnels);
@@ -157,6 +178,8 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
         if (strcmp(hostname, chassis_rec->hostname)) {
             sbrec_chassis_set_hostname(chassis_rec, hostname);
         }
+
+        update_chassis_transport_zones(transport_zones, chassis_rec);
 
         /* Determine new values for Chassis external-ids. */
         const char *chassis_bridge_mappings

@@ -378,6 +378,10 @@ clone(1)
 clone(clone(push_vlan(vid=12,pcp=0),2),1)
 set(tunnel(tun_id=0x1,dst=1.1.1.1,ttl=64,erspan(ver=1,idx=0x7),flags(df|key)))
 set(tunnel(tun_id=0x1,dst=1.1.1.1,ttl=64,erspan(ver=2,dir=1,hwid=0x1),flags(df|key)))
+check_pkt_len(size=200,gt(4),le(5))
+check_pkt_len(size=200,gt(drop),le(5))
+check_pkt_len(size=200,gt(ct(nat)),le(drop))
+check_pkt_len(size=200,gt(set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15))),le(set(eth(src=00:01:02:03:04:06,dst=10:11:12:13:14:16))))
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

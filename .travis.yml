@@ -28,22 +28,25 @@ before_script: export PATH=$PATH:$HOME/bin
 
 env:
   - OPTS="--disable-ssl"
-  - TESTSUITE=1 KERNEL=3.16.54
+  - TESTSUITE=1 KERNEL=3.16
   - TESTSUITE=1 OPTS="--enable-shared"
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
-  - KERNEL=3.16.54 DPDK=1 OPTS="--enable-shared"
-  - KERNEL=3.16.54 TESTSUITE=1 DPDK=1
-  - KERNEL=3.16.54 DPDK_SHARED=1
-  - KERNEL=3.16.54 DPDK_SHARED=1 OPTS="--enable-shared"
-  - KERNEL=4.18.20
-  - KERNEL=4.17.19
-  - KERNEL=4.16.18
-  - KERNEL=4.15.18
-  - KERNEL=4.14.63
-  - KERNEL=4.9.149
-  - KERNEL=4.4.148
-  - KERNEL=3.19.8
-  - KERNEL=3.16.57
+  - DPDK=1 OPTS="--enable-shared"
+  - TESTSUITE=1 DPDK=1
+  - DPDK_SHARED=1
+  - DPDK_SHARED=1 OPTS="--enable-shared"
+  - KERNEL=5.0
+  - KERNEL=4.20
+  - KERNEL=4.19
+  - KERNEL=4.18
+  - KERNEL=4.17
+  - KERNEL=4.16
+  - KERNEL=4.15
+  - KERNEL=4.14
+  - KERNEL=4.9
+  - KERNEL=4.4
+  - KERNEL=3.19
+  - KERNEL=3.16
   - TESTSUITE=1 LIBS=-ljemalloc
 
 matrix:

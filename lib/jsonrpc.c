@@ -824,10 +824,9 @@ jsonrpc_session_open_multiple(const struct svec *remotes, bool retry)
 
     s = xmalloc(sizeof *s);
 
-    /* Set 'n' remotes from 'names', shuffling them into random order. */
+    /* Set 'n' remotes from 'names'. */
     ovs_assert(remotes->n > 0);
     svec_clone(&s->remotes, remotes);
-    svec_shuffle(&s->remotes);
     s->next_remote = 0;
 
     s->reconnect = reconnect_create(time_msec());

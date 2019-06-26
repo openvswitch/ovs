@@ -53,16 +53,16 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0],
 ])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
-in_port(2),eth(macs),eth_type(0x0800), packets:9, bytes:756, used:0.001s, actions:output
-in_port(3),eth(macs),eth_type(0x0800), packets:9, bytes:756, used:0.001s, actions:output
+in_port(2),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
 ])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows type=ovs | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [])
 
-AT_CHECK([ovs-appctl dpctl/dump-flows type=offloaded | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
-in_port(2),eth(macs),eth_type(0x0800), packets:9, bytes:756, used:0.001s, actions:output
-in_port(3),eth(macs),eth_type(0x0800), packets:9, bytes:756, used:0.001s, actions:output
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
+in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
 ])
 
-OVS_TRAFFIC_VSWITCHD_STOP('/.*/d')
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

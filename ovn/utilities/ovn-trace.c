@@ -35,8 +35,8 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/logical-fields.h"
 #include "ovn/lib/acl-log.h"
-#include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
@@ -850,7 +850,7 @@ read_flows(void)
         char *error;
         struct expr *match;
         match = expr_parse_string(sblf->match, &symtab, &address_sets,
-                                  &port_groups, &error);
+                                  &port_groups, NULL, &error);
         if (error) {
             VLOG_WARN("%s: parsing expression failed (%s)",
                       sblf->match, error);
@@ -1939,6 +1939,25 @@ execute_log(const struct ovnact_log *log, struct flow *uflow,
 }
 
 static void
+execute_ovnfield_load(const struct ovnact_load *load,
+                      struct ovs_list *super)
+{
+    const struct ovn_field *f = ovn_field_from_name(load->dst.symbol->name);
+    switch (f->id) {
+    case OVN_ICMP4_FRAG_MTU: {
+        ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
+                             "icmp4.frag_mtu = %u",
+                             ntohs(load->imm.value.be16_int));
+        break;
+    }
+
+    case OVN_FIELD_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
               uint8_t table_id, enum ovnact_pipeline pipeline,
@@ -2097,6 +2116,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
                           super);
             break;
 
+        case OVNACT_ICMP4_ERROR:
+            execute_icmp4(ovnact_get_ICMP4_ERROR(a), dp, uflow, table_id,
+                          pipeline, super);
+            break;
+
         case OVNACT_ICMP6:
             execute_icmp6(ovnact_get_ICMP6(a), dp, uflow, table_id, pipeline,
                           super);
@@ -2106,8 +2130,14 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             execute_tcp_reset(ovnact_get_TCP_RESET(a), dp, uflow, table_id,
                               pipeline, super);
             break;
-        }
 
+        case OVNACT_OVNFIELD_LOAD:
+            execute_ovnfield_load(ovnact_get_OVNFIELD_LOAD(a), super);
+            break;
+
+        case OVNACT_CHECK_PKT_LARGER:
+            break;
+        }
     }
     ds_destroy(&s);
 }
