@@ -3099,6 +3099,22 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
+      <column name="other_config" key="pmd-rxq-soft-affinity"
+              type='{"type": "boolean"}'>
+        <p>
+         Even if pmd-rxq-affinity have been set, 
+         the pmd that this interface RX queue map to 
+         will no been isolated, if this value set to true.
+        </p>
+        <p>
+          The default value is <code>false</code>.
+        </p>
+        <p>
+          Set this value to <code>true</code> to enable this option. It is
+          currently disabled by default.
+        </p>
+      </column>
+
       <column name="options" key="vhost-server-path"
               type='{"type": "string"}'>
         <p>

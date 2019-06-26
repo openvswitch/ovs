@@ -479,6 +479,8 @@ struct dp_netdev_port {
     bool emc_enabled;           /* If true EMC will be used. */
     char *type;                 /* Port type as requested by user. */
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
+    bool rxq_soft_affinity;     /* If true pmd that the port use rxq_affinity_list 
+                                   will not be isolated*/
 };
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
@@ -4007,6 +4009,7 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
     int error = 0;
     const char *affinity_list = smap_get(cfg, "pmd-rxq-affinity");
     bool emc_enabled = smap_get_bool(cfg, "emc-enable", true);
+    bool rxq_soft_affinity = smap_get_bool(cfg, "pmd-rxq-soft-affinity", false);
 
     ovs_mutex_lock(&dp->port_mutex);
     error = get_port_by_number(dp, port_no, &port);
@@ -4049,7 +4052,8 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
 
     /* Checking for RXq affinity changes. */
     if (!netdev_is_pmd(port->netdev)
-        || nullable_string_is_equal(affinity_list, port->rxq_affinity_list)) {
+        || (nullable_string_is_equal(affinity_list, port->rxq_affinity_list) 
+            && rxq_soft_affinity == port->rxq_soft_affinity )) {
         goto unlock;
     }
 
@@ -4059,6 +4063,7 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
     }
     free(port->rxq_affinity_list);
     port->rxq_affinity_list = nullable_xstrdup(affinity_list);
+    port->rxq_soft_affinity = rxq_soft_affinity;
 
     dp_netdev_request_reconfigure(dp);
 unlock:
@@ -4559,6 +4564,8 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                     VLOG_WARN("There is no PMD thread on core %d. Queue "
                               "%d on port \'%s\' will not be polled.",
                               q->core_id, qid, netdev_get_name(port->netdev));
+                } else if (q->port->rxq_soft_affinity){
+                    continue;
                 } else {
                     q->pmd = pmd;
                     pmd->isolated = true;
@@ -4583,6 +4590,26 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                 }
                 /* Store the queue. */
                 rxqs[n_rxqs++] = q;
+            }
+        }
+    }
+
+    /* Set pmd core pin of the rxq soft affinity port . */
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        if (!netdev_is_pmd(port->netdev)) {
+            continue;
+        }
+
+        for (int qid = 0; qid < port->n_rxq; qid++) {
+            struct dp_netdev_rxq *q = &port->rxqs[qid];
+
+            if (pinned && q->core_id != OVS_CORE_UNSPEC) {
+                struct dp_netdev_pmd_thread *pmd;
+
+                pmd = dp_netdev_get_pmd(dp, q->core_id);
+                if (q->port->rxq_soft_affinity){
+                    q->pmd = pmd;
+                }
             }
         }
     }
