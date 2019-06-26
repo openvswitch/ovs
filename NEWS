@@ -1,7 +1,7 @@
 v2.11.2 - xx xxx xxxx
 --------------------
    - DPDK
-     * OVS validated with DPDK 18.11.1 which is recommended to be used.
+     * OVS validated with DPDK 18.11.2 which is recommended to be used.
 
 v2.11.1 - 30 Mar 2019
 --------------------
