@@ -242,12 +242,6 @@ features are listed in the previous section.
 
   (optional for OF1.5+)
 
-* Meter action
-
-  (EXT-379)
-
-  (required for OF1.5+ if metering is supported)
-
 * Port properties for pipeline fields
 
   Prototype for OVS was done during specification.

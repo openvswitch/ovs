@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,7 +151,8 @@ enum ofputil_protocol ofputil_protocols_from_version_bitmap(uint32_t bitmap);
                                     (1u << OFP11_VERSION) | \
                                     (1u << OFP12_VERSION) | \
                                     (1u << OFP13_VERSION) | \
-                                    (1u << OFP14_VERSION))
+                                    (1u << OFP14_VERSION) | \
+                                    (1u << OFP15_VERSION))
 #define OFPUTIL_DEFAULT_VERSIONS OFPUTIL_SUPPORTED_VERSIONS
 
 enum ofputil_protocol ofputil_protocols_from_string(const char *s);

@@ -18,7 +18,7 @@ Contents
 1. Introduction
 ===============
 
-This text describes a Netronome Extension to (draft) OpenFlow 1.5 that allows a
+This text describes a Netronome Extension to OpenFlow 1.5 that allows a
 controller to provide more information on the selection method for select
 groups.  This proposal is in the form of an enhanced select group type.
 
@@ -30,7 +30,7 @@ the OpenFlow specification.
 ===============
 
 A new Netronome group experimenter property is defined which provides
-compatibility with the group mod message defined in draft Open Flow 1.5
+compatibility with the group mod message defined in Open Flow 1.5
 (also known as ONF EXT-350) and allows parameters for the selection
 method of select groups to be passed by the controller. In particular it
 allows controllers to:
@@ -60,14 +60,14 @@ enum ntr_group_mod_subtype {
 };
 
 
-Modifications to the group table from the controller may be done with a
-OFPT_GROUP_MOD message described (draft) Open Flow 1.5.  Group Entry
-Message. Of relevance here is that (draft) Open Flow 1.5 group messages
-have properties.
+Modifications to the group table from the controller may be done with
+a OFPT_GROUP_MOD message described Open Flow 1.5.  Group Entry
+Message. Of relevance here is that Open Flow 1.5 group messages have
+properties.
 
 This proposal is defined in terms of an implementation of struct
-ofp_group_prop_experimenter which is described in (draft) Open Flow 1.5.
-The implementation is:
+ofp_group_prop_experimenter which is described in Open Flow 1.5.  The
+implementation is:
 
 struct ntr_group_prop_selection_method {
     ovs_be16 type;                  /* OFPGPT_EXPERIMENTER. */

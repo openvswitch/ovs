@@ -140,6 +140,9 @@ struct ofputil_packet_in_private {
     /* NXCPT_ACTION_SET. */
     struct ofpact *action_set;
     size_t action_set_len;
+
+    /* NXCPT_ODP_PORT. */
+    odp_port_t odp_port;
 };
 
 struct ofpbuf *ofputil_encode_packet_in_private(

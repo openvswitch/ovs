@@ -5122,9 +5122,7 @@ nxt_resume(struct ofproto *ofproto_,
     pkt_metadata_from_flow(&packet.md, &pin->base.flow_metadata.flow);
 
     /* Fix up in_port. */
-    ofproto_dpif_set_packet_odp_port(ofproto,
-                                     pin->base.flow_metadata.flow.in_port.ofp_port,
-                                     &packet);
+    packet.md.in_port.odp_port = pin->odp_port;
 
     struct flow headers;
     flow_extract(&packet, &headers);

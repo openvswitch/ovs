@@ -2833,10 +2833,19 @@ while <var>link</var> &gt; <var>max_link</var>
         </p>
 
         <p>
+          OpenFlow 1.5 allows implementations to restrict <code>meter</code> to
+          be the first action in an action list and to exclude
+          <code>meter</code> from action sets, for better compatibility with
+          OpenFlow 1.3 and 1.4.  Open vSwitch restricts the <code>meter</code>
+          action both ways.
+        </p>
+
+        <p>
           Open vSwitch 2.0 introduced OpenFlow protocol support for meters, but
           it did not include a datapath implementation.  Open vSwitch 2.7 added
           meter support to the userspace datapath.  Open vSwitch 2.10 added
-          meter support to the kernel datapath.
+          meter support to the kernel datapath.  Open vSwitch 2.12 added
+          support for meter as an action in OpenFlow 1.5.
         </p>
       </conformance>
     </action>
