@@ -2254,7 +2254,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
             /* No packets sent - do not retry.*/
             break;
         }
-    } while (cnt && (retries++ <= VHOST_ENQ_RETRY_NUM));
+    } while (cnt && (retries++ < VHOST_ENQ_RETRY_NUM));
 
     rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
 
