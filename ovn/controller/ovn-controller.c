@@ -1742,6 +1742,30 @@ main(int argc, char *argv[])
 
     ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
+
+    /* Omit the external_ids column of all the tables except for -
+     *  - DNS. pinctrl.c uses the external_ids column of DNS,
+     *    which it shouldn't. This should be removed.
+     *
+     *  - Chassis - chassis.c copies the chassis configuration from
+     *              local open_vswitch table to the external_ids of
+     *              chassis.
+     *
+     *  - Datapath_binding - lflow.c is using this to check if the datapath
+     *                       is switch or not. This should be removed.
+     * */
+
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_sb_global_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_port_binding_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_connection_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_ssl_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl,
+                   &sbrec_gateway_chassis_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_ha_chassis_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl,
+                   &sbrec_ha_chassis_group_col_external_ids);
+
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
 
     stopwatch_create(CONTROLLER_LOOP_STOPWATCH_NAME, SW_MS);
