@@ -75,6 +75,42 @@ type for all known use cases; the only limitation is that vhost-user client
 mode ports require QEMU version 2.7.  Ports of type vhost-user are currently
 deprecated and will be removed in a future release.
 
+vhost tx retries
+~~~~~~~~~~~~~~~~
+
+When sending a batch of packets to a vhost-user or vhost-user-client interface,
+it may happen that some but not all of the packets in the batch are able to be
+sent to the guest. This is often because there is not enough free descriptors
+in the virtqueue for all the packets in the batch to be sent. In this case
+there will be a retry, with a default maximum of 8 occurring. If at any time no
+packets can be sent, it may mean the guest is not accepting packets, so there
+are no (more) retries.
+
+.. note::
+
+  Maximum vhost tx batch size is defined by NETDEV_MAX_BURST, and is currently
+  as 32.
+
+Tx Retries may be reduced or even avoided by some external configuration, such
+as increasing the virtqueue size through the ``rx_queue_size`` parameter
+introduced in QEMU 2.7.0 / libvirt 2.3.0::
+
+  <interface type='vhostuser'>
+      <mac address='56:48:4f:53:54:01'/>
+      <source type='unix' path='/tmp/dpdkvhostclient0' mode='server'/>
+      <model type='virtio'/>
+      <driver name='vhost' rx_queue_size='1024' tx_queue_size='1024'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x10' function='0x0'/>
+  </interface>
+
+The guest application will also need need to provide enough descriptors. For
+example with ``testpmd`` the command line argument can be used::
+
+ --rxd=1024 --txd=1024
+
+The guest should also have sufficient cores dedicated for consuming and
+processing packets at the required rate.
+
 .. _dpdk-vhost-user:
 
 vhost-user

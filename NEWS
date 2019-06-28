@@ -4,7 +4,9 @@ Post-v2.11.0
      * New option 'other_config:dpdk-socket-limit' to limit amount of
        hugepage memory that can be used by DPDK.
      * Add support for vHost Post-copy Live Migration (experimental).
-     * OVS validated with DPDK 18.11.2 which is recommended to be used.
+     * OVS validated with DPDK 18.11.2 which is the new minimal supported
+       version.
+     * DPDK 18.11.1 and lower is no longer supported.
    - OpenFlow:
      * All features required by OpenFlow 1.5 are now implemented, so
        ovs-vswitchd now enables OpenFlow 1.5 by default (in addition to
