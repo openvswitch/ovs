@@ -1838,6 +1838,7 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
                     }
                     free(row->tracked_old_datum);
                     row->tracked_old_datum = NULL;
+                    free(row->parsed_columns);
                     free(row);
                 }
             }
@@ -2674,14 +2675,13 @@ ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
     const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
-    if (row->parsed) {
-        ovsdb_idl_row_unparse(row);
-    }
+    ovsdb_idl_row_unparse(row);
+
     for (i = 0; i < class->n_columns; i++) {
         const struct ovsdb_idl_column *c = &class->columns[i];
         (c->parse)(row, &row->old_datum[i]);
+        bitmap_set1(row->parsed_columns, i);
     }
-    row->parsed = true;
 }
 
 static void
@@ -2690,14 +2690,13 @@ ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
     const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
-    if (!row->parsed) {
-        return;
-    }
     for (i = 0; i < class->n_columns; i++) {
-        const struct ovsdb_idl_column *c = &class->columns[i];
-        (c->unparse)(row);
+        if (bitmap_is_set(row->parsed_columns, i)) {
+            const struct ovsdb_idl_column *c = &class->columns[i];
+            (c->unparse)(row);
+            bitmap_set0(row->parsed_columns, i);
+        }
     }
-    row->parsed = false;
 }
 
 /* The OVSDB-IDL Compound Indexes feature allows for the creation of custom
@@ -2876,8 +2875,11 @@ ovsdb_idl_index_write(struct ovsdb_idl_row *const_row,
         bitmap_set1(row->written, column_idx);
      }
     row->new_datum[column_idx] = *datum;
-    (column->unparse)(row);
+    if (bitmap_is_set(row->parsed_columns, column_idx)) {
+        (column->unparse)(row);
+    }
     (column->parse)(row, &row->new_datum[column_idx]);
+    bitmap_set1(row->parsed_columns, column_idx);
 }
 
 /* Magic UUID for index rows */
@@ -2906,6 +2908,7 @@ ovsdb_idl_index_init_row(struct ovsdb_idl_index *index)
     row->uuid = index_row_uuid;
     row->new_datum = xmalloc(class->n_columns * sizeof *row->new_datum);
     row->written = bitmap_allocate(class->n_columns);
+    row->parsed_columns = bitmap_allocate(class->n_columns);
     row->table = index->table;
     /* arcs are not used for index row, but it doesn't harm to initialize */
     ovs_list_init(&row->src_arcs);
@@ -2929,13 +2932,16 @@ ovsdb_idl_index_destroy_row(const struct ovsdb_idl_row *row_)
     ovs_assert(ovs_list_is_empty(&row_->src_arcs));
     ovs_assert(ovs_list_is_empty(&row_->dst_arcs));
     BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
-        c = &class->columns[i];
-        (c->unparse) (row);
+        if (bitmap_is_set(row->parsed_columns, i)) {
+            c = &class->columns[i];
+            (c->unparse) (row);
+        }
         free(row->new_datum[i].values);
         free(row->new_datum[i].keys);
     }
     free(row->new_datum);
     free(row->written);
+    free(row->parsed_columns);
     free(row);
 }
 
@@ -3117,6 +3123,7 @@ ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
     ovs_list_init(&row->dst_arcs);
     hmap_node_nullify(&row->txn_node);
     ovs_list_init(&row->track_node);
+    row->parsed_columns = bitmap_allocate(class->n_columns);
     return row;
 }
 
@@ -3210,6 +3217,7 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl_db *db)
                 if (!ovsdb_idl_track_is_set(row->table)) {
                     ovs_list_remove(&row->track_node);
                     ovsdb_idl_row_unparse(row);
+                    free(row->parsed_columns);
                     free(row);
                 }
             }
@@ -3774,6 +3782,8 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
             ovsdb_idl_add_to_indexes(row);
         } else {
             hmap_remove(&row->table->rows, &row->hmap_node);
+            free(row->parsed_columns);
+            row->parsed_columns = NULL;
             free(row);
         }
     }
@@ -4484,8 +4494,11 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     } else {
         ovsdb_datum_clone(&row->new_datum[column_idx], datum, &column->type);
     }
-    (column->unparse)(row);
+    if (bitmap_is_set(row->parsed_columns, column_idx)) {
+        (column->unparse)(row);
+    }
     (column->parse)(row, &row->new_datum[column_idx]);
+    bitmap_set1(row->parsed_columns, column_idx);
     if (!index_row) {
         ovsdb_idl_add_to_indexes(row);
     }
@@ -4624,6 +4637,7 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
         ovs_assert(!row->prereqs);
         hmap_remove(&row->table->rows, &row->hmap_node);
         hmap_remove(&row->table->db->txn->txn_rows, &row->txn_node);
+        free(row->parsed_columns);
         free(row);
         return;
     }
