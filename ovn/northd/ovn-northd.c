@@ -2493,23 +2493,12 @@ ovn_port_update_sbrec(struct northd_context *ctx,
 
             const char *nat_addresses = smap_get(&op->nbsp->options,
                                            "nat-addresses");
+            size_t n_nats = 0;
+            char **nats = NULL;
             if (nat_addresses && !strcmp(nat_addresses, "router")) {
                 if (op->peer && op->peer->od
                     && (chassis || op->peer->od->l3redirect_port)) {
-                    size_t n_nats;
-                    char **nats = get_nat_addresses(op->peer, &n_nats);
-                    if (n_nats) {
-                        sbrec_port_binding_set_nat_addresses(op->sb,
-                            (const char **) nats, n_nats);
-                        for (size_t i = 0; i < n_nats; i++) {
-                            free(nats[i]);
-                        }
-                        free(nats);
-                    } else {
-                        sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
-                    }
-                } else {
-                    sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
+                    nats = get_nat_addresses(op->peer, &n_nats);
                 }
             /* Only accept manual specification of ethernet address
              * followed by IPv4 addresses on type "l3gateway" ports. */
@@ -2519,15 +2508,20 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     static struct vlog_rate_limit rl =
                         VLOG_RATE_LIMIT_INIT(1, 1);
                     VLOG_WARN_RL(&rl, "Error extracting nat-addresses.");
-                    sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
                 } else {
-                    sbrec_port_binding_set_nat_addresses(op->sb,
-                                                         &nat_addresses, 1);
                     destroy_lport_addresses(&laddrs);
+                    n_nats = 1;
+                    nats = xcalloc(1, sizeof *nats);
+                    nats[0] = xstrdup(nat_addresses);
                 }
-            } else {
-                sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
             }
+
+            sbrec_port_binding_set_nat_addresses(op->sb,
+                                                 (const char **) nats, n_nats);
+            for (size_t i = 0; i < n_nats; i++) {
+                free(nats[i]);
+            }
+            free(nats);
         }
         sbrec_port_binding_set_parent_port(op->sb, op->nbsp->parent_name);
         sbrec_port_binding_set_tag(op->sb, op->nbsp->tag, op->nbsp->n_tag);
