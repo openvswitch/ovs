@@ -2437,7 +2437,7 @@ static struct rtnl_link_ops ip6gre_link_ops __read_mostly = {
 };
 
 static struct rtnl_link_ops ip6gre_tap_ops __read_mostly = {
-	.kind		= "ip6gre",
+	.kind		= "ip6gretap",
 	.maxtype	= RPL_IFLA_GRE_MAX,
 	.policy		= ip6gre_policy,
 	.priv_size	= sizeof(struct ip6_tnl),
