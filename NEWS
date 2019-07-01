@@ -53,6 +53,8 @@ Post-v2.11.0
    - Linux datapath:
      * Support for the kernel versions 4.19.x and 4.20.x.
      * Support for the kernel version 5.0.x.
+   - 'ovs-dpctl dump-flows' is no longer suitable for dumping offloaded flows.
+     'ovs-appctl dpctl/dump-flows' should be used instead.
 
 
 v2.11.0 - 19 Feb 2019
