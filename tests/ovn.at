@@ -9317,9 +9317,10 @@ ovn_start
 # # (i.e 8.8.8.8 as destination ip).
 
 # Physical network:
-# # Three hypervisors hv[123].
+# # Four hypervisors hv[1234].
 # # hv1 hosts vif foo1.
 # # hv2 is the "redirect-chassis" that hosts the distributed router gateway port.
+# # Later to test GARPs for the router port - foo, hv2 and hv4 are added to the ha_chassis_group
 # # hv3 hosts nexthop port vif outside1.
 # # All other tests connect hypervisors to network n1 through br-phys for tunneling.
 # # But in this test, hv1 won't connect to n1(and no br-phys in hv1), and
@@ -9344,6 +9345,8 @@ ovs-vsctl \
 start_daemon ovn-controller
 ovs-vsctl -- add-port br-int hv1-vif1 -- \
     set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
     ofport-request=1
 
 sim_add hv2
@@ -9363,6 +9366,12 @@ ovs-vsctl -- add-port br-int hv3-vif1 -- \
     ofport-request=1
 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="phys:br-phys"
 
+sim_add hv4
+as hv4
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.4
+ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="public:br-ex,phys:br-phys"
+
 # Create network n2 for vlan connectivity between hv1 and hv2
 net_add n2
 
@@ -9371,6 +9380,10 @@ ovs-vsctl add-br br-ex
 net_attach n2 br-ex
 
 as hv2
+ovs-vsctl add-br br-ex
+net_attach n2 br-ex
+
+as hv4
 ovs-vsctl add-br br-ex
 net_attach n2 br-ex
 
@@ -9556,7 +9569,48 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/vif1-tx.pcap | grep ${foo1_ip}${
 cat hv3-vif1.expected > expout
 AT_CHECK([sort hv3-vif1], [0], [expout])
 
-OVN_CLEANUP([hv1],[hv2],[hv3])
+# Test the GARP for the router port ip - 192.168.1.1
+ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
+
+as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
+as hv4 reset_pcap_file br-ex_n2 hv4/br-ex_n2
+
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv2 30
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv4 20
+
+hagrp1_uuid=`ovn-nbctl --bare --columns _uuid find ha_chassis_group name=hagrp1`
+ovn-nbctl remove logical_router_port alice options redirect-chassis
+ovn-nbctl --wait=sb set logical_router_port alice ha_chassis_group=$hagrp1_uuid
+
+# When hv2 claims the gw router port cr-alice, it should send out
+# GARP for 192.168.1.1 and it should be received by foo1 on hv1.
+
+# foo1 (on hv1) should receive GARP without VLAN tag
+exp_garp_on_foo1="ffffffffffff00000101020308060001080006040001000001010203c0a80101000000000000c0a80101"
+echo $exp_garp_on_foo1 > foo1.expout
+
+# ovn-controller on hv2 should send garp with VLAN tag
+sent_garp="ffffffffffff0000010102038100000208060001080006040001000001010203c0a80101000000000000c0a80101"
+echo $sent_garp > br-ex_n2.expout
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
+OVN_CHECK_PACKETS([hv2/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv4/br-ex_n2-tx.pcap > empty
+AT_CHECK([cat empty], [0], [])
+
+# Make hv4 master
+as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
+as hv4 reset_pcap_file br-ex_n2 hv4/br-ex_n2
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv4 40
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
+OVN_CHECK_PACKETS([hv4/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-ex_n2-tx.pcap > empty
+AT_CHECK([cat empty], [0], [])
+
+OVN_CLEANUP([hv1],[hv2],[hv3], [hv4])
 AT_CLEANUP
 
 AT_SETUP([ovn -- IPv6 ND Router Solicitation responder])

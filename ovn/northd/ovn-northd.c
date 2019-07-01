@@ -2522,7 +2522,38 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 free(nats[i]);
             }
             free(nats);
+
+            /* Add the router mac and IPv4 addresses to
+             * Port_Binding.nat_addresses so that GARP is sent for these
+             * IPs by the ovn-controller on which the distributed gateway
+             * router port resides if:
+             *
+             * -  op->peer has 'reside-on-gateway-chassis' set and the
+             *    the logical router datapath has distributed router port.
+             *
+             * Note: Port_Binding.nat_addresses column is also used for
+             * sending the GARPs for the router port IPs.
+             * */
+            if (op->peer && op->peer->nbrp && op->peer->od->l3dgw_port &&
+                op->peer->od->l3redirect_port &&
+                smap_get_bool(&op->peer->nbrp->options,
+                              "reside-on-redirect-chassis", false)) {
+                struct ds garp_info = DS_EMPTY_INITIALIZER;
+                ds_put_format(&garp_info, "%s", op->peer->lrp_networks.ea_s);
+                for (size_t i = 0; i < op->peer->lrp_networks.n_ipv4_addrs;
+                     i++) {
+                    ds_put_format(&garp_info, " %s",
+                                  op->peer->lrp_networks.ipv4_addrs[i].addr_s);
+                }
+                ds_put_format(&garp_info, " is_chassis_resident(%s)",
+                              op->peer->od->l3redirect_port->json_key);
+
+                sbrec_port_binding_update_nat_addresses_addvalue(
+                    op->sb, ds_cstr(&garp_info));
+                ds_destroy(&garp_info);
+            }
         }
+
         sbrec_port_binding_set_parent_port(op->sb, op->nbsp->parent_name);
         sbrec_port_binding_set_tag(op->sb, op->nbsp->tag, op->nbsp->n_tag);
         sbrec_port_binding_set_mac(op->sb, (const char **) op->nbsp->addresses,
