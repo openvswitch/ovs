@@ -112,6 +112,20 @@
         </p>
       </dd>
 
+      <dt><code>external_ids:ovn-openflow-probe-interval</code></dt>
+      <dd>
+        <p>
+          The inactivity probe interval of the OpenFlow connection to the
+          OpenvSwitch integration bridge, in seconds.
+          If the value is zero, it disables the connection keepalive feature.
+        </p>
+
+        <p>
+          If the value is nonzero, then it will be forced to a value of
+          at least 5s.
+        </p>
+      </dd>
+
       <dt><code>external_ids:ovn-encap-type</code></dt>
       <dd>
         <p>
