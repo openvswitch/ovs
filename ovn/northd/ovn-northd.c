@@ -1983,9 +1983,23 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
             }
         } else {
             /* Centralized NAT rule, either on gateway router or distributed
-             * router. */
-            ds_put_format(&c_addresses, " %s", nat->external_ip);
-            central_ip_address = true;
+             * router.
+             * Check if external_ip is same as router ip. If so, then there
+             * is no need to add this to the nat_addresses. The router IPs
+             * will be added separately. */
+            bool is_router_ip = false;
+            for (size_t j = 0; j < op->lrp_networks.n_ipv4_addrs; j++) {
+                if (!strcmp(nat->external_ip,
+                            op->lrp_networks.ipv4_addrs[j].addr_s)) {
+                    is_router_ip = true;
+                    break;
+                }
+            }
+
+            if (!is_router_ip) {
+                ds_put_format(&c_addresses, " %s", nat->external_ip);
+                central_ip_address = true;
+            }
         }
     }
 
@@ -2531,13 +2545,26 @@ ovn_port_update_sbrec(struct northd_context *ctx,
              * -  op->peer has 'reside-on-gateway-chassis' set and the
              *    the logical router datapath has distributed router port.
              *
+             * -  op->peer is distributed gateway router port.
+             *
+             * -  op->peer's router is a gateway router and op has a localnet
+             *    port.
+             *
              * Note: Port_Binding.nat_addresses column is also used for
              * sending the GARPs for the router port IPs.
              * */
+            bool add_router_port_garp = false;
             if (op->peer && op->peer->nbrp && op->peer->od->l3dgw_port &&
                 op->peer->od->l3redirect_port &&
-                smap_get_bool(&op->peer->nbrp->options,
-                              "reside-on-redirect-chassis", false)) {
+                (smap_get_bool(&op->peer->nbrp->options,
+                              "reside-on-redirect-chassis", false) ||
+                op->peer == op->peer->od->l3dgw_port)) {
+                add_router_port_garp = true;
+            } else if (chassis && op->od->localnet_port) {
+                add_router_port_garp = true;
+            }
+
+            if (add_router_port_garp) {
                 struct ds garp_info = DS_EMPTY_INITIALIZER;
                 ds_put_format(&garp_info, "%s", op->peer->lrp_networks.ea_s);
                 for (size_t i = 0; i < op->peer->lrp_networks.n_ipv4_addrs;
@@ -2545,8 +2572,11 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     ds_put_format(&garp_info, " %s",
                                   op->peer->lrp_networks.ipv4_addrs[i].addr_s);
                 }
-                ds_put_format(&garp_info, " is_chassis_resident(%s)",
-                              op->peer->od->l3redirect_port->json_key);
+
+                if (op->peer->od->l3redirect_port) {
+                    ds_put_format(&garp_info, " is_chassis_resident(%s)",
+                                  op->peer->od->l3redirect_port->json_key);
+                }
 
                 sbrec_port_binding_update_nat_addresses_addvalue(
                     op->sb, ds_cstr(&garp_info));
