@@ -164,7 +164,13 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
 typedef uint16_t dpdk_port_t;
 #define DPDK_PORT_ID_FMT "%"PRIu16
 
-#define VHOST_ENQ_RETRY_NUM 8
+/* Minimum amount of vhost tx retries, effectively a disable. */
+#define VHOST_ENQ_RETRY_MIN 0
+/* Maximum amount of vhost tx retries. */
+#define VHOST_ENQ_RETRY_MAX 32
+/* Legacy default value for vhost tx retries. */
+#define VHOST_ENQ_RETRY_DEF 8
+
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
 
 static const struct rte_eth_conf port_conf = {
@@ -417,7 +423,9 @@ struct netdev_dpdk {
 
         /* True if vHost device is 'up' and has been reconfigured at least once */
         bool vhost_reconfigured;
-        /* 3 pad bytes here. */
+
+        atomic_uint8_t vhost_tx_retries_max;
+        /* 2 pad bytes here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1261,6 +1269,8 @@ vhost_common_construct(struct netdev *netdev)
         return ENOMEM;
     }
 
+    atomic_init(&dev->vhost_tx_retries_max, VHOST_ENQ_RETRY_DEF);
+
     return common_construct(netdev, DPDK_ETH_PORT_ID_INVALID,
                             DPDK_DEV_VHOST, socket_id);
 }
@@ -1921,6 +1931,7 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *path;
+    int max_tx_retries, cur_max_tx_retries;
 
     ovs_mutex_lock(&dev->mutex);
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
@@ -1936,6 +1947,19 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
             }
             netdev_request_reconfigure(netdev);
         }
+    }
+
+    max_tx_retries = smap_get_int(args, "tx-retries-max",
+                                  VHOST_ENQ_RETRY_DEF);
+    if (max_tx_retries < VHOST_ENQ_RETRY_MIN
+        || max_tx_retries > VHOST_ENQ_RETRY_MAX) {
+        max_tx_retries = VHOST_ENQ_RETRY_DEF;
+    }
+    atomic_read_relaxed(&dev->vhost_tx_retries_max, &cur_max_tx_retries);
+    if (max_tx_retries != cur_max_tx_retries) {
+        atomic_store_relaxed(&dev->vhost_tx_retries_max, max_tx_retries);
+        VLOG_INFO("Max Tx retries for vhost device '%s' set to %d",
+                  netdev_get_name(netdev), max_tx_retries);
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -2350,6 +2374,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     unsigned int total_pkts = cnt;
     unsigned int dropped = 0;
     int i, retries = 0;
+    int max_retries = VHOST_ENQ_RETRY_MIN;
     int vid = netdev_dpdk_get_vid(dev);
 
     qid = dev->tx_q[qid % netdev->n_txq].map;
@@ -2379,18 +2404,25 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
             cnt -= tx_pkts;
             /* Prepare for possible retry.*/
             cur_pkts = &cur_pkts[tx_pkts];
+            if (OVS_UNLIKELY(cnt && !retries)) {
+                /*
+                 * Read max retries as there are packets not sent
+                 * and no retries have already occurred.
+                 */
+                atomic_read_relaxed(&dev->vhost_tx_retries_max, &max_retries);
+            }
         } else {
             /* No packets sent - do not retry.*/
             break;
         }
-    } while (cnt && (retries++ < VHOST_ENQ_RETRY_NUM));
+    } while (cnt && (retries++ < max_retries));
 
     rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
 
     rte_spinlock_lock(&dev->stats_lock);
     netdev_dpdk_vhost_update_tx_counters(&dev->stats, pkts, total_pkts,
                                          cnt + dropped);
-    dev->tx_retries += MIN(retries, VHOST_ENQ_RETRY_NUM);
+    dev->tx_retries += MIN(retries, max_retries);
     rte_spinlock_unlock(&dev->stats_lock);
 
 out:
