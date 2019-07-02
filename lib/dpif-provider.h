@@ -119,6 +119,12 @@ struct dpif_class {
      * the type assumed if no type is specified when opening a dpif. */
     const char *type;
 
+    /* If 'true', datapath ports should be destroyed on ofproto destruction.
+     *
+     * This is used by the vswitch at exit, so that it can clean any
+     * datapaths that can not exist without it (e.g. netdev datapath).  */
+    bool cleanup_required;
+
     /* Called when the dpif provider is registered, typically at program
      * startup.  Returning an error from this function will prevent any
      * datapath with this class from being created.

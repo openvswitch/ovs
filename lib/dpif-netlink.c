@@ -3384,6 +3384,7 @@ probe_broken_meters(struct dpif *dpif)
 
 const struct dpif_class dpif_netlink_class = {
     "system",
+    false,                      /* cleanup_required */
     NULL,                       /* init */
     dpif_netlink_enumerate,
     NULL,
