@@ -1269,16 +1269,9 @@
       </column>
 
       <column name="protocols">
-        <p>
-          List of OpenFlow protocols that may be used when negotiating
-          a connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, and
-          1.4 are enabled by default if this column is empty.
-        </p>
-
-        <p>
-          OpenFlow 1.5 is not enabled by default because its
-          implementations is missing features.
-        </p>
+        List of OpenFlow protocols that may be used when negotiating a
+        connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and
+        1.5 are enabled by default if this column is empty.
       </column>
     </group>
 

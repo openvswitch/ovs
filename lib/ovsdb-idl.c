@@ -239,6 +239,7 @@ static bool ovsdb_idl_check_server_db(struct ovsdb_idl *);
 static void ovsdb_idl_send_monitor_request(struct ovsdb_idl *,
                                            struct ovsdb_idl_db *,
                                            enum ovsdb_idl_monitor_method);
+static void ovsdb_idl_db_clear(struct ovsdb_idl_db *db);
 
 struct ovsdb_idl {
     struct ovsdb_idl_db server;
@@ -557,6 +558,7 @@ ovsdb_idl_db_destroy(struct ovsdb_idl_db *db)
 {
     ovs_assert(!db->txn);
     ovsdb_idl_db_txn_abort_all(db);
+    ovsdb_idl_db_clear(db);
     for (size_t i = 0; i < db->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &db->tables[i];
         ovsdb_idl_condition_destroy(&table->condition);
@@ -581,7 +583,6 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
     if (idl) {
         ovsdb_idl_clear(idl);
         jsonrpc_session_close(idl->session);
-
         ovsdb_idl_db_destroy(&idl->server);
         ovsdb_idl_db_destroy(&idl->data);
         json_destroy(idl->request_id);

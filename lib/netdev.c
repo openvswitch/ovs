@@ -686,6 +686,16 @@ netdev_rxq_close(struct netdev_rxq *rx)
     }
 }
 
+bool netdev_rxq_enabled(struct netdev_rxq *rx)
+{
+    bool enabled = true;
+
+    if (rx->netdev->netdev_class->rxq_enabled) {
+        enabled = rx->netdev->netdev_class->rxq_enabled(rx);
+    }
+    return enabled;
+}
+
 /* Attempts to receive a batch of packets from 'rx'.  'batch' should point to
  * the beginning of an array of NETDEV_MAX_BURST pointers to dp_packet.  If
  * successful, this function stores pointers to up to NETDEV_MAX_BURST

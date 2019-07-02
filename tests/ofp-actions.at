@@ -792,6 +792,9 @@ AT_DATA([test-data], [dnl
 # actions=set_field:00:00:00:00:12:34/00:00:00:00:ff:ff->eth_src
 0019 0018 8000090c 000000001234 00000000ffff 00000000
 
+# actions=meter:5
+001d 0008 00000005
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout

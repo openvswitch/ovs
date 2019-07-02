@@ -47,15 +47,15 @@ using std::atomic_compare_exchange_weak_explicit;
     atomic_and_explicit(RMW, ARG, ORIG, memory_order_seq_cst)
 
 #define atomic_add_explicit(RMW, ARG, ORIG, ORDER) \
-    (*(ORIG) = std::atomic_fetch_add_explicit(RMW, ARG, ORDER), (void) 0)
+    (*(ORIG) = (*(RMW)).fetch_add(ARG, ORDER), (void) 0)
 #define atomic_sub_explicit(RMW, ARG, ORIG, ORDER) \
-    (*(ORIG) = std::atomic_fetch_sub_explicit(RMW, ARG, ORDER), (void) 0)
+    (*(ORIG) = (*(RMW)).fetch_sub(ARG, ORDER), (void) 0)
 #define atomic_or_explicit(RMW, ARG, ORIG, ORDER) \
-    (*(ORIG) = std::atomic_fetch_or_explicit(RMW, ARG, ORDER), (void) 0)
+    (*(ORIG) = (*(RMW)).fetch_or(ARG, ORDER), (void) 0)
 #define atomic_xor_explicit(RMW, ARG, ORIG, ORDER) \
-    (*(ORIG) = std::atomic_fetch_xor_explicit(RMW, ARG, ORDER), (void) 0)
+    (*(ORIG) = (*(RMW)).fetch_xor(ARG, ORDER), (void) 0)
 #define atomic_and_explicit(RMW, ARG, ORIG, ORDER) \
-    (*(ORIG) = std::atomic_fetch_and_explicit(RMW, ARG, ORDER), (void) 0)
+    (*(ORIG) = (*(RMW)).fetch_and(ARG, ORDER), (void) 0)
 
 using std::atomic_flag;
 using std::atomic_flag_test_and_set_explicit;

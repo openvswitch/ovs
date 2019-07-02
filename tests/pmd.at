@@ -14,7 +14,7 @@ parse_pmd_rxq_show () {
 # of the core on one line
 # 'port:' port_name 'queue_id:' rxq_id rxq_id rxq_id rxq_id
 parse_pmd_rxq_show_group () {
-   awk '/port:/ {print  $1, $2, $3, $4, $12, $20, $28}'
+   awk '/port:/ {print  $1, $2, $3, $4, $13, $22, $31}'
 }
 
 # Given the output of `ovs-appctl dpctl/dump-flows`, prints a list of flows
@@ -72,7 +72,7 @@ CHECK_PMD_THREADS_CREATED()
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
-  port: p0                queue-id:  0  pmd usage: NOT AVAIL
+  port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
 ])
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
@@ -103,14 +103,14 @@ dummy@ovs-dummy: hit:0 missed:0
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
-  port: p0                queue-id:  0  pmd usage: NOT AVAIL
-  port: p0                queue-id:  1  pmd usage: NOT AVAIL
-  port: p0                queue-id:  2  pmd usage: NOT AVAIL
-  port: p0                queue-id:  3  pmd usage: NOT AVAIL
-  port: p0                queue-id:  4  pmd usage: NOT AVAIL
-  port: p0                queue-id:  5  pmd usage: NOT AVAIL
-  port: p0                queue-id:  6  pmd usage: NOT AVAIL
-  port: p0                queue-id:  7  pmd usage: NOT AVAIL
+  port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  1 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  2 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  3 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  4 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP
@@ -134,14 +134,14 @@ dummy@ovs-dummy: hit:0 missed:0
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
-  port: p0                queue-id:  0  pmd usage: NOT AVAIL
-  port: p0                queue-id:  1  pmd usage: NOT AVAIL
-  port: p0                queue-id:  2  pmd usage: NOT AVAIL
-  port: p0                queue-id:  3  pmd usage: NOT AVAIL
-  port: p0                queue-id:  4  pmd usage: NOT AVAIL
-  port: p0                queue-id:  5  pmd usage: NOT AVAIL
-  port: p0                queue-id:  6  pmd usage: NOT AVAIL
-  port: p0                queue-id:  7  pmd usage: NOT AVAIL
+  port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  1 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  2 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  3 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  4 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
 ])
 
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
@@ -167,14 +167,14 @@ CHECK_PMD_THREADS_CREATED([1], [], [+$TMP])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
-  port: p0                queue-id:  0  pmd usage: NOT AVAIL
-  port: p0                queue-id:  1  pmd usage: NOT AVAIL
-  port: p0                queue-id:  2  pmd usage: NOT AVAIL
-  port: p0                queue-id:  3  pmd usage: NOT AVAIL
-  port: p0                queue-id:  4  pmd usage: NOT AVAIL
-  port: p0                queue-id:  5  pmd usage: NOT AVAIL
-  port: p0                queue-id:  6  pmd usage: NOT AVAIL
-  port: p0                queue-id:  7  pmd usage: NOT AVAIL
+  port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  1 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  2 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  3 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  4 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
+  port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP

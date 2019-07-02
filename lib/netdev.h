@@ -183,6 +183,7 @@ enum netdev_pt_mode netdev_get_pt_mode(const struct netdev *);
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);
 void netdev_rxq_close(struct netdev_rxq *);
+bool netdev_rxq_enabled(struct netdev_rxq *);
 
 const char *netdev_rxq_get_name(const struct netdev_rxq *);
 int netdev_rxq_get_queue_id(const struct netdev_rxq *);
