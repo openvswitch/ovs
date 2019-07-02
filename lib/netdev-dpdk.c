@@ -138,6 +138,12 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
 #define XSTAT_RX_FRAGMENTED_ERRORS       "rx_fragmented_errors"
 #define XSTAT_RX_JABBER_ERRORS           "rx_jabber_errors"
 
+/* Size of vHost custom stats. */
+#define VHOST_CUSTOM_STATS_SIZE          1
+
+/* Names of vHost custom stats. */
+#define VHOST_STAT_TX_RETRIES            "tx_retries"
+
 #define SOCKET0              0
 
 /* Default size of Physical NIC RXQ */
@@ -433,9 +439,11 @@ struct netdev_dpdk {
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
         struct netdev_stats stats;
+        /* Custom stat for retries when unable to transmit. */
+        uint64_t tx_retries;
         /* Protects stats */
         rte_spinlock_t stats_lock;
-        /* 44 pad bytes here. */
+        /* 4 pad bytes here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1188,6 +1196,8 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
 
     dev->rte_xstats_ids = NULL;
     dev->rte_xstats_ids_size = 0;
+
+    dev->tx_retries = 0;
 
     return 0;
 }
@@ -2380,6 +2390,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     rte_spinlock_lock(&dev->stats_lock);
     netdev_dpdk_vhost_update_tx_counters(&dev->stats, pkts, total_pkts,
                                          cnt + dropped);
+    dev->tx_retries += MIN(retries, VHOST_ENQ_RETRY_NUM);
     rte_spinlock_unlock(&dev->stats_lock);
 
 out:
@@ -2811,6 +2822,29 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
 
         free(values);
     }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
+                                   struct netdev_custom_stats *custom_stats)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+
+    custom_stats->size = VHOST_CUSTOM_STATS_SIZE;
+    custom_stats->counters = xcalloc(custom_stats->size,
+                                     sizeof *custom_stats->counters);
+    ovs_strlcpy(custom_stats->counters[0].name, VHOST_STAT_TX_RETRIES,
+                NETDEV_CUSTOM_STATS_NAME_SIZE);
+
+    rte_spinlock_lock(&dev->stats_lock);
+    custom_stats->counters[0].value = dev->tx_retries;
+    rte_spinlock_unlock(&dev->stats_lock);
 
     ovs_mutex_unlock(&dev->mutex);
 
@@ -4397,6 +4431,7 @@ static const struct netdev_class dpdk_vhost_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,
@@ -4412,6 +4447,7 @@ static const struct netdev_class dpdk_vhost_client_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_client_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,
