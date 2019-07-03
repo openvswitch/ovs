@@ -71,20 +71,6 @@ static void erspan_build_header(struct sk_buff *skb,
 
 static bool ip_gre_loaded = false;
 
-#define ip_gre_calc_hlen rpl_ip_gre_calc_hlen
-static int ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
-
 /* Returns the least-significant 32 bits of a __be64. */
 static __be32 tunnel_id_to_key(__be64 x)
 {
@@ -99,6 +85,10 @@ static __be32 tunnel_id_to_key(__be64 x)
 struct dst_ops md_dst_ops = {
 	.family =		AF_UNSPEC,
 };
+
+#ifndef ip_gre_calc_hlen
+#define ip_gre_calc_hlen gre_calc_hlen
+#endif
 
 static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		      int gre_hdr_len)

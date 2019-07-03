@@ -56,6 +56,27 @@ static inline struct net_device *rpl_gretap_fb_dev_create(
 #else
 #include_next <net/gre.h>
 
+#ifndef HAVE_GRE_CALC_HLEN
+static inline int gre_calc_hlen(__be16 o_flags)
+{
+	int addend = 4;
+
+	if (o_flags & TUNNEL_CSUM)
+		addend += 4;
+	if (o_flags & TUNNEL_KEY)
+		addend += 4;
+	if (o_flags & TUNNEL_SEQ)
+		addend += 4;
+	return addend;
+}
+
+#define ip_gre_calc_hlen gre_calc_hlen
+#else
+#ifdef HAVE_IP_GRE_CALC_HLEN
+#define gre_calc_hlen ip_gre_calc_hlen
+#endif
+#endif
+
 #define tnl_flags_to_gre_flags rpl_tnl_flags_to_gre_flags
 static inline __be16 rpl_tnl_flags_to_gre_flags(__be16 tflags)
 {
