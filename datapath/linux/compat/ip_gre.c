@@ -71,16 +71,6 @@ static void erspan_build_header(struct sk_buff *skb,
 
 static bool ip_gre_loaded = false;
 
-/* Returns the least-significant 32 bits of a __be64. */
-static __be32 tunnel_id_to_key(__be64 x)
-{
-#ifdef __BIG_ENDIAN
-	return (__force __be32)x;
-#else
-	return (__force __be32)((__force u64)x >> 32);
-#endif
-}
-
 /* Normally in net/core/dst.c but move it here */
 struct dst_ops md_dst_ops = {
 	.family =		AF_UNSPEC,
@@ -474,7 +464,7 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 
 	flags = tun_info->key.tun_flags & (TUNNEL_CSUM | TUNNEL_KEY);
 	build_header(skb, tunnel_hlen, flags, htons(ETH_P_TEB),
-		     tunnel_id_to_key(tun_info->key.tun_id), 0);
+		     tunnel_id_to_key32(tun_info->key.tun_id), 0);
 
 	df = key->tun_flags & TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
 	iptunnel_xmit(skb->sk, rt, skb, fl.saddr, key->u.ipv4.dst, IPPROTO_GRE,
