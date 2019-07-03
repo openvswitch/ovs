@@ -30,6 +30,137 @@ struct metadata_dst {
 	} u;
 };
 
+#ifndef DST_METADATA
+#define DST_METADATA 0x0080
+#endif
+
+extern struct dst_ops md_dst_ops;
+
+static void rpl__metadata_dst_init(struct metadata_dst *md_dst,
+				enum metadata_type type, u8 optslen)
+
+{
+	struct dst_entry *dst;
+
+	dst = &md_dst->dst;
+	dst_init(dst, &md_dst_ops, NULL, 1, DST_OBSOLETE_NONE,
+		 DST_METADATA | DST_NOCOUNT);
+
+#if 0
+	/* unused in OVS */
+	dst->input = dst_md_discard;
+	dst->output = dst_md_discard_out;
+#endif
+	memset(dst + 1, 0, sizeof(*md_dst) + optslen - sizeof(*dst));
+	md_dst->type = type;
+}
+
+static struct
+metadata_dst *__rpl_metadata_dst_alloc(u8 optslen,
+				       enum metadata_type type,
+				       gfp_t flags)
+{
+	struct metadata_dst *md_dst;
+
+	md_dst = kmalloc(sizeof(*md_dst) + optslen, flags);
+	if (!md_dst)
+		return NULL;
+
+	rpl__metadata_dst_init(md_dst, type, optslen);
+
+	return md_dst;
+}
+static inline struct metadata_dst *rpl_tun_rx_dst(int md_size)
+{
+	struct metadata_dst *tun_dst;
+
+	tun_dst = __rpl_metadata_dst_alloc(md_size, METADATA_IP_TUNNEL,
+					 GFP_ATOMIC);
+	if (!tun_dst)
+		return NULL;
+
+	tun_dst->u.tun_info.options_len = 0;
+	tun_dst->u.tun_info.mode = 0;
+	return tun_dst;
+}
+static inline struct metadata_dst *rpl__ip_tun_set_dst(__be32 saddr,
+						    __be32 daddr,
+						    __u8 tos, __u8 ttl,
+						    __be16 tp_dst,
+						    __be16 flags,
+						    __be64 tunnel_id,
+						    int md_size)
+{
+	struct metadata_dst *tun_dst;
+
+	tun_dst = rpl_tun_rx_dst(md_size);
+	if (!tun_dst)
+		return NULL;
+
+	ip_tunnel_key_init(&tun_dst->u.tun_info.key,
+			   saddr, daddr, tos, ttl,
+			   0, 0, tp_dst, tunnel_id, flags);
+	return tun_dst;
+}
+
+static inline struct metadata_dst *rpl_ip_tun_rx_dst(struct sk_buff *skb,
+						 __be16 flags,
+						 __be64 tunnel_id,
+						 int md_size)
+{
+	const struct iphdr *iph = ip_hdr(skb);
+
+	return rpl__ip_tun_set_dst(iph->saddr, iph->daddr, iph->tos, iph->ttl,
+				0, flags, tunnel_id, md_size);
+}
+
+static inline
+struct metadata_dst *rpl__ipv6_tun_set_dst(const struct in6_addr *saddr,
+					   const struct in6_addr *daddr,
+					    __u8 tos, __u8 ttl,
+					    __be16 tp_dst,
+					    __be32 label,
+					    __be16 flags,
+					    __be64 tunnel_id,
+					    int md_size)
+{
+	struct metadata_dst *tun_dst;
+	struct ip_tunnel_info *info;
+
+	tun_dst = rpl_tun_rx_dst(md_size);
+	if (!tun_dst)
+		return NULL;
+
+	info = &tun_dst->u.tun_info;
+	info->mode = IP_TUNNEL_INFO_IPV6;
+	info->key.tun_flags = flags;
+	info->key.tun_id = tunnel_id;
+	info->key.tp_src = 0;
+	info->key.tp_dst = tp_dst;
+
+	info->key.u.ipv6.src = *saddr;
+	info->key.u.ipv6.dst = *daddr;
+
+	info->key.tos = tos;
+	info->key.ttl = ttl;
+	info->key.label = label;
+
+	return tun_dst;
+}
+
+static inline struct metadata_dst *rpl_ipv6_tun_rx_dst(struct sk_buff *skb,
+						 __be16 flags,
+						 __be64 tunnel_id,
+						 int md_size)
+{
+	const struct ipv6hdr *ip6h = ipv6_hdr(skb);
+
+	return rpl__ipv6_tun_set_dst(&ip6h->saddr, &ip6h->daddr,
+				     ipv6_get_dsfield(ip6h), ip6h->hop_limit,
+				     0, ip6_flowlabel(ip6h), flags, tunnel_id,
+				     md_size);
+}
+
 static void __metadata_dst_init(struct metadata_dst *md_dst, u8 optslen)
 {
 	struct dst_entry *dst;
@@ -126,10 +257,6 @@ rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type, gfp_t flags)
 #endif
 }
 #define metadata_dst_alloc rpl_metadata_dst_alloc
-
-#ifndef DST_METADATA 
-#define DST_METADATA		0x0200
-#endif
 
 static inline bool rpl_skb_valid_dst(const struct sk_buff *skb)
 {
