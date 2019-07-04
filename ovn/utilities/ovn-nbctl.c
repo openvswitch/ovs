@@ -156,6 +156,7 @@ main(int argc, char *argv[])
     char *error_s = ovs_cmdl_parse_all(argc, argv, get_all_options(),
                                        &parsed_options, &n_parsed_options);
     if (error_s) {
+        free(args);
         ctl_fatal("%s", error_s);
     }
 
@@ -181,6 +182,7 @@ main(int argc, char *argv[])
     bool daemon_mode = false;
     if (get_detach()) {
         if (argc != optind) {
+            free(args);
             ctl_fatal("non-option arguments not supported with --detach "
                       "(use --help for help)");
         }
@@ -203,6 +205,7 @@ main(int argc, char *argv[])
         error = ctl_parse_commands(argc - optind, argv + optind,
                                    &local_options, &commands, &n_commands);
         if (error) {
+            free(args);
             ctl_fatal("%s", error);
         }
         VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
@@ -212,11 +215,13 @@ main(int argc, char *argv[])
 
         error = run_prerequisites(commands, n_commands, idl);
         if (error) {
+            free(args);
             ctl_fatal("%s", error);
         }
 
         error = main_loop(args, commands, n_commands, idl, NULL);
         if (error) {
+            free(args);
             ctl_fatal("%s", error);
         }
 

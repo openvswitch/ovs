@@ -23,48 +23,17 @@
 
       Avoid deeper levels because they do not render well.
 
-=========
-Deep Dive
-=========
+=======
+Fuzzing
+=======
 
-How Open vSwitch and OVN are implemented and, where necessary, why it was
-implemented that way.
-
-OVS
----
+All about fuzzing in Open vSwitch.
 
 .. toctree::
    :maxdepth: 2
 
-   design
-   datapath
-   fuzzing/index
-   integration
-   porting
-   openflow
-   bonding
-   networking-namespaces
-   ovsdb-replication
-   dpdk/index
-   windows
-   language-bindings
-   testing
-   tracing
-   idl-compound-indexes
+   what-is-fuzzing
+   ovs-fuzzing-infrastructure
+   ovs-fuzzers
+   security-analysis-of-ovs-fuzzers
 
-OVN
----
-
-.. toctree::
-   :maxdepth: 2
-
-   high-availability
-   role-based-access-control
-   ovn-news-2.8
-
-.. list-table::
-
-   * - ovn-architecture(7)
-     - `(pdf) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.pdf>`__
-     - `(html) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.html>`__
-     - `(plain text) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.txt>`__

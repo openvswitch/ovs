@@ -83,20 +83,6 @@ static void ip6gre_tunnel_link(struct ip6gre_net *ign, struct ip6_tnl *t);
 static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu);
 static void ip6erspan_tnl_link_config(struct ip6_tnl *t, int set_mtu);
 
-#define gre_calc_hlen rpl_ip_gre_calc_hlen
-static int rpl_ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
-
 /* Tunnel hash table */
 
 /*
@@ -518,105 +504,6 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 		t->err_count = 1;
 	t->err_time = jiffies;
 #endif
-}
-
-static struct dst_ops md_dst_ops = {
-	.family =		AF_UNSPEC,
-};
-
-#ifndef DST_METADATA
-#define DST_METADATA 0x0080
-#endif
-
-static void rpl__metadata_dst_init(struct metadata_dst *md_dst,
-				enum metadata_type type, u8 optslen)
-
-{
-	struct dst_entry *dst;
-
-	dst = &md_dst->dst;
-	dst_init(dst, &md_dst_ops, NULL, 1, DST_OBSOLETE_NONE,
-		 DST_METADATA | DST_NOCOUNT);
-
-#if 0
-	/* unused in OVS */
-	dst->input = dst_md_discard;
-	dst->output = dst_md_discard_out;
-#endif
-	memset(dst + 1, 0, sizeof(*md_dst) + optslen - sizeof(*dst));
-	md_dst->type = type;
-}
-
-static struct metadata_dst *erspan_rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type,
-					gfp_t flags)
-{
-	struct metadata_dst *md_dst;
-
-	md_dst = kmalloc(sizeof(*md_dst) + optslen, flags);
-	if (!md_dst)
-		return NULL;
-
-	rpl__metadata_dst_init(md_dst, type, optslen);
-
-	return md_dst;
-}
-static inline struct metadata_dst *rpl_tun_rx_dst(int md_size)
-{
-	struct metadata_dst *tun_dst;
-
-	tun_dst = erspan_rpl_metadata_dst_alloc(md_size, METADATA_IP_TUNNEL, GFP_ATOMIC);
-	if (!tun_dst)
-		return NULL;
-
-	tun_dst->u.tun_info.options_len = 0;
-	tun_dst->u.tun_info.mode = 0;
-	return tun_dst;
-}
-static inline
-struct metadata_dst *rpl__ipv6_tun_set_dst(const struct in6_addr *saddr,
-					   const struct in6_addr *daddr,
-					    __u8 tos, __u8 ttl,
-					    __be16 tp_dst,
-					    __be32 label,
-					    __be16 flags,
-					    __be64 tunnel_id,
-					    int md_size)
-{
-	struct metadata_dst *tun_dst;
-	struct ip_tunnel_info *info;
-
-	tun_dst = rpl_tun_rx_dst(md_size);
-	if (!tun_dst)
-		return NULL;
-
-	info = &tun_dst->u.tun_info;
-	info->mode = IP_TUNNEL_INFO_IPV6;
-	info->key.tun_flags = flags;
-	info->key.tun_id = tunnel_id;
-	info->key.tp_src = 0;
-	info->key.tp_dst = tp_dst;
-
-	info->key.u.ipv6.src = *saddr;
-	info->key.u.ipv6.dst = *daddr;
-
-	info->key.tos = tos;
-	info->key.ttl = ttl;
-	info->key.label = label;
-
-	return tun_dst;
-}
-
-static inline struct metadata_dst *rpl_ipv6_tun_rx_dst(struct sk_buff *skb,
-						 __be16 flags,
-						 __be64 tunnel_id,
-						 int md_size)
-{
-	const struct ipv6hdr *ip6h = ipv6_hdr(skb);
-
-	return rpl__ipv6_tun_set_dst(&ip6h->saddr, &ip6h->daddr,
-				     ipv6_get_dsfield(ip6h), ip6h->hop_limit,
-				     0, ip6_flowlabel(ip6h), flags, tunnel_id,
-				     md_size);
 }
 
 static int ip6gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
@@ -2550,7 +2437,7 @@ static struct rtnl_link_ops ip6gre_link_ops __read_mostly = {
 };
 
 static struct rtnl_link_ops ip6gre_tap_ops __read_mostly = {
-	.kind		= "ip6gre",
+	.kind		= "ip6gretap",
 	.maxtype	= RPL_IFLA_GRE_MAX,
 	.policy		= ip6gre_policy,
 	.priv_size	= sizeof(struct ip6_tnl),

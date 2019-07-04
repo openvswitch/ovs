@@ -1146,9 +1146,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     }
     mask->mpls_lse[0] = 0;
 
-    if (eth_type_vlan(key->vlans[0].tpid)) {
+    if (mask->vlans[0].tpid && eth_type_vlan(key->vlans[0].tpid)) {
         flower.key.encap_eth_type[0] = flower.key.eth_type;
+        flower.mask.encap_eth_type[0] = flower.mask.eth_type;
         flower.key.eth_type = key->vlans[0].tpid;
+        flower.mask.eth_type = mask->vlans[0].tpid;
     }
     if (mask->vlans[0].tci) {
         ovs_be16 vid_mask = mask->vlans[0].tci & htons(VLAN_VID_MASK);
@@ -1179,9 +1181,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
-    if (eth_type_vlan(key->vlans[1].tpid)) {
+    if (mask->vlans[1].tpid && eth_type_vlan(key->vlans[1].tpid)) {
         flower.key.encap_eth_type[1] = flower.key.encap_eth_type[0];
+        flower.mask.encap_eth_type[1] = flower.mask.encap_eth_type[0];
         flower.key.encap_eth_type[0] = key->vlans[1].tpid;
+        flower.mask.encap_eth_type[0] = mask->vlans[1].tpid;
     }
     if (mask->vlans[1].tci) {
         ovs_be16 vid_mask = mask->vlans[1].tci & htons(VLAN_VID_MASK);

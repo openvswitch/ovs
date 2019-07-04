@@ -104,7 +104,13 @@ vport_type_to_kind(enum ovs_vport_type type,
     case OVS_VPORT_TYPE_IP6ERSPAN:
         return "ip6erspan";
     case OVS_VPORT_TYPE_IP6GRE:
-        return "ip6gre";
+        if (tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L2) {
+            return "ip6gretap";
+        } else if (tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L3) {
+            return NULL;
+        } else {
+            return NULL;
+        }
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:

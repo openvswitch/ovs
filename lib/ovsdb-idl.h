@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2019 Nicira, Inc.
  * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,29 +94,79 @@ const struct ovsdb_idl_class *ovsdb_idl_get_class(const struct ovsdb_idl *);
 const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
     const struct ovsdb_idl_class *, const struct ovsdb_idl_column *);
 
-/* Choosing columns and tables to replicate. */
+/* Choosing columns and tables to replicate.
+ *
+ * The client may choose any subset of the columns and tables to replicate,
+ * specifying it one of two ways:
+ *
+ *   - As a blacklist (adding the columns or tables to replicate).  To do so,
+ *     the client passes false as 'monitor_everything_by_default' to
+ *     ovsdb_idl_create() and then calls ovsdb_idl_add_column() and
+ *     ovsdb_idl_add_table() for the desired columns and, if necessary, tables.
+ *
+ *   - As a whitelist (replicating all columns and tables except those
+ *     explicitly removed).  To do so, the client passes true as
+ *     'monitor_everything_by_default' to ovsdb_idl_create() and then calls
+ *     ovsdb_idl_omit() to remove columns.
+ *
+ * There are multiple modes a column may be replicated:
+ *
+ *   - Read-only.  This is the default.  Whenever the column changes in any
+ *     replicated row, the value returned by ovsdb_idl_get_seqno() will change,
+ *     letting the client know to look at the replicated data again.
+ *
+ *   - Write-only.  This is for columns that the client sets and updates but
+ *     does not want to be alerted about its own updates (which, at the OVSDB
+ *     level, cannot be distinguished from updates made by any other client).
+ *     The column will be replicated in the same way as for read-only columns,
+ *     but the value returned by ovsdb_idl_get_seqno() will not change when the
+ *     column changes, saving wasted CPU time.
+ *
+ *     (A "write-only" client probably does read the column so that it can know
+ *     whether it needs to update it, but it doesn't expect to react to changes
+ *     by other clients.)
+ *
+ *     To mark a replicated column as write-only, a client calls
+ *     ovsdb_idl_omit_alert().  (The column must already be replicated one of
+ *     the ways described in the previous list.)
+ *
+ *     This is an optimization only and does not affect behavioral correctness
+ *     of an otherwise well-written client.
+ *
+ *   - Read/write.  In theory, an OVSDB client might both read and write a
+ *     column, although OVSDB schemas are usually designed so that any given
+ *     client only does one or the other.  This is actually the same as
+ *     read/write columns; that is, the client need take no special action.
+ */
 
-/* Modes with which the IDL can monitor a column.
+/* Modes with which the IDL can replicate a column.  See above comment for
+ * overview.
  *
- * If no bits are set, the column is not monitored at all.  Its value will
- * always appear to the client to be the default value for its type.
+ * If no bits are set, the IDL does not replicate the column at all.  The
+ * client will always see it with the default value for its type.
  *
- * If OVSDB_IDL_MONITOR is set, then the column is replicated.  Its value will
- * reflect the value in the database.  If OVSDB_IDL_ALERT is also set, then the
- * value returned by ovsdb_idl_get_seqno() will change when the column's value
- * changes.
+ * If OVSDB_IDL_MONITOR is set, then the IDL replicates the column and sets it
+ * to to the value in the database.  If OVSDB_IDL_ALERT is also set, then the
+ * IDL will change the value returned by ovsdb_idl_get_seqno() when the
+ * column's value changes in any row.
  *
  * The possible mode combinations are:
  *
- *   - 0, for a column that a client doesn't care about.
+ *   - 0, for a column that a client doesn't care about.  This is the default
+ *     for every column in every table, if the client passes false for
+ *     'monitor_everything_by_default' to ovsdb_idl_create().
  *
  *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT), for a column that a client wants
- *     to track and possibly update.
+ *     to track and possibly update.  This is the default for every column in
+ *     every table, if the client passes true for
+ *     'monitor_everything_by_default' to ovsdb_idl_create().
  *
  *   - OVSDB_IDL_MONITOR, for columns that a client treats as "write-only",
  *     that is, it updates them but doesn't want to get alerted about its own
  *     updates.  It also won't be alerted about other clients' updates, so this
  *     is suitable only for use by a client that "owns" a particular column.
+ *     Use ovsdb_idl_omit_alert() to set a column that is already replicated to
+ *     this mode.
  *
  *   - OVDSB_IDL_ALERT without OVSDB_IDL_MONITOR is not valid.
  *
@@ -124,8 +174,8 @@ const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
  *     that a client wants to track using the change tracking
  *     ovsdb_idl_track_get_*() functions.
  */
-#define OVSDB_IDL_MONITOR (1 << 0) /* Monitor this column? */
-#define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column updated? */
+#define OVSDB_IDL_MONITOR (1 << 0) /* Replicate this column? */
+#define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column changes? */
 #define OVSDB_IDL_TRACK   (1 << 2)
 
 void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);

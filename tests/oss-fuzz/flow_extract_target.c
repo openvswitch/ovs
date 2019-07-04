@@ -60,12 +60,6 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         ignore(tcp_flags);
     }
 
-    /* Parse TCP flags. */
-    if (dp_packet_size(&packet) >= ETH_HEADER_LEN) {
-        uint16_t tcp_flags = parse_tcp_flags(&packet);
-        ignore(tcp_flags);
-    }
-
     /* Count headers. */
     int count = flow_count_vlan_headers(&flow);
     ignore(count);

@@ -1,5 +1,74 @@
 AT_BANNER([tunnel_push_pop_ipv6])
 
+AT_SETUP([tunnel_push_pop_ipv6 - ip6gre])
+
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
+AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=ip6gre \
+                       options:remote_ip=2001:cafe::92 ofport_request=2\
+                       options:packet_type=legacy_l2
+                       ], [0])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  int-br:
+    int-br 65534/2: (dummy-internal)
+    t2 2/6: (ip6gre: remote_ip=2001:cafe::92)
+])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:cafe::92/24 br0], [0], [OK
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl Check Neighbour discovery.
+AT_CHECK([ovs-vsctl -- set Interface p0 options:pcap=p0.pcap])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br 'in_port(2),eth(src=aa:55:aa:55:00:00,dst=f8:bc:12:ff:ff:ff),eth_type(0x0800),ipv4(src=1.1.3.92,dst=1.1.3.88,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
+AT_CHECK([ovs-pcap p0.pcap > p0.pcap.txt 2>&1])
+
+AT_CHECK([cat p0.pcap.txt | grep 92aa55aa55000086dd6000000000203aff2001cafe | uniq], [0], [dnl
+3333ff000092aa55aa55000086dd6000000000203aff2001cafe000000000000000000000088ff0200000000000000000001ff00009287004d48000000002001cafe0000000000000000000000920101aa55aa550000
+])
+
+dnl
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6)'])
+
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:b6   br0
+])
+
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+ip6gre_sys (6) ref_cnt=1
+])
+
+dnl Check IPv6 GRE tunnel pop
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=47,tclass=0x0,hlimit=64)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: tnl_pop(6)
+])
+
+dnl Check IPv6 GRE tunnel push
+AT_CHECK([ovs-ofctl add-flow int-br action=2])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: clone(tnl_push(tnl_port(6),header(size=58,type=109,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=47,tclass=0x0,hlimit=64),gre((flags=0x0,proto=0x6558))),out_port(100)),1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel_push_pop_ipv6 - ip6erspan])
 
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])

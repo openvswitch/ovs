@@ -2554,8 +2554,14 @@
 
           <dt><code>gre</code></dt>
           <dd>
-            Generic Routing Encapsulation (GRE) over IPv4/IPv6 tunnel,
+            Generic Routing Encapsulation (GRE) over IPv4 tunnel,
             configurable to encapsulate layer 2 or layer 3 traffic.
+          </dd>
+
+          <dt><code>ip6gre</code></dt>
+          <dd>
+            Generic Routing Encapsulation (GRE) over IPv6 tunnel,
+            encapsulate layer 2 traffic.
           </dd>
 
           <dt><code>vxlan</code></dt>
@@ -2616,8 +2622,8 @@
     <group title="Tunnel Options">
       <p>
         These options apply to interfaces with <ref column="type"/> of
-        <code>geneve</code>, <code>gre</code>, <code>vxlan</code>,
-        <code>lisp</code> and <code>stt</code>.
+        <code>geneve</code>, <code>gre</code>, <code>ip6gre</code>,
+        <code>vxlan</code>, <code>lisp</code> and <code>stt</code>.
       </p>
 
       <p>
@@ -2914,10 +2920,10 @@
         </column>
       </group>
 
-      <group title="Tunnel Options: gre, geneve, and vxlan">
+      <group title="Tunnel Options: gre, ip6gre, geneve, and vxlan">
         <p>
-          <code>gre</code>, <code>geneve</code>, and
-          <code>vxlan</code> interfaces support these options.
+          <code>gre</code>, <code>ip6gre</code>, <code>geneve</code>,
+          and <code>vxlan</code> interfaces support these options.
         </p>
 
         <column name="options" key="csum" type='{"type": "boolean"}'>
@@ -2931,8 +2937,9 @@
           <p>
             When using the upstream Linux kernel module, computation of
             checksums for <code>geneve</code> and <code>vxlan</code> requires
-            Linux kernel version 4.0 or higher. <code>gre</code> supports
-            checksums for all versions of Open vSwitch that support GRE.
+            Linux kernel version 4.0 or higher. <code>gre</code> and
+            <code>ip6gre</code> support checksums for all versions of
+            Open vSwitch that support GRE.
             The out of tree kernel module distributed as part of OVS
             can compute all tunnel checksums on any kernel version that it
             is compatible with.
@@ -2944,10 +2951,11 @@
       <group title="Tunnel Options: IPsec">
         <p>
           Setting any of these options enables IPsec support for a given
-          tunnel.  <code>gre</code>, <code>geneve</code>, <code>vxlan</code>,
-          and <code>stt</code> interfaces support these options.  See the
-          <code>IPsec</code> section in the <ref table="Open_vSwitch"/> table
-          for a description of each mode.
+          tunnel.  <code>gre</code>, <code>ip6gre</code>,
+          <code>geneve</code>, <code>vxlan</code> and <code>stt</code>
+          interfaces support these options.  See the <code>IPsec</code>
+          section in the <ref table="Open_vSwitch"/> table for a description
+          of each mode.
         </p>
         <column name="options" key="psk" type='{"type": "string"}'>
           <p>

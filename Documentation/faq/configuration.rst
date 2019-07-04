@@ -212,6 +212,19 @@ Q: Does Open vSwitch support ERSPAN?
                 options:erspan_ver=2 options:erspan_dir=1 \
                 options:erspan_hwid=4
 
+Q: Does Open vSwitch support IPv6 GRE?
+
+    A: Yes. L2 tunnel interface GRE over IPv6 is supported.
+    L3 GRE tunnel over IPv6 is not supported.
+
+    ::
+
+        $ ovs-vsctl add-br br0
+        $ ovs-vsctl add-port br0 at_gre0 -- \
+                set int at_gre0 type=ip6gre \
+                options:remote_ip=fc00:100::1 \
+                options:packet_type=legacy_l2
+
 Q: How do I connect two bridges?
 
     A: First, why do you want to do this?  Two connected bridges are not much
