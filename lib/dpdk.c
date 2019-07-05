@@ -518,6 +518,12 @@ dpdk_per_port_memory(void)
     return per_port_memory;
 }
 
+bool
+dpdk_available(void)
+{
+    return dpdk_initialized;
+}
+
 void
 dpdk_set_lcore_id(unsigned cpu)
 {

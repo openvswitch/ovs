@@ -41,6 +41,7 @@ const char *dpdk_get_vhost_sock_dir(void);
 bool dpdk_vhost_iommu_enabled(void);
 bool dpdk_vhost_postcopy_enabled(void);
 bool dpdk_per_port_memory(void);
+bool dpdk_available(void);
 void print_dpdk_version(void);
 void dpdk_status(const struct ovsrec_open_vswitch *);
 #endif /* dpdk.h */
