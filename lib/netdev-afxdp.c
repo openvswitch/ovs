@@ -448,21 +448,6 @@ xsk_destroy_all(struct netdev *netdev)
     }
 }
 
-static inline void OVS_UNUSED
-log_xsk_stat(struct xsk_socket_info *xsk OVS_UNUSED) {
-    struct xdp_statistics stat;
-    socklen_t optlen;
-
-    optlen = sizeof stat;
-    ovs_assert(getsockopt(xsk_socket__fd(xsk->xsk), SOL_XDP, XDP_STATISTICS,
-               &stat, &optlen) == 0);
-
-    VLOG_DBG_RL(&rl, "rx dropped %llu, rx_invalid %llu, tx_invalid %llu",
-                stat.rx_dropped,
-                stat.rx_invalid_descs,
-                stat.tx_invalid_descs);
-}
-
 int
 netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
                         char **errp OVS_UNUSED)
@@ -711,10 +696,6 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
         /* TODO: return the number of remaining packets in the queue. */
         *qfill = 0;
     }
-
-#ifdef AFXDP_DEBUG
-    log_xsk_stat(xsk_info);
-#endif
     return 0;
 }
 
@@ -1010,6 +991,52 @@ netdev_afxdp_destruct(struct netdev *netdev)
 
     xsk_destroy_all(netdev);
     ovs_mutex_destroy(&dev->mutex);
+}
+
+int
+netdev_afxdp_get_custom_stats(const struct netdev *netdev,
+                              struct netdev_custom_stats *custom_stats)
+{
+    struct netdev_linux *dev = netdev_linux_cast(netdev);
+    struct xsk_socket_info *xsk_info;
+    struct xdp_statistics stat;
+    uint32_t i, c = 0;
+    socklen_t optlen;
+
+    ovs_mutex_lock(&dev->mutex);
+
+#define XDP_CSTATS                                                           \
+    XDP_CSTAT(rx_dropped)                                                    \
+    XDP_CSTAT(rx_invalid_descs)                                              \
+    XDP_CSTAT(tx_invalid_descs)
+
+#define XDP_CSTAT(NAME) + 1
+    enum { N_XDP_CSTATS = XDP_CSTATS };
+#undef XDP_CSTAT
+
+    custom_stats->counters = xcalloc(netdev_n_rxq(netdev) * N_XDP_CSTATS,
+                                     sizeof *custom_stats->counters);
+
+    /* Account the stats for each xsk. */
+    for (i = 0; i < netdev_n_rxq(netdev); i++) {
+        xsk_info = dev->xsks[i];
+        optlen  = sizeof stat;
+
+        if (xsk_info && !getsockopt(xsk_socket__fd(xsk_info->xsk), SOL_XDP,
+                                    XDP_STATISTICS, &stat, &optlen)) {
+#define XDP_CSTAT(NAME)                                                      \
+            snprintf(custom_stats->counters[c].name,                         \
+                     NETDEV_CUSTOM_STATS_NAME_SIZE,                          \
+                     "xsk_queue_%d_" #NAME, i);                              \
+            custom_stats->counters[c++].value = stat.NAME;
+            XDP_CSTATS;
+#undef XDP_CSTAT
+        }
+    }
+    custom_stats->size = c;
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
 }
 
 int
