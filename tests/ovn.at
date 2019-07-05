@@ -6730,6 +6730,9 @@ AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
 AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
 AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
 
+# Wait until the patch ports are created in hv1 to connect br-int to br-eth0
+OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-vsctl show | \
+grep "Port patch-br-int-to-ln_port" | wc -l`])
 
 # Wait for packet to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 50])
@@ -6737,10 +6740,11 @@ trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > packets
-expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80002000000000000c0a80002"
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80001000000000000c0a80001"
 echo $expected > expout
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80002000000000000c0a80002"
+echo $expected >> expout
 AT_CHECK([sort packets], [0], [expout])
-cat packets
 
 OVN_CLEANUP([hv1])
 
@@ -6786,7 +6790,15 @@ AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
 AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
 AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
 
+# Wait until the patch ports are created to connect br-int to br-eth0
+OVS_WAIT_UNTIL([test 1 = `ovs-vsctl show | \
+grep "Port patch-br-int-to-ln_port" | wc -l`])
 
+ovn-sbctl list port_binding lrp0-rp
+echo "*****"
+ovn-nbctl list logical_switch_port lrp0-rp
+ovn-nbctl list logical_router_port lrp0
+ovn-nbctl show
 # Wait for packet to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 50])
 trim_zeros() {
@@ -6800,7 +6812,6 @@ echo $expected >> expout
 expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80003000000000000c0a80003"
 echo $expected >> expout
 AT_CHECK([sort packets], [0], [expout])
-cat packets
 
 OVN_CLEANUP([hv1])
 
@@ -8564,7 +8575,8 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     dst_ip=`ip_to_hex 172 16 1 3`
     expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
     echo $expected > ext1-vif1.expected
-
+    exp_gw_ip_garp=ffffffffffff00000201020308060001080006040001000002010203ac100101000000000000ac100101
+    echo $exp_gw_ip_garp >> ext1-vif1.expected
     as $active_gw reset_pcap_file br-phys_n1 $active_gw/br-phys_n1
 
     if test $backup_vswitchd_dead != 1; then
@@ -8580,7 +8592,10 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
 
     OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
-    AT_CHECK([grep $expected packets | sort], [0], [expout])
+    cat packets | grep $expected > exp
+    cat packets | grep $exp_gw_ip_garp >> exp
+    AT_CHECK([cat exp], [0], [expout])
+    rm -f expout
     if test $backup_vswitchd_dead != 1; then
         # Check for backup gw only if vswitchd is alive
         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
@@ -8812,6 +8827,8 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     dst_ip=`ip_to_hex 172 16 1 3`
     expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
     echo $expected > ext1-vif1.expected
+    exp_gw_ip_garp=ffffffffffff00000201020308060001080006040001000002010203ac100101000000000000ac100101
+    echo $exp_gw_ip_garp >> ext1-vif1.expected
 
     as $active_gw reset_pcap_file br-phys_n1 $active_gw/br-phys_n1
     as $backup_gw reset_pcap_file br-phys_n1 $backup_gw/br-phys_n1
@@ -8820,11 +8837,12 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     # Resend packet from foo1 to outside1
     as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 
-    sleep 1
-
     OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
-    AT_CHECK([grep $expected packets | sort], [0], [expout])
+    cat packets | grep $expected > exp
+    cat packets | grep $exp_gw_ip_garp >> exp
+    AT_CHECK([cat exp], [0], [expout])
+
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
     AT_CHECK([grep $expected packets | sort], [0], [])
 }
@@ -9062,12 +9080,16 @@ OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
 # Now add bridge-mappings on hv2, which should make everything work
 as hv2 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
 
-# Allow some time for ovn-northd and ovn-controller to catch up.
-# XXX This should be more systematic.
-sleep 2
+# Wait until the patch ports are created in hv2 to connect br-int to br-phys
+OVS_WAIT_UNTIL([test 1 = `as hv2 ovs-vsctl show | \
+grep "Port patch-br-int-to-ln-alice" | wc -l`])
 
 # ARP for router IP address from outside1
 test_arp 3 1 f00000010204 $outside_ip $rtr_ip 000002010203
+
+# hv3-vif1.expected should also have the gw router port garp packet.
+exp_gw_ip_garp=ffffffffffff00000201020308060001080006040001000002010203ac100101000000000000ac100101
+echo $exp_gw_ip_garp >> hv3-vif1.expected
 
 # Now check the packets actually received against the ones expected.
 OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
@@ -9224,7 +9246,7 @@ ovn_attach n1 br-phys 192.168.0.3
 AT_CHECK([ovn-nbctl lsp-add ls0 ln_port])
 AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
 AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
-AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
+AT_CHECK([ovn-nbctl --wait=hv lsp-set-options ln_port network_name=physnet1])
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -9236,6 +9258,10 @@ OVN_CHECK_PACKETS([hv1/snoopvif-tx.pcap], [packets])
 
 # Add bridge-mapping on hv2
 AT_CHECK([as hv2 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+
+# Wait until the patch ports are created in hv2 to connect br-int to br-phys
+OVS_WAIT_UNTIL([test 1 = `as hv2 ovs-vsctl show | \
+grep "Port patch-br-int-to-ln_port" | wc -l`])
 
 # Wait for packets to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
@@ -9277,6 +9303,10 @@ ovs-vsctl -- add-port br-int hv3-vif2 -- \
 # Add bridge-mapping on hv3
 AT_CHECK([as hv3 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
 
+# Wait until the patch ports are created in hv3 to connect br-int to br-phys
+OVS_WAIT_UNTIL([test 1 = `as hv3 ovs-vsctl show | \
+grep "Port patch-br-int-to-ln_port" | wc -l`])
+
 # Re-add nat-addresses option
 ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
 
@@ -9287,12 +9317,14 @@ trim_zeros() {
 }
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > packets
-expected="fffffffffffff0000000000308060001080006040001f00000000003c0a80003000000000000c0a80003"
-echo $expected >> expout
-expected="fffffffffffff0000000000408060001080006040001f00000000004c0a80004000000000000c0a80004"
-echo $expected >> expout
-AT_CHECK([sort packets], [0], [expout])
-sort packets | cat
+garp_1="fffffffffffff0000000000308060001080006040001f00000000003c0a80003000000000000c0a80003"
+echo $garp_1 > expout
+garp_2="fffffffffffff0000000000408060001080006040001f00000000004c0a80004000000000000c0a80004"
+echo $garp_2 >> expout
+
+cat packets | grep $garp_1 | head -1 > exp
+cat packets | grep $garp_2 | head -1 >> exp
+AT_CHECK([cat exp], [0], [expout])
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
@@ -9317,9 +9349,10 @@ ovn_start
 # # (i.e 8.8.8.8 as destination ip).
 
 # Physical network:
-# # Three hypervisors hv[123].
+# # Four hypervisors hv[1234].
 # # hv1 hosts vif foo1.
 # # hv2 is the "redirect-chassis" that hosts the distributed router gateway port.
+# # Later to test GARPs for the router port - foo, hv2 and hv4 are added to the ha_chassis_group
 # # hv3 hosts nexthop port vif outside1.
 # # All other tests connect hypervisors to network n1 through br-phys for tunneling.
 # # But in this test, hv1 won't connect to n1(and no br-phys in hv1), and
@@ -9344,6 +9377,8 @@ ovs-vsctl \
 start_daemon ovn-controller
 ovs-vsctl -- add-port br-int hv1-vif1 -- \
     set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
     ofport-request=1
 
 sim_add hv2
@@ -9363,6 +9398,12 @@ ovs-vsctl -- add-port br-int hv3-vif1 -- \
     ofport-request=1
 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="phys:br-phys"
 
+sim_add hv4
+as hv4
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.4
+ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="public:br-ex,phys:br-phys"
+
 # Create network n2 for vlan connectivity between hv1 and hv2
 net_add n2
 
@@ -9371,6 +9412,10 @@ ovs-vsctl add-br br-ex
 net_attach n2 br-ex
 
 as hv2
+ovs-vsctl add-br br-ex
+net_attach n2 br-ex
+
+as hv4
 ovs-vsctl add-br br-ex
 net_attach n2 br-ex
 
@@ -9556,7 +9601,48 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/vif1-tx.pcap | grep ${foo1_ip}${
 cat hv3-vif1.expected > expout
 AT_CHECK([sort hv3-vif1], [0], [expout])
 
-OVN_CLEANUP([hv1],[hv2],[hv3])
+# Test the GARP for the router port ip - 192.168.1.1
+ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
+
+as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
+as hv4 reset_pcap_file br-ex_n2 hv4/br-ex_n2
+
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv2 30
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv4 20
+
+hagrp1_uuid=`ovn-nbctl --bare --columns _uuid find ha_chassis_group name=hagrp1`
+ovn-nbctl remove logical_router_port alice options redirect-chassis
+ovn-nbctl --wait=sb set logical_router_port alice ha_chassis_group=$hagrp1_uuid
+
+# When hv2 claims the gw router port cr-alice, it should send out
+# GARP for 192.168.1.1 and it should be received by foo1 on hv1.
+
+# foo1 (on hv1) should receive GARP without VLAN tag
+exp_garp_on_foo1="ffffffffffff00000101020308060001080006040001000001010203c0a80101000000000000c0a80101"
+echo $exp_garp_on_foo1 > foo1.expout
+
+# ovn-controller on hv2 should send garp with VLAN tag
+sent_garp="ffffffffffff0000010102038100000208060001080006040001000001010203c0a80101000000000000c0a80101"
+echo $sent_garp > br-ex_n2.expout
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
+OVN_CHECK_PACKETS([hv2/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv4/br-ex_n2-tx.pcap > empty
+AT_CHECK([cat empty], [0], [])
+
+# Make hv4 master
+as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
+as hv4 reset_pcap_file br-ex_n2 hv4/br-ex_n2
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv4 40
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
+OVN_CHECK_PACKETS([hv4/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-ex_n2-tx.pcap > empty
+AT_CHECK([cat empty], [0], [])
+
+OVN_CLEANUP([hv1],[hv2],[hv3], [hv4])
 AT_CLEANUP
 
 AT_SETUP([ovn -- IPv6 ND Router Solicitation responder])
@@ -10709,15 +10795,30 @@ AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
 AT_CHECK([ovn-nbctl set Logical_Switch_Port ln_port tag=2014])
 
 # wait for earlier changes to take effect
-AT_CHECK([ovn-nbctl --timeout=3 --wait=hv sync], [0], [ignore])
+OVS_WAIT_UNTIL([test 1 = `as hv2 ovs-ofctl dump-flows br-int table=65 | \
+grep "actions=mod_vlan_vid:2014" | wc -l`
+])
+
+OVS_WAIT_UNTIL([test 1 = `as hv3 ovs-ofctl dump-flows br-int table=65 | \
+grep "actions=mod_vlan_vid:2014" | wc -l`
+])
 
 # update nat-addresses option
-ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0
-ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+ovn-nbctl --wait=hv clear logical_switch_port lrp0-rp options
+
+#Wait until the Port_Binding.nat_addresses is cleared.
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl --bare --columns nat_addresses find port_binding \
+logical_port=lrp0-rp | grep is_chassis | wc -l`])
 
 as hv1 reset_pcap_file snoopvif hv1/snoopvif
 as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
 as hv3 reset_pcap_file br-phys_n1 hv3/br-phys_n1
+
+ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+
+#Wait until the Port_Binding.nat_addresses is set.
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns nat_addresses find port_binding \
+logical_port=lrp0-rp | grep is_chassis | wc -l`])
 
 # Wait for packets to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])

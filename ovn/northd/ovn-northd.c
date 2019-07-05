@@ -1983,9 +1983,23 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
             }
         } else {
             /* Centralized NAT rule, either on gateway router or distributed
-             * router. */
-            ds_put_format(&c_addresses, " %s", nat->external_ip);
-            central_ip_address = true;
+             * router.
+             * Check if external_ip is same as router ip. If so, then there
+             * is no need to add this to the nat_addresses. The router IPs
+             * will be added separately. */
+            bool is_router_ip = false;
+            for (size_t j = 0; j < op->lrp_networks.n_ipv4_addrs; j++) {
+                if (!strcmp(nat->external_ip,
+                            op->lrp_networks.ipv4_addrs[j].addr_s)) {
+                    is_router_ip = true;
+                    break;
+                }
+            }
+
+            if (!is_router_ip) {
+                ds_put_format(&c_addresses, " %s", nat->external_ip);
+                central_ip_address = true;
+            }
         }
     }
 
@@ -2493,23 +2507,12 @@ ovn_port_update_sbrec(struct northd_context *ctx,
 
             const char *nat_addresses = smap_get(&op->nbsp->options,
                                            "nat-addresses");
+            size_t n_nats = 0;
+            char **nats = NULL;
             if (nat_addresses && !strcmp(nat_addresses, "router")) {
                 if (op->peer && op->peer->od
                     && (chassis || op->peer->od->l3redirect_port)) {
-                    size_t n_nats;
-                    char **nats = get_nat_addresses(op->peer, &n_nats);
-                    if (n_nats) {
-                        sbrec_port_binding_set_nat_addresses(op->sb,
-                            (const char **) nats, n_nats);
-                        for (size_t i = 0; i < n_nats; i++) {
-                            free(nats[i]);
-                        }
-                        free(nats);
-                    } else {
-                        sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
-                    }
-                } else {
-                    sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
+                    nats = get_nat_addresses(op->peer, &n_nats);
                 }
             /* Only accept manual specification of ethernet address
              * followed by IPv4 addresses on type "l3gateway" ports. */
@@ -2519,16 +2522,68 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     static struct vlog_rate_limit rl =
                         VLOG_RATE_LIMIT_INIT(1, 1);
                     VLOG_WARN_RL(&rl, "Error extracting nat-addresses.");
-                    sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
                 } else {
-                    sbrec_port_binding_set_nat_addresses(op->sb,
-                                                         &nat_addresses, 1);
                     destroy_lport_addresses(&laddrs);
+                    n_nats = 1;
+                    nats = xcalloc(1, sizeof *nats);
+                    nats[0] = xstrdup(nat_addresses);
                 }
-            } else {
-                sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
+            }
+
+            sbrec_port_binding_set_nat_addresses(op->sb,
+                                                 (const char **) nats, n_nats);
+            for (size_t i = 0; i < n_nats; i++) {
+                free(nats[i]);
+            }
+            free(nats);
+
+            /* Add the router mac and IPv4 addresses to
+             * Port_Binding.nat_addresses so that GARP is sent for these
+             * IPs by the ovn-controller on which the distributed gateway
+             * router port resides if:
+             *
+             * -  op->peer has 'reside-on-gateway-chassis' set and the
+             *    the logical router datapath has distributed router port.
+             *
+             * -  op->peer is distributed gateway router port.
+             *
+             * -  op->peer's router is a gateway router and op has a localnet
+             *    port.
+             *
+             * Note: Port_Binding.nat_addresses column is also used for
+             * sending the GARPs for the router port IPs.
+             * */
+            bool add_router_port_garp = false;
+            if (op->peer && op->peer->nbrp && op->peer->od->l3dgw_port &&
+                op->peer->od->l3redirect_port &&
+                (smap_get_bool(&op->peer->nbrp->options,
+                              "reside-on-redirect-chassis", false) ||
+                op->peer == op->peer->od->l3dgw_port)) {
+                add_router_port_garp = true;
+            } else if (chassis && op->od->localnet_port) {
+                add_router_port_garp = true;
+            }
+
+            if (add_router_port_garp) {
+                struct ds garp_info = DS_EMPTY_INITIALIZER;
+                ds_put_format(&garp_info, "%s", op->peer->lrp_networks.ea_s);
+                for (size_t i = 0; i < op->peer->lrp_networks.n_ipv4_addrs;
+                     i++) {
+                    ds_put_format(&garp_info, " %s",
+                                  op->peer->lrp_networks.ipv4_addrs[i].addr_s);
+                }
+
+                if (op->peer->od->l3redirect_port) {
+                    ds_put_format(&garp_info, " is_chassis_resident(%s)",
+                                  op->peer->od->l3redirect_port->json_key);
+                }
+
+                sbrec_port_binding_update_nat_addresses_addvalue(
+                    op->sb, ds_cstr(&garp_info));
+                ds_destroy(&garp_info);
             }
         }
+
         sbrec_port_binding_set_parent_port(op->sb, op->nbsp->parent_name);
         sbrec_port_binding_set_tag(op->sb, op->nbsp->tag, op->nbsp->n_tag);
         sbrec_port_binding_set_mac(op->sb, (const char **) op->nbsp->addresses,
