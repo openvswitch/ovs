@@ -986,6 +986,7 @@ cmd_get(struct ctl_context *ctx)
                         ctx, "no key \"%s\" in %s record \"%s\" column %s",
                         key_string, table->name, record_id, column->name);
                     free(key_string);
+                    ovsdb_atom_destroy(&key, column->type.key.type);
                     return;
                 }
             } else {
