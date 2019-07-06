@@ -6634,6 +6634,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                                   count_1bits(ntohl(mask)) + 1,
                                   ds_cstr(&match), ds_cstr(&actions));
                 } else {
+                    uint16_t priority = count_1bits(ntohl(mask)) + 1;
+
                     /* Distributed router. */
                     ds_clear(&match);
                     ds_put_format(&match, "ip && ip4.src == %s"
@@ -6643,6 +6645,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     if (!distributed && od->l3redirect_port) {
                         /* Flows for NAT rules that are centralized are only
                          * programmed on the "redirect-chassis". */
+                        priority += 128;
                         ds_put_format(&match, " && is_chassis_resident(%s)",
                                       od->l3redirect_port->json_key);
                     }
@@ -6657,8 +6660,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                      * nat->logical_ip with the longest mask gets a higher
                      * priority. */
                     ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT,
-                                  count_1bits(ntohl(mask)) + 1,
-                                  ds_cstr(&match), ds_cstr(&actions));
+                                  priority, ds_cstr(&match),
+                                  ds_cstr(&actions));
                 }
             }
 
