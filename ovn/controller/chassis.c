@@ -23,6 +23,7 @@
 #include "lib/vswitch-idl.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/ofp-parse.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
@@ -66,6 +67,12 @@ static const char *
 get_bridge_mappings(const struct smap *ext_ids)
 {
     return smap_get_def(ext_ids, "ovn-bridge-mappings", "");
+}
+
+static const char *
+get_chassis_mac_mappings(const struct smap *ext_ids)
+{
+    return smap_get_def(ext_ids, "ovn-chassis-mac-mappings", "");
 }
 
 static const char *
@@ -162,6 +169,7 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     const char *datapath_type =
         br_int && br_int->datapath_type ? br_int->datapath_type : "";
     const char *cms_options = get_cms_options(&cfg->external_ids);
+    const char *chassis_macs = get_chassis_mac_mappings(&cfg->external_ids);
 
     struct ds iface_types = DS_EMPTY_INITIALIZER;
     ds_put_cstr(&iface_types, "");
@@ -190,18 +198,22 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             = smap_get_def(&chassis_rec->external_ids, "iface-types", "");
         const char *chassis_cms_options
             = get_cms_options(&chassis_rec->external_ids);
+        const char *chassis_mac_mappings
+            = get_chassis_mac_mappings(&chassis_rec->external_ids);
 
         /* If any of the external-ids should change, update them. */
         if (strcmp(bridge_mappings, chassis_bridge_mappings) ||
             strcmp(datapath_type, chassis_datapath_type) ||
             strcmp(iface_types_str, chassis_iface_types) ||
-            strcmp(cms_options, chassis_cms_options)) {
+            strcmp(cms_options, chassis_cms_options) ||
+            strcmp(chassis_macs, chassis_mac_mappings)) {
             struct smap new_ids;
             smap_clone(&new_ids, &chassis_rec->external_ids);
             smap_replace(&new_ids, "ovn-bridge-mappings", bridge_mappings);
             smap_replace(&new_ids, "datapath-type", datapath_type);
             smap_replace(&new_ids, "iface-types", iface_types_str);
             smap_replace(&new_ids, "ovn-cms-options", cms_options);
+            smap_replace(&new_ids, "ovn-chassis-mac-mappings", chassis_macs);
             sbrec_chassis_verify_external_ids(chassis_rec);
             sbrec_chassis_set_external_ids(chassis_rec, &new_ids);
             smap_destroy(&new_ids);
@@ -317,6 +329,51 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
 
     inited = true;
     return chassis_rec;
+}
+
+bool
+chassis_get_mac(const struct sbrec_chassis *chassis_rec,
+                const char *bridge_mapping,
+                struct eth_addr *chassis_mac)
+{
+    const char *tokens
+        = get_chassis_mac_mappings(&chassis_rec->external_ids);
+    if (!tokens[0]) {
+       return false;
+    }
+
+    char *save_ptr = NULL;
+    bool ret = false;
+    char *tokstr = xstrdup(tokens);
+
+    /* Format for a chassis mac configuration is:
+     * ovn-chassis-mac-mappings="bridge-name1:MAC1,bridge-name2:MAC2"
+     */
+    for (char *token = strtok_r(tokstr, ",", &save_ptr);
+         token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        char *save_ptr2 = NULL;
+        char *chassis_mac_bridge = strtok_r(token, ":", &save_ptr2);
+        char *chassis_mac_str = strtok_r(NULL, "", &save_ptr2);
+
+        if (!strcmp(chassis_mac_bridge, bridge_mapping)) {
+            struct eth_addr temp_mac;
+
+            /* Return the first chassis mac. */
+            char *err_str = str_to_mac(chassis_mac_str, &temp_mac);
+            if (err_str) {
+                free(err_str);
+                continue;
+            }
+
+            ret = true;
+            *chassis_mac = temp_mac;
+            break;
+        }
+    }
+
+    free(tokstr);
+    return ret;
 }
 
 /* Returns true if the database is all cleaned up, false if more work is

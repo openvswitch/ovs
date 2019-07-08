@@ -73,6 +73,7 @@ static unixctl_cb_func ovn_controller_conn_show;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
 #define DEFAULT_PROBE_INTERVAL_MSEC 5000
+#define OFCTRL_DEFAULT_PROBE_INTERVAL_SEC 5
 
 #define CONTROLLER_LOOP_STOPWATCH_NAME "ovn-controller-flow-generation"
 
@@ -388,6 +389,15 @@ update_ssl_config(const struct ovsrec_ssl_table *ssl_table)
         stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
+}
+
+static int
+get_ofctrl_probe_interval(struct ovsdb_idl *ovs_idl)
+{
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    return smap_get_int(&cfg->external_ids,
+                        "ovn-openflow-probe-interval",
+                        OFCTRL_DEFAULT_PROBE_INTERVAL_SEC);
 }
 
 /* Retrieves the pointer to the OVN Southbound database from 'ovs_idl' and
@@ -899,7 +909,7 @@ en_runtime_data_cleanup(struct engine_node *node)
     struct local_datapath *cur_node, *next_node;
     HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node,
                         &data->local_datapaths) {
-        free(cur_node->peer_dps);
+        free(cur_node->peer_ports);
         hmap_remove(&data->local_datapaths, &cur_node->hmap_node);
         free(cur_node);
     }
@@ -929,7 +939,7 @@ en_runtime_data_run(struct engine_node *node)
     } else {
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, local_datapaths) {
-            free(cur_node->peer_dps);
+            free(cur_node->peer_ports);
             hmap_remove(local_datapaths, &cur_node->hmap_node);
             free(cur_node);
         }
@@ -1732,6 +1742,30 @@ main(int argc, char *argv[])
 
     ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
+
+    /* Omit the external_ids column of all the tables except for -
+     *  - DNS. pinctrl.c uses the external_ids column of DNS,
+     *    which it shouldn't. This should be removed.
+     *
+     *  - Chassis - chassis.c copies the chassis configuration from
+     *              local open_vswitch table to the external_ids of
+     *              chassis.
+     *
+     *  - Datapath_binding - lflow.c is using this to check if the datapath
+     *                       is switch or not. This should be removed.
+     * */
+
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_sb_global_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_port_binding_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_connection_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_ssl_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl,
+                   &sbrec_gateway_chassis_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl, &sbrec_ha_chassis_col_external_ids);
+    ovsdb_idl_omit(ovnsb_idl_loop.idl,
+                   &sbrec_ha_chassis_group_col_external_ids);
+
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
 
     stopwatch_create(CONTROLLER_LOOP_STOPWATCH_NAME, SW_MS);
@@ -1817,7 +1851,8 @@ main(int argc, char *argv[])
     engine_init(&en_flow_output);
 
     ofctrl_init(&ed_flow_output.group_table,
-                &ed_flow_output.meter_table);
+                &ed_flow_output.meter_table,
+                get_ofctrl_probe_interval(ovs_idl_loop.idl));
 
     unixctl_command_register("group-table-list", "", 0, 0,
                              group_table_list, &ed_flow_output.group_table);
@@ -1844,6 +1879,7 @@ main(int argc, char *argv[])
     while (!exiting) {
         update_sb_db(ovs_idl_loop.idl, ovnsb_idl_loop.idl);
         update_ssl_config(ovsrec_ssl_table_get(ovs_idl_loop.idl));
+        ofctrl_set_probe_interval(get_ofctrl_probe_interval(ovs_idl_loop.idl));
         old_engine_run_id = engine_run_id;
 
         struct ovsdb_idl_txn *ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop);

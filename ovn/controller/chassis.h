@@ -26,6 +26,7 @@ struct ovsrec_open_vswitch_table;
 struct sbrec_chassis;
 struct sbrec_chassis_table;
 struct sset;
+struct eth_addr;
 
 void chassis_register_ovs_idl(struct ovsdb_idl *);
 const struct sbrec_chassis *chassis_run(
@@ -36,5 +37,8 @@ const struct sbrec_chassis *chassis_run(
     const struct sset *transport_zones);
 bool chassis_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
                      const struct sbrec_chassis *);
+bool chassis_get_mac(const struct sbrec_chassis *chassis,
+                     const char *bridge_mapping,
+                     struct eth_addr *chassis_mac);
 
 #endif /* ovn/chassis.h */

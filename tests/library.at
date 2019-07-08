@@ -231,6 +231,11 @@ AT_CHECK([sed 's/.*: //
 
 AT_CLEANUP
 
+AT_SETUP([saturating arithmetic])
+AT_KEYWORDS([sat math sat_math])
+AT_CHECK([ovstest test-util sat_math])
+AT_CLEANUP
+
 AT_SETUP([snprintf])
 AT_CHECK([ovstest test-util snprintf])
 AT_CLEANUP

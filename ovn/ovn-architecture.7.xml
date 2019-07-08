@@ -1403,10 +1403,41 @@
     </li>
 
     <li>
-      From the router datapath, packet enters the ingress pipeline and then
-      egress pipeline of the destination localnet logical switch datapath
-      and goes out of the integration bridge to the provider bridge (
-      belonging to the destination logical switch) via the localnet port.
+      <p>
+        From the router datapath, packet enters the ingress pipeline and then
+        egress pipeline of the destination localnet logical switch datapath
+        and goes out of the integration bridge to the provider bridge (
+        belonging to the destination logical switch) via the localnet port.
+        While sending the packet to provider bridge, we also replace router
+        port MAC as source MAC with a chassis unique MAC.
+      </p>
+
+      <p>
+        This chassis unique MAC is configured as global ovs config on each
+        chassis (eg. via "<code>ovs-vsctl set open . external-ids:
+        ovn-chassis-mac-mappings="phys:aa:bb:cc:dd:ee:$i$i"</code>").  For more
+        details, see <code>ovn-controller</code>(8).
+      </p>
+
+      <p>
+        If the above is not configured, then source MAC would be the router
+        port MAC.  This could create problem if we have more than one chassis.
+        This is because, since the router port is distributed, the same
+        (MAC,VLAN) tuple will seen by physical network from other chassis as
+        well, which could cause these issues:
+      </p>
+      
+      <ul>
+        <li>
+          Continuous MAC moves in top-of-rack switch (ToR).
+        </li>
+        <li>
+          ToR dropping the traffic, which is causing continuous MAC moves.
+        </li>
+        <li>
+          ToR blocking the ports from which MAC moves are happening.
+        </li>
+      </ul>
     </li>
 
     <li>

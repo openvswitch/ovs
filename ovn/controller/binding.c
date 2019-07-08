@@ -159,13 +159,11 @@ add_local_datapath__(struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                                          sbrec_port_binding_by_name,
                                          peer->datapath, false,
                                          depth + 1, local_datapaths);
-                    ld->n_peer_dps++;
-                    ld->peer_dps = xrealloc(
-                            ld->peer_dps,
-                            ld->n_peer_dps * sizeof *ld->peer_dps);
-                    ld->peer_dps[ld->n_peer_dps - 1] = datapath_lookup_by_key(
-                        sbrec_datapath_binding_by_key,
-                        peer->datapath->tunnel_key);
+                    ld->n_peer_ports++;
+                    ld->peer_ports = xrealloc(ld->peer_ports,
+                                              ld->n_peer_ports *
+                                              sizeof *ld->peer_ports);
+                    ld->peer_ports[ld->n_peer_ports - 1] = peer;
                 }
             }
         }

@@ -75,42 +75,6 @@ type for all known use cases; the only limitation is that vhost-user client
 mode ports require QEMU version 2.7.  Ports of type vhost-user are currently
 deprecated and will be removed in a future release.
 
-vhost tx retries
-~~~~~~~~~~~~~~~~
-
-When sending a batch of packets to a vhost-user or vhost-user-client interface,
-it may happen that some but not all of the packets in the batch are able to be
-sent to the guest. This is often because there is not enough free descriptors
-in the virtqueue for all the packets in the batch to be sent. In this case
-there will be a retry, with a default maximum of 8 occurring. If at any time no
-packets can be sent, it may mean the guest is not accepting packets, so there
-are no (more) retries.
-
-.. note::
-
-  Maximum vhost tx batch size is defined by NETDEV_MAX_BURST, and is currently
-  as 32.
-
-Tx Retries may be reduced or even avoided by some external configuration, such
-as increasing the virtqueue size through the ``rx_queue_size`` parameter
-introduced in QEMU 2.7.0 / libvirt 2.3.0::
-
-  <interface type='vhostuser'>
-      <mac address='56:48:4f:53:54:01'/>
-      <source type='unix' path='/tmp/dpdkvhostclient0' mode='server'/>
-      <model type='virtio'/>
-      <driver name='vhost' rx_queue_size='1024' tx_queue_size='1024'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x10' function='0x0'/>
-  </interface>
-
-The guest application will also need need to provide enough descriptors. For
-example with ``testpmd`` the command line argument can be used::
-
- --rxd=1024 --txd=1024
-
-The guest should also have sufficient cores dedicated for consuming and
-processing packets at the required rate.
-
 .. _dpdk-vhost-user:
 
 vhost-user
@@ -386,6 +350,31 @@ The default value is ``false``.
 
 .. _dpdk-testpmd:
 
+vhost-user-client tx retries config
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For vhost-user-client interfaces, the max amount of retries can be changed from
+the default 8 by setting ``tx-retries-max``.
+
+The minimum is 0 which means there will be no retries and if any packets in
+each batch cannot be sent immediately they will be dropped. The maximum is 32,
+which would mean that after the first packet(s) in the batch was sent there
+could be a maximum of 32 more retries.
+
+Retries can help with avoiding packet loss when temporarily unable to send to a
+vhost interface because the virtqueue is full. However, spending more time
+retrying to send to one interface, will reduce the time available for rx/tx and
+processing packets on other interfaces, so some tuning may be required for best
+performance.
+
+Tx retries max can be set for vhost-user-client ports::
+
+    $ ovs-vsctl set Interface vhost-client-1 options:tx-retries-max=0
+
+.. note::
+
+  Configurable vhost tx retries are not supported with vhost-user ports.
+
 DPDK in the Guest
 -----------------
 
@@ -519,6 +508,50 @@ Jumbo Frames
 
 DPDK vHost User ports can be configured to use Jumbo Frames. For more
 information, refer to :doc:`jumbo-frames`.
+
+vhost tx retries
+----------------
+
+When sending a batch of packets to a vhost-user or vhost-user-client interface,
+it may happen that some but not all of the packets in the batch are able to be
+sent to the guest. This is often because there is not enough free descriptors
+in the virtqueue for all the packets in the batch to be sent. In this case
+there will be a retry, with a default maximum of 8 occurring. If at any time no
+packets can be sent, it may mean the guest is not accepting packets, so there
+are no (more) retries.
+
+For information about configuring the maximum amount of tx retries for
+vhost-user-client interfaces see `vhost-user-client tx retries config`_.
+
+.. note::
+
+  Maximum vhost tx batch size is defined by NETDEV_MAX_BURST, and is currently
+  as 32.
+
+Tx Retries may be reduced or even avoided by some external configuration, such
+as increasing the virtqueue size through the ``rx_queue_size`` parameter
+introduced in QEMU 2.7.0 / libvirt 2.3.0::
+
+  <interface type='vhostuser'>
+      <mac address='56:48:4f:53:54:01'/>
+      <source type='unix' path='/tmp/dpdkvhostclient0' mode='server'/>
+      <model type='virtio'/>
+      <driver name='vhost' rx_queue_size='1024' tx_queue_size='1024'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x10' function='0x0'/>
+  </interface>
+
+The guest application will also need need to provide enough descriptors. For
+example with ``testpmd`` the command line argument can be used::
+
+ --rxd=1024 --txd=1024
+
+The guest should also have sufficient cores dedicated for consuming and
+processing packets at the required rate.
+
+The amount of Tx retries on a vhost-user or vhost-user-client interface can be
+shown with::
+
+  $ ovs-vsctl get Interface dpdkvhostclient0 statistics:tx_retries
 
 vhost-user Dequeue Zero Copy (experimental)
 -------------------------------------------

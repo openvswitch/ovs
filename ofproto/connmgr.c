@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -501,9 +501,9 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
         if (!shash_find(info, target)) {
             struct ofconn *ofconn = ofservice_first_conn(ofservice);
             struct ofproto_controller_info *cinfo = xmalloc(sizeof *cinfo);
-            time_t now = time_now();
-            time_t last_connection = rconn_get_last_connection(rconn);
-            time_t last_disconnect = rconn_get_last_disconnect(rconn);
+            long long int now = time_msec();
+            long long int last_connection = rconn_get_last_connection(rconn);
+            long long int last_disconnect = rconn_get_last_disconnect(rconn);
             int last_error = rconn_get_last_error(rconn);
             int i;
 
@@ -520,14 +520,14 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
 
             smap_add(&cinfo->pairs, "state", rconn_get_state(rconn));
 
-            if (last_connection != TIME_MIN) {
+            if (last_connection != LLONG_MIN) {
                 smap_add_format(&cinfo->pairs, "sec_since_connect",
-                                "%ld", (long int) (now - last_connection));
+                                "%lld", (now - last_connection) / 1000);
             }
 
-            if (last_disconnect != TIME_MIN) {
+            if (last_disconnect != LLONG_MIN) {
                 smap_add_format(&cinfo->pairs, "sec_since_disconnect",
-                                "%ld", (long int) (now - last_disconnect));
+                                "%lld", (now - last_disconnect) / 1000);
             }
 
             for (i = 0; i < N_SCHEDULERS; i++) {

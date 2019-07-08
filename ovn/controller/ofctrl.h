@@ -41,7 +41,8 @@ struct ovn_desired_flow_table {
 
 /* Interface for OVN main loop. */
 void ofctrl_init(struct ovn_extend_table *group_table,
-                 struct ovn_extend_table *meter_table);
+                 struct ovn_extend_table *meter_table,
+                 int inactivity_probe_interval);
 void ofctrl_run(const struct ovsrec_bridge *br_int,
                 struct shash *pending_ct_zones);
 enum mf_field_id ofctrl_get_mf_field_id(void);
@@ -81,5 +82,6 @@ void ofctrl_check_and_add_flow(struct ovn_desired_flow_table *,
                                const struct uuid *, bool log_duplicate_flow);
 
 bool ofctrl_is_connected(void);
+void ofctrl_set_probe_interval(int probe_interval);
 
 #endif /* ovn/ofctrl.h */

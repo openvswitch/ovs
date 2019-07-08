@@ -21,6 +21,7 @@
 #include "ha-chassis.h"
 #include "lflow.h"
 #include "lport.h"
+#include "chassis.h"
 #include "lib/bundle.h"
 #include "openvswitch/poll-loop.h"
 #include "lib/uuid.h"
@@ -31,6 +32,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/ofp-parse.h"
 #include "ovn-controller.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -223,6 +225,92 @@ get_zone_ids(const struct sbrec_port_binding *binding,
     free(snat);
 
     return zone_ids;
+}
+
+static void
+put_replace_router_port_mac_flows(const struct
+                                  sbrec_port_binding *localnet_port,
+                                  const struct sbrec_chassis *chassis,
+                                  const struct hmap *local_datapaths,
+                                  struct ofpbuf *ofpacts_p,
+                                  ofp_port_t ofport,
+                                  struct ovn_desired_flow_table *flow_table)
+{
+    struct local_datapath *ld = get_local_datapath(local_datapaths,
+                                                   localnet_port->datapath->
+                                                   tunnel_key);
+    ovs_assert(ld);
+
+    uint32_t dp_key = localnet_port->datapath->tunnel_key;
+    uint32_t port_key = localnet_port->tunnel_key;
+    int tag = localnet_port->tag ? *localnet_port->tag : 0;
+    const char *network = smap_get(&localnet_port->options, "network_name");
+    struct eth_addr chassis_mac;
+
+    if (!network) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "Physical network not configured for datapath:"
+                     "%"PRId64" with localnet port",
+                     localnet_port->datapath->tunnel_key);
+        return;
+    }
+
+    /* Get chassis mac */
+    if (!chassis_get_mac(chassis, network, &chassis_mac)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        /* Keeping the log level low for backward compatibility.
+         * Chassis mac is a new configuration.
+         */
+        VLOG_DBG_RL(&rl, "Could not get chassis mac for network: %s", network);
+        return;
+    }
+
+    for (int i = 0; i < ld->n_peer_ports; i++) {
+        const struct sbrec_port_binding *rport_binding = ld->peer_ports[i];
+        struct eth_addr router_port_mac;
+        struct match match;
+        struct ofpact_mac *replace_mac;
+
+        /* Table 65, priority 150.
+         * =======================
+         *
+         * Implements output to localnet port.
+         * a. Flow replaces ingress router port mac with a chassis mac.
+         * b. Flow appends the vlan id localnet port is configured with.
+         */
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+
+        ovs_assert(rport_binding->n_mac == 1);
+        char *err_str = str_to_mac(rport_binding->mac[0], &router_port_mac);
+        if (err_str) {
+            /* Parsing of mac failed. */
+            VLOG_WARN("Parsing or router port mac failed for router port: %s, "
+                      "with error: %s", rport_binding->logical_port, err_str);
+            free(err_str);
+            return;
+        }
+
+        /* Replace Router mac flow */
+        match_set_metadata(&match, htonll(dp_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+        match_set_dl_src(&match, router_port_mac);
+
+        replace_mac = ofpact_put_SET_ETH_SRC(ofpacts_p);
+        replace_mac->mac = chassis_mac;
+
+        if (tag) {
+            struct ofpact_vlan_vid *vlan_vid;
+            vlan_vid = ofpact_put_SET_VLAN_VID(ofpacts_p);
+            vlan_vid->vlan_vid = tag;
+            vlan_vid->push_vlan_if_needed = true;
+        }
+
+        ofpact_put_OUTPUT(ofpacts_p)->port = ofport;
+
+        ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 150, 0,
+                        &match, ofpacts_p, &localnet_port->header_.uuid);
+    }
 }
 
 static void
@@ -697,6 +785,13 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
         }
         ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 100, 0,
                         &match, ofpacts_p, &binding->header_.uuid);
+
+        if (!strcmp(binding->type, "localnet")) {
+            put_replace_router_port_mac_flows(binding, chassis,
+                                              local_datapaths, ofpacts_p,
+                                              ofport, flow_table);
+        }
+
     } else if (!tun && !is_ha_remote) {
         /* Remote port connected by localnet port */
         /* Table 33, priority 100.
