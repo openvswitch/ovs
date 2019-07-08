@@ -1923,14 +1923,16 @@ main(int argc, char *argv[])
                 ovsrec_bridge_table_get(ovs_idl_loop.idl);
             const struct ovsrec_open_vswitch_table *ovs_table =
                 ovsrec_open_vswitch_table_get(ovs_idl_loop.idl);
+            const struct sbrec_chassis_table *chassis_table =
+                sbrec_chassis_table_get(ovnsb_idl_loop.idl);
             const struct ovsrec_bridge *br_int =
                 process_br_int(ovs_idl_txn, bridge_table, ovs_table);
             const char *chassis_id = get_ovs_chassis_id(ovs_table);
             const struct sbrec_chassis *chassis = NULL;
             if (chassis_id) {
                 chassis = chassis_run(ovnsb_idl_txn, sbrec_chassis_by_name,
-                                      ovs_table, chassis_id, br_int,
-                                      &transport_zones);
+                                      ovs_table, chassis_table, chassis_id,
+                                      br_int, &transport_zones);
             }
 
             if (br_int) {
