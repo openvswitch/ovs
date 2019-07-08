@@ -291,7 +291,7 @@ process_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
 }
 
 static const char *
-get_chassis_id(const struct ovsrec_open_vswitch_table *ovs_table)
+get_ovs_chassis_id(const struct ovsrec_open_vswitch_table *ovs_table)
 {
     const struct ovsrec_open_vswitch *cfg
         = ovsrec_open_vswitch_table_first(ovs_table);
@@ -958,7 +958,7 @@ en_runtime_data_run(struct engine_node *node)
     struct ovsrec_bridge_table *bridge_table =
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = get_ovs_chassis_id(ovs_table);
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
 
     ovs_assert(br_int && chassis_id);
@@ -1043,7 +1043,7 @@ runtime_data_sb_port_binding_handler(struct engine_node *node)
     struct ovsrec_bridge_table *bridge_table =
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
 
     ovs_assert(br_int && chassis_id);
@@ -1158,7 +1158,7 @@ en_flow_output_run(struct engine_node *node)
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
 
     struct ovsdb_idl_index *sbrec_chassis_by_name =
         engine_ovsdb_node_get_index(
@@ -1280,7 +1280,7 @@ flow_output_sb_logical_flow_handler(struct engine_node *node)
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
 
     struct ovsdb_idl_index *sbrec_chassis_by_name =
         engine_ovsdb_node_get_index(
@@ -1383,7 +1383,7 @@ flow_output_sb_port_binding_handler(struct engine_node *node)
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
 
     struct ovsdb_idl_index *sbrec_chassis_by_name =
         engine_ovsdb_node_get_index(
@@ -1486,7 +1486,7 @@ flow_output_sb_multicast_group_handler(struct engine_node *node)
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
 
     struct ovsdb_idl_index *sbrec_chassis_by_name =
         engine_ovsdb_node_get_index(
@@ -1542,7 +1542,7 @@ _flow_output_resource_ref_handler(struct engine_node *node,
         (struct ovsrec_bridge_table *)EN_OVSDB_GET(
             engine_get_input("OVS_bridge", node));
     const struct ovsrec_bridge *br_int = get_br_int(bridge_table, ovs_table);
-    const char *chassis_id = get_chassis_id(ovs_table);
+    const char *chassis_id = chassis_get_id();
 
     struct ovsdb_idl_index *sbrec_chassis_by_name =
         engine_ovsdb_node_get_index(
@@ -1925,7 +1925,7 @@ main(int argc, char *argv[])
                 ovsrec_open_vswitch_table_get(ovs_idl_loop.idl);
             const struct ovsrec_bridge *br_int =
                 process_br_int(ovs_idl_txn, bridge_table, ovs_table);
-            const char *chassis_id = get_chassis_id(ovs_table);
+            const char *chassis_id = get_ovs_chassis_id(ovs_table);
             const struct sbrec_chassis *chassis = NULL;
             if (chassis_id) {
                 chassis = chassis_run(ovnsb_idl_txn, sbrec_chassis_by_name,
