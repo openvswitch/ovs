@@ -90,13 +90,12 @@ if grep -qs "suse" /etc/os-release; then
     if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
         %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
     fi
-elif [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
-    if [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ] || \
-       [ "$major_rev" = "957" ]; then
-        # For RHEL 7.2, 7.4 and 7.6
-        if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-            %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
-        fi
+elif [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ] &&
+     { [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ] || \
+       [ "$major_rev" = "957" ]; }; then
+    # For RHEL 7.2, 7.4 and 7.6
+    if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+        %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
     fi
 else
     # Ensure that modprobe will find our modules.
