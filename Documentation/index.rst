@@ -87,7 +87,7 @@ Deeper Dive
 
 - **Reference Guides:** :doc:`ref/index`
 
-- **Testing** :doc:`topics/testing`
+- **Testing** :doc:`topics/testing` :doc:`topics/fuzzing/index`
 
 - **Packaging:** :doc:`intro/install/debian` |
   :doc:`intro/install/rhel` |

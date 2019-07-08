@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ struct vl_mff_map;
     OFPACT(DEBUG_RECIRC, ofpact_null,           ofpact, "debug_recirc") \
     OFPACT(DEBUG_SLOW,   ofpact_null,           ofpact, "debug_slow")   \
                                                                         \
-    /* Instructions. */                                                 \
+    /* Instructions ("meter" is an action in OF1.5+). */                \
     OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \
     OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \
     OFPACT(WRITE_ACTIONS,   ofpact_nest,        actions, "write_actions") \
@@ -1360,7 +1360,7 @@ enum {
 const char *ovs_instruction_name_from_type(enum ovs_instruction_type type);
 int ovs_instruction_type_from_name(const char *name);
 enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
-    enum ofpact_type);
+    enum ofpact_type, enum ofp_version);
 enum ofperr ovs_instruction_type_from_inst_type(
     enum ovs_instruction_type *instruction_type, const uint16_t inst_type);
 

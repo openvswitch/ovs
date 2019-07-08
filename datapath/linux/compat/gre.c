@@ -139,21 +139,6 @@ void rpl_gre_exit(void)
 }
 EXPORT_SYMBOL_GPL(rpl_gre_exit);
 
-#define ip_gre_calc_hlen rpl_ip_gre_calc_hlen
-#define gre_calc_hlen rpl_ip_gre_calc_hlen
-static int rpl_ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
-
 void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 			  int hdr_len)
 {

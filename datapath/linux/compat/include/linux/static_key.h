@@ -1,6 +1,7 @@
 #ifndef _STATIC_KEY_WRAPPER_H
 #define _STATIC_KEY_WRAPPER_H
 
+#include <linux/atomic.h>
 #include_next <linux/static_key.h>
 #ifndef HAVE_UPSTREAM_STATIC_KEY
 /*

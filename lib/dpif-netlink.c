@@ -38,6 +38,7 @@
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "netdev-linux.h"
+#include "netdev-offload.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netdev.h"
@@ -3383,6 +3384,7 @@ probe_broken_meters(struct dpif *dpif)
 
 const struct dpif_class dpif_netlink_class = {
     "system",
+    false,                      /* cleanup_required */
     NULL,                       /* init */
     dpif_netlink_enumerate,
     NULL,

@@ -2051,14 +2051,18 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
     while (true) {
         if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
             nat_conn->rev_key.dst.addr = ct_addr;
-            nat_conn->rev_key.dst.port = htons(port);
+            if (pat_enabled) {
+                nat_conn->rev_key.dst.port = htons(port);
+            }
         } else {
             nat_conn->rev_key.src.addr = ct_addr;
-            nat_conn->rev_key.src.port = htons(port);
+            if (pat_enabled) {
+                nat_conn->rev_key.src.port = htons(port);
+            }
         }
 
-        bool found = conn_lookup(ct, &nat_conn->rev_key, time_msec(),
-                                     NULL, NULL);
+        bool found = conn_lookup(ct, &nat_conn->rev_key, time_msec(), NULL,
+                                 NULL);
         if (!found) {
             return true;
         } else if (pat_enabled && !all_ports_tried) {

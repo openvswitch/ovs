@@ -208,6 +208,11 @@
           available, Open vSwitch may not be able to offload
           functionality to hardware.
         </p>
+        <p>
+          In order to dump HW offloaded flows use
+          <code>ovs-appctl dpctl/dump-flows</code>, <code>ovs-dpctl</code>
+          doesn't support this functionality. See ovs-vswitchd(8) for details.
+        </p>
       </column>
 
       <column name="other_config" key="tc-policy"
@@ -1264,16 +1269,9 @@
       </column>
 
       <column name="protocols">
-        <p>
-          List of OpenFlow protocols that may be used when negotiating
-          a connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, and
-          1.4 are enabled by default if this column is empty.
-        </p>
-
-        <p>
-          OpenFlow 1.5 is not enabled by default because its
-          implementations is missing features.
-        </p>
+        List of OpenFlow protocols that may be used when negotiating a
+        connection with a controller.  OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and
+        1.5 are enabled by default if this column is empty.
       </column>
     </group>
 
@@ -2556,8 +2554,14 @@
 
           <dt><code>gre</code></dt>
           <dd>
-            Generic Routing Encapsulation (GRE) over IPv4/IPv6 tunnel,
+            Generic Routing Encapsulation (GRE) over IPv4 tunnel,
             configurable to encapsulate layer 2 or layer 3 traffic.
+          </dd>
+
+          <dt><code>ip6gre</code></dt>
+          <dd>
+            Generic Routing Encapsulation (GRE) over IPv6 tunnel,
+            encapsulate layer 2 traffic.
           </dd>
 
           <dt><code>vxlan</code></dt>
@@ -2618,8 +2622,8 @@
     <group title="Tunnel Options">
       <p>
         These options apply to interfaces with <ref column="type"/> of
-        <code>geneve</code>, <code>gre</code>, <code>vxlan</code>,
-        <code>lisp</code> and <code>stt</code>.
+        <code>geneve</code>, <code>gre</code>, <code>ip6gre</code>,
+        <code>vxlan</code>, <code>lisp</code> and <code>stt</code>.
       </p>
 
       <p>
@@ -2916,10 +2920,10 @@
         </column>
       </group>
 
-      <group title="Tunnel Options: gre, geneve, and vxlan">
+      <group title="Tunnel Options: gre, ip6gre, geneve, and vxlan">
         <p>
-          <code>gre</code>, <code>geneve</code>, and
-          <code>vxlan</code> interfaces support these options.
+          <code>gre</code>, <code>ip6gre</code>, <code>geneve</code>,
+          and <code>vxlan</code> interfaces support these options.
         </p>
 
         <column name="options" key="csum" type='{"type": "boolean"}'>
@@ -2933,8 +2937,9 @@
           <p>
             When using the upstream Linux kernel module, computation of
             checksums for <code>geneve</code> and <code>vxlan</code> requires
-            Linux kernel version 4.0 or higher. <code>gre</code> supports
-            checksums for all versions of Open vSwitch that support GRE.
+            Linux kernel version 4.0 or higher. <code>gre</code> and
+            <code>ip6gre</code> support checksums for all versions of
+            Open vSwitch that support GRE.
             The out of tree kernel module distributed as part of OVS
             can compute all tunnel checksums on any kernel version that it
             is compatible with.
@@ -2946,10 +2951,11 @@
       <group title="Tunnel Options: IPsec">
         <p>
           Setting any of these options enables IPsec support for a given
-          tunnel.  <code>gre</code>, <code>geneve</code>, <code>vxlan</code>,
-          and <code>stt</code> interfaces support these options.  See the
-          <code>IPsec</code> section in the <ref table="Open_vSwitch"/> table
-          for a description of each mode.
+          tunnel.  <code>gre</code>, <code>ip6gre</code>,
+          <code>geneve</code>, <code>vxlan</code> and <code>stt</code>
+          interfaces support these options.  See the <code>IPsec</code>
+          section in the <ref table="Open_vSwitch"/> table for a description
+          of each mode.
         </p>
         <column name="options" key="psk" type='{"type": "string"}'>
           <p>
@@ -3118,6 +3124,18 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           Must be set before vhost-server-path is specified.
           Only supported by dpdkvhostuserclient interfaces.
           The feature is considered experimental.
+        </p>
+      </column>
+
+      <column name="options" key="tx-retries-max"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 32}'>
+        <p>
+          The value specifies the maximum amount of vhost tx retries that can
+          be made while trying to send a batch of packets to an interface.
+          Only supported by dpdkvhostuserclient interfaces.
+        </p>
+        <p>
+          Default value is 8.
         </p>
       </column>
 

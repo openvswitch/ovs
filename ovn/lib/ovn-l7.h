@@ -40,6 +40,7 @@ struct gen_opts_map {
 #define DHCP_OPT_DNS_SERVER  DHCP_OPTION("dns_server", 6, "ipv4")
 #define DHCP_OPT_LOG_SERVER  DHCP_OPTION("log_server", 7, "ipv4")
 #define DHCP_OPT_LPR_SERVER  DHCP_OPTION("lpr_server", 9, "ipv4")
+#define DHCP_OPT_DOMAIN_NAME DHCP_OPTION("domain_name", 15, "str")
 #define DHCP_OPT_SWAP_SERVER DHCP_OPTION("swap_server", 16, "ipv4")
 
 #define DHCP_OPT_POLICY_FILTER \

@@ -119,6 +119,7 @@ flow. As an example, \fBfilter='tcp,tp_src=100'\fR will match the
 datapath flow containing '\fBtcp(src=80/0xff00,dst=8080/0xff)\fR'.
 .IP
 If \fBtype=\fItype\fR is specified, only displays flows of the specified types.
+This option supported only for \fBovs\-appctl dpctl/dump\-flows\fR.
 \fItype\fR is a comma separated list, which can contain any of the following:
 .
    \fBovs\fR - displays flows handled in the ovs dp
@@ -128,6 +129,7 @@ If \fBtype=\fItype\fR is specified, only displays flows of the specified types.
    \fBall\fR - displays all the types of flows
 .IP
 By default all the types of flows are displayed.
+\fBovs\-dpctl\fR always acts as if the \fBtype\fR was \fIovs\fR.
 .
 .IP "\*(DX\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
 .TP

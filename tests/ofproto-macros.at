@@ -173,7 +173,6 @@ m4_define([_OVS_VSWITCHD_START],
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
 /dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
 /netlink_socket|INFO|netlink: could not enable listening to all nsid/d
-/netdev: Flow API/d
 /probe tc:/d
 /tc: Using policy/d']])
 ])
@@ -196,7 +195,7 @@ m4_define([_OVS_VSWITCHD_START],
 # 'vswitchd-aux-args' provides a way to pass extra command line arguments
 # to ovs-vswitchd
 m4_define([OVS_VSWITCHD_START],
-  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system $4])
+  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system --disable-system-route $4])
    AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 

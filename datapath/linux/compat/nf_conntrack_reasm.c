@@ -41,6 +41,7 @@
 #include <net/inet_frag.h>
 
 #include <net/ipv6.h>
+#include <net/ipv6_frag.h>
 #include <net/protocol.h>
 #include <net/transp_v6.h>
 #include <net/rawv6.h>
@@ -138,7 +139,11 @@ static void nf_ct_frag6_expire(unsigned long data)
 #ifdef HAVE_INET_FRAGS_RND
 	ip6_expire_frag_queue(net, fq, &nf_frags);
 #else
+#ifdef HAVE_IPV6_FRAG_H
+	ip6frag_expire_frag_queue(net, fq);
+#else
 	ip6_expire_frag_queue(net, fq);
+#endif
 #endif
 }
 
@@ -673,6 +678,16 @@ static struct pernet_operations nf_ct_net_ops = {
 	.exit = nf_ct_net_exit,
 };
 
+#ifdef HAVE_IPV6_FRAG_H
+static const struct rhashtable_params nfct_rhash_params = {
+	.head_offset		= offsetof(struct inet_frag_queue, node),
+	.hashfn			= ip6frag_key_hashfn,
+	.obj_hashfn		= ip6frag_obj_hashfn,
+	.obj_cmpfn		= ip6frag_obj_cmpfn,
+	.automatic_shrinking	= true,
+};
+#endif
+
 int rpl_nf_ct_frag6_init(void)
 {
 	int ret = 0;
@@ -683,10 +698,16 @@ int rpl_nf_ct_frag6_init(void)
 #ifdef HAVE_INET_FRAGS_RND
 	nf_frags.hashfn = nf_hashfn;
 	nf_frags.match = ip6_frag_match;
+	nf_frags.constructor = ip6_frag_init;
+#else
+#ifdef HAVE_IPV6_FRAG_H
+	nf_frags.rhash_params = nfct_rhash_params;
+	nf_frags.constructor = ip6frag_init;
 #else
 	nf_frags.rhash_params = ip6_rhash_params;
-#endif
 	nf_frags.constructor = ip6_frag_init;
+#endif
+#endif /* HAVE_INET_FRAGS_RND */
 	nf_frags.destructor = NULL;
 	nf_frags.qsize = sizeof(struct frag_queue);
 	nf_frags.frag_expire = nf_ct_frag6_expire;

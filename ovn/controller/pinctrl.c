@@ -22,6 +22,7 @@
 #include "csum.h"
 #include "dirs.h"
 #include "dp-packet.h"
+#include "encaps.h"
 #include "flow.h"
 #include "ha-chassis.h"
 #include "lport.h"
@@ -466,6 +467,7 @@ static int
 pinctrl_handle_buffered_packets(const struct flow *ip_flow,
                                 struct dp_packet *pkt_in,
                                 const struct match *md, bool is_arp)
+    OVS_REQUIRES(pinctrl_mutex)
 {
     struct buffered_packets *bp;
     struct dp_packet *clone;
@@ -514,7 +516,9 @@ pinctrl_handle_arp(struct rconn *swconn, const struct flow *ip_flow,
         return;
     }
 
+    ovs_mutex_lock(&pinctrl_mutex);
     pinctrl_handle_buffered_packets(ip_flow, pkt_in, md, true);
+    ovs_mutex_unlock(&pinctrl_mutex);
 
     /* Compose an ARP packet. */
     uint64_t packet_stub[128 / 8];
@@ -2725,7 +2729,8 @@ get_localnet_vifs_l3gwports(
         }
         const char *tunnel_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
+        if (tunnel_id &&
+                encaps_tunnel_id_match(tunnel_id, chassis->name, NULL)) {
             continue;
         }
         const char *localnet = smap_get(&port_rec->external_ids,
@@ -3139,7 +3144,9 @@ pinctrl_handle_nd_ns(struct rconn *swconn, const struct flow *ip_flow,
         return;
     }
 
+    ovs_mutex_lock(&pinctrl_mutex);
     pinctrl_handle_buffered_packets(ip_flow, pkt_in, md, false);
+    ovs_mutex_unlock(&pinctrl_mutex);
 
     uint64_t packet_stub[128 / 8];
     struct dp_packet packet;

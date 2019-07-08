@@ -16,10 +16,12 @@
 #include <config.h>
 #include "binding.h"
 #include "byte-order.h"
+#include "encaps.h"
 #include "flow.h"
 #include "ha-chassis.h"
 #include "lflow.h"
 #include "lport.h"
+#include "chassis.h"
 #include "lib/bundle.h"
 #include "openvswitch/poll-loop.h"
 #include "lib/uuid.h"
@@ -30,6 +32,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/ofp-parse.h"
 #include "ovn-controller.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -80,38 +83,27 @@ struct chassis_tunnel {
 /*
  * This function looks up the list of tunnel ports (provided by
  * ovn-chassis-id ports) and returns the tunnel for the given chassid-id and
- * encap-ip. The ovn-chassis-id is formed using the chassis-id and encap-ip as
- * <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip>. The list is hashed using
- * the chassis-id. If the encap-ip is not specified, it means we'll just
- * return a tunnel for that chassis-id, i.e. we just check for chassis-id and
- * if there is a match, we'll return the tunnel. If encap-ip is also provided we
- * use <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip> to do a more specific
- * lookup.
+ * encap-ip. The ovn-chassis-id is formed using the chassis-id and encap-ip.
+ * The list is hashed using the chassis-id. If the encap-ip is not specified,
+ * it means we'll just return a tunnel for that chassis-id, i.e. we just check
+ * for chassis-id and if there is a match, we'll return the tunnel.
+ * If encap-ip is also provided we use both chassis-id and encap-ip to do
+ * a more specific lookup.
  */
 static struct chassis_tunnel *
 chassis_tunnel_find(const char *chassis_id, char *encap_ip)
 {
-    char *chassis_tunnel_entry;
-
     /*
      * If the specific encap_ip is given, look for the chassisid_ip entry,
      * else return the 1st found entry for the chassis.
      */
-    if (encap_ip != NULL) {
-        chassis_tunnel_entry = xasprintf("%s%s%s", chassis_id,
-            OVN_MVTEP_CHASSISID_DELIM, encap_ip);
-    } else {
-        chassis_tunnel_entry = xasprintf("%s", chassis_id);
-    }
     struct chassis_tunnel *tun = NULL;
     HMAP_FOR_EACH_WITH_HASH (tun, hmap_node, hash_string(chassis_id, 0),
                              &tunnels) {
-        if (strstr(tun->chassis_id, chassis_tunnel_entry) != NULL) {
-            free (chassis_tunnel_entry);
+        if (encaps_tunnel_id_match(tun->chassis_id, chassis_id, encap_ip)) {
             return tun;
         }
     }
-    free (chassis_tunnel_entry);
     return NULL;
 }
 
@@ -233,6 +225,92 @@ get_zone_ids(const struct sbrec_port_binding *binding,
     free(snat);
 
     return zone_ids;
+}
+
+static void
+put_replace_router_port_mac_flows(const struct
+                                  sbrec_port_binding *localnet_port,
+                                  const struct sbrec_chassis *chassis,
+                                  const struct hmap *local_datapaths,
+                                  struct ofpbuf *ofpacts_p,
+                                  ofp_port_t ofport,
+                                  struct ovn_desired_flow_table *flow_table)
+{
+    struct local_datapath *ld = get_local_datapath(local_datapaths,
+                                                   localnet_port->datapath->
+                                                   tunnel_key);
+    ovs_assert(ld);
+
+    uint32_t dp_key = localnet_port->datapath->tunnel_key;
+    uint32_t port_key = localnet_port->tunnel_key;
+    int tag = localnet_port->tag ? *localnet_port->tag : 0;
+    const char *network = smap_get(&localnet_port->options, "network_name");
+    struct eth_addr chassis_mac;
+
+    if (!network) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "Physical network not configured for datapath:"
+                     "%"PRId64" with localnet port",
+                     localnet_port->datapath->tunnel_key);
+        return;
+    }
+
+    /* Get chassis mac */
+    if (!chassis_get_mac(chassis, network, &chassis_mac)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        /* Keeping the log level low for backward compatibility.
+         * Chassis mac is a new configuration.
+         */
+        VLOG_DBG_RL(&rl, "Could not get chassis mac for network: %s", network);
+        return;
+    }
+
+    for (int i = 0; i < ld->n_peer_ports; i++) {
+        const struct sbrec_port_binding *rport_binding = ld->peer_ports[i];
+        struct eth_addr router_port_mac;
+        struct match match;
+        struct ofpact_mac *replace_mac;
+
+        /* Table 65, priority 150.
+         * =======================
+         *
+         * Implements output to localnet port.
+         * a. Flow replaces ingress router port mac with a chassis mac.
+         * b. Flow appends the vlan id localnet port is configured with.
+         */
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+
+        ovs_assert(rport_binding->n_mac == 1);
+        char *err_str = str_to_mac(rport_binding->mac[0], &router_port_mac);
+        if (err_str) {
+            /* Parsing of mac failed. */
+            VLOG_WARN("Parsing or router port mac failed for router port: %s, "
+                      "with error: %s", rport_binding->logical_port, err_str);
+            free(err_str);
+            return;
+        }
+
+        /* Replace Router mac flow */
+        match_set_metadata(&match, htonll(dp_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+        match_set_dl_src(&match, router_port_mac);
+
+        replace_mac = ofpact_put_SET_ETH_SRC(ofpacts_p);
+        replace_mac->mac = chassis_mac;
+
+        if (tag) {
+            struct ofpact_vlan_vid *vlan_vid;
+            vlan_vid = ofpact_put_SET_VLAN_VID(ofpacts_p);
+            vlan_vid->vlan_vid = tag;
+            vlan_vid->push_vlan_if_needed = true;
+        }
+
+        ofpact_put_OUTPUT(ofpacts_p)->port = ofport;
+
+        ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 150, 0,
+                        &match, ofpacts_p, &localnet_port->header_.uuid);
+    }
 }
 
 static void
@@ -707,6 +785,13 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
         }
         ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 100, 0,
                         &match, ofpacts_p, &binding->header_.uuid);
+
+        if (!strcmp(binding->type, "localnet")) {
+            put_replace_router_port_mac_flows(binding, chassis,
+                                              local_datapaths, ofpacts_p,
+                                              ofport, flow_table);
+        }
+
     } else if (!tun && !is_ha_remote) {
         /* Remote port connected by localnet port */
         /* Table 33, priority 100.
@@ -1064,8 +1149,9 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
         }
 
         const char *tunnel_id = smap_get(&port_rec->external_ids,
-                                          "ovn-chassis-id");
-        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
+                                         "ovn-chassis-id");
+        if (tunnel_id &&
+                encaps_tunnel_id_match(tunnel_id, chassis->name, NULL)) {
             continue;
         }
 
@@ -1121,16 +1207,10 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                  * where we need to tunnel to the chassis, but won't
                  * have the encap-ip specifically.
                  */
-                char *tokstr = xstrdup(tunnel_id);
-                char *save_ptr = NULL;
-                char *hash_id = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM,
-                                &save_ptr);
-                char *ip = strtok_r(NULL, "", &save_ptr);
-                /*
-                 * If the value has morphed into something other than
-                 * chassis-id>delim>encap-ip, ignore.
-                 */
-                if (!hash_id || !ip) {
+                char *hash_id = NULL;
+                char *ip = NULL;
+
+                if (!encaps_tunnel_id_parse(tunnel_id, &hash_id, &ip)) {
                     continue;
                 }
                 struct chassis_tunnel *tun = chassis_tunnel_find(hash_id, ip);
@@ -1151,7 +1231,8 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                     tun->type = tunnel_type;
                     physical_map_changed = true;
                 }
-                free(tokstr);
+                free(hash_id);
+                free(ip);
                 break;
             } else {
                 const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -1256,7 +1337,8 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
             struct match match = MATCH_CATCHALL_INITIALIZER;
 
             if (!binding->chassis ||
-                strstr(tun->chassis_id, binding->chassis->name) == NULL) {
+                !encaps_tunnel_id_match(tun->chassis_id,
+                                        binding->chassis->name, NULL)) {
                 continue;
             }
 

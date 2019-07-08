@@ -59,8 +59,9 @@ struct local_datapath {
     /* True if this datapath contains an l3gateway port located on this
      * hypervisor. */
     bool has_local_l3gateway;
-    const struct sbrec_datapath_binding **peer_dps;
-    size_t n_peer_dps;
+
+    const struct sbrec_port_binding **peer_ports;
+    size_t n_peer_ports;
 };
 
 struct local_datapath *get_local_datapath(const struct hmap *,
@@ -80,12 +81,5 @@ enum chassis_tunnel_type {
 };
 
 uint32_t get_tunnel_type(const char *name);
-
-/*
- * Given there could be multiple tunnels with different IPs to the same
- * chassis we annotate the ovn-chassis-id with
- * <chassis_name>OVN_MVTEP_CHASSISID_DELIM<IP>.
- */
-#define	OVN_MVTEP_CHASSISID_DELIM	"@"
 
 #endif /* ovn/ovn-controller.h */

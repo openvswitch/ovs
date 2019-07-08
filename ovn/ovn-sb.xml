@@ -301,6 +301,14 @@
       See <code>ovn-controller</code>(8) for more information.
     </column>
 
+    <column name="external_ids" key="ovn-chassis-mac-mappings">
+      <code>ovn-controller</code> populates this key with the set of options
+      configured in the <ref table="Open_vSwitch"
+      column="external_ids:ovn-chassis-mac-mappings"/> column of the
+      Open_vSwitch database's <ref table="Open_vSwitch" db="Open_vSwitch"/>
+      table. See <code>ovn-controller</code>(8) for more information.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
@@ -362,14 +370,14 @@
     </column>
 
     <column name="options">
-      <p>
-        Options for configuring the encapsulation. Currently, the only
-        option that has been defined is <code>csum</code>.
-      </p>
+      Options for configuring the encapsulation, which may be <ref column="type"/> specific.
+    </column>
 
+    <column name="options" key="csum" type='{"type": "boolean"}'>
       <p>
-        <code>csum</code> indicates that encapsulation checksums can be
-        transmitted and received with reasonable performance. It is a hint
+        <code>csum</code> indicates whether this chassis can transmit and
+        receive packets that include checksums with reasonable performance.  It
+        hints
         to senders transmitting data to this chassis that they should use
         checksums to protect OVN metadata. <code>ovn-controller</code>
         populates this key with the value defined in
@@ -380,7 +388,7 @@
       </p>
 
       <p>
-        In terms of performance, this actually significantly increases
+        In terms of performance, checksumming actually significantly increases
         throughput in most common cases when running on Linux based hosts
         without NICs supporting encapsulation hardware offload (around 60% for
         bulk traffic). The reason is that generally all NICs are capable of
@@ -399,7 +407,7 @@
         efficiently compute or validate full packet checksums. In addition
         certain versions of the Linux kernel are not able to fully take
         advantage of encapsulation NIC offloads in the presence of checksums.
-        (This is actually a pretty narrow corner case though - earlier
+        (This is actually a pretty narrow corner case though: earlier
         versions of Linux don't support encapsulation offloads at all and
         later versions support both offloads and checksums well.)
       </p>
@@ -407,6 +415,18 @@
       <p>
         <code>csum</code> defaults to <code>false</code> for hardware VTEPs and
         <code>true</code> for all other cases.
+      </p>
+
+      <p>
+        This option applies to <code>geneve</code> and <code>vxlan</code>
+        encapsulations.
+      </p>
+    </column>
+
+    <column name="options" key="dst_port" type='{"type": "integer"}'>
+      <p>
+        If set, overrides the UDP (for <code>geneve</code> and
+        <code>vxlan</code>) or TCP (for <code>stt</code>) destination port.
       </p>
     </column>
 

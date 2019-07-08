@@ -21,8 +21,10 @@
 
 #include "connectivity.h"
 #include "netdev.h"
+#include "netdev-offload.h"
 #include "openvswitch/list.h"
 #include "ovs-numa.h"
+#include "ovs-rcu.h"
 #include "packets.h"
 #include "seq.h"
 #include "openvswitch/shash.h"
@@ -34,19 +36,6 @@ extern "C" {
 
 struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
-
-/* Offload-capable (HW) netdev information */
-struct netdev_hw_info {
-    bool oor;		/* Out of Offload Resources ? */
-    int offload_count;  /* Pending (non-offloaded) flow count */
-    int pending_count;  /* Offloaded flow count */
-};
-
-enum hw_info_type {
-    HW_INFO_TYPE_OOR = 1,		/* OOR state */
-    HW_INFO_TYPE_PEND_COUNT = 2,	/* Pending(non-offloaded) flow count */
-    HW_INFO_TYPE_OFFL_COUNT = 3		/* Offloaded flow count */
-};
 
 /* A network device (e.g. an Ethernet device).
  *
@@ -93,6 +82,9 @@ struct netdev {
     int n_rxq;
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
+
+    /* Functions to control flow offloading. */
+    OVSRCU_TYPE(const struct netdev_flow_api *) flow_api;
     struct netdev_hw_info hw_info;	/* offload-capable netdev info */
 };
 
@@ -134,13 +126,6 @@ struct netdev_rxq {
 
 struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
 
-
-struct netdev_flow_dump {
-    struct netdev *netdev;
-    odp_port_t port;
-    bool terse;
-    struct nl_dump *nl_dump;
-};
 
 /* Network device class structure, to be defined by each implementation of a
  * network device.
@@ -789,6 +774,13 @@ struct netdev_class {
     void (*rxq_destruct)(struct netdev_rxq *);
     void (*rxq_dealloc)(struct netdev_rxq *);
 
+    /* Retrieves the current state of rx queue.  'false' means that queue won't
+     * get traffic in a short term and could be not polled.
+     *
+     * This function may be set to null if it would always return 'true'
+     * anyhow. */
+    bool (*rxq_enabled)(struct netdev_rxq *);
+
     /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
      * caller supplies 'packets' as the pointer to the beginning of an array
      * of NETDEV_MAX_BURST pointers to dp_packet.  If successful, the
@@ -821,69 +813,6 @@ struct netdev_class {
 
     /* Discards all packets waiting to be received from 'rx'. */
     int (*rxq_drain)(struct netdev_rxq *rx);
-
-    /* ## -------------------------------- ## */
-    /* ## netdev flow offloading functions ## */
-    /* ## -------------------------------- ## */
-
-    /* If a particular netdev class does not support offloading flows,
-     * all these function pointers must be NULL. */
-
-    /* Flush all offloaded flows from a netdev.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*flow_flush)(struct netdev *);
-
-    /* Flow dumping interface.
-     *
-     * This is the back-end for the flow dumping interface described in
-     * dpif.h.  Please read the comments there first, because this code
-     * closely follows it.
-     *
-     * On success returns 0 and allocates data, on failure returns
-     * positive errno. */
-    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump);
-    int (*flow_dump_destroy)(struct netdev_flow_dump *);
-
-    /* Returns true if there are more flows to dump.
-     * 'rbuffer' is used as a temporary buffer and needs to be pre allocated
-     * by the caller.  While there are more flows the same 'rbuffer'
-     * should be provided. 'wbuffer' is used to store dumped actions and needs
-     * to be pre allocated by the caller. */
-    bool (*flow_dump_next)(struct netdev_flow_dump *, struct match *,
-                           struct nlattr **actions,
-                           struct dpif_flow_stats *stats,
-                           struct dpif_flow_attrs *attrs, ovs_u128 *ufid,
-                           struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
-
-    /* Offload the given flow on netdev.
-     * To modify a flow, use the same ufid.
-     * 'actions' are in netlink format, as with struct dpif_flow_put.
-     * 'info' is extra info needed to offload the flow.
-     * 'stats' is populated according to the rules set out in the description
-     * above 'struct dpif_flow_put'.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*flow_put)(struct netdev *, struct match *, struct nlattr *actions,
-                    size_t actions_len, const ovs_u128 *ufid,
-                    struct offload_info *info, struct dpif_flow_stats *);
-
-    /* Queries a flow specified by ufid on netdev.
-     * Fills output buffer as 'wbuffer' in flow_dump_next, which
-     * needs to be be pre allocated.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*flow_get)(struct netdev *, struct match *, struct nlattr **actions,
-                    const ovs_u128 *ufid, struct dpif_flow_stats *,
-                    struct dpif_flow_attrs *, struct ofpbuf *wbuffer);
-
-    /* Delete a flow specified by ufid from netdev.
-     * 'stats' is populated according to the rules set out in the description
-     * above 'struct dpif_flow_del'.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*flow_del)(struct netdev *, const ovs_u128 *ufid,
-                    struct dpif_flow_stats *);
-
-    /* Initializies the netdev flow api.
-     * Return 0 if successful, otherwise returns a positive errno value. */
-    int (*init_flow_api)(struct netdev *);
 
     /* Get a block_id from the netdev.
      * Returns the block_id or 0 if none exists for netdev. */

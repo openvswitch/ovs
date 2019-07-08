@@ -553,6 +553,7 @@ fi
 /var/lib/openvswitch
 %attr(750,root,root) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
+%ghost %attr(644,root,root) %{_rundir}/openvswitch.useropts
 
 %files ipsec
 %{_datadir}/openvswitch/scripts/ovs-monitor-ipsec

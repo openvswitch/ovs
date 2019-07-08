@@ -10,7 +10,7 @@
 
 #define OFP_VERSION_OPTION_HANDLERS                             \
         case 'V':                                               \
-            ovs_print_version(OFP10_VERSION, OFP14_VERSION);    \
+            ovs_print_version(OFP10_VERSION, OFP15_VERSION);    \
             exit(EXIT_SUCCESS);                                 \
                                                                 \
         case 'O':                                               \

@@ -26,6 +26,13 @@
 
 VLOG_DEFINE_THIS_MODULE(encaps);
 
+/*
+ * Given there could be multiple tunnels with different IPs to the same
+ * chassis we annotate the ovn-chassis-id with
+ * <chassis_name>OVN_MVTEP_CHASSISID_DELIM<IP>.
+ */
+#define	OVN_MVTEP_CHASSISID_DELIM '@'
+
 void
 encaps_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
@@ -78,6 +85,70 @@ tunnel_create_name(struct tunnel_ctx *tc, const char *chassis_id)
     return NULL;
 }
 
+/*
+ * Returns a tunnel-id of the form 'chassis_id'-delimiter-'encap_ip'.
+ */
+char *
+encaps_tunnel_id_create(const char *chassis_id, const char *encap_ip)
+{
+    return xasprintf("%s%c%s", chassis_id, OVN_MVTEP_CHASSISID_DELIM,
+                     encap_ip);
+}
+
+/*
+ * Parses a 'tunnel_id' of the form <chassis_name><delimiter><IP>.
+ * If the 'chassis_id' argument is not NULL the function will allocate memory
+ * and store the chassis-id part of the tunnel-id at '*chassis_id'.
+ * If the 'encap_ip' argument is not NULL the function will allocate memory
+ * and store the encapsulation IP part of the tunnel-id at '*encap_ip'.
+ */
+bool
+encaps_tunnel_id_parse(const char *tunnel_id, char **chassis_id,
+                       char **encap_ip)
+{
+    /* Find the delimiter.  Fail if there is no delimiter or if <chassis_name>
+     * or <IP> is the empty string.*/
+    const char *d = strchr(tunnel_id, OVN_MVTEP_CHASSISID_DELIM);
+    if (d == tunnel_id || !d || !d[1]) {
+        return false;
+    }
+
+    if (chassis_id) {
+        *chassis_id = xmemdup0(tunnel_id, d - tunnel_id);
+    }
+    if (encap_ip) {
+        *encap_ip = xstrdup(d + 1);
+    }
+    return true;
+}
+
+/*
+ * Returns true if 'tunnel_id' contains 'chassis_id' and, if specified, the
+ * given 'encap_ip'. Returns false otherwise.
+ */
+bool
+encaps_tunnel_id_match(const char *tunnel_id, const char *chassis_id,
+                       const char *encap_ip)
+{
+    while (*tunnel_id == *chassis_id) {
+        if (!*tunnel_id) {
+            /* 'tunnel_id' and 'chassis_id' are equal strings.  This is a
+             * mismatch because 'tunnel_id' is missing the delimiter and IP. */
+            return false;
+        }
+        tunnel_id++;
+        chassis_id++;
+    }
+
+    /* We found the first byte that disagrees between 'tunnel_id' and
+     * 'chassis_id'.  If we consumed all of 'chassis_id' and arrived at the
+     * delimiter in 'tunnel_id' (and if 'encap_ip' is correct, if it was
+     * supplied), it's a match. */
+    return (*tunnel_id == OVN_MVTEP_CHASSISID_DELIM
+            && *chassis_id == '\0'
+            && (!encap_ip || !strcmp(tunnel_id + 1, encap_ip)));
+}
+
 static void
 tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
            const char *new_chassis_id, const struct sbrec_encap *encap)
@@ -85,6 +156,7 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     struct smap options = SMAP_INITIALIZER(&options);
     smap_add(&options, "remote_ip", encap->ip);
     smap_add(&options, "key", "flow");
+    const char *dst_port = smap_get(&encap->options, "dst_port");
     const char *csum = smap_get(&encap->options, "csum");
     char *tunnel_entry_id = NULL;
 
@@ -94,10 +166,12 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
      * combination of the chassis_name and the encap-ip to identify
      * a specific tunnel to the chassis.
      */
-    tunnel_entry_id = xasprintf("%s%s%s", new_chassis_id,
-                                OVN_MVTEP_CHASSISID_DELIM, encap->ip);
+    tunnel_entry_id = encaps_tunnel_id_create(new_chassis_id, encap->ip);
     if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
         smap_add(&options, "csum", csum);
+    }
+    if (dst_port) {
+        smap_add(&options, "dst_port", dst_port);
     }
 
     /* Add auth info if ipsec is enabled. */

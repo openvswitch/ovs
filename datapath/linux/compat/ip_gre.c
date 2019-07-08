@@ -71,112 +71,14 @@ static void erspan_build_header(struct sk_buff *skb,
 
 static bool ip_gre_loaded = false;
 
-#define ip_gre_calc_hlen rpl_ip_gre_calc_hlen
-static int ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
-
-/* Returns the least-significant 32 bits of a __be64. */
-static __be32 tunnel_id_to_key(__be64 x)
-{
-#ifdef __BIG_ENDIAN
-	return (__force __be32)x;
-#else
-	return (__force __be32)((__force u64)x >> 32);
-#endif
-}
-
-static struct dst_ops md_dst_ops = {
+/* Normally in net/core/dst.c but move it here */
+struct dst_ops md_dst_ops = {
 	.family =		AF_UNSPEC,
 };
 
-#ifndef DST_METADATA
-#define DST_METADATA 0x0080
+#ifndef ip_gre_calc_hlen
+#define ip_gre_calc_hlen gre_calc_hlen
 #endif
-
-static void rpl__metadata_dst_init(struct metadata_dst *md_dst,
-				enum metadata_type type, u8 optslen)
-
-{
-	struct dst_entry *dst;
-
-	dst = &md_dst->dst;
-	dst_init(dst, &md_dst_ops, NULL, 1, DST_OBSOLETE_NONE,
-		 DST_METADATA | DST_NOCOUNT);
-
-#if 0
-	/* unused in OVS */
-	dst->input = dst_md_discard;
-	dst->output = dst_md_discard_out;
-#endif
-	memset(dst + 1, 0, sizeof(*md_dst) + optslen - sizeof(*dst));
-	md_dst->type = type;
-}
-
-static struct metadata_dst *erspan_rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type,
-					gfp_t flags)
-{
-	struct metadata_dst *md_dst;
-
-	md_dst = kmalloc(sizeof(*md_dst) + optslen, flags);
-	if (!md_dst)
-		return NULL;
-
-	rpl__metadata_dst_init(md_dst, type, optslen);
-
-	return md_dst;
-}
-static inline struct metadata_dst *rpl_tun_rx_dst(int md_size)
-{
-	struct metadata_dst *tun_dst;
-
-	tun_dst = erspan_rpl_metadata_dst_alloc(md_size, METADATA_IP_TUNNEL, GFP_ATOMIC);
-	if (!tun_dst)
-		return NULL;
-
-	tun_dst->u.tun_info.options_len = 0;
-	tun_dst->u.tun_info.mode = 0;
-	return tun_dst;
-}
-static inline struct metadata_dst *rpl__ip_tun_set_dst(__be32 saddr,
-						    __be32 daddr,
-						    __u8 tos, __u8 ttl,
-						    __be16 tp_dst,
-						    __be16 flags,
-						    __be64 tunnel_id,
-						    int md_size)
-{
-	struct metadata_dst *tun_dst;
-
-	tun_dst = rpl_tun_rx_dst(md_size);
-	if (!tun_dst)
-		return NULL;
-
-	ip_tunnel_key_init(&tun_dst->u.tun_info.key,
-			   saddr, daddr, tos, ttl,
-			   0, 0, tp_dst, tunnel_id, flags);
-	return tun_dst;
-}
-
-static inline struct metadata_dst *rpl_ip_tun_rx_dst(struct sk_buff *skb,
-						 __be16 flags,
-						 __be64 tunnel_id,
-						 int md_size)
-{
-	const struct iphdr *iph = ip_hdr(skb);
-
-	return rpl__ip_tun_set_dst(iph->saddr, iph->daddr, iph->tos, iph->ttl,
-				0, flags, tunnel_id, md_size);
-}
 
 static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		      int gre_hdr_len)
@@ -562,7 +464,7 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 
 	flags = tun_info->key.tun_flags & (TUNNEL_CSUM | TUNNEL_KEY);
 	build_header(skb, tunnel_hlen, flags, htons(ETH_P_TEB),
-		     tunnel_id_to_key(tun_info->key.tun_id), 0);
+		     tunnel_id_to_key32(tun_info->key.tun_id), 0);
 
 	df = key->tun_flags & TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
 	iptunnel_xmit(skb->sk, rt, skb, fl.saddr, key->u.ipv4.dst, IPPROTO_GRE,
@@ -1500,7 +1402,7 @@ static struct vport *erspan_tnl_create(const struct vport_parms *parms)
 		return ERR_CAST(dev);
 	}
 
-	err = dev_change_flags(dev, dev->flags | IFF_UP);
+	err = dev_change_flags(dev, dev->flags | IFF_UP, NULL);
 	if (err < 0) {
 		rtnl_delete_link(dev);
 		rtnl_unlock();
@@ -1554,7 +1456,7 @@ static struct vport *ipgre_tnl_create(const struct vport_parms *parms)
 		return ERR_CAST(dev);
 	}
 
-	err = dev_change_flags(dev, dev->flags | IFF_UP);
+	err = dev_change_flags(dev, dev->flags | IFF_UP, NULL);
 	if (err < 0) {
 		rtnl_delete_link(dev);
 		rtnl_unlock();

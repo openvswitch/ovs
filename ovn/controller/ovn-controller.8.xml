@@ -112,6 +112,20 @@
         </p>
       </dd>
 
+      <dt><code>external_ids:ovn-openflow-probe-interval</code></dt>
+      <dd>
+        <p>
+          The inactivity probe interval of the OpenFlow connection to the
+          OpenvSwitch integration bridge, in seconds.
+          If the value is zero, it disables the connection keepalive feature.
+        </p>
+
+        <p>
+          If the value is nonzero, then it will be forced to a value of
+          at least 5s.
+        </p>
+      </dd>
+
       <dt><code>external_ids:ovn-encap-type</code></dt>
       <dd>
         <p>
@@ -181,6 +195,16 @@
           If not set, the Chassis will be considered part of a default
           transport zone.
         </p>
+      </dd>
+      <dt><code>external_ids:ovn-chassis-mac-mappings</code></dt>
+      <dd>
+        A list of key-value pairs that map a chassis specific mac to
+        a physical network name. An example
+        value mapping two chassis macs to two physical network names would be:
+        <code>physnet1:aa:bb:cc:dd:ee:ff,physnet2:a1:b2:c3:d4:e5:f6</code>.
+        These are the macs that ovn-controller will replace a router port
+        mac with, if packet is going from a distributed router port on
+        vlan type logical switch.
       </dd>
     </dl>
 

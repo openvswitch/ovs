@@ -419,6 +419,8 @@ const char *dpif_name(const struct dpif *);
 const char *dpif_base_name(const struct dpif *);
 const char *dpif_type(const struct dpif *);
 
+bool dpif_cleanup_required(const struct dpif *);
+
 int dpif_delete(struct dpif *);
 
 /* Statistics for a dpif as a whole. */

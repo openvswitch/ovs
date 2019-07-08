@@ -47,7 +47,6 @@
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
-#include "netdev-rte-offloads.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
@@ -139,6 +138,12 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
 #define XSTAT_RX_FRAGMENTED_ERRORS       "rx_fragmented_errors"
 #define XSTAT_RX_JABBER_ERRORS           "rx_jabber_errors"
 
+/* Size of vHost custom stats. */
+#define VHOST_CUSTOM_STATS_SIZE          1
+
+/* Names of vHost custom stats. */
+#define VHOST_STAT_TX_RETRIES            "tx_retries"
+
 #define SOCKET0              0
 
 /* Default size of Physical NIC RXQ */
@@ -159,7 +164,13 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
 typedef uint16_t dpdk_port_t;
 #define DPDK_PORT_ID_FMT "%"PRIu16
 
-#define VHOST_ENQ_RETRY_NUM 8
+/* Minimum amount of vhost tx retries, effectively a disable. */
+#define VHOST_ENQ_RETRY_MIN 0
+/* Maximum amount of vhost tx retries. */
+#define VHOST_ENQ_RETRY_MAX 32
+/* Legacy default value for vhost tx retries. */
+#define VHOST_ENQ_RETRY_DEF 8
+
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
 
 static const struct rte_eth_conf port_conf = {
@@ -186,12 +197,15 @@ static const struct rte_eth_conf port_conf = {
 static int new_device(int vid);
 static void destroy_device(int vid);
 static int vring_state_changed(int vid, uint16_t queue_id, int enable);
+static void destroy_connection(int vid);
 static const struct vhost_device_ops virtio_net_device_ops =
 {
     .new_device =  new_device,
     .destroy_device = destroy_device,
     .vring_state_changed = vring_state_changed,
-    .features_changed = NULL
+    .features_changed = NULL,
+    .new_connection = NULL,
+    .destroy_connection = destroy_connection,
 };
 
 enum { DPDK_RING_SIZE = 256 };
@@ -409,7 +423,9 @@ struct netdev_dpdk {
 
         /* True if vHost device is 'up' and has been reconfigured at least once */
         bool vhost_reconfigured;
-        /* 3 pad bytes here. */
+
+        atomic_uint8_t vhost_tx_retries_max;
+        /* 2 pad bytes here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -424,13 +440,18 @@ struct netdev_dpdk {
         OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
         uint32_t policer_rate;
         uint32_t policer_burst;
+
+        /* Array of vhost rxq states, see vring_state_changed. */
+        bool *vhost_rxq_enabled;
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
         struct netdev_stats stats;
+        /* Custom stat for retries when unable to transmit. */
+        uint64_t tx_retries;
         /* Protects stats */
         rte_spinlock_t stats_lock;
-        /* 44 pad bytes here. */
+        /* 4 pad bytes here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1184,6 +1205,8 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
     dev->rte_xstats_ids = NULL;
     dev->rte_xstats_ids_size = 0;
 
+    dev->tx_retries = 0;
+
     return 0;
 }
 
@@ -1235,10 +1258,18 @@ vhost_common_construct(struct netdev *netdev)
     int socket_id = rte_lcore_to_socket_id(rte_get_master_lcore());
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
-    dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
-    if (!dev->tx_q) {
+    dev->vhost_rxq_enabled = dpdk_rte_mzalloc(OVS_VHOST_MAX_QUEUE_NUM *
+                                              sizeof *dev->vhost_rxq_enabled);
+    if (!dev->vhost_rxq_enabled) {
         return ENOMEM;
     }
+    dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
+    if (!dev->tx_q) {
+        rte_free(dev->vhost_rxq_enabled);
+        return ENOMEM;
+    }
+
+    atomic_init(&dev->vhost_tx_retries_max, VHOST_ENQ_RETRY_DEF);
 
     return common_construct(netdev, DPDK_ETH_PORT_ID_INVALID,
                             DPDK_DEV_VHOST, socket_id);
@@ -1449,6 +1480,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
 
     vhost_id = dev->vhost_id;
     dev->vhost_id = NULL;
+    rte_free(dev->vhost_rxq_enabled);
 
     common_destruct(dev);
 
@@ -1899,6 +1931,7 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *path;
+    int max_tx_retries, cur_max_tx_retries;
 
     ovs_mutex_lock(&dev->mutex);
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
@@ -1914,6 +1947,19 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
             }
             netdev_request_reconfigure(netdev);
         }
+    }
+
+    max_tx_retries = smap_get_int(args, "tx-retries-max",
+                                  VHOST_ENQ_RETRY_DEF);
+    if (max_tx_retries < VHOST_ENQ_RETRY_MIN
+        || max_tx_retries > VHOST_ENQ_RETRY_MAX) {
+        max_tx_retries = VHOST_ENQ_RETRY_DEF;
+    }
+    atomic_read_relaxed(&dev->vhost_tx_retries_max, &cur_max_tx_retries);
+    if (max_tx_retries != cur_max_tx_retries) {
+        atomic_store_relaxed(&dev->vhost_tx_retries_max, max_tx_retries);
+        VLOG_INFO("Max Tx retries for vhost device '%s' set to %d",
+                  netdev_get_name(netdev), max_tx_retries);
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -2203,6 +2249,14 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
     return 0;
 }
 
+static bool
+netdev_dpdk_vhost_rxq_enabled(struct netdev_rxq *rxq)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
+
+    return dev->vhost_rxq_enabled[rxq->queue_id];
+}
+
 static int
 netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch,
                      int *qfill)
@@ -2320,6 +2374,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     unsigned int total_pkts = cnt;
     unsigned int dropped = 0;
     int i, retries = 0;
+    int max_retries = VHOST_ENQ_RETRY_MIN;
     int vid = netdev_dpdk_get_vid(dev);
 
     qid = dev->tx_q[qid % netdev->n_txq].map;
@@ -2349,17 +2404,25 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
             cnt -= tx_pkts;
             /* Prepare for possible retry.*/
             cur_pkts = &cur_pkts[tx_pkts];
+            if (OVS_UNLIKELY(cnt && !retries)) {
+                /*
+                 * Read max retries as there are packets not sent
+                 * and no retries have already occurred.
+                 */
+                atomic_read_relaxed(&dev->vhost_tx_retries_max, &max_retries);
+            }
         } else {
             /* No packets sent - do not retry.*/
             break;
         }
-    } while (cnt && (retries++ <= VHOST_ENQ_RETRY_NUM));
+    } while (cnt && (retries++ < max_retries));
 
     rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
 
     rte_spinlock_lock(&dev->stats_lock);
     netdev_dpdk_vhost_update_tx_counters(&dev->stats, pkts, total_pkts,
                                          cnt + dropped);
+    dev->tx_retries += MIN(retries, max_retries);
     rte_spinlock_unlock(&dev->stats_lock);
 
 out:
@@ -2791,6 +2854,29 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
 
         free(values);
     }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
+                                   struct netdev_custom_stats *custom_stats)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+
+    custom_stats->size = VHOST_CUSTOM_STATS_SIZE;
+    custom_stats->counters = xcalloc(custom_stats->size,
+                                     sizeof *custom_stats->counters);
+    ovs_strlcpy(custom_stats->counters[0].name, VHOST_STAT_TX_RETRIES,
+                NETDEV_CUSTOM_STATS_NAME_SIZE);
+
+    rte_spinlock_lock(&dev->stats_lock);
+    custom_stats->counters[0].value = dev->tx_retries;
+    rte_spinlock_unlock(&dev->stats_lock);
 
     ovs_mutex_unlock(&dev->mutex);
 
@@ -3495,8 +3581,8 @@ new_device(int vid)
                 newnode = dev->socket_id;
             }
 
-            if (dev->requested_n_txq != qp_num
-                || dev->requested_n_rxq != qp_num
+            if (dev->requested_n_txq < qp_num
+                || dev->requested_n_rxq < qp_num
                 || dev->requested_socket_id != newnode) {
                 dev->requested_socket_id = newnode;
                 dev->requested_n_rxq = qp_num;
@@ -3566,6 +3652,8 @@ destroy_device(int vid)
             ovs_mutex_lock(&dev->mutex);
             dev->vhost_reconfigured = false;
             ovsrcu_index_set(&dev->vid, -1);
+            memset(dev->vhost_rxq_enabled, 0,
+                   dev->up.n_rxq * sizeof *dev->vhost_rxq_enabled);
             netdev_dpdk_txq_map_clear(dev);
 
             netdev_change_seq_changed(&dev->up);
@@ -3600,24 +3688,30 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
     struct netdev_dpdk *dev;
     bool exists = false;
     int qid = queue_id / VIRTIO_QNUM;
+    bool is_rx = (queue_id % VIRTIO_QNUM) == VIRTIO_TXQ;
     char ifname[IF_NAME_SZ];
 
     rte_vhost_get_ifname(vid, ifname, sizeof ifname);
-
-    if (queue_id % VIRTIO_QNUM == VIRTIO_TXQ) {
-        return 0;
-    }
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
         ovs_mutex_lock(&dev->mutex);
         if (nullable_string_is_equal(ifname, dev->vhost_id)) {
-            if (enable) {
-                dev->tx_q[qid].map = qid;
+            if (is_rx) {
+                bool old_state = dev->vhost_rxq_enabled[qid];
+
+                dev->vhost_rxq_enabled[qid] = enable != 0;
+                if (old_state != dev->vhost_rxq_enabled[qid]) {
+                    netdev_change_seq_changed(&dev->up);
+                }
             } else {
-                dev->tx_q[qid].map = OVS_VHOST_QUEUE_DISABLED;
+                if (enable) {
+                    dev->tx_q[qid].map = qid;
+                } else {
+                    dev->tx_q[qid].map = OVS_VHOST_QUEUE_DISABLED;
+                }
+                netdev_dpdk_remap_txqs(dev);
             }
-            netdev_dpdk_remap_txqs(dev);
             exists = true;
             ovs_mutex_unlock(&dev->mutex);
             break;
@@ -3627,15 +3721,57 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (exists) {
-        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s' "
-                  "changed to \'%s\'", queue_id, qid, ifname,
-                  (enable == 1) ? "enabled" : "disabled");
+        VLOG_INFO("State of queue %d ( %s_qid %d ) of vhost device '%s' "
+                  "changed to \'%s\'", queue_id, is_rx == true ? "rx" : "tx",
+                  qid, ifname, (enable == 1) ? "enabled" : "disabled");
     } else {
         VLOG_INFO("vHost Device '%s' not found", ifname);
         return -1;
     }
 
     return 0;
+}
+
+static void
+destroy_connection(int vid)
+{
+    struct netdev_dpdk *dev;
+    char ifname[IF_NAME_SZ];
+    bool exists = false;
+
+    rte_vhost_get_ifname(vid, ifname, sizeof ifname);
+
+    ovs_mutex_lock(&dpdk_mutex);
+    LIST_FOR_EACH (dev, list_node, &dpdk_list) {
+        ovs_mutex_lock(&dev->mutex);
+        if (nullable_string_is_equal(ifname, dev->vhost_id)) {
+            uint32_t qp_num = NR_QUEUE;
+
+            if (netdev_dpdk_get_vid(dev) >= 0) {
+                VLOG_ERR("Connection on socket '%s' destroyed while vhost "
+                         "device still attached.", dev->vhost_id);
+            }
+
+            /* Restore the number of queue pairs to default. */
+            if (dev->requested_n_txq != qp_num
+                || dev->requested_n_rxq != qp_num) {
+                dev->requested_n_rxq = qp_num;
+                dev->requested_n_txq = qp_num;
+                netdev_request_reconfigure(&dev->up);
+            }
+            ovs_mutex_unlock(&dev->mutex);
+            exists = true;
+            break;
+        }
+        ovs_mutex_unlock(&dev->mutex);
+    }
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    if (exists) {
+        VLOG_INFO("vHost Device '%s' connection has been destroyed", ifname);
+    } else {
+        VLOG_INFO("vHost Device '%s' not found", ifname);
+    }
 }
 
 /*
@@ -4088,6 +4224,10 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
     dev->up.n_rxq = dev->requested_n_rxq;
     int err;
 
+    /* Always keep RX queue 0 enabled for implementations that won't
+     * report vring states. */
+    dev->vhost_rxq_enabled[0] = true;
+
     /* Enable TX queue 0 by default if it wasn't disabled. */
     if (dev->tx_q[0].map == OVS_VHOST_QUEUE_MAP_UNKNOWN) {
         dev->tx_q[0].map = 0;
@@ -4212,6 +4352,27 @@ unlock:
     return err;
 }
 
+bool
+netdev_dpdk_flow_api_supported(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev;
+    bool ret = false;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        goto out;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    if (dev->type == DPDK_DEV_ETH) {
+        /* TODO: Check if we able to offload some minimal flow. */
+        ret = true;
+    }
+    ovs_mutex_unlock(&dev->mutex);
+out:
+    return ret;
+}
+
 int
 netdev_dpdk_rte_flow_destroy(struct netdev *netdev,
                              struct rte_flow *rte_flow,
@@ -4276,8 +4437,7 @@ netdev_dpdk_rte_flow_create(struct netdev *netdev,
     .get_features = netdev_dpdk_get_features,           \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
-    .rxq_recv = netdev_dpdk_rxq_recv,                   \
-    DPDK_FLOW_OFFLOAD_API
+    .rxq_recv = netdev_dpdk_rxq_recv
 
 static const struct netdev_class dpdk_class = {
     .type = "dpdk",
@@ -4303,9 +4463,11 @@ static const struct netdev_class dpdk_vhost_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_reconfigure,
-    .rxq_recv = netdev_dpdk_vhost_rxq_recv
+    .rxq_recv = netdev_dpdk_vhost_rxq_recv,
+    .rxq_enabled = netdev_dpdk_vhost_rxq_enabled,
 };
 
 static const struct netdev_class dpdk_vhost_client_class = {
@@ -4317,9 +4479,11 @@ static const struct netdev_class dpdk_vhost_client_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_client_reconfigure,
-    .rxq_recv = netdev_dpdk_vhost_rxq_recv
+    .rxq_recv = netdev_dpdk_vhost_rxq_recv,
+    .rxq_enabled = netdev_dpdk_vhost_rxq_enabled,
 };
 
 void

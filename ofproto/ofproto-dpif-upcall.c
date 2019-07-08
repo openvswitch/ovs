@@ -45,7 +45,6 @@
 #include "openvswitch/vlog.h"
 #include "lib/netdev-provider.h"
 
-#define MAX_QUEUE_LENGTH 512
 #define UPCALL_MAX_BATCH 64
 #define REVALIDATE_MAX_BATCH 50
 
@@ -1526,6 +1525,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                                : NULL),
                 am->pin.up.action_set_len = state->action_set_len,
                 am->pin.up.bridge = upcall->ofproto->uuid;
+                am->pin.up.odp_port = upcall->packet->md.in_port.odp_port;
             }
 
             /* We don't want to use the upcall 'flow', since it may be

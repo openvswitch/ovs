@@ -183,6 +183,7 @@ enum netdev_pt_mode netdev_get_pt_mode(const struct netdev *);
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);
 void netdev_rxq_close(struct netdev_rxq *);
+bool netdev_rxq_enabled(struct netdev_rxq *);
 
 const char *netdev_rxq_get_name(const struct netdev_rxq *);
 int netdev_rxq_get_queue_id(const struct netdev_rxq *);
@@ -196,63 +197,6 @@ int netdev_rxq_drain(struct netdev_rxq *);
 int netdev_send(struct netdev *, int qid, struct dp_packet_batch *,
                 bool concurrent_txq);
 void netdev_send_wait(struct netdev *, int qid);
-
-/* Flow offloading. */
-struct offload_info {
-    const struct dpif_class *dpif_class;
-    ovs_be16 tp_dst_port; /* Destination port for tunnel in SET action */
-    uint8_t tunnel_csum_on; /* Tunnel header with checksum */
-
-    /*
-     * The flow mark id assigened to the flow. If any pkts hit the flow,
-     * it will be in the pkt meta data.
-     */
-    uint32_t flow_mark;
-};
-struct dpif_class;
-struct netdev_flow_dump;
-int netdev_flow_flush(struct netdev *);
-int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump);
-int netdev_flow_dump_destroy(struct netdev_flow_dump *);
-bool netdev_flow_dump_next(struct netdev_flow_dump *, struct match *,
-                          struct nlattr **actions, struct dpif_flow_stats *,
-                          struct dpif_flow_attrs *, ovs_u128 *ufid,
-                          struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
-int netdev_flow_put(struct netdev *, struct match *, struct nlattr *actions,
-                    size_t actions_len, const ovs_u128 *,
-                    struct offload_info *, struct dpif_flow_stats *);
-int netdev_flow_get(struct netdev *, struct match *, struct nlattr **actions,
-                    const ovs_u128 *, struct dpif_flow_stats *,
-                    struct dpif_flow_attrs *, struct ofpbuf *wbuffer);
-int netdev_flow_del(struct netdev *, const ovs_u128 *,
-                    struct dpif_flow_stats *);
-int netdev_init_flow_api(struct netdev *);
-uint32_t netdev_get_block_id(struct netdev *);
-int netdev_get_hw_info(struct netdev *, int);
-void netdev_set_hw_info(struct netdev *, int, int);
-bool netdev_any_oor(void);
-bool netdev_is_flow_api_enabled(void);
-void netdev_set_flow_api_enabled(const struct smap *ovs_other_config);
-bool netdev_is_offload_rebalance_policy_enabled(void);
-
-struct dpif_port;
-int netdev_ports_insert(struct netdev *, const struct dpif_class *,
-                        struct dpif_port *);
-struct netdev *netdev_ports_get(odp_port_t port, const struct dpif_class *);
-int netdev_ports_remove(odp_port_t port, const struct dpif_class *);
-odp_port_t netdev_ifindex_to_odp_port(int ifindex);
-struct netdev_flow_dump **netdev_ports_flow_dump_create(
-                                        const struct dpif_class *,
-                                        int *ports);
-void netdev_ports_flow_flush(const struct dpif_class *);
-int netdev_ports_flow_del(const struct dpif_class *, const ovs_u128 *ufid,
-                          struct dpif_flow_stats *stats);
-int netdev_ports_flow_get(const struct dpif_class *, struct match *match,
-                          struct nlattr **actions,
-                          const ovs_u128 *ufid,
-                          struct dpif_flow_stats *stats,
-                          struct dpif_flow_attrs *attrs,
-                          struct ofpbuf *buf);
 
 /* native tunnel APIs */
 /* Structure to pass parameters required to build a tunnel header. */

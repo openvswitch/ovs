@@ -4,10 +4,18 @@ Post-v2.11.0
      * New option 'other_config:dpdk-socket-limit' to limit amount of
        hugepage memory that can be used by DPDK.
      * Add support for vHost Post-copy Live Migration (experimental).
-     * OVS validated with DPDK 18.11.1 which is recommended to be used.
+     * OVS validated with DPDK 18.11.2 which is the new minimal supported
+       version.
+     * DPDK 18.11.1 and lower is no longer supported.
+     * New option 'tx-retries-max' to set the maximum amount of vhost tx
+       retries that can be made.
    - OpenFlow:
+     * All features required by OpenFlow 1.5 are now implemented, so
+       ovs-vswitchd now enables OpenFlow 1.5 by default (in addition to
+       OpenFlow 1.0 to 1.4).
      * Removed support for OpenFlow 1.6 (draft), which ONF abandoned.
      * New action "check_pkt_larger".
+     * Support for OpenFlow 1.5 "meter" action.
    - Userspace datapath:
      * ICMPv6 ND enhancements: support for match and set ND options type
        and reserved fields.
@@ -23,6 +31,9 @@ Post-v2.11.0
      * New action "check_pkt_len".
      * Port configuration with "other-config:priority-tags" now has a mode
        that retains the 802.1Q header even if VLAN and priority are both zero.
+     * 'ovs-appctl exit' now implies cleanup of non-internal ports in userspace
+       datapath regardless of '--cleanup' option. Use '--cleanup' to remove
+       internal ports too.
    - OVSDB:
      * OVSDB clients can now resynchronize with clustered servers much more
        quickly after a brief disconnection, saving bandwidth and CPU time.
@@ -46,6 +57,10 @@ Post-v2.11.0
    - Added support for TLS Server Name Indication (SNI).
    - Linux datapath:
      * Support for the kernel versions 4.19.x and 4.20.x.
+     * Support for the kernel version 5.0.x.
+   - 'ovs-dpctl dump-flows' is no longer suitable for dumping offloaded flows.
+     'ovs-appctl dpctl/dump-flows' should be used instead.
+   - Add L2 GRE tunnel over IPv6 support.
 
 
 v2.11.0 - 19 Feb 2019

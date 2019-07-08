@@ -1890,6 +1890,13 @@ reg1 = <var>EIP1</var>;
 outport = <code>redirect-chassis-port</code>;
 <code>REGBIT_DISTRIBUTED_NAT = 1; next;</code>.
         </pre>
+
+        <p>
+            Morover a priority-400 logical flow is configured for each
+            <code>dnat_and_snat</code> NAT rule configured in order to
+            not send traffic for local FIP through the overlay tunnels
+            but manage it in the local hypervisor
+        </p>
       </li>
 
       <li>

@@ -963,6 +963,13 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         if (!strncmp(argv[argc - 1], "filter=", 7) && !filter) {
             filter = xstrdup(argv[--argc] + 7);
         } else if (!strncmp(argv[argc - 1], "type=", 5) && !types_list) {
+            if (!dpctl_p->is_appctl) {
+                dpctl_error(dpctl_p, 0,
+                            "Invalid argument 'type'. "
+                            "Use 'ovs-appctl dpctl/dump-flows' instead.");
+                error = EINVAL;
+                goto out_free;
+            }
             types_list = xstrdup(argv[--argc] + 5);
         }
     }

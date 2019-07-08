@@ -38,6 +38,7 @@ OVS
 
    design
    datapath
+   fuzzing/index
    integration
    porting
    openflow
