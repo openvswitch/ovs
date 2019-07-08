@@ -40,5 +40,6 @@ bool chassis_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
 bool chassis_get_mac(const struct sbrec_chassis *chassis,
                      const char *bridge_mapping,
                      struct eth_addr *chassis_mac);
+const char *chassis_get_id(void);
 
 #endif /* ovn/chassis.h */

@@ -36,6 +36,44 @@ VLOG_DEFINE_THIS_MODULE(chassis);
 #define HOST_NAME_MAX 255
 #endif /* HOST_NAME_MAX */
 
+/*
+ * Structure to hold chassis specific state (currently just chassis-id)
+ * to avoid database lookups when changes happen while the controller is
+ * running.
+ */
+struct chassis_info {
+    /* Last ID we initialized the Chassis SB record with. */
+    struct ds id;
+
+    /* True if Chassis SB record is initialized, false otherwise. */
+    uint32_t id_inited : 1;
+};
+
+static struct chassis_info chassis_state = {
+    .id = DS_EMPTY_INITIALIZER,
+    .id_inited = false,
+};
+
+static void
+chassis_info_set_id(struct chassis_info *info, const char *id)
+{
+    ds_clear(&info->id);
+    ds_put_cstr(&info->id, id);
+    info->id_inited = true;
+}
+
+static bool
+chassis_info_id_inited(const struct chassis_info *info)
+{
+    return info->id_inited;
+}
+
+static const char *
+chassis_info_id(const struct chassis_info *info)
+{
+    return ds_cstr_ro(&info->id);
+}
+
 void
 chassis_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
@@ -110,15 +148,19 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             const struct ovsrec_bridge *br_int,
             const struct sset *transport_zones)
 {
-    const struct sbrec_chassis *chassis_rec
-        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
+    const struct ovsrec_open_vswitch *cfg;
+    const char *encap_type, *encap_ip;
+
+    const struct sbrec_chassis *chassis_rec = NULL;
+
+    if (chassis_info_id_inited(&chassis_state)) {
+        chassis_rec = chassis_lookup_by_name(sbrec_chassis_by_name,
+                                             chassis_info_id(&chassis_state));
+    }
+
     if (!ovnsb_idl_txn) {
         return chassis_rec;
     }
-
-    const struct ovsrec_open_vswitch *cfg;
-    const char *encap_type, *encap_ip;
-    static bool inited = false;
 
     cfg = ovsrec_open_vswitch_table_first(ovs_table);
     if (!cfg) {
@@ -263,10 +305,8 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
 
         if (same) {
             /* Nothing changed. */
-            inited = true;
-            ds_destroy(&iface_types);
-            return chassis_rec;
-        } else if (!inited) {
+            goto inited;
+        } else if (!chassis_info_id_inited(&chassis_state)) {
             struct ds cur_encaps = DS_EMPTY_INITIALIZER;
             for (int i = 0; i < chassis_rec->n_encaps; i++) {
                 ds_put_format(&cur_encaps, "%s,",
@@ -293,7 +333,6 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
         smap_add(&ext_ids, "datapath-type", datapath_type);
         smap_add(&ext_ids, "iface-types", iface_types_str);
         chassis_rec = sbrec_chassis_insert(ovnsb_idl_txn);
-        sbrec_chassis_set_name(chassis_rec, chassis_id);
         sbrec_chassis_set_hostname(chassis_rec, hostname);
         sbrec_chassis_set_external_ids(chassis_rec, &ext_ids);
         smap_destroy(&ext_ids);
@@ -327,7 +366,13 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     free(tokstr);
     free(encaps);
 
-    inited = true;
+inited:
+    /* Store the name of the chassis for further lookups. */
+    if (!chassis_rec->name || strcmp(chassis_id, chassis_rec->name)) {
+        sbrec_chassis_set_name(chassis_rec, chassis_id);
+        chassis_info_set_id(&chassis_state, chassis_id);
+    }
+
     return chassis_rec;
 }
 
@@ -392,4 +437,17 @@ chassis_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
         sbrec_chassis_delete(chassis_rec);
     }
     return false;
+}
+
+/*
+ * Returns the last initialized chassis-id.
+ */
+const char *
+chassis_get_id(void)
+{
+    if (chassis_info_id_inited(&chassis_state)) {
+        return chassis_info_id(&chassis_state);
+    }
+
+    return NULL;
 }

@@ -2098,7 +2098,7 @@ main(int argc, char *argv[])
 
             const struct ovsrec_bridge *br_int = get_br_int(bridge_table,
                                                             ovs_table);
-            const char *chassis_id = get_chassis_id(ovs_table);
+            const char *chassis_id = chassis_get_id();
             const struct sbrec_chassis *chassis
                 = (chassis_id
                    ? chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id)
