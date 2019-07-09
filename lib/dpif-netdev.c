@@ -5480,7 +5480,6 @@ reload:
                 poll_block();
             }
         }
-        lc = UINT_MAX;
     }
 
     pmd->intrvl_tsc_prev = 0;
@@ -5529,11 +5528,6 @@ reload:
                 emc_cache_slow_sweep(&((pmd->flow_cache).emc_cache));
             }
 
-            atomic_read_explicit(&pmd->reload, &reload, memory_order_acquire);
-            if (reload) {
-                break;
-            }
-
             for (i = 0; i < poll_cnt; i++) {
                 uint64_t current_seq =
                          netdev_get_change_seq(poll_list[i].rxq->port->netdev);
@@ -5544,6 +5538,12 @@ reload:
                 }
             }
         }
+
+        atomic_read_explicit(&pmd->reload, &reload, memory_order_acquire);
+        if (OVS_UNLIKELY(reload)) {
+            break;
+        }
+
         pmd_perf_end_iteration(s, rx_packets, tx_packets,
                                pmd_perf_metrics_enabled(pmd));
     }
