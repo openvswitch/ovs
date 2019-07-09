@@ -14313,3 +14313,24 @@ OVN_CHECK_PACKETS([hv2/vif22-tx.pcap], [vif22.expected])
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
+
+# Run ovn-nbctl in daemon mode, change to a backup database and verify that
+# an insert operation is not allowed.
+AT_SETUP([ovn -- can't write to a backup database server instance])
+ovn_start
+on_exit 'kill $(cat ovn-nbctl.pid)'
+export OVN_NB_DAEMON=$(ovn-nbctl --pidfile --detach)
+
+AT_CHECK([ovn-nbctl ls-add sw0])
+as ovn-nb
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/sync-status | grep active | wc -l], [0], [1
+])
+ovs-appctl -t ovsdb-server ovsdb-server/set-active-ovsdb-server tcp:192.0.2.2:6641
+ovs-appctl -t ovsdb-server ovsdb-server/connect-active-ovsdb-server
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/sync-status | grep -c backup], [0], [1
+])
+AT_CHECK([ovn-nbctl ls-add sw1], [1], [ignore],
+[ovn-nbctl: transaction error: {"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}
+])
+
+AT_CLEANUP
