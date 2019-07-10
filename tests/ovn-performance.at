@@ -275,6 +275,10 @@ for i in 1 2; do
     )
     OVN_CONTROLLER_EXPECT_HIT(
         [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-set-options $lsp router-port=$lrp]
+    )
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
         [ovn-nbctl --wait=hv lsp-set-addresses $lsp router]
     )
 done
