@@ -682,10 +682,49 @@ struct dp_netdev_pmd_thread {
 
     struct seq *reload_seq;
     uint64_t last_reload_seq;
+
+    /* These are atomic variables used as a synchronization and configuration
+     * points for thread reload/exit.
+     *
+     * 'reload' atomic is the main one and it's used as a memory
+     * synchronization point for all other knobs and data.
+     *
+     * For a thread that requests PMD reload:
+     *
+     *   * All changes that should be visible to the PMD thread must be made
+     *     before setting the 'reload'.  These changes could use any memory
+     *     ordering model including 'relaxed'.
+     *   * Setting the 'reload' atomic should occur in the same thread where
+     *     all other PMD configuration options updated.
+     *   * Setting the 'reload' atomic should be done with 'release' memory
+     *     ordering model or stricter.  This will guarantee that all previous
+     *     changes (including non-atomic and 'relaxed') will be visible to
+     *     the PMD thread.
+     *   * To check that reload is done, thread should poll the 'reload' atomic
+     *     to become 'false'.  Polling should be done with 'acquire' memory
+     *     ordering model or stricter.  This ensures that PMD thread completed
+     *     the reload process.
+     *
+     * For the PMD thread:
+     *
+     *   * PMD thread should read 'reload' atomic with 'acquire' memory
+     *     ordering model or stricter.  This will guarantee that all changes
+     *     made before setting the 'reload' in the requesting thread will be
+     *     visible to the PMD thread.
+     *   * All other configuration data could be read with any memory
+     *     ordering model (including non-atomic and 'relaxed') but *only after*
+     *     reading the 'reload' atomic set to 'true'.
+     *   * When the PMD reload done, PMD should (optionally) set all the below
+     *     knobs except the 'reload' to their default ('false') values and
+     *     (mandatory), as the last step, set the 'reload' to 'false' using
+     *     'release' memory ordering model or stricter.  This will inform the
+     *     requesting thread that PMD has completed a reload cycle.
+     */
     atomic_bool reload;             /* Do we need to reload ports? */
     atomic_bool wait_for_reload;    /* Can we busy wait for the next reload? */
     atomic_bool reload_tx_qid;      /* Do we need to reload static_tx_qid? */
     atomic_bool exit;               /* For terminating the pmd thread. */
+
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
