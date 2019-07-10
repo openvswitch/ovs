@@ -2478,7 +2478,12 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         }
         if (is_ip_any(flow)) {
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-            flow_unwildcard_tp_ports(flow, wc);
+            /* Unwildcard port only for non-UDP packets as udp port
+             * numbers are not used in hash calculations.
+             */
+            if (flow->nw_proto != IPPROTO_UDP) {
+                flow_unwildcard_tp_ports(flow, wc);
+            }
         }
         for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
             wc->masks.vlans[i].tci |= htons(VLAN_VID_MASK | VLAN_CFI);
