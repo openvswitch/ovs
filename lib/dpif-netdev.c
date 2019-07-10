@@ -4745,9 +4745,16 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     FOR_EACH_CORE_ON_DUMP(core, pmd_cores) {
         pmd = dp_netdev_get_pmd(dp, core->core_id);
         if (!pmd) {
+            struct ds name = DS_EMPTY_INITIALIZER;
+
             pmd = xzalloc(sizeof *pmd);
             dp_netdev_configure_pmd(pmd, dp, core->core_id, core->numa_id);
-            pmd->thread = ovs_thread_create("pmd", pmd_thread_main, pmd);
+
+            ds_put_format(&name, "pmd-c%02d/id:", core->core_id);
+            pmd->thread = ovs_thread_create(ds_cstr(&name),
+                                            pmd_thread_main, pmd);
+            ds_destroy(&name);
+
             VLOG_INFO("PMD thread on numa_id: %d, core id: %2d created.",
                       pmd->numa_id, pmd->core_id);
             changed = true;
