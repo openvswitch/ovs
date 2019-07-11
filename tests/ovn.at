@@ -14361,3 +14361,68 @@ AT_CHECK([ovn-nbctl ls-add sw1], [1], [ignore],
 ])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- controller event])
+AT_KEYWORDS([ovn_controller_event])
+ovn_start
+
+# Create hypervisors hv[12].
+# Add vif1[12] to hv1, vif2[12] to hv2
+# Add all of the vifs to a single logical switch sw0.
+
+net_add n1
+ovn-nbctl ls-add sw0
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+
+    for j in 1 2; do
+        ovn-nbctl lsp-add sw0 sw0-p$i$j -- \
+                lsp-set-addresses sw0-p$i$j "00:00:00:00:00:$i$j 192.168.1.$i$j"
+
+        ovs-vsctl -- add-port br-int vif$i$j -- \
+                set interface vif$i$j \
+                external-ids:iface-id=sw0-p$i$j \
+                options:tx_pcap=hv$i/vif$i$j-tx.pcap \
+                options:rxq_pcap=hv$i/vif$i$j-rx.pcap \
+                ofport-request=$i$j
+    done
+done
+
+ovn-nbctl --wait=hv set NB_Global . options:controller_event=true
+ovn-nbctl lb-add lb0 192.168.1.100:80 ""
+ovn-nbctl ls-lb-add sw0 lb0
+uuid_lb=$(ovn-nbctl --bare --columns=_uuid find load_balancer name=lb0)
+
+OVN_POPULATE_ARP
+ovn-nbctl --timeout=3 --wait=hv sync
+ovn-sbctl lflow-list
+as hv1 ovs-ofctl dump-flows br-int
+
+packet="inport==\"sw0-p11\" && eth.src==00:00:00:00:00:11 && eth.dst==00:00:00:00:00:21 &&
+       ip4 && ip.ttl==64 && ip4.src==192.168.1.11 && ip4.dst==192.168.1.100 &&
+       tcp && tcp.src==10000 && tcp.dst==80"
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+ovn-sbctl list controller_event
+uuid=$(ovn-sbctl list controller_event | awk '/_uuid/{print $3}')
+AT_CHECK([ovn-sbctl get controller_event $uuid event_type], [0], [dnl
+empty_lb_backends
+])
+AT_CHECK([ovn-sbctl get controller_event $uuid event_info:vip], [0], [dnl
+"192.168.1.100:80"
+])
+AT_CHECK([ovn-sbctl get controller_event $uuid event_info:protocol], [0], [dnl
+tcp
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get controller_event $uuid event_info:load_balancer], [0], [dnl
+"$uuid_lb"
+])
+AT_CHECK([ovn-sbctl get controller_event $uuid seq_num], [0], [dnl
+1
+])
+
+OVN_CLEANUP([hv1], [hv2])
+AT_CLEANUP

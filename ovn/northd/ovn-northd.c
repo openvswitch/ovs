@@ -70,6 +70,8 @@ static const char *unixctl_path;
 static struct hmap macam = HMAP_INITIALIZER(&macam);
 static struct eth_addr mac_prefix;
 
+static bool controller_event_en;
+
 #define MAX_OVN_TAGS 4096
 
 /* Pipeline stages. */
@@ -3624,6 +3626,34 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
 
             if (!sset_contains(&all_ips, ip_address)) {
                 sset_add(&all_ips, ip_address);
+            }
+
+            if (controller_event_en && !node->value[0]) {
+                struct ds match = DS_EMPTY_INITIALIZER;
+                char *action;
+
+                if (addr_family == AF_INET) {
+                    ds_put_format(&match, "ip4.dst == %s && %s",
+                                  ip_address, lb->protocol);
+                } else {
+                    ds_put_format(&match, "ip6.dst == %s && %s",
+                                  ip_address, lb->protocol);
+                }
+                if (port) {
+                    ds_put_format(&match, " && %s.dst == %u", lb->protocol,
+                                  port);
+                }
+                action = xasprintf("trigger_event(event = \"%s\", "
+                               "vip = \"%s\", protocol = \"%s\", "
+                               "load_balancer = \"" UUID_FMT "\");",
+                               event_to_string(OVN_EVENT_EMPTY_LB_BACKENDS),
+                               node->key, lb->protocol,
+                               UUID_ARGS(&lb->header_.uuid));
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB, 120,
+                              ds_cstr(&match), action);
+                ds_destroy(&match);
+                free(action);
+                continue;
             }
 
             free(ip_address);
@@ -8114,6 +8144,9 @@ ovnnb_db_run(struct northd_context *ctx,
 
         smap_destroy(&options);
     }
+
+    controller_event_en = smap_get_bool(&nb->options,
+                                        "controller_event", false);
 
     cleanup_macam(&macam);
 }
