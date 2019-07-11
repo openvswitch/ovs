@@ -3494,4 +3494,44 @@ tcp.flags = RST;
       </column>
     </group>
   </table>
+  <table name="Controller_Event" title="Controller Event table">
+    <p>
+      Database table used by <code>ovn-controller</code> to report CMS
+      related events. Please note there is no guarantee a given event is
+      written exactly once in the db. It is CMS responsibility to squash
+      duplicated lines or to filter out duplicated events
+    </p>
+    <column name="event_type">
+      Event type occurred
+    </column>
+    <column name="event_info">
+    <p>
+      Key-value pairs used to specify event info to the CMS.
+      Possible values are:
+    </p>
+      <ul>
+        <li>
+         <code>vip</code>: VIP reported for the <code>empty_lb_backends</code>
+         event
+        </li>
+        <li>
+          <code>protocol</code>: Transport protocol reported for the
+          <code>empty_lb_backends</code> event
+        </li>
+        <li>
+          <code>load_balancer</code>: UUID of the load balancer reported for
+          the <code>empty_lb_backends</code> event
+        </li>
+      </ul>
+    </column>
+    <column name="chassis">
+      This column is a <ref table="Chassis"/> record to identify the chassis
+      that has managed a given event.
+    </column>
+    <column name="seq_num">
+      Event sequence number. Global counter for controller generated events.
+      It can be used by the CMS to detect possible duplication of the same
+      event.
+    </column>
+  </table>
 </database>

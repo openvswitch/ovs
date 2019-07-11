@@ -133,6 +133,8 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
      * Monitor Logical_Flow, MAC_Binding, Multicast_Group, and DNS tables for
      * local datapaths.
      *
+     * Monitor Controller_Event rows for local chassis.
+     *
      * We always monitor patch ports because they allow us to see the linkages
      * between related logical datapaths.  That way, when we know that we have
      * a VIF on a particular logical switch, we immediately know to monitor all
@@ -142,6 +144,7 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     struct ovsdb_idl_condition mb = OVSDB_IDL_CONDITION_INIT(&mb);
     struct ovsdb_idl_condition mg = OVSDB_IDL_CONDITION_INIT(&mg);
     struct ovsdb_idl_condition dns = OVSDB_IDL_CONDITION_INIT(&dns);
+    struct ovsdb_idl_condition ce =  OVSDB_IDL_CONDITION_INIT(&ce);
     sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "patch");
     /* XXX: We can optimize this, if we find a way to only monitor
      * ports that have a Gateway_Chassis that point's to our own
@@ -165,6 +168,9 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l2);
         const struct smap l3 = SMAP_CONST1(&l3, "l3gateway-chassis", id);
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l3);
+
+        sbrec_controller_event_add_clause_chassis(&ce, OVSDB_F_EQ,
+                                                  &chassis->header_.uuid);
     }
     if (local_ifaces) {
         const char *name;
@@ -191,11 +197,13 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     sbrec_mac_binding_set_condition(ovnsb_idl, &mb);
     sbrec_multicast_group_set_condition(ovnsb_idl, &mg);
     sbrec_dns_set_condition(ovnsb_idl, &dns);
+    sbrec_controller_event_set_condition(ovnsb_idl, &ce);
     ovsdb_idl_condition_destroy(&pb);
     ovsdb_idl_condition_destroy(&lf);
     ovsdb_idl_condition_destroy(&mb);
     ovsdb_idl_condition_destroy(&mg);
     ovsdb_idl_condition_destroy(&dns);
+    ovsdb_idl_condition_destroy(&ce);
 }
 
 static const char *
@@ -1981,6 +1989,8 @@ main(int argc, char *argv[])
                                 sbrec_port_binding_by_name,
                                 sbrec_mac_binding_by_lport_ip,
                                 sbrec_dns_table_get(ovnsb_idl_loop.idl),
+                                sbrec_controller_event_table_get(
+                                    ovnsb_idl_loop.idl),
                                 br_int, chassis,
                                 &ed_runtime_data.local_datapaths,
                                 &ed_runtime_data.active_tunnels);

@@ -225,6 +225,27 @@ ovn_init_symtab(struct shash *symtab)
     expr_symtab_add_ovn_field(symtab, "icmp4.frag_mtu", OVN_ICMP4_FRAG_MTU);
 }
 
+const char *
+event_to_string(enum ovn_controller_event event)
+{
+    switch (event) {
+    case OVN_EVENT_EMPTY_LB_BACKENDS:
+        return "empty_lb_backends";
+    case OVN_EVENT_MAX:
+    default:
+        return "";
+    }
+}
+
+int
+string_to_event(const char *s)
+{
+    if (!strcmp(s, "empty_lb_backends")) {
+        return OVN_EVENT_EMPTY_LB_BACKENDS;
+    }
+    return -1;
+}
+
 const struct ovn_field *
 ovn_field_from_name(const char *name)
 {
