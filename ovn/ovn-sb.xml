@@ -1988,6 +1988,27 @@ tcp.flags = RST;
 
           <p><b>Prerequisite:</b> <code>tcp</code></p>
         </dd>
+
+        <dt><code>trigger_event;</code></dt>
+        <dd>
+          <p>
+            This action is used to allow ovs-vswitchd to report CMS related
+            events writing them in <ref table="Controller_Event"/> table.
+            Supported event:
+          </p>
+
+          <ul>
+            <li>
+              <p>
+                <dfn>empty_lb_backends</dfn>. This event is raised if a
+                received packet is destined for a load balancer VIP that has
+                no configured backend destinations. For this event, the event
+                info includes the load balancer VIP, the load balancer UUID,
+                and the transport protocol.
+              </p>
+            </li>
+          </ul>
+        </dd>
       </dl>
     </column>
 

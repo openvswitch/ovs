@@ -211,6 +211,10 @@ static void pinctrl_handle_put_icmp4_frag_mtu(struct rconn *swconn,
                                               struct ofputil_packet_in *pin,
                                               struct ofpbuf *userdata,
                                               struct ofpbuf *continuation);
+static void
+pinctrl_handle_event(struct ofpbuf *userdata)
+    OVS_REQUIRES(pinctrl_mutex);
+static void wait_controller_event(struct ovsdb_idl_txn *ovnsb_idl_txn);
 static void init_ipv6_ras(void);
 static void destroy_ipv6_ras(void);
 static void ipv6_ra_wait(long long int send_ipv6_ra_time);
@@ -1897,6 +1901,12 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
                                           &pin, &userdata, &continuation);
         break;
 
+    case ACTION_OPCODE_EVENT:
+        ovs_mutex_lock(&pinctrl_mutex);
+        pinctrl_handle_event(&userdata);
+        ovs_mutex_unlock(&pinctrl_mutex);
+        break;
+
     default:
         VLOG_WARN_RL(&rl, "unrecognized packet-in opcode %"PRIu32,
                      ntohl(ah->opcode));
@@ -2405,6 +2415,7 @@ void
 pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
     wait_put_mac_bindings(ovnsb_idl_txn);
+    wait_controller_event(ovnsb_idl_txn);
     int64_t new_seq = seq_read(pinctrl_main_seq);
     seq_wait(pinctrl_main_seq, new_seq);
 }
@@ -3446,5 +3457,108 @@ exit:
     queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     if (pkt_out) {
         dp_packet_delete(pkt_out);
+    }
+}
+
+static void
+wait_controller_event(struct ovsdb_idl_txn *ovnsb_idl_txn)
+{
+    if (!ovnsb_idl_txn) {
+        return;
+    }
+
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        if (!hmap_is_empty(&event_table[i])) {
+            poll_immediate_wake();
+            break;
+        }
+    }
+}
+
+static bool
+pinctrl_handle_empty_lb_backends_opts(struct ofpbuf *userdata)
+{
+    struct controller_event_opt_header *userdata_opt;
+    uint32_t hash = 0;
+    char *vip = NULL;
+    char *protocol = NULL;
+    char *load_balancer = NULL;
+
+    while (userdata->size) {
+        userdata_opt = ofpbuf_try_pull(userdata, sizeof *userdata_opt);
+        if (!userdata_opt) {
+            return false;
+        }
+        size_t size = ntohs(userdata_opt->size);
+        char *userdata_opt_data = ofpbuf_try_pull(userdata, size);
+        if (!userdata_opt_data) {
+            return false;
+        }
+        switch (ntohs(userdata_opt->opt_code)) {
+        case EMPTY_LB_VIP:
+            vip = xmemdup0(userdata_opt_data, size);
+            break;
+        case EMPTY_LB_PROTOCOL:
+            protocol = xmemdup0(userdata_opt_data, size);
+            break;
+        case EMPTY_LB_LOAD_BALANCER:
+            load_balancer = xmemdup0(userdata_opt_data, size);
+            break;
+        default:
+            OVS_NOT_REACHED();
+        }
+        hash = hash_bytes(userdata_opt_data, size, hash);
+    }
+    if (!vip || !protocol || !load_balancer) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "missing lb parameters in userdata");
+        return false;
+    }
+
+    struct empty_lb_backends_event *event;
+
+    event = pinctrl_find_empty_lb_backends_event(vip, protocol,
+                                                 load_balancer, hash);
+    if (!event) {
+        if (hmap_count(&event_table[OVN_EVENT_EMPTY_LB_BACKENDS]) >= 1000) {
+            COVERAGE_INC(pinctrl_drop_controller_event);
+            return false;
+        }
+
+        event = xzalloc(sizeof *event);
+        hmap_insert(&event_table[OVN_EVENT_EMPTY_LB_BACKENDS],
+                    &event->hmap_node, hash);
+        event->vip = vip;
+        event->protocol = protocol;
+        event->load_balancer = load_balancer;
+        event->timestamp = time_msec();
+        notify_pinctrl_main();
+    } else {
+        free(vip);
+        free(protocol);
+        free(load_balancer);
+    }
+    return true;
+}
+
+static void
+pinctrl_handle_event(struct ofpbuf *userdata)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    ovs_be32 *pevent;
+
+    pevent = ofpbuf_try_pull(userdata, sizeof *pevent);
+    if (!pevent) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "event not present in the userdata");
+        return;
+    }
+
+    switch (ntohl(*pevent)) {
+    case OVN_EVENT_EMPTY_LB_BACKENDS:
+        pinctrl_handle_empty_lb_backends_opts(userdata);
+        break;
+    default:
+        return;
     }
 }
