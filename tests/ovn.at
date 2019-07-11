@@ -8593,7 +8593,9 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
     cat packets | grep $expected > exp
-    cat packets | grep $exp_gw_ip_garp >> exp
+    # Its possible that $active_gw/br-phys_n1-tx.pcap may have received multiple
+    # garp packets. So consider only the first packet.
+    cat packets | grep $exp_gw_ip_garp | head -1 >> exp
     AT_CHECK([cat exp], [0], [expout])
     rm -f expout
     if test $backup_vswitchd_dead != 1; then
@@ -8840,7 +8842,7 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
     cat packets | grep $expected > exp
-    cat packets | grep $exp_gw_ip_garp >> exp
+    cat packets | grep $exp_gw_ip_garp | head -1 >> exp
     AT_CHECK([cat exp], [0], [expout])
 
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
@@ -9567,19 +9569,8 @@ options:rxq_pcap=${pcap_file}-rx.pcap
 
 as hv1 reset_pcap_file br-ex_n2 hv1/br-ex_n2
 as hv3 reset_pcap_file hv3-vif1 hv3/vif1
-sleep 2
-# Take note of how many packets arrived on the VLAN switch before generating
-# further traffic
-n_packets=`as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" | grep actions=clone | sed 's/.*n_packets=\([[0-9]]*\),.*/\1/'`
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 sleep 2
-
-# On hv1, the packet should not go from vlan switch pipleline to router
-# pipeline
-as hv1 ovs-ofctl dump-flows br-int
-AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" \
-| grep actions=clone | grep -v n_packets=$n_packets | wc -l], [0], [[0
-]])
 
 # On hv1, table 32 check that no packet goes via the tunnel port
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 \
@@ -9624,21 +9615,38 @@ echo $exp_garp_on_foo1 > foo1.expout
 
 # ovn-controller on hv2 should send garp with VLAN tag
 sent_garp="ffffffffffff0000010102038100000208060001080006040001000001010203c0a80101000000000000c0a80101"
-echo $sent_garp > br-ex_n2.expout
 
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
-OVN_CHECK_PACKETS([hv2/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+# Wait until we receive atleast 1 packet
+OVS_WAIT_UNTIL([test 1=`$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-ex_n2-tx.pcap | wc -l`])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-ex_n2-tx.pcap | head -1 > packets
+echo $sent_garp > expout
+AT_CHECK([cat packets], [0], [expout])
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv4/br-ex_n2-tx.pcap > empty
 AT_CHECK([cat empty], [0], [])
 
 # Make hv4 master
 as hv1 reset_pcap_file hv1-vif1 hv1/vif1
-as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
 as hv4 reset_pcap_file br-ex_n2 hv4/br-ex_n2
 ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 hv4 40
 
+# Wait till cr-alice is claimed by hv4
+hv4_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=hv4)
+# check that the chassis redirect port has been claimed by the gw1 chassis
+OVS_WAIT_UNTIL([ovn-sbctl --columns chassis --bare find Port_Binding \
+logical_port=cr-alice | grep $hv4_chassis | wc -l], [0],[[1
+]])
+
+# Reset the pcap file for hv2/br-ex_n2. From now on ovn-controller in hv2
+# should not send GARPs for the router ports.
+as hv2 reset_pcap_file br-ex_n2 hv2/br-ex_n2
+
+echo $sent_garp > br-ex_n2.expout
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [foo1.expout])
 OVN_CHECK_PACKETS([hv4/br-ex_n2-tx.pcap], [br-ex_n2.expout])
+
+sleep 2
+
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-ex_n2-tx.pcap > empty
 AT_CHECK([cat empty], [0], [])
 
@@ -13580,6 +13588,8 @@ test_ip_packet_larger() {
     orig_packet_l3=${orig_packet_l3}000000000000000000000000000000000000
     packet=${packet}${orig_packet_l3}
 
+    gw_ip_garp=ffffffffffff00002020121308060001080006040001000020201213aca80064000000000000aca80064
+
     # If icmp_pmtu_reply_expected is 0, it means the packet is lesser than
     # the gateway mtu and should be delivered to the provider bridge via the
     # localnet port.
@@ -13599,6 +13609,7 @@ test_ip_packet_larger() {
         expected=${expected}000000000000000000000000000000000000
         expected=${expected}000000000000000000000000000000000000
         echo $expected > br_phys_n1.expected
+        echo $gw_ip_garp >> br_phys_n1.expected
     else
         # MTU would be 100 - 18 = 82 (hex 0052)
         mtu=0052
@@ -13622,12 +13633,18 @@ test_ip_packet_larger() {
 
     if test $icmp_pmtu_reply_expected = 0; then
         OVN_CHECK_PACKETS([hv1/br-phys_n1-tx.pcap], [br_phys_n1.expected])
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > packets
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > pkts
+        # hv1/vif1-tx.pcap can receive the GARP packet generated by ovn-controller
+        # for the gateway router port. So ignore this packet.
+        cat pkts | grep -v $gw_ip_garp > packets
         AT_CHECK([cat packets], [0], [])
     else
         OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [hv1-vif1.expected])
         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys_n1-tx.pcap  > \
-        packets
+        pkts
+        # hv1/br-phys_n1-tx.pcap can receive the GARP packet generated by ovn-controller
+        # for the gateway router port. So ignore this packet.
+        cat pkts | grep -v $gw_ip_garp > packets
         AT_CHECK([cat packets], [0], [])
     fi
 }
