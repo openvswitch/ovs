@@ -9,6 +9,9 @@
 /ovstest
 /test-dpdkr
 /ovs-pki.log
+/ovsdb-cluster-testsuite
+/ovsdb-cluster-testsuite.dir/
+/ovsdb-cluster-testsuite.log
 /pki/
 /system-dpdk-testsuite
 /system-dpdk-testsuite.dir/
