@@ -45,6 +45,7 @@
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/extend-table.h"
 #include "ovn/lib/ip-mcast-index.h"
+#include "ovn/lib/mcast-group-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"
@@ -1743,9 +1744,7 @@ main(int argc, char *argv[])
     struct ovsdb_idl_index *sbrec_chassis_by_name
         = chassis_index_create(ovnsb_idl_loop.idl);
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath
-        = ovsdb_idl_index_create2(ovnsb_idl_loop.idl,
-                                  &sbrec_multicast_group_col_name,
-                                  &sbrec_multicast_group_col_datapath);
+        = mcast_group_index_create(ovnsb_idl_loop.idl);
     struct ovsdb_idl_index *sbrec_port_binding_by_name
         = ovsdb_idl_index_create1(ovnsb_idl_loop.idl,
                                   &sbrec_port_binding_col_logical_port);

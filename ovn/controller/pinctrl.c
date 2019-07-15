@@ -45,6 +45,7 @@
 #include "ovn/lex.h"
 #include "ovn/lib/acl-log.h"
 #include "ovn/lib/ip-mcast-index.h"
+#include "ovn/lib/mcast-group-index.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-util.h"
 #include "ovn/logical-fields.h"

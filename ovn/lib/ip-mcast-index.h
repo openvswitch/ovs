@@ -28,9 +28,6 @@ struct sbrec_datapath_binding;
 #define OVN_MCAST_DEFAULT_QUERY_MAX_RESPONSE_S 1
 #define OVN_MCAST_DEFAULT_MAX_ENTRIES          2048
 
-#define OVN_MCAST_FLOOD_TUNNEL_KEY   65535
-#define OVN_MCAST_UNKNOWN_TUNNEL_KEY (OVN_MCAST_FLOOD_TUNNEL_KEY - 1)
-
 struct ovsdb_idl_index *ip_mcast_index_create(struct ovsdb_idl *);
 const struct sbrec_ip_multicast *ip_mcast_lookup(
     struct ovsdb_idl_index *ip_mcast_index,

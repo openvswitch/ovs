@@ -14430,3 +14430,273 @@ AT_CHECK([ovn-sbctl get controller_event $uuid seq_num], [0], [dnl
 
 OVN_CLEANUP([hv1], [hv2])
 AT_CLEANUP
+
+AT_SETUP([ovn -- IGMP snoop/querier])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# Two independent logical switches (sw1 and sw2).
+# sw1:
+#   - subnet 10.0.0.0/8
+#   - 2 ports bound on hv1 (sw1-p11, sw1-p12)
+#   - 2 ports bound on hv2 (sw1-p21, sw1-p22)
+# sw2:
+#   - subnet 20.0.0.0/8
+#   - 1 port bound on hv1 (sw2-p1)
+#   - 1 port bound on hv2 (sw2-p2)
+#   - IGMP Querier from 20.0.0.254
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+ip_to_hex() {
+     printf "%02x%02x%02x%02x" "$@"
+}
+
+#
+# send_igmp_v3_report INPORT HV ETH_SRC IP_SRC IP_CSUM GROUP REC_TYPE
+#                     IGMP_CSUM OUTFILE
+#
+# This shell function causes an IGMPv3 report to be received on INPORT of HV.
+# The packet's content has Ethernet destination 01:00:5E:00:00:22 and source
+# ETH_SRC (exactly 12 hex digits). Ethernet type is set to IP.
+# GROUP is the IP multicast group to be joined/to leave (based on REC_TYPE).
+# REC_TYPE == 04: join GROUP
+# REC_TYPE == 03: leave GROUP
+# The packet hexdump is also stored in OUTFILE.
+#
+send_igmp_v3_report() {
+    local inport=$1 hv=$2 eth_src=$3 ip_src=$4 ip_chksum=$5 group=$6
+    local rec_type=$7 igmp_chksum=$8 outfile=$9
+
+    local eth_dst=01005e000016
+    local ip_dst=$(ip_to_hex 224 0 0 22)
+    local ip_ttl=01
+    local ip_ra_opt=94040000
+
+    local igmp_type=2200
+    local num_rec=00000001
+    local aux_dlen=00
+    local num_src=0000
+
+    local eth=${eth_dst}${eth_src}0800
+    local ip=46c0002800004000${ip_ttl}02${ip_chksum}${ip_src}${ip_dst}${ip_ra_opt}
+    local igmp=${igmp_type}${igmp_chksum}${num_rec}${rec_type}${aux_dlen}${num_src}${group}
+    local packet=${eth}${ip}${igmp}
+
+    echo ${packet} >> ${outfile}
+    as $hv ovs-appctl netdev-dummy/receive ${inport} ${packet}
+}
+
+#
+# store_igmp_v3_query ETH_SRC IP_SRC IP_CSUM OUTFILE
+#
+# This shell function builds an IGMPv3 general query from ETH_SRC and IP_SRC
+# and stores the hexdump of the packet in OUTFILE.
+#
+store_igmp_v3_query() {
+    local eth_src=$1 ip_src=$2 ip_chksum=$3 outfile=$4
+
+    local eth_dst=01005e000001
+    local ip_dst=$(ip_to_hex 224 0 0 1)
+    local ip_ttl=01
+    local igmp_type=11
+    local max_resp=0a
+    local igmp_chksum=eeeb
+    local addr=00000000
+
+    local eth=${eth_dst}${eth_src}0800
+    local ip=4500002000004000${ip_ttl}02${ip_chksum}${ip_src}${ip_dst}
+    local igmp=${igmp_type}${max_resp}${igmp_chksum}${addr}000a0000
+    local packet=${eth}${ip}${igmp}
+
+    echo ${packet} >> ${outfile}
+}
+
+#
+# send_ip_multicast_pkt INPORT HV ETH_SRC ETH_DST IP_SRC IP_DST IP_LEN
+#    IP_PROTO DATA OUTFILE
+#
+# This shell function causes an IP multicast packet to be received on INPORT
+# of HV.
+# The hexdump of the packet is stored in OUTFILE.
+#
+send_ip_multicast_pkt() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ip_src=$5 ip_dst=$6
+    local ip_len=$7 ip_chksum=$8 proto=$9 data=${10} outfile=${11}
+
+    local ip_ttl=20
+
+    local eth=${eth_dst}${eth_src}0800
+    local ip=450000${ip_len}95f14000${ip_ttl}${proto}${ip_chksum}${ip_src}${ip_dst}
+    local packet=${eth}${ip}${data}
+
+    as $hv ovs-appctl netdev-dummy/receive ${inport} ${packet}
+    echo ${packet} >> ${outfile}
+}
+
+ovn-nbctl ls-add sw1
+ovn-nbctl ls-add sw2
+
+ovn-nbctl lsp-add sw1 sw1-p11
+ovn-nbctl lsp-add sw1 sw1-p12
+ovn-nbctl lsp-add sw1 sw1-p21
+ovn-nbctl lsp-add sw1 sw1-p22
+ovn-nbctl lsp-add sw2 sw2-p1
+ovn-nbctl lsp-add sw2 sw2-p2
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw1-p11 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=sw1-p12 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv1-vif3 -- \
+    set interface hv1-vif3 external-ids:iface-id=sw2-p1 \
+    options:tx_pcap=hv1/vif3-tx.pcap \
+    options:rxq_pcap=hv1/vif3-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=sw1-p21 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv2-vif2 -- \
+    set interface hv2-vif2 external-ids:iface-id=sw1-p22 \
+    options:tx_pcap=hv2/vif2-tx.pcap \
+    options:rxq_pcap=hv2/vif2-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv2-vif3 -- \
+    set interface hv2-vif3 external-ids:iface-id=sw2-p2 \
+    options:tx_pcap=hv2/vif3-tx.pcap \
+    options:rxq_pcap=hv2/vif3-rx.pcap \
+    ofport-request=1
+
+OVN_POPULATE_ARP
+
+# Enable IGMP snooping on sw1.
+ovn-nbctl set Logical_Switch sw1 other_config:mcast_querier="false"
+ovn-nbctl set Logical_Switch sw1 other_config:mcast_snoop="true"
+
+# No IGMP query should be generated by sw1 (mcast_querier="false").
+truncate -s 0 expected
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv2/vif2-tx.pcap], [expected])
+
+ovn-nbctl --wait=hv sync
+
+# Inject IGMP Join for 239.0.1.68 on sw1-p11.
+send_igmp_v3_report hv1-vif1 hv1 \
+    000000000001 $(ip_to_hex 10 0 0 1) f9f8 \
+    $(ip_to_hex 239 0 1 68) 04 e9b9 \
+    /dev/null
+# Inject IGMP Join for 239.0.1.68 on sw1-p21.
+send_igmp_v3_report hv2-vif1 hv2 000000000002 $(ip_to_hex 10 0 0 2) f9f9 \
+    $(ip_to_hex 239 0 1 68) 04 e9b9 \
+    /dev/null
+
+# Check that the IGMP Group is learned on both hv.
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    test "${total_entries}" = "2"
+])
+
+# Send traffic and make sure it gets forwarded only on the two ports that
+# joined.
+truncate -s 0 expected
+truncate -s 0 expected_empty
+send_ip_multicast_pkt hv1-vif2 hv1 \
+    000000000001 01005e000144 \
+    $(ip_to_hex 10 0 0 42) $(ip_to_hex 239 0 1 68) 1e ca70 11 \
+    e518e518000a3b3a0000 \
+    expected
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv2/vif2-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv2/vif3-tx.pcap], [expected_empty])
+
+# Inject IGMP Leave for 239.0.1.68 on sw1-p11.
+send_igmp_v3_report hv1-vif1 hv1 \
+    000000000001 $(ip_to_hex 10 0 0 1) f9f8 \
+    $(ip_to_hex 239 0 1 68) 03 eab9 \
+    /dev/null
+
+# Check IGMP_Group table on both HV.
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    test "${total_entries}" = "1"
+])
+
+# Send traffic traffic and make sure it gets forwarded only on the port that
+# joined.
+as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+as hv2 reset_pcap_file hv2-vif1 hv2/vif1
+truncate -s 0 expected
+truncate -s 0 expected_empty
+send_ip_multicast_pkt hv1-vif2 hv1 \
+    000000000001 01005e000144 \
+    $(ip_to_hex 10 0 0 42) $(ip_to_hex 239 0 1 68) 1e ca70 11 \
+    e518e518000a3b3a0000 \
+    expected
+
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv2/vif2-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [expected_empty])
+OVN_CHECK_PACKETS([hv2/vif3-tx.pcap], [expected_empty])
+
+# Flush IGMP groups.
+ovn-sbctl ip-multicast-flush sw1
+ovn-nbctl --wait=hv -t 3 sync
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    test "${total_entries}" = "0"
+])
+
+# Enable IGMP snooping and querier on sw2 and set query interval to minimum.
+ovn-nbctl set Logical_Switch sw2 \
+    other_config:mcast_snoop="true" \
+    other_config:mcast_querier="true" \
+    other_config:mcast_query_interval=1 \
+    other_config:mcast_eth_src="00:00:00:00:02:fe" \
+    other_config:mcast_ip4_src="20.0.0.254"
+
+# Wait for 1 query interval (1 sec) and check that two queries are generated.
+truncate -s 0 expected
+store_igmp_v3_query 0000000002fe $(ip_to_hex 20 0 0 254) 84dd expected
+store_igmp_v3_query 0000000002fe $(ip_to_hex 20 0 0 254) 84dd expected
+
+sleep 1
+OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [expected])
+OVN_CHECK_PACKETS([hv2/vif3-tx.pcap], [expected])
+
+OVN_CLEANUP([hv1], [hv2])
+AT_CLEANUP

@@ -285,6 +285,60 @@
       </column>
     </group>
 
+    <group title="IP Multicast Snooping Options">
+      <p>
+        These options control IP Multicast Snooping configuration of the
+        logical switch. To enable IP Multicast Snooping set
+        <ref column="other_config" key="mcast_snoop"/> to true. To enable IP
+        Multicast Querier set <ref column="other_config" key="mcast_snoop"/>
+        to true. If IP Multicast Querier is enabled
+        <ref column="other_config" key="mcast_eth_src"/> and
+        <ref column="other_config" key="mcast_ip4_src"/> must be set.
+      </p>
+      <column name="other_config" key="mcast_snoop"
+          type='{"type": "boolean"}'>
+        Enables/disables IP Multicast Snooping on the logical switch.
+      </column>
+      <column name="other_config" key="mcast_querier"
+          type='{"type": "boolean"}'>
+        Enables/disables IP Multicast Querier on the logical switch.
+      </column>
+      <column name="other_config" key="mcast_flood_unregistered"
+          type='{"type": "boolean"}'>
+        Determines whether unregistered multicast traffic should be flooded
+        or not. Only applicable if
+        <ref column="other_config" key="mcast_snoop"/> is enabled.
+      </column>
+      <column name="other_config" key="mcast_table_size"
+          type='{"type": "integer", "minInteger": 1, "maxInteger": 32766}'>
+        Number of multicast groups to be stored. Default: 2048.
+      </column>
+      <column name="other_config" key="mcast_idle_timeout"
+          type='{"type": "integer", "minInteger": 15, "maxInteger": 3600}'>
+        Configures the IP Multicast Snooping group idle timeout (in seconds).
+        Default: 300 seconds.
+      </column>
+      <column name="other_config" key="mcast_query_interval"
+          type='{"type": "integer", "minInteger": 1, "maxInteger": 3600}'>
+        Configures the IP Multicast Querier interval between queries (in
+        seconds). Default:
+        <ref column="other_config" key="mcast_idle_timeout"/> / 2.
+      </column>
+      <column name="other_config" key="mcast_query_max_response"
+          type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
+        Configures the value of the "max-response" field in the multicast
+        queries originated by the logical switch. Default: 1 second.
+      </column>
+      <column name="other_config" key="mcast_eth_src">
+        Configures the source Ethernet address for queries originated by the
+        logical switch.
+      </column>
+      <column name="other_config" key="mcast_ip4_src">
+        Configures the source IPv4 address for queries originated by the
+        logical switch.
+      </column>
+    </group>
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
