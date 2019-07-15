@@ -1343,6 +1343,10 @@ trigger_event(event = "empty_lb_backends", vip = "10.0.0.1:80", protocol = "sctp
 trigger_event(event = "empty_lb_backends", vip = "10.0.0.1:80", protocol = "tcp", load_balancer = "bacon");
     Load balancer 'bacon' is not a UUID
 
+# IGMP
+igmp;
+    encodes as controller(userdata=00.00.00.10.00.00.00.00)
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31];
     encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]

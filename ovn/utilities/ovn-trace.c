@@ -2126,6 +2126,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
                           super);
             break;
 
+        case OVNACT_IGMP:
+            /* Nothing to do for tracing. */
+            break;
+
         case OVNACT_TCP_RESET:
             execute_tcp_reset(ovnact_get_TCP_RESET(a), dp, uflow, table_id,
                               pipeline, super);

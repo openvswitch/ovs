@@ -67,6 +67,7 @@ struct ovn_extend_table;
     OVNACT(ICMP4,             ovnact_nest)            \
     OVNACT(ICMP4_ERROR,       ovnact_nest)            \
     OVNACT(ICMP6,             ovnact_nest)            \
+    OVNACT(IGMP,              ovnact_null)            \
     OVNACT(TCP_RESET,         ovnact_nest)            \
     OVNACT(ND_NA,             ovnact_nest)            \
     OVNACT(ND_NA_ROUTER,      ovnact_nest)            \
@@ -498,6 +499,12 @@ enum action_opcode {
 
     /* "trigger_event (event_type)" */
     ACTION_OPCODE_EVENT,
+
+    /* "igmp".
+     *
+     * Snoop IGMP, learn the multicast participants
+     */
+    ACTION_OPCODE_IGMP,
 };
 
 /* Header. */

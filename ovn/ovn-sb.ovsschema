@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
     "version": "2.4.0",
-    "cksum": "1795697952 18106",
+    "cksum": "3059284885 20260",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -362,5 +362,43 @@
                                      "min": 0, "max": 1}},
                 "seq_num": {"type": {"key": "integer"}}
             },
-            "isRoot": true
-         }}}
+            "isRoot": true},
+        "IP_Multicast": {
+            "columns": {
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding",
+                                              "refType": "weak"}}},
+                "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "querier": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "eth_src": {"type": "string"},
+                "ip4_src": {"type": "string"},
+                "table_size": {"type": {"key": "integer",
+                                        "min": 0, "max": 1}},
+                "idle_timeout": {"type": {"key": "integer",
+                                          "min": 0, "max": 1}},
+                "query_interval": {"type": {"key": "integer",
+                                            "min": 0, "max": 1}},
+                "query_max_resp": {"type": {"key": "integer",
+                                            "min": 0, "max": 1}},
+                "seq_no": {"type": "integer"}},
+            "indexes": [["datapath"]],
+            "isRoot": true},
+        "IGMP_Group": {
+            "columns": {
+                "address": {"type": "string"},
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding",
+                                              "refType": "weak"},
+                                      "min": 0,
+                                      "max": 1}},
+                "chassis": {"type": {"key": {"type": "uuid",
+                                             "refTable": "Chassis",
+                                             "refType": "weak"},
+                                     "min": 0,
+                                     "max": 1}},
+                "ports": {"type": {"key": {"type": "uuid",
+                                           "refTable": "Port_Binding",
+                                           "refType": "weak"},
+                                   "min": 0, "max": "unlimited"}}},
+            "indexes": [["address", "datapath", "chassis"]],
+            "isRoot": true}}}

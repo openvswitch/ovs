@@ -164,6 +164,8 @@ ovn_init_symtab(struct shash *symtab)
     expr_symtab_add_field(symtab, "icmp4.code", MFF_ICMPV4_CODE, "icmp4",
               false);
 
+    expr_symtab_add_predicate(symtab, "igmp", "ip4 && ip.proto == 2");
+
     expr_symtab_add_field(symtab, "ip6.src", MFF_IPV6_SRC, "ip6", false);
     expr_symtab_add_field(symtab, "ip6.dst", MFF_IPV6_DST, "ip6", false);
     expr_symtab_add_field(symtab, "ip6.label", MFF_IPV6_LABEL, "ip6", false);

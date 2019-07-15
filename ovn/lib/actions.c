@@ -1232,6 +1232,12 @@ format_ICMP6(const struct ovnact_nest *nest, struct ds *s)
 }
 
 static void
+format_IGMP(const struct ovnact_null *a OVS_UNUSED, struct ds *s)
+{
+    ds_put_cstr(s, "igmp;");
+}
+
+static void
 format_TCP_RESET(const struct ovnact_nest *nest, struct ds *s)
 {
     format_nested_action(nest, "tcp_reset", s);
@@ -1331,6 +1337,14 @@ encode_ICMP6(const struct ovnact_nest *on,
              struct ofpbuf *ofpacts)
 {
     encode_nested_actions(on, ep, ACTION_OPCODE_ICMP, ofpacts);
+}
+
+static void
+encode_IGMP(const struct ovnact_null *a OVS_UNUSED,
+            const struct ovnact_encode_params *ep OVS_UNUSED,
+            struct ofpbuf *ofpacts)
+{
+    encode_controller_op(ACTION_OPCODE_IGMP, ofpacts);
 }
 
 static void
@@ -2666,6 +2680,8 @@ parse_action(struct action_context *ctx)
         parse_ICMP4_ERROR(ctx);
     } else if (lexer_match_id(ctx->lexer, "icmp6")) {
         parse_ICMP6(ctx);
+    } else if (lexer_match_id(ctx->lexer, "igmp")) {
+        ovnact_put_IGMP(ctx->ovnacts);
     } else if (lexer_match_id(ctx->lexer, "tcp_reset")) {
         parse_TCP_RESET(ctx);
     } else if (lexer_match_id(ctx->lexer, "nd_na")) {

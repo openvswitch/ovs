@@ -12,6 +12,8 @@ ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/expr.c \
 	ovn/lib/extend-table.h \
 	ovn/lib/extend-table.c \
+	ovn/lib/ip-mcast-index.c \
+	ovn/lib/ip-mcast-index.h \
 	ovn/lib/lex.c \
 	ovn/lib/ovn-l7.h \
 	ovn/lib/ovn-util.c \
