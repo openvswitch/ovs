@@ -2532,13 +2532,6 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 }
             }
 
-            sbrec_port_binding_set_nat_addresses(op->sb,
-                                                 (const char **) nats, n_nats);
-            for (size_t i = 0; i < n_nats; i++) {
-                free(nats[i]);
-            }
-            free(nats);
-
             /* Add the router mac and IPv4 addresses to
              * Port_Binding.nat_addresses so that GARP is sent for these
              * IPs by the ovn-controller on which the distributed gateway
@@ -2580,10 +2573,18 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                                   op->peer->od->l3redirect_port->json_key);
                 }
 
-                sbrec_port_binding_update_nat_addresses_addvalue(
-                    op->sb, ds_cstr(&garp_info));
+                n_nats++;
+                nats = xrealloc(nats, (n_nats * sizeof *nats));
+                nats[n_nats - 1] = ds_steal_cstr(&garp_info);
                 ds_destroy(&garp_info);
             }
+
+            sbrec_port_binding_set_nat_addresses(op->sb,
+                                                 (const char **) nats, n_nats);
+            for (size_t i = 0; i < n_nats; i++) {
+                free(nats[i]);
+            }
+            free(nats);
         }
 
         sbrec_port_binding_set_parent_port(op->sb, op->nbsp->parent_name);
