@@ -79,6 +79,8 @@ AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
 AC_SEARCH_LIBS([pthread_rwlock_tryrdlock], [pthread])
 AC_SEARCH_LIBS([pthread_rwlockattr_destroy], [pthread])
+AC_SEARCH_LIBS([pthread_spin_lock], [pthread])
+AC_CHECK_FUNCS([pthread_spin_lock])
 AC_FUNC_STRERROR_R
 
 OVS_CHECK_WIN64

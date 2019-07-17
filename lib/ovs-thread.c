@@ -75,6 +75,9 @@ static bool multithreaded;
 LOCK_FUNCTION(mutex, lock);
 LOCK_FUNCTION(rwlock, rdlock);
 LOCK_FUNCTION(rwlock, wrlock);
+#ifdef HAVE_PTHREAD_SPIN_LOCK
+LOCK_FUNCTION(spin, lock);
+#endif
 
 #define TRY_LOCK_FUNCTION(TYPE, FUN) \
     int \
@@ -103,6 +106,9 @@ LOCK_FUNCTION(rwlock, wrlock);
 TRY_LOCK_FUNCTION(mutex, trylock);
 TRY_LOCK_FUNCTION(rwlock, tryrdlock);
 TRY_LOCK_FUNCTION(rwlock, trywrlock);
+#ifdef HAVE_PTHREAD_SPIN_LOCK
+TRY_LOCK_FUNCTION(spin, trylock);
+#endif
 
 #define UNLOCK_FUNCTION(TYPE, FUN, WHERE) \
     void \
@@ -125,6 +131,10 @@ UNLOCK_FUNCTION(mutex, unlock, "<unlocked>");
 UNLOCK_FUNCTION(mutex, destroy, NULL);
 UNLOCK_FUNCTION(rwlock, unlock, "<unlocked>");
 UNLOCK_FUNCTION(rwlock, destroy, NULL);
+#ifdef HAVE_PTHREAD_SPIN_LOCK
+UNLOCK_FUNCTION(spin, unlock, "<unlocked>");
+UNLOCK_FUNCTION(spin, destroy, NULL);
+#endif
 
 #define XPTHREAD_FUNC1(FUNCTION, PARAM1)                \
     void                                                \
@@ -267,6 +277,27 @@ ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
         ovs_abort(error, "pthread_cond_wait failed");
     }
 }
+
+#ifdef HAVE_PTHREAD_SPIN_LOCK
+static void
+ovs_spin_init__(const struct ovs_spin *l_, int pshared)
+{
+    struct ovs_spin *l = CONST_CAST(struct ovs_spin *, l_);
+    int error;
+
+    l->where = "<unlocked>";
+    error = pthread_spin_init(&l->lock, pshared);
+    if (OVS_UNLIKELY(error)) {
+        ovs_abort(error, "pthread_spin_init failed");
+    }
+}
+
+void
+ovs_spin_init(const struct ovs_spin *spin)
+{
+    ovs_spin_init__(spin, PTHREAD_PROCESS_PRIVATE);
+}
+#endif
 
 /* Initializes the 'barrier'.  'size' is the number of threads
  * expected to hit the barrier. */
