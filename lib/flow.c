@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3506,8 +3506,21 @@ minimask_expand(const struct minimask *mask, struct flow_wildcards *wc)
 bool
 minimask_equal(const struct minimask *a, const struct minimask *b)
 {
-    return !memcmp(a, b, sizeof *a
-                   + MINIFLOW_VALUES_SIZE(miniflow_n_values(&a->masks)));
+    /* At first glance, it might seem that this can be reasonably optimized
+     * into a single memcmp() for the total size of the region.  Such an
+     * optimization will work OK with most implementations of memcmp() that
+     * proceed from the start of the regions to be compared to the end in
+     * reasonably sized chunks.  However, memcmp() is not required to be
+     * implemented that way, and an implementation that, for example, compares
+     * all of the bytes in both regions without early exit when it finds a
+     * difference, or one that compares, say, 64 bytes at a time, could access
+     * an unmapped region of memory if minimasks 'a' and 'b' have different
+     * lengths.  By first checking that the maps are the same with the first
+     * memcmp(), we verify that 'a' and 'b' have the same length and therefore
+     * ensure that the second memcmp() is safe. */
+    return (!memcmp(a, b, sizeof *a)
+            && !memcmp(a + 1, b + 1,
+                       MINIFLOW_VALUES_SIZE(miniflow_n_values(&a->masks))));
 }
 
 /* Returns true if at least one bit matched by 'b' is wildcarded by 'a',
