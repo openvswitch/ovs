@@ -53,6 +53,7 @@ Post-v2.11.0
      * Support for Transport Zones, a way to separate chassis into
        logical groups which results in tunnels only been formed between
        members of the same transport zone(s).
+     * Support for IGMP Snooping and IGMP Querier.
    - New QoS type "linux-netem" on Linux.
    - Added support for TLS Server Name Indication (SNI).
    - Linux datapath:
