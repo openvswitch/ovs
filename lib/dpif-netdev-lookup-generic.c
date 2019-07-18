@@ -27,61 +27,217 @@
 #include "dpif-netdev-perf.h"
 #include "dpif-provider.h"
 #include "flow.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "pvector.h"
 
-/* Returns a hash value for the bits of 'key' where there are 1-bits in
- * 'mask'. */
-static inline uint32_t
-netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
-                             const struct netdev_flow_key *mask)
-{
-    const uint64_t *p = miniflow_get_values(&mask->mf);
-    uint32_t hash = 0;
-    uint64_t value;
+VLOG_DEFINE_THIS_MODULE(dpif_lookup_generic);
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP (value, key, mask->mf.map) {
-        hash = hash_add64(hash, value & *p);
-        p++;
+/* Lookup functions below depends on the internal structure of flowmap. */
+BUILD_ASSERT_DECL(FLOWMAP_UNITS == 2);
+
+struct block_array {
+    uint32_t count; /* Number of items allocated in 'blocks' */
+    uint64_t blocks[];
+};
+
+DEFINE_PER_THREAD_MALLOCED_DATA(struct block_array *, block_array);
+
+static inline uint64_t *
+get_blocks_scratch(uint32_t required_count)
+{
+    struct block_array *array = block_array_get();
+
+    /* Check if this thread already has a large enough array allocated.
+     * This is a predictable and unlikely branch, as it occurs only once at
+     * startup, or if a subtable with higher block count is added.
+     */
+    if (OVS_UNLIKELY(!array || array->count < required_count)) {
+        array = xrealloc(array, sizeof *array +
+                         (required_count * sizeof array->blocks[0]));
+        array->count = required_count;
+        block_array_set_unsafe(array);
+        VLOG_DBG("Block array resized to %"PRIu32, required_count);
     }
 
-    return hash_finish(hash, (p - miniflow_get_values(&mask->mf)) * 8);
+    return &array->blocks[0];
 }
 
-uint32_t
-dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
-                              uint32_t keys_map,
-                              const struct netdev_flow_key *keys[],
-                              struct dpcls_rule **rules)
+static inline void
+netdev_flow_key_flatten_unit(const uint64_t *pkt_blocks,
+                             const uint64_t *tbl_blocks,
+                             const uint64_t *mf_masks,
+                             uint64_t *blocks_scratch,
+                             const uint64_t pkt_mf_bits,
+                             const uint32_t count)
 {
-    int i;
-    uint32_t found_map;
+    uint32_t i;
 
-    /* Compute hashes for the remaining keys.  Each search-key is
-     * masked with the subtable's mask to avoid hashing the wildcarded
-     * bits. */
-    uint32_t hashes[NETDEV_MAX_BURST];
-    ULLONG_FOR_EACH_1 (i, keys_map) {
-        hashes[i] = netdev_flow_key_hash_in_mask(keys[i], &subtable->mask);
+    for (i = 0; i < count; i++) {
+        uint64_t mf_mask = mf_masks[i];
+        /* Calculate the block index for the packet metadata. */
+        uint64_t idx_bits = mf_mask & pkt_mf_bits;
+        const uint32_t pkt_idx = count_1bits(idx_bits);
+
+        /* Check if the packet has the subtable miniflow bit set. If yes, the
+         * block at the above pkt_idx will be stored, otherwise it is masked
+         * out to be zero.
+         */
+        uint64_t pkt_has_mf_bit = (mf_mask + 1) & pkt_mf_bits;
+        uint64_t no_bit = ((!pkt_has_mf_bit) > 0) - 1;
+
+        /* Mask packet block by table block, and mask to zero if packet
+         * doesn't actually contain this block of metadata.
+         */
+        blocks_scratch[i] = pkt_blocks[pkt_idx] & tbl_blocks[i] & no_bit;
+    }
+}
+
+/* This function takes a packet, and subtable and writes an array of uint64_t
+ * blocks. The blocks contain the metadata that the subtable matches on, in
+ * the same order as the subtable, allowing linear iteration over the blocks.
+ *
+ * To calculate the blocks contents, the netdev_flow_key_flatten_unit function
+ * is called twice, once for each "unit" of the miniflow. This call can be
+ * inlined by the compiler for performance.
+ *
+ * Note that the u0_count and u1_count variables can be compile-time constants,
+ * allowing the loop in the inlined flatten_unit() function to be compile-time
+ * unrolled, or possibly removed totally by unrolling by the loop iterations.
+ * The compile time optimizations enabled by this design improves performance.
+ */
+static inline void
+netdev_flow_key_flatten(const struct netdev_flow_key *key,
+                        const struct netdev_flow_key *mask,
+                        const uint64_t *mf_masks,
+                        uint64_t *blocks_scratch,
+                        const uint32_t u0_count,
+                        const uint32_t u1_count)
+{
+    /* Load mask from subtable, mask with packet mf, popcount to get idx. */
+    const uint64_t *pkt_blocks = miniflow_get_values(&key->mf);
+    const uint64_t *tbl_blocks = miniflow_get_values(&mask->mf);
+
+    /* Packet miniflow bits to be masked by pre-calculated mf_masks. */
+    const uint64_t pkt_bits_u0 = key->mf.map.bits[0];
+    const uint32_t pkt_bits_u0_pop = count_1bits(pkt_bits_u0);
+    const uint64_t pkt_bits_u1 = key->mf.map.bits[1];
+
+    /* Unit 0 flattening */
+    netdev_flow_key_flatten_unit(&pkt_blocks[0],
+                                 &tbl_blocks[0],
+                                 &mf_masks[0],
+                                 &blocks_scratch[0],
+                                 pkt_bits_u0,
+                                 u0_count);
+
+    /* Unit 1 flattening:
+     * Move the pointers forward in the arrays based on u0 offsets, NOTE:
+     * 1) pkt blocks indexed by actual popcount of u0, which is NOT always
+     *    the same as the amount of bits set in the subtable.
+     * 2) mf_masks, tbl_block and blocks_scratch are all "flat" arrays, so
+     *    the index is always u0_count.
+     */
+    netdev_flow_key_flatten_unit(&pkt_blocks[pkt_bits_u0_pop],
+                                 &tbl_blocks[u0_count],
+                                 &mf_masks[u0_count],
+                                 &blocks_scratch[u0_count],
+                                 pkt_bits_u1,
+                                 u1_count);
+}
+
+/* Compares a rule and the blocks representing a key, returns 1 on a match. */
+static inline uint64_t
+netdev_rule_matches_key(const struct dpcls_rule *rule,
+                        const uint32_t mf_bits_total,
+                        const uint64_t *blocks_scratch)
+{
+    const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
+    const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
+    uint64_t not_match = 0;
+
+    for (int i = 0; i < mf_bits_total; i++) {
+        not_match |= (blocks_scratch[i] & maskp[i]) != keyp[i];
     }
 
-    /* Lookup. */
+    /* Invert result to show match as 1. */
+    return !not_match;
+}
+
+/* Const prop version of the function: note that mf bits total and u0 are
+ * explicitly passed in here, while they're also available at runtime from the
+ * subtable pointer. By making them compile time, we enable the compiler to
+ * unroll loops and flatten out code-sequences based on the knowledge of the
+ * mf_bits_* compile time values. This results in improved performance.
+ *
+ * Note: this function is marked with ALWAYS_INLINE to ensure the compiler
+ * inlines the below code, and then uses the compile time constants to make
+ * specialized versions of the runtime code. Without ALWAYS_INLINE, the
+ * compiler might decide to not inline, and performance will suffer.
+ */
+static inline uint32_t ALWAYS_INLINE
+lookup_generic_impl(struct dpcls_subtable *subtable,
+                    uint32_t keys_map,
+                    const struct netdev_flow_key *keys[],
+                    struct dpcls_rule **rules,
+                    const uint32_t bit_count_u0,
+                    const uint32_t bit_count_u1)
+{
+    const uint32_t n_pkts = count_1bits(keys_map);
+    ovs_assert(NETDEV_MAX_BURST >= n_pkts);
+    uint32_t hashes[NETDEV_MAX_BURST];
+
+    const uint32_t bit_count_total = bit_count_u0 + bit_count_u1;
+    const uint32_t block_count_required = bit_count_total * NETDEV_MAX_BURST;
+    uint64_t *mf_masks = subtable->mf_masks;
+    int i;
+
+    /* Blocks scratch is an optimization to re-use the same packet miniflow
+     * block data when doing rule-verify. This reduces work done during lookup
+     * and hence improves performance. The blocks_scratch array is stored as a
+     * thread local variable, as each thread requires its own blocks memory.
+     */
+    uint64_t *blocks_scratch = get_blocks_scratch(block_count_required);
+
+    /* Flatten the packet metadata into the blocks_scratch[] using subtable. */
+    ULLONG_FOR_EACH_1 (i, keys_map) {
+            netdev_flow_key_flatten(keys[i],
+                                    &subtable->mask,
+                                    mf_masks,
+                                    &blocks_scratch[i * bit_count_total],
+                                    bit_count_u0,
+                                    bit_count_u1);
+    }
+
+    /* Hash the now linearized blocks of packet metadata. */
+    ULLONG_FOR_EACH_1 (i, keys_map) {
+        uint64_t *block_ptr = &blocks_scratch[i * bit_count_total];
+        uint32_t hash = hash_add_words64(0, block_ptr, bit_count_total);
+        hashes[i] = hash_finish(hash, bit_count_total * 8);
+    }
+
+    /* Lookup: this returns a bitmask of packets where the hash table had
+     * an entry for the given hash key. Presence of a hash key does not
+     * guarantee matching the key, as there can be hash collisions.
+     */
+    uint32_t found_map;
     const struct cmap_node *nodes[NETDEV_MAX_BURST];
+
     found_map = cmap_find_batch(&subtable->rules, keys_map, hashes, nodes);
 
-    /* Check results.  When the i-th bit of found_map is set, it means
-     * that a set of nodes with a matching hash value was found for the
-     * i-th search-key.  Due to possible hash collisions we need to check
-     * which of the found rules, if any, really matches our masked
-     * search-key. */
+    /* Verify that packet actually matched rule. If not found, a hash
+     * collision has taken place, so continue searching with the next node.
+     */
     ULLONG_FOR_EACH_1 (i, found_map) {
         struct dpcls_rule *rule;
 
         CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
-            if (OVS_LIKELY(dpcls_rule_matches_key(rule, keys[i]))) {
+            const uint32_t cidx = i * bit_count_total;
+            uint32_t match = netdev_rule_matches_key(rule, bit_count_total,
+                                                     &blocks_scratch[cidx]);
+
+            if (OVS_LIKELY(match)) {
                 rules[i] = rule;
-                /* Even at 20 Mpps the 32-bit hit_cnt cannot wrap
-                 * within one second optimization interval. */
                 subtable->hit_cnt++;
                 goto next;
             }
@@ -95,4 +251,16 @@ dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
     }
 
     return found_map;
+}
+
+/* Generic lookup function that uses runtime provided mf bits for iterating. */
+uint32_t
+dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
+                              uint32_t keys_map,
+                              const struct netdev_flow_key *keys[],
+                              struct dpcls_rule **rules)
+{
+    return lookup_generic_impl(subtable, keys_map, keys, rules,
+                               subtable->mf_bits_set_unit0,
+                               subtable->mf_bits_set_unit1);
 }

@@ -7649,6 +7649,7 @@ static void
 dpcls_subtable_destroy_cb(struct dpcls_subtable *subtable)
 {
     cmap_destroy(&subtable->rules);
+    ovsrcu_postpone(free, subtable->mf_masks);
     ovsrcu_postpone(free, subtable);
 }
 
@@ -7701,7 +7702,17 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     subtable->hit_cnt = 0;
     netdev_flow_key_clone(&subtable->mask, mask);
 
-    /* Decide which hash/lookup/verify function to use. */
+    /* The count of bits in the mask defines the space required for masks.
+     * Then call gen_masks() to create the appropriate masks, avoiding the cost
+     * of doing runtime calculations. */
+    uint32_t unit0 = count_1bits(mask->mf.map.bits[0]);
+    uint32_t unit1 = count_1bits(mask->mf.map.bits[1]);
+    subtable->mf_bits_set_unit0 = unit0;
+    subtable->mf_bits_set_unit1 = unit1;
+    subtable->mf_masks = xmalloc(sizeof(uint64_t) * (unit0 + unit1));
+    netdev_flow_key_gen_masks(mask, subtable->mf_masks, unit0, unit1);
+
+    /* Assign the generic lookup - this works with any miniflow fingerprint. */
     subtable->lookup_func = dpcls_subtable_lookup_generic;
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
@@ -7846,6 +7857,43 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
     }
 }
 
+/* Inner loop for mask generation of a unit, see netdev_flow_key_gen_masks. */
+static inline void
+netdev_flow_key_gen_mask_unit(uint64_t iter,
+                              const uint64_t count,
+                              uint64_t *mf_masks)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        uint64_t lowest_bit = (iter & -iter);
+        iter &= ~lowest_bit;
+        mf_masks[i] = (lowest_bit - 1);
+    }
+    /* Checks that count has covered all bits in the iter bitmap. */
+    ovs_assert(iter == 0);
+}
+
+/* Generate a mask for each block in the miniflow, based on the bits set. This
+ * allows easily masking packets with the generated array here, without
+ * calculations. This replaces runtime-calculating the masks.
+ * @param key The table to generate the mf_masks for
+ * @param mf_masks Pointer to a u64 array of at least *mf_bits* in size
+ * @param mf_bits_total Number of bits set in the whole miniflow (both units)
+ * @param mf_bits_unit0 Number of bits set in unit0 of the miniflow
+ */
+void
+netdev_flow_key_gen_masks(const struct netdev_flow_key *tbl,
+                          uint64_t *mf_masks,
+                          const uint32_t mf_bits_u0,
+                          const uint32_t mf_bits_u1)
+{
+    uint64_t iter_u0 = tbl->mf.map.bits[0];
+    uint64_t iter_u1 = tbl->mf.map.bits[1];
+
+    netdev_flow_key_gen_mask_unit(iter_u0, mf_bits_u0, &mf_masks[0]);
+    netdev_flow_key_gen_mask_unit(iter_u1, mf_bits_u1, &mf_masks[mf_bits_u0]);
+}
+
 /* Returns true if 'target' satisfies 'key' in 'mask', that is, if each 1-bit
  * in 'mask' the values in 'key' and 'target' are the same. */
 bool
@@ -7886,7 +7934,6 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
     BUILD_ASSERT_DECL(MAP_BITS >= NETDEV_MAX_BURST);
 
     struct dpcls_subtable *subtable;
-
     uint32_t keys_map = TYPE_MAXIMUM(uint32_t); /* Set all bits. */
 
     if (cnt != MAP_BITS) {
