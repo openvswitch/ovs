@@ -103,6 +103,9 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static void restore_all_flags(void *aux OVS_UNUSED);
 void update_device_args(struct netdev *, const struct shash *args);
+#ifdef HAVE_AF_XDP
+void signal_remove_xdp(struct netdev *netdev);
+#endif
 
 int
 netdev_n_txq(const struct netdev *netdev)
@@ -147,6 +150,9 @@ netdev_initialize(void)
         netdev_vport_tunnel_register();
 
         netdev_register_flow_api_provider(&netdev_offload_tc);
+#ifdef HAVE_AF_XDP
+        netdev_register_provider(&netdev_afxdp_class);
+#endif
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)
         netdev_register_provider(&netdev_tap_class);
@@ -2021,6 +2027,11 @@ restore_all_flags(void *aux OVS_UNUSED)
                                                saved_flags & ~saved_values,
                                                &old_flags);
         }
+#ifdef HAVE_AF_XDP
+        if (netdev->netdev_class == &netdev_afxdp_class) {
+            signal_remove_xdp(netdev);
+        }
+#endif
     }
 }
 

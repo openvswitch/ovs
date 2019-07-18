@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include "netdev-linux.h"
+#include "netdev-linux-private.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -54,6 +55,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "openvswitch/hmap.h"
+#include "netdev-afxdp.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink-notifier.h"
@@ -486,57 +488,6 @@ static int tc_calc_cell_log(unsigned int mtu);
 static void tc_fill_rate(struct tc_ratespec *rate, uint64_t bps, int mtu);
 static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
 
-struct netdev_linux {
-    struct netdev up;
-
-    /* Protects all members below. */
-    struct ovs_mutex mutex;
-
-    unsigned int cache_valid;
-
-    bool miimon;                    /* Link status of last poll. */
-    long long int miimon_interval;  /* Miimon Poll rate. Disabled if <= 0. */
-    struct timer miimon_timer;
-
-    int netnsid;                    /* Network namespace ID. */
-    /* The following are figured out "on demand" only.  They are only valid
-     * when the corresponding VALID_* bit in 'cache_valid' is set. */
-    int ifindex;
-    struct eth_addr etheraddr;
-    int mtu;
-    unsigned int ifi_flags;
-    long long int carrier_resets;
-    uint32_t kbits_rate;        /* Policing data. */
-    uint32_t kbits_burst;
-    int vport_stats_error;      /* Cached error code from vport_get_stats().
-                                   0 or an errno value. */
-    int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU or SIOCSIFMTU. */
-    int ether_addr_error;       /* Cached error code from set/get etheraddr. */
-    int netdev_policing_error;  /* Cached error code from set policing. */
-    int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
-    int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
-
-    enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
-    enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
-    enum netdev_features supported;  /* Cached from ETHTOOL_GSET. */
-
-    struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
-    struct tc *tc;
-
-    /* For devices of class netdev_tap_class only. */
-    int tap_fd;
-    bool present;               /* If the device is present in the namespace */
-    uint64_t tx_dropped;        /* tap device can drop if the iface is down */
-
-    /* LAG information. */
-    bool is_lag_master;         /* True if the netdev is a LAG master. */
-};
-
-struct netdev_rxq_linux {
-    struct netdev_rxq up;
-    bool is_tap;
-    int fd;
-};
 
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
@@ -549,8 +500,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * Readers do not depend on this variable synchronizing with the related
  * changes in the device miimon status, so we can use atomic_count. */
 static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
-
-static void netdev_linux_run(const struct netdev_class *);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
@@ -565,7 +514,6 @@ static int do_set_addr(struct netdev *netdev,
                        struct in_addr addr);
 static int get_etheraddr(const char *netdev_name, struct eth_addr *ea);
 static int set_etheraddr(const char *netdev_name, const struct eth_addr);
-static int get_stats_via_netlink(const struct netdev *, struct netdev_stats *);
 static int af_packet_sock(void);
 static bool netdev_linux_miimon_enabled(void);
 static void netdev_linux_miimon_run(void);
@@ -573,30 +521,9 @@ static void netdev_linux_miimon_wait(void);
 static int netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup);
 
 static bool
-is_netdev_linux_class(const struct netdev_class *netdev_class)
-{
-    return netdev_class->run == netdev_linux_run;
-}
-
-static bool
 is_tap_netdev(const struct netdev *netdev)
 {
     return netdev_get_class(netdev) == &netdev_tap_class;
-}
-
-static struct netdev_linux *
-netdev_linux_cast(const struct netdev *netdev)
-{
-    ovs_assert(is_netdev_linux_class(netdev_get_class(netdev)));
-
-    return CONTAINER_OF(netdev, struct netdev_linux, up);
-}
-
-static struct netdev_rxq_linux *
-netdev_rxq_linux_cast(const struct netdev_rxq *rx)
-{
-    ovs_assert(is_netdev_linux_class(netdev_get_class(rx->netdev)));
-    return CONTAINER_OF(rx, struct netdev_rxq_linux, up);
 }
 
 static int
@@ -773,7 +700,7 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
     }
 }
 
-static void
+void
 netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     struct nl_sock *sock;
@@ -3278,9 +3205,7 @@ exit:
     .run = netdev_linux_run,                                    \
     .wait = netdev_linux_wait,                                  \
     .alloc = netdev_linux_alloc,                                \
-    .destruct = netdev_linux_destruct,                          \
     .dealloc = netdev_linux_dealloc,                            \
-    .send = netdev_linux_send,                                  \
     .send_wait = netdev_linux_send_wait,                        \
     .set_etheraddr = netdev_linux_set_etheraddr,                \
     .get_etheraddr = netdev_linux_get_etheraddr,                \
@@ -3311,39 +3236,74 @@ exit:
     .arp_lookup = netdev_linux_arp_lookup,                      \
     .update_flags = netdev_linux_update_flags,                  \
     .rxq_alloc = netdev_linux_rxq_alloc,                        \
-    .rxq_construct = netdev_linux_rxq_construct,                \
-    .rxq_destruct = netdev_linux_rxq_destruct,                  \
     .rxq_dealloc = netdev_linux_rxq_dealloc,                    \
-    .rxq_recv = netdev_linux_rxq_recv,                          \
     .rxq_wait = netdev_linux_rxq_wait,                          \
     .rxq_drain = netdev_linux_rxq_drain
 
 const struct netdev_class netdev_linux_class = {
     NETDEV_LINUX_CLASS_COMMON,
     .type = "system",
+    .is_pmd = false,
     .construct = netdev_linux_construct,
+    .destruct = netdev_linux_destruct,
     .get_stats = netdev_linux_get_stats,
     .get_features = netdev_linux_get_features,
     .get_status = netdev_linux_get_status,
-    .get_block_id = netdev_linux_get_block_id
+    .get_block_id = netdev_linux_get_block_id,
+    .send = netdev_linux_send,
+    .rxq_construct = netdev_linux_rxq_construct,
+    .rxq_destruct = netdev_linux_rxq_destruct,
+    .rxq_recv = netdev_linux_rxq_recv,
 };
 
 const struct netdev_class netdev_tap_class = {
     NETDEV_LINUX_CLASS_COMMON,
     .type = "tap",
+    .is_pmd = false,
     .construct = netdev_linux_construct_tap,
+    .destruct = netdev_linux_destruct,
     .get_stats = netdev_tap_get_stats,
     .get_features = netdev_linux_get_features,
     .get_status = netdev_linux_get_status,
+    .send = netdev_linux_send,
+    .rxq_construct = netdev_linux_rxq_construct,
+    .rxq_destruct = netdev_linux_rxq_destruct,
+    .rxq_recv = netdev_linux_rxq_recv,
 };
 
 const struct netdev_class netdev_internal_class = {
     NETDEV_LINUX_CLASS_COMMON,
     .type = "internal",
+    .is_pmd = false,
     .construct = netdev_linux_construct,
+    .destruct = netdev_linux_destruct,
     .get_stats = netdev_internal_get_stats,
     .get_status = netdev_internal_get_status,
+    .send = netdev_linux_send,
+    .rxq_construct = netdev_linux_rxq_construct,
+    .rxq_destruct = netdev_linux_rxq_destruct,
+    .rxq_recv = netdev_linux_rxq_recv,
 };
+
+#ifdef HAVE_AF_XDP
+const struct netdev_class netdev_afxdp_class = {
+    NETDEV_LINUX_CLASS_COMMON,
+    .type = "afxdp",
+    .is_pmd = true,
+    .construct = netdev_linux_construct,
+    .destruct = netdev_afxdp_destruct,
+    .get_stats = netdev_afxdp_get_stats,
+    .get_status = netdev_linux_get_status,
+    .set_config = netdev_afxdp_set_config,
+    .get_config = netdev_afxdp_get_config,
+    .reconfigure = netdev_afxdp_reconfigure,
+    .get_numa_id = netdev_afxdp_get_numa_id,
+    .send = netdev_afxdp_batch_send,
+    .rxq_construct = netdev_afxdp_rxq_construct,
+    .rxq_destruct = netdev_afxdp_rxq_destruct,
+    .rxq_recv = netdev_afxdp_rxq_recv,
+};
+#endif
 
 
 #define CODEL_N_QUEUES 0x0000
@@ -5915,7 +5875,7 @@ netdev_stats_from_rtnl_link_stats64(struct netdev_stats *dst,
     dst->tx_window_errors = src->tx_window_errors;
 }
 
-static int
+int
 get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
 {
     struct ofpbuf request;

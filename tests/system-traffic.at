@@ -71,6 +71,7 @@ AT_CLEANUP
 
 AT_SETUP([datapath - ping between two ports on cvlan])
 OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_8021AD()
 
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
@@ -161,6 +162,7 @@ AT_CLEANUP
 
 AT_SETUP([datapath - ping6 between two ports on cvlan])
 OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_8021AD()
 
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 

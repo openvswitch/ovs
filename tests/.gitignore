@@ -13,6 +13,9 @@
 /ovsdb-cluster-testsuite.dir/
 /ovsdb-cluster-testsuite.log
 /pki/
+/system-afxdp-testsuite
+/system-afxdp-testsuite.dir/
+/system-afxdp-testsuite.log
 /system-dpdk-testsuite
 /system-dpdk-testsuite.dir/
 /system-dpdk-testsuite.log

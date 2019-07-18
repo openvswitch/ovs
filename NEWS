@@ -39,6 +39,7 @@ Post-v2.11.0
        the lookup implementation at runtime. This enables specialization of
        specific subtables based on the miniflow attributes, enhancing the
        performance of the subtable search.
+     * Add Linux AF_XDP support through a new experimental netdev type "afxdp".
    - OVSDB:
      * OVSDB clients can now resynchronize with clustered servers much more
        quickly after a brief disconnection, saving bandwidth and CPU time.

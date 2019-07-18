@@ -169,6 +169,11 @@ void ovs_strzcpy(char *dst, const char *src, size_t size);
 
 int string_ends_with(const char *str, const char *suffix);
 
+void *xmalloc_pagealign(size_t) MALLOC_LIKE;
+void free_pagealign(void *);
+void *xmalloc_size_align(size_t, size_t) MALLOC_LIKE;
+void free_size_align(void *);
+
 /* The C standards say that neither the 'dst' nor 'src' argument to
  * memcpy() may be null, even if 'n' is zero.  This wrapper tolerates
  * the null case. */

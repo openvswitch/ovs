@@ -4,12 +4,14 @@ EXTRA_DIST += \
 	$(SYSTEM_TESTSUITE_AT) \
 	$(SYSTEM_KMOD_TESTSUITE_AT) \
 	$(SYSTEM_USERSPACE_TESTSUITE_AT) \
+	$(SYSTEM_AFXDP_TESTSUITE_AT) \
 	$(SYSTEM_OFFLOADS_TESTSUITE_AT) \
 	$(SYSTEM_DPDK_TESTSUITE_AT) \
 	$(OVSDB_CLUSTER_TESTSUITE_AT) \
 	$(TESTSUITE) \
 	$(SYSTEM_KMOD_TESTSUITE) \
 	$(SYSTEM_USERSPACE_TESTSUITE) \
+	$(SYSTEM_AFXDP_TESTSUITE) \
 	$(SYSTEM_OFFLOADS_TESTSUITE) \
 	$(SYSTEM_DPDK_TESTSUITE) \
 	$(OVSDB_CLUSTER_TESTSUITE) \
@@ -160,6 +162,11 @@ SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-macros.at \
 	tests/system-userspace-packet-type-aware.at
 
+SYSTEM_AFXDP_TESTSUITE_AT = \
+	tests/system-userspace-macros.at \
+	tests/system-afxdp-testsuite.at \
+	tests/system-afxdp-macros.at
+
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-ovn.at \
@@ -184,6 +191,7 @@ TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
+SYSTEM_AFXDP_TESTSUITE = $(srcdir)/tests/system-afxdp-testsuite
 SYSTEM_OFFLOADS_TESTSUITE = $(srcdir)/tests/system-offloads-testsuite
 SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 OVSDB_CLUSTER_TESTSUITE = $(srcdir)/tests/ovsdb-cluster-testsuite
@@ -317,6 +325,10 @@ check-system-userspace: all
 	set $(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
 	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
+check-afxdp: all
+	set $(SHELL) '$(SYSTEM_AFXDP_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+
 check-offloads: all
 	set $(SHELL) '$(SYSTEM_OFFLOADS_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
 	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
@@ -351,6 +363,10 @@ $(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_KMOD_TESTSU
 	$(AM_V_at)mv $@.tmp $@
 
 $(SYSTEM_USERSPACE_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_USERSPACE_TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(SYSTEM_AFXDP_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_AFXDP_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 
