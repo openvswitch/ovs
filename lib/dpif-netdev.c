@@ -7683,6 +7683,28 @@ dpif_dummy_register(enum dummy_level level)
 
 /* Datapath Classifier. */
 
+/* Forward declaration for lookup_func typedef. */
+struct dpcls_subtable;
+
+/* Lookup function for a subtable in the dpcls. This function is called
+ * by each subtable with an array of packets, and a bitmask of packets to
+ * perform the lookup on. Using a function pointer gives flexibility to
+ * optimize the lookup function based on subtable properties and the
+ * CPU instruction set available at runtime.
+ */
+typedef
+uint32_t (*dpcls_subtable_lookup_func)(struct dpcls_subtable *subtable,
+                                       uint32_t keys_map,
+                                       const struct netdev_flow_key *keys[],
+                                       struct dpcls_rule **rules);
+
+/* Prototype for generic lookup func, using same code path as before. */
+uint32_t
+dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
+                              uint32_t keys_map,
+                              const struct netdev_flow_key *keys[],
+                              struct dpcls_rule **rules);
+
 /* A set of rules that all have the same fields wildcarded. */
 struct dpcls_subtable {
     /* The fields are only used by writers. */
@@ -7692,6 +7714,13 @@ struct dpcls_subtable {
     struct cmap rules;           /* Contains "struct dpcls_rule"s. */
     uint32_t hit_cnt;            /* Number of match hits in subtable in current
                                     optimization interval. */
+
+    /* The lookup function to use for this subtable. If there is a known
+     * property of the subtable (eg: only 3 bits of miniflow metadata is
+     * used for the lookup) then this can point at an optimized version of
+     * the lookup function for this particular subtable. */
+    dpcls_subtable_lookup_func lookup_func;
+
     struct netdev_flow_key mask; /* Wildcards for fields (const). */
     /* 'mask' must be the last field, additional space is allocated here. */
 };
@@ -7751,6 +7780,10 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     cmap_init(&subtable->rules);
     subtable->hit_cnt = 0;
     netdev_flow_key_clone(&subtable->mask, mask);
+
+    /* Decide which hash/lookup/verify function to use. */
+    subtable->lookup_func = dpcls_subtable_lookup_generic;
+
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */
     pvector_insert(&cls->subtables, subtable, 0);
@@ -7911,6 +7944,55 @@ dpcls_rule_matches_key(const struct dpcls_rule *rule,
     return true;
 }
 
+uint32_t
+dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
+                              uint32_t keys_map,
+                              const struct netdev_flow_key *keys[],
+                              struct dpcls_rule **rules)
+{
+        int i;
+        uint32_t found_map;
+
+        /* Compute hashes for the remaining keys.  Each search-key is
+         * masked with the subtable's mask to avoid hashing the wildcarded
+         * bits. */
+        uint32_t hashes[NETDEV_MAX_BURST];
+        ULLONG_FOR_EACH_1 (i, keys_map) {
+            hashes[i] = netdev_flow_key_hash_in_mask(keys[i],
+                                                     &subtable->mask);
+        }
+
+        /* Lookup. */
+        const struct cmap_node *nodes[NETDEV_MAX_BURST];
+        found_map = cmap_find_batch(&subtable->rules, keys_map, hashes, nodes);
+
+        /* Check results.  When the i-th bit of found_map is set, it means
+         * that a set of nodes with a matching hash value was found for the
+         * i-th search-key.  Due to possible hash collisions we need to check
+         * which of the found rules, if any, really matches our masked
+         * search-key. */
+        ULLONG_FOR_EACH_1 (i, found_map) {
+            struct dpcls_rule *rule;
+
+            CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
+                if (OVS_LIKELY(dpcls_rule_matches_key(rule, keys[i]))) {
+                    rules[i] = rule;
+                    /* Even at 20 Mpps the 32-bit hit_cnt cannot wrap
+                     * within one second optimization interval. */
+                    subtable->hit_cnt++;
+                    goto next;
+                }
+            }
+            /* None of the found rules was a match.  Reset the i-th bit to
+             * keep searching this key in the next subtable. */
+            ULLONG_SET0(found_map, i);  /* Did not match. */
+        next:
+            ;                     /* Keep Sparse happy. */
+        }
+
+        return found_map;
+}
+
 /* For each miniflow in 'keys' performs a classifier lookup writing the result
  * into the corresponding slot in 'rules'.  If a particular entry in 'keys' is
  * NULL it is skipped.
@@ -7929,16 +8011,12 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
     /* The received 'cnt' miniflows are the search-keys that will be processed
      * to find a matching entry into the available subtables.
      * The number of bits in map_type is equal to NETDEV_MAX_BURST. */
-    typedef uint32_t map_type;
-#define MAP_BITS (sizeof(map_type) * CHAR_BIT)
+#define MAP_BITS (sizeof(uint32_t) * CHAR_BIT)
     BUILD_ASSERT_DECL(MAP_BITS >= NETDEV_MAX_BURST);
 
     struct dpcls_subtable *subtable;
 
-    map_type keys_map = TYPE_MAXIMUM(map_type); /* Set all bits. */
-    map_type found_map;
-    uint32_t hashes[MAP_BITS];
-    const struct cmap_node *nodes[MAP_BITS];
+    uint32_t keys_map = TYPE_MAXIMUM(uint32_t); /* Set all bits. */
 
     if (cnt != MAP_BITS) {
         keys_map >>= MAP_BITS - cnt; /* Clear extra bits. */
@@ -7946,6 +8024,7 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
     memset(rules, 0, cnt * sizeof *rules);
 
     int lookups_match = 0, subtable_pos = 1;
+    uint32_t found_map;
 
     /* The Datapath classifier - aka dpcls - is composed of subtables.
      * Subtables are dynamically created as needed when new rules are inserted.
@@ -7955,52 +8034,27 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
      * search-key, the search for that key can stop because the rules are
      * non-overlapping. */
     PVECTOR_FOR_EACH (subtable, &cls->subtables) {
-        int i;
+        /* Call the subtable specific lookup function. */
+        found_map = subtable->lookup_func(subtable, keys_map, keys, rules);
 
-        /* Compute hashes for the remaining keys.  Each search-key is
-         * masked with the subtable's mask to avoid hashing the wildcarded
-         * bits. */
-        ULLONG_FOR_EACH_1(i, keys_map) {
-            hashes[i] = netdev_flow_key_hash_in_mask(keys[i],
-                                                     &subtable->mask);
-        }
-        /* Lookup. */
-        found_map = cmap_find_batch(&subtable->rules, keys_map, hashes, nodes);
-        /* Check results.  When the i-th bit of found_map is set, it means
-         * that a set of nodes with a matching hash value was found for the
-         * i-th search-key.  Due to possible hash collisions we need to check
-         * which of the found rules, if any, really matches our masked
-         * search-key. */
-        ULLONG_FOR_EACH_1(i, found_map) {
-            struct dpcls_rule *rule;
+        /* Count the number of subtables searched for this packet match. This
+         * estimates the "spread" of subtables looked at per matched packet. */
+        uint32_t pkts_matched = count_1bits(found_map);
+        lookups_match += pkts_matched * subtable_pos;
 
-            CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
-                if (OVS_LIKELY(dpcls_rule_matches_key(rule, keys[i]))) {
-                    rules[i] = rule;
-                    /* Even at 20 Mpps the 32-bit hit_cnt cannot wrap
-                     * within one second optimization interval. */
-                    subtable->hit_cnt++;
-                    lookups_match += subtable_pos;
-                    goto next;
-                }
-            }
-            /* None of the found rules was a match.  Reset the i-th bit to
-             * keep searching this key in the next subtable. */
-            ULLONG_SET0(found_map, i);  /* Did not match. */
-        next:
-            ;                     /* Keep Sparse happy. */
-        }
-        keys_map &= ~found_map;             /* Clear the found rules. */
+        /* Clear the found rules, and return early if all packets are found. */
+        keys_map &= ~found_map;
         if (!keys_map) {
             if (num_lookups_p) {
                 *num_lookups_p = lookups_match;
             }
-            return true;              /* All found. */
+            return true;
         }
         subtable_pos++;
     }
+
     if (num_lookups_p) {
         *num_lookups_p = lookups_match;
     }
-    return false;                     /* Some misses. */
+    return false;
 }
