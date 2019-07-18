@@ -35,6 +35,10 @@ Post-v2.11.0
        datapath regardless of '--cleanup' option. Use '--cleanup' to remove
        internal ports too.
      * Removed experimental tag for SMC cache.
+     * Datapath classifer code refactored to enable function pointers to select
+       the lookup implementation at runtime. This enables specialization of
+       specific subtables based on the miniflow attributes, enhancing the
+       performance of the subtable search.
    - OVSDB:
      * OVSDB clients can now resynchronize with clustered servers much more
        quickly after a brief disconnection, saving bandwidth and CPU time.

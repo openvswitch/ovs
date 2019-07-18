@@ -7712,8 +7712,13 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     subtable->mf_masks = xmalloc(sizeof(uint64_t) * (unit0 + unit1));
     netdev_flow_key_gen_masks(mask, subtable->mf_masks, unit0, unit1);
 
-    /* Assign the generic lookup - this works with any miniflow fingerprint. */
-    subtable->lookup_func = dpcls_subtable_lookup_generic;
+    /* Probe for a specialized generic lookup function. */
+    subtable->lookup_func = dpcls_subtable_generic_probe(unit0, unit1);
+
+    /* If not set, assign generic lookup. Generic works for any miniflow. */
+    if (!subtable->lookup_func) {
+        subtable->lookup_func = dpcls_subtable_lookup_generic;
+    }
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */
