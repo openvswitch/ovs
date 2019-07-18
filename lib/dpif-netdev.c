@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
+#include "dpif-netdev-private.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -128,15 +129,6 @@ static struct odp_support dp_netdev_support = {
     .ct_orig_tuple6 = true,
 };
 
-/* Stores a miniflow with inline values */
-
-struct netdev_flow_key {
-    uint32_t hash;       /* Hash function differs for different users. */
-    uint32_t len;        /* Length of the following miniflow (incl. map). */
-    struct miniflow mf;
-    uint64_t buf[FLOW_MAX_PACKET_U64S];
-};
-
 /* EMC cache and SMC cache compose the datapath flow cache (DFC)
  *
  * Exact match cache for frequently used flows
@@ -243,14 +235,6 @@ struct dpcls {
     struct pvector subtables;
 };
 
-/* A rule to be inserted to the classifier. */
-struct dpcls_rule {
-    struct cmap_node cmap_node;   /* Within struct dpcls_subtable 'rules'. */
-    struct netdev_flow_key *mask; /* Subtable's mask. */
-    struct netdev_flow_key flow;  /* Matching key. */
-    /* 'flow' must be the last field, additional space is allocated here. */
-};
-
 /* Data structure to keep packet order till fastpath processing. */
 struct dp_packet_flow_map {
     struct dp_packet *packet;
@@ -268,7 +252,7 @@ static bool dpcls_lookup(struct dpcls *cls,
                          const struct netdev_flow_key *keys[],
                          struct dpcls_rule **rules, size_t cnt,
                          int *num_lookups_p);
-static bool dpcls_rule_matches_key(const struct dpcls_rule *rule,
+bool dpcls_rule_matches_key(const struct dpcls_rule *rule,
                             const struct netdev_flow_key *target);
 /* Set of supported meter flags */
 #define DP_SUPPORTED_METER_FLAGS_MASK \
@@ -2783,10 +2767,6 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
     dst->hash = hash_finish(hash,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
-
-/* Iterate through netdev_flow_key TNL u64 values specified by 'FLOWMAP'. */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(VALUE, KEY, FLOWMAP)   \
-    MINIFLOW_FOR_EACH_IN_FLOWMAP(VALUE, &(KEY)->mf, FLOWMAP)
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
  * 'mask'. */
@@ -7683,48 +7663,6 @@ dpif_dummy_register(enum dummy_level level)
 
 /* Datapath Classifier. */
 
-/* Forward declaration for lookup_func typedef. */
-struct dpcls_subtable;
-
-/* Lookup function for a subtable in the dpcls. This function is called
- * by each subtable with an array of packets, and a bitmask of packets to
- * perform the lookup on. Using a function pointer gives flexibility to
- * optimize the lookup function based on subtable properties and the
- * CPU instruction set available at runtime.
- */
-typedef
-uint32_t (*dpcls_subtable_lookup_func)(struct dpcls_subtable *subtable,
-                                       uint32_t keys_map,
-                                       const struct netdev_flow_key *keys[],
-                                       struct dpcls_rule **rules);
-
-/* Prototype for generic lookup func, using same code path as before. */
-uint32_t
-dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
-                              uint32_t keys_map,
-                              const struct netdev_flow_key *keys[],
-                              struct dpcls_rule **rules);
-
-/* A set of rules that all have the same fields wildcarded. */
-struct dpcls_subtable {
-    /* The fields are only used by writers. */
-    struct cmap_node cmap_node OVS_GUARDED; /* Within dpcls 'subtables_map'. */
-
-    /* These fields are accessed by readers. */
-    struct cmap rules;           /* Contains "struct dpcls_rule"s. */
-    uint32_t hit_cnt;            /* Number of match hits in subtable in current
-                                    optimization interval. */
-
-    /* The lookup function to use for this subtable. If there is a known
-     * property of the subtable (eg: only 3 bits of miniflow metadata is
-     * used for the lookup) then this can point at an optimized version of
-     * the lookup function for this particular subtable. */
-    dpcls_subtable_lookup_func lookup_func;
-
-    struct netdev_flow_key mask; /* Wildcards for fields (const). */
-    /* 'mask' must be the last field, additional space is allocated here. */
-};
-
 static void
 dpcls_subtable_destroy_cb(struct dpcls_subtable *subtable)
 {
@@ -7928,7 +7866,7 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
 
 /* Returns true if 'target' satisfies 'key' in 'mask', that is, if each 1-bit
  * in 'mask' the values in 'key' and 'target' are the same. */
-static bool
+bool
 dpcls_rule_matches_key(const struct dpcls_rule *rule,
                        const struct netdev_flow_key *target)
 {
