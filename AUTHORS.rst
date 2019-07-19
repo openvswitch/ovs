@@ -157,6 +157,7 @@ Guolin Yang                        gyang@vmware.com
 Guru Chaitanya Perakam             gperakam@Brocade.com
 Gurucharan Shetty                  guru@ovn.org
 Han Zhou                           zhouhan@gmail.com
+Harry Van Haaren                   harry.van.haaren@intel.com
 Henry Mai
 Hao Zheng
 Helmut Schaa                       helmut.schaa@googlemail.com
