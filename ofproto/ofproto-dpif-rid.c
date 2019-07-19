@@ -130,6 +130,7 @@ frozen_state_hash(const struct frozen_state *state)
     hash = hash_bytes64((const uint64_t *) &state->metadata,
                         sizeof state->metadata, hash);
     hash = hash_boolean(state->conntracked, hash);
+    hash = hash_boolean(state->was_mpls, hash);
     if (state->stack && state->stack_size) {
         hash = hash_bytes(state->stack, state->stack_size, hash);
     }
@@ -158,6 +159,7 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
             && !memcmp(a->stack, b->stack, a->stack_size)
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
+            && a->was_mpls == b->was_mpls
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len)
             && ofpacts_equal(a->action_set, a->action_set_len,
