@@ -2040,7 +2040,7 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
         return true;
     }
 
-    if (udpif->dump_duration < 200) {
+    if (udpif->dump_duration < ofproto_max_revalidator / 2) {
         /* We are likely to handle full revalidation for the flows. */
         return true;
     }
