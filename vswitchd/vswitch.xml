@@ -204,6 +204,17 @@
         </p>
       </column>
 
+      <column name="other_config" key="min-revalidate-pps"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Set minimum pps that flow must have in order to be revalidated when
+          revalidation duration exceeds half of max-revalidator config variable.
+        </p>
+        <p>
+          The default is 5.
+        </p>
+      </column>
+
       <column name="other_config" key="hw-offload"
               type='{"type": "boolean"}'>
         <p>

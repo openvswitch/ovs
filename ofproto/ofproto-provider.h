@@ -528,6 +528,10 @@ extern unsigned ofproto_max_idle;
  * Revalidator timeout is a minimum of max_idle and max_revalidator values. */
 extern unsigned ofproto_max_revalidator;
 
+/* Minimum pps that flow must have in order to be revalidated when revalidation
+ * duration exceeds half of max-revalidator config variable. */
+extern unsigned ofproto_min_revalidate_pps;
+
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;

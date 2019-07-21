@@ -2060,8 +2060,8 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
     duration = now - used;
     metric = duration / packets;
 
-    if (metric < 200) {
-        /* The flow is receiving more than ~5pps, so keep it. */
+    if (metric < 1000 / ofproto_min_revalidate_pps) {
+        /* The flow is receiving more than min-revalidate-pps, so keep it. */
         return true;
     }
     return false;
