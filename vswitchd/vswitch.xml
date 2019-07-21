@@ -190,6 +190,20 @@
         </p>
     </column>
 
+      <column name="other_config" key="max-revalidator"
+              type='{"type": "integer", "minInteger": 100}'>
+        <p>
+          The maximum time (in ms) that revalidator threads will wait before
+          executing flow revalidation. Note that this is maximum allowed value.
+          Actual timeout used by OVS is minimum of max-idle and max-revalidator
+          values. Tweaking this value is discouraged unless you know exactly
+          what you're doing.
+        </p>
+        <p>
+          The default is 500.
+        </p>
+      </column>
+
       <column name="other_config" key="hw-offload"
               type='{"type": "boolean"}'>
         <p>

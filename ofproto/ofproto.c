@@ -306,6 +306,7 @@ struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
 unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
+unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
 
 size_t n_handlers, n_revalidators;
 
@@ -700,6 +701,15 @@ void
 ofproto_set_max_idle(unsigned max_idle)
 {
     ofproto_max_idle = max_idle;
+}
+
+/* Sets the maximum allowed revalidator timeout. */
+void
+ofproto_set_max_revalidator(unsigned max_revalidator)
+{
+    if (max_revalidator >= 100) {
+        ofproto_max_revalidator = max_revalidator;
+    }
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with
