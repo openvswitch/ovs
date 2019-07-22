@@ -43,6 +43,7 @@ struct netdev_rxq_linux {
     int fd;
 };
 
+int netdev_linux_construct(struct netdev *);
 void netdev_linux_run(const struct netdev_class *);
 
 int get_stats_via_netlink(const struct netdev *netdev_,

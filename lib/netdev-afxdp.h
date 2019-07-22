@@ -36,6 +36,7 @@ struct netdev_stats;
 
 int netdev_afxdp_rxq_construct(struct netdev_rxq *rxq_);
 void netdev_afxdp_rxq_destruct(struct netdev_rxq *rxq_);
+int netdev_afxdp_construct(struct netdev *netdev_);
 void netdev_afxdp_destruct(struct netdev *netdev_);
 
 int netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_,

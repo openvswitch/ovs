@@ -525,7 +525,8 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
     ovs_mutex_lock(&dev->mutex);
 
     if (netdev->n_rxq == dev->requested_n_rxq
-        && dev->xdpmode == dev->requested_xdpmode) {
+        && dev->xdpmode == dev->requested_xdpmode
+        && dev->xsks) {
         goto out;
     }
 
@@ -963,6 +964,33 @@ void
 netdev_afxdp_rxq_destruct(struct netdev_rxq *rxq_ OVS_UNUSED)
 {
     /* Nothing. */
+}
+
+int
+netdev_afxdp_construct(struct netdev *netdev)
+{
+    struct netdev_linux *dev = netdev_linux_cast(netdev);
+    int ret;
+
+    /* Configure common netdev-linux first. */
+    ret = netdev_linux_construct(netdev);
+    if (ret) {
+        return ret;
+    }
+
+    /* Queues should not be used before the first reconfiguration. Clearing. */
+    netdev->n_rxq = 0;
+    netdev->n_txq = 0;
+    dev->xdpmode = 0;
+
+    dev->requested_n_rxq = NR_QUEUE;
+    dev->requested_xdpmode = XDP_COPY;
+
+    dev->xsks = NULL;
+    dev->tx_locks = NULL;
+
+    netdev_request_reconfigure(netdev);
+    return 0;
 }
 
 void
