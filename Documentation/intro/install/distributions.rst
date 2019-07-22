@@ -44,10 +44,13 @@ that includes the core userspace components of the switch.
 
 2. For kernel datapath, ``openvswitch-datapath-dkms`` can be installed to
 automatically build and install Open vSwitch kernel module for your running
-kernel.
+kernel.  This package is only available when the .deb packages are built from
+the Open vSwitch repository; it is not downstream in Debian or Ubuntu releases.
 
 3. For fast userspace switching, Open vSwitch with DPDK support is
-bundled in the package ``openvswitch-switch-dpdk``.
+bundled in the package ``openvswitch-switch-dpdk``.  This package is only
+available in the Ubuntu distribution; it is not upstream in the Open vSwitch
+repository or downstream in Debian.
 
 Fedora
 ------
