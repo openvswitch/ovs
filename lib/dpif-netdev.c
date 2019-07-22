@@ -1862,7 +1862,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     reconfigure_datapath(dp);
 
-    return 0;
+    /* Check that port was successfully configured. */
+    return dp_netdev_lookup_port(dp, port_no) ? 0 : EINVAL;
 }
 
 static int
