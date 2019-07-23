@@ -1091,7 +1091,7 @@ void physical_handle_port_binding_changes(
                                   flow_table, &ofpacts);
         }
     }
-
+    ofpbuf_uninit(&ofpacts);
 }
 
 void
