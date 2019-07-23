@@ -5124,6 +5124,27 @@ NXT_FLOW_MONITOR_RESUMED:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - flow monitoring usable protocols])
+AT_KEYWORDS([monitor])
+
+OVS_VSWITCHD_START
+
+on_exit 'kill `cat ovs-ofctl.pid`'
+ovs-ofctl -OOpenFlow14 monitor br0 watch:udp,udp_dst=8 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# ovs-ofctl should exit because monitor is not supported in OpenFlow 1.4
+OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+
+# check that only NXM flag is returned as usable protocols for sctp_dst
+# and ovs-ofctl should exit since monitor is not supported in OpenFlow 1.4
+ovs-ofctl -OOpenFlow14 monitor br0 watch:sctp,sctp_dst=9 --detach --no-chdir --pidfile >monitor.log 2>&1
+OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([ofproto - event filtering (OpenFlow 1.3)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START

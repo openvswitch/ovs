@@ -2289,6 +2289,14 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
                 ovs_fatal(0, "%s", error);
             }
 
+            if (!(usable_protocols & allowed_protocols)) {
+                char *allowed_s =
+                                ofputil_protocols_to_string(allowed_protocols);
+                char *usable_s = ofputil_protocols_to_string(usable_protocols);
+                ovs_fatal(0, "none of the usable flow formats (%s) is among "
+                         "the allowed flow formats (%s)", usable_s, allowed_s);
+            }
+
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg);
             dump_transaction(vconn, msg);

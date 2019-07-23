@@ -578,7 +578,8 @@ monitoring will not show any traffic.
 .IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fBinvalid_ttl\fR] [\fBwatch:\fR[\fIspec\fR...]]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify the name of a
-bridge in the \fBovs\-vswitchd\fR database.
+bridge in the \fBovs\-vswitchd\fR database. This is available only in
+OpenFlow 1.0 as Nicira extension.
 .IP
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests

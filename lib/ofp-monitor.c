@@ -469,6 +469,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
     fmr->table_id = 0xff;
     match_init_catchall(&fmr->match);
 
+    *usable_protocols = OFPUTIL_P_ANY;
     while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct ofp_protocol *p;
         char *error = NULL;
@@ -493,6 +494,10 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
         } else if (mf_from_name(name)) {
             error = ofp_parse_field(mf_from_name(name), value, port_map,
                                     &fmr->match, usable_protocols);
+            if (!error && !(*usable_protocols & OFPUTIL_P_OF10_ANY)) {
+                return xasprintf("%s: match field is not supported for "
+                                 "flow monitor", name);
+            }
         } else {
             if (!*value) {
                 return xasprintf("%s: field %s missing value", str_, name);
@@ -513,6 +518,9 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
         if (error) {
             return error;
         }
+        /* Flow Monitor is supported in OpenFlow 1.0 or can be further reduced
+         * to a few 1.0 flavors by a match field. */
+        *usable_protocols &= OFPUTIL_P_OF10_ANY;
     }
     return NULL;
 }
