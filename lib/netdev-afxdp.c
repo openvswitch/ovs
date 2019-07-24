@@ -277,8 +277,12 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
 
     /* Make sure the built-in AF_XDP program is loaded. */
     ret = bpf_get_link_xdp_id(ifindex, &prog_id, cfg.xdp_flags);
-    if (ret) {
-        VLOG_ERR("Get XDP prog ID failed (%s)", ovs_strerror(errno));
+    if (ret || !prog_id) {
+        if (ret) {
+            VLOG_ERR("Get XDP prog ID failed (%s)", ovs_strerror(errno));
+        } else {
+            VLOG_ERR("No XDP program is loaded at ifindex %d", ifindex);
+        }
         xsk_socket__delete(xsk->xsk);
         free(xsk);
         return NULL;
