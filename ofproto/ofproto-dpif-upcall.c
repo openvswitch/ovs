@@ -1031,6 +1031,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
     odp_port_t port;
     uint32_t pid;
 
+    memset(&cookie, 0, sizeof cookie);
     cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
     cookie.slow_path.unused = 0;
     cookie.slow_path.reason = xout->slow;
