@@ -3056,7 +3056,11 @@ compose_sflow_action(struct xlate_ctx *ctx)
         return 0;
     }
 
-    union user_action_cookie cookie = { .type = USER_ACTION_COOKIE_SFLOW };
+    union user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.type = USER_ACTION_COOKIE_SFLOW;
+
     return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
                                  &cookie, sizeof cookie.sflow, ODPP_NONE,
                                  true);
@@ -3097,12 +3101,12 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
         }
     }
 
-    union user_action_cookie cookie = {
-        .ipfix = {
-            .type = USER_ACTION_COOKIE_IPFIX,
-            .output_odp_port = output_odp_port,
-        }
-    };
+    union user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.ipfix.type = USER_ACTION_COOKIE_IPFIX;
+    cookie.ipfix.output_odp_port = output_odp_port;
+
     compose_sample_action(ctx,
                           dpif_ipfix_get_bridge_exporter_probability(ipfix),
                           &cookie, sizeof cookie.ipfix, tunnel_out_port,
@@ -5393,17 +5397,17 @@ xlate_sample_action(struct xlate_ctx *ctx,
         }
     }
 
-    union user_action_cookie cookie = {
-        .flow_sample = {
-            .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
-            .probability = os->probability,
-            .collector_set_id = os->collector_set_id,
-            .obs_domain_id = os->obs_domain_id,
-            .obs_point_id = os->obs_point_id,
-            .output_odp_port = output_odp_port,
-            .direction = os->direction,
-        }
-    };
+    union user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.flow_sample.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
+    cookie.flow_sample.probability = os->probability;
+    cookie.flow_sample.collector_set_id = os->collector_set_id;
+    cookie.flow_sample.obs_domain_id = os->obs_domain_id;
+    cookie.flow_sample.obs_point_id = os->obs_point_id;
+    cookie.flow_sample.output_odp_port = output_odp_port;
+    cookie.flow_sample.direction = os->direction;
+
     compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
                           tunnel_out_port, false);
 }
