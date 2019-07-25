@@ -136,28 +136,28 @@ AT_CHECK([ovn-sbctl --columns=ip list Encap | cut -d ':' -f2 | tr -d ' '], [0], 
 AT_CHECK([vtep-ctl add-ls lswitch0 -- bind-ls br-vtep p0 100 lswitch0 -- bind-ls br-vtep p0 200 lswitch0 -- bind-ls br-vtep p1 300 lswitch0])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Chassis | grep -- lswitch0`"])
 AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
-[["lswitch0"]]
+[[lswitch0]]
 ])
 
 # adds another logical switch and new vlan_bindings.
 AT_CHECK([vtep-ctl add-ls lswitch1 -- bind-ls br-vtep p0 300 lswitch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Chassis | grep -- lswitch1`"])
 AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' '], [0], [dnl
-[["lswitch0","lswitch1"]]
+[[lswitch0,lswitch1]]
 ])
 
 # unbinds one port from lswitch0, nothing should change.
 AT_CHECK([vtep-ctl unbind-ls br-vtep p0 200])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=vlan_bindings list physical_port p0 | grep -- '200='`"])
 AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
-[["lswitch0","lswitch1"]]
+[[lswitch0,lswitch1]]
 ])
 
 # unbinds all ports from lswitch0.
 AT_CHECK([vtep-ctl unbind-ls br-vtep p0 100 -- unbind-ls br-vtep p1 300])
 OVS_WAIT_UNTIL([test -z "`ovn-sbctl list Chassis | grep -- br-vtep_lswitch0`"])
 AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
-[["lswitch1"]]
+[[lswitch1]]
 ])
 
 # unbinds all ports from lswitch1.

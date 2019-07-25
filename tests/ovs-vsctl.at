@@ -453,9 +453,9 @@ value0
 key0=othervalue
 
 
-{"key1"="value1"}
-{"key2"="value2", "key3"="value3"}
-{"key4"="value4"}
+{key1=value1}
+{key2=value2, key3=value3}
+{key4=value4}
 ])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [br-get-external-id a],
@@ -463,9 +463,9 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [get interface a2 external-ids],
   [get interface a3 external-ids])], [0],
 [
-{"key1"="value1"}
-{"key2"="value2", "key3"="value3"}
-{"key4"="value4"}
+{key1=value1}
+{key2=value2, key3=value3}
+{key4=value4}
 ])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [bond0])
@@ -731,7 +731,7 @@ flow_tables         : {}
 ipfix               : []
 mcast_snooping_enable: false
 mirrors             : []
-name                : "br0"
+name                : br0
 netflow             : []
 other_config        : {}
 ports               : []
@@ -747,14 +747,14 @@ AT_CHECK(
   [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type list bridge])],
   [0],
   [[fail_mode           : []
-name                : "br0"
+name                : br0
 datapath_type       : ""
 ]], [ignore])
 AT_CHECK(
   [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type find bridge])],
   [0],
   [[fail_mode           : []
-name                : "br0"
+name                : br0
 datapath_type       : ""
 ]], [ignore])
 AT_CHECK([
@@ -766,8 +766,8 @@ AT_CHECK(
   [RUN_OVS_VSCTL([--columns=name find bridge datapath_type!=foo])], [0], [stdout],
   [ignore])
 AT_CHECK([sed -n '/./p' stdout | sort], [0],
-  [[name                : "br0"
-name                : "br2"
+  [[name                : br0
+name                : br2
 ]])
 AT_CHECK(
   [RUN_OVS_VSCTL(
@@ -1142,9 +1142,9 @@ AT_CHECK(
 AT_CHECK(
   [sed -n -e '/uuid/p' -e '/name/p' -e '/mirrors/p' -e '/select/p' -e '/output/p' < stdout | uuidfilt], [0], [dnl
 [_uuid               : <0>
-name                : "eth0"
+name                : eth0
 _uuid               : <1>
-name                : "eth1"
+name                : eth1
 _uuid               : <2>
 name                : mymirror
 output_port         : <1>
@@ -1155,7 +1155,7 @@ select_src_port     : [<0>]
 select_vlan         : []
 _uuid               : <3>
 mirrors             : [<2>]
-name                : "br0"
+name                : br0
 ]])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
@@ -1214,7 +1214,7 @@ flow_tables         : {}
 ipfix               : []
 mcast_snooping_enable: false
 mirrors             : []
-name                : "br0"
+name                : br0
 netflow             : []
 other_config        : {}
 ports               : []
@@ -1357,7 +1357,7 @@ OVS_VSCTL_SETUP
 dnl First check that the database commands can refer to row by database UUID.
 AT_CHECK([RUN_OVS_VSCTL([add-br br0])])
 uuid=`[]RUN_OVS_VSCTL(get port br0 _uuid)`
-AT_CHECK([RUN_OVS_VSCTL([get port $uuid name])], [0], ["br0"
+AT_CHECK([RUN_OVS_VSCTL([get port $uuid name])], [0], [br0
 ])
 
 dnl Next check that, if a database row is given a name that has the same form
