@@ -3214,11 +3214,13 @@ compose_sflow_action(struct xlate_ctx *ctx)
         return 0;
     }
 
-    struct user_action_cookie cookie = {
-        .type = USER_ACTION_COOKIE_SFLOW,
-        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
-        .ofproto_uuid = ctx->xbridge->ofproto->uuid
-    };
+    struct user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.type = USER_ACTION_COOKIE_SFLOW;
+    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+
     return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
                                  &cookie, ODPP_NONE, true);
 }
@@ -3258,12 +3260,14 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
         }
     }
 
-    struct user_action_cookie cookie = {
-        .type = USER_ACTION_COOKIE_IPFIX,
-        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
-        .ofproto_uuid = ctx->xbridge->ofproto->uuid,
-        .ipfix.output_odp_port = output_odp_port
-    };
+    struct user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.type = USER_ACTION_COOKIE_IPFIX;
+    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    cookie.ipfix.output_odp_port = output_odp_port;
+
     compose_sample_action(ctx,
                           dpif_ipfix_get_bridge_exporter_probability(ipfix),
                           &cookie, tunnel_out_port, false);
@@ -5521,19 +5525,19 @@ xlate_sample_action(struct xlate_ctx *ctx,
         }
     }
 
-    struct user_action_cookie cookie = {
-        .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
-        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
-        .ofproto_uuid = ctx->xbridge->ofproto->uuid,
-        .flow_sample = {
-            .probability = os->probability,
-            .collector_set_id = os->collector_set_id,
-            .obs_domain_id = os->obs_domain_id,
-            .obs_point_id = os->obs_point_id,
-            .output_odp_port = output_odp_port,
-            .direction = os->direction,
-        }
-    };
+    struct user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
+    cookie.ofp_in_port = ctx->xin->flow.in_port.ofp_port;
+    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    cookie.flow_sample.probability = os->probability;
+    cookie.flow_sample.collector_set_id = os->collector_set_id;
+    cookie.flow_sample.obs_domain_id = os->obs_domain_id;
+    cookie.flow_sample.obs_point_id = os->obs_point_id;
+    cookie.flow_sample.output_odp_port = output_odp_port;
+    cookie.flow_sample.direction = os->direction;
+
     compose_sample_action(ctx, probability, &cookie, tunnel_out_port, false);
 }
 
