@@ -329,7 +329,7 @@ Recommended BIOS Settings
      - Disabled
    * - MLC Streamer
      - Enabled
-   * - MLC Spacial Prefetcher
+   * - MLC Spatial Prefetcher
      - Enabled
    * - DCU Data Prefetcher
      - Enabled
@@ -337,7 +337,7 @@ Recommended BIOS Settings
      - Enabled
    * - CPU Power and Performance
      - Performance
-   * - Memeory RAS and Performance Config -> NUMA optimized
+   * - Memory RAS and Performance Config -> NUMA optimized
      - Enabled
 
 PCIe Slot Selection
