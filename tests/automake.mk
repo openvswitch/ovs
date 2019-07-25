@@ -264,7 +264,8 @@ $(valgrind_wrappers): tests/valgrind-wrapper.in
 CLEANFILES += $(valgrind_wrappers)
 EXTRA_DIST += tests/valgrind-wrapper.in
 
-VALGRIND = valgrind --log-file=valgrind.%p --leak-check=full \
+VALGRIND = valgrind --log-file=valgrind.%p \
+	--leak-check=full --track-origins=yes \
 	--suppressions=$(abs_top_srcdir)/tests/glibc.supp \
 	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
 HELGRIND = valgrind --log-file=helgrind.%p --tool=helgrind \
