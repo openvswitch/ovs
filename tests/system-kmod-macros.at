@@ -59,7 +59,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # kernel conntrack tables when the test is finished.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON2 = no])
+    [AT_SKIP_IF([test $HAVE_PYTHON = no])
      m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
                         [nf_nat_tftp]],
                 [modprobe mod || echo "Module mod not loaded."
