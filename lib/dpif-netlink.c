@@ -2016,11 +2016,6 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
         return err;
     }
 
-    /* When we try to install a dummy flow from a probed feature. */
-    if (match.flow.dl_type == htons(0x1234)) {
-        return EOPNOTSUPP;
-    }
-
     in_port = match.flow.in_port.odp_port;
     dev = netdev_ports_get(in_port, dpif_class);
     if (!dev) {
