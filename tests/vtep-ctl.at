@@ -939,9 +939,9 @@ AT_CHECK([vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket show | tail -n+
     Physical_Switch a
         management_ips: [["4.3.2.1"]]
         tunnel_ips: [["1.2.3.4"]]
-        Physical_Port "a1"
+        Physical_Port a1
             vlan_bindings:
-                100="ls1"
+                100=ls1
 ], [], [VTEP_CTL_CLEANUP])
 
 VTEP_CTL_CLEANUP

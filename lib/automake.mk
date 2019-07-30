@@ -9,6 +9,7 @@ lib_LTLIBRARIES += lib/libopenvswitch.la
 
 lib_libopenvswitch_la_LIBADD = $(SSL_LIBS)
 lib_libopenvswitch_la_LIBADD += $(CAPNG_LDADD)
+lib_libopenvswitch_la_LIBADD += $(LIBBPF_LDADD)
 
 if WIN32
 lib_libopenvswitch_la_LIBADD += ${PTHREAD_LIBS}
@@ -78,8 +79,10 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dp-packet.h \
 	lib/dp-packet.c \
 	lib/dpdk.h \
+	lib/dpif-netdev-lookup-generic.c \
 	lib/dpif-netdev.c \
 	lib/dpif-netdev.h \
+	lib/dpif-netdev-private.h \
 	lib/dpif-netdev-perf.c \
 	lib/dpif-netdev-perf.h \
 	lib/dpif-provider.h \
@@ -394,6 +397,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
+	lib/netdev-linux-private.h \
 	lib/netdev-offload-tc.c \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \
@@ -408,6 +412,14 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/route-table.h \
 	lib/tc.c \
 	lib/tc.h
+endif
+
+if HAVE_AF_XDP
+lib_libopenvswitch_la_SOURCES += \
+	lib/netdev-afxdp-pool.c \
+	lib/netdev-afxdp-pool.h \
+	lib/netdev-afxdp.c \
+	lib/netdev-afxdp.h
 endif
 
 if DPDK_NETDEV

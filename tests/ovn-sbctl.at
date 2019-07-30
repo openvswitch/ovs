@@ -79,11 +79,11 @@ AT_CHECK([ovn-nbctl --wait=sb sync])
 AT_CHECK([ovn-sbctl lsp-bind vif0 ch0])
 
 AT_CHECK([ovn-sbctl show], [0], [dnl
-Chassis "ch0"
+Chassis ch0
     Encap stt
         ip: "1.2.3.5"
         options: {csum="true"}
-    Port_Binding "vif0"
+    Port_Binding vif0
 ])
 
 # adds another 'vif1'
@@ -92,12 +92,12 @@ AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:03])
 AT_CHECK([ovn-sbctl lsp-bind vif1 ch0])
 
 AT_CHECK([ovn-sbctl show | sed 's/vif[[0-9]]/vif/'], [0], [dnl
-Chassis "ch0"
+Chassis ch0
     Encap stt
         ip: "1.2.3.5"
         options: {csum="true"}
-    Port_Binding "vif"
-    Port_Binding "vif"
+    Port_Binding vif
+    Port_Binding vif
 ])
 
 # deletes 'vif1'
@@ -105,16 +105,16 @@ AT_CHECK([ovn-nbctl lsp-del vif1])
 AT_CHECK([ovn-nbctl --wait=sb sync])
 
 AT_CHECK([ovn-sbctl show], [0], [dnl
-Chassis "ch0"
+Chassis ch0
     Encap stt
         ip: "1.2.3.5"
         options: {csum="true"}
-    Port_Binding "vif0"
+    Port_Binding vif0
 ])
 
 uuid=$(ovn-sbctl --columns=_uuid list Chassis ch0 | cut -d ':' -f2 | tr -d ' ')
 AT_CHECK_UNQUOTED([ovn-sbctl --columns=logical_port,mac,chassis list Port_Binding], [0], [dnl
-logical_port        : "vif0"
+logical_port        : vif0
 mac                 : [["f0:ab:cd:ef:01:02"]]
 chassis             : ${uuid}
 ])
@@ -126,10 +126,10 @@ AT_CHECK([ovn-nbctl lsp-set-options vtep0 vtep_physical_switch=p0 vtep_logical_s
 
 AT_CHECK([ovn-sbctl --timeout=10 wait-until Port_Binding vtep0 options!={}])
 AT_CHECK([ovn-sbctl --columns=logical_port,mac,type,options list Port_Binding vtep0], [0], [dnl
-logical_port        : "vtep0"
+logical_port        : vtep0
 mac                 : [[]]
 type                : vtep
-options             : {vtep_logical_switch="l0", vtep_physical_switch="p0"}
+options             : {vtep_logical_switch=l0, vtep_physical_switch=p0}
 ])
 
 OVN_SBCTL_TEST_STOP

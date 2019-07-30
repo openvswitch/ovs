@@ -143,7 +143,7 @@ def reset_counters():
 # something in parentheses (usually an expression) then a left curly brace.
 #
 # 'do' almost qualifies but it's also used as "do { ... } while (...);".
-__parenthesized_constructs = 'if|for|while|switch|[_A-Z]+FOR_*EACH[_A-Z]*'
+__parenthesized_constructs = 'if|for|while|switch|[_A-Z]+FOR_*EACH[_A-Z0-9]*'
 
 __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
 __regex_subtracted_line = re.compile(r'^\-{1,2}[^\-][\w\W]*')

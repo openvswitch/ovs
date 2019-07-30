@@ -22,6 +22,7 @@
 #include <netinet/icmp6.h>
 #include "openvswitch/hmap.h"
 #include "hash.h"
+#include "ovn/logical-fields.h"
 
 /* Generic options map which is used to store dhcpv4 opts and dhcpv6 opts. */
 struct gen_opts_map {
@@ -271,6 +272,51 @@ nd_ra_opts_init(struct hmap *nd_ra_opts)
     nd_ra_opt_add(nd_ra_opts, "slla", ND_OPT_SOURCE_LINKADDR, "mac");
     nd_ra_opt_add(nd_ra_opts, "prefix", ND_OPT_PREFIX_INFORMATION, "ipv6");
     nd_ra_opt_add(nd_ra_opts, "mtu", ND_OPT_MTU, "uint32");
+}
+
+#define EMPTY_LB_VIP           1
+#define EMPTY_LB_PROTOCOL      2
+#define EMPTY_LB_LOAD_BALANCER 3
+
+/* Used in the OpenFlow PACKET_IN userdata */
+struct controller_event_opt_header {
+    ovs_be16 opt_code;
+    ovs_be16 size;
+};
+
+struct controller_event_options {
+    struct hmap event_opts[OVN_EVENT_MAX];
+};
+
+static inline void
+controller_event_opt_add(struct controller_event_options *event_opts,
+                         enum ovn_controller_event event_type, char *opt_name,
+                         size_t opt_code, char *opt_type)
+{
+    gen_opt_add(&event_opts->event_opts[event_type], opt_name, opt_code,
+                opt_type);
+}
+
+static inline void
+controller_event_opts_init(struct controller_event_options *opts)
+{
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        hmap_init(&opts->event_opts[i]);
+    }
+    controller_event_opt_add(opts, OVN_EVENT_EMPTY_LB_BACKENDS, "vip",
+                             EMPTY_LB_VIP, "str");
+    controller_event_opt_add(opts, OVN_EVENT_EMPTY_LB_BACKENDS, "protocol",
+                             EMPTY_LB_PROTOCOL, "str");
+    controller_event_opt_add(opts, OVN_EVENT_EMPTY_LB_BACKENDS,
+                             "load_balancer", EMPTY_LB_LOAD_BALANCER, "str");
+}
+
+static inline void
+controller_event_opts_destroy(struct controller_event_options *opts)
+{
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        gen_opts_destroy(&opts->event_opts[i]);
+    }
 }
 
 #endif /* OVN_DHCP_H */

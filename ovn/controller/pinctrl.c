@@ -44,6 +44,8 @@
 #include "ovn/actions.h"
 #include "ovn/lex.h"
 #include "ovn/lib/acl-log.h"
+#include "ovn/lib/ip-mcast-index.h"
+#include "ovn/lib/mcast-group-index.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-util.h"
 #include "ovn/logical-fields.h"
@@ -54,6 +56,7 @@
 #include "timeval.h"
 #include "vswitch-idl.h"
 #include "lflow.h"
+#include "ip-mcast.h"
 
 VLOG_DEFINE_THIS_MODULE(pinctrl);
 
@@ -105,6 +108,17 @@ VLOG_DEFINE_THIS_MODULE(pinctrl);
  *                      the hmap - 'buffered_mac_bindings' and reinjects the
  *                      buffered packets.
  *
+ *    - igmp          - This action punts an IGMP packet to the controller
+ *                      which maintains multicast group information. The
+ *                      multicast groups (mcast_snoop_map) are synced to
+ *                      the 'IGMP_Group' table by ip_mcast_sync().
+ *                      ip_mcast_sync() also reads the 'IP_Multicast'
+ *                      (snooping and querier) configuration and builds a
+ *                      local configuration mcast_cfg_map.
+ *                      ip_mcast_snoop_run() which runs in the
+ *                      pinctrl_handler() thread configures the per datapath
+ *                      mcast_snoop_map entries according to mcast_cfg_map.
+ *
  * pinctrl module also periodically sends IPv6 Router Solicitation requests
  * and gARPs (for the router gateway IPs and configured NAT addresses).
  *
@@ -122,6 +136,13 @@ VLOG_DEFINE_THIS_MODULE(pinctrl);
  *                    pinctrl_handler() thread sends these gARPs using the
  *                    shash 'send_garp_data'.
  *
+ * IGMP Queries     - pinctrl_run() prepares the IGMP queries (at most one
+ *                    per local datapath) based on the mcast_snoop_map
+ *                    contents and stores them in mcast_query_list.
+ *
+ *                    pinctrl_handler thread sends the periodic IGMP queries
+ *                    by walking the mcast_query_list.
+ *
  * Notification between pinctrl_handler() and pinctrl_run()
  * -------------------------------------------------------
  * 'struct seq' is used for notification between pinctrl_handler() thread
@@ -131,8 +152,8 @@ VLOG_DEFINE_THIS_MODULE(pinctrl);
  *  in 'send_garp_data', 'ipv6_ras' and 'buffered_mac_bindings' structures.
  *
  *  'pinctrl_main_seq' is used by pinctrl_handler() thread to wake up
- *  the main thread from poll_block() when mac bindings needs to be updated
- *  in the Southboubd DB.
+ *  the main thread from poll_block() when mac bindings/igmp groups need to
+ *  be updated in the Southboubd DB.
  * */
 
 static struct ovs_mutex pinctrl_mutex = OVS_MUTEX_INITIALIZER;
@@ -211,6 +232,10 @@ static void pinctrl_handle_put_icmp4_frag_mtu(struct rconn *swconn,
                                               struct ofputil_packet_in *pin,
                                               struct ofpbuf *userdata,
                                               struct ofpbuf *continuation);
+static void
+pinctrl_handle_event(struct ofpbuf *userdata)
+    OVS_REQUIRES(pinctrl_mutex);
+static void wait_controller_event(struct ovsdb_idl_txn *ovnsb_idl_txn);
 static void init_ipv6_ras(void);
 static void destroy_ipv6_ras(void);
 static void ipv6_ra_wait(long long int send_ipv6_ra_time);
@@ -222,10 +247,181 @@ static void prepare_ipv6_ras(
 static void send_ipv6_ras(struct rconn *swconn,
                           long long int *send_ipv6_ra_time)
     OVS_REQUIRES(pinctrl_mutex);
+
+static void ip_mcast_snoop_init(void);
+static void ip_mcast_snoop_destroy(void);
+static void ip_mcast_snoop_run(void)
+    OVS_REQUIRES(pinctrl_mutex);
+static void ip_mcast_querier_run(struct rconn *swconn,
+                                 long long int *query_time);
+static void ip_mcast_querier_wait(long long int query_time);
+static void ip_mcast_sync(
+    struct ovsdb_idl_txn *ovnsb_idl_txn,
+    const struct sbrec_chassis *chassis,
+    const struct hmap *local_datapaths,
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+    struct ovsdb_idl_index *sbrec_port_binding_by_key,
+    struct ovsdb_idl_index *sbrec_igmp_groups,
+    struct ovsdb_idl_index *sbrec_ip_multicast)
+    OVS_REQUIRES(pinctrl_mutex);
+static void pinctrl_ip_mcast_handle_igmp(
+    struct rconn *swconn,
+    const struct flow *ip_flow,
+    struct dp_packet *pkt_in,
+    const struct match *md,
+    struct ofpbuf *userdata);
+
 static bool may_inject_pkts(void);
 
 COVERAGE_DEFINE(pinctrl_drop_put_mac_binding);
 COVERAGE_DEFINE(pinctrl_drop_buffered_packets_map);
+COVERAGE_DEFINE(pinctrl_drop_controller_event);
+
+struct empty_lb_backends_event {
+    struct hmap_node hmap_node;
+    long long int timestamp;
+
+    char *vip;
+    char *protocol;
+    char *load_balancer;
+};
+
+static struct hmap event_table[OVN_EVENT_MAX];
+static int64_t event_seq_num;
+
+static void
+init_event_table(void)
+{
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        hmap_init(&event_table[i]);
+    }
+}
+
+#define EVENT_TIMEOUT   10000
+static void
+empty_lb_backends_event_gc(bool flush)
+{
+    struct empty_lb_backends_event *cur_ce, *next_ce;
+    long long int now = time_msec();
+
+    HMAP_FOR_EACH_SAFE (cur_ce, next_ce, hmap_node,
+                        &event_table[OVN_EVENT_EMPTY_LB_BACKENDS]) {
+        if ((now < cur_ce->timestamp + EVENT_TIMEOUT) && !flush) {
+            continue;
+        }
+
+        free(cur_ce->vip);
+        free(cur_ce->protocol);
+        free(cur_ce->load_balancer);
+        hmap_remove(&event_table[OVN_EVENT_EMPTY_LB_BACKENDS],
+                    &cur_ce->hmap_node);
+        free(cur_ce);
+    }
+}
+
+static void
+event_table_gc(bool flush)
+{
+    empty_lb_backends_event_gc(flush);
+}
+
+static void
+event_table_destroy(void)
+{
+    event_table_gc(true);
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        hmap_destroy(&event_table[i]);
+    }
+}
+
+static struct empty_lb_backends_event *
+pinctrl_find_empty_lb_backends_event(char *vip, char *protocol,
+                                     char *load_balancer, uint32_t hash)
+{
+    struct empty_lb_backends_event *ce;
+    HMAP_FOR_EACH_WITH_HASH (ce, hmap_node, hash,
+                             &event_table[OVN_EVENT_EMPTY_LB_BACKENDS]) {
+        if (!strcmp(ce->vip, vip) &&
+            !strcmp(ce->protocol, protocol) &&
+            !strcmp(ce->load_balancer, load_balancer)) {
+            return ce;
+        }
+    }
+    return NULL;
+}
+
+static const struct sbrec_controller_event *
+empty_lb_backends_lookup(struct empty_lb_backends_event *event,
+                         const struct sbrec_controller_event_table *ce_table,
+                         const struct sbrec_chassis *chassis)
+{
+    const struct sbrec_controller_event *sbrec_event;
+    const char *event_type = event_to_string(OVN_EVENT_EMPTY_LB_BACKENDS);
+    char ref_uuid[UUID_LEN + 1];
+    sprintf(ref_uuid, UUID_FMT, UUID_ARGS(&chassis->header_.uuid));
+
+    SBREC_CONTROLLER_EVENT_TABLE_FOR_EACH (sbrec_event, ce_table) {
+        if (strcmp(sbrec_event->event_type, event_type)) {
+            continue;
+        }
+
+        char chassis_uuid[UUID_LEN + 1];
+        sprintf(chassis_uuid, UUID_FMT,
+                UUID_ARGS(&sbrec_event->chassis->header_.uuid));
+        if (strcmp(ref_uuid, chassis_uuid)) {
+            continue;
+        }
+
+        const char *vip = smap_get(&sbrec_event->event_info, "vip");
+        const char *protocol = smap_get(&sbrec_event->event_info, "protocol");
+        const char *load_balancer = smap_get(&sbrec_event->event_info,
+                                             "load_balancer");
+
+        if (!strcmp(event->vip, vip) &&
+            !strcmp(event->protocol, protocol) &&
+            !strcmp(event->load_balancer, load_balancer)) {
+            return sbrec_event;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+controller_event_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
+                     const struct sbrec_controller_event_table *ce_table,
+                     const struct sbrec_chassis *chassis)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    if (!ovnsb_idl_txn) {
+        goto out;
+    }
+
+    struct empty_lb_backends_event *empty_lbs;
+    HMAP_FOR_EACH (empty_lbs, hmap_node,
+                   &event_table[OVN_EVENT_EMPTY_LB_BACKENDS]) {
+        const struct sbrec_controller_event *event;
+
+        event = empty_lb_backends_lookup(empty_lbs, ce_table, chassis);
+        if (!event) {
+            struct smap event_info = SMAP_INITIALIZER(&event_info);
+
+            smap_add(&event_info, "vip", empty_lbs->vip);
+            smap_add(&event_info, "protocol", empty_lbs->protocol);
+            smap_add(&event_info, "load_balancer", empty_lbs->load_balancer);
+
+            event = sbrec_controller_event_insert(ovnsb_idl_txn);
+            sbrec_controller_event_set_event_type(event,
+                    event_to_string(OVN_EVENT_EMPTY_LB_BACKENDS));
+            sbrec_controller_event_set_seq_num(event, ++event_seq_num);
+            sbrec_controller_event_set_event_info(event, &event_info);
+            sbrec_controller_event_set_chassis(event, chassis);
+        }
+    }
+
+out:
+    event_table_gc(!!ovnsb_idl_txn);
+}
 
 void
 pinctrl_init(void)
@@ -234,6 +430,8 @@ pinctrl_init(void)
     init_send_garps();
     init_ipv6_ras();
     init_buffered_packets_map();
+    init_event_table();
+    ip_mcast_snoop_init();
     pinctrl.br_int_name = NULL;
     pinctrl_handler_seq = seq_create();
     pinctrl_main_seq = seq_create();
@@ -1673,6 +1871,10 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
         pinctrl_handle_arp(swconn, &headers, &packet, &pin.flow_metadata,
                            &userdata);
         break;
+    case ACTION_OPCODE_IGMP:
+        pinctrl_ip_mcast_handle_igmp(swconn, &headers, &packet,
+                                     &pin.flow_metadata, &userdata);
+        break;
 
     case ACTION_OPCODE_PUT_ARP:
         ovs_mutex_lock(&pinctrl_mutex);
@@ -1749,6 +1951,12 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
                                           &pin, &userdata, &continuation);
         break;
 
+    case ACTION_OPCODE_EVENT:
+        ovs_mutex_lock(&pinctrl_mutex);
+        pinctrl_handle_event(&userdata);
+        ovs_mutex_unlock(&pinctrl_mutex);
+        break;
+
     default:
         VLOG_WARN_RL(&rl, "unrecognized packet-in opcode %"PRIu32,
                      ntohl(ah->opcode));
@@ -1785,7 +1993,6 @@ pinctrl_recv(struct rconn *swconn, const struct ofp_header *oh,
 }
 
 /* Called with in the main ovn-controller thread context. */
-
 static void
 notify_pinctrl_handler(void)
 {
@@ -1817,6 +2024,8 @@ pinctrl_handler(void *arg_)
     static long long int send_ipv6_ra_time = LLONG_MAX;
     /* Next GARP announcement in ms. */
     static long long int send_garp_time = LLONG_MAX;
+    /* Next multicast query (IGMP) in ms. */
+    static long long int send_mcast_query_time = LLONG_MAX;
 
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
 
@@ -1840,6 +2049,10 @@ pinctrl_handler(void *arg_)
         } else {
             rconn_disconnect(swconn);
         }
+
+        ovs_mutex_lock(&pinctrl_mutex);
+        ip_mcast_snoop_run();
+        ovs_mutex_unlock(&pinctrl_mutex);
 
         rconn_run(swconn);
         if (rconn_is_connected(swconn)) {
@@ -1868,6 +2081,8 @@ pinctrl_handler(void *arg_)
                 send_ipv6_ras(swconn, &send_ipv6_ra_time);
                 send_mac_binding_buffered_pkts(swconn);
                 ovs_mutex_unlock(&pinctrl_mutex);
+
+                ip_mcast_querier_run(swconn, &send_mcast_query_time);
             }
         }
 
@@ -1875,6 +2090,7 @@ pinctrl_handler(void *arg_)
         rconn_recv_wait(swconn);
         send_garp_wait(send_garp_time);
         ipv6_ra_wait(send_ipv6_ra_time);
+        ip_mcast_querier_wait(send_mcast_query_time);
 
         new_seq = seq_read(pinctrl_handler_seq);
         seq_wait(pinctrl_handler_seq, new_seq);
@@ -1896,7 +2112,10 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_port_binding_by_key,
             struct ovsdb_idl_index *sbrec_port_binding_by_name,
             struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip,
+            struct ovsdb_idl_index *sbrec_igmp_groups,
+            struct ovsdb_idl_index *sbrec_ip_multicast_opts,
             const struct sbrec_dns_table *dns_table,
+            const struct sbrec_controller_event_table *ce_table,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis,
             const struct hmap *local_datapaths,
@@ -1922,6 +2141,12 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     prepare_ipv6_ras(sbrec_port_binding_by_datapath,
                      sbrec_port_binding_by_name, local_datapaths);
     sync_dns_cache(dns_table);
+    controller_event_run(ovnsb_idl_txn, ce_table, chassis);
+    ip_mcast_sync(ovnsb_idl_txn, chassis, local_datapaths,
+                  sbrec_datapath_binding_by_key,
+                  sbrec_port_binding_by_key,
+                  sbrec_igmp_groups,
+                  sbrec_ip_multicast_opts);
     run_buffered_binding(sbrec_port_binding_by_datapath,
                          sbrec_mac_binding_by_lport_ip,
                          local_datapaths);
@@ -2255,6 +2480,7 @@ void
 pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
     wait_put_mac_bindings(ovnsb_idl_txn);
+    wait_controller_event(ovnsb_idl_txn);
     int64_t new_seq = seq_read(pinctrl_main_seq);
     seq_wait(pinctrl_main_seq, new_seq);
 }
@@ -2270,8 +2496,10 @@ pinctrl_destroy(void)
     destroy_send_garps();
     destroy_ipv6_ras();
     destroy_buffered_packets_map();
+    event_table_destroy();
     destroy_put_mac_bindings();
     destroy_dns_cache();
+    ip_mcast_snoop_destroy();
     seq_destroy(pinctrl_main_seq);
     seq_destroy(pinctrl_handler_seq);
 }
@@ -2711,6 +2939,718 @@ send_garp(struct rconn *swconn, struct garp_data *garp,
     return garp->announce_time;
 }
 
+/*
+ * Multicast snooping configuration.
+ */
+struct ip_mcast_snoop_cfg {
+    bool enabled;
+    bool querier_enabled;
+
+    uint32_t table_size;       /* Max number of allowed multicast groups. */
+    uint32_t idle_time_s;      /* Idle timeout for multicast groups. */
+    uint32_t query_interval_s; /* Multicast query interval. */
+    uint32_t query_max_resp_s; /* Multicast query max-response field. */
+    uint32_t seq_no;           /* Used for flushing learnt groups. */
+
+    struct eth_addr query_eth_src; /* Src ETH address used for queries. */
+    struct eth_addr query_eth_dst; /* Dst ETH address used for queries. */
+    ovs_be32 query_ipv4_src;       /* Src IPv4 address used for queries. */
+    ovs_be32 query_ipv4_dst;       /* Dsc IPv4 address used for queries. */
+};
+
+/*
+ * Holds per-datapath information about multicast snooping. Maintained by
+ * pinctrl_handler().
+ */
+struct ip_mcast_snoop {
+    struct hmap_node hmap_node;    /* Linkage in the hash map. */
+    struct ovs_list query_node;    /* Linkage in the query list. */
+    struct ip_mcast_snoop_cfg cfg; /* Multicast configuration. */
+    struct mcast_snooping *ms;     /* Multicast group state. */
+    int64_t dp_key;                /* Datapath running the snooping. */
+
+    long long int query_time_ms;   /* Next query time in ms. */
+};
+
+/*
+ * Holds the per-datapath multicast configuration state. Maintained by
+ * pinctrl_run().
+ */
+struct ip_mcast_snoop_state {
+    struct hmap_node hmap_node;
+    int64_t dp_key;
+    struct ip_mcast_snoop_cfg cfg;
+};
+
+/* Only default vlan supported for now. */
+#define IP_MCAST_VLAN 1
+
+/* Multicast snooping information stored independently by datapath key.
+ * Protected by pinctrl_mutex. pinctrl_handler has RW access and pinctrl_main
+ * has RO access.
+ */
+static struct hmap mcast_snoop_map OVS_GUARDED_BY(pinctrl_mutex);
+
+/* Contains multicast queries to be sent. Only used by pinctrl_handler so no
+ * locking needed.
+ */
+static struct ovs_list mcast_query_list;
+
+/* Multicast config information stored independently by datapath key.
+ * Protected by pinctrl_mutex. pinctrl_handler has RO access and pinctrl_main
+ * has RW access. Read accesses from pinctrl_ip_mcast_handle_igmp() can be
+ * performed without taking the lock as they are executed in the pinctrl_main
+ * thread.
+ */
+static struct hmap mcast_cfg_map OVS_GUARDED_BY(pinctrl_mutex);
+
+static void
+ip_mcast_snoop_cfg_load(struct ip_mcast_snoop_cfg *cfg,
+                        const struct sbrec_ip_multicast *ip_mcast)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+    memset(cfg, 0, sizeof *cfg);
+    cfg->enabled =
+        (ip_mcast->enabled && ip_mcast->enabled[0]);
+    cfg->querier_enabled =
+        (cfg->enabled && ip_mcast->querier && ip_mcast->querier[0]);
+
+    if (ip_mcast->table_size) {
+        cfg->table_size = ip_mcast->table_size[0];
+    } else {
+        cfg->table_size = OVN_MCAST_DEFAULT_MAX_ENTRIES;
+    }
+
+    if (ip_mcast->idle_timeout) {
+        cfg->idle_time_s = ip_mcast->idle_timeout[0];
+    } else {
+        cfg->idle_time_s = OVN_MCAST_DEFAULT_IDLE_TIMEOUT_S;
+    }
+
+    if (ip_mcast->query_interval) {
+        cfg->query_interval_s = ip_mcast->query_interval[0];
+    } else {
+        cfg->query_interval_s = cfg->idle_time_s / 2;
+        if (cfg->query_interval_s < OVN_MCAST_MIN_QUERY_INTERVAL_S) {
+            cfg->query_interval_s = OVN_MCAST_MIN_QUERY_INTERVAL_S;
+        }
+    }
+
+    if (ip_mcast->query_max_resp) {
+        cfg->query_max_resp_s = ip_mcast->query_max_resp[0];
+    } else {
+        cfg->query_max_resp_s = OVN_MCAST_DEFAULT_QUERY_MAX_RESPONSE_S;
+    }
+
+    cfg->seq_no = ip_mcast->seq_no;
+
+    if (cfg->querier_enabled) {
+        /* Try to parse the source ETH address. */
+        if (!ip_mcast->eth_src ||
+                !eth_addr_from_string(ip_mcast->eth_src,
+                                      &cfg->query_eth_src)) {
+            VLOG_WARN_RL(&rl,
+                         "IGMP Querier enabled with invalid ETH src address");
+            /* Failed to parse the IPv4 source address. Disable the querier. */
+            cfg->querier_enabled = false;
+        }
+
+        /* Try to parse the source IP address. */
+        if (!ip_mcast->ip4_src ||
+                !ip_parse(ip_mcast->ip4_src, &cfg->query_ipv4_src)) {
+            VLOG_WARN_RL(&rl,
+                         "IGMP Querier enabled with invalid IPv4 src address");
+            /* Failed to parse the IPv4 source address. Disable the querier. */
+            cfg->querier_enabled = false;
+        }
+
+        /* IGMP queries must be sent to 224.0.0.1. */
+        cfg->query_eth_dst =
+            (struct eth_addr)ETH_ADDR_C(01, 00, 5E, 00, 00, 01);
+        cfg->query_ipv4_dst = htonl(0xe0000001);
+    }
+}
+
+static uint32_t
+ip_mcast_snoop_hash(int64_t dp_key)
+{
+    return hash_uint64(dp_key);
+}
+
+static struct ip_mcast_snoop_state *
+ip_mcast_snoop_state_add(int64_t dp_key)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    struct ip_mcast_snoop_state *ms_state = xmalloc(sizeof *ms_state);
+
+    ms_state->dp_key = dp_key;
+    hmap_insert(&mcast_cfg_map, &ms_state->hmap_node,
+                ip_mcast_snoop_hash(dp_key));
+    return ms_state;
+}
+
+static struct ip_mcast_snoop_state *
+ip_mcast_snoop_state_find(int64_t dp_key)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    struct ip_mcast_snoop_state *ms_state;
+    uint32_t hash = ip_mcast_snoop_hash(dp_key);
+
+    HMAP_FOR_EACH_WITH_HASH (ms_state, hmap_node, hash, &mcast_cfg_map) {
+        if (ms_state->dp_key == dp_key) {
+            return ms_state;
+        }
+    }
+    return NULL;
+}
+
+static bool
+ip_mcast_snoop_state_update(int64_t dp_key,
+                            const struct ip_mcast_snoop_cfg *cfg)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    bool notify = false;
+    struct ip_mcast_snoop_state *ms_state = ip_mcast_snoop_state_find(dp_key);
+
+    if (!ms_state) {
+        ms_state = ip_mcast_snoop_state_add(dp_key);
+        notify = true;
+    } else if (memcmp(cfg, &ms_state->cfg, sizeof *cfg)) {
+        notify = true;
+    }
+
+    ms_state->cfg = *cfg;
+    return notify;
+}
+
+static void
+ip_mcast_snoop_state_remove(struct ip_mcast_snoop_state *ms_state)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    hmap_remove(&mcast_cfg_map, &ms_state->hmap_node);
+    free(ms_state);
+}
+
+static bool
+ip_mcast_snoop_enable(struct ip_mcast_snoop *ip_ms)
+{
+    if (ip_ms->cfg.enabled) {
+        return true;
+    }
+
+    ip_ms->ms = mcast_snooping_create();
+    return ip_ms->ms != NULL;
+}
+
+static void
+ip_mcast_snoop_flush(struct ip_mcast_snoop *ip_ms)
+{
+    if (!ip_ms->cfg.enabled) {
+        return;
+    }
+
+    mcast_snooping_flush(ip_ms->ms);
+}
+
+static void
+ip_mcast_snoop_disable(struct ip_mcast_snoop *ip_ms)
+{
+    if (!ip_ms->cfg.enabled) {
+        return;
+    }
+
+    mcast_snooping_unref(ip_ms->ms);
+    ip_ms->ms = NULL;
+}
+
+static bool
+ip_mcast_snoop_configure(struct ip_mcast_snoop *ip_ms,
+                         const struct ip_mcast_snoop_cfg *cfg)
+{
+    if (cfg->enabled) {
+        if (!ip_mcast_snoop_enable(ip_ms)) {
+            return false;
+        }
+        if (ip_ms->cfg.seq_no != cfg->seq_no) {
+            ip_mcast_snoop_flush(ip_ms);
+        }
+
+        if (ip_ms->cfg.querier_enabled && !cfg->querier_enabled) {
+            ovs_list_remove(&ip_ms->query_node);
+        } else if (!ip_ms->cfg.querier_enabled && cfg->querier_enabled) {
+            ovs_list_push_back(&mcast_query_list, &ip_ms->query_node);
+        }
+    } else {
+        ip_mcast_snoop_disable(ip_ms);
+        goto set_fields;
+    }
+
+    ovs_rwlock_wrlock(&ip_ms->ms->rwlock);
+    if (cfg->table_size != ip_ms->cfg.table_size) {
+        mcast_snooping_set_max_entries(ip_ms->ms, cfg->table_size);
+    }
+
+    if (cfg->idle_time_s != ip_ms->cfg.idle_time_s) {
+        mcast_snooping_set_idle_time(ip_ms->ms, cfg->idle_time_s);
+    }
+    ovs_rwlock_unlock(&ip_ms->ms->rwlock);
+
+    if (cfg->query_interval_s != ip_ms->cfg.query_interval_s) {
+        long long int now = time_msec();
+
+        if (ip_ms->query_time_ms > now + cfg->query_interval_s * 1000) {
+            ip_ms->query_time_ms = now;
+        }
+    }
+
+set_fields:
+    memcpy(&ip_ms->cfg, cfg, sizeof ip_ms->cfg);
+    return true;
+}
+
+static struct ip_mcast_snoop *
+ip_mcast_snoop_add(int64_t dp_key, const struct ip_mcast_snoop_cfg *cfg)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    struct ip_mcast_snoop *ip_ms = xzalloc(sizeof *ip_ms);
+
+    ip_ms->dp_key = dp_key;
+    if (!ip_mcast_snoop_configure(ip_ms, cfg)) {
+        free(ip_ms);
+        return NULL;
+    }
+
+    hmap_insert(&mcast_snoop_map, &ip_ms->hmap_node,
+                ip_mcast_snoop_hash(dp_key));
+    return ip_ms;
+}
+
+static struct ip_mcast_snoop *
+ip_mcast_snoop_find(int64_t dp_key)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    struct ip_mcast_snoop *ip_ms;
+
+    HMAP_FOR_EACH_WITH_HASH (ip_ms, hmap_node, ip_mcast_snoop_hash(dp_key),
+                             &mcast_snoop_map) {
+        if (ip_ms->dp_key == dp_key) {
+            return ip_ms;
+        }
+    }
+    return NULL;
+}
+
+static void
+ip_mcast_snoop_remove(struct ip_mcast_snoop *ip_ms)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    hmap_remove(&mcast_snoop_map, &ip_ms->hmap_node);
+
+    if (ip_ms->cfg.querier_enabled) {
+        ovs_list_remove(&ip_ms->query_node);
+    }
+
+    ip_mcast_snoop_disable(ip_ms);
+    free(ip_ms);
+}
+
+static void
+ip_mcast_snoop_init(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    hmap_init(&mcast_snoop_map);
+    ovs_list_init(&mcast_query_list);
+    hmap_init(&mcast_cfg_map);
+}
+
+static void
+ip_mcast_snoop_destroy(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    struct ip_mcast_snoop *ip_ms, *ip_ms_next;
+
+    HMAP_FOR_EACH_SAFE (ip_ms, ip_ms_next, hmap_node, &mcast_snoop_map) {
+        ip_mcast_snoop_remove(ip_ms);
+    }
+    hmap_destroy(&mcast_snoop_map);
+
+    struct ip_mcast_snoop_state *ip_ms_state;
+
+    HMAP_FOR_EACH_POP (ip_ms_state, hmap_node, &mcast_cfg_map) {
+        free(ip_ms_state);
+    }
+}
+
+static void
+ip_mcast_snoop_run(void)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    struct ip_mcast_snoop *ip_ms, *ip_ms_next;
+
+    /* First read the config updated by pinctrl_main. If there's any new or
+     * updated config then apply it.
+     */
+    struct ip_mcast_snoop_state *ip_ms_state;
+
+    HMAP_FOR_EACH (ip_ms_state, hmap_node, &mcast_cfg_map) {
+        ip_ms = ip_mcast_snoop_find(ip_ms_state->dp_key);
+
+        if (!ip_ms) {
+            ip_mcast_snoop_add(ip_ms_state->dp_key, &ip_ms_state->cfg);
+        } else if (memcmp(&ip_ms_state->cfg, &ip_ms->cfg,
+                          sizeof ip_ms_state->cfg)) {
+            ip_mcast_snoop_configure(ip_ms, &ip_ms_state->cfg);
+        }
+    }
+
+    bool notify = false;
+
+    /* Then walk the multicast snoop instances. */
+    HMAP_FOR_EACH_SAFE (ip_ms, ip_ms_next, hmap_node, &mcast_snoop_map) {
+
+        /* Delete the stale ones. */
+        if (!ip_mcast_snoop_state_find(ip_ms->dp_key)) {
+            ip_mcast_snoop_remove(ip_ms);
+            continue;
+        }
+
+        /* If enabled run the snooping instance to timeout old groups. */
+        if (ip_ms->cfg.enabled) {
+            if (mcast_snooping_run(ip_ms->ms)) {
+                notify = true;
+            }
+
+            mcast_snooping_wait(ip_ms->ms);
+        }
+    }
+
+    if (notify) {
+        notify_pinctrl_main();
+    }
+}
+
+/*
+ * This runs in the pinctrl main thread, so it has access to the southbound
+ * database. It reads the IP_Multicast table and updates the local multicast
+ * configuration. Then writes to the southbound database the updated
+ * IGMP_Groups.
+ */
+static void
+ip_mcast_sync(struct ovsdb_idl_txn *ovnsb_idl_txn,
+              const struct sbrec_chassis *chassis,
+              const struct hmap *local_datapaths,
+              struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+              struct ovsdb_idl_index *sbrec_port_binding_by_key,
+              struct ovsdb_idl_index *sbrec_igmp_groups,
+              struct ovsdb_idl_index *sbrec_ip_multicast)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    bool notify = false;
+
+    if (!ovnsb_idl_txn || !chassis) {
+        return;
+    }
+
+    struct sbrec_ip_multicast *ip_mcast;
+    struct ip_mcast_snoop_state *ip_ms_state, *ip_ms_state_next;
+
+    /* First read and update our own local multicast configuration for the
+     * local datapaths.
+     */
+    SBREC_IP_MULTICAST_FOR_EACH_BYINDEX (ip_mcast, sbrec_ip_multicast) {
+
+        int64_t dp_key = ip_mcast->datapath->tunnel_key;
+        struct ip_mcast_snoop_cfg cfg;
+
+        ip_mcast_snoop_cfg_load(&cfg, ip_mcast);
+        if (ip_mcast_snoop_state_update(dp_key, &cfg)) {
+            notify = true;
+        }
+    }
+
+    /* Then delete the old entries. */
+    HMAP_FOR_EACH_SAFE (ip_ms_state, ip_ms_state_next, hmap_node,
+                        &mcast_cfg_map) {
+        if (!get_local_datapath(local_datapaths, ip_ms_state->dp_key)) {
+            ip_mcast_snoop_state_remove(ip_ms_state);
+            notify = true;
+        }
+    }
+
+    const struct sbrec_igmp_group *sbrec_igmp;
+
+    /* Then flush any IGMP_Group entries that are not needed anymore:
+     * - either multicast snooping was disabled on the datapath
+     * - or the group has expired.
+     */
+    SBREC_IGMP_GROUP_FOR_EACH_BYINDEX (sbrec_igmp, sbrec_igmp_groups) {
+        ovs_be32 group_addr;
+
+        if (!sbrec_igmp->datapath) {
+            continue;
+        }
+
+        int64_t dp_key = sbrec_igmp->datapath->tunnel_key;
+        struct ip_mcast_snoop *ip_ms = ip_mcast_snoop_find(dp_key);
+
+        /* If the datapath doesn't exist anymore or IGMP snooping was disabled
+         * on it then delete the IGMP_Group entry.
+         */
+        if (!ip_ms || !ip_ms->cfg.enabled) {
+            igmp_group_delete(sbrec_igmp);
+            continue;
+        }
+
+        if (!ip_parse(sbrec_igmp->address, &group_addr)) {
+            continue;
+        }
+
+        ovs_rwlock_rdlock(&ip_ms->ms->rwlock);
+        struct mcast_group *mc_group =
+            mcast_snooping_lookup4(ip_ms->ms, group_addr,
+                                   IP_MCAST_VLAN);
+
+        if (!mc_group || ovs_list_is_empty(&mc_group->bundle_lru)) {
+            igmp_group_delete(sbrec_igmp);
+        }
+        ovs_rwlock_unlock(&ip_ms->ms->rwlock);
+    }
+
+    struct ip_mcast_snoop *ip_ms, *ip_ms_next;
+
+    /* Last: write new IGMP_Groups to the southbound DB and update existing
+     * ones (if needed). We also flush any old per-datapath multicast snoop
+     * structures.
+     */
+    HMAP_FOR_EACH_SAFE (ip_ms, ip_ms_next, hmap_node, &mcast_snoop_map) {
+        /* Flush any non-local snooping datapaths (e.g., stale). */
+        struct local_datapath *local_dp =
+            get_local_datapath(local_datapaths, ip_ms->dp_key);
+
+        if (!local_dp) {
+            continue;
+        }
+
+        /* Skip datapaths on which snooping is disabled. */
+        if (!ip_ms->cfg.enabled) {
+            continue;
+        }
+
+        struct mcast_group *mc_group;
+
+        ovs_rwlock_rdlock(&ip_ms->ms->rwlock);
+        LIST_FOR_EACH (mc_group, group_node, &ip_ms->ms->group_lru) {
+            if (ovs_list_is_empty(&mc_group->bundle_lru)) {
+                continue;
+            }
+            sbrec_igmp = igmp_group_lookup(sbrec_igmp_groups, &mc_group->addr,
+                                           local_dp->datapath, chassis);
+            if (!sbrec_igmp) {
+                sbrec_igmp = igmp_group_create(ovnsb_idl_txn, &mc_group->addr,
+                                               local_dp->datapath, chassis);
+            }
+
+            igmp_group_update_ports(sbrec_igmp, sbrec_datapath_binding_by_key,
+                                    sbrec_port_binding_by_key, ip_ms->ms,
+                                    mc_group);
+        }
+        ovs_rwlock_unlock(&ip_ms->ms->rwlock);
+    }
+
+    if (notify) {
+        notify_pinctrl_handler();
+    }
+}
+
+static void
+pinctrl_ip_mcast_handle_igmp(struct rconn *swconn OVS_UNUSED,
+                             const struct flow *ip_flow,
+                             struct dp_packet *pkt_in,
+                             const struct match *md,
+                             struct ofpbuf *userdata OVS_UNUSED)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+    /* This action only works for IP packets, and the switch should only send
+     * us IP packets this way, but check here just to be sure.
+     */
+    if (ip_flow->dl_type != htons(ETH_TYPE_IP)) {
+        VLOG_WARN_RL(&rl,
+                     "IGMP action on non-IP packet (eth_type 0x%"PRIx16")",
+                     ntohs(ip_flow->dl_type));
+        return;
+    }
+
+    int64_t dp_key = ntohll(md->flow.metadata);
+    uint32_t port_key = md->flow.regs[MFF_LOG_INPORT - MFF_REG0];
+
+    const struct igmp_header *igmp;
+    size_t offset;
+
+    offset = (char *) dp_packet_l4(pkt_in) - (char *) dp_packet_data(pkt_in);
+    igmp = dp_packet_at(pkt_in, offset, IGMP_HEADER_LEN);
+    if (!igmp || csum(igmp, dp_packet_l4_size(pkt_in)) != 0) {
+        VLOG_WARN_RL(&rl, "multicast snooping received bad IGMP checksum");
+        return;
+    }
+
+    ovs_be32 ip4 = ip_flow->igmp_group_ip4;
+
+    struct ip_mcast_snoop *ip_ms = ip_mcast_snoop_find(dp_key);
+    if (!ip_ms || !ip_ms->cfg.enabled) {
+        /* IGMP snooping is not configured or is disabled. */
+        return;
+    }
+
+    void *port_key_data = (void *)(uintptr_t)port_key;
+
+    bool group_change = false;
+
+    ovs_rwlock_wrlock(&ip_ms->ms->rwlock);
+    switch (ntohs(ip_flow->tp_src)) {
+     /* Only default VLAN is supported for now. */
+    case IGMP_HOST_MEMBERSHIP_REPORT:
+    case IGMPV2_HOST_MEMBERSHIP_REPORT:
+        group_change =
+            mcast_snooping_add_group4(ip_ms->ms, ip4, IP_MCAST_VLAN,
+                                      port_key_data);
+        break;
+    case IGMP_HOST_LEAVE_MESSAGE:
+        group_change =
+            mcast_snooping_leave_group4(ip_ms->ms, ip4, IP_MCAST_VLAN,
+                                        port_key_data);
+        break;
+    case IGMP_HOST_MEMBERSHIP_QUERY:
+        /* Shouldn't be receiving any of these since we are the multicast
+         * router. Store them for now.
+         */
+        group_change =
+            mcast_snooping_add_mrouter(ip_ms->ms, IP_MCAST_VLAN,
+                                       port_key_data);
+        break;
+    case IGMPV3_HOST_MEMBERSHIP_REPORT:
+        group_change =
+            mcast_snooping_add_report(ip_ms->ms, pkt_in, IP_MCAST_VLAN,
+                                      port_key_data);
+        break;
+    }
+    ovs_rwlock_unlock(&ip_ms->ms->rwlock);
+
+    if (group_change) {
+        notify_pinctrl_main();
+    }
+}
+
+static long long int
+ip_mcast_querier_send(struct rconn *swconn, struct ip_mcast_snoop *ip_ms,
+                      long long int current_time)
+{
+    if (current_time < ip_ms->query_time_ms) {
+        return ip_ms->query_time_ms;
+    }
+
+    /* Compose a multicast query. */
+    uint64_t packet_stub[128 / 8];
+    struct dp_packet packet;
+
+    dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
+
+    uint8_t ip_tos = 0;
+    uint8_t igmp_ttl = 1;
+
+    dp_packet_clear(&packet);
+    packet.packet_type = htonl(PT_ETH);
+
+    struct eth_header *eh = dp_packet_put_zeros(&packet, sizeof *eh);
+    eh->eth_dst = ip_ms->cfg.query_eth_dst;
+    eh->eth_src = ip_ms->cfg.query_eth_src;
+
+    struct ip_header *nh = dp_packet_put_zeros(&packet, sizeof *nh);
+
+    eh->eth_type = htons(ETH_TYPE_IP);
+    dp_packet_set_l3(&packet, nh);
+    nh->ip_ihl_ver = IP_IHL_VER(5, 4);
+    nh->ip_tot_len = htons(sizeof(struct ip_header) +
+                            sizeof(struct igmpv3_query_header));
+    nh->ip_tos = IP_DSCP_CS6;
+    nh->ip_proto = IPPROTO_IGMP;
+    nh->ip_frag_off = htons(IP_DF);
+    packet_set_ipv4(&packet, ip_ms->cfg.query_ipv4_src,
+                    ip_ms->cfg.query_ipv4_dst, ip_tos, igmp_ttl);
+
+    nh->ip_csum = 0;
+    nh->ip_csum = csum(nh, sizeof *nh);
+
+    struct igmpv3_query_header *igh =
+        dp_packet_put_zeros(&packet, sizeof *igh);
+    dp_packet_set_l4(&packet, igh);
+
+    /* IGMP query max-response in tenths of seconds. */
+    uint8_t max_response = ip_ms->cfg.query_max_resp_s * 10;
+    uint8_t qqic = max_response;
+    packet_set_igmp3_query(&packet, max_response, 0, false, 0, qqic);
+
+    /* Inject multicast query. */
+    uint64_t ofpacts_stub[4096 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    enum ofp_version version = rconn_get_version(swconn);
+    put_load(ip_ms->dp_key, MFF_LOG_DATAPATH, 0, 64, &ofpacts);
+    put_load(OVN_MCAST_FLOOD_TUNNEL_KEY, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
+    put_load(1, MFF_LOG_FLAGS, MLF_LOCAL_ONLY, 1, &ofpacts);
+    struct ofpact_resubmit *resubmit = ofpact_put_RESUBMIT(&ofpacts);
+    resubmit->in_port = OFPP_CONTROLLER;
+    resubmit->table_id = OFTABLE_LOCAL_OUTPUT;
+
+    struct ofputil_packet_out po = {
+        .packet = dp_packet_data(&packet),
+        .packet_len = dp_packet_size(&packet),
+        .buffer_id = UINT32_MAX,
+        .ofpacts = ofpacts.data,
+        .ofpacts_len = ofpacts.size,
+    };
+    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    queue_msg(swconn, ofputil_encode_packet_out(&po, proto));
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&ofpacts);
+
+    /* Set the next query time. */
+    ip_ms->query_time_ms = current_time + ip_ms->cfg.query_interval_s * 1000;
+    return ip_ms->query_time_ms;
+}
+
+static void
+ip_mcast_querier_run(struct rconn *swconn, long long int *query_time)
+{
+    if (ovs_list_is_empty(&mcast_query_list)) {
+        return;
+    }
+
+    /* Send multicast queries and update the next query time. */
+    long long int current_time = time_msec();
+    *query_time = LLONG_MAX;
+
+    struct ip_mcast_snoop *ip_ms;
+
+    LIST_FOR_EACH (ip_ms, query_node, &mcast_query_list) {
+        long long int next_query_time =
+            ip_mcast_querier_send(swconn, ip_ms, current_time);
+        if (*query_time > next_query_time) {
+            *query_time = next_query_time;
+        }
+    }
+}
+
+static void
+ip_mcast_querier_wait(long long int query_time)
+{
+    if (!ovs_list_is_empty(&mcast_query_list)) {
+        poll_timer_wait_until(query_time);
+    }
+}
+
 /* Get localnet vifs, local l3gw ports and ofport for localnet patch ports. */
 static void
 get_localnet_vifs_l3gwports(
@@ -3059,6 +3999,7 @@ may_inject_pkts(void)
 {
     return (!shash_is_empty(&ipv6_ras) ||
             !shash_is_empty(&send_garp_data) ||
+            !ovs_list_is_empty(&mcast_query_list) ||
             !ovs_list_is_empty(&buffered_mac_bindings));
 }
 
@@ -3295,5 +4236,108 @@ exit:
     queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     if (pkt_out) {
         dp_packet_delete(pkt_out);
+    }
+}
+
+static void
+wait_controller_event(struct ovsdb_idl_txn *ovnsb_idl_txn)
+{
+    if (!ovnsb_idl_txn) {
+        return;
+    }
+
+    for (size_t i = 0; i < OVN_EVENT_MAX; i++) {
+        if (!hmap_is_empty(&event_table[i])) {
+            poll_immediate_wake();
+            break;
+        }
+    }
+}
+
+static bool
+pinctrl_handle_empty_lb_backends_opts(struct ofpbuf *userdata)
+{
+    struct controller_event_opt_header *userdata_opt;
+    uint32_t hash = 0;
+    char *vip = NULL;
+    char *protocol = NULL;
+    char *load_balancer = NULL;
+
+    while (userdata->size) {
+        userdata_opt = ofpbuf_try_pull(userdata, sizeof *userdata_opt);
+        if (!userdata_opt) {
+            return false;
+        }
+        size_t size = ntohs(userdata_opt->size);
+        char *userdata_opt_data = ofpbuf_try_pull(userdata, size);
+        if (!userdata_opt_data) {
+            return false;
+        }
+        switch (ntohs(userdata_opt->opt_code)) {
+        case EMPTY_LB_VIP:
+            vip = xmemdup0(userdata_opt_data, size);
+            break;
+        case EMPTY_LB_PROTOCOL:
+            protocol = xmemdup0(userdata_opt_data, size);
+            break;
+        case EMPTY_LB_LOAD_BALANCER:
+            load_balancer = xmemdup0(userdata_opt_data, size);
+            break;
+        default:
+            OVS_NOT_REACHED();
+        }
+        hash = hash_bytes(userdata_opt_data, size, hash);
+    }
+    if (!vip || !protocol || !load_balancer) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "missing lb parameters in userdata");
+        return false;
+    }
+
+    struct empty_lb_backends_event *event;
+
+    event = pinctrl_find_empty_lb_backends_event(vip, protocol,
+                                                 load_balancer, hash);
+    if (!event) {
+        if (hmap_count(&event_table[OVN_EVENT_EMPTY_LB_BACKENDS]) >= 1000) {
+            COVERAGE_INC(pinctrl_drop_controller_event);
+            return false;
+        }
+
+        event = xzalloc(sizeof *event);
+        hmap_insert(&event_table[OVN_EVENT_EMPTY_LB_BACKENDS],
+                    &event->hmap_node, hash);
+        event->vip = vip;
+        event->protocol = protocol;
+        event->load_balancer = load_balancer;
+        event->timestamp = time_msec();
+        notify_pinctrl_main();
+    } else {
+        free(vip);
+        free(protocol);
+        free(load_balancer);
+    }
+    return true;
+}
+
+static void
+pinctrl_handle_event(struct ofpbuf *userdata)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    ovs_be32 *pevent;
+
+    pevent = ofpbuf_try_pull(userdata, sizeof *pevent);
+    if (!pevent) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "event not present in the userdata");
+        return;
+    }
+
+    switch (ntohl(*pevent)) {
+    case OVN_EVENT_EMPTY_LB_BACKENDS:
+        pinctrl_handle_empty_lb_backends_opts(userdata);
+        break;
+    default:
+        return;
     }
 }

@@ -920,3 +920,50 @@ dnl which is not correct
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel - neighbor entry add and deletion])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=gre \
+                    options:local_ip=3.3.3.3 options:remote_ip=4.4.4.4 \
+                    ofport_request=2])
+AT_CHECK([ovs-vsctl add-br br1 -- set bridge br1 datapath_type=dummy], [0])
+
+dnl Populate tunnel neighbor cache table
+AT_CHECK([
+    ovs-appctl tnl/arp/set p1 10.0.0.1 00:00:10:00:00:01
+    ovs-appctl tnl/arp/set p1 10.0.0.2 00:00:10:00:00:02
+    ovs-appctl tnl/arp/set p2 10.0.1.1 00:00:10:00:01:01
+    ovs-appctl tnl/arp/set br0 10.0.2.1 00:00:10:00:02:01
+    ovs-appctl tnl/arp/set br0 10.0.2.2 00:00:10:00:02:02
+    ovs-appctl tnl/arp/set br1 20.0.0.1 00:00:20:00:00:01
+], [0], [stdout])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+10.0.0.1                                      00:00:10:00:00:01   p1
+10.0.0.2                                      00:00:10:00:00:02   p1
+10.0.1.1                                      00:00:10:00:01:01   p2
+10.0.2.1                                      00:00:10:00:02:01   br0
+10.0.2.2                                      00:00:10:00:02:02   br0
+20.0.0.1                                      00:00:20:00:00:01   br1
+])
+
+dnl neighbor table after deleting port p1
+AT_CHECK([ovs-vsctl del-port br0 p1],[0], [stdout])
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | grep -w p1 | sort], [0], [dnl
+])
+
+dnl neighbor table after deleting bridge br0
+AT_CHECK([ovs-vsctl del-br br0],[0], [stdout])
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+20.0.0.1                                      00:00:20:00:00:01   br1
+])
+
+dnl neighbor table after deleting bridge br1
+AT_CHECK([ovs-vsctl del-br br1],[0], [stdout])
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
