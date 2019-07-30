@@ -674,6 +674,7 @@ string_needs_quotes(const char *s)
 {
     const char *p = s;
     unsigned char c;
+    struct uuid uuid;
 
     c = *p++;
     if (!isalpha(c) && c != '_') {
@@ -681,12 +682,16 @@ string_needs_quotes(const char *s)
     }
 
     while ((c = *p++) != '\0') {
-        if (!isalpha(c) && c != '_' && c != '-' && c != '.') {
+        if (!isalpha(c) && !isdigit(c) && c != '_' && c != '-' && c != '.') {
             return true;
         }
     }
 
     if (!strcmp(s, "true") || !strcmp(s, "false")) {
+        return true;
+    }
+
+    if (uuid_from_string(&uuid, s)) {
         return true;
     }
 

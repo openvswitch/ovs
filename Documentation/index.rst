@@ -59,6 +59,7 @@ vSwitch? Start here.
   :doc:`intro/install/windows` |
   :doc:`intro/install/xenserver` |
   :doc:`intro/install/dpdk` |
+  :doc:`intro/install/afxdp` |
   :doc:`Installation FAQs <faq/releases>`
 
 - **Tutorials:** :doc:`tutorials/faucet` |

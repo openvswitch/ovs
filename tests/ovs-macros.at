@@ -35,9 +35,31 @@ m4_divert_push([PREPARE_TESTS])
 # directory.
 ovs_init() {
     ovs_base=`pwd`
-    trap '. "$ovs_base/cleanup"' 0
+    trap ovs_on_exit 0
     : > cleanup
     ovs_setenv
+}
+
+# Catch testsuite error condition and cleanup test environment by tearing down
+# all interfaces and processes spawned.
+# User has an option to leave the test environment in error state so that system
+# can be poked around to get more information. User can enable this option by setting
+# environment variable OVS_PAUSE_TEST=1. User needs to press CTRL-D to resume the
+# cleanup operation.
+ovs_pause() {
+    echo "====================================================="
+    echo "Set following environment variable to use various ovs utilities"
+    echo "export OVS_RUNDIR=$ovs_base"
+    echo "Press ENTER to continue: "
+    read
+}
+
+ovs_on_exit () {
+    if [ ! -z "${OVS_PAUSE_TEST}" ] && [ -z $at_verbose ]; then
+        trap '' INT
+        ovs_pause
+    fi
+    . "$ovs_base/cleanup"
 }
 
 # With no parameter or an empty parameter, sets the OVS_*DIR

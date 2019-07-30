@@ -20,6 +20,11 @@
 
 struct shash;
 
+enum ovn_controller_event {
+    OVN_EVENT_EMPTY_LB_BACKENDS = 0,
+    OVN_EVENT_MAX,
+};
+
 /* Logical fields.
  *
  * These values are documented in ovn-architecture(7), please update the
@@ -118,6 +123,8 @@ ovn_field_from_id(enum ovn_field_id id)
     return &ovn_fields[id];
 }
 
+const char *event_to_string(enum ovn_controller_event event);
+int string_to_event(const char *s);
 const struct ovn_field *ovn_field_from_name(const char *name);
 void ovn_destroy_ovnfields(void);
 #endif /* ovn/lib/logical-fields.h */

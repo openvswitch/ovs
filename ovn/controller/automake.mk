@@ -10,6 +10,8 @@ ovn_controller_ovn_controller_SOURCES = \
 	ovn/controller/encaps.h \
 	ovn/controller/ha-chassis.c \
 	ovn/controller/ha-chassis.h \
+	ovn/controller/ip-mcast.c \
+	ovn/controller/ip-mcast.h \
 	ovn/controller/lflow.c \
 	ovn/controller/lflow.h \
 	ovn/controller/lport.c \

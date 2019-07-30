@@ -157,7 +157,8 @@ create_symtab(struct shash *symtab)
 
 static void
 create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
-                struct hmap *nd_ra_opts)
+                struct hmap *nd_ra_opts,
+                struct controller_event_options *event_opts)
 {
     hmap_init(dhcp_opts);
     dhcp_opt_add(dhcp_opts, "offerip", 0, "ipv4");
@@ -197,6 +198,9 @@ create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
     /* IPv6 ND RA options. */
     hmap_init(nd_ra_opts);
     nd_ra_opts_init(nd_ra_opts);
+
+    /* OVN controller events options. */
+    controller_event_opts_init(event_opts);
 }
 
 static void
@@ -1229,12 +1233,13 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     struct hmap dhcp_opts;
     struct hmap dhcpv6_opts;
     struct hmap nd_ra_opts;
+    struct controller_event_options event_opts;
     struct simap ports;
     struct ds input;
     bool ok = true;
 
     create_symtab(&symtab);
-    create_gen_opts(&dhcp_opts, &dhcpv6_opts, &nd_ra_opts);
+    create_gen_opts(&dhcp_opts, &dhcpv6_opts, &nd_ra_opts, &event_opts);
 
     /* Initialize group ids. */
     struct ovn_extend_table group_table;
@@ -1264,6 +1269,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
             .nd_ra_opts = &nd_ra_opts,
+            .controller_event_opts = &event_opts,
             .n_tables = 24,
             .cur_ltable = 10,
         };
@@ -1351,6 +1357,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     dhcp_opts_destroy(&dhcp_opts);
     dhcp_opts_destroy(&dhcpv6_opts);
     nd_ra_opts_destroy(&nd_ra_opts);
+    controller_event_opts_destroy(&event_opts);
     ovn_extend_table_destroy(&group_table);
     ovn_extend_table_destroy(&meter_table);
     exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);

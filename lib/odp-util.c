@@ -264,7 +264,7 @@ static void
 format_nsh_key(struct ds *ds, const struct ovs_key_nsh *key)
 {
     ds_put_format(ds, "flags=%d", key->flags);
-    ds_put_format(ds, "ttl=%d", key->ttl);
+    ds_put_format(ds, ",ttl=%d", key->ttl);
     ds_put_format(ds, ",mdtype=%d", key->mdtype);
     ds_put_format(ds, ",np=%d", key->np);
     ds_put_format(ds, ",spi=0x%x",
@@ -2798,11 +2798,14 @@ odp_parse_error(struct vlog_rate_limit *rl, char **errorp,
 }
 
 /* Parses OVS_KEY_ATTR_NSH attribute 'attr' into 'nsh' and 'nsh_mask' and
- * returns fitness.  If 'errorp' is nonnull and the function returns
- * ODP_FIT_ERROR, stores a malloc()'d error message in '*errorp'. */
-enum odp_key_fitness
-odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
-                      struct ovs_key_nsh *nsh_mask, char **errorp)
+ * returns fitness.  If the attribute is a key, 'is_mask' should be false;
+ * if it is a mask, 'is_mask' should be true.  If 'errorp' is nonnull and the
+ * function returns ODP_FIT_ERROR, stores a malloc()'d error message in
+ * '*errorp'. */
+static enum odp_key_fitness
+odp_nsh_key_from_attr__(const struct nlattr *attr, bool is_mask,
+                        struct ovs_key_nsh *nsh, struct ovs_key_nsh *nsh_mask,
+                        char **errorp)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     if (errorp) {
@@ -2877,7 +2880,7 @@ odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
         return ODP_FIT_TOO_MUCH;
     }
 
-    if (has_md1 && nsh->mdtype != NSH_M_TYPE1 && !nsh_mask) {
+    if (!is_mask && has_md1 && nsh->mdtype != NSH_M_TYPE1 && !nsh_mask) {
         odp_parse_error(&rl, errorp, "OVS_NSH_KEY_ATTR_MD1 present but "
                         "declared mdtype %"PRIu8" is not %d (NSH_M_TYPE1)",
                         nsh->mdtype, NSH_M_TYPE1);
@@ -2885,6 +2888,17 @@ odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
     }
 
     return ODP_FIT_PERFECT;
+}
+
+/* Parses OVS_KEY_ATTR_NSH attribute 'attr' into 'nsh' and 'nsh_mask' and
+ * returns fitness.  The attribute should be a key (not a mask).  If 'errorp'
+ * is nonnull and the function returns ODP_FIT_ERROR, stores a malloc()'d error
+ * message in '*errorp'. */
+enum odp_key_fitness
+odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
+                      struct ovs_key_nsh *nsh_mask, char **errorp)
+{
+    return odp_nsh_key_from_attr__(attr, false, nsh, nsh_mask, errorp);
 }
 
 /* Parses OVS_KEY_ATTR_TUNNEL attribute 'attr' into 'tun' and returns fitness.
@@ -6750,8 +6764,9 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             *expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_NSH;
         }
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_NSH)) {
-            if (odp_nsh_key_from_attr(attrs[OVS_KEY_ATTR_NSH], &flow->nsh,
-                                      NULL, errorp) == ODP_FIT_ERROR) {
+            if (odp_nsh_key_from_attr__(attrs[OVS_KEY_ATTR_NSH],
+                                        is_mask, &flow->nsh,
+                                        NULL, errorp) == ODP_FIT_ERROR) {
                 return ODP_FIT_ERROR;
             }
             if (is_mask) {

@@ -29,6 +29,8 @@
 #include "openvswitch/json.h"
 #include "ovn/lex.h"
 #include "ovn/lib/chassis-index.h"
+#include "ovn/lib/ip-mcast-index.h"
+#include "ovn/lib/mcast-group-index.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -57,6 +59,8 @@ struct northd_context {
     struct ovsdb_idl_txn *ovnnb_txn;
     struct ovsdb_idl_txn *ovnsb_txn;
     struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name;
+    struct ovsdb_idl_index *sbrec_mcast_group_by_name_dp;
+    struct ovsdb_idl_index *sbrec_ip_mcast_by_dp;
 };
 
 static const char *ovnnb_db;
@@ -69,6 +73,8 @@ static const char *unixctl_path;
  * MAC addresses allocated by the OVN ipam module. */
 static struct hmap macam = HMAP_INITIALIZER(&macam);
 static struct eth_addr mac_prefix;
+
+static bool controller_event_en;
 
 #define MAX_OVN_TAGS 4096
 
@@ -302,17 +308,17 @@ tnlid_in_use(const struct hmap *set, uint32_t tnlid)
 }
 
 static uint32_t
-next_tnlid(uint32_t tnlid, uint32_t max)
+next_tnlid(uint32_t tnlid, uint32_t min, uint32_t max)
 {
-    return tnlid + 1 <= max ? tnlid + 1 : 1;
+    return tnlid + 1 <= max ? tnlid + 1 : min;
 }
 
 static uint32_t
-allocate_tnlid(struct hmap *set, const char *name, uint32_t max,
+allocate_tnlid(struct hmap *set, const char *name, uint32_t min, uint32_t max,
                uint32_t *hint)
 {
-    for (uint32_t tnlid = next_tnlid(*hint, max); tnlid != *hint;
-         tnlid = next_tnlid(tnlid, max)) {
+    for (uint32_t tnlid = next_tnlid(*hint, min, max); tnlid != *hint;
+         tnlid = next_tnlid(tnlid, min, max)) {
         if (!tnlid_in_use(set, tnlid)) {
             add_tnlid(set, tnlid);
             *hint = tnlid;
@@ -424,6 +430,42 @@ struct ipam_info {
     bool mac_only;
 };
 
+#define OVN_MIN_MULTICAST 32768
+#define OVN_MAX_MULTICAST OVN_MCAST_FLOOD_TUNNEL_KEY
+BUILD_ASSERT_DECL(OVN_MIN_MULTICAST < OVN_MAX_MULTICAST);
+
+#define OVN_MIN_IP_MULTICAST OVN_MIN_MULTICAST
+#define OVN_MAX_IP_MULTICAST (OVN_MCAST_UNKNOWN_TUNNEL_KEY - 1)
+BUILD_ASSERT_DECL(OVN_MAX_IP_MULTICAST >= OVN_MIN_MULTICAST);
+
+/*
+ * Multicast snooping and querier per datapath configuration.
+ */
+struct mcast_info {
+    bool enabled;
+    bool querier;
+    bool flood_unregistered;
+
+    int64_t table_size;
+    int64_t idle_timeout;
+    int64_t query_interval;
+    char *eth_src;
+    char *ipv4_src;
+    int64_t  query_max_response;
+
+    struct hmap group_tnlids;
+    uint32_t group_tnlid_hint;
+    uint32_t active_flows;
+};
+
+static uint32_t
+ovn_mcast_group_allocate_key(struct mcast_info *mcast_info)
+{
+    return allocate_tnlid(&mcast_info->group_tnlids, "multicast group",
+                          OVN_MIN_IP_MULTICAST, OVN_MAX_IP_MULTICAST,
+                          &mcast_info->group_tnlid_hint);
+}
+
 /* The 'key' comes from nbs->header_.uuid or nbr->header_.uuid or
  * sb->external_ids:logical-switch. */
 struct ovn_datapath {
@@ -447,6 +489,9 @@ struct ovn_datapath {
 
     /* IPAM data. */
     struct ipam_info ipam_info;
+
+    /* Multicast data. */
+    struct mcast_info mcast_info;
 
     /* OVN northd only needs to know about the logical router gateway port for
      * NAT on a distributed router.  This "distributed gateway port" is
@@ -524,6 +569,13 @@ ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
         bitmap_free(od->ipam_info.allocated_ipv4s);
         free(od->router_ports);
         ovn_ls_port_group_destroy(&od->nb_pgs);
+
+        if (od->nbs) {
+            free(od->mcast_info.eth_src);
+            free(od->mcast_info.ipv4_src);
+            destroy_tnlids(&od->mcast_info.group_tnlids);
+        }
+
         free(od);
     }
 }
@@ -659,6 +711,86 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
 }
 
 static void
+init_mcast_info_for_datapath(struct ovn_datapath *od)
+{
+    if (!od->nbs) {
+        return;
+    }
+
+    struct mcast_info *mcast_info = &od->mcast_info;
+
+    mcast_info->enabled =
+        smap_get_bool(&od->nbs->other_config, "mcast_snoop", false);
+    mcast_info->querier =
+        smap_get_bool(&od->nbs->other_config, "mcast_querier", true);
+    mcast_info->flood_unregistered =
+        smap_get_bool(&od->nbs->other_config, "mcast_flood_unregistered",
+                      false);
+
+    mcast_info->table_size =
+        smap_get_ullong(&od->nbs->other_config, "mcast_table_size",
+                        OVN_MCAST_DEFAULT_MAX_ENTRIES);
+
+    uint32_t idle_timeout =
+        smap_get_ullong(&od->nbs->other_config, "mcast_idle_timeout",
+                        OVN_MCAST_DEFAULT_IDLE_TIMEOUT_S);
+    if (idle_timeout < OVN_MCAST_MIN_IDLE_TIMEOUT_S) {
+        idle_timeout = OVN_MCAST_MIN_IDLE_TIMEOUT_S;
+    } else if (idle_timeout > OVN_MCAST_MAX_IDLE_TIMEOUT_S) {
+        idle_timeout = OVN_MCAST_MAX_IDLE_TIMEOUT_S;
+    }
+    mcast_info->idle_timeout = idle_timeout;
+
+    uint32_t query_interval =
+        smap_get_ullong(&od->nbs->other_config, "mcast_query_interval",
+                        mcast_info->idle_timeout / 2);
+    if (query_interval < OVN_MCAST_MIN_QUERY_INTERVAL_S) {
+        query_interval = OVN_MCAST_MIN_QUERY_INTERVAL_S;
+    } else if (query_interval > OVN_MCAST_MAX_QUERY_INTERVAL_S) {
+        query_interval = OVN_MCAST_MAX_QUERY_INTERVAL_S;
+    }
+    mcast_info->query_interval = query_interval;
+
+    mcast_info->eth_src =
+        nullable_xstrdup(smap_get(&od->nbs->other_config, "mcast_eth_src"));
+    mcast_info->ipv4_src =
+        nullable_xstrdup(smap_get(&od->nbs->other_config, "mcast_ip4_src"));
+
+    mcast_info->query_max_response =
+        smap_get_ullong(&od->nbs->other_config, "mcast_query_max_response",
+                        OVN_MCAST_DEFAULT_QUERY_MAX_RESPONSE_S);
+
+    hmap_init(&mcast_info->group_tnlids);
+    mcast_info->group_tnlid_hint = OVN_MIN_IP_MULTICAST;
+    mcast_info->active_flows = 0;
+}
+
+static void
+store_mcast_info_for_datapath(const struct sbrec_ip_multicast *sb,
+                              struct ovn_datapath *od)
+{
+    struct mcast_info *mcast_info = &od->mcast_info;
+
+    sbrec_ip_multicast_set_datapath(sb, od->sb);
+    sbrec_ip_multicast_set_enabled(sb, &mcast_info->enabled, 1);
+    sbrec_ip_multicast_set_querier(sb, &mcast_info->querier, 1);
+    sbrec_ip_multicast_set_table_size(sb, &mcast_info->table_size, 1);
+    sbrec_ip_multicast_set_idle_timeout(sb, &mcast_info->idle_timeout, 1);
+    sbrec_ip_multicast_set_query_interval(sb,
+                                          &mcast_info->query_interval, 1);
+    sbrec_ip_multicast_set_query_max_resp(sb,
+                                          &mcast_info->query_max_response, 1);
+
+    if (mcast_info->eth_src) {
+        sbrec_ip_multicast_set_eth_src(sb, mcast_info->eth_src);
+    }
+
+    if (mcast_info->ipv4_src) {
+        sbrec_ip_multicast_set_ip4_src(sb, mcast_info->ipv4_src);
+    }
+}
+
+static void
 ovn_datapath_update_external_ids(struct ovn_datapath *od)
 {
     /* Get the logical-switch or logical-router UUID to set in
@@ -741,6 +873,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
         }
 
         init_ipam_info_for_datapath(od);
+        init_mcast_info_for_datapath(od);
     }
 
     const struct nbrec_logical_router *nbr;
@@ -778,7 +911,7 @@ static uint32_t
 ovn_datapath_allocate_key(struct hmap *dp_tnlids)
 {
     static uint32_t hint;
-    return allocate_tnlid(dp_tnlids, "datapath", (1u << 24) - 1, &hint);
+    return allocate_tnlid(dp_tnlids, "datapath", 1, (1u << 24) - 1, &hint);
 }
 
 /* Updates the southbound Datapath_Binding table so that it contains the
@@ -910,7 +1043,7 @@ ovn_port_destroy(struct hmap *ports, struct ovn_port *port)
 }
 
 static struct ovn_port *
-ovn_port_find(struct hmap *ports, const char *name)
+ovn_port_find(const struct hmap *ports, const char *name)
 {
     struct ovn_port *op;
 
@@ -926,7 +1059,7 @@ static uint32_t
 ovn_port_allocate_key(struct ovn_datapath *od)
 {
     return allocate_tnlid(&od->port_tnlids, "port",
-                          (1u << 15) - 1, &od->port_key_hint);
+                          1, (1u << 15) - 1, &od->port_key_hint);
 }
 
 static char *
@@ -2530,13 +2663,6 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 }
             }
 
-            sbrec_port_binding_set_nat_addresses(op->sb,
-                                                 (const char **) nats, n_nats);
-            for (size_t i = 0; i < n_nats; i++) {
-                free(nats[i]);
-            }
-            free(nats);
-
             /* Add the router mac and IPv4 addresses to
              * Port_Binding.nat_addresses so that GARP is sent for these
              * IPs by the ovn-controller on which the distributed gateway
@@ -2578,10 +2704,18 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                                   op->peer->od->l3redirect_port->json_key);
                 }
 
-                sbrec_port_binding_update_nat_addresses_addvalue(
-                    op->sb, ds_cstr(&garp_info));
+                n_nats++;
+                nats = xrealloc(nats, (n_nats * sizeof *nats));
+                nats[n_nats - 1] = ds_steal_cstr(&garp_info);
                 ds_destroy(&garp_info);
             }
+
+            sbrec_port_binding_set_nat_addresses(op->sb,
+                                                 (const char **) nats, n_nats);
+            for (size_t i = 0; i < n_nats; i++) {
+                free(nats[i]);
+            }
+            free(nats);
         }
 
         sbrec_port_binding_set_parent_port(op->sb, op->nbsp->parent_name);
@@ -2700,9 +2834,6 @@ build_ports(struct northd_context *ctx,
     cleanup_sb_ha_chassis_groups(ctx, &active_ha_chassis_grps);
     sset_destroy(&active_ha_chassis_grps);
 }
-
-#define OVN_MIN_MULTICAST 32768
-#define OVN_MAX_MULTICAST 65535
 
 struct multicast_group {
     const char *name;
@@ -2710,10 +2841,12 @@ struct multicast_group {
 };
 
 #define MC_FLOOD "_MC_flood"
-static const struct multicast_group mc_flood = { MC_FLOOD, 65535 };
+static const struct multicast_group mc_flood =
+    { MC_FLOOD, OVN_MCAST_FLOOD_TUNNEL_KEY };
 
 #define MC_UNKNOWN "_MC_unknown"
-static const struct multicast_group mc_unknown = { MC_UNKNOWN, 65534 };
+static const struct multicast_group mc_unknown =
+    { MC_UNKNOWN, OVN_MCAST_UNKNOWN_TUNNEL_KEY };
 
 static bool
 multicast_group_equal(const struct multicast_group *a,
@@ -2756,10 +2889,10 @@ ovn_multicast_find(struct hmap *mcgroups, struct ovn_datapath *datapath,
 }
 
 static void
-ovn_multicast_add(struct hmap *mcgroups, const struct multicast_group *group,
-                  struct ovn_port *port)
+ovn_multicast_add_ports(struct hmap *mcgroups, struct ovn_datapath *od,
+                        const struct multicast_group *group,
+                        struct ovn_port **ports, size_t n_ports)
 {
-    struct ovn_datapath *od = port->od;
     struct ovn_multicast *mc = ovn_multicast_find(mcgroups, od, group);
     if (!mc) {
         mc = xmalloc(sizeof *mc);
@@ -2770,11 +2903,27 @@ ovn_multicast_add(struct hmap *mcgroups, const struct multicast_group *group,
         mc->allocated_ports = 4;
         mc->ports = xmalloc(mc->allocated_ports * sizeof *mc->ports);
     }
-    if (mc->n_ports >= mc->allocated_ports) {
+
+    size_t n_ports_total = mc->n_ports + n_ports;
+
+    if (n_ports_total > 2 * mc->allocated_ports) {
+        mc->allocated_ports = n_ports_total;
+        mc->ports = xrealloc(mc->ports,
+                             mc->allocated_ports * sizeof *mc->ports);
+    } else if (n_ports_total > mc->allocated_ports) {
         mc->ports = x2nrealloc(mc->ports, &mc->allocated_ports,
                                sizeof *mc->ports);
     }
-    mc->ports[mc->n_ports++] = port;
+
+    memcpy(&mc->ports[mc->n_ports], &ports[0], n_ports * sizeof *ports);
+    mc->n_ports += n_ports;
+}
+
+static void
+ovn_multicast_add(struct hmap *mcgroups, const struct multicast_group *group,
+                  struct ovn_port *port)
+{
+    ovn_multicast_add_ports(mcgroups, port->od, group, &port, 1);
 }
 
 static void
@@ -2798,7 +2947,144 @@ ovn_multicast_update_sbrec(const struct ovn_multicast *mc,
     sbrec_multicast_group_set_ports(sb, ports, mc->n_ports);
     free(ports);
 }
-
+
+/*
+ * IGMP group entry (1:1 mapping to SB database).
+ */
+struct ovn_igmp_group_entry {
+    struct ovs_list list_node; /* Linkage in the list of entries. */
+    const struct sbrec_igmp_group *sb;
+};
+
+/*
+ * IGMP group entry (aggregate of all entries from the SB database
+ * corresponding to the multicast group).
+ */
+struct ovn_igmp_group {
+    struct hmap_node hmap_node; /* Index on 'datapath' and 'address'. */
+
+    struct ovn_datapath *datapath;
+    struct in6_addr address; /* Multicast IPv6-mapped-IPv4 or IPv4 address. */
+    struct multicast_group mcgroup;
+
+    struct ovs_list sb_entries; /* List of SB entries for this group. */
+};
+
+static uint32_t
+ovn_igmp_group_hash(const struct ovn_datapath *datapath,
+                    const struct in6_addr *address)
+{
+    return hash_pointer(datapath, hash_bytes(address, sizeof *address, 0));
+}
+
+static struct ovn_igmp_group *
+ovn_igmp_group_find(struct hmap *igmp_groups,
+                    const struct ovn_datapath *datapath,
+                    const struct in6_addr *address)
+{
+    struct ovn_igmp_group *group;
+
+    HMAP_FOR_EACH_WITH_HASH (group, hmap_node,
+                             ovn_igmp_group_hash(datapath, address),
+                             igmp_groups) {
+        if (group->datapath == datapath &&
+                ipv6_addr_equals(&group->address, address)) {
+            return group;
+        }
+    }
+    return NULL;
+}
+
+static void
+ovn_igmp_group_add(struct northd_context *ctx, struct hmap *igmp_groups,
+                   struct ovn_datapath *datapath,
+                   const struct sbrec_igmp_group *sb_igmp_group)
+{
+    struct in6_addr group_address;
+    ovs_be32 ipv4;
+
+    if (ip_parse(sb_igmp_group->address, &ipv4)) {
+        group_address = in6_addr_mapped_ipv4(ipv4);
+    } else if (!ipv6_parse(sb_igmp_group->address, &group_address)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "invalid IGMP group address: %s",
+                     sb_igmp_group->address);
+        return;
+    }
+
+    struct ovn_igmp_group *igmp_group =
+        ovn_igmp_group_find(igmp_groups, datapath, &group_address);
+
+    if (!igmp_group) {
+        igmp_group = xmalloc(sizeof *igmp_group);
+
+        const struct sbrec_multicast_group *mcgroup =
+            mcast_group_lookup(ctx->sbrec_mcast_group_by_name_dp,
+                               sb_igmp_group->address, datapath->sb);
+
+        igmp_group->datapath = datapath;
+        igmp_group->address = group_address;
+        if (mcgroup) {
+            igmp_group->mcgroup.key = mcgroup->tunnel_key;
+            add_tnlid(&datapath->mcast_info.group_tnlids, mcgroup->tunnel_key);
+        } else {
+            igmp_group->mcgroup.key = 0;
+        }
+        igmp_group->mcgroup.name = sb_igmp_group->address;
+        ovs_list_init(&igmp_group->sb_entries);
+
+        hmap_insert(igmp_groups, &igmp_group->hmap_node,
+                    ovn_igmp_group_hash(datapath, &group_address));
+    }
+
+    struct ovn_igmp_group_entry *entry = xmalloc(sizeof *entry);
+
+    entry->sb = sb_igmp_group;
+    ovs_list_push_back(&igmp_group->sb_entries , &entry->list_node);
+}
+
+static void
+ovn_igmp_group_aggregate_ports(struct ovn_igmp_group *igmp_group,
+                               struct hmap *ovn_ports,
+                               struct hmap *mcast_groups)
+{
+    struct ovn_igmp_group_entry *entry;
+
+    LIST_FOR_EACH_POP (entry, list_node, &igmp_group->sb_entries) {
+        size_t n_oports = 0;
+        struct ovn_port **oports =
+            xmalloc(entry->sb->n_ports * sizeof *oports);
+
+        for (size_t i = 0; i < entry->sb->n_ports; i++) {
+            oports[n_oports] =
+                ovn_port_find(ovn_ports, entry->sb->ports[i]->logical_port);
+            if (oports[n_oports]) {
+                n_oports++;
+            }
+        }
+
+        ovn_multicast_add_ports(mcast_groups, igmp_group->datapath,
+                                &igmp_group->mcgroup, oports, n_oports);
+        free(oports);
+        free(entry);
+    }
+}
+
+static void
+ovn_igmp_group_destroy(struct hmap *igmp_groups,
+                       struct ovn_igmp_group *igmp_group)
+{
+    if (igmp_group) {
+        struct ovn_igmp_group_entry *entry;
+
+        LIST_FOR_EACH_POP (entry, list_node, &igmp_group->sb_entries) {
+            free(entry);
+        }
+        hmap_remove(igmp_groups, &igmp_group->hmap_node);
+        free(igmp_group);
+    }
+}
+
 /* Logical flow generation.
  *
  * This code generates the Logical_Flow table in the southbound database, as a
@@ -3626,6 +3912,34 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
                 sset_add(&all_ips, ip_address);
             }
 
+            if (controller_event_en && !node->value[0]) {
+                struct ds match = DS_EMPTY_INITIALIZER;
+                char *action;
+
+                if (addr_family == AF_INET) {
+                    ds_put_format(&match, "ip4.dst == %s && %s",
+                                  ip_address, lb->protocol);
+                } else {
+                    ds_put_format(&match, "ip6.dst == %s && %s",
+                                  ip_address, lb->protocol);
+                }
+                if (port) {
+                    ds_put_format(&match, " && %s.dst == %u", lb->protocol,
+                                  port);
+                }
+                action = xasprintf("trigger_event(event = \"%s\", "
+                               "vip = \"%s\", protocol = \"%s\", "
+                               "load_balancer = \"" UUID_FMT "\");",
+                               event_to_string(OVN_EVENT_EMPTY_LB_BACKENDS),
+                               node->key, lb->protocol,
+                               UUID_ARGS(&lb->header_.uuid));
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB, 120,
+                              ds_cstr(&match), action);
+                ds_destroy(&match);
+                free(action);
+                continue;
+            }
+
             free(ip_address);
 
             /* Ignore L4 port information in the key because fragmented packets
@@ -4444,7 +4758,7 @@ build_lrouter_groups(struct hmap *ports, struct ovs_list *lr_list)
 static void
 build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *port_groups, struct hmap *lflows,
-                    struct hmap *mcgroups)
+                    struct hmap *mcgroups, struct hmap *igmp_groups)
 {
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
@@ -4908,24 +5222,63 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             }
         }
     }
-    /* Ingress table 17: Destination lookup, broadcast and multicast handling
-     * (priority 100). */
-    HMAP_FOR_EACH (op, key_node, ports) {
-        if (!op->nbsp) {
-            continue;
-        }
 
-        if (lsp_is_enabled(op->nbsp)) {
-            ovn_multicast_add(mcgroups, &mc_flood, op);
-        }
-    }
+    /* Ingress table 17: Destination lookup, broadcast and multicast handling
+     * (priority 70 - 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
         }
 
-        ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 100, "eth.mcast",
+        if (od->mcast_info.enabled) {
+            /* Punt IGMP traffic to controller. */
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 100,
+                          "ip4 && ip.proto == 2", "igmp;");
+
+            /* Flood all IP multicast traffic destined to 224.0.0.X to all
+             * ports - RFC 4541, section 2.1.2, item 2.
+             */
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 85,
+                          "ip4 && ip4.dst == 224.0.0.0/24",
+                          "outport = \""MC_FLOOD"\"; output;");
+
+            /* Drop unregistered IP multicast if not allowed. */
+            if (!od->mcast_info.flood_unregistered) {
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 80,
+                              "ip4 && ip4.mcast", "drop;");
+            }
+        }
+
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 70, "eth.mcast",
                       "outport = \""MC_FLOOD"\"; output;");
+    }
+
+    /* Ingress table 17: Add IP multicast flows learnt from IGMP
+     * (priority 90). */
+    struct ovn_igmp_group *igmp_group, *next_igmp_group;
+
+    HMAP_FOR_EACH_SAFE (igmp_group, next_igmp_group, hmap_node, igmp_groups) {
+        ds_clear(&match);
+        ds_clear(&actions);
+
+        if (!igmp_group->datapath) {
+            continue;
+        }
+
+        struct mcast_info *mcast_info = &igmp_group->datapath->mcast_info;
+
+        if (mcast_info->active_flows >= mcast_info->table_size) {
+            continue;
+        }
+        mcast_info->active_flows++;
+
+        ds_put_format(&match, "eth.mcast && ip4 && ip4.dst == %s ",
+                      igmp_group->mcgroup.name);
+        ds_put_format(&actions, "outport = \"%s\"; output; ",
+                      igmp_group->mcgroup.name);
+
+        ovn_lflow_add(lflows, igmp_group->datapath, S_SWITCH_IN_L2_LKUP, 90,
+                      ds_cstr(&match), ds_cstr(&actions));
     }
 
     /* Ingress table 17: Destination lookup, unicast handling (priority 50), */
@@ -6634,6 +6987,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                                   count_1bits(ntohl(mask)) + 1,
                                   ds_cstr(&match), ds_cstr(&actions));
                 } else {
+                    uint16_t priority = count_1bits(ntohl(mask)) + 1;
+
                     /* Distributed router. */
                     ds_clear(&match);
                     ds_put_format(&match, "ip && ip4.src == %s"
@@ -6643,6 +6998,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     if (!distributed && od->l3redirect_port) {
                         /* Flows for NAT rules that are centralized are only
                          * programmed on the "redirect-chassis". */
+                        priority += 128;
                         ds_put_format(&match, " && is_chassis_resident(%s)",
                                       od->l3redirect_port->json_key);
                     }
@@ -6657,8 +7013,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                      * nat->logical_ip with the longest mask gets a higher
                      * priority. */
                     ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT,
-                                  count_1bits(ntohl(mask)) + 1,
-                                  ds_cstr(&match), ds_cstr(&actions));
+                                  priority, ds_cstr(&match),
+                                  ds_cstr(&actions));
                 }
             }
 
@@ -7523,12 +7879,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
  * constructing their contents based on the OVN_NB database. */
 static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
-             struct hmap *ports, struct hmap *port_groups)
+             struct hmap *ports, struct hmap *port_groups,
+             struct hmap *mcgroups, struct hmap *igmp_groups)
 {
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
-    struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
-    build_lswitch_flows(datapaths, ports, port_groups, &lflows, &mcgroups);
+    build_lswitch_flows(datapaths, ports, port_groups, &lflows, mcgroups,
+                        igmp_groups);
     build_lrouter_flows(datapaths, ports, &lflows);
 
     /* Push changes to the Logical_Flow table to database. */
@@ -7603,24 +7960,27 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 
         struct multicast_group group = { .name = sbmc->name,
                                          .key = sbmc->tunnel_key };
-        struct ovn_multicast *mc = ovn_multicast_find(&mcgroups, od, &group);
+        struct ovn_multicast *mc = ovn_multicast_find(mcgroups, od, &group);
         if (mc) {
             ovn_multicast_update_sbrec(mc, sbmc);
-            ovn_multicast_destroy(&mcgroups, mc);
+            ovn_multicast_destroy(mcgroups, mc);
         } else {
             sbrec_multicast_group_delete(sbmc);
         }
     }
     struct ovn_multicast *mc, *next_mc;
-    HMAP_FOR_EACH_SAFE (mc, next_mc, hmap_node, &mcgroups) {
+    HMAP_FOR_EACH_SAFE (mc, next_mc, hmap_node, mcgroups) {
+        if (!mc->datapath) {
+            ovn_multicast_destroy(mcgroups, mc);
+            continue;
+        }
         sbmc = sbrec_multicast_group_insert(ctx->ovnsb_txn);
         sbrec_multicast_group_set_datapath(sbmc, mc->datapath->sb);
         sbrec_multicast_group_set_name(sbmc, mc->group->name);
         sbrec_multicast_group_set_tunnel_key(sbmc, mc->group->key);
         ovn_multicast_update_sbrec(mc, sbmc);
-        ovn_multicast_destroy(&mcgroups, mc);
+        ovn_multicast_destroy(mcgroups, mc);
     }
-    hmap_destroy(&mcgroups);
 }
 
 static void
@@ -8040,6 +8400,105 @@ destroy_datapaths_and_ports(struct hmap *datapaths, struct hmap *ports,
 }
 
 static void
+build_ip_mcast(struct northd_context *ctx, struct hmap *datapaths)
+{
+    struct ovn_datapath *od;
+
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbs) {
+            continue;
+        }
+
+        const struct sbrec_ip_multicast *ip_mcast =
+            ip_mcast_lookup(ctx->sbrec_ip_mcast_by_dp, od->sb);
+
+        if (!ip_mcast) {
+            ip_mcast = sbrec_ip_multicast_insert(ctx->ovnsb_txn);
+        }
+        store_mcast_info_for_datapath(ip_mcast, od);
+    }
+
+    /* Delete southbound records without northbound matches. */
+    const struct sbrec_ip_multicast *sb, *sb_next;
+
+    SBREC_IP_MULTICAST_FOR_EACH_SAFE (sb, sb_next, ctx->ovnsb_idl) {
+        if (!sb->datapath ||
+                !ovn_datapath_from_sbrec(datapaths, sb->datapath)) {
+            sbrec_ip_multicast_delete(sb);
+        }
+    }
+}
+
+static void
+build_mcast_groups(struct northd_context *ctx,
+                   struct hmap *datapaths, struct hmap *ports,
+                   struct hmap *mcast_groups,
+                   struct hmap *igmp_groups)
+{
+    struct ovn_port *op;
+
+    hmap_init(mcast_groups);
+    hmap_init(igmp_groups);
+
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbsp) {
+            continue;
+        }
+
+        if (lsp_is_enabled(op->nbsp)) {
+            ovn_multicast_add(mcast_groups, &mc_flood, op);
+        }
+    }
+
+    const struct sbrec_igmp_group *sb_igmp, *sb_igmp_next;
+
+    SBREC_IGMP_GROUP_FOR_EACH_SAFE (sb_igmp, sb_igmp_next, ctx->ovnsb_idl) {
+        /* If this is a stale group (e.g., controller had crashed,
+         * purge it).
+         */
+        if (!sb_igmp->chassis || !sb_igmp->datapath) {
+            sbrec_igmp_group_delete(sb_igmp);
+            continue;
+        }
+
+        /* If the datapath value is stale, purge the group. */
+        struct ovn_datapath *od =
+            ovn_datapath_from_sbrec(datapaths, sb_igmp->datapath);
+        if (!od) {
+            sbrec_igmp_group_delete(sb_igmp);
+            continue;
+        }
+
+        /* Add the IGMP group entry. Will also try to allocate an ID for it
+         * if the multicast group already exists.
+         */
+        ovn_igmp_group_add(ctx, igmp_groups, od, sb_igmp);
+    }
+
+    /* Walk the aggregated IGMP groups and allocate IDs for new entries.
+     * Then store the ports in the associated multicast group.
+     */
+    struct ovn_igmp_group *igmp_group, *igmp_group_next;
+    HMAP_FOR_EACH_SAFE (igmp_group, igmp_group_next, hmap_node, igmp_groups) {
+        if (igmp_group->mcgroup.key == 0) {
+            struct mcast_info *mcast_info = &igmp_group->datapath->mcast_info;
+            igmp_group->mcgroup.key = ovn_mcast_group_allocate_key(mcast_info);
+        }
+
+        /* If we ran out of keys just destroy the entry. */
+        if (igmp_group->mcgroup.key == 0) {
+            ovn_igmp_group_destroy(igmp_groups, igmp_group);
+            continue;
+        }
+
+        /* Aggregate the ports from all SB entries corresponding to this
+         * group.
+         */
+        ovn_igmp_group_aggregate_ports(igmp_group, ports, mcast_groups);
+    }
+}
+
+static void
 ovnnb_db_run(struct northd_context *ctx,
              struct ovsdb_idl_index *sbrec_chassis_by_name,
              struct ovsdb_idl_loop *sb_loop,
@@ -8050,23 +8509,36 @@ ovnnb_db_run(struct northd_context *ctx,
         return;
     }
     struct hmap port_groups;
+    struct hmap mcast_groups;
+    struct hmap igmp_groups;
 
     build_datapaths(ctx, datapaths, lr_list);
     build_ports(ctx, sbrec_chassis_by_name, datapaths, ports);
     build_ipam(datapaths, ports);
     build_port_group_lswitches(ctx, &port_groups, ports);
     build_lrouter_groups(ports, lr_list);
-    build_lflows(ctx, datapaths, ports, &port_groups);
+    build_ip_mcast(ctx, datapaths);
+    build_mcast_groups(ctx, datapaths, ports, &mcast_groups, &igmp_groups);
+    build_lflows(ctx, datapaths, ports, &port_groups, &mcast_groups,
+                 &igmp_groups);
 
     sync_address_sets(ctx);
     sync_port_groups(ctx);
     sync_meters(ctx);
     sync_dns_entries(ctx, datapaths);
 
+    struct ovn_igmp_group *igmp_group, *next_igmp_group;
+
+    HMAP_FOR_EACH_SAFE (igmp_group, next_igmp_group, hmap_node, &igmp_groups) {
+        ovn_igmp_group_destroy(&igmp_groups, igmp_group);
+    }
+
     struct ovn_port_group *pg, *next_pg;
     HMAP_FOR_EACH_SAFE (pg, next_pg, key_node, &port_groups) {
         ovn_port_group_destroy(&port_groups, pg);
     }
+    hmap_destroy(&igmp_groups);
+    hmap_destroy(&mcast_groups);
     hmap_destroy(&port_groups);
 
     /* Sync ipsec configuration.
@@ -8111,6 +8583,9 @@ ovnnb_db_run(struct northd_context *ctx,
 
         smap_destroy(&options);
     }
+
+    controller_event_en = smap_get_bool(&nb->options,
+                                        "controller_event", false);
 
     cleanup_macam(&macam);
 }
@@ -8863,11 +9338,43 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl,
                        &sbrec_ha_chassis_group_col_ref_chassis);
 
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_igmp_group);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_igmp_group_col_address);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_igmp_group_col_datapath);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_igmp_group_col_chassis);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_igmp_group_col_ports);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_ip_multicast);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_datapath);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_enabled);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_querier);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_eth_src);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_ip4_src);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_table_size);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_idle_timeout);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_query_interval);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ip_multicast_col_query_max_resp);
+
     struct ovsdb_idl_index *sbrec_chassis_by_name
         = chassis_index_create(ovnsb_idl_loop.idl);
 
     struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name
         = ha_chassis_group_index_create(ovnsb_idl_loop.idl);
+
+    struct ovsdb_idl_index *sbrec_mcast_group_by_name_dp
+        = mcast_group_index_create(ovnsb_idl_loop.idl);
+
+    struct ovsdb_idl_index *sbrec_ip_mcast_by_dp
+        = ip_mcast_index_create(ovnsb_idl_loop.idl);
 
     /* Ensure that only a single ovn-northd is active in the deployment by
      * acquiring a lock called "ovn_northd" on the southbound database
@@ -8884,6 +9391,8 @@ main(int argc, char *argv[])
             .ovnsb_idl = ovnsb_idl_loop.idl,
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
             .sbrec_ha_chassis_grp_by_name = sbrec_ha_chassis_grp_by_name,
+            .sbrec_mcast_group_by_name_dp = sbrec_mcast_group_by_name_dp,
+            .sbrec_ip_mcast_by_dp = sbrec_ip_mcast_by_dp,
         };
 
         if (!had_lock && ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {

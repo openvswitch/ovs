@@ -220,6 +220,26 @@ tnl_neigh_cache_run(void)
     }
 }
 
+void
+tnl_neigh_flush(const char br_name[IFNAMSIZ])
+{
+    struct tnl_neigh_entry *neigh;
+    bool changed = false;
+
+    ovs_mutex_lock(&mutex);
+    CMAP_FOR_EACH (neigh, cmap_node, &table) {
+        if (!strcmp(neigh->br_name, br_name)) {
+            tnl_neigh_delete(neigh);
+            changed = true;
+        }
+    }
+    ovs_mutex_unlock(&mutex);
+
+    if (changed) {
+        seq_change(tnl_conf_seq);
+    }
+}
+
 static void
 tnl_neigh_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)

@@ -4487,6 +4487,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     }
     (column->unparse)(row);
     (column->parse)(row, &row->new_datum[column_idx]);
+    row->parsed = true;
     if (!index_row) {
         ovsdb_idl_add_to_indexes(row);
     }

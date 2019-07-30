@@ -1988,6 +1988,35 @@ tcp.flags = RST;
 
           <p><b>Prerequisite:</b> <code>tcp</code></p>
         </dd>
+
+        <dt><code>trigger_event;</code></dt>
+        <dd>
+          <p>
+            This action is used to allow ovs-vswitchd to report CMS related
+            events writing them in <ref table="Controller_Event"/> table.
+            Supported event:
+          </p>
+
+          <ul>
+            <li>
+              <p>
+                <dfn>empty_lb_backends</dfn>. This event is raised if a
+                received packet is destined for a load balancer VIP that has
+                no configured backend destinations. For this event, the event
+                info includes the load balancer VIP, the load balancer UUID,
+                and the transport protocol.
+              </p>
+            </li>
+          </ul>
+        </dd>
+        <dt><code>igmp;</code></dt>
+        <dd>
+          <p>
+            This action sends the packet to <code>ovn-controller</code> for
+            multicast snooping.
+          </p>
+          <p><b>Prerequisite:</b> <code>igmp</code></p>
+        </dd>
       </dl>
     </column>
 
@@ -3493,5 +3522,117 @@ tcp.flags = RST;
         See <em>External IDs</em> at the beginning of this document.
       </column>
     </group>
+  </table>
+  <table name="Controller_Event" title="Controller Event table">
+    <p>
+      Database table used by <code>ovn-controller</code> to report CMS
+      related events. Please note there is no guarantee a given event is
+      written exactly once in the db. It is CMS responsibility to squash
+      duplicated lines or to filter out duplicated events
+    </p>
+    <column name="event_type">
+      Event type occurred
+    </column>
+    <column name="event_info">
+    <p>
+      Key-value pairs used to specify event info to the CMS.
+      Possible values are:
+    </p>
+      <ul>
+        <li>
+         <code>vip</code>: VIP reported for the <code>empty_lb_backends</code>
+         event
+        </li>
+        <li>
+          <code>protocol</code>: Transport protocol reported for the
+          <code>empty_lb_backends</code> event
+        </li>
+        <li>
+          <code>load_balancer</code>: UUID of the load balancer reported for
+          the <code>empty_lb_backends</code> event
+        </li>
+      </ul>
+    </column>
+    <column name="chassis">
+      This column is a <ref table="Chassis"/> record to identify the chassis
+      that has managed a given event.
+    </column>
+    <column name="seq_num">
+      Event sequence number. Global counter for controller generated events.
+      It can be used by the CMS to detect possible duplication of the same
+      event.
+    </column>
+  </table>
+  <table name="IP_Multicast">
+    <p>
+      IP Multicast configuration options. For now only applicable to IGMP.
+    </p>
+
+    <column name="datapath">
+      <ref table="Datapath_Binding"/> entry for which these configuration
+      options are defined.
+    </column>
+    <column name="enabled">
+      Enables/disables multicast snooping. Default: disabled.
+    </column>
+    <column name="querier">
+      Enables/disables multicast querying. If
+      <ref table="IP_Multicast" column="enabled"/> then multicast querying is
+      enabled by default.
+    </column>
+    <column name="table_size">
+      Limits the number of multicast groups that can be learned. Default:
+      2048 groups per datapath.
+    </column>
+    <column name="idle_timeout">
+      Configures the idle timeout (in seconds) for IP multicast groups if
+      multicast snooping is enabled. Default: 300 seconds.
+    </column>
+    <column name="query_interval">
+      Configures the interval (in seconds) for sending multicast queries if
+      snooping and querier are enabled.
+      Default: <ref table="IP_Multicast" column="idle_timeout"/>/2 seconds.
+    </column>
+    <column name="seq_no">
+      <code>ovn-controller</code> reads this value and flushes all learned
+      multicast groups when it detects that <code>seq_no</code> was changed.
+    </column>
+
+    <group title="Querier configuration options">
+      The <code>ovn-controller</code> process that runs on OVN hypervisor
+      nodes uses the following columns to determine field values in IGMP
+      queries that it originates:
+      <column name="eth_src">
+        Source Ethernet address.
+      </column>
+      <column name="ip4_src">
+        Source IPv4 address.
+      </column>
+      <column name="query_max_resp">
+        Value (in seconds) to be used as "max-response" field in multicast
+        queries. Default: 1 second.
+      </column>
+    </group>
+  </table>
+  <table name="IGMP_Group">
+    <p>
+      Contains learned IGMP groups indexed by address/datapath/chassis.
+    </p>
+
+    <column name="address">
+      Destination IPv4 address for the IGMP group.
+    </column>
+
+    <column name="datapath">
+      Datapath to which this IGMP group belongs.
+    </column>
+
+    <column name="chassis">
+      Chassis to which this IGMP group belongs.
+    </column>
+
+    <column name="ports">
+      The destination port bindings for this IGMP group.
+    </column>
   </table>
 </database>

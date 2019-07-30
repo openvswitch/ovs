@@ -681,6 +681,7 @@ char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
 #define IP_ECN_ECT_0 0x02
 #define IP_ECN_CE 0x03
 #define IP_ECN_MASK 0x03
+#define IP_DSCP_CS6 0xc0
 #define IP_DSCP_MASK 0xfc
 
 static inline int
@@ -762,6 +763,20 @@ struct igmpv3_header {
     ovs_be16 ngrp;
 };
 BUILD_ASSERT_DECL(IGMPV3_HEADER_LEN == sizeof(struct igmpv3_header));
+
+#define IGMPV3_QUERY_HEADER_LEN 12
+struct igmpv3_query_header {
+    uint8_t type;
+    uint8_t max_resp;
+    ovs_be16 csum;
+    ovs_16aligned_be32 group;
+    uint8_t srs_qrv;
+    uint8_t qqic;
+    ovs_be16 nsrcs;
+};
+BUILD_ASSERT_DECL(
+    IGMPV3_QUERY_HEADER_LEN == sizeof(struct igmpv3_query_header
+));
 
 #define IGMPV3_RECORD_LEN 8
 struct igmpv3_record {
@@ -1543,7 +1558,9 @@ void packet_set_nd(struct dp_packet *, const struct in6_addr *target,
 void packet_set_nd_ext(struct dp_packet *packet,
                        const ovs_16aligned_be32 rso_flags,
                        const uint8_t opt_type);
-
+void packet_set_igmp3_query(struct dp_packet *, uint8_t max_resp,
+                            ovs_be32 group, bool srs, uint8_t qrv,
+                            uint8_t qqic);
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
 void compose_arp__(struct dp_packet *);

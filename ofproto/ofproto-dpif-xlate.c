@@ -1481,6 +1481,9 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
     ovs_assert(new_xcfg);
 
     xport = xport_lookup(new_xcfg, ofport);
+    if (xport) {
+        tnl_neigh_flush(netdev_get_name(xport->netdev));
+    }
     xlate_xport_remove(new_xcfg, xport);
 }
 

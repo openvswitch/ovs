@@ -69,11 +69,29 @@ EOF
      GROFF_NO_SGR=1 man -l -Tutf8 $manpage | sed 's/.//g' > $manpage.txt
      (echo '<html><head><meta charset="UTF-8"></head><body><pre>'
       GROFF_NO_SGR=1 man -l -Tutf8 $manpage | sed '
-s/&/&amp;/g
-s/</&lt;/g
-s/>/&gt;/g
-s,\(.\)\1,<b>\1</b>,g
-s,_\(.\),<u>\1</u>,g'
+# Change bold and underline via backspacing into bracketing with control
+# characters.  We cannot directly translate them to HTML because <> need
+# to be escaped later.  (We cannot escape <> first because bold or
+# underlined escaped characters would be mis-processed.)
+s,\(.\)\1,\1,g
+s,_\(.\),\1,g
+
+# Drop redundant font changes, to keep from having every character have
+# a separate tag pair.
+s,,,g
+s,,,g
+
+# Escape special characters.
+s,&,\&amp;,g
+s,<,\&lt;,g
+s,>,\&gt;,g
+
+# Translate control characters to HTML.
+s,,<b>,g
+s,,</b>,g
+s,,<u>,g
+s,,</u>,g
+'
       echo '</pre></body></html>'
      ) > $manpage.html
 
