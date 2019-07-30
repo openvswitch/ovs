@@ -524,6 +524,9 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_external_ids);
 
     ovsdb_idl_add_column(ctx->idl, &sbrec_datapath_binding_col_external_ids);
+
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ip_multicast_col_datapath);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ip_multicast_col_seq_no);
 }
 
 static struct cmd_show_table cmd_show_tables[] = {
@@ -952,6 +955,52 @@ cmd_lflow_list(struct ctl_context *ctx)
 
     vconn_close(vconn);
     free(lflows);
+}
+
+static void
+sbctl_ip_mcast_flush_switch(struct ctl_context *ctx,
+                            const struct sbrec_datapath_binding *dp)
+{
+    const struct sbrec_ip_multicast *ip_mcast;
+
+    /* Lookup the corresponding IP_Multicast entry. */
+    SBREC_IP_MULTICAST_FOR_EACH (ip_mcast, ctx->idl) {
+        if (ip_mcast->datapath != dp) {
+            continue;
+        }
+
+        sbrec_ip_multicast_set_seq_no(ip_mcast, ip_mcast->seq_no + 1);
+    }
+}
+
+static void
+sbctl_ip_mcast_flush(struct ctl_context *ctx)
+{
+    const struct sbrec_datapath_binding *dp;
+
+    if (ctx->argc > 2) {
+        return;
+    }
+
+    if (ctx->argc == 2) {
+        const struct ovsdb_idl_row *row;
+        char *error = ctl_get_row(ctx, &sbrec_table_datapath_binding,
+                                  ctx->argv[1], false, &row);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+
+        dp = (const struct sbrec_datapath_binding *)row;
+        if (!dp) {
+            ctl_fatal("%s is not a valid datapath", ctx->argv[1]);
+        }
+
+        sbctl_ip_mcast_flush_switch(ctx, dp);
+    } else {
+        SBREC_DATAPATH_BINDING_FOR_EACH (dp, ctx->idl) {
+            sbctl_ip_mcast_flush_switch(ctx, dp);
+        }
+    }
 }
 
 static void
@@ -1461,6 +1510,10 @@ static const struct ctl_command_syntax sbctl_commands[] = {
     {"dump-flows", 0, INT_MAX, "[DATAPATH] [LFLOW...]",
      pre_get_info, cmd_lflow_list, NULL,
      "--uuid,--ovs?,--stats", RO}, /* Friendly alias for lflow-list */
+
+    /* IP multicast commands. */
+    {"ip-multicast-flush", 0, 1, "SWITCH",
+     pre_get_info, sbctl_ip_mcast_flush, NULL, "", RW },
 
     /* Connection commands. */
     {"get-connection", 0, 0, "", pre_connection, cmd_get_connection, NULL, "", RO},

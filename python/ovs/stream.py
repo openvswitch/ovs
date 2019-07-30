@@ -825,6 +825,14 @@ class SSLStream(Stream):
         except SSL.SysCallError as e:
             return -ovs.socket_util.get_exception_errno(e)
 
+    def close(self):
+        if self.socket:
+            try:
+                self.socket.shutdown()
+            except SSL.Error:
+                pass
+        return super(SSLStream, self).close()
+
 
 if SSL:
     # Register SSL only if the OpenSSL module is available

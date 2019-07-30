@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1660,7 +1660,9 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                     /* No mask means that the cookie is being set. */
                     if (command != OFPFC_ADD && command != OFPFC_MODIFY
                         && command != OFPFC_MODIFY_STRICT) {
-                        return xstrdup("cannot set cookie");
+                        return xasprintf("cannot set cookie (to match on a "
+                                         "cookie, specify a mask, e.g. "
+                                         "cookie=%s/-1)", value);
                     }
                     error = str_to_be64(value, &fm->new_cookie);
                     fm->modify_cookie = true;

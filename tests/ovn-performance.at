@@ -275,6 +275,10 @@ for i in 1 2; do
     )
     OVN_CONTROLLER_EXPECT_HIT(
         [hv1 hv2], [lflow_run],
+        [ovn-nbctl --wait=hv lsp-set-options $lsp router-port=$lrp]
+    )
+    OVN_CONTROLLER_EXPECT_HIT(
+        [hv1 hv2], [lflow_run],
         [ovn-nbctl --wait=hv lsp-set-addresses $lsp router]
     )
 done
@@ -328,7 +332,7 @@ for i in 1 2; do
     # Add ACLs for port $lp
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],
-        [ovn-nbctl --wait=hv acl-add $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \\$$as' allow]
+        [ovn-nbctl --wait=hv acl-add $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \$$as' allow]
     )
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],
@@ -353,7 +357,7 @@ for i in 1 2; do
     # Delete ACLs for port $lp
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],
-        [ovn-nbctl --wait=hv acl-del $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \\$$as']
+        [ovn-nbctl --wait=hv acl-del $ls to-lport 1001 'outport == \"$lp\" && ip4.src == \$$as']
     )
     OVN_CONTROLLER_EXPECT_NO_HIT(
         [hv1 hv2], [lflow_run],

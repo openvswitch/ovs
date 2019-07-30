@@ -516,6 +516,8 @@ ovsdb_server_stop() {
 }
 
 ovsdb_server_promote() {
+    local state
+
     ovsdb_server_check_status ignore_northd
     rc=$?
     case $rc in
@@ -540,7 +542,15 @@ ovsdb_server_promote() {
         ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
     fi
 
-    ocf_log debug "ovndb_servers: Promoting $host_name as the master"
+    ocf_log debug "ovndb_servers: Waiting for promotion $host_name as master to complete"
+    ovsdb_server_check_status
+    state=$?
+    while [ "$state" != "$OCF_RUNNING_MASTER" ]; do
+      sleep 1
+      ovsdb_server_check_status
+      state=$?
+    done
+    ocf_log debug "ovndb_servers: Promotion of $host_name as the master completed"
     # Record ourselves so that the agent has a better chance of doing
     # the right thing at startup
     ${CRM_ATTR_REPL_INFO} -v "$host_name"

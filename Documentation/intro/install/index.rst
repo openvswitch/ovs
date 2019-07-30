@@ -45,6 +45,7 @@ Installation from Source
    xenserver
    userspace
    dpdk
+   afxdp
 
 Installation from Packages
 --------------------------

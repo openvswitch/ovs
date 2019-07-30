@@ -3107,6 +3107,21 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
+      <column name="other_config" key="xdpmode"
+              type='{"type": "string",
+                     "enum": ["set", ["skb", "drv"]]}'>
+        <p>
+          Specifies the operational mode of the XDP program.
+          If "drv", the XDP program is loaded into the device driver with
+          zero-copy RX and TX enabled. This mode requires device driver with
+          AF_XDP support and has the best performance.
+          If "skb", the XDP program is using generic XDP mode in kernel with
+          extra data copying between userspace and kernel. No device driver
+          support is needed. Note that this is afxdp netdev type only.
+          Defaults to "skb" mode.
+        </p>
+      </column>
+
       <column name="options" key="vhost-server-path"
               type='{"type": "string"}'>
         <p>

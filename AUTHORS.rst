@@ -157,6 +157,7 @@ Guolin Yang                        gyang@vmware.com
 Guru Chaitanya Perakam             gperakam@Brocade.com
 Gurucharan Shetty                  guru@ovn.org
 Han Zhou                           zhouhan@gmail.com
+Harry Van Haaren                   harry.van.haaren@intel.com
 Henry Mai
 Hao Zheng
 Helmut Schaa                       helmut.schaa@googlemail.com
@@ -259,6 +260,7 @@ Maxime Coquelin                    maxime.coquelin@redhat.com
 Mehak Mahajan
 Michael Arnaldi                    arnaldimichael@gmail.com
 Michal Weglicki                    michalx.weglicki@intel.com
+Michele Baldessari                 michele@acksyn.org
 Mickey Spiegel                     mickeys.dev@gmail.com
 Miguel Angel Ajo                   majopela@redhat.com
 Mijo Safradin                      mijo@linux.vnet.ibm.com

@@ -214,20 +214,19 @@ x2nrealloc(void *p, size_t *n, size_t s)
     return xrealloc(p, *n * s);
 }
 
-/* Allocates and returns 'size' bytes of memory aligned to a cache line and in
- * dedicated cache lines.  That is, the memory block returned will not share a
- * cache line with other data, avoiding "false sharing".
+/* Allocates and returns 'size' bytes of memory aligned to 'alignment' bytes.
+ * 'alignment' must be a power of two and a multiple of sizeof(void *).
  *
- * Use free_cacheline() to free the returned memory block. */
+ * Use free_size_align() to free the returned memory block. */
 void *
-xmalloc_cacheline(size_t size)
+xmalloc_size_align(size_t size, size_t alignment)
 {
 #ifdef HAVE_POSIX_MEMALIGN
     void *p;
     int error;
 
     COVERAGE_INC(util_xalloc);
-    error = posix_memalign(&p, CACHE_LINE_SIZE, size ? size : 1);
+    error = posix_memalign(&p, alignment, size ? size : 1);
     if (error != 0) {
         out_of_memory();
     }
@@ -235,16 +234,16 @@ xmalloc_cacheline(size_t size)
 #else
     /* Allocate room for:
      *
-     *     - Header padding: Up to CACHE_LINE_SIZE - 1 bytes, to allow the
-     *       pointer to be aligned exactly sizeof(void *) bytes before the
-     *       beginning of a cache line.
+     *     - Header padding: Up to alignment - 1 bytes, to allow the
+     *       pointer 'q' to be aligned exactly sizeof(void *) bytes before the
+     *       beginning of the alignment.
      *
      *     - Pointer: A pointer to the start of the header padding, to allow us
      *       to free() the block later.
      *
      *     - User data: 'size' bytes.
      *
-     *     - Trailer padding: Enough to bring the user data up to a cache line
+     *     - Trailer padding: Enough to bring the user data up to a alignment
      *       multiple.
      *
      * +---------------+---------+------------------------+---------+
@@ -255,16 +254,53 @@ xmalloc_cacheline(size_t size)
      * p               q         r
      *
      */
-    void *p = xmalloc((CACHE_LINE_SIZE - 1)
-                      + sizeof(void *)
-                      + ROUND_UP(size, CACHE_LINE_SIZE));
-    bool runt = PAD_SIZE((uintptr_t) p, CACHE_LINE_SIZE) < sizeof(void *);
-    void *r = (void *) ROUND_UP((uintptr_t) p + (runt ? CACHE_LINE_SIZE : 0),
-                                CACHE_LINE_SIZE);
-    void **q = (void **) r - 1;
+    void *p, *r, **q;
+    bool runt;
+
+    if (!IS_POW2(alignment) || (alignment % sizeof(void *) != 0)) {
+        ovs_abort(0, "Invalid alignment");
+    }
+
+    p = xmalloc((alignment - 1)
+                + sizeof(void *)
+                + ROUND_UP(size, alignment));
+
+    runt = PAD_SIZE((uintptr_t) p, alignment) < sizeof(void *);
+    /* When the padding size < sizeof(void*), we don't have enough room for
+     * pointer 'q'. As a reuslt, need to move 'r' to the next alignment.
+     * So ROUND_UP when xmalloc above, and ROUND_UP again when calculate 'r'
+     * below.
+     */
+    r = (void *) ROUND_UP((uintptr_t) p + (runt ? alignment : 0), alignment);
+    q = (void **) r - 1;
     *q = p;
+
     return r;
 #endif
+}
+
+void
+free_size_align(void *p)
+{
+#ifdef HAVE_POSIX_MEMALIGN
+    free(p);
+#else
+    if (p) {
+        void **q = (void **) p - 1;
+        free(*q);
+    }
+#endif
+}
+
+/* Allocates and returns 'size' bytes of memory aligned to a cache line and in
+ * dedicated cache lines.  That is, the memory block returned will not share a
+ * cache line with other data, avoiding "false sharing".
+ *
+ * Use free_cacheline() to free the returned memory block. */
+void *
+xmalloc_cacheline(size_t size)
+{
+    return xmalloc_size_align(size, CACHE_LINE_SIZE);
 }
 
 /* Like xmalloc_cacheline() but clears the allocated memory to all zero
@@ -282,14 +318,19 @@ xzalloc_cacheline(size_t size)
 void
 free_cacheline(void *p)
 {
-#ifdef HAVE_POSIX_MEMALIGN
-    free(p);
-#else
-    if (p) {
-        void **q = (void **) p - 1;
-        free(*q);
-    }
-#endif
+    free_size_align(p);
+}
+
+void *
+xmalloc_pagealign(size_t size)
+{
+    return xmalloc_size_align(size, get_page_size());
+}
+
+void
+free_pagealign(void *p)
+{
+    free_size_align(p);
 }
 
 char *

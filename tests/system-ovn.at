@@ -1542,3 +1542,122 @@ as
 OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
 /connection dropped.*/d"])
 AT_CLEANUP
+
+AT_SETUP([ovn -- 2 LSs IGMP])
+AT_KEYWORDS([ovnigmp])
+
+ovn_start
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-int])
+
+# Set external-ids in br-int needed for ovn-controller
+ovs-vsctl \
+        -- set Open_vSwitch . external-ids:system-id=hv1 \
+        -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
+        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
+        -- set Open_vSwitch . external-ids:ovn-encap-ip=169.0.0.1 \
+        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
+
+# Start ovn-controller
+start_daemon ovn-controller
+
+# Logical network:
+# Two independent logical switches (sw1 and sw2).
+# sw1:
+#   - subnet 10.0.0.0/8
+#   - 2 ports (sw1-p1 - sw1-p2)
+# sw2:
+#   - subnet 20.0.0.0/8
+#   - 2 port (sw2-p1 - sw2-p2)
+#   - IGMP Querier from 20.0.0.254
+
+ovn-nbctl ls-add sw1
+ovn-nbctl ls-add sw2
+
+for i in `seq 1 2`
+do
+    ADD_NAMESPACES(sw1-p$i)
+    ADD_VETH(sw1-p$i, sw1-p$i, br-int, "10.0.0.$i/24", "00:00:00:00:01:0$i", \
+            "10.0.0.254")
+    ovn-nbctl lsp-add sw1 sw1-p$i \
+        -- lsp-set-addresses sw1-p$i "00:00:00:00:01:0$i 10.0.0.$i"
+done
+
+for i in `seq 1 2`
+do
+    ADD_NAMESPACES(sw2-p$i)
+    ADD_VETH(sw2-p$i, sw2-p$i, br-int, "20.0.0.$i/24", "00:00:00:00:02:0$i", \
+            "20.0.0.254")
+    ovn-nbctl lsp-add sw2 sw2-p$i \
+        -- lsp-set-addresses sw2-p$i "00:00:00:00:02:0$i 20.0.0.$i"
+done
+
+# Enable IGMP snooping on sw1.
+ovn-nbctl set Logical_Switch sw1 other_config:mcast_querier="false"
+ovn-nbctl set Logical_Switch sw1 other_config:mcast_snoop="true"
+
+# Inject IGMP Join for 239.0.1.68 on sw1-p1.
+NS_CHECK_EXEC([sw1-p1], [ip addr add dev sw1-p1 239.0.1.68/32 autojoin], [0])
+
+# Inject IGMP Join for 239.0.1.68 on sw1-p2
+NS_CHECK_EXEC([sw1-p2], [ip addr add dev sw1-p2 239.0.1.68/32 autojoin], [0])
+
+# Check that the IGMP Group is learned.
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    ports=`ovn-sbctl find IGMP_Group | grep ports | cut -f 2 -d ":" | wc -w`
+    test "${total_entries}" = "1"
+    test "${ports}" = "2"
+])
+
+# Inject IGMP Leave for 239.0.1.68 on sw1-p2.
+NS_CHECK_EXEC([sw1-p2], [ip addr del dev sw1-p2 239.0.1.68/32], [0])
+
+# Check that only one port is left in the group.
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    ports=`ovn-sbctl find IGMP_Group | grep ports | cut -f 2 -d ":" | wc -w`
+    test "${total_entries}" = "1"
+    test "${ports}" = "1"
+])
+
+# Flush IGMP groups.
+ovn-sbctl ip-multicast-flush sw1
+ovn-nbctl --wait=hv -t 3 sync
+OVS_WAIT_UNTIL([
+    total_entries=`ovn-sbctl find IGMP_Group | grep "239.0.1.68" | wc -l`
+    test "${total_entries}" = "0"
+])
+
+# Enable IGMP snooping and querier on sw2 and set query interval to minimum.
+ovn-nbctl set Logical_Switch sw2 \
+    other_config:mcast_snoop="true" \
+    other_config:mcast_querier="true" \
+    other_config:mcast_query_interval=1 \
+    other_config:mcast_eth_src="00:00:00:00:02:fe" \
+    other_config:mcast_ip4_src="20.0.0.254"
+
+# Check that queries are generated.
+NS_CHECK_EXEC([sw2-p1], [tcpdump -n -c 2 -i sw2-p1 igmp > sw2-p1.pcap &])
+
+OVS_WAIT_UNTIL([
+    total_queries=`cat sw2-p1.pcap | grep "igmp query" | wc -l`
+    test "${total_queries}" = "2"
+])
+
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as
+OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
+/connection dropped.*/d"])
+AT_CLEANUP

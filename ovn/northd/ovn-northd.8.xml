@@ -2428,7 +2428,8 @@ nd_ns {
         <p>
           If the NAT rule cannot be handled in a distributed manner, then
           the flow above is only programmed on the
-          <code>redirect-chassis</code>.
+          <code>redirect-chassis</code> increasing flow priority by 128 in
+          order to be run first
         </p>
 
         <p>

@@ -179,7 +179,7 @@ m4_define([COMMON_PATCH_HEADER], [dnl
 
 
 AT_SETUP([checkpatch - parenthesized constructs])
-for ctr in 'if' 'while' 'switch'; do
+for ctr in 'if' 'while' 'switch' 'HMAP_FOR_EACH' 'BITMAP_FOR_EACH_1'; do
 try_checkpatch \
    "COMMON_PATCH_HEADER
     +     $ctr (first_run) {

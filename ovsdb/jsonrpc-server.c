@@ -365,7 +365,7 @@ ovsdb_jsonrpc_server_set_read_only(struct ovsdb_jsonrpc_server *svr,
 {
     if (svr->read_only != read_only) {
         svr->read_only = read_only;
-        ovsdb_jsonrpc_server_reconnect(svr, false,
+        ovsdb_jsonrpc_server_reconnect(svr, true,
                                        xstrdup(read_only
                                                ? "making server read-only"
                                                : "making server read/write"));

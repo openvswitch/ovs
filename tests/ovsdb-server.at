@@ -1203,8 +1203,8 @@ for i in `seq 1 $n_iterations`; do
     trigger_big_update $i
 done
 AT_CHECK([ovs-appctl -t ovsdb-client ovsdb-client/unblock])
-OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client.out])
-OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client-nonblock.out])
+OVS_WAIT_UNTIL([grep "xyzzy$counter" ovsdb-client.out])
+OVS_WAIT_UNTIL([grep "xyzzy$counter" ovsdb-client-nonblock.out])
 OVS_APP_EXIT_AND_WAIT([ovsdb-client])
 AT_CHECK([kill `cat nonblock.pid`])
 
@@ -1221,7 +1221,7 @@ echo "logged_updates=$logged_updates (expected less than $logged_nonblock_update
 AT_CHECK([test $logged_nonblock_updates -le $n_updates])
 AT_CHECK([test $logged_updates -lt $logged_nonblock_updates])
 AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
-  ["xyzzy$counter"
+  [xyzzy$counter
 ])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP

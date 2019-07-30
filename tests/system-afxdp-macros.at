@@ -1,0 +1,39 @@
+# Add port to ovs bridge by using afxdp mode.
+# This will use generic XDP support in the veth driver.
+m4_define([ADD_VETH],
+    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1 || return 77])
+      CONFIGURE_VETH_OFFLOADS([$1])
+      AT_CHECK([ip link set $1 netns $2])
+      AT_CHECK([ip link set dev ovs-$1 up])
+      AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
+                set interface ovs-$1 external-ids:iface-id="$1" type="afxdp"])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
+      NS_CHECK_EXEC([$2], [ip link set dev $1 up])
+      if test -n "$5"; then
+        NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
+      fi
+      if test -n "$6"; then
+        NS_CHECK_EXEC([$2], [ip route add default via $6])
+      fi
+      on_exit 'ip link del ovs-$1'
+    ]
+)
+
+m4_define([OVS_CHECK_8021AD],
+    [AT_SKIP_IF([:])])
+
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# Disable TX offloads and VLAN offloads for veths used in AF_XDP.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])
+     AT_CHECK([ethtool -K $1 txvlan off], [0], [ignore], [ignore])
+    ]
+)
+
+# OVS_START_L7([namespace], [protocol])
+#
+# AF_XDP doesn't work with TCP over virtual interfaces for now.
+#
+m4_define([OVS_START_L7],
+   [AT_SKIP_IF([:])])

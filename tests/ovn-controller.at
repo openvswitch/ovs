@@ -187,6 +187,15 @@ OVS_WAIT_UNTIL([
     test "${expected_iface_types}" = "${chassis_iface_types}"
 ])
 
+# Change the value of external_ids:system-id and make sure it's mirrored
+# in the Chassis record in the OVN_Southbound database.
+sysid=${sysid}-foo
+ovs-vsctl set Open_vSwitch . external-ids:system-id="${sysid}"
+OVS_WAIT_UNTIL([
+    chassis_id=$(ovn-sbctl get Chassis "${sysid}" name)
+    test "${sysid}" = "${chassis_id}"
+])
+
 # Gracefully terminate daemons
 OVN_CLEANUP_SBOX([hv])
 OVN_CLEANUP_VSWITCH([main])
