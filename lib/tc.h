@@ -155,6 +155,7 @@ enum tc_action_type {
     TC_ACT_VLAN_PUSH,
     TC_ACT_MPLS_POP,
     TC_ACT_MPLS_PUSH,
+    TC_ACT_MPLS_SET,
 };
 
 struct tc_action {

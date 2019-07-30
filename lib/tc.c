@@ -1303,6 +1303,25 @@ nl_parse_act_mpls(struct nlattr *options, struct tc_flower *flower)
         }
         action->type = TC_ACT_MPLS_PUSH;
         break;
+    case TCA_MPLS_ACT_MODIFY:
+        mpls_label = mpls_attrs[TCA_MPLS_LABEL];
+        if (mpls_label) {
+            action->mpls.label = nl_attr_get_u32(mpls_label);
+        }
+        mpls_tc = mpls_attrs[TCA_MPLS_TC];
+        if (mpls_tc) {
+            action->mpls.tc = nl_attr_get_u8(mpls_tc);
+        }
+        mpls_ttl = mpls_attrs[TCA_MPLS_TTL];
+        if (mpls_ttl) {
+            action->mpls.ttl = nl_attr_get_u8(mpls_ttl);
+        }
+        mpls_bos = mpls_attrs[TCA_MPLS_BOS];
+        if (mpls_bos) {
+            action->mpls.bos = nl_attr_get_u8(mpls_bos);
+        }
+        action->type = TC_ACT_MPLS_SET;
+        break;
     default:
         VLOG_ERR_RL(&error_rl, "unknown mpls action: %d, %d",
                     m->action, m->m_action);
@@ -1765,6 +1784,27 @@ nl_msg_put_act_push_mpls(struct ofpbuf *request, ovs_be16 proto,
 }
 
 static void
+nl_msg_put_act_set_mpls(struct ofpbuf *request, uint32_t label, uint8_t tc,
+                        uint8_t ttl, uint8_t bos)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "mpls");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS | NLA_F_NESTED);
+    {
+        struct tc_mpls parm = { .action = TC_ACT_PIPE,
+                                .m_action = TCA_MPLS_ACT_MODIFY };
+
+        nl_msg_put_unspec(request, TCA_MPLS_PARMS, &parm, sizeof parm);
+        nl_msg_put_u32(request, TCA_MPLS_LABEL, label);
+        nl_msg_put_u8(request, TCA_MPLS_TC, tc);
+        nl_msg_put_u8(request, TCA_MPLS_TTL, ttl);
+        nl_msg_put_u8(request, TCA_MPLS_BOS, bos);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
 nl_msg_put_act_tunnel_key_release(struct ofpbuf *request)
 {
     size_t offset;
@@ -2152,6 +2192,14 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 nl_msg_put_act_push_mpls(request, action->mpls.proto,
                                          action->mpls.label, action->mpls.tc,
                                          action->mpls.ttl, action->mpls.bos);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
+            case TC_ACT_MPLS_SET: {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_set_mpls(request, action->mpls.label,
+                                        action->mpls.tc, action->mpls.ttl,
+                                        action->mpls.bos);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
