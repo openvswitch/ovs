@@ -486,6 +486,10 @@ chassis_get_record(struct ovsdb_idl_txn *ovnsb_idl_txn,
         if (!chassis_rec) {
             VLOG_WARN("Could not find Chassis : stored (%s) ovs (%s)",
                       chassis_info_id(&chassis_state), chassis_id);
+            if (ovnsb_idl_txn) {
+                /* Recreate the chassis record.  */
+                chassis_rec = sbrec_chassis_insert(ovnsb_idl_txn);
+            }
         }
     } else {
         chassis_rec =
