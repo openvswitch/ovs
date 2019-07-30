@@ -645,6 +645,11 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                        | VLAN_CFI);
             }
             break;
+            case TC_ACT_MPLS_POP: {
+                nl_msg_put_be16(buf, OVS_ACTION_ATTR_POP_MPLS,
+                                action->mpls.proto);
+            }
+            break;
             case TC_ACT_PEDIT: {
                 parse_flower_rewrite_to_netlink_action(buf, flower);
             }
@@ -1327,6 +1332,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
             action->type = TC_ACT_VLAN_POP;
+            flower.action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_MPLS) {
+            action->mpls.proto = nl_attr_get_be16(nla);
+            action->type = TC_ACT_MPLS_POP;
             flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET) {
             const struct nlattr *set = nl_attr_get(nla);

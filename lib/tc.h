@@ -153,6 +153,7 @@ enum tc_action_type {
     TC_ACT_PEDIT,
     TC_ACT_VLAN_POP,
     TC_ACT_VLAN_PUSH,
+    TC_ACT_MPLS_POP,
 };
 
 struct tc_action {
@@ -167,6 +168,10 @@ struct tc_action {
             uint16_t vlan_push_id;
             uint8_t vlan_push_prio;
         } vlan;
+
+        struct {
+            ovs_be16 proto;
+        } mpls;
 
         struct {
             bool id_present;
