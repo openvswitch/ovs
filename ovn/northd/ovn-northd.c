@@ -52,6 +52,9 @@
 VLOG_DEFINE_THIS_MODULE(ovn_northd);
 
 static unixctl_cb_func ovn_northd_exit;
+static unixctl_cb_func ovn_northd_pause;
+static unixctl_cb_func ovn_northd_resume;
+static unixctl_cb_func ovn_northd_is_paused;
 
 struct northd_context {
     struct ovsdb_idl *ovnnb_idl;
@@ -9332,6 +9335,7 @@ main(int argc, char *argv[])
     struct unixctl_server *unixctl;
     int retval;
     bool exiting;
+    bool paused;
 
     fatal_ignore_sigpipe();
     ovs_cmdl_proctitle_init(argc, argv);
@@ -9346,6 +9350,10 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
     unixctl_command_register("exit", "", 0, 0, ovn_northd_exit, &exiting);
+    unixctl_command_register("pause", "", 0, 0, ovn_northd_pause, &paused);
+    unixctl_command_register("resume", "", 0, 0, ovn_northd_resume, &paused);
+    unixctl_command_register("is-paused", "", 0, 0, ovn_northd_is_paused,
+                             &paused);
 
     daemonize_complete();
 
@@ -9536,34 +9544,51 @@ main(int argc, char *argv[])
 
     /* Main loop. */
     exiting = false;
+    paused = false;
     while (!exiting) {
-        struct northd_context ctx = {
-            .ovnnb_idl = ovnnb_idl_loop.idl,
-            .ovnnb_txn = ovsdb_idl_loop_run(&ovnnb_idl_loop),
-            .ovnsb_idl = ovnsb_idl_loop.idl,
-            .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
-            .sbrec_ha_chassis_grp_by_name = sbrec_ha_chassis_grp_by_name,
-            .sbrec_mcast_group_by_name_dp = sbrec_mcast_group_by_name_dp,
-            .sbrec_ip_mcast_by_dp = sbrec_ip_mcast_by_dp,
-        };
+        if (!paused) {
+            struct northd_context ctx = {
+                .ovnnb_idl = ovnnb_idl_loop.idl,
+                .ovnnb_txn = ovsdb_idl_loop_run(&ovnnb_idl_loop),
+                .ovnsb_idl = ovnsb_idl_loop.idl,
+                .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
+                .sbrec_ha_chassis_grp_by_name = sbrec_ha_chassis_grp_by_name,
+                .sbrec_mcast_group_by_name_dp = sbrec_mcast_group_by_name_dp,
+                .sbrec_ip_mcast_by_dp = sbrec_ip_mcast_by_dp,
+            };
 
-        if (!had_lock && ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
-            VLOG_INFO("ovn-northd lock acquired. "
-                      "This ovn-northd instance is now active.");
-            had_lock = true;
-        } else if (had_lock && !ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
-            VLOG_INFO("ovn-northd lock lost. "
-                      "This ovn-northd instance is now on standby.");
-            had_lock = false;
-        }
-
-        if (ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
-            ovn_db_run(&ctx, sbrec_chassis_by_name, &ovnsb_idl_loop);
-            if (ctx.ovnsb_txn) {
-                check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
-                check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
-                check_and_update_rbac(&ctx);
+            if (!had_lock && ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+                VLOG_INFO("ovn-northd lock acquired. "
+                        "This ovn-northd instance is now active.");
+                had_lock = true;
+            } else if (had_lock && !ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+                VLOG_INFO("ovn-northd lock lost. "
+                        "This ovn-northd instance is now on standby.");
+                had_lock = false;
             }
+
+            if (ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+                ovn_db_run(&ctx, sbrec_chassis_by_name, &ovnsb_idl_loop);
+                if (ctx.ovnsb_txn) {
+                    check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
+                    check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
+                    check_and_update_rbac(&ctx);
+                }
+            }
+
+            ovsdb_idl_loop_commit_and_wait(&ovnnb_idl_loop);
+            ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        } else {
+            /* ovn-northd is paused
+             *    - we still want to handle any db updates and update the
+             *      local IDL. Otherwise, when it is resumed, the local IDL
+             *      copy will be out of sync.
+             *    - but we don't want to create any txns.
+             * */
+            ovsdb_idl_run(ovnnb_idl_loop.idl);
+            ovsdb_idl_run(ovnsb_idl_loop.idl);
+            ovsdb_idl_wait(ovnnb_idl_loop.idl);
+            ovsdb_idl_wait(ovnsb_idl_loop.idl);
         }
 
         unixctl_server_run(unixctl);
@@ -9571,8 +9596,6 @@ main(int argc, char *argv[])
         if (exiting) {
             poll_immediate_wake();
         }
-        ovsdb_idl_loop_commit_and_wait(&ovnnb_idl_loop);
-        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
 
         poll_block();
         if (should_service_stop()) {
@@ -9596,4 +9619,36 @@ ovn_northd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
     *exiting = true;
 
     unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovn_northd_pause(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[] OVS_UNUSED, void *pause_)
+{
+    bool *pause = pause_;
+    *pause = true;
+
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovn_northd_resume(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                  const char *argv[] OVS_UNUSED, void *pause_)
+{
+    bool *pause = pause_;
+    *pause = false;
+
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovn_northd_is_paused(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *paused_)
+{
+    bool *paused = paused_;
+    if (*paused) {
+        unixctl_command_reply(conn, "true");
+    } else {
+        unixctl_command_reply(conn, "false");
+    }
 }

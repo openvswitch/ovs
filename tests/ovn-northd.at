@@ -898,3 +898,41 @@ as northd
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- ovn-northd pause and resume])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+AT_CHECK([test xfalse = x`as northd ovs-appctl -t ovn-northd is-paused`])
+
+ovn-nbctl ls-add sw0
+
+OVS_WAIT_UNTIL([
+    ovn-sbctl lflow-list sw0
+    test 0 = $?])
+
+ovn-nbctl ls-del sw0
+OVS_WAIT_UNTIL([
+    ovn-sbctl lflow-list sw0
+    test 1 = $?])
+
+# Now pause the ovn-northd
+as northd ovs-appctl -t ovn-northd pause
+AT_CHECK([test xtrue = x`as northd ovs-appctl -t ovn-northd is-paused`])
+
+ovn-nbctl ls-add sw0
+
+# There should be no logical flows for sw0 datapath.
+OVS_WAIT_UNTIL([
+    ovn-sbctl lflow-list sw0
+    test 1 = $?])
+
+# Now resume ovn-northd
+as northd ovs-appctl -t ovn-northd resume
+AT_CHECK([test xfalse = x`as northd ovs-appctl -t ovn-northd is-paused`])
+
+OVS_WAIT_UNTIL([
+    ovn-sbctl lflow-list sw0
+    test 0 = $?])
+
+AT_CLEANUP

@@ -70,6 +70,23 @@
       <dd>
         Causes <code>ovn-northd</code> to gracefully terminate.
       </dd>
+
+      <dt><code>pause</code></dt>
+      <dd>
+        Pauses the ovn-northd operation from processing any Northbound and
+        Southbound database changes.
+      </dd>
+
+      <dt><code>resume</code></dt>
+      <dd>
+        Resumes the ovn-northd operation to process Northbound and
+        Southbound database contents and generate logical flows.
+      </dd>
+
+      <dt><code>is-paused</code></dt>
+      <dd>
+        Returns "true" if ovn-northd is currently paused, "false" otherwise.
+      </dd>
       </dl>
     </p>
 
@@ -80,6 +97,37 @@
       If multiple instances of <code>ovn-northd</code> are running and the
       active <code>ovn-northd</code> fails, one of the hot standby instances
       of <code>ovn-northd</code> will automatically take over.
+    </p>
+
+    <h2> Active-Standby with multiple OVN DB servers</h2>
+    <p>
+      You may run multiple OVN DB servers in an OVN deployment with:
+      <ul>
+        <li>
+          OVN DB servers deployed in active/passive mode with one active
+          and multiple passive ovsdb-servers.
+        </li>
+
+        <li>
+          <code>ovn-northd</code> also deployed on all these nodes,
+          using unix ctl sockets to connect to the local OVN DB servers.
+        </li>
+      </ul>
+    </p>
+
+    <p>
+      In such deployments, the ovn-northds on the passive nodes will process
+      the DB changes and compute logical flows to be thrown out later,
+      because write transactions are not allowed by the passive ovsdb-servers.
+      It results in unnecessary CPU usage.
+    </p>
+
+    <p>
+      With the help of runtime management command <code>pause</code>, you can
+      pause <code>ovn-northd</code> on these nodes. When a passive node
+      becomes master, you can use the runtime management command
+      <code>resume</code> to resume the <code>ovn-northd</code> to process the
+      DB changes.
     </p>
 
     <h1>Logical Flow Table Structure</h1>
