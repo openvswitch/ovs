@@ -273,9 +273,22 @@ static void pinctrl_ip_mcast_handle_igmp(
 
 static bool may_inject_pkts(void);
 
+static void init_put_vport_bindings(void);
+static void destroy_put_vport_bindings(void);
+static void run_put_vport_bindings(
+    struct ovsdb_idl_txn *ovnsb_idl_txn,
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+    struct ovsdb_idl_index *sbrec_port_binding_by_key,
+    const struct sbrec_chassis *chassis)
+    OVS_REQUIRES(pinctrl_mutex);
+static void wait_put_vport_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn);
+static void pinctrl_handle_bind_vport(const struct flow *md,
+                                      struct ofpbuf *userdata);
+
 COVERAGE_DEFINE(pinctrl_drop_put_mac_binding);
 COVERAGE_DEFINE(pinctrl_drop_buffered_packets_map);
 COVERAGE_DEFINE(pinctrl_drop_controller_event);
+COVERAGE_DEFINE(pinctrl_drop_put_vport_binding);
 
 struct empty_lb_backends_event {
     struct hmap_node hmap_node;
@@ -432,6 +445,7 @@ pinctrl_init(void)
     init_buffered_packets_map();
     init_event_table();
     ip_mcast_snoop_init();
+    init_put_vport_bindings();
     pinctrl.br_int_name = NULL;
     pinctrl_handler_seq = seq_create();
     pinctrl_main_seq = seq_create();
@@ -1957,6 +1971,12 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
         ovs_mutex_unlock(&pinctrl_mutex);
         break;
 
+    case ACTION_OPCODE_BIND_VPORT:
+        ovs_mutex_lock(&pinctrl_mutex);
+        pinctrl_handle_bind_vport(&pin.flow_metadata.flow, &userdata);
+        ovs_mutex_unlock(&pinctrl_mutex);
+        break;
+
     default:
         VLOG_WARN_RL(&rl, "unrecognized packet-in opcode %"PRIu32,
                      ntohl(ah->opcode));
@@ -2135,6 +2155,8 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     run_put_mac_bindings(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
                          sbrec_port_binding_by_key,
                          sbrec_mac_binding_by_lport_ip);
+    run_put_vport_bindings(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
+                           sbrec_port_binding_by_key, chassis);
     send_garp_prepare(sbrec_port_binding_by_datapath,
                       sbrec_port_binding_by_name, br_int, chassis,
                       local_datapaths, active_tunnels);
@@ -2481,6 +2503,7 @@ pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
     wait_put_mac_bindings(ovnsb_idl_txn);
     wait_controller_event(ovnsb_idl_txn);
+    wait_put_vport_bindings(ovnsb_idl_txn);
     int64_t new_seq = seq_read(pinctrl_main_seq);
     seq_wait(pinctrl_main_seq, new_seq);
 }
@@ -2498,6 +2521,7 @@ pinctrl_destroy(void)
     destroy_buffered_packets_map();
     event_table_destroy();
     destroy_put_mac_bindings();
+    destroy_put_vport_bindings();
     destroy_dns_cache();
     ip_mcast_snoop_destroy();
     seq_destroy(pinctrl_main_seq);
@@ -4340,4 +4364,154 @@ pinctrl_handle_event(struct ofpbuf *userdata)
     default:
         return;
     }
+}
+
+struct put_vport_binding {
+    struct hmap_node hmap_node;
+
+    /* Key and value. */
+    uint32_t dp_key;
+    uint32_t vport_key;
+
+    uint32_t vport_parent_key;
+};
+
+/* Contains "struct put_vport_binding"s. */
+static struct hmap put_vport_bindings;
+
+static void
+init_put_vport_bindings(void)
+{
+    hmap_init(&put_vport_bindings);
+}
+
+static void
+flush_put_vport_bindings(void)
+{
+    struct put_vport_binding *vport_b;
+    HMAP_FOR_EACH_POP (vport_b, hmap_node, &put_vport_bindings) {
+        free(vport_b);
+    }
+}
+
+static void
+destroy_put_vport_bindings(void)
+{
+    flush_put_vport_bindings();
+    hmap_destroy(&put_vport_bindings);
+}
+
+static void
+wait_put_vport_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn)
+{
+    if (ovnsb_idl_txn && !hmap_is_empty(&put_vport_bindings)) {
+        poll_immediate_wake();
+    }
+}
+
+static struct put_vport_binding *
+pinctrl_find_put_vport_binding(uint32_t dp_key, uint32_t vport_key,
+                               uint32_t hash)
+{
+    struct put_vport_binding *vpb;
+    HMAP_FOR_EACH_WITH_HASH (vpb, hmap_node, hash, &put_vport_bindings) {
+        if (vpb->dp_key == dp_key && vpb->vport_key == vport_key) {
+            return vpb;
+        }
+    }
+    return NULL;
+}
+
+static void
+run_put_vport_binding(struct ovsdb_idl_txn *ovnsb_idl_txn OVS_UNUSED,
+                      struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                      struct ovsdb_idl_index *sbrec_port_binding_by_key,
+                      const struct sbrec_chassis *chassis,
+                      const struct put_vport_binding *vpb)
+{
+    /* Convert logical datapath and logical port key into lport. */
+    const struct sbrec_port_binding *pb = lport_lookup_by_key(
+        sbrec_datapath_binding_by_key, sbrec_port_binding_by_key,
+        vpb->dp_key, vpb->vport_key);
+    if (!pb) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        VLOG_WARN_RL(&rl, "unknown logical port with datapath %"PRIu32" "
+                     "and port %"PRIu32, vpb->dp_key, vpb->vport_key);
+        return;
+    }
+
+    /* pinctrl module updates the port binding only for type 'virtual'. */
+    if (!strcmp(pb->type, "virtual")) {
+        const struct sbrec_port_binding *parent = lport_lookup_by_key(
+        sbrec_datapath_binding_by_key, sbrec_port_binding_by_key,
+        vpb->dp_key, vpb->vport_parent_key);
+        if (parent) {
+            VLOG_INFO("Claiming virtual lport %s for this chassis "
+                       "with the virtual parent %s",
+                       pb->logical_port, parent->logical_port);
+            sbrec_port_binding_set_chassis(pb, chassis);
+            sbrec_port_binding_set_virtual_parent(pb, parent->logical_port);
+        }
+    }
+}
+
+/* Called by pinctrl_run(). Runs with in the main ovn-controller
+ * thread context. */
+static void
+run_put_vport_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn,
+                      struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                      struct ovsdb_idl_index *sbrec_port_binding_by_key,
+                      const struct sbrec_chassis *chassis)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    if (!ovnsb_idl_txn) {
+        return;
+    }
+
+    const struct put_vport_binding *vpb;
+    HMAP_FOR_EACH (vpb, hmap_node, &put_vport_bindings) {
+        run_put_vport_binding(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
+                              sbrec_port_binding_by_key, chassis, vpb);
+    }
+
+    flush_put_vport_bindings();
+}
+
+/* Called with in the pinctrl_handler thread context. */
+static void
+pinctrl_handle_bind_vport(
+    const struct flow *md, struct ofpbuf *userdata)
+    OVS_REQUIRES(pinctrl_mutex)
+{
+    /* Get the datapath key from the packet metadata. */
+    uint32_t dp_key = ntohll(md->metadata);
+    uint32_t vport_parent_key = md->regs[MFF_LOG_INPORT - MFF_REG0];
+
+    /* Get the virtual port key from the userdata buffer. */
+    uint32_t *vport_key = ofpbuf_try_pull(userdata, sizeof *vport_key);
+
+    if (!vport_key) {
+        return;
+    }
+
+    uint32_t hash = hash_2words(dp_key, *vport_key);
+
+    struct put_vport_binding *vpb
+        = pinctrl_find_put_vport_binding(dp_key, *vport_key, hash);
+    if (!vpb) {
+        if (hmap_count(&put_vport_bindings) >= 1000) {
+            COVERAGE_INC(pinctrl_drop_put_vport_binding);
+            return;
+        }
+
+        vpb = xmalloc(sizeof *vpb);
+        hmap_insert(&put_vport_bindings, &vpb->hmap_node, hash);
+    }
+
+    vpb->dp_key = dp_key;
+    vpb->vport_key = *vport_key;
+    vpb->vport_parent_key = vport_parent_key;
+
+    notify_pinctrl_main();
 }

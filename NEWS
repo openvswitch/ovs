@@ -60,6 +60,7 @@ v2.12.0 - xx xxx xxxx
        logical groups which results in tunnels only been formed between
        members of the same transport zone(s).
      * Support for IGMP Snooping and IGMP Querier.
+     * Support for new logical switch port type - 'virtual'.
    - New QoS type "linux-netem" on Linux.
    - Added support for TLS Server Name Indication (SNI).
    - Linux datapath:

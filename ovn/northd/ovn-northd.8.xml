@@ -521,6 +521,34 @@
 
       <li>
         <p>
+          If inport <code>V</code> is of type <code>virtual</code> adds a
+          priority-100 logical flow for each <var>P</var> configured in the
+          <ref table="Logical_Switch_Port" column="options:virtual-parents"/>
+          column with the match
+        </p>
+        <pre>
+<code>inport == <var>P</var> &amp;&amp; !is_chassis_resident(<var>V</var>) &amp;&amp; ((arp.op == 1 &amp;&amp; arp.spa == <var>VIP</var> &amp;&amp; arp.tpa == <var>VIP</var>) || (arp.op == 2 &amp;&amp; arp.spa == <var>VIP</var>))</code>
+        </pre>
+
+        <p>
+          and applies the action
+        </p>
+        <pre>
+<code>bind_vport(<var>V</var>, inport);</code>
+        </pre>
+
+        <p>
+         and advances the packet to the next table.
+        </p>
+
+        <p>
+          Where <var>VIP</var> is the virtual ip configured in the column
+          <ref table="Logical_Switch_Port" column="options:virtual-ip"/>.
+        </p>
+      </li>
+
+      <li>
+        <p>
           Priority-50 flows that match ARP requests to each known IP address
           <var>A</var> of every logical switch port, and respond with ARP
           replies directly with corresponding Ethernet address <var>E</var>:
@@ -541,7 +569,8 @@ output;
 
         <p>
           These flows are omitted for logical ports (other than router ports or
-          <code>localport</code> ports) that are down.
+          <code>localport</code> ports) that are down and for logical ports of
+          type <code>virtual</code>.
         </p>
       </li>
 
@@ -588,7 +617,8 @@ nd_na_router {
 
         <p>
           These flows are omitted for logical ports (other than router ports or
-          <code>localport</code> ports) that are down.
+          <code>localport</code> ports) that are down and for logical ports of
+          type <code>virtual</code>.
         </p>
       </li>
 
@@ -2029,6 +2059,33 @@ next;
           priority-100 flow with match <code>outport === <var>P</var>
           &amp;&amp; reg0 == <var>A</var></code> has actions
           <code>eth.dst = <var>E</var>; next;</code>.
+        </p>
+
+        <p>
+          For each virtual ip <var>A</var> configured on a logical port
+          of type <code>virtual</code> and its virtual parent set in
+          its corresponding <ref db="OVN_Southbound" table="Port_Binding"/>
+          record and the virtual parent with the Ethernet address <var>E</var>
+          and the virtual ip is reachable via the router port <var>P</var>, a
+          priority-100 flow with match <code>outport === <var>P</var>
+          &amp;&amp; reg0 == <var>A</var></code> has actions
+          <code>eth.dst = <var>E</var>; next;</code>.
+        </p>
+
+        <p>
+          For each virtual ip <var>A</var> configured on a logical port
+          of type <code>virtual</code> and its virtual parent <code>not</code>
+          set in its corresponding
+          <ref db="OVN_Southbound" table="Port_Binding"/>
+          record and the virtual ip <var>A</var> is reachable via the
+          router port <var>P</var>, a
+          priority-100 flow with match <code>outport === <var>P</var>
+          &amp;&amp; reg0 == <var>A</var></code> has actions
+          <code>eth.dst = <var>00:00:00:00:00:00</var>; next;</code>.
+          This flow is added so that the ARP is always resolved for the
+          virtual ip <var>A</var> by generating ARP request and
+          <code>not</code> consulting the MAC_Binding table as it can have
+          incorrect value for the virtual ip <var>A</var>.
         </p>
 
         <p>

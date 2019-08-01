@@ -326,6 +326,7 @@ static const char *OVN_NB_LSP_TYPES[] = {
     "router",
     "vtep",
     "external",
+    "virtual",
 };
 
 bool

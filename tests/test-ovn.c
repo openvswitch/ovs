@@ -1253,6 +1253,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     simap_put(&ports, "eth0", 5);
     simap_put(&ports, "eth1", 6);
     simap_put(&ports, "LOCAL", ofp_to_u16(OFPP_LOCAL));
+    simap_put(&ports, "lsp1", 0x11);
 
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {

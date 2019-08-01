@@ -465,6 +465,31 @@
               </li>
             </ul>
           </dd>
+
+          <dt><code>virtual</code></dt>
+          <dd>
+            <p>
+              Represents a logical port which does not have an OVS
+              port in the integration bridge and has a virtual ip configured
+              in the <ref column="options:virtual-ip"/> column. This virtual ip
+              can move around between the logical ports configured in
+              the <ref column="options:virtual-parents"/> column.
+            </p>
+
+            <p>
+              One of the use case where <code>virtual</code>
+              ports can be used is.
+            </p>
+
+            <ul>
+              <li>
+                The <code>virtual ip</code> represents a load balancer vip
+                and the <code>virtual parents</code> provide load balancer
+                service in an active-standby setup with the active virtual
+                parent owning the <code>virtual ip</code>.
+              </li>
+            </ul>
+           </dd>
         </dl>
       </column>
     </group>
@@ -618,6 +643,26 @@
           interface, in bits.
         </column>
       </group>
+
+      <group title="Virtual port Options">
+        <p>
+          These options apply when <ref column="type"/> is
+          <code>virtual</code>.
+        </p>
+
+        <column name="options" key="virtual-ip">
+          This option represents the virtual IPv4 address.
+        </column>
+
+        <column name="options" key="virtual-parents">
+          This options represents a set of logical port names (with in the same
+          logical switch) which can own the <code>virtual ip</code> configured
+          in the <ref column="options:virtual-ip"/>. All these virtual parents
+          should add the <code>virtual ip</code> in the
+          <ref column="port_security"/> if port security addressed are enabled.
+        </column>
+      </group>
+
     </group>
 
     <group title="Containers">

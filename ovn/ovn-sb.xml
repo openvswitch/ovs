@@ -2017,6 +2017,24 @@ tcp.flags = RST;
           </p>
           <p><b>Prerequisite:</b> <code>igmp</code></p>
         </dd>
+
+        <dt><code>bind_vport(<var>V</var>, <var>P</var>);</code></dt>
+        <dd>
+          <p>
+            <b>Parameters</b>: logical port string field <var>V</var>
+            of type <code>virtual</code>, logical port string field
+            <var>P</var>.
+          </p>
+
+          <p>
+            Binds the virtual logical port <var>V</var> and sets the
+            <ref table="Port_Binding" column="chassis"/> column and
+            <ref table="Port_Binding" column="virtual_parent"/> of
+            the table <ref table="Port_Binding"/>.
+            <ref table="Port_Binding" column="virtual_parent"/> is
+            set to <var>P</var>.
+          </p>
+        </dd>
       </dl>
     </column>
 
@@ -2480,6 +2498,13 @@ tcp.flags = RST;
             the <code>outport</code> will be reset to the value of the
             distributed port.
           </dd>
+
+          <dt><code>virtual</code></dt>
+          <dd>
+            Represents a logical port with an <code>virtual ip</code>.
+            This <code>virtual ip</code> can be configured on a
+            logical port (which is refered as virtual parent).
+          </dd>
         </dl>
       </column>
     </group>
@@ -2716,6 +2741,27 @@ tcp.flags = RST;
           This column is used for a different purpose when <ref column="type"/>
           is <code>localnet</code> (see <code>Localnet Options</code>, above)
           or <code>l2gateway</code> (see <code>L2 Gateway Options</code>, above).
+        </p>
+      </column>
+    </group>
+
+    <group title="Virtual ports">
+      <column name="virtual_parent">
+        <p>
+          This column is set by <code>ovn-controller</code> with one of the
+          value from the
+          <ref table="Logical_Switch_Port" column="options:virtual-parents"
+          db="OVN_Northbound"/> in the OVN_Northbound database's
+          <ref table="Logical_Switch_Port" db="OVN_Northbound"/> table
+          when the OVN action <code>bind_vport</code> is executed.
+          <code>ovn-controller</code> also sets the
+          <ref column="chassis"/> column when it executes this action
+          with its chassis id.
+        </p>
+
+        <p>
+          <code>ovn-controller</code> sets this column only if the
+          <ref column="type"/> is "virtual".
         </p>
       </column>
     </group>

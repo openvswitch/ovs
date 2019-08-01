@@ -85,7 +85,8 @@ struct ovn_extend_table;
     OVNACT(SET_METER,         ovnact_set_meter)       \
     OVNACT(OVNFIELD_LOAD,     ovnact_load)            \
     OVNACT(CHECK_PKT_LARGER,  ovnact_check_pkt_larger) \
-    OVNACT(TRIGGER_EVENT,     ovnact_controller_event)
+    OVNACT(TRIGGER_EVENT,     ovnact_controller_event) \
+    OVNACT(BIND_VPORT,        ovnact_bind_vport)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -328,6 +329,13 @@ struct ovnact_controller_event {
     size_t n_options;
 };
 
+/* OVNACT_BIND_VPORT. */
+struct ovnact_bind_vport {
+    struct ovnact ovnact;
+    char *vport;
+    struct expr_field vport_parent;     /* Logical virtual port's port name. */
+};
+
 /* Internal use by the helpers below. */
 void ovnact_init(struct ovnact *, enum ovnact_type, size_t len);
 void *ovnact_put(struct ofpbuf *, enum ovnact_type, size_t len);
@@ -505,6 +513,14 @@ enum action_opcode {
      * Snoop IGMP, learn the multicast participants
      */
     ACTION_OPCODE_IGMP,
+
+    /* "bind_vport(vport, vport_parent)".
+     *
+     *   'vport' follows the action_header, in the format - 32-bit field.
+     *   'vport_parent' is passed through the packet metadata as
+     *    MFF_LOG_INPORT.
+     */
+    ACTION_OPCODE_BIND_VPORT,
 };
 
 /* Header. */

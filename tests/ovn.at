@@ -1368,6 +1368,24 @@ reg0 = check_pkt_larger(foo);
 reg0[0] = check_pkt_larger(foo);
     Syntax error at `foo' expecting `;'.
 
+# bind_vport
+# lsp1's port key is 0x11.
+bind_vport("lsp1", inport);
+    encodes as controller(userdata=00.00.00.11.00.00.00.00.11.00.00.00)
+# lsp2 doesn't exist. So it should be encoded as drop.
+bind_vport("lsp2", inport);
+    encodes as drop
+bind_vport;
+    Syntax error at `;' expecting `('.
+bind_vport(;
+    Syntax error at `;' expecting port name string.
+bind_vport("xyzzy";
+    Syntax error at `;' expecting `,'.
+bind_vport("xyzzy",;
+    Syntax error at `;' expecting field name.
+bind_vport("xyzzy", inport;
+    Syntax error at `;' expecting `)'.
+
 # Miscellaneous negative tests.
 ;
     Syntax error at `;'.
@@ -14343,6 +14361,278 @@ OVN_CHECK_PACKETS([hv2/vif22-tx.pcap], [vif22.expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
+AT_CLEANUP
+
+AT_SETUP([ovn -- virtual ports])
+AT_KEYWORDS([virtual ports])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+send_garp() {
+    local hv=$1 inport=$2 eth_src=$3 eth_dst=$4 spa=$5 tpa=$6
+    local request=${eth_dst}${eth_src}08060001080006040001${eth_src}${spa}${eth_dst}${tpa}
+    as hv$hv ovs-appctl netdev-dummy/receive hv${hv}-vif$inport $request
+}
+
+send_arp_reply() {
+    local hv=$1 inport=$2 eth_src=$3 eth_dst=$4 spa=$5 tpa=$6
+    local request=${eth_dst}${eth_src}08060001080006040002${eth_src}${spa}${eth_dst}${tpa}
+    as hv$hv ovs-appctl netdev-dummy/receive hv${hv}-vif$inport $request
+}
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw0-p1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=sw0-p3 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=sw0-p2 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv2-vif2 -- \
+    set interface hv2-vif2 external-ids:iface-id=sw1-p1 \
+    options:tx_pcap=hv2/vif2-tx.pcap \
+    options:rxq_pcap=hv2/vif2-rx.pcap \
+    ofport-request=2
+
+ovn-nbctl ls-add sw0
+
+ovn-nbctl lsp-add sw0 sw0-vir
+ovn-nbctl lsp-set-addresses sw0-vir "50:54:00:00:00:10 10.0.0.10"
+ovn-nbctl lsp-set-port-security sw0-vir "50:54:00:00:00:10 10.0.0.10"
+ovn-nbctl lsp-set-type sw0-vir virtual
+ovn-nbctl set logical_switch_port sw0-vir options:virtual-ip=10.0.0.10
+ovn-nbctl set logical_switch_port sw0-vir options:virtual-parents=sw0-p1,sw0-p2
+
+ovn-nbctl lsp-add sw0 sw0-p1
+ovn-nbctl lsp-set-addresses sw0-p1 "50:54:00:00:00:03 10.0.0.3"
+ovn-nbctl lsp-set-port-security sw0-p1 "50:54:00:00:00:03 10.0.0.3 10.0.0.10"
+
+ovn-nbctl lsp-add sw0 sw0-p2
+ovn-nbctl lsp-set-addresses sw0-p2 "50:54:00:00:00:04 10.0.0.4"
+ovn-nbctl lsp-set-port-security sw0-p2 "50:54:00:00:00:04 10.0.0.4 10.0.0.10"
+
+ovn-nbctl lsp-add sw0 sw0-p3
+ovn-nbctl lsp-set-addresses sw0-p3 "50:54:00:00:00:05 10.0.0.5"
+ovn-nbctl lsp-set-port-security sw0-p3 "50:54:00:00:00:05 10.0.0.5"
+
+# Create the second logical switch with one port
+ovn-nbctl ls-add sw1
+ovn-nbctl lsp-add sw1 sw1-p1
+ovn-nbctl lsp-set-addresses sw1-p1 "40:54:00:00:00:03 20.0.0.3"
+ovn-nbctl lsp-set-port-security sw1-p1 "40:54:00:00:00:03 20.0.0.3"
+
+# Create a logical router and attach both logical switches
+ovn-nbctl lr-add lr0
+ovn-nbctl lrp-add lr0 lr0-sw0 00:00:00:00:ff:01 10.0.0.1/24
+ovn-nbctl lsp-add sw0 sw0-lr0
+ovn-nbctl lsp-set-type sw0-lr0 router
+ovn-nbctl lsp-set-addresses sw0-lr0 00:00:00:00:ff:01
+ovn-nbctl lsp-set-options sw0-lr0 router-port=lr0-sw0
+
+ovn-nbctl lrp-add lr0 lr0-sw1 00:00:00:00:ff:02 20.0.0.1/24
+ovn-nbctl lsp-add sw1 sw1-lr0
+ovn-nbctl lsp-set-type sw1-lr0 router
+ovn-nbctl lsp-set-addresses sw1-lr0 00:00:00:00:ff:02
+ovn-nbctl lsp-set-options sw1-lr0 router-port=lr0-sw1
+
+OVN_POPULATE_ARP
+ovn-nbctl --wait=hv sync
+
+# Check that logical flows are added for sw0-vir in lsp_in_arp_rsp pipeline
+# with bind_vport action.
+
+ovn-sbctl dump-flows sw0 | grep ls_in_arp_rsp | grep bind_vport > lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=11(ls_in_arp_rsp      ), priority=100  , match=(inport == "sw0-p1" && !is_chassis_resident("sw0-vir") && ((arp.op == 1 && arp.spa == 10.0.0.10 && arp.tpa == 10.0.0.10) || (arp.op == 2 && arp.spa == 10.0.0.10))), action=(bind_vport("sw0-vir", inport); next;)
+  table=11(ls_in_arp_rsp      ), priority=100  , match=(inport == "sw0-p2" && !is_chassis_resident("sw0-vir") && ((arp.op == 1 && arp.spa == 10.0.0.10 && arp.tpa == 10.0.0.10) || (arp.op == 2 && arp.spa == 10.0.0.10))), action=(bind_vport("sw0-vir", inport); next;)
+])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+# Since the sw0-vir is not claimed by any chassis, eth.dst should be set to
+# zero if the ip4.dst is the virtual ip in the router pipeline.
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 00:00:00:00:00:00; next;)
+])
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+hv1_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="hv1"`
+hv2_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="hv2"`
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = x])
+
+# From sw0-p0 send GARP for 10.0.0.10. hv1 should claim sw0-vir
+# and sw0-p1 should be its virtual_parent.
+eth_src=505400000003
+eth_dst=ffffffffffff
+spa=$(ip_to_hex 10 0 0 10)
+tpa=$(ip_to_hex 10 0 0 10)
+send_garp 1 1 $eth_src $eth_dst $spa $tpa
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x$hv1_ch_uuid], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = xsw0-p1])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+# There should be an arp resolve flow to resolve the virtual_ip with the
+# sw0-p1's MAC.
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 50:54:00:00:00:03; next;)
+])
+
+# send the garp from sw0-p2 (in hv2). hv2 should claim sw0-vir
+# and sw0-p2 shpuld be its virtual_parent.
+eth_src=505400000004
+eth_dst=ffffffffffff
+spa=$(ip_to_hex 10 0 0 10)
+tpa=$(ip_to_hex 10 0 0 10)
+send_garp 2 1 $eth_src $eth_dst $spa $tpa
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x$hv2_ch_uuid], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = xsw0-p2])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+# There should be an arp resolve flow to resolve the virtual_ip with the
+# sw0-p2's MAC.
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 50:54:00:00:00:04; next;)
+])
+
+# Now send arp reply from sw0-p1. hv1 should claim sw0-vir
+# and sw0-p1 shpuld be its virtual_parent.
+eth_src=505400000003
+eth_dst=ffffffffffff
+spa=$(ip_to_hex 10 0 0 10)
+tpa=$(ip_to_hex 10 0 0 4)
+send_arp_reply 1 1 $eth_src $eth_dst $spa $tpa
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x$hv1_ch_uuid], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = xsw0-p1])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 50:54:00:00:00:03; next;)
+])
+
+# Delete hv1-vif1 port. hv1 should release sw0-vir
+as hv1 ovs-vsctl del-port hv1-vif1
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = x])
+
+# Since the sw0-vir is not claimed by any chassis, eth.dst should be set to
+# zero if the ip4.dst is the virtual ip.
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 00:00:00:00:00:00; next;)
+])
+
+# Now send arp reply from sw0-p2. hv2 should claim sw0-vir
+# and sw0-p2 shpuld be its virtual_parent.
+eth_src=505400000004
+eth_dst=ffffffffffff
+spa=$(ip_to_hex 10 0 0 10)
+tpa=$(ip_to_hex 10 0 0 3)
+send_arp_reply 2 1 $eth_src $eth_dst $spa $tpa
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x$hv2_ch_uuid], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = xsw0-p2])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=9 (lr_in_arp_resolve  ), priority=100  , match=(outport == "lr0-sw0" && reg0 == 10.0.0.10), action=(eth.dst = 50:54:00:00:00:04; next;)
+])
+
+# Delete sw0-p2 logical port
+ovn-nbctl lsp-del sw0-p2
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-vir) = x], [0], [])
+
+AT_CHECK([test x$(ovn-sbctl --bare --columns virtual_parent find port_binding \
+logical_port=sw0-vir) = x])
+
+# Clear virtual_ip column of sw0-vir. There should be no bind_vport flows.
+ovn-nbctl --wait=hv remove logical_switch_port sw0-vir options virtual-ip
+
+ovn-sbctl dump-flows sw0 | grep ls_in_arp_rsp | grep bind_vport > lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+])
+
+# Add back virtual_ip and clear virtual_parents.
+ovn-nbctl --wait=hv set logical_switch_port sw0-vir options:virtual-ip=10.0.0.10
+
+ovn-sbctl dump-flows sw0 | grep ls_in_arp_rsp | grep bind_vport > lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+  table=11(ls_in_arp_rsp      ), priority=100  , match=(inport == "sw0-p1" && !is_chassis_resident("sw0-vir") && ((arp.op == 1 && arp.spa == 10.0.0.10 && arp.tpa == 10.0.0.10) || (arp.op == 2 && arp.spa == 10.0.0.10))), action=(bind_vport("sw0-vir", inport); next;)
+])
+
+ovn-nbctl --wait=hv remove logical_switch_port sw0-vir options virtual-parents
+ovn-sbctl dump-flows sw0 | grep ls_in_arp_rsp | grep bind_vport > lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+])
+
+ovn-sbctl dump-flows lr0 | grep lr_in_arp_resolve | grep "reg0 == 10.0.0.10" \
+> lflows.txt
+
+AT_CHECK([cat lflows.txt], [0], [dnl
+])
+
+OVN_CLEANUP([hv1], [hv2])
 AT_CLEANUP
 
 # Run ovn-nbctl in daemon mode, change to a backup database and verify that

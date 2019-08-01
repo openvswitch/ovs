@@ -571,11 +571,31 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
                 sbrec_port_binding_set_encap(binding_rec, encap_rec);
             }
         } else if (binding_rec->chassis == chassis_rec) {
-            VLOG_INFO("Releasing lport %s from this chassis.",
-                      binding_rec->logical_port);
-            if (binding_rec->encap)
-                sbrec_port_binding_set_encap(binding_rec, NULL);
-            sbrec_port_binding_set_chassis(binding_rec, NULL);
+            if (!strcmp(binding_rec->type, "virtual")) {
+                /* pinctrl module takes care of binding the ports
+                 * of type 'virtual'.
+                 * Release such ports if their virtual parents are no
+                 * longer claimed by this chassis. */
+                const struct sbrec_port_binding *parent
+                    = lport_lookup_by_name(sbrec_port_binding_by_name,
+                                        binding_rec->virtual_parent);
+                if (!parent || parent->chassis != chassis_rec) {
+                    VLOG_INFO("Releasing lport %s from this chassis.",
+                            binding_rec->logical_port);
+                    if (binding_rec->encap) {
+                        sbrec_port_binding_set_encap(binding_rec, NULL);
+                    }
+                    sbrec_port_binding_set_chassis(binding_rec, NULL);
+                    sbrec_port_binding_set_virtual_parent(binding_rec, NULL);
+                }
+            } else {
+                VLOG_INFO("Releasing lport %s from this chassis.",
+                          binding_rec->logical_port);
+                if (binding_rec->encap) {
+                    sbrec_port_binding_set_encap(binding_rec, NULL);
+                }
+                sbrec_port_binding_set_chassis(binding_rec, NULL);
+            }
         } else if (our_chassis) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
             VLOG_INFO_RL(&rl,

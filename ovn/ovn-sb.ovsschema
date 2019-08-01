@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "2.4.0",
-    "cksum": "3059284885 20260",
+    "version": "2.5.0",
+    "cksum": "1257419092 20387",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -173,6 +173,8 @@
                                       "minInteger": 1,
                                       "maxInteger": 4095},
                               "min": 0, "max": 1}},
+                "virtual_parent": {"type": {"key": "string", "min": 0,
+                                            "max": 1}},
                 "chassis": {"type": {"key": {"type": "uuid",
                                              "refTable": "Chassis",
                                              "refType": "weak"},

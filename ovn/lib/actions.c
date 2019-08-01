@@ -2599,6 +2599,63 @@ ovnact_check_pkt_larger_free(struct ovnact_check_pkt_larger *cipl OVS_UNUSED)
 {
 }
 
+static void
+parse_bind_vport(struct action_context *ctx)
+{
+    if (!lexer_force_match(ctx->lexer, LEX_T_LPAREN)) {
+        return;
+    }
+
+    if (ctx->lexer->token.type != LEX_T_STRING) {
+        lexer_syntax_error(ctx->lexer, "expecting port name string");
+        return;
+    }
+
+    struct ovnact_bind_vport *bind_vp = ovnact_put_BIND_VPORT(ctx->ovnacts);
+    bind_vp->vport = xstrdup(ctx->lexer->token.s);
+    lexer_get(ctx->lexer);
+    (void) (lexer_force_match(ctx->lexer, LEX_T_COMMA)
+            && action_parse_field(ctx, 0, false, &bind_vp->vport_parent)
+            && lexer_force_match(ctx->lexer, LEX_T_RPAREN));
+}
+
+static void
+format_BIND_VPORT(const struct ovnact_bind_vport *bind_vp,
+                  struct ds *s )
+{
+    ds_put_format(s, "bind_vport(\"%s\", ", bind_vp->vport);
+    expr_field_format(&bind_vp->vport_parent, s);
+    ds_put_cstr(s, ");");
+}
+
+static void
+encode_BIND_VPORT(const struct ovnact_bind_vport *vp,
+                 const struct ovnact_encode_params *ep,
+                 struct ofpbuf *ofpacts)
+{
+    uint32_t vport_key;
+    if (!ep->lookup_port(ep->aux, vp->vport, &vport_key)) {
+        return;
+    }
+
+    const struct arg args[] = {
+        { expr_resolve_field(&vp->vport_parent), MFF_LOG_INPORT },
+    };
+    encode_setup_args(args, ARRAY_SIZE(args), ofpacts);
+    size_t oc_offset = encode_start_controller_op(ACTION_OPCODE_BIND_VPORT,
+                                                  false, NX_CTLR_NO_METER,
+                                                  ofpacts);
+    ofpbuf_put(ofpacts, &vport_key, sizeof(uint32_t));
+    encode_finish_controller_op(oc_offset, ofpacts);
+    encode_restore_args(args, ARRAY_SIZE(args), ofpacts);
+}
+
+static void
+ovnact_bind_vport_free(struct ovnact_bind_vport *bp)
+{
+    free(bp->vport);
+}
+
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
 parse_set_action(struct action_context *ctx)
@@ -2706,6 +2763,8 @@ parse_action(struct action_context *ctx)
         parse_set_meter_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "trigger_event")) {
         parse_trigger_event(ctx, ovnact_put_TRIGGER_EVENT(ctx->ovnacts));
+    } else if (lexer_match_id(ctx->lexer, "bind_vport")) {
+        parse_bind_vport(ctx);
     } else {
         lexer_syntax_error(ctx->lexer, "expecting action");
     }
