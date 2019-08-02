@@ -234,6 +234,7 @@ struct ofproto_controller {
                                  * be negotiated for a session. */
 
     /* OpenFlow packet-in rate-limiting. */
+    int max_pktq_size;          /* Maximum number of packet-in to be queued. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
     int burst_limit;            /* Limit on accumulating packet credits. */
 

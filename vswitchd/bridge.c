@@ -227,6 +227,11 @@ static struct if_notifier *ifnotifier;
 static struct seq *ifaces_changed;
 static uint64_t last_ifaces_changed;
 
+/* Default/min/max packet-in queue sizes towards the controllers. */
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE 100
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_MIN_SIZE 1
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_MAX_SIZE 512
+
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
@@ -1121,6 +1126,25 @@ bridge_get_allowed_versions(struct bridge *br)
 
     return ofputil_versions_from_strings(br->cfg->protocols,
                                          br->cfg->n_protocols);
+}
+
+static int
+bridge_get_controller_queue_size(struct bridge *br,
+                                 struct ovsrec_controller *c)
+{
+    if (c && c->controller_queue_size) {
+        return *c->controller_queue_size;
+    }
+
+    int queue_size = smap_get_int(&br->cfg->other_config,
+                                  "controller-queue-size",
+                                  BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE);
+    if (queue_size < BRIDGE_CONTROLLER_PACKET_QUEUE_MIN_SIZE ||
+            queue_size > BRIDGE_CONTROLLER_PACKET_QUEUE_MAX_SIZE) {
+        return BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE;
+    }
+
+    return queue_size;
 }
 
 /* Set NetFlow configuration on 'br'. */
@@ -3616,6 +3640,7 @@ bridge_configure_remotes(struct bridge *br,
         .band = OFPROTO_OUT_OF_BAND,
         .enable_async_msgs = true,
         .allowed_versions = bridge_get_allowed_versions(br),
+        .max_pktq_size = bridge_get_controller_queue_size(br, NULL),
     };
     shash_add_nocopy(
         &ocs, xasprintf("punix:%s/%s.mgmt", ovs_rundir(), br->name), oc);
@@ -3691,6 +3716,7 @@ bridge_configure_remotes(struct bridge *br,
             .enable_async_msgs = (!c->enable_async_messages
                                   || *c->enable_async_messages),
             .allowed_versions = bridge_get_allowed_versions(br),
+            .max_pktq_size = bridge_get_controller_queue_size(br, c),
             .rate_limit = (c->controller_rate_limit
                            ? *c->controller_rate_limit : 0),
             .burst_limit = (c->controller_burst_limit
