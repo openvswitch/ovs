@@ -31,6 +31,8 @@ function install_kernel()
              sed 's/.*\..*\.\(.*\)/\1/' | sort -h | tail -1)
     version="${1}.${lo_ver}"
 
+    rm -rf index* linux-*
+
     url="${base_url}/linux-${version}.tar.xz"
     # Download kernel sources. Try direct link on CDN failure.
     wget ${url} || wget ${url} || wget ${url/cdn/www}
@@ -117,6 +119,23 @@ function configure_ovs()
     ./boot.sh && ./configure $* || { cat config.log; exit 1; }
 }
 
+function build_ovs()
+{
+    local KERNEL=$1
+
+    configure_ovs $OPTS
+    make selinux-policy
+
+    # Only build datapath if we are testing kernel w/o running testsuite
+    if [ "${KERNEL}" ]; then
+        pushd datapath
+        make -j4
+        popd
+    else
+        make -j4
+    fi
+}
+
 if [ "$KERNEL" ]; then
     install_kernel $KERNEL
 fi
@@ -132,17 +151,18 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     fi
 fi
 
-OPTS="$EXTRA_OPTS $*"
-
 if [ "$CC" = "clang" ]; then
     export OVS_CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
     export OVS_CFLAGS="$CFLAGS $BUILD_ENV"
 else
-    OPTS="$OPTS --enable-sparse"
+    OPTS="--enable-sparse"
     export OVS_CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS"
 fi
+
+save_OPTS="${OPTS} $*"
+OPTS="${EXTRA_OPTS} ${save_OPTS}"
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
@@ -156,14 +176,20 @@ if [ "$TESTSUITE" ]; then
         exit 1
     fi
 else
-    configure_ovs $OPTS
-    make selinux-policy
-
-    # Only build datapath if we are testing kernel w/o running testsuite
-    if [ "$KERNEL" ]; then
-        cd datapath
+    if [ -z "${KERNEL_LIST}" ]; then build_ovs ${KERNEL};
+    else
+        save_EXTRA_OPTS="${EXTRA_OPTS}"
+        for KERNEL in ${KERNEL_LIST}; do
+            echo "=============================="
+            echo "Building with kernel ${KERNEL}"
+            echo "=============================="
+            EXTRA_OPTS="${save_EXTRA_OPTS}"
+            install_kernel ${KERNEL}
+            OPTS="${EXTRA_OPTS} ${save_OPTS}"
+            build_ovs ${KERNEL}
+            make distclean
+        done
     fi
-    make -j4
 fi
 
 exit 0

@@ -34,24 +34,14 @@ env:
   - OPTS="--disable-ssl"
   - TESTSUITE=1 KERNEL=3.16
   - TESTSUITE=1 OPTS="--enable-shared"
+  - TESTSUITE=1 DPDK=1
+  - TESTSUITE=1 LIBS=-ljemalloc
+  - KERNEL_LIST="5.0  4.20 4.19 4.18 4.17 4.16"
+  - KERNEL_LIST="4.15 4.14 4.9  4.4  3.19 3.16"
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
   - DPDK=1 OPTS="--enable-shared"
-  - TESTSUITE=1 DPDK=1
   - DPDK_SHARED=1
   - DPDK_SHARED=1 OPTS="--enable-shared"
-  - KERNEL=5.0
-  - KERNEL=4.20
-  - KERNEL=4.19
-  - KERNEL=4.18
-  - KERNEL=4.17
-  - KERNEL=4.16
-  - KERNEL=4.15
-  - KERNEL=4.14
-  - KERNEL=4.9
-  - KERNEL=4.4
-  - KERNEL=3.19
-  - KERNEL=3.16
-  - TESTSUITE=1 LIBS=-ljemalloc
 
 matrix:
   include:
