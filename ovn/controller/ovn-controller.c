@@ -1896,7 +1896,7 @@ main(int argc, char *argv[])
 
     uint64_t engine_run_id = 0;
     uint64_t old_engine_run_id = 0;
-    bool engine_aborted = false;
+    bool engine_run_done = true;
 
     unsigned int ovs_cond_seqno = UINT_MAX;
     unsigned int ovnsb_cond_seqno = UINT_MAX;
@@ -1997,14 +1997,14 @@ main(int argc, char *argv[])
                              * this round of engine_run and continue processing
                              * acculated changes incrementally later when
                              * ofctrl_can_put() returns true. */
-                            if (!engine_aborted) {
+                            if (engine_run_done) {
                                 engine_set_abort_recompute(true);
-                                engine_aborted = engine_run(&en_flow_output,
-                                                            ++engine_run_id);
+                                engine_run_done = engine_run(&en_flow_output,
+                                                             ++engine_run_id);
                             }
                         } else {
                             engine_set_abort_recompute(false);
-                            engine_aborted = false;
+                            engine_run_done = true;
                             engine_run(&en_flow_output, ++engine_run_id);
                         }
                     }
@@ -2048,8 +2048,8 @@ main(int argc, char *argv[])
                 }
 
             }
-            if (old_engine_run_id == engine_run_id || engine_aborted) {
-                if (engine_aborted || engine_need_run(&en_flow_output)) {
+            if (old_engine_run_id == engine_run_id || !engine_run_done) {
+                if (!engine_run_done || engine_need_run(&en_flow_output)) {
                     VLOG_DBG("engine did not run, force recompute next time: "
                              "br_int %p, chassis %p", br_int, chassis);
                     engine_set_force_recompute(true);
