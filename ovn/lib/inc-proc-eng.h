@@ -121,8 +121,9 @@ struct engine_node {
 void engine_init(struct engine_node *);
 
 /* Execute the processing recursively, which should be called in the main
- * loop. */
-void engine_run(struct engine_node *, uint64_t run_id);
+ * loop. Returns true if the execution is compelte, false if it is aborted,
+ * which could happen when engine_abort_recompute is set. */
+bool engine_run(struct engine_node *, uint64_t run_id);
 
 /* Clean up the data for the engine nodes recursively. It calls each node's
  * cleanup() method if not NULL. It should be called before the program
@@ -149,6 +150,10 @@ void engine_add_input(struct engine_node *node, struct engine_node *input,
  * when there is change but the engine couldn't be executed in that
  * iteration, and the change can't be tracked across iterations */
 void engine_set_force_recompute(bool val);
+
+/* Set the flag to cause engine execution to be aborted when there
+ * is any recompute to be triggered in any node. */
+void engine_set_abort_recompute(bool val);
 
 const struct engine_context * engine_get_context(void);
 

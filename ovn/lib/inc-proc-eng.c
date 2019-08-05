@@ -31,12 +31,19 @@
 VLOG_DEFINE_THIS_MODULE(inc_proc_eng);
 
 static bool engine_force_recompute = false;
+static bool engine_abort_recompute = false;
 static const struct engine_context *engine_context;
 
 void
 engine_set_force_recompute(bool val)
 {
     engine_force_recompute = val;
+}
+
+void
+engine_set_abort_recompute(bool val)
+{
+    engine_abort_recompute = val;
 }
 
 const struct engine_context *
@@ -121,11 +128,11 @@ engine_ovsdb_node_add_index(struct engine_node *node, const char *name,
     ed->n_indexes ++;
 }
 
-void
+bool
 engine_run(struct engine_node *node, uint64_t run_id)
 {
     if (node->run_id == run_id) {
-        return;
+        return true;
     }
     node->run_id = run_id;
 
@@ -133,11 +140,13 @@ engine_run(struct engine_node *node, uint64_t run_id)
     if (!node->n_inputs) {
         node->run(node);
         VLOG_DBG("node: %s, changed: %d", node->name, node->changed);
-        return;
+        return true;
     }
 
     for (size_t i = 0; i < node->n_inputs; i++) {
-        engine_run(node->inputs[i].node, run_id);
+        if (!engine_run(node->inputs[i].node, run_id)) {
+            return false;
+        }
     }
 
     bool need_compute = false;
@@ -160,6 +169,10 @@ engine_run(struct engine_node *node, uint64_t run_id)
     if (need_recompute) {
         VLOG_DBG("node: %s, recompute (%s)", node->name,
                  engine_force_recompute ? "forced" : "triggered");
+        if (engine_abort_recompute) {
+            VLOG_DBG("node: %s, recompute aborted", node->name);
+            return false;
+        }
         node->run(node);
     } else if (need_compute) {
         for (size_t i = 0; i < node->n_inputs; i++) {
@@ -170,6 +183,10 @@ engine_run(struct engine_node *node, uint64_t run_id)
                     VLOG_DBG("node: %s, can't handle change for input %s, "
                              "fall back to recompute",
                              node->name, node->inputs[i].node->name);
+                    if (engine_abort_recompute) {
+                        VLOG_DBG("node: %s, recompute aborted", node->name);
+                        return false;
+                    }
                     node->run(node);
                     break;
                 }
@@ -178,6 +195,7 @@ engine_run(struct engine_node *node, uint64_t run_id)
     }
 
     VLOG_DBG("node: %s, changed: %d", node->name, node->changed);
+    return true;
 }
 
 bool

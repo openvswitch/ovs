@@ -985,7 +985,7 @@ add_meter(struct ovn_extend_table_info *m_desired,
  * in the correct state and not backlogged with existing flow_mods.  (Our
  * criteria for being backlogged appear very conservative, but the socket
  * between ovn-controller and OVS provides some buffering.) */
-static bool
+bool
 ofctrl_can_put(void)
 {
     if (state != S_UPDATE_FLOWS

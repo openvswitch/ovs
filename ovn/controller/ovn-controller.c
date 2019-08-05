@@ -1896,6 +1896,7 @@ main(int argc, char *argv[])
 
     uint64_t engine_run_id = 0;
     uint64_t old_engine_run_id = 0;
+    bool engine_aborted = false;
 
     unsigned int ovs_cond_seqno = UINT_MAX;
     unsigned int ovnsb_cond_seqno = UINT_MAX;
@@ -1982,7 +1983,30 @@ main(int argc, char *argv[])
                     stopwatch_start(CONTROLLER_LOOP_STOPWATCH_NAME,
                                     time_msec());
                     if (ovnsb_idl_txn) {
-                        engine_run(&en_flow_output, ++engine_run_id);
+                        if (!ofctrl_can_put()) {
+                            /* When there are in-flight messages pending to
+                             * ovs-vswitchd, we should hold on recomputing so
+                             * that the previous flow installations won't be
+                             * delayed.  However, we still want to try if
+                             * recompute is not needed and we can quickly
+                             * incrementally process the new changes, to avoid
+                             * unnecessarily forced recomputes later on.  This
+                             * is because the OVSDB change tracker cannot
+                             * preserve tracked changes across iterations.  If
+                             * change tracking is improved, we can simply skip
+                             * this round of engine_run and continue processing
+                             * acculated changes incrementally later when
+                             * ofctrl_can_put() returns true. */
+                            if (!engine_aborted) {
+                                engine_set_abort_recompute(true);
+                                engine_aborted = engine_run(&en_flow_output,
+                                                            ++engine_run_id);
+                            }
+                        } else {
+                            engine_set_abort_recompute(false);
+                            engine_aborted = false;
+                            engine_run(&en_flow_output, ++engine_run_id);
+                        }
                     }
                     stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
                                    time_msec());
@@ -2024,8 +2048,8 @@ main(int argc, char *argv[])
                 }
 
             }
-            if (old_engine_run_id == engine_run_id) {
-                if (engine_need_run(&en_flow_output)) {
+            if (old_engine_run_id == engine_run_id || engine_aborted) {
+                if (engine_aborted || engine_need_run(&en_flow_output)) {
                     VLOG_DBG("engine did not run, force recompute next time: "
                              "br_int %p, chassis %p", br_int, chassis);
                     engine_set_force_recompute(true);
