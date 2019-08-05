@@ -3723,7 +3723,7 @@ sleep 1
 packet="inport==\"ls1-lp1\" && eth.src==$ls1_lp1_mac && eth.dst==$rp_ls1_mac &&
         ip4 && ip.ttl==64 && ip4.src==$ls1_lp1_ip && ip4.dst==$ls2_lp1_ip &&
         udp && udp.src==53 && udp.dst==4369"
-as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+AT_CHECK([as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"])
 
 
 echo "---------NB dump-----"

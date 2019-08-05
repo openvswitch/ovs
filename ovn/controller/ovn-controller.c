@@ -2079,12 +2079,14 @@ main(int argc, char *argv[])
                         unixctl_command_reply_error(pending_pkt.conn, error);
                         free(error);
                     } else {
-                        VLOG_DBG("Pending_pkt conn but br_int %p or chassis "
-                                 "%p not ready. run-id: %"PRIu64, br_int,
-                                 chassis, engine_run_id);
-                        unixctl_command_reply_error(pending_pkt.conn,
-                            "ovn-controller not ready.");
+                        unixctl_command_reply(pending_pkt.conn, NULL);
                     }
+                } else {
+                    VLOG_DBG("Pending_pkt conn but br_int %p or chassis "
+                             "%p not ready. run-id: %"PRIu64, br_int,
+                             chassis, engine_run_id);
+                    unixctl_command_reply_error(pending_pkt.conn,
+                        "ovn-controller not ready.");
                 }
                 pending_pkt.conn = NULL;
                 free(pending_pkt.flow_s);
