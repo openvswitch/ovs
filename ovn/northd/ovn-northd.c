@@ -7858,7 +7858,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             for (size_t i = 0; i < od->nbr->n_ports; i++) {
                 struct ovn_port *rp = ovn_port_find(ports,
                                                     od->nbr->ports[i]->name);
-                if (!rp || rp == od->l3dgw_port) {
+                if (!rp || rp == od->l3dgw_port ||
+                    !rp->lrp_networks.ipv4_addrs) {
                     continue;
                 }
                 ds_clear(&match);
