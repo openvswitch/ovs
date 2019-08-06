@@ -1371,7 +1371,7 @@ reg0[0] = check_pkt_larger(foo);
 # bind_vport
 # lsp1's port key is 0x11.
 bind_vport("lsp1", inport);
-    encodes as controller(userdata=00.00.00.11.00.00.00.00.11.00.00.00)
+    encodes as controller(userdata=00.00.00.11.00.00.00.00.00.00.00.11)
 # lsp2 doesn't exist. So it should be encoded as drop.
 bind_vport("lsp2", inport);
     encodes as drop

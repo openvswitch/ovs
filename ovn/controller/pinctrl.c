@@ -4489,16 +4489,17 @@ pinctrl_handle_bind_vport(
     uint32_t vport_parent_key = md->regs[MFF_LOG_INPORT - MFF_REG0];
 
     /* Get the virtual port key from the userdata buffer. */
-    uint32_t *vport_key = ofpbuf_try_pull(userdata, sizeof *vport_key);
+    ovs_be32 *vp_key = ofpbuf_try_pull(userdata, sizeof *vp_key);
 
-    if (!vport_key) {
+    if (!vp_key) {
         return;
     }
 
-    uint32_t hash = hash_2words(dp_key, *vport_key);
+    uint32_t vport_key = ntohl(*vp_key);
+    uint32_t hash = hash_2words(dp_key, vport_key);
 
     struct put_vport_binding *vpb
-        = pinctrl_find_put_vport_binding(dp_key, *vport_key, hash);
+        = pinctrl_find_put_vport_binding(dp_key, vport_key, hash);
     if (!vpb) {
         if (hmap_count(&put_vport_bindings) >= 1000) {
             COVERAGE_INC(pinctrl_drop_put_vport_binding);
@@ -4510,7 +4511,7 @@ pinctrl_handle_bind_vport(
     }
 
     vpb->dp_key = dp_key;
-    vpb->vport_key = *vport_key;
+    vpb->vport_key = vport_key;
     vpb->vport_parent_key = vport_parent_key;
 
     notify_pinctrl_main();

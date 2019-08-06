@@ -2645,7 +2645,8 @@ encode_BIND_VPORT(const struct ovnact_bind_vport *vp,
     size_t oc_offset = encode_start_controller_op(ACTION_OPCODE_BIND_VPORT,
                                                   false, NX_CTLR_NO_METER,
                                                   ofpacts);
-    ofpbuf_put(ofpacts, &vport_key, sizeof(uint32_t));
+    ovs_be32 vp_key = htonl(vport_key);
+    ofpbuf_put(ofpacts, &vp_key, sizeof(ovs_be32));
     encode_finish_controller_op(oc_offset, ofpacts);
     encode_restore_args(args, ARRAY_SIZE(args), ofpacts);
 }
