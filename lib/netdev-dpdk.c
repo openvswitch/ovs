@@ -110,34 +110,6 @@ BUILD_ASSERT_DECL(MAX_NB_MBUF % ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF)
 BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
                   % MP_CACHE_SZ == 0);
 
-/*
- * DPDK XSTATS Counter names definition
- */
-#define XSTAT_RX_64_PACKETS              "rx_size_64_packets"
-#define XSTAT_RX_65_TO_127_PACKETS       "rx_size_65_to_127_packets"
-#define XSTAT_RX_128_TO_255_PACKETS      "rx_size_128_to_255_packets"
-#define XSTAT_RX_256_TO_511_PACKETS      "rx_size_256_to_511_packets"
-#define XSTAT_RX_512_TO_1023_PACKETS     "rx_size_512_to_1023_packets"
-#define XSTAT_RX_1024_TO_1522_PACKETS    "rx_size_1024_to_1522_packets"
-#define XSTAT_RX_1523_TO_MAX_PACKETS     "rx_size_1523_to_max_packets"
-
-#define XSTAT_TX_64_PACKETS              "tx_size_64_packets"
-#define XSTAT_TX_65_TO_127_PACKETS       "tx_size_65_to_127_packets"
-#define XSTAT_TX_128_TO_255_PACKETS      "tx_size_128_to_255_packets"
-#define XSTAT_TX_256_TO_511_PACKETS      "tx_size_256_to_511_packets"
-#define XSTAT_TX_512_TO_1023_PACKETS     "tx_size_512_to_1023_packets"
-#define XSTAT_TX_1024_TO_1522_PACKETS    "tx_size_1024_to_1522_packets"
-#define XSTAT_TX_1523_TO_MAX_PACKETS     "tx_size_1523_to_max_packets"
-
-#define XSTAT_RX_MULTICAST_PACKETS       "rx_multicast_packets"
-#define XSTAT_TX_MULTICAST_PACKETS       "tx_multicast_packets"
-#define XSTAT_RX_BROADCAST_PACKETS       "rx_broadcast_packets"
-#define XSTAT_TX_BROADCAST_PACKETS       "tx_broadcast_packets"
-#define XSTAT_RX_UNDERSIZED_ERRORS       "rx_undersized_errors"
-#define XSTAT_RX_OVERSIZE_ERRORS         "rx_oversize_errors"
-#define XSTAT_RX_FRAGMENTED_ERRORS       "rx_fragmented_errors"
-#define XSTAT_RX_JABBER_ERRORS           "rx_jabber_errors"
-
 /* Size of vHost custom stats. */
 #define VHOST_CUSTOM_STATS_SIZE          1
 
@@ -2682,51 +2654,41 @@ netdev_dpdk_convert_xstats(struct netdev_stats *stats,
                            const struct rte_eth_xstat_name *names,
                            const unsigned int size)
 {
+/* DPDK XSTATS Counter names definition. */
+#define DPDK_XSTATS \
+    DPDK_XSTAT(multicast,               "rx_multicast_packets"            ) \
+    DPDK_XSTAT(tx_multicast_packets,    "tx_multicast_packets"            ) \
+    DPDK_XSTAT(rx_broadcast_packets,    "rx_broadcast_packets"            ) \
+    DPDK_XSTAT(tx_broadcast_packets,    "tx_broadcast_packets"            ) \
+    DPDK_XSTAT(rx_undersized_errors,    "rx_undersized_errors"            ) \
+    DPDK_XSTAT(rx_oversize_errors,      "rx_oversize_errors"              ) \
+    DPDK_XSTAT(rx_fragmented_errors,    "rx_fragmented_errors"            ) \
+    DPDK_XSTAT(rx_jabber_errors,        "rx_jabber_errors"                ) \
+    DPDK_XSTAT(rx_1_to_64_packets,      "rx_size_64_packets"              ) \
+    DPDK_XSTAT(rx_65_to_127_packets,    "rx_size_65_to_127_packets"       ) \
+    DPDK_XSTAT(rx_128_to_255_packets,   "rx_size_128_to_255_packets"      ) \
+    DPDK_XSTAT(rx_256_to_511_packets,   "rx_size_256_to_511_packets"      ) \
+    DPDK_XSTAT(rx_512_to_1023_packets,  "rx_size_512_to_1023_packets"     ) \
+    DPDK_XSTAT(rx_1024_to_1522_packets, "rx_size_1024_to_1522_packets"    ) \
+    DPDK_XSTAT(rx_1523_to_max_packets,  "rx_size_1523_to_max_packets"     ) \
+    DPDK_XSTAT(tx_1_to_64_packets,      "tx_size_64_packets"              ) \
+    DPDK_XSTAT(tx_65_to_127_packets,    "tx_size_65_to_127_packets"       ) \
+    DPDK_XSTAT(tx_128_to_255_packets,   "tx_size_128_to_255_packets"      ) \
+    DPDK_XSTAT(tx_256_to_511_packets,   "tx_size_256_to_511_packets"      ) \
+    DPDK_XSTAT(tx_512_to_1023_packets,  "tx_size_512_to_1023_packets"     ) \
+    DPDK_XSTAT(tx_1024_to_1522_packets, "tx_size_1024_to_1522_packets"    ) \
+    DPDK_XSTAT(tx_1523_to_max_packets,  "tx_size_1523_to_max_packets"     )
+
     for (unsigned int i = 0; i < size; i++) {
-        if (strcmp(XSTAT_RX_64_PACKETS, names[i].name) == 0) {
-            stats->rx_1_to_64_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_65_TO_127_PACKETS, names[i].name) == 0) {
-            stats->rx_65_to_127_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_128_TO_255_PACKETS, names[i].name) == 0) {
-            stats->rx_128_to_255_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_256_TO_511_PACKETS, names[i].name) == 0) {
-            stats->rx_256_to_511_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_512_TO_1023_PACKETS, names[i].name) == 0) {
-            stats->rx_512_to_1023_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_1024_TO_1522_PACKETS, names[i].name) == 0) {
-            stats->rx_1024_to_1522_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_1523_TO_MAX_PACKETS, names[i].name) == 0) {
-            stats->rx_1523_to_max_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_64_PACKETS, names[i].name) == 0) {
-            stats->tx_1_to_64_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_65_TO_127_PACKETS, names[i].name) == 0) {
-            stats->tx_65_to_127_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_128_TO_255_PACKETS, names[i].name) == 0) {
-            stats->tx_128_to_255_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_256_TO_511_PACKETS, names[i].name) == 0) {
-            stats->tx_256_to_511_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_512_TO_1023_PACKETS, names[i].name) == 0) {
-            stats->tx_512_to_1023_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_1024_TO_1522_PACKETS, names[i].name) == 0) {
-            stats->tx_1024_to_1522_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_1523_TO_MAX_PACKETS, names[i].name) == 0) {
-            stats->tx_1523_to_max_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_MULTICAST_PACKETS, names[i].name) == 0) {
-            stats->multicast = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_MULTICAST_PACKETS, names[i].name) == 0) {
-            stats->tx_multicast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_BROADCAST_PACKETS, names[i].name) == 0) {
-            stats->rx_broadcast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_BROADCAST_PACKETS, names[i].name) == 0) {
-            stats->tx_broadcast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_UNDERSIZED_ERRORS, names[i].name) == 0) {
-            stats->rx_undersized_errors = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_FRAGMENTED_ERRORS, names[i].name) == 0) {
-            stats->rx_fragmented_errors = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_JABBER_ERRORS, names[i].name) == 0) {
-            stats->rx_jabber_errors = xstats[i].value;
+#define DPDK_XSTAT(MEMBER, NAME) \
+        if (strcmp(NAME, names[i].name) == 0) {   \
+            stats->MEMBER = xstats[i].value;      \
+            continue;                             \
         }
+        DPDK_XSTATS;
+#undef DPDK_XSTAT
     }
+#undef DPDK_XSTATS
 }
 
 static int
