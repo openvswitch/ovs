@@ -2506,12 +2506,11 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     }
 
                     if (sb_ha_ch_grp->n_ha_chassis != 1) {
-                        struct sbrec_ha_chassis **sb_ha_ch =
-                            xcalloc(1, sizeof *sb_ha_ch);
-                        sb_ha_ch[0] = create_sb_ha_chassis(ctx, chassis,
-                                                           chassis->name, 0);
+                        struct sbrec_ha_chassis *sb_ha_ch =
+                            create_sb_ha_chassis(ctx, chassis,
+                                                 chassis->name, 0);
                         sbrec_ha_chassis_group_set_ha_chassis(sb_ha_ch_grp,
-                                                              sb_ha_ch, 1);
+                                                              &sb_ha_ch, 1);
                     }
                     sbrec_port_binding_set_ha_chassis_group(op->sb,
                                                             sb_ha_ch_grp);
