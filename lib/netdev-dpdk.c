@@ -110,12 +110,6 @@ BUILD_ASSERT_DECL(MAX_NB_MBUF % ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF)
 BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF / MIN_NB_MBUF))
                   % MP_CACHE_SZ == 0);
 
-/* Size of vHost custom stats. */
-#define VHOST_CUSTOM_STATS_SIZE          1
-
-/* Names of vHost custom stats. */
-#define VHOST_STAT_TX_RETRIES            "tx_retries"
-
 #define SOCKET0              0
 
 /* Default size of Physical NIC RXQ */
@@ -2827,17 +2821,31 @@ netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
                                    struct netdev_custom_stats *custom_stats)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int i;
+
+#define VHOST_CSTATS \
+    VHOST_CSTAT(tx_retries)
+
+#define VHOST_CSTAT(NAME) + 1
+    custom_stats->size = VHOST_CSTATS;
+#undef VHOST_CSTAT
+    custom_stats->counters = xcalloc(custom_stats->size,
+                                     sizeof *custom_stats->counters);
+    i = 0;
+#define VHOST_CSTAT(NAME) \
+    ovs_strlcpy(custom_stats->counters[i++].name, #NAME, \
+                NETDEV_CUSTOM_STATS_NAME_SIZE);
+    VHOST_CSTATS;
+#undef VHOST_CSTAT
 
     ovs_mutex_lock(&dev->mutex);
 
-    custom_stats->size = VHOST_CUSTOM_STATS_SIZE;
-    custom_stats->counters = xcalloc(custom_stats->size,
-                                     sizeof *custom_stats->counters);
-    ovs_strlcpy(custom_stats->counters[0].name, VHOST_STAT_TX_RETRIES,
-                NETDEV_CUSTOM_STATS_NAME_SIZE);
-
     rte_spinlock_lock(&dev->stats_lock);
-    custom_stats->counters[0].value = dev->tx_retries;
+    i = 0;
+#define VHOST_CSTAT(NAME) \
+    custom_stats->counters[i++].value = dev->NAME;
+    VHOST_CSTATS;
+#undef VHOST_CSTAT
     rte_spinlock_unlock(&dev->stats_lock);
 
     ovs_mutex_unlock(&dev->mutex);
