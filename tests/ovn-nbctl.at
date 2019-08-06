@@ -657,8 +657,8 @@ AT_CHECK([ovn-nbctl lb-list | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP             IPs
 <0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
 <1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
-<2>    lb2                 tcp/udp    30.0.0.30       192.168.10.10
-<3>    lb3                 tcp/udp    30.0.0.30       192.168.10.10
+<2>    lb2                 tcp        30.0.0.30       192.168.10.10
+<3>    lb3                 tcp        30.0.0.30       192.168.10.10
 ])
 AT_CHECK([ovn-nbctl lb-del lb2 30.0.0.30])
 AT_CHECK([ovn-nbctl lb-del lb3 30.0.0.30])
@@ -710,14 +710,14 @@ AT_CHECK([ovn-nbctl ls-lb-list ls0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP             IPs
 <0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
 <1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
-<2>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
+<2>    lb3                 tcp        30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb0])
 AT_CHECK([ovn-nbctl ls-lb-list ls0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP             IPs
 <0>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
-<1>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
+<1>    lb3                 tcp        30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb1])
@@ -746,14 +746,14 @@ AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP             IPs
 <0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
 <1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
-<2>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
+<2>    lb3                 tcp        30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP             IPs
 <0>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
-<1>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
+<1>    lb3                 tcp        30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb1])
@@ -924,8 +924,8 @@ AT_CHECK([ovn-nbctl lb-list | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP              IPs
 <0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
 <1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
-<2>    lb2                 tcp/udp    ae0f::30         fd0f::10
-<3>    lb3                 tcp/udp    ae0f::30         fd0f::10
+<2>    lb2                 tcp        ae0f::30         fd0f::10
+<3>    lb3                 tcp        ae0f::30         fd0f::10
 ])
 AT_CHECK([ovn-nbctl lb-del lb2 ae0f::30])
 AT_CHECK([ovn-nbctl lb-del lb3 ae0f::30])
@@ -977,14 +977,14 @@ AT_CHECK([ovn-nbctl ls-lb-list ls0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP              IPs
 <0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
 <1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
-<2>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+<2>    lb3                 tcp        ae0f::10         fd0f::10,fd0f::20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb0])
 AT_CHECK([ovn-nbctl ls-lb-list ls0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP              IPs
 <0>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
-<1>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+<1>    lb3                 tcp        ae0f::10         fd0f::10,fd0f::20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb1])
@@ -1013,14 +1013,14 @@ AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP              IPs
 <0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
 <1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
-<2>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+<2>    lb3                 tcp        ae0f::10         fd0f::10,fd0f::20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [dnl
 UUID                                    LB                  PROTO      VIP              IPs
 <0>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
-<1>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+<1>    lb3                 tcp        ae0f::10         fd0f::10,fd0f::20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb1])
