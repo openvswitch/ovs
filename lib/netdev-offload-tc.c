@@ -645,6 +645,43 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                        | VLAN_CFI);
             }
             break;
+            case TC_ACT_MPLS_POP: {
+                nl_msg_put_be16(buf, OVS_ACTION_ATTR_POP_MPLS,
+                                action->mpls.proto);
+            }
+            break;
+            case TC_ACT_MPLS_PUSH: {
+                struct ovs_action_push_mpls *push;
+                ovs_be32 mpls_lse = 0;
+
+                flow_set_mpls_lse_label(&mpls_lse, action->mpls.label);
+                flow_set_mpls_lse_tc(&mpls_lse, action->mpls.tc);
+                flow_set_mpls_lse_ttl(&mpls_lse, action->mpls.ttl);
+                flow_set_mpls_lse_bos(&mpls_lse, action->mpls.bos);
+
+                push = nl_msg_put_unspec_zero(buf, OVS_ACTION_ATTR_PUSH_MPLS,
+                                              sizeof *push);
+                push->mpls_ethertype = action->mpls.proto;
+                push->mpls_lse = mpls_lse;
+            }
+            break;
+            case TC_ACT_MPLS_SET: {
+                size_t set_offset = nl_msg_start_nested(buf,
+                                                        OVS_ACTION_ATTR_SET);
+                struct ovs_key_mpls *set_mpls;
+                ovs_be32 mpls_lse = 0;
+
+                flow_set_mpls_lse_label(&mpls_lse, action->mpls.label);
+                flow_set_mpls_lse_tc(&mpls_lse, action->mpls.tc);
+                flow_set_mpls_lse_ttl(&mpls_lse, action->mpls.ttl);
+                flow_set_mpls_lse_bos(&mpls_lse, action->mpls.bos);
+
+                set_mpls = nl_msg_put_unspec_zero(buf, OVS_KEY_ATTR_MPLS,
+                                                  sizeof *set_mpls);
+                set_mpls->mpls_lse = mpls_lse;
+                nl_msg_end_nested(buf, set_offset);
+            }
+            break;
             case TC_ACT_PEDIT: {
                 parse_flower_rewrite_to_netlink_action(buf, flower);
             }
@@ -770,6 +807,22 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
 }
 
 static int
+parse_mpls_set_action(struct tc_flower *flower, struct tc_action *action,
+                      const struct nlattr *set)
+{
+        const struct ovs_key_mpls *mpls_set = nl_attr_get(set);
+
+        action->mpls.label = mpls_lse_to_label(mpls_set->mpls_lse);
+        action->mpls.tc = mpls_lse_to_tc(mpls_set->mpls_lse);
+        action->mpls.ttl = mpls_lse_to_ttl(mpls_set->mpls_lse);
+        action->mpls.bos = mpls_lse_to_bos(mpls_set->mpls_lse);
+        action->type = TC_ACT_MPLS_SET;
+        flower->action_count++;
+
+        return 0;
+}
+
+static int
 parse_put_flow_set_masked_action(struct tc_flower *flower,
                                  struct tc_action *action,
                                  const struct nlattr *set,
@@ -849,6 +902,10 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
     const struct nlattr *tunnel;
     const struct nlattr *tun_attr;
     size_t tun_left, tunnel_len;
+
+    if (nl_attr_type(set) == OVS_KEY_ATTR_MPLS) {
+        return parse_mpls_set_action(flower, action, set);
+    }
 
     if (nl_attr_type(set) != OVS_KEY_ATTR_TUNNEL) {
             return parse_put_flow_set_masked_action(flower, action, set,
@@ -1327,6 +1384,20 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
             action->type = TC_ACT_VLAN_POP;
+            flower.action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_MPLS) {
+            const struct ovs_action_push_mpls *mpls_push = nl_attr_get(nla);
+
+            action->mpls.proto = mpls_push->mpls_ethertype;
+            action->mpls.label = mpls_lse_to_label(mpls_push->mpls_lse);
+            action->mpls.tc = mpls_lse_to_tc(mpls_push->mpls_lse);
+            action->mpls.ttl = mpls_lse_to_ttl(mpls_push->mpls_lse);
+            action->mpls.bos = mpls_lse_to_bos(mpls_push->mpls_lse);
+            action->type = TC_ACT_MPLS_PUSH;
+            flower.action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_MPLS) {
+            action->mpls.proto = nl_attr_get_be16(nla);
+            action->type = TC_ACT_MPLS_POP;
             flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET) {
             const struct nlattr *set = nl_attr_get(nla);

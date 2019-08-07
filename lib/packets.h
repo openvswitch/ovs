@@ -574,6 +574,30 @@ mpls_lse_to_ttl(ovs_be32 mpls_lse)
     return (ntohl(mpls_lse) & MPLS_TTL_MASK) >> MPLS_TTL_SHIFT;
 }
 
+/* Set label in mpls lse. */
+static inline void
+flow_set_mpls_lse_label(ovs_be32 *mpls_lse, uint32_t label)
+{
+    *mpls_lse &= ~htonl(MPLS_LABEL_MASK);
+    *mpls_lse |= htonl(label << MPLS_LABEL_SHIFT);
+}
+
+/* Set TC in mpls lse. */
+static inline void
+flow_set_mpls_lse_tc(ovs_be32 *mpls_lse, uint8_t tc)
+{
+    *mpls_lse &= ~htonl(MPLS_TC_MASK);
+    *mpls_lse |= htonl((tc & 0x7) << MPLS_TC_SHIFT);
+}
+
+/* Set BOS in mpls lse. */
+static inline void
+flow_set_mpls_lse_bos(ovs_be32 *mpls_lse, uint8_t bos)
+{
+    *mpls_lse &= ~htonl(MPLS_BOS_MASK);
+    *mpls_lse |= htonl((bos & 0x1) << MPLS_BOS_SHIFT);
+}
+
 /* Set TTL in mpls lse. */
 static inline void
 flow_set_mpls_lse_ttl(ovs_be32 *mpls_lse, uint8_t ttl)

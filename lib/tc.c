@@ -25,6 +25,7 @@
 #include <linux/tc_act/tc_csum.h>
 #include <linux/tc_act/tc_gact.h>
 #include <linux/tc_act/tc_mirred.h>
+#include <linux/tc_act/tc_mpls.h>
 #include <linux/tc_act/tc_pedit.h>
 #include <linux/tc_act/tc_skbedit.h>
 #include <linux/tc_act/tc_tunnel_key.h>
@@ -1237,6 +1238,99 @@ nl_parse_act_vlan(struct nlattr *options, struct tc_flower *flower)
     return 0;
 }
 
+static const struct nl_policy mpls_policy[] = {
+    [TCA_MPLS_PARMS] = { .type = NL_A_UNSPEC,
+                         .min_len = sizeof(struct tc_mpls),
+                         .optional = false, },
+    [TCA_MPLS_PROTO] = { .type = NL_A_U16, .optional = true, },
+    [TCA_MPLS_LABEL] = { .type = NL_A_U32, .optional = true, },
+    [TCA_MPLS_TC] = { .type = NL_A_U8, .optional = true, },
+    [TCA_MPLS_TTL] = { .type = NL_A_U8, .optional = true, },
+    [TCA_MPLS_BOS] = { .type = NL_A_U8, .optional = true, },
+};
+
+static int
+nl_parse_act_mpls(struct nlattr *options, struct tc_flower *flower)
+{
+    struct nlattr *mpls_attrs[ARRAY_SIZE(mpls_policy)];
+    const struct nlattr *mpls_parms;
+    struct nlattr *mpls_proto;
+    struct nlattr *mpls_label;
+    struct tc_action *action;
+    const struct tc_mpls *m;
+    struct nlattr *mpls_ttl;
+    struct nlattr *mpls_bos;
+    struct nlattr *mpls_tc;
+
+    if (!nl_parse_nested(options, mpls_policy, mpls_attrs,
+                         ARRAY_SIZE(mpls_policy))) {
+        VLOG_ERR_RL(&error_rl, "failed to parse mpls action options");
+        return EPROTO;
+    }
+
+    action = &flower->actions[flower->action_count++];
+    mpls_parms = mpls_attrs[TCA_MPLS_PARMS];
+    m = nl_attr_get_unspec(mpls_parms, sizeof *m);
+
+    switch (m->m_action) {
+    case TCA_MPLS_ACT_POP:
+        mpls_proto = mpls_attrs[TCA_MPLS_PROTO];
+        if (mpls_proto) {
+            action->mpls.proto = nl_attr_get_be16(mpls_proto);
+        }
+        action->type = TC_ACT_MPLS_POP;
+        break;
+    case TCA_MPLS_ACT_PUSH:
+        mpls_proto = mpls_attrs[TCA_MPLS_PROTO];
+        if (mpls_proto) {
+            action->mpls.proto = nl_attr_get_be16(mpls_proto);
+        }
+        mpls_label = mpls_attrs[TCA_MPLS_LABEL];
+        if (mpls_label) {
+            action->mpls.label = nl_attr_get_u32(mpls_label);
+        }
+        mpls_tc = mpls_attrs[TCA_MPLS_TC];
+        if (mpls_tc) {
+            action->mpls.tc = nl_attr_get_u8(mpls_tc);
+        }
+        mpls_ttl = mpls_attrs[TCA_MPLS_TTL];
+        if (mpls_ttl) {
+            action->mpls.ttl = nl_attr_get_u8(mpls_ttl);
+        }
+        mpls_bos = mpls_attrs[TCA_MPLS_BOS];
+        if (mpls_bos) {
+            action->mpls.bos = nl_attr_get_u8(mpls_bos);
+        }
+        action->type = TC_ACT_MPLS_PUSH;
+        break;
+    case TCA_MPLS_ACT_MODIFY:
+        mpls_label = mpls_attrs[TCA_MPLS_LABEL];
+        if (mpls_label) {
+            action->mpls.label = nl_attr_get_u32(mpls_label);
+        }
+        mpls_tc = mpls_attrs[TCA_MPLS_TC];
+        if (mpls_tc) {
+            action->mpls.tc = nl_attr_get_u8(mpls_tc);
+        }
+        mpls_ttl = mpls_attrs[TCA_MPLS_TTL];
+        if (mpls_ttl) {
+            action->mpls.ttl = nl_attr_get_u8(mpls_ttl);
+        }
+        mpls_bos = mpls_attrs[TCA_MPLS_BOS];
+        if (mpls_bos) {
+            action->mpls.bos = nl_attr_get_u8(mpls_bos);
+        }
+        action->type = TC_ACT_MPLS_SET;
+        break;
+    default:
+        VLOG_ERR_RL(&error_rl, "unknown mpls action: %d, %d",
+                    m->action, m->m_action);
+        return EINVAL;
+    }
+
+    return 0;
+}
+
 static const struct nl_policy csum_policy[] = {
     [TCA_CSUM_PARMS] = { .type = NL_A_UNSPEC,
                          .min_len = sizeof(struct tc_csum),
@@ -1319,6 +1413,8 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
         err = nl_parse_act_mirred(act_options, flower);
     } else if (!strcmp(act_kind, "vlan")) {
         err = nl_parse_act_vlan(act_options, flower);
+    } else if (!strcmp(act_kind, "mpls")) {
+        err = nl_parse_act_mpls(act_options, flower);
     } else if (!strcmp(act_kind, "tunnel_key")) {
         err = nl_parse_act_tunnel_key(act_options, flower);
     } else if (!strcmp(act_kind, "pedit")) {
@@ -1644,6 +1740,66 @@ nl_msg_put_act_pop_vlan(struct ofpbuf *request)
                                 .v_action = TCA_VLAN_ACT_POP };
 
         nl_msg_put_unspec(request, TCA_VLAN_PARMS, &parm, sizeof parm);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
+nl_msg_put_act_pop_mpls(struct ofpbuf *request, ovs_be16 proto)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "mpls");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS | NLA_F_NESTED);
+    {
+        struct tc_mpls parm = { .action = TC_ACT_PIPE,
+                                .m_action = TCA_MPLS_ACT_POP };
+
+        nl_msg_put_unspec(request, TCA_MPLS_PARMS, &parm, sizeof parm);
+        nl_msg_put_be16(request, TCA_MPLS_PROTO, proto);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
+nl_msg_put_act_push_mpls(struct ofpbuf *request, ovs_be16 proto,
+                         uint32_t label, uint8_t tc, uint8_t ttl, uint8_t bos)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "mpls");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS | NLA_F_NESTED);
+    {
+        struct tc_mpls parm = { .action = TC_ACT_PIPE,
+                                .m_action = TCA_MPLS_ACT_PUSH };
+
+        nl_msg_put_unspec(request, TCA_MPLS_PARMS, &parm, sizeof parm);
+        nl_msg_put_be16(request, TCA_MPLS_PROTO, proto);
+        nl_msg_put_u32(request, TCA_MPLS_LABEL, label);
+        nl_msg_put_u8(request, TCA_MPLS_TC, tc);
+        nl_msg_put_u8(request, TCA_MPLS_TTL, ttl);
+        nl_msg_put_u8(request, TCA_MPLS_BOS, bos);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
+nl_msg_put_act_set_mpls(struct ofpbuf *request, uint32_t label, uint8_t tc,
+                        uint8_t ttl, uint8_t bos)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "mpls");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS | NLA_F_NESTED);
+    {
+        struct tc_mpls parm = { .action = TC_ACT_PIPE,
+                                .m_action = TCA_MPLS_ACT_MODIFY };
+
+        nl_msg_put_unspec(request, TCA_MPLS_PARMS, &parm, sizeof parm);
+        nl_msg_put_u32(request, TCA_MPLS_LABEL, label);
+        nl_msg_put_u8(request, TCA_MPLS_TC, tc);
+        nl_msg_put_u8(request, TCA_MPLS_TTL, ttl);
+        nl_msg_put_u8(request, TCA_MPLS_BOS, bos);
     }
     nl_msg_end_nested(request, offset);
 }
@@ -2022,6 +2178,28 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                          action->vlan.vlan_push_tpid,
                                          action->vlan.vlan_push_id,
                                          action->vlan.vlan_push_prio);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
+            case TC_ACT_MPLS_POP: {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_pop_mpls(request, action->mpls.proto);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
+            case TC_ACT_MPLS_PUSH: {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_push_mpls(request, action->mpls.proto,
+                                         action->mpls.label, action->mpls.tc,
+                                         action->mpls.ttl, action->mpls.bos);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
+            case TC_ACT_MPLS_SET: {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_set_mpls(request, action->mpls.label,
+                                        action->mpls.tc, action->mpls.ttl,
+                                        action->mpls.bos);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
