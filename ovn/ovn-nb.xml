@@ -730,6 +730,7 @@
           table="Binding"/> table, <code>ovn-northd</code> sets this
           column to <code>true</code>; otherwise, or if the port
           becomes unbound later, it sets it to <code>false</code>.
+          If this column is empty, the port is not considered up.
           This allows the CMS to wait for a VM's (or container's)
           networking to become active before it allows the VM (or
           container) to start.

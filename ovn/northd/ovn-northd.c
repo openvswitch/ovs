@@ -3488,16 +3488,20 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 
 }
 
+/* Returns true if the logical switch port 'enabled' column is empty or
+ * set to true.  Otherwise, returns false. */
 static bool
 lsp_is_enabled(const struct nbrec_logical_switch_port *lsp)
 {
-    return !lsp->enabled || *lsp->enabled;
+    return !lsp->n_enabled || *lsp->enabled;
 }
 
+/* Returns true only if the logical switch port 'up' column is set to true.
+ * Otherwise, if the column is not set or set to false, returns false. */
 static bool
 lsp_is_up(const struct nbrec_logical_switch_port *lsp)
 {
-    return lsp->up && *lsp->up;
+    return lsp->n_up && *lsp->up;
 }
 
 static bool
