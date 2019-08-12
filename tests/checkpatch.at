@@ -230,6 +230,11 @@ try_checkpatch \
    "COMMON_PATCH_HEADER
     +     $ctr (first_run) { \\
     "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     $ctr (a) {    \\
+    "
 done
 AT_CLEANUP
 
