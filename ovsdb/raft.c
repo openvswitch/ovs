@@ -1816,8 +1816,8 @@ raft_run(struct raft *raft)
                 && now - cmd->timestamp > ELECTION_BASE_MSEC * 2) {
                 raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
             }
-            raft_reset_ping_timer(raft);
         }
+        raft_reset_ping_timer(raft);
     }
 
     /* Do this only at the end; if we did it as soon as we set raft->left or
