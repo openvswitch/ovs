@@ -394,6 +394,68 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel - table version])
+dnl check if changes in the egress bridge flow table affects
+dnl discovering the link layer address of tunnel endpoints.
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
+AT_CHECK([ovs-vsctl add-port int-br v1 -- set Interface v1 type=vxlan \
+                       options:remote_ip=172.31.1.2 options:key=123 \
+                       ofport_request=2 \
+                 -- add-port int-br v2 -- set Interface v2 type=internal \
+                       ofport_request=3 \
+                       ], [0])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  int-br:
+    int-br 65534/2: (dummy-internal)
+    v1 2/4789: (vxlan: key=123, remote_ip=172.31.1.2)
+    v2 3/3: (dummy-internal)
+])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 172.31.1.1/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 172.31.1.0/24 br0], [0], [OK
+])
+
+dnl change the flow table to bump the internal table version
+AT_CHECK([ovs-ofctl add-flow int-br action=normal])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl Check Neighbour discovery.
+AT_CHECK([ovs-vsctl -- set Interface p0 options:pcap=p0.pcap])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br 'in_port(2),eth(src=aa:55:aa:55:00:00,dst=f8:bc:12:ff:ff:ff),eth_type(0x0800),ipv4(src=1.1.3.92,dst=1.1.3.88,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
+AT_CHECK([ovs-pcap p0.pcap > p0.pcap.txt 2>&1])
+
+dnl When the wrong version is used, the flow is not visible and the
+dnl packet is dropped.
+AT_CHECK([cat p0.pcap.txt | grep ffffffffffffaa55aa55000008060001080006040001aa55aa550000ac1f0101000000000000ac1f0102 | uniq], [0], [dnl
+ffffffffffffaa55aa55000008060001080006040001aa55aa550000ac1f0101000000000000ac1f0102
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - LISP])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
                     options:remote_ip=1.1.1.1 ofport_request=1])
