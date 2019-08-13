@@ -275,7 +275,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     int result;
     bool auto_determine = true;
     int err = 0;
-    cpu_set_t cpuset;
+    struct ovs_numa_dump *affinity = NULL;
     struct svec args = SVEC_EMPTY_INITIALIZER;
 
     log_stream = fopencookie(NULL, "w+", dpdk_log_func);
@@ -357,22 +357,22 @@ dpdk_init__(const struct smap *ovs_other_config)
      * lcore for the DPDK Master.
      */
     if (auto_determine) {
+        const struct ovs_numa_info_core *core;
         int cpu = 0;
 
         /* Get the main thread affinity */
-        CPU_ZERO(&cpuset);
-        err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                     &cpuset);
-        if (!err) {
-            for (cpu = 0; cpu < CPU_SETSIZE; cpu++) {
-                if (CPU_ISSET(cpu, &cpuset)) {
-                    break;
+        affinity = ovs_numa_thread_getaffinity_dump();
+        if (affinity) {
+            cpu = INT_MAX;
+            FOR_EACH_CORE_ON_DUMP (core, affinity) {
+                if (cpu > core->core_id) {
+                    cpu = core->core_id;
                 }
             }
         } else {
             /* User did not set dpdk-lcore-mask and unable to get current
              * thread affintity - default to core #0 */
-            VLOG_ERR("Thread getaffinity error %d. Using core #0", err);
+            VLOG_ERR("Thread getaffinity failed. Using core #0");
         }
         svec_add(&args, "-l");
         svec_add_nocopy(&args, xasprintf("%d", cpu));
@@ -403,12 +403,9 @@ dpdk_init__(const struct smap *ovs_other_config)
     svec_destroy(&args);
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    if (auto_determine && !err) {
-        err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                     &cpuset);
-        if (err) {
-            VLOG_ERR("Thread setaffinity error %d", err);
-        }
+    if (affinity) {
+        ovs_numa_thread_setaffinity_dump(affinity);
+        ovs_numa_dump_destroy(affinity);
     }
 
     if (result < 0) {
