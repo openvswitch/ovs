@@ -3418,6 +3418,7 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
                     struct dp_packet *packet)
 {
     struct xbridge *xbridge = out_dev->xbridge;
+    ovs_version_t version = ofproto_dpif_get_tables_version(xbridge->ofproto);
     struct ofpact_output output;
     struct flow flow;
 
@@ -3427,8 +3428,7 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
     output.port = OFPP_TABLE;
     output.max_len = 0;
 
-    return ofproto_dpif_execute_actions__(xbridge->ofproto,
-                                          ctx->xin->tables_version, &flow,
+    return ofproto_dpif_execute_actions__(xbridge->ofproto, version, &flow,
                                           NULL, &output.ofpact, sizeof output,
                                           ctx->depth, ctx->resubmits, packet);
 }
