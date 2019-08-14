@@ -125,7 +125,7 @@ fi
 pid_exists () {
     # This is better than "kill -0" because it doesn't require permission to
     # send a signal (so daemon_status in particular works as non-root).
-    test -d /proc/"$1"
+    test -n "$1" && test -d /proc/"$1"
 }
 
 pid_comm_check () {
