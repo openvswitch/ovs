@@ -1760,8 +1760,9 @@ parse_trigger_event(struct action_context *ctx,
 }
 
 static void
-ovnact_controller_event_free(struct ovnact_controller_event *event OVS_UNUSED)
+ovnact_controller_event_free(struct ovnact_controller_event *event)
 {
+    free_gen_options(event->options, event->n_options);
 }
 
 static void
