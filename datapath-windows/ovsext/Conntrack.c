@@ -809,6 +809,7 @@ OvsConntrackSetLabels(OvsFlowKey *key,
     ovs_u128 v, m, pktMdLabel = {0};
     memcpy(&v, val, sizeof v);
     memcpy(&m, mask, sizeof m);
+    memcpy(&pktMdLabel, &entry->labels, sizeof(struct ovs_key_ct_labels));
 
     pktMdLabel.u64.lo = v.u64.lo | (pktMdLabel.u64.lo & ~(m.u64.lo));
     pktMdLabel.u64.hi = v.u64.hi | (pktMdLabel.u64.hi & ~(m.u64.hi));
