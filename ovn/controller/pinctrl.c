@@ -736,6 +736,12 @@ pinctrl_handle_dns_lookup(
         goto exit;
     }
 
+    /* Check that the packet stores at least the minimal headers. */
+    if (dp_packet_l4_size(pkt_in) < (UDP_HEADER_LEN + DNS_HEADER_LEN)) {
+        VLOG_WARN_RL(&rl, "truncated dns packet");
+        goto exit;
+    }
+
     /* Extract the DNS header */
     struct dns_header const *in_dns_header = dp_packet_get_udp_payload(pkt_in);
     if (!in_dns_header) {
@@ -760,7 +766,7 @@ pinctrl_handle_dns_lookup(
     uint8_t *end = (uint8_t *)in_udp + MIN(udp_len, l4_len);
     uint8_t *in_dns_data = (uint8_t *)(in_dns_header + 1);
     uint8_t *in_queryname = in_dns_data;
-    uint8_t idx = 0;
+    uint16_t idx = 0;
     struct ds query_name;
     ds_init(&query_name);
     /* Extract the query_name. If the query name is - 'www.ovn.org' it would be
