@@ -1416,9 +1416,9 @@ ovsdb_txn_history_run(struct ovsdb *db)
 }
 
 void
-ovsdb_txn_history_init(struct ovsdb *db)
+ovsdb_txn_history_init(struct ovsdb *db, bool need_txn_history)
 {
-    db->need_txn_history = true;
+    db->need_txn_history = need_txn_history;
     db->n_txn_history = 0;
     ovs_list_init(&db->txn_history);
 }
