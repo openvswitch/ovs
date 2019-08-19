@@ -250,7 +250,6 @@ struct raft {
     uint64_t last_applied;      /* Max log index applied to state machine. */
     struct uuid leader_sid;     /* Server ID of leader (zero, if unknown). */
 
-    /* Followers and candidates only. */
 #define ELECTION_BASE_MSEC 1024
 #define ELECTION_RANGE_MSEC 1024
     long long int election_base;    /* Time of last heartbeat from leader. */
@@ -1785,7 +1784,43 @@ raft_run(struct raft *raft)
     }
 
     if (!raft->joining && time_msec() >= raft->election_timeout) {
-        raft_start_election(raft, false);
+        if (raft->role == RAFT_LEADER) {
+            /* Check if majority of followers replied, then reset
+             * election_timeout and reset s->replied. Otherwise, become
+             * follower.
+             *
+             * Raft paper section 6.2: Leaders: A server might be in the leader
+             * state, but if it isn’t the current leader, it could be
+             * needlessly delaying client requests. For example, suppose a
+             * leader is partitioned from the rest of the cluster, but it can
+             * still communicate with a particular client. Without additional
+             * mechanism, it could delay a request from that client forever,
+             * being unable to replicate a log entry to any other servers.
+             * Meanwhile, there might be another leader of a newer term that is
+             * able to communicate with a majority of the cluster and would be
+             * able to commit the client’s request. Thus, a leader in Raft
+             * steps down if an election timeout elapses without a successful
+             * round of heartbeats to a majority of its cluster; this allows
+             * clients to retry their requests with another server.  */
+            int count = 0;
+            HMAP_FOR_EACH (server, hmap_node, &raft->servers) {
+                if (server->replied) {
+                    count ++;
+                }
+            }
+            if (count >= hmap_count(&raft->servers) / 2) {
+                HMAP_FOR_EACH (server, hmap_node, &raft->servers) {
+                    server->replied = false;
+                }
+                raft_reset_election_timer(raft);
+            } else {
+                raft_become_follower(raft);
+                raft_start_election(raft, false);
+            }
+        } else {
+            raft_start_election(raft, false);
+        }
+
     }
 
     if (raft->leaving && time_msec() >= raft->leave_timeout) {
@@ -2447,6 +2482,7 @@ raft_server_init_leader(struct raft *raft, struct raft_server *s)
     s->next_index = raft->log_end;
     s->match_index = 0;
     s->phase = RAFT_PHASE_STABLE;
+    s->replied = false;
 }
 
 static void
@@ -2462,7 +2498,7 @@ raft_become_leader(struct raft *raft)
     ovs_assert(raft->role != RAFT_LEADER);
     raft->role = RAFT_LEADER;
     raft->leader_sid = raft->sid;
-    raft->election_timeout = LLONG_MAX;
+    raft_reset_election_timer(raft);
     raft_reset_ping_timer(raft);
 
     struct raft_server *s;
@@ -3192,6 +3228,7 @@ raft_handle_append_reply(struct raft *raft,
         }
     }
 
+    s->replied = true;
     if (rpy->result == RAFT_APPEND_OK) {
         /* Figure 3.1: "If successful, update nextIndex and matchIndex for
          * follower (section 3.5)." */
