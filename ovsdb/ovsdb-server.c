@@ -664,9 +664,8 @@ open_db(struct server_config *config, const char *filename)
 
     /* Enable txn history for clustered mode. It is not enabled for other mode
      * for now, since txn id is available for clustered mode only. */
-    if (ovsdb_storage_is_clustered(storage)) {
-        ovsdb_txn_history_init(db->db);
-    }
+    ovsdb_txn_history_init(db->db, ovsdb_storage_is_clustered(storage));
+
     read_db(config, db);
 
     error = (db->db->name[0] == '_'
