@@ -285,8 +285,13 @@ struct raft {
 
     /* Candidates only.  Reinitialized at start of election. */
     int n_votes;                /* Number of votes for me. */
-    bool candidate_retrying;    /* The first round of election timed-out and it
-                                   is now retrying. */
+
+    /* Followers and candidates only. */
+    bool candidate_retrying;    /* The earlier election timed-out and we are
+                                   now retrying. */
+    bool had_leader;            /* There has been leader elected since last
+                                   election initiated. This is to help setting
+                                   candidate_retrying. */
 };
 
 /* All Raft structures. */
@@ -344,6 +349,7 @@ static bool raft_handle_write_error(struct raft *, struct ovsdb_error *);
 
 static void raft_run_reconfigure(struct raft *);
 
+static void raft_set_leader(struct raft *, const struct uuid *sid);
 static struct raft_server *
 raft_find_server(const struct raft *raft, const struct uuid *sid)
 {
@@ -996,11 +1002,13 @@ raft_get_sid(const struct raft *raft)
 bool
 raft_is_connected(const struct raft *raft)
 {
-    return (!(raft->role == RAFT_CANDIDATE && raft->candidate_retrying)
+    bool ret = (!raft->candidate_retrying
             && !raft->joining
             && !raft->leaving
             && !raft->left
             && !raft->failed);
+    VLOG_DBG("raft_is_connected: %s\n", ret? "true": "false");
+    return ret;
 }
 
 /* Returns true if 'raft' is the cluster leader. */
@@ -1615,8 +1623,11 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
     }
 
     ovs_assert(raft->role != RAFT_LEADER);
-    raft->candidate_retrying = (raft->role == RAFT_CANDIDATE);
     raft->role = RAFT_CANDIDATE;
+    /* If there was no leader elected since last election, we know we are
+     * retrying now. */
+    raft->candidate_retrying = !raft->had_leader;
+    raft->had_leader = false;
 
     raft->n_votes = 0;
 
@@ -2486,6 +2497,14 @@ raft_server_init_leader(struct raft *raft, struct raft_server *s)
 }
 
 static void
+raft_set_leader(struct raft *raft, const struct uuid *sid)
+{
+    raft->leader_sid = *sid;
+    raft->had_leader = true;
+    raft->candidate_retrying = false;
+}
+
+static void
 raft_become_leader(struct raft *raft)
 {
     log_all_commands(raft);
@@ -2497,7 +2516,7 @@ raft_become_leader(struct raft *raft)
 
     ovs_assert(raft->role != RAFT_LEADER);
     raft->role = RAFT_LEADER;
-    raft->leader_sid = raft->sid;
+    raft_set_leader(raft, &raft->sid);
     raft_reset_election_timer(raft);
     raft_reset_ping_timer(raft);
 
@@ -2891,7 +2910,7 @@ raft_update_leader(struct raft *raft, const struct uuid *sid)
                       raft_get_nickname(raft, sid, buf, sizeof buf),
                       raft->term);
         }
-        raft->leader_sid = *sid;
+        raft_set_leader(raft, sid);
 
         /* Record the leader to the log.  This is not used by the algorithm
          * (although it could be, for quick restart), but it is used for
