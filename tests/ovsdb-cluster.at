@@ -63,6 +63,63 @@ m4_define([OVSDB_CHECK_EXECUTION],
 EXECUTION_EXAMPLES
 
 
+AT_BANNER([OVSDB - disconnect from cluster])
+
+# When a node is disconnected from the cluster, the IDL should disconnect
+# and retry even if it uses a single remote, because the remote IP can be
+# a VIP on a load-balance.
+AT_SETUP([OVSDB cluster - disconnect from cluster, single remote])
+AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
+
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=`ovsdb-tool db-cid s1.db`
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+for i in `seq 2 3`; do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill `cat *.pid`'
+for i in `seq 3`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in `seq 3`; do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1}}]]'], [0], [ignore], [ignore])
+
+# Connect to a single remote s3.  Use "wait" to trigger a non-op transaction so
+# that test-ovsdb will not quit.
+
+test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -v -t10 idl unix:s3.ovsdb '[["idltest",
+      {"op": "wait",
+       "table": "simple",
+       "where": [["i", "==", 1]],
+       "columns": ["i"],
+       "until": "==",
+       "rows": [{"i": 1}]}]]' > test-ovsdb.log 2>&1 &
+echo $! > test-ovsdb.pid
+
+OVS_WAIT_UNTIL([grep "000: i=1" test-ovsdb.log])
+
+# Shutdown the other 2 servers so that s3 is disconnected from the cluster.
+for i in 2 1; do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+
+# The test-ovsdb should detect the disconnect and retry.
+OVS_WAIT_UNTIL([grep disconnect test-ovsdb.log])
+
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s3], [s3.pid])
+
+AT_CLEANUP
+
+
 OVS_START_SHELL_HELPERS
 # ovsdb_cluster_failure_test SCHEMA_FUNC OUTPUT TRANSACTION...
 ovsdb_cluster_failure_test () {

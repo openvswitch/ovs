@@ -657,12 +657,8 @@ ovsdb_idl_state_to_string(enum ovsdb_idl_state state)
 static void
 ovsdb_idl_retry_at(struct ovsdb_idl *idl, const char *where)
 {
-    if (idl->session && jsonrpc_session_get_n_remotes(idl->session) > 1) {
-        ovsdb_idl_force_reconnect(idl);
-        ovsdb_idl_transition_at(idl, IDL_S_RETRY, where);
-    } else {
-        ovsdb_idl_transition_at(idl, IDL_S_ERROR, where);
-    }
+    ovsdb_idl_force_reconnect(idl);
+    ovsdb_idl_transition_at(idl, IDL_S_RETRY, where);
 }
 
 static void
@@ -1895,8 +1891,7 @@ ovsdb_idl_check_server_db(struct ovsdb_idl *idl)
     if (!database) {
         VLOG_INFO_RL(&rl, "%s: server does not have %s database",
                      server_name, idl->data.class_->database);
-    } else if (!strcmp(database->model, "clustered")
-               && jsonrpc_session_get_n_remotes(idl->session) > 1) {
+    } else if (!strcmp(database->model, "clustered")) {
         uint64_t index = database->n_index ? *database->index : 0;
 
         if (!database->schema) {
