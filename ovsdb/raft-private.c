@@ -307,6 +307,10 @@ raft_entry_to_json(const struct raft_entry *e)
     if (e->servers) {
         json_object_put(json, "servers", json_clone(e->servers));
     }
+    if (e->election_timer) {
+        raft_put_uint64(json, "election_timer", e->election_timer);
+    }
+
     return json;
 }
 
@@ -326,6 +330,7 @@ raft_entry_from_json(struct json *json, struct raft_entry *e)
     if (e->servers) {
         ovsdb_parser_put_error(&p, raft_servers_validate_json(e->servers));
     }
+    e->election_timer = raft_parse_optional_uint64(&p, "election_timer");
 
     struct ovsdb_error *error = ovsdb_parser_finish(&p);
     if (error) {
@@ -556,6 +561,8 @@ raft_record_from_json__(struct raft_record *r, struct ovsdb_parser *p)
             ovsdb_parser_put_error(
                 p, raft_servers_validate_json(r->entry.servers));
         }
+        r->entry.election_timer = raft_parse_optional_uint64(
+            p, "election_timer");
         r->entry.data = json_nullable_clone(
             ovsdb_parser_member(p, "data",
                                 OP_OBJECT | OP_ARRAY | OP_OPTIONAL));
@@ -596,6 +603,9 @@ raft_record_to_json(const struct raft_record *r)
         }
         if (r->entry.servers) {
             json_object_put(json, "servers", json_clone(r->entry.servers));
+        }
+        if (r->entry.election_timer) {
+            raft_put_uint64(json, "election_timer", r->entry.election_timer);
         }
         if (!uuid_is_zero(&r->entry.eid)) {
             json_object_put_format(json, "eid",

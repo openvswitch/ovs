@@ -196,6 +196,15 @@ struct raft {
      * most recently added to 'log'. */
     struct hmap servers;
 
+#define ELECTION_BASE_MSEC 1000
+#define ELECTION_RANGE_MSEC 1000
+    /* The election timeout base value for leader election, in milliseconds.
+     * It can be set by unixctl cluster/change-election-timer. Default value is
+     * ELECTION_BASE_MSEC. */
+    uint64_t election_timer;
+    /* If not 0, it is the new value of election_timer being proposed. */
+    uint64_t election_timer_new;
+
 /* Persistent state on all servers.
  *
  * Must be updated on stable storage before responding to RPCs. */
@@ -250,8 +259,6 @@ struct raft {
     uint64_t last_applied;      /* Max log index applied to state machine. */
     struct uuid leader_sid;     /* Server ID of leader (zero, if unknown). */
 
-#define ELECTION_BASE_MSEC 1024
-#define ELECTION_RANGE_MSEC 1024
     long long int election_base;    /* Time of last heartbeat from leader. */
     long long int election_timeout; /* Time at which we start an election. */
 
@@ -280,7 +287,6 @@ struct raft {
     struct hmap add_servers;    /* Contains "struct raft_server"s to add. */
     struct raft_server *remove_server; /* Server being removed. */
     struct hmap commands;       /* Contains "struct raft_command"s. */
-#define PING_TIME_MSEC (ELECTION_BASE_MSEC / 3)
     long long int ping_timeout; /* Time at which to send a heartbeat */
 
     /* Candidates only.  Reinitialized at start of election. */
@@ -344,6 +350,7 @@ static void raft_send_heartbeats(struct raft *);
 static void raft_start_election(struct raft *, bool leadership_transfer);
 static bool raft_truncate(struct raft *, uint64_t new_end);
 static void raft_get_servers_from_log(struct raft *, enum vlog_level);
+static void raft_get_election_timer_from_log(struct raft *);
 
 static bool raft_handle_write_error(struct raft *, struct ovsdb_error *);
 
@@ -396,6 +403,7 @@ raft_alloc(void)
     hmap_init(&raft->add_servers);
     hmap_init(&raft->commands);
 
+    raft->election_timer = ELECTION_BASE_MSEC;
     raft_reset_ping_timer(raft);
     raft_reset_election_timer(raft);
 
@@ -649,7 +657,7 @@ raft_set_servers(struct raft *raft, const struct hmap *new_servers,
 static uint64_t
 raft_add_entry(struct raft *raft,
                uint64_t term, struct json *data, const struct uuid *eid,
-               struct json *servers)
+               struct json *servers, uint64_t election_timer)
 {
     if (raft->log_end - raft->log_start >= raft->allocated_log) {
         raft->entries = x2nrealloc(raft->entries, &raft->allocated_log,
@@ -662,22 +670,26 @@ raft_add_entry(struct raft *raft,
     entry->data = data;
     entry->eid = eid ? *eid : UUID_ZERO;
     entry->servers = servers;
+    entry->election_timer = election_timer;
     return index;
 }
 
-/* Writes a RAFT_REC_ENTRY record for 'term', 'data', 'eid', 'servers' to
- * 'raft''s log and returns an error indication. */
+/* Writes a RAFT_REC_ENTRY record for 'term', 'data', 'eid', 'servers',
+ * 'election_timer' to * 'raft''s log and returns an error indication. */
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 raft_write_entry(struct raft *raft, uint64_t term, struct json *data,
-                 const struct uuid *eid, struct json *servers)
+                 const struct uuid *eid, struct json *servers,
+                 uint64_t election_timer)
 {
     struct raft_record r = {
         .type = RAFT_REC_ENTRY,
         .term = term,
         .entry = {
-            .index = raft_add_entry(raft, term, data, eid, servers),
+            .index = raft_add_entry(raft, term, data, eid, servers,
+                                    election_timer),
             .data = data,
             .servers = servers,
+            .election_timer = election_timer,
             .eid = eid ? *eid : UUID_ZERO,
         },
     };
@@ -750,7 +762,8 @@ raft_apply_record(struct raft *raft, unsigned long long int rec_idx,
         raft->log_synced = raft_add_entry(
             raft, r->term,
             json_nullable_clone(r->entry.data), &r->entry.eid,
-            json_nullable_clone(r->entry.servers));
+            json_nullable_clone(r->entry.servers),
+            r->entry.election_timer);
         return NULL;
 
     case RAFT_REC_TERM:
@@ -881,18 +894,21 @@ raft_read_log(struct raft *raft)
     /* Set the most recent servers. */
     raft_get_servers_from_log(raft, VLL_DBG);
 
+    /* Set the most recent election_timer. */
+    raft_get_election_timer_from_log(raft);
+
     return NULL;
 }
 
 static void
 raft_reset_election_timer(struct raft *raft)
 {
-    unsigned int duration = (ELECTION_BASE_MSEC
+    unsigned int duration = (raft->election_timer
                              + random_range(ELECTION_RANGE_MSEC));
     raft->election_base = time_msec();
     if (failure_test == FT_DELAY_ELECTION) {
         /* Slow down this node so that it won't win the next election. */
-        duration += ELECTION_BASE_MSEC;
+        duration += raft->election_timer;
     }
     raft->election_timeout = raft->election_base + duration;
 }
@@ -900,7 +916,7 @@ raft_reset_election_timer(struct raft *raft)
 static void
 raft_reset_ping_timer(struct raft *raft)
 {
-    raft->ping_timeout = time_msec() + PING_TIME_MSEC;
+    raft->ping_timeout = time_msec() + raft->election_timer / 3;
 }
 
 static void
@@ -1144,7 +1160,7 @@ raft_send_remove_server_requests(struct raft *raft)
         }
     }
 
-    raft->leave_timeout = time_msec() + ELECTION_BASE_MSEC;
+    raft->leave_timeout = time_msec() + raft->election_timer;
 }
 
 /* Attempts to start 'raft' leaving its cluster.  The caller can check progress
@@ -1161,7 +1177,7 @@ raft_leave(struct raft *raft)
     raft_transfer_leadership(raft, "this server is leaving the cluster");
     raft_become_follower(raft);
     raft_send_remove_server_requests(raft);
-    raft->leave_timeout = time_msec() + ELECTION_BASE_MSEC;
+    raft->leave_timeout = time_msec() + raft->election_timer;
 }
 
 /* Returns true if 'raft' is currently attempting to leave its cluster. */
@@ -1859,7 +1875,7 @@ raft_run(struct raft *raft)
         struct raft_command *cmd, *next_cmd;
         HMAP_FOR_EACH_SAFE (cmd, next_cmd, hmap_node, &raft->commands) {
             if (cmd->timestamp
-                && now - cmd->timestamp > ELECTION_BASE_MSEC * 2) {
+                && now - cmd->timestamp > raft->election_timer * 2) {
                 raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
             }
         }
@@ -2017,14 +2033,15 @@ raft_command_create_incomplete(struct raft *raft, uint64_t index)
 static struct raft_command * OVS_WARN_UNUSED_RESULT
 raft_command_initiate(struct raft *raft,
                       const struct json *data, const struct json *servers,
-                      const struct uuid *eid)
+                      uint64_t election_timer, const struct uuid *eid)
 {
     /* Write to local log. */
     uint64_t index = raft->log_end;
     if (!raft_handle_write_error(
             raft, raft_write_entry(
                 raft, raft->term, json_nullable_clone(data), eid,
-                json_nullable_clone(servers)))) {
+                json_nullable_clone(servers),
+                election_timer))) {
         return raft_command_create_completed(RAFT_CMD_IO_ERROR);
     }
 
@@ -2064,8 +2081,8 @@ log_all_commands(struct raft *raft)
 }
 
 static struct raft_command * OVS_WARN_UNUSED_RESULT
-raft_command_execute__(struct raft *raft,
-                       const struct json *data, const struct json *servers,
+raft_command_execute__(struct raft *raft, const struct json *data,
+                       const struct json *servers, uint64_t election_timer,
                        const struct uuid *prereq, struct uuid *result)
 {
     if (raft->joining || raft->leaving || raft->left || raft->failed) {
@@ -2078,7 +2095,7 @@ raft_command_execute__(struct raft *raft,
          * servers.  We do not proxy commands without prerequisites, even
          * though we could, because in an OVSDB context a log entry doesn't
          * make sense without context. */
-        if (servers || !data
+        if (servers || election_timer || !data
             || raft->role != RAFT_FOLLOWER || uuid_is_zero(&raft->leader_sid)
             || !prereq) {
             return raft_command_create_completed(RAFT_CMD_NOT_LEADER);
@@ -2131,7 +2148,7 @@ raft_command_execute__(struct raft *raft,
         return raft_command_create_completed(RAFT_CMD_BAD_PREREQ);
     }
 
-    return raft_command_initiate(raft, data, servers, &eid);
+    return raft_command_initiate(raft, data, servers, election_timer, &eid);
 }
 
 /* Initiates appending a log entry to 'raft'.  The log entry consists of 'data'
@@ -2146,7 +2163,7 @@ struct raft_command * OVS_WARN_UNUSED_RESULT
 raft_command_execute(struct raft *raft, const struct json *data,
                      const struct uuid *prereq, struct uuid *result)
 {
-    return raft_command_execute__(raft, data, NULL, prereq, result);
+    return raft_command_execute__(raft, data, NULL, 0, prereq, result);
 }
 
 /* Returns the status of 'cmd'. */
@@ -2525,6 +2542,8 @@ raft_become_leader(struct raft *raft)
         raft_server_init_leader(raft, s);
     }
 
+    raft->election_timer_new = 0;
+
     raft_update_our_match_index(raft, raft->log_end - 1);
     raft_send_heartbeats(raft);
 
@@ -2550,7 +2569,8 @@ raft_become_leader(struct raft *raft)
      *     entry is committed, the leader’s commit index will be at least as
      *     large as any other servers’ during its term.
      */
-    raft_command_unref(raft_command_execute__(raft, NULL, NULL, NULL, NULL));
+    raft_command_unref(raft_command_execute__(raft, NULL, NULL, 0, NULL,
+                                              NULL));
 }
 
 /* Processes term 'term' received as part of RPC 'common'.  Returns true if the
@@ -2704,6 +2724,12 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
                     raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
                 }
             }
+            if (e->election_timer) {
+                VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
+                          raft->election_timer, e->election_timer);
+                raft->election_timer = e->election_timer;
+                raft->election_timer_new = 0;
+            }
             if (e->servers) {
                 /* raft_run_reconfigure() can write a new Raft entry, which can
                  * reallocate raft->entries, which would invalidate 'e', so
@@ -2712,7 +2738,15 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
             }
         }
     } else {
-        raft->commit_index = new_commit_index;
+        while (raft->commit_index < new_commit_index) {
+            uint64_t index = ++raft->commit_index;
+            const struct raft_entry *e = raft_get_entry(raft, index);
+            if (e->election_timer) {
+                VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
+                          raft->election_timer, e->election_timer);
+                raft->election_timer = e->election_timer;
+            }
+        }
         /* Check if any pending command can be completed, and complete it.
          * This can happen when leader fail-over before sending
          * execute_command_reply. */
@@ -2857,7 +2891,8 @@ raft_handle_append_entries(struct raft *raft,
         const struct raft_entry *e = &entries[i];
         error = raft_write_entry(raft, e->term,
                                  json_nullable_clone(e->data), &e->eid,
-                                 json_nullable_clone(e->servers));
+                                 json_nullable_clone(e->servers),
+                                 e->election_timer);
         if (error) {
             break;
         }
@@ -3220,6 +3255,7 @@ raft_send_install_snapshot_request(struct raft *raft,
             .last_servers = raft->snap.servers,
             .last_eid = raft->snap.eid,
             .data = raft->snap.data,
+            .election_timer = raft->election_timer,
         }
     };
     raft_send(raft, &rpc);
@@ -3351,10 +3387,10 @@ raft_should_suppress_disruptive_server(struct raft *raft,
         return true;
 
     case RAFT_FOLLOWER:
-        if (now < raft->election_base + ELECTION_BASE_MSEC) {
+        if (now < raft->election_base + raft->election_timer) {
             VLOG_WARN_RL(&rl, "ignoring vote request received after only "
-                         "%lld ms (minimum election time is %d ms)",
-                         now - raft->election_base, ELECTION_BASE_MSEC);
+                         "%lld ms (minimum election time is %"PRIu64" ms)",
+                         now - raft->election_base, raft->election_timer);
             return true;
         }
         return false;
@@ -3478,7 +3514,7 @@ raft_log_reconfiguration(struct raft *raft)
 {
     struct json *servers_json = raft_servers_to_json(&raft->servers);
     raft_command_unref(raft_command_execute__(
-                           raft, NULL, servers_json, NULL, NULL));
+                           raft, NULL, servers_json, 0, NULL, NULL));
     json_destroy(servers_json);
 }
 
@@ -3777,6 +3813,7 @@ raft_write_snapshot(struct raft *raft, struct ovsdb_log *log,
                 .index = index,
                 .data = e->data,
                 .servers = e->servers,
+                .election_timer = e->election_timer,
                 .eid = e->eid,
             },
         };
@@ -3869,6 +3906,7 @@ raft_handle_install_snapshot_request__(
         .data = rq->data,
         .eid = rq->last_eid,
         .servers = rq->last_servers,
+        .election_timer = rq->election_timer,
     };
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
@@ -3893,6 +3931,7 @@ raft_handle_install_snapshot_request__(
     raft_entry_clone(&raft->snap, &new_snapshot);
 
     raft_get_servers_from_log(raft, VLL_INFO);
+    raft_get_election_timer_from_log(raft);
 
     return true;
 }
@@ -4019,6 +4058,7 @@ raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
         .data = json_clone(new_snapshot_data),
         .eid = *raft_get_eid(raft, new_log_start - 1),
         .servers = json_clone(raft_servers_for_index(raft, new_log_start - 1)),
+        .election_timer = raft->election_timer,
     };
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
@@ -4097,7 +4137,7 @@ raft_handle_execute_command_request__(
     }
 
     struct raft_command *cmd = raft_command_initiate(raft, rq->data,
-                                                     NULL, &rq->result);
+                                                     NULL, 0, &rq->result);
     cmd->sid = rq->common.sid;
 
     enum raft_command_status status = cmd->status;
@@ -4359,6 +4399,13 @@ raft_unixctl_status(struct unixctl_conn *conn,
     raft_put_sid("Vote", &raft->vote, raft, &s);
     ds_put_char(&s, '\n');
 
+    ds_put_format(&s, "Election timer: %"PRIu64, raft->election_timer);
+    if (raft->role == RAFT_LEADER && raft->election_timer_new) {
+        ds_put_format(&s, " (changing to %"PRIu64")",
+                      raft->election_timer_new);
+    }
+    ds_put_char(&s, '\n');
+
     ds_put_format(&s, "Log: [%"PRIu64", %"PRIu64"]\n",
                   raft->log_start, raft->log_end);
 
@@ -4513,6 +4560,84 @@ raft_unixctl_kick(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+raft_get_election_timer_from_log(struct raft *raft)
+{
+    if (raft->snap.election_timer) {
+        raft->election_timer = raft->snap.election_timer;
+    }
+    for (uint64_t index = raft->commit_index; index >= raft->log_start;
+         index--) {
+        struct raft_entry *e = &raft->entries[index - raft->log_start];
+        if (e->election_timer) {
+            raft->election_timer = e->election_timer;
+            break;
+        }
+    }
+}
+
+static void
+raft_log_election_timer(struct raft *raft)
+{
+    raft_command_unref(raft_command_execute__(raft, NULL, NULL,
+                                              raft->election_timer_new, NULL,
+                                              NULL));
+}
+
+static void
+raft_unixctl_change_election_timer(struct unixctl_conn *conn,
+                                   int argc OVS_UNUSED, const char *argv[],
+                                   void *aux OVS_UNUSED)
+{
+    const char *cluster_name = argv[1];
+    const char *election_timer_str = argv[2];
+
+    struct raft *raft = raft_lookup_by_name(cluster_name);
+    if (!raft) {
+        unixctl_command_reply_error(conn, "unknown cluster");
+        return;
+    }
+
+    if (raft->role != RAFT_LEADER) {
+        unixctl_command_reply_error(conn, "election timer must be changed"
+                                   " through leader.");
+        return;
+    }
+
+    /* If there are pending changes for election timer, reject it. */
+    if (raft->election_timer_new) {
+        unixctl_command_reply_error(conn, "election timer change pending.");
+        return;
+    }
+
+    uint64_t election_timer = atoll(election_timer_str);
+    if (election_timer == raft->election_timer) {
+        unixctl_command_reply(conn, "change election timer to current value.");
+        return;
+    }
+
+    /* Election timer smaller than 100ms or bigger than 10min doesn't make
+     * sense. */
+    if (election_timer < 100 || election_timer > 600000) {
+        unixctl_command_reply_error(conn, "election timer must be between "
+                                    "100 and 600000, in msec.");
+        return;
+    }
+
+    /* If election timer is to be enlarged, it should be done gradually so that
+     * it won't cause timeout when new value is applied on leader but not yet
+     * applied on some of the followers. */
+    if (election_timer > raft->election_timer * 2) {
+        unixctl_command_reply_error(conn, "election timer increase should not "
+                                    "exceed the current value x 2.");
+        return;
+    }
+
+    raft->election_timer_new = election_timer;
+    raft_log_election_timer(raft);
+    unixctl_command_reply(conn, "change of election timer initiated.");
+}
+
+static void
 raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
                           int argc OVS_UNUSED, const char *argv[],
                           void *aux OVS_UNUSED)
@@ -4568,6 +4693,8 @@ raft_init(void)
                              raft_unixctl_leave, NULL);
     unixctl_command_register("cluster/kick", "DB SERVER", 2, 2,
                              raft_unixctl_kick, NULL);
+    unixctl_command_register("cluster/change-election-timer", "DB TIME", 2, 2,
+                             raft_unixctl_change_election_timer, NULL);
     unixctl_command_register("cluster/failure-test", "FAILURE SCENARIO", 1, 1,
                              raft_unixctl_failure_test, NULL);
     ovsthread_once_done(&once);

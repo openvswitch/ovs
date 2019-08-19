@@ -115,6 +115,7 @@ struct raft_entry {
     struct json *data;
     struct uuid eid;
     struct json *servers;
+    uint64_t election_timer;
 };
 
 void raft_entry_clone(struct raft_entry *, const struct raft_entry *);
@@ -181,6 +182,7 @@ struct raft_record {
             uint64_t index;
             struct json *data;
             struct json *servers;
+            uint64_t election_timer;
             struct uuid eid;
         } entry;
     };

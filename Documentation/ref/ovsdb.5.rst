@@ -226,20 +226,21 @@ The table below identifies the members that each type of record contains.
 it is forbidden, and [1] that ``data`` and ``eid`` must be either both present
 or both absent.
 
-============  =====  ====  ====  ======  ============  ====
-member        Entry  Term  Vote  Leader  Commit Index  Note
-============  =====  ====  ====  ======  ============  ====
-comment         ?      ?     ?      ?          ?         ?
-term           yes    yes   yes    yes
-index          yes
-servers         ?
-data           [1]
-eid            [1]
-vote                        yes
-leader                             yes
-commit_index                                  yes
-note                                                   yes
-============  =====  ====  ====  ======  ============  ====
+==============  =====  ====  ====  ======  ============  ====
+member          Entry  Term  Vote  Leader  Commit Index  Note
+==============  =====  ====  ====  ======  ============  ====
+comment           ?      ?     ?      ?          ?         ?
+term             yes    yes   yes    yes
+index            yes
+servers           ?
+election_timer    ?
+data             [1]
+eid              [1]
+vote                          yes
+leader                               yes
+commit_index                                    yes
+note                                                     yes
+==============  =====  ====  ====  ======  ============  ====
 
 The members are:
 
@@ -255,6 +256,9 @@ The members are:
 
 ``"servers": <servers>``
     Server configuration in a log entry.
+
+``"election_timer": <uint64>``
+    Leader election timeout base value in a log entry.
 
 ``"data": <json-value>``
     The data in a log entry.
