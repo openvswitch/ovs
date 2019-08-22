@@ -240,6 +240,9 @@ struct dfc_cache {
  * and used during rxq to pmd assignment. */
 #define PMD_RXQ_INTERVAL_MAX 6
 
+/* Time in microseconds to try RCU quiescing. */
+#define PMD_RCU_QUIESCE_INTERVAL 10000LL
+
 struct dpcls {
     struct cmap_node node;      /* Within dp_netdev_pmd_thread.classifiers */
     odp_port_t in_port;
@@ -787,6 +790,9 @@ struct dp_netdev_pmd_thread {
 
     /* Set to true if the pmd thread needs to be reloaded. */
     bool need_reload;
+
+    /* Next time when PMD should try RCU quiescing. */
+    long long next_rcu_quiesce;
 };
 
 /* Interface to netdev-based datapath. */
@@ -5730,6 +5736,9 @@ reload:
     pmd->intrvl_tsc_prev = 0;
     atomic_store_relaxed(&pmd->intrvl_cycles, 0);
     cycles_counter_update(s);
+
+    pmd->next_rcu_quiesce = pmd->ctx.now + PMD_RCU_QUIESCE_INTERVAL;
+
     /* Protect pmd stats from external clearing while polling. */
     ovs_mutex_lock(&pmd->perf_stats.stats_mutex);
     for (;;) {
@@ -5764,6 +5773,16 @@ reload:
             tx_packets = dp_netdev_pmd_flush_output_packets(pmd, false);
         }
 
+        /* Do RCU synchronization at fixed interval.  This ensures that
+         * synchronization would not be delayed long even at high load of
+         * packet processing. */
+        if (pmd->ctx.now > pmd->next_rcu_quiesce) {
+            if (!ovsrcu_try_quiesce()) {
+                pmd->next_rcu_quiesce =
+                    pmd->ctx.now + PMD_RCU_QUIESCE_INTERVAL;
+            }
+        }
+
         if (lc++ > 1024) {
             lc = 0;
 
@@ -5771,6 +5790,8 @@ reload:
             dp_netdev_pmd_try_optimize(pmd, poll_list, poll_cnt);
             if (!ovsrcu_try_quiesce()) {
                 emc_cache_slow_sweep(&((pmd->flow_cache).emc_cache));
+                pmd->next_rcu_quiesce =
+                    pmd->ctx.now + PMD_RCU_QUIESCE_INTERVAL;
             }
 
             for (i = 0; i < poll_cnt; i++) {
@@ -6244,6 +6265,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->ctx.last_rxq = NULL;
     pmd_thread_ctx_time_update(pmd);
     pmd->next_optimization = pmd->ctx.now + DPCLS_OPTIMIZATION_INTERVAL;
+    pmd->next_rcu_quiesce = pmd->ctx.now + PMD_RCU_QUIESCE_INTERVAL;
     pmd->rxq_next_cycle_store = pmd->ctx.now + PMD_RXQ_INTERVAL_LEN;
     hmap_init(&pmd->poll_list);
     hmap_init(&pmd->tx_ports);
