@@ -164,7 +164,7 @@ The clustered format has the following additional notation:
     This allows readers to be ignorant of the full semantics of schema change.
 
 The first record in a clustered database contains the following members,
-all of which are required:
+all of which are required, except ``prev_election_timer``:
 
 ``"server_id": <raw-uuid>``
     The server's own UUID, which must be unique within the cluster.
@@ -189,6 +189,10 @@ all of which are required:
     The set of one or more servers in the cluster at index "prev_index" and
     term "prev_term".  It might not include this server, if it was not the
     initial server in the cluster.
+
+``"prev_election_timer": <uint64>``
+    The election base time before the beginning of the log.  If not exist,
+    the default value 1000 ms is used as if it exists this record.
 
 ``"prev_data": <json-value>`` and ``"prev_eid": <raw-uuid>``
     A snapshot of the data in the database at index "prev_index" and term
