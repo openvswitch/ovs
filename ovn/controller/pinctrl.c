@@ -2549,8 +2549,6 @@ pinctrl_destroy(void)
 struct put_mac_binding {
     struct hmap_node hmap_node; /* In 'put_mac_bindings'. */
 
-    long long int timestamp;    /* In milliseconds. */
-
     /* Key. */
     uint32_t dp_key;
     uint32_t port_key;
@@ -2624,7 +2622,6 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
         pmb->port_key = port_key;
         pmb->ip_key = ip_key;
     }
-    pmb->timestamp = time_msec();
     pmb->mac = headers->dl_src;
 
     /* We can send the buffered packet once the main ovn-controller
@@ -2672,10 +2669,6 @@ run_put_mac_binding(struct ovsdb_idl_txn *ovnsb_idl_txn,
                     struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip,
                     const struct put_mac_binding *pmb)
 {
-    if (time_msec() > pmb->timestamp + 1000) {
-        return;
-    }
-
     /* Convert logical datapath and logical port key into lport. */
     const struct sbrec_port_binding *pb = lport_lookup_by_key(
         sbrec_datapath_binding_by_key, sbrec_port_binding_by_key,
