@@ -156,7 +156,7 @@ The clustered format has the following additional notation:
        database.
 
     2. The second element is either a transaction record in the format
-       described under ``Standalone Format'' above, or ``null``.
+       described under ``Standalone Format`` above, or ``null``.
 
     When a schema is present, the transaction record is relative to an empty
     database.  That is, a schema change effectively resets the database to
@@ -173,7 +173,7 @@ all of which are required, except ``prev_election_timer``:
     The address on which the server listens for connections from other
     servers in the cluster.
 
-``name": <id>``
+``"name": <id>``
     The database schema name.  It is only important when a server is in the
     process of joining a cluster: a server will only join a cluster if the
     name matches.  (If the database schema name were unique, then we would
