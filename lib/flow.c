@@ -343,7 +343,6 @@ parse_vlan(const void **datap, size_t *sizep, union flow_vlan_hdr *vlan_hdrs)
 {
     const ovs_be16 *eth_type;
 
-    memset(vlan_hdrs, 0, sizeof(union flow_vlan_hdr) * FLOW_MAX_VLAN_HEADERS);
     data_pull(datap, sizep, ETH_ADDR_LEN * 2);
 
     eth_type = *datap;
@@ -354,6 +353,7 @@ parse_vlan(const void **datap, size_t *sizep, union flow_vlan_hdr *vlan_hdrs)
             break;
         }
 
+        memset(vlan_hdrs + n, 0, sizeof(union flow_vlan_hdr));
         const ovs_16aligned_be32 *qp = data_pull(datap, sizep, sizeof *qp);
         vlan_hdrs[n].qtag = get_16aligned_be32(qp);
         vlan_hdrs[n].tci |= htons(VLAN_CFI);
