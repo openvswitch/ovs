@@ -404,8 +404,6 @@ raft_alloc(void)
     hmap_init(&raft->commands);
 
     raft->election_timer = ELECTION_BASE_MSEC;
-    raft_reset_ping_timer(raft);
-    raft_reset_election_timer(raft);
 
     return raft;
 }
@@ -969,6 +967,9 @@ raft_open(struct ovsdb_log *log, struct raft **raftp)
     } else {
         raft->join_timeout = time_msec() + 1000;
     }
+
+    raft_reset_ping_timer(raft);
+    raft_reset_election_timer(raft);
 
     *raftp = raft;
     hmap_insert(&all_rafts, &raft->hmap_node, hash_string(raft->name, 0));
