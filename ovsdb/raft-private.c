@@ -284,6 +284,7 @@ raft_entry_clone(struct raft_entry *dst, const struct raft_entry *src)
     dst->data = json_nullable_clone(src->data);
     dst->eid = src->eid;
     dst->servers = json_nullable_clone(src->servers);
+    dst->election_timer = src->election_timer;
 }
 
 void
@@ -405,6 +406,8 @@ raft_header_from_json__(struct raft_header *h, struct ovsdb_parser *p)
                 ovsdb_parser_member(p, "prev_data", OP_ANY));
             h->snap.eid = raft_parse_required_uuid(p, "prev_eid");
             h->snap.term = raft_parse_required_uint64(p, "prev_term");
+            h->snap.election_timer = raft_parse_optional_uint64(
+                p, "prev_election_timer");
         }
     }
 
@@ -457,6 +460,10 @@ raft_header_to_json(const struct raft_header *h)
         }
         json_object_put_format(json, "prev_eid",
                                UUID_FMT, UUID_ARGS(&h->snap.eid));
+        if (h->snap.election_timer) {
+            raft_put_uint64(json, "prev_election_timer",
+                            h->snap.election_timer);
+        }
     }
 
     return json;
