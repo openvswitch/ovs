@@ -837,6 +837,7 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
              * interpretation in the further packet processing when
              * recirculated.*/
             dp_packet_reset_offload(packet);
+            pkt_metadata_init_conn(&packet->md);
             dp_packet_batch_refill(batch, packet, i);
         }
     }

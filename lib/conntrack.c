@@ -1089,6 +1089,46 @@ conn_update_state_alg(struct conntrack *ct, struct dp_packet *pkt,
 }
 
 static void
+set_cached_conn(const struct nat_action_info_t *nat_action_info,
+                const struct conn_lookup_ctx *ctx, struct conn *conn,
+                struct dp_packet *pkt)
+{
+    if (OVS_LIKELY(!nat_action_info)) {
+        pkt->md.conn = conn;
+        pkt->md.reply = ctx->reply;
+        pkt->md.icmp_related = ctx->icmp_related;
+    } else {
+        pkt->md.conn = NULL;
+    }
+}
+
+static void
+process_one_fast(uint16_t zone, const uint32_t *setmark,
+                 const struct ovs_key_ct_labels *setlabel,
+                 const struct nat_action_info_t *nat_action_info,
+                 struct conn *conn, struct dp_packet *pkt)
+{
+    if (nat_action_info) {
+        handle_nat(pkt, conn, zone, pkt->md.reply, pkt->md.icmp_related);
+        pkt->md.conn = NULL;
+    }
+
+    pkt->md.ct_zone = zone;
+    ovs_mutex_lock(&conn->lock);
+    pkt->md.ct_mark = conn->mark;
+    pkt->md.ct_label = conn->label;
+    ovs_mutex_unlock(&conn->lock);
+
+    if (setmark) {
+        set_mark(pkt, conn, setmark[0], setmark[1]);
+    }
+
+    if (setlabel) {
+        set_label(pkt, conn, &setlabel[0], &setlabel[1]);
+    }
+}
+
+static void
 process_one(struct conntrack *ct, struct dp_packet *pkt,
             struct conn_lookup_ctx *ctx, uint16_t zone,
             bool force, bool commit, long long now, const uint32_t *setmark,
@@ -1188,6 +1228,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     }
 
     handle_alg_ctl(ct, ctx, pkt, ct_alg_ctl, conn, now, !!nat_action_info);
+
+    set_cached_conn(nat_action_info, ctx, conn, pkt);
 }
 
 /* Sends the packets in '*pkt_batch' through the connection tracker 'ct'.  All
@@ -1215,14 +1257,21 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
     struct conn_lookup_ctx ctx;
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
-        if (packet->md.ct_state == CS_INVALID
-            || !conn_key_extract(ct, packet, dl_type, &ctx, zone)) {
+        struct conn *conn = packet->md.conn;
+        if (OVS_UNLIKELY(packet->md.ct_state == CS_INVALID)) {
+            write_ct_md(packet, zone, NULL, NULL, NULL);
+        } else if (conn && conn->key.zone == zone && !force
+                   && !get_alg_ctl_type(packet, tp_src, tp_dst, helper)) {
+            process_one_fast(zone, setmark, setlabel, nat_action_info,
+                             conn, packet);
+        } else if (OVS_UNLIKELY(!conn_key_extract(ct, packet, dl_type, &ctx,
+                                zone))) {
             packet->md.ct_state = CS_INVALID;
             write_ct_md(packet, zone, NULL, NULL, NULL);
-            continue;
+        } else {
+            process_one(ct, packet, &ctx, zone, force, commit, now, setmark,
+                        setlabel, nat_action_info, tp_src, tp_dst, helper);
         }
-        process_one(ct, packet, &ctx, zone, force, commit, now, setmark,
-                    setlabel, nat_action_info, tp_src, tp_dst, helper);
     }
 
     ipf_postprocess_conntrack(ct->ipf, pkt_batch, now, dl_type);
@@ -1236,6 +1285,7 @@ conntrack_clear(struct dp_packet *packet)
     /* According to pkt_metadata_init(), ct_state == 0 is enough to make all of
      * the conntrack fields invalid. */
     packet->md.ct_state = 0;
+    pkt_metadata_init_conn(&packet->md);
 }
 
 static void

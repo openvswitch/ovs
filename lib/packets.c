@@ -391,6 +391,8 @@ push_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse)
     header = dp_packet_resize_l2_5(packet, MPLS_HLEN);
     memmove(header, header + MPLS_HLEN, len);
     memcpy(header + len, &lse, sizeof lse);
+
+    pkt_metadata_init_conn(&packet->md);
 }
 
 /* If 'packet' is an MPLS packet, removes its outermost MPLS label stack entry.
@@ -983,6 +985,8 @@ packet_set_ipv4_addr(struct dp_packet *packet,
     ovs_be32 old_addr = get_16aligned_be32(addr);
     size_t l4_size = dp_packet_l4_size(packet);
 
+    pkt_metadata_init_conn(&packet->md);
+
     if (nh->ip_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
         struct tcp_header *th = dp_packet_l4(packet);
 
@@ -1122,6 +1126,7 @@ packet_set_ipv6_addr(struct dp_packet *packet, uint8_t proto,
         packet_update_csum128(packet, proto, addr, new_addr);
     }
     memcpy(addr, new_addr, sizeof(ovs_be32[4]));
+    pkt_metadata_init_conn(&packet->md);
 }
 
 static void
@@ -1223,6 +1228,7 @@ packet_set_tcp_port(struct dp_packet *packet, ovs_be16 src, ovs_be16 dst)
 
     packet_set_port(&th->tcp_src, src, &th->tcp_csum);
     packet_set_port(&th->tcp_dst, dst, &th->tcp_csum);
+    pkt_metadata_init_conn(&packet->md);
 }
 
 /* Sets the UDP source and destination port ('src' and 'dst' respectively) of
@@ -1244,6 +1250,7 @@ packet_set_udp_port(struct dp_packet *packet, ovs_be16 src, ovs_be16 dst)
         uh->udp_src = src;
         uh->udp_dst = dst;
     }
+    pkt_metadata_init_conn(&packet->md);
 }
 
 /* Sets the SCTP source and destination port ('src' and 'dst' respectively) of
@@ -1265,6 +1272,7 @@ packet_set_sctp_port(struct dp_packet *packet, ovs_be16 src, ovs_be16 dst)
 
     new_csum = crc32c((void *)sh, tp_len);
     put_16aligned_be32(&sh->sctp_csum, old_csum ^ old_correct_csum ^ new_csum);
+    pkt_metadata_init_conn(&packet->md);
 }
 
 /* Sets the ICMP type and code of the ICMP header contained in 'packet'.
@@ -1283,6 +1291,7 @@ packet_set_icmp(struct dp_packet *packet, uint8_t type, uint8_t code)
 
         ih->icmp_csum = recalc_csum16(ih->icmp_csum, orig_tc, new_tc);
     }
+    pkt_metadata_init_conn(&packet->md);
 }
 
 /* Sets the IGMP type to IGMP_HOST_MEMBERSHIP_QUERY and populates the

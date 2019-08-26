@@ -5618,6 +5618,69 @@ grep "tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),r
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - negative test for recirculation optimization])
+dnl This test will fail if 'conn' caching is being used, because the tuple
+dnl has been changed outside of conntrack.
+AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_CT_CLEAR()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01") dnl FIP 10.254.254.1
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02") dnl FIP 10.254.254.2
+
+dnl Static ARPs
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
+
+dnl Static ARP and route entries for the FIP "gateway"
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p1])
+NS_CHECK_EXEC([at_ns0], [ip route add default nexthop via 10.1.1.254])
+NS_CHECK_EXEC([at_ns1], [ip route add default nexthop via 10.1.1.254])
+
+NETNS_DAEMONIZE([at_ns0], [nc -l -k 1234 > /dev/null], [nc0.pid])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=10  ip action=ct(table=1)
+dnl dst FIP
+table=1,priority=20  ip,ct_state=+trk+est,nw_dst=10.254.254.0/24 action=goto_table:2
+table=1,priority=20  ip,ct_state=+trk+new,nw_dst=10.254.254.0/24 action=ct(commit,exec(set_field:1->ct_mark),table=2)
+dnl
+dnl FIP translation (dst FIP, src local) --> (dst local, src FIP)
+table=2             ip,nw_dst=10.254.254.1 action=set_field:10.1.1.1->nw_dst,goto_table:3
+table=2             ip,nw_dst=10.254.254.2 action=set_field:10.1.1.2->nw_dst,goto_table:3
+table=3             ip,nw_src=10.1.1.1 action=set_field:10.254.254.1->nw_src,goto_table:4
+table=3             ip,nw_src=10.1.1.2 action=set_field:10.254.254.2->nw_src,goto_table:4
+table=4             ip,nw_dst=10.1.1.1 action=set_field:f0:00:00:01:01:01->eth_dst,goto_table:5
+table=4             ip,nw_dst=10.1.1.2 action=set_field:f0:00:00:01:01:02->eth_dst,goto_table:5
+table=5             ip,nw_src=10.254.254.0/24 action=set_field:f0:00:00:01:01:FE->eth_src,goto_table:6
+dnl
+dnl Tuple has been changed outside of conntrack
+table=6,priority=10 ip action=ct(table=7)
+dnl
+table=7             ip,ct_state=+trk+est action=goto_table:8
+table=7             ip,ct_mark=0x0,ct_state=+trk+new action=ct(commit,exec(set_field:2->ct_mark),table=8)
+dnl
+table=8             ip,nw_dst=10.1.1.1 action=output:ovs-p0
+table=8             ip,nw_dst=10.1.1.2 action=output:ovs-p1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.254.254.1 1234])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.254.254)], [0], [dnl
+tcp,orig=(src=10.1.1.2,dst=10.254.254.1,sport=<cleared>,dport=<cleared>),reply=(src=10.254.254.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.254.254.2,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
+])
+
+ovs-appctl dpif/dump-flows br0
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
