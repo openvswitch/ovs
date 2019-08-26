@@ -34,7 +34,7 @@ struct OVS_LOCKABLE ovs_mutex {
 };
 
 #ifdef HAVE_PTHREAD_SPIN_LOCK
-struct OVS_LOCKABLE ovs_spin {
+OVS_ALIGNED_STRUCT(64, OVS_LOCKABLE ovs_spin) {
     pthread_spinlock_t lock;
     const char *where;          /* NULL if and only if uninitialized. */
 };
