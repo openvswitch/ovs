@@ -41,6 +41,7 @@
 #include <rte_vhost.h>
 
 #include "cmap.h"
+#include "coverage.h"
 #include "dirs.h"
 #include "dp-packet.h"
 #include "dpdk.h"
@@ -71,6 +72,8 @@ enum {VIRTIO_RXQ, VIRTIO_TXQ, VIRTIO_QNUM};
 
 VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+
+COVERAGE_DEFINE(vhost_tx_contention);
 
 #define DPDK_PORT_WATCHDOG_INTERVAL 5
 
@@ -2376,7 +2379,10 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         goto out;
     }
 
-    rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
+    if (OVS_UNLIKELY(!rte_spinlock_trylock(&dev->tx_q[qid].tx_lock))) {
+        COVERAGE_INC(vhost_tx_contention);
+        rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
+    }
 
     cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
     /* Check has QoS has been configured for the netdev */
