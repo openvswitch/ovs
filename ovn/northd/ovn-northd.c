@@ -3937,7 +3937,6 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
                               ds_cstr(&match), action);
                 ds_destroy(&match);
                 free(action);
-                continue;
             }
 
             free(ip_address);
