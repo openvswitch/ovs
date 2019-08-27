@@ -654,7 +654,8 @@ force_reload_kmod () {
 
     restore_interfaces
 
-    "$datadir/scripts/ovs-check-dead-ifs"
+    action "Finding processes on dead interfaces" timeout 5 \
+        "$datadir/scripts/ovs-check-dead-ifs" || true
 }
 
 ## ------- ##
