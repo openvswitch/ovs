@@ -745,6 +745,9 @@ struct icmp_header {
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
+/* ICMPV4 */
+#define ICMP_ERROR_DATA_L4_LEN 8
+
 #define IGMP_HEADER_LEN 8
 struct igmp_header {
     uint8_t igmp_type;
