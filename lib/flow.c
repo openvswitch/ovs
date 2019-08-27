@@ -786,20 +786,17 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         ct_nw_proto_p = miniflow_pointer(mf, ct_nw_proto);
         miniflow_push_uint8(mf, ct_nw_proto, 0);
         miniflow_push_uint16(mf, ct_zone, md->ct_zone);
-    } else if (md->recirc_id) {
-        miniflow_push_uint32(mf, recirc_id, md->recirc_id);
-        miniflow_pad_to_64(mf, recirc_id);
-    }
-
-    if (md->ct_state) {
         miniflow_push_uint32(mf, ct_mark, md->ct_mark);
         miniflow_push_be32(mf, packet_type, packet_type);
-
         if (!ovs_u128_is_zero(md->ct_label)) {
             miniflow_push_words(mf, ct_label, &md->ct_label,
                                 sizeof md->ct_label / sizeof(uint64_t));
         }
     } else {
+        if (md->recirc_id) {
+            miniflow_push_uint32(mf, recirc_id, md->recirc_id);
+            miniflow_pad_to_64(mf, recirc_id);
+        }
         miniflow_pad_from_64(mf, packet_type);
         miniflow_push_be32(mf, packet_type, packet_type);
     }
