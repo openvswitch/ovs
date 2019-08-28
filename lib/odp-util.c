@@ -930,6 +930,8 @@ static const struct nl_policy ovs_conntrack_policy[] = {
     [OVS_CT_ATTR_HELPER] = { .type = NL_A_STRING, .optional = true,
                              .min_len = 1, .max_len = 16 },
     [OVS_CT_ATTR_NAT] = { .type = NL_A_UNSPEC, .optional = true },
+    [OVS_CT_ATTR_TIMEOUT] = { .type = NL_A_STRING, .optional = true,
+                              .min_len = 1, .max_len = 32 },
 };
 
 static void
@@ -941,7 +943,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
         ovs_32aligned_u128 mask;
     } *label;
     const uint32_t *mark;
-    const char *helper;
+    const char *helper, *timeout;
     uint16_t zone;
     bool commit, force;
     const struct nlattr *nat;
@@ -957,10 +959,12 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     mark = a[OVS_CT_ATTR_MARK] ? nl_attr_get(a[OVS_CT_ATTR_MARK]) : NULL;
     label = a[OVS_CT_ATTR_LABELS] ? nl_attr_get(a[OVS_CT_ATTR_LABELS]): NULL;
     helper = a[OVS_CT_ATTR_HELPER] ? nl_attr_get(a[OVS_CT_ATTR_HELPER]) : NULL;
+    timeout = a[OVS_CT_ATTR_TIMEOUT] ?
+                nl_attr_get(a[OVS_CT_ATTR_TIMEOUT]) : NULL;
     nat = a[OVS_CT_ATTR_NAT];
 
     ds_put_format(ds, "ct");
-    if (commit || force || zone || mark || label || helper || nat) {
+    if (commit || force || zone || mark || label || helper || timeout || nat) {
         ds_put_cstr(ds, "(");
         if (commit) {
             ds_put_format(ds, "commit,");
@@ -982,6 +986,9 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
         }
         if (helper) {
             ds_put_format(ds, "helper=%s,", helper);
+        }
+        if (timeout) {
+            ds_put_format(ds, "timeout=%s", timeout);
         }
         if (nat) {
             format_odp_ct_nat(ds, nat);
@@ -1910,8 +1917,8 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
     const char *s = s_;
 
     if (ovs_scan(s, "ct")) {
-        const char *helper = NULL;
-        size_t helper_len = 0;
+        const char *helper = NULL, *timeout = NULL;
+        size_t helper_len = 0, timeout_len = 0;
         bool commit = false;
         bool force_commit = false;
         uint16_t zone = 0;
@@ -1988,6 +1995,16 @@ find_end:
                     s += helper_len;
                     continue;
                 }
+                if (ovs_scan(s, "timeout=%n", &n)) {
+                    s += n;
+                    timeout_len = strcspn(s, delimiters_end);
+                    if (!timeout_len || timeout_len > 31) {
+                        return -EINVAL;
+                    }
+                    timeout = s;
+                    s += timeout_len;
+                    continue;
+                }
 
                 n = scan_ct_nat(s, &nat_params);
                 if (n > 0) {
@@ -2027,6 +2044,10 @@ find_end:
         if (helper) {
             nl_msg_put_string__(actions, OVS_CT_ATTR_HELPER, helper,
                                 helper_len);
+        }
+        if (timeout) {
+            nl_msg_put_string__(actions, OVS_CT_ATTR_TIMEOUT, timeout,
+                                timeout_len);
         }
         if (have_nat) {
             nl_msg_put_ct_nat(&nat_params, actions);
