@@ -411,6 +411,10 @@ pop_mpls(struct dp_packet *packet, ovs_be16 ethtype)
         /* Shift the l2 header forward. */
         memmove((char*)dp_packet_data(packet) + MPLS_HLEN, dp_packet_data(packet), len);
         dp_packet_resize_l2_5(packet, -MPLS_HLEN);
+
+        /* Invalidate offload flags as they are not valid after
+         * decapsulation of MPLS header. */
+        dp_packet_reset_offload(packet);
     }
 }
 
