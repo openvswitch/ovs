@@ -52,6 +52,13 @@
     one record in the <ref table="Open_vSwitch"/> table.
 
     <group title="Configuration">
+      <column name="datapaths">
+        Map of datapath types to datapaths.  The
+        <ref column="datapath_type"/> column of the <ref table="Bridge"/>
+        table is used as a key for this map.  The value points to a row in
+        the <ref table="Datapath"/> table.
+      </column>
+
       <column name="bridges">
         Set of bridges managed by the daemon.
       </column>
@@ -1217,53 +1224,11 @@
       </column>
 
       <column name="datapath_version">
-        <p>
-          Reports the version number of the Open vSwitch datapath in use.
-          This allows management software to detect and report discrepancies
-          between Open vSwitch userspace and datapath versions.  (The <ref
-          column="ovs_version" table="Open_vSwitch"/> column in the <ref
-          table="Open_vSwitch"/> reports the Open vSwitch userspace version.)
-          The version reported depends on the datapath in use:
-        </p>
-
-        <ul>
-          <li>
-            When the kernel module included in the Open vSwitch source tree is
-            used, this column reports the Open vSwitch version from which the
-            module was taken.
-          </li>
-
-          <li>
-            When the kernel module that is part of the upstream Linux kernel is
-            used, this column reports <code>&lt;unknown&gt;</code>.
-          </li>
-
-          <li>
-            When the datapath is built into the <code>ovs-vswitchd</code>
-            binary, this column reports <code>&lt;built-in&gt;</code>.  A
-            built-in datapath is by definition the same version as the rest of
-            the Open VSwitch userspace.
-          </li>
-
-          <li>
-            Other datapaths (such as the Hyper-V kernel datapath) currently
-            report <code>&lt;unknown&gt;</code>.
-          </li>
-        </ul>
-
-        <p>
-          A version discrepancy between <code>ovs-vswitchd</code> and the
-          datapath in use is not normally cause for alarm.  The Open vSwitch
-          kernel datapaths for Linux and Hyper-V, in particular, are designed
-          for maximum inter-version compatibility: any userspace version works
-          with with any kernel version.  Some reasons do exist to insist on
-          particular user/kernel pairings.  First, newer kernel versions add
-          new features, that can only be used by new-enough userspace, e.g.
-          VXLAN tunneling requires certain minimal userspace and kernel
-          versions.  Second, as an extension to the first reason, some newer
-          kernel versions add new features for enhancing performance that only
-          new-enough userspace versions can take advantage of.
-        </p>
+          Reports the datapath version.  This column is maintained for
+          backwards compatibility.  The preferred locatation is the
+          <ref column="datapath_id" table="Datapath"/> column of the
+          <ref table="Datapath"/> table.  The full documentation for this
+          column is there.
       </column>
 
       <column name="other_config" key="datapath-id">
@@ -5576,6 +5541,222 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       disambiguate the traffic.</p>
       <p>When this option is enabled, a maximum of 508 ports are supported.</p>
     </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
+  </table>
+
+  <table name="Datapath">
+    <p>
+      Configuration for a datapath within <ref table="Open_vSwitch"/>.
+    </p>
+    <p>
+      A datapath is responsible for providing the packet handling in Open
+      vSwitch.  There are two primary datapath implementations used by
+      Open vSwitch: kernel and userspace.  Kernel datapath
+      implementations are available for Linux and Hyper-V, and selected
+      as <code>system</code> in the <ref column="datapath_type"/> column
+      of the <ref table="Bridge"/> table.  The userspace datapath is used
+      by DPDK and AF-XDP, and is selected as <code>netdev</code> in the
+      <ref column="datapath_type"/> column of the <ref table="Bridge"/>
+      table.
+    </p>
+    <p>
+      A datapath of a particular type is shared by all the bridges that use
+      that datapath.  Thus, configurations applied to this table affect
+      all bridges that use this datapath.
+    </p>
+
+    <column name="datapath_version">
+      <p>
+        Reports the version number of the Open vSwitch datapath in use.
+        This allows management software to detect and report discrepancies
+        between Open vSwitch userspace and datapath versions.  (The <ref
+        column="ovs_version" table="Open_vSwitch"/> column in the <ref
+        table="Open_vSwitch"/> reports the Open vSwitch userspace version.)
+        The version reported depends on the datapath in use:
+      </p>
+
+      <ul>
+        <li>
+          When the kernel module included in the Open vSwitch source tree is
+          used, this column reports the Open vSwitch version from which the
+          module was taken.
+        </li>
+
+        <li>
+          When the kernel module that is part of the upstream Linux kernel is
+          used, this column reports <code>&lt;unknown&gt;</code>.
+        </li>
+
+        <li>
+          When the datapath is built into the <code>ovs-vswitchd</code>
+          binary, this column reports <code>&lt;built-in&gt;</code>.  A
+          built-in datapath is by definition the same version as the rest of
+          the Open vSwitch userspace.
+        </li>
+
+        <li>
+          Other datapaths (such as the Hyper-V kernel datapath) currently
+          report <code>&lt;unknown&gt;</code>.
+        </li>
+      </ul>
+
+      <p>
+        A version discrepancy between <code>ovs-vswitchd</code> and the
+        datapath in use is not normally cause for alarm.  The Open vSwitch
+        kernel datapaths for Linux and Hyper-V, in particular, are designed
+        for maximum inter-version compatibility: any userspace version works
+        with with any kernel version.  Some reasons do exist to insist on
+        particular user/kernel pairings.  First, newer kernel versions add
+        new features, that can only be used by new-enough userspace, e.g.
+        VXLAN tunneling requires certain minimal userspace and kernel
+        versions.  Second, as an extension to the first reason, some newer
+        kernel versions add new features for enhancing performance that only
+        new-enough userspace versions can take advantage of.
+      </p>
+    </column>
+
+    <column name="ct_zones">
+      Configuration for connection tracking zones.  Each pair maps from a
+      zone id to a configuration for that zone.  Zone <code>0</code> applies
+      to the default zone (ie, the one used if a zone is not specified in
+      connection tracking-related OpenFlow matches and actions).
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
+  </table>
+
+  <table name="CT_Zone">
+    Connection tracking zone configuration
+
+    <column name="timeout_policy">
+      Connection tracking timeout policy for this zone. If a timeout policy
+      is not specified, it defaults to the timeout policy in the system.
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
+  </table>
+
+  <table name="CT_Timeout_Policy">
+    Connection tracking timeout policy configuration
+
+    <group title="Timeouts">
+      <column name="timeouts">
+        The <code>timeouts</code> column contains key-value pairs used
+        to configure connection tracking timeouts in a datapath.
+        Key-value pairs that are not supported by a datapath are
+        ignored.  The timeout value is in seconds.
+      </column>
+
+      <group title="TCP Timeouts">
+        <column name="timeouts" key="tcp_syn_sent">
+          The timeout for the connection after the first TCP SYN packet has
+          been seen by conntrack.
+        </column>
+
+        <column name="timeouts" key="tcp_syn_recv">
+          The timeout of the connection after the first TCP SYN-ACK packet
+          has been seen by conntrack.
+        </column>
+
+        <column name="timeouts" key="tcp_established">
+          The timeout of the connection after the connection has been fully
+          established.
+        </column>
+
+        <column name="timeouts" key="tcp_fin_wait">
+          The timeout of the connection after the first TCP FIN packet
+          has been seen by conntrack.
+        </column>
+
+        <column name="timeouts" key="tcp_close_wait">
+          The timeout of the connection after the first TCP ACK packet
+          has been seen after it receives TCP FIN packet.  This timeout
+          is only supported by the Linux kernel datapath.
+        </column>
+
+        <column name="timeouts" key="tcp_last_ack">
+          The timeout of the connection after TCP FIN packets have been
+          seen by conntrack from both directions.  This timeout is only
+          supported by the Linux kernel datapath.
+        </column>
+
+        <column name="timeouts" key="tcp_time_wait">
+          The timeout of the connection after conntrack has seen the
+          TCP ACK packet for the second TCP FIN packet.
+        </column>
+
+        <column name="timeouts" key="tcp_close">
+          The timeout of the connection after the first TCP RST packet
+          has been seen by conntrack.
+        </column>
+
+        <column name="timeouts" key="tcp_syn_sent2">
+          The timeout of the connection when only a TCP SYN packet has been
+          seen by conntrack from both directions (simultaneous open).
+          This timeout is only supported by the Linux kernel datapath.
+        </column>
+
+        <column name="timeouts" key="tcp_retransmit">
+          The timeout of the connection when it exceeds the maximum
+          number of retransmissions.  This timeout is only supported by
+          the Linux kernel datapath.
+        </column>
+
+        <column name="timeouts" key="tcp_unack">
+          The timeout of the connection when non-SYN packets create an
+          established connection in TCP loose tracking mode.  This timeout
+          is only supported by the Linux kernel datapath.
+        </column>
+      </group>
+
+      <group title="UDP Timeouts">
+        <column name="timeouts" key="udp_first">
+          The timeout of the connection after the first UDP packet has
+          been seen by conntrack.  This timeout is only supported by the
+          userspace datapath.
+        </column>
+
+        <column name="timeouts" key="udp_single">
+          The timeout of the connection when conntrack only seen UDP
+          packet from the source host, but the destination host has never
+          sent one back.
+        </column>
+
+        <column name="timeouts" key="udp_multiple">
+          The timeout of the connection when UDP packets have been seen in
+          both directions.
+        </column>
+      </group>
+
+      <group title="ICMP Timeouts">
+        <column name="timeouts" key="icmp_first">
+          The timeout of the connection after the first ICMP packet has
+          been seen by conntrack.
+        </column>
+
+        <column name="timeouts" key="icmp_reply">
+          The timeout of the connection after an ICMP error is replied in
+          response to an ICMP packet.  This timeout is only supported by
+          the userspace datapath.
+        </column>
+      </group>
+    </group>
 
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
