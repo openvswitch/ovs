@@ -153,8 +153,34 @@ struct aa_mapping {
     char *br_name;
 };
 
+/* Internal representation of conntrack zone configuration table in OVSDB. */
+struct ct_zone {
+    uint16_t zone_id;
+    struct simap tp;            /* A map from timeout policy attribute to
+                                 * timeout value. */
+    struct hmap_node node;      /* Node in 'struct datapath' 'ct_zones'
+                                 * hmap. */
+    unsigned int last_used;     /* The last idl_seqno that this 'ct_zone' used
+                                 * in OVSDB. This number is used for garbage
+                                 * collection. */
+};
+
+/* Internal representation of datapath configuration table in OVSDB. */
+struct datapath {
+    char *type;                 /* Datapath type. */
+    struct hmap ct_zones;       /* Map of 'struct ct_zone' elements, indexed
+                                 * by 'zone'. */
+    struct hmap_node node;      /* Node in 'all_datapaths' hmap. */
+    unsigned int last_used;     /* The last idl_seqno that this 'datapath'
+                                 * used in OVSDB. This number is used for
+                                 * garbage collection. */
+};
+
 /* All bridges, indexed by name. */
 static struct hmap all_bridges = HMAP_INITIALIZER(&all_bridges);
+
+/* All datapath configuartions, indexed by type. */
+static struct hmap all_datapaths = HMAP_INITIALIZER(&all_datapaths);
 
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
@@ -275,6 +301,8 @@ static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
 static bool port_is_bond_fake_iface(const struct port *);
+
+static void datapath_destroy(struct datapath *dp);
 
 static unixctl_cb_func qos_unixctl_show_types;
 static unixctl_cb_func qos_unixctl_show;
@@ -506,13 +534,19 @@ bridge_init(const char *remote)
 void
 bridge_exit(bool delete_datapath)
 {
-    struct bridge *br, *next_br;
-
     if_notifier_destroy(ifnotifier);
     seq_destroy(ifaces_changed);
+
+    struct datapath *dp, *next;
+    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+        datapath_destroy(dp);
+    }
+
+    struct bridge *br, *next_br;
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
         bridge_destroy(br, delete_datapath);
     }
+
     ovsdb_idl_destroy(idl);
 }
 
@@ -590,6 +624,164 @@ config_ofproto_types(const struct smap *other_config)
         ofproto_type_set_config(type, other_config);
     }
     sset_destroy(&types);
+}
+
+static void
+get_timeout_policy_from_ovsrec(struct simap *tp,
+                               const struct ovsrec_ct_timeout_policy *tp_cfg)
+{
+    for (size_t i = 0; i < tp_cfg->n_timeouts; i++) {
+        simap_put(tp, tp_cfg->key_timeouts[i], tp_cfg->value_timeouts[i]);
+    }
+}
+
+static struct ct_zone *
+ct_zone_lookup(struct hmap *ct_zones, uint16_t zone_id)
+{
+    struct ct_zone *ct_zone;
+
+    HMAP_FOR_EACH_WITH_HASH (ct_zone, node, hash_int(zone_id, 0), ct_zones) {
+        if (ct_zone->zone_id == zone_id) {
+            return ct_zone;
+        }
+    }
+    return NULL;
+}
+
+static struct ct_zone *
+ct_zone_alloc(uint16_t zone_id, struct ovsrec_ct_timeout_policy *tp_cfg)
+{
+    struct ct_zone *ct_zone = xzalloc(sizeof *ct_zone);
+
+    ct_zone->zone_id = zone_id;
+    simap_init(&ct_zone->tp);
+    get_timeout_policy_from_ovsrec(&ct_zone->tp, tp_cfg);
+    return ct_zone;
+}
+
+static void
+ct_zone_remove_and_destroy(struct datapath *dp, struct ct_zone *ct_zone)
+{
+    hmap_remove(&dp->ct_zones, &ct_zone->node);
+    simap_destroy(&ct_zone->tp);
+    free(ct_zone);
+}
+
+/* Replace 'old_tp' by 'new_tp' (destroyed 'new_tp'). Returns true if 'old_tp'
+ * and 'new_tp' contains different data, false if they are the same. */
+static bool
+update_timeout_policy(struct simap *old_tp, struct simap *new_tp)
+{
+    bool changed = !simap_equal(old_tp, new_tp);
+    if (changed) {
+        simap_swap(old_tp, new_tp);
+    }
+    simap_destroy(new_tp);
+    return changed;
+}
+
+static struct datapath *
+datapath_lookup(const char *type)
+{
+    struct datapath *dp;
+
+    HMAP_FOR_EACH_WITH_HASH (dp, node, hash_string(type, 0), &all_datapaths) {
+        if (!strcmp(dp->type, type)) {
+            return dp;
+        }
+    }
+    return NULL;
+}
+
+static struct datapath *
+datapath_create(const char *type)
+{
+    struct datapath *dp = xzalloc(sizeof *dp);
+    dp->type = xstrdup(type);
+    hmap_init(&dp->ct_zones);
+    hmap_insert(&all_datapaths, &dp->node, hash_string(type, 0));
+    return dp;
+}
+
+static void
+datapath_destroy(struct datapath *dp)
+{
+    if (dp) {
+        struct ct_zone *ct_zone, *next;
+        HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+            ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+            ct_zone_remove_and_destroy(dp, ct_zone);
+        }
+
+        hmap_remove(&all_datapaths, &dp->node);
+        hmap_destroy(&dp->ct_zones);
+        free(dp->type);
+        free(dp);
+    }
+}
+
+static void
+ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
+{
+    struct ct_zone *ct_zone, *next;
+
+    /* Add new 'ct_zone's or update existing 'ct_zone's based on the database
+     * state. */
+    for (size_t i = 0; i < dp_cfg->n_ct_zones; i++) {
+        uint16_t zone_id = dp_cfg->key_ct_zones[i];
+        struct ovsrec_ct_zone *zone_cfg = dp_cfg->value_ct_zones[i];
+        struct ovsrec_ct_timeout_policy *tp_cfg = zone_cfg->timeout_policy;
+
+        ct_zone = ct_zone_lookup(&dp->ct_zones, zone_id);
+        if (ct_zone) {
+            struct simap new_tp = SIMAP_INITIALIZER(&new_tp);
+            get_timeout_policy_from_ovsrec(&new_tp, tp_cfg);
+            if (update_timeout_policy(&ct_zone->tp, &new_tp)) {
+                ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
+                                                   &ct_zone->tp);
+            }
+        } else {
+            ct_zone = ct_zone_alloc(zone_id, tp_cfg);
+            hmap_insert(&dp->ct_zones, &ct_zone->node, hash_int(zone_id, 0));
+            ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
+                                               &ct_zone->tp);
+        }
+        ct_zone->last_used = idl_seqno;
+    }
+
+    /* Purge 'ct_zone's no longer found in the database. */
+    HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+        if (ct_zone->last_used != idl_seqno) {
+            ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+            ct_zone_remove_and_destroy(dp, ct_zone);
+        }
+    }
+}
+
+static void
+datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
+{
+    struct datapath *dp, *next;
+
+    /* Add new 'datapath's or update existing ones. */
+    for (size_t i = 0; i < cfg->n_datapaths; i++) {
+        struct ovsrec_datapath *dp_cfg = cfg->value_datapaths[i];
+        char *dp_name = cfg->key_datapaths[i];
+
+        dp = datapath_lookup(dp_name);
+        if (!dp) {
+            dp = datapath_create(dp_name);
+        }
+        dp->last_used = idl_seqno;
+        ct_zones_reconfigure(dp, dp_cfg);
+    }
+
+    /* Purge deleted 'datapath's. */
+    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+        if (dp->last_used != idl_seqno) {
+            datapath_destroy(dp);
+        }
+    }
 }
 
 static void
@@ -680,6 +872,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
 
     reconfigure_system_stats(ovs_cfg);
+    datapath_reconfigure(ovs_cfg);
 
     /* Complete the configuration. */
     sflow_bridge_number = 0;

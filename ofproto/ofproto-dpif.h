@@ -245,6 +245,16 @@ struct dpif_backer {
     /* Meter. */
     struct id_pool *meter_ids;     /* Datapath meter allocation. */
 
+    /* Connection tracking. */
+    struct id_pool *tp_ids;             /* Datapath timeout policy id
+                                         * allocation. */
+    struct cmap ct_zones;               /* "struct ct_zone"s indexed by zone
+                                         * id. */
+    struct hmap ct_tps;                 /* "struct ct_timeout_policy"s indexed
+                                         * by timeout policy (struct simap). */
+    struct ovs_list ct_tp_kill_list;    /* A list of timeout policy to be
+                                         * deleted. */
+
     /* Version string of the datapath stored in OVSDB. */
     char *dp_version_string;
 
