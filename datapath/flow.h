@@ -283,6 +283,7 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies);
 
 /* Update the non-metadata part of the flow key using skb. */
 int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key);
+int ovs_flow_key_update_l3l4(struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_flow_key_extract(const struct ip_tunnel_info *tun_info,
 			 struct sk_buff *skb,
 			 struct sw_flow_key *key);
