@@ -577,6 +577,7 @@ static int key_extract_l3l4(struct sk_buff *skb, struct sw_flow_key *key)
 		offset = nh->frag_off & htons(IP_OFFSET);
 		if (offset) {
 			key->ip.frag = OVS_FRAG_TYPE_LATER;
+			memset(&key->tp, 0, sizeof(key->tp));
 			return 0;
 		}
 #ifdef HAVE_SKB_GSO_UDP
@@ -699,8 +700,10 @@ static int key_extract_l3l4(struct sk_buff *skb, struct sw_flow_key *key)
 			return error;
 		}
 
-		if (key->ip.frag == OVS_FRAG_TYPE_LATER)
+		if (key->ip.frag == OVS_FRAG_TYPE_LATER) {
+			memset(&key->tp, 0, sizeof(key->tp));
 			return 0;
+		}
 #ifdef HAVE_SKB_GSO_UDP
 		if (skb_shinfo(skb)->gso_type & SKB_GSO_UDP)
 			key->ip.frag = OVS_FRAG_TYPE_FIRST;
