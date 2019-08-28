@@ -32,14 +32,18 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/poll-loop.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
-#include "openvswitch/poll-loop.h"
 #include "process.h"
+#include "simap.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "smap.h"
@@ -49,8 +53,6 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vsctl);
 
@@ -1151,6 +1153,188 @@ cmd_emer_reset(struct ctl_context *ctx)
     }
 
     vsctl_context_invalidate_cache(ctx);
+}
+
+static struct ovsrec_datapath *
+find_datapath(struct vsctl_context *vsctl_ctx, const char *dp_name)
+{
+    const struct ovsrec_open_vswitch *ovs = vsctl_ctx->ovs;
+
+    for (int i = 0; i < ovs->n_datapaths; i++) {
+        if (!strcmp(ovs->key_datapaths[i], dp_name)) {
+            return ovs->value_datapaths[i];
+        }
+    }
+    return NULL;
+}
+
+static struct ovsrec_ct_zone *
+find_ct_zone(struct ovsrec_datapath *dp, const int64_t zone_id)
+{
+    for (int i = 0; i < dp->n_ct_zones; i++) {
+        if (dp->key_ct_zones[i] == zone_id) {
+            return dp->value_ct_zones[i];
+        }
+    }
+    return NULL;
+}
+
+static struct ovsrec_ct_timeout_policy *
+create_timeout_policy(struct ctl_context *ctx, char **tps, int n_tps)
+{
+    const struct ovsrec_ct_timeout_policy_table *tp_table;
+    const struct ovsrec_ct_timeout_policy *row;
+    struct ovsrec_ct_timeout_policy *tp = NULL;
+    struct simap new_tp = SIMAP_INITIALIZER(&new_tp);
+
+    char **policies = xzalloc(sizeof *policies * n_tps);
+    const char **key_timeouts = xmalloc(sizeof *key_timeouts * n_tps);
+    int64_t *value_timeouts = xmalloc(sizeof *value_timeouts * n_tps);
+
+    /* Parse timeout arguments. */
+    for (int i = 0; i < n_tps; i++) {
+        policies[i] = xstrdup(tps[i]);
+
+        char *key, *value;
+        char *policy = policies[i];
+        if (!ofputil_parse_key_value(&policy, &key, &value)) {
+            goto done;
+        }
+        key_timeouts[i] = key;
+        value_timeouts[i] = atoi(value);
+        simap_put(&new_tp, key, (unsigned int)value_timeouts[i]);
+    }
+
+done:
+    tp_table = ovsrec_ct_timeout_policy_table_get(ctx->idl);
+    OVSREC_CT_TIMEOUT_POLICY_TABLE_FOR_EACH (row, tp_table) {
+        struct simap s = SIMAP_INITIALIZER(&s);
+
+        /* Convert to simap. */
+        for (int i = 0; i < row->n_timeouts; i++) {
+            simap_put(&s, row->key_timeouts[i], row->value_timeouts[i]);
+        }
+
+        if (simap_equal(&s, &new_tp)) {
+            tp = CONST_CAST(struct ovsrec_ct_timeout_policy *, row);
+            simap_destroy(&s);
+            break;
+        }
+        simap_destroy(&s);
+    }
+
+    if (!tp) {
+        tp = ovsrec_ct_timeout_policy_insert(ctx->txn);
+        ovsrec_ct_timeout_policy_set_timeouts(tp, key_timeouts,
+                                              (const int64_t *)value_timeouts,
+                                              n_tps);
+    }
+
+    for (int i = 0; i < n_tps; i++) {
+        free(policies[i]);
+    }
+    free(policies);
+    simap_destroy(&new_tp);
+    free(key_timeouts);
+    free(value_timeouts);
+    return tp;
+}
+
+static void
+cmd_add_zone_tp(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    struct ovsrec_ct_timeout_policy *tp;
+    int64_t zone_id;
+
+    const char *dp_name = ctx->argv[1];
+    ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id);
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
+    if (!dp) {
+        ctl_fatal("datapath %s does not exist", dp_name);
+    }
+
+    int n_tps = ctx->argc - 3;
+    struct ovsrec_ct_zone *zone = find_ct_zone(dp, zone_id);
+
+    if (n_tps <= 0) {
+        ctl_fatal("No timeout policy");
+    }
+
+    if (zone && !may_exist) {
+        ctl_fatal("zone id %"PRIu64" already exists", zone_id);
+    }
+
+    tp = create_timeout_policy(ctx, &ctx->argv[3], n_tps);
+    if (zone) {
+        ovsrec_ct_zone_set_timeout_policy(zone, tp);
+    } else {
+        zone = ovsrec_ct_zone_insert(ctx->txn);
+        ovsrec_ct_zone_set_timeout_policy(zone, tp);
+        ovsrec_datapath_update_ct_zones_setkey(dp, zone_id, zone);
+    }
+}
+
+static void
+cmd_del_zone_tp(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    int64_t zone_id;
+
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    const char *dp_name = ctx->argv[1];
+    ovs_scan(ctx->argv[2], "zone=%"SCNi64, &zone_id);
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
+    if (!dp) {
+        ctl_fatal("datapath %s does not exist", dp_name);
+    }
+
+    struct ovsrec_ct_zone *zone = find_ct_zone(dp, zone_id);
+    if (must_exist && !zone) {
+        ctl_fatal("zone id %"PRIu64" does not exist", zone_id);
+    }
+
+    if (zone) {
+        ovsrec_datapath_update_ct_zones_delkey(dp, zone_id);
+    }
+}
+
+static void
+cmd_list_zone_tp(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, ctx->argv[1]);
+    if (!dp) {
+        ctl_fatal("datapath: %s record not found", ctx->argv[1]);
+    }
+
+    for (int i = 0; i < dp->n_ct_zones; i++) {
+        struct ovsrec_ct_zone *zone = dp->value_ct_zones[i];
+        ds_put_format(&ctx->output, "Zone:%"PRIu64", Timeout Policies: ",
+                      dp->key_ct_zones[i]);
+
+        struct ovsrec_ct_timeout_policy *tp = zone->timeout_policy;
+
+        for (int j = 0; j < tp->n_timeouts; j++) {
+            ds_put_format(&ctx->output, "%s=%"PRIu64" ",
+                          tp->key_timeouts[j], tp->value_timeouts[j]);
+        }
+        ds_chomp(&ctx->output, ' ');
+        ds_put_char(&ctx->output, '\n');
+    }
+}
+
+static void
+pre_get_zone(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_datapaths);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_datapath_col_ct_zones);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ct_zone_col_timeout_policy);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ct_timeout_policy_col_timeouts);
 }
 
 static void
@@ -2895,6 +3079,13 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 
     /* Switch commands. */
     {"emer-reset", 0, 0, "", pre_cmd_emer_reset, cmd_emer_reset, NULL, "", RW},
+
+    /* Zone and CT Timeout Policy commands. */
+    {"add-zone-tp", 3, INT_MAX, "", pre_get_zone, cmd_add_zone_tp, NULL,
+     "--may-exist", RW},
+    {"del-zone-tp", 2, 2, "", pre_get_zone, cmd_del_zone_tp, NULL,
+     "--if-exists", RW},
+    {"list-zone-tp", 1, 1, "", pre_get_zone, cmd_list_zone_tp, NULL, "", RO},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };

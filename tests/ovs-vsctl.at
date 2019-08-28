@@ -805,6 +805,20 @@ AT_CHECK(
   [RUN_OVS_VSCTL([--if-exists remove netflow x targets '"1.2.3.4:567"'])])
 AT_CHECK(
   [RUN_OVS_VSCTL([--if-exists clear netflow x targets])])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=1 icmp_first=1 icmp_reply=2])])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-zone-tp netdev zone=1 icmp_first=1 icmp_reply=2])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:1, Timeout Policies: icmp_first=1 icmp_reply=2
+])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:1, Timeout Policies: icmp_first=1 icmp_reply=2
+Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=1])])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-tp netdev zone=1])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -893,10 +907,10 @@ AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=-1])],
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=4096])],
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ])
-AT_CHECK([RUN_OVS_VSCTL([set co br1 'connection-mode=xyz'])],
+AT_CHECK([RUN_OVS_VSCTL([set controller br1 'connection-mode=xyz'])],
   [1], [], [[ovs-vsctl: constraint violation: xyz is not one of the allowed values ([in-band, out-of-band])
 ]])
-AT_CHECK([RUN_OVS_VSCTL([set co br1 connection-mode:x=y])],
+AT_CHECK([RUN_OVS_VSCTL([set controller br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ])
 AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])],
@@ -931,6 +945,22 @@ AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 flood-vlans true])],
 ])
 AT_CHECK([RUN_OVS_VSCTL([clear bridge br1 name])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
+])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdevxx zone=1 icmp_first=1 icmp_reply=2])],
+  [1], [], [ovs-vsctl: datapath netdevxx does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])],
+  [1], [], [ovs-vsctl: zone id 2 already exists
+])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=11])],
+  [1], [], [ovs-vsctl: zone id 11 does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
