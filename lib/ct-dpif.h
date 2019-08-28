@@ -252,6 +252,7 @@ int ct_dpif_ipf_dump_done(struct dpif *dpif, void *);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);
+void ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto);
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
