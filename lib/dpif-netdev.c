@@ -7566,6 +7566,12 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* ct_set_limits */
     NULL,                       /* ct_get_limits */
     NULL,                       /* ct_del_limits */
+    NULL,                       /* ct_set_timeout_policy */
+    NULL,                       /* ct_get_timeout_policy */
+    NULL,                       /* ct_del_timeout_policy */
+    NULL,                       /* ct_timeout_policy_dump_start */
+    NULL,                       /* ct_timeout_policy_dump_next */
+    NULL,                       /* ct_timeout_policy_dump_done */
     dpif_netdev_ipf_set_enabled,
     dpif_netdev_ipf_set_min_frag,
     dpif_netdev_ipf_set_max_nfrags,

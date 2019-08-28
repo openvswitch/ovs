@@ -840,6 +840,307 @@ nl_ct_parse_helper(struct nlattr *nla, struct ct_dpif_helper *helper)
     return parsed;
 }
 
+static int nl_ct_timeout_policy_max_attr[] = {
+    [IPPROTO_TCP] = CTA_TIMEOUT_TCP_MAX,
+    [IPPROTO_UDP] = CTA_TIMEOUT_UDP_MAX,
+    [IPPROTO_ICMP] = CTA_TIMEOUT_ICMP_MAX,
+    [IPPROTO_ICMPV6] = CTA_TIMEOUT_ICMPV6_MAX
+};
+
+static void
+nl_ct_set_timeout_policy_attr(struct nl_ct_timeout_policy *nl_tp,
+                              uint32_t attr, uint32_t val)
+{
+    nl_tp->present |= 1 << attr;
+    nl_tp->attrs[attr] = val;
+}
+
+static int
+nl_ct_parse_tcp_timeout_policy_data(struct nlattr *nla,
+                                    struct nl_ct_timeout_policy *nl_tp)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_TIMEOUT_TCP_SYN_SENT] =    { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_SYN_RECV] =    { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_ESTABLISHED] = { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_FIN_WAIT] =    { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_CLOSE_WAIT] =  { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_LAST_ACK] =    { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_TIME_WAIT] =   { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_CLOSE] =       { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_SYN_SENT2] =   { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_RETRANS] =     { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_TCP_UNACK] =       { .type = NL_A_BE32,
+                                          .optional = false },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+
+    if (!nl_parse_nested(nla, policy, attrs, ARRAY_SIZE(policy))) {
+        VLOG_ERR_RL(&rl, "Could not parse nested tcp timeout options. "
+                    "Possibly incompatible Linux kernel version.");
+        return EINVAL;
+    }
+
+    for (int i = CTA_TIMEOUT_TCP_SYN_SENT; i <= CTA_TIMEOUT_TCP_UNACK; i++) {
+        nl_ct_set_timeout_policy_attr(nl_tp, i,
+                                      ntohl(nl_attr_get_be32(attrs[i])));
+    }
+    return 0;
+}
+
+static int
+nl_ct_parse_udp_timeout_policy_data(struct nlattr *nla,
+                                    struct nl_ct_timeout_policy *nl_tp)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_TIMEOUT_UDP_UNREPLIED] =   { .type = NL_A_BE32,
+                                          .optional = false },
+        [CTA_TIMEOUT_UDP_REPLIED] =     { .type = NL_A_BE32,
+                                          .optional = false },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+
+    if (!nl_parse_nested(nla, policy, attrs, ARRAY_SIZE(policy))) {
+        VLOG_ERR_RL(&rl, "Could not parse nested tcp timeout options. "
+                    "Possibly incompatible Linux kernel version.");
+        return EINVAL;
+    }
+
+    for (int i = CTA_TIMEOUT_UDP_UNREPLIED; i <= CTA_TIMEOUT_UDP_REPLIED;
+         i++) {
+        nl_ct_set_timeout_policy_attr(nl_tp, i,
+                                      ntohl(nl_attr_get_be32(attrs[i])));
+    }
+    return 0;
+}
+
+static int
+nl_ct_parse_icmp_timeout_policy_data(struct nlattr *nla,
+                                     struct nl_ct_timeout_policy *nl_tp)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_TIMEOUT_ICMP_TIMEOUT] =   { .type = NL_A_BE32,
+                                         .optional = false },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+
+    if (!nl_parse_nested(nla, policy, attrs, ARRAY_SIZE(policy))) {
+        VLOG_ERR_RL(&rl, "Could not parse nested icmp timeout options. "
+                    "Possibly incompatible Linux kernel version.");
+        return EINVAL;
+    }
+
+    nl_ct_set_timeout_policy_attr(
+        nl_tp, CTA_TIMEOUT_ICMP_TIMEOUT,
+        ntohl(nl_attr_get_be32(attrs[CTA_TIMEOUT_ICMP_TIMEOUT])));
+    return 0;
+}
+
+static int
+nl_ct_parse_icmpv6_timeout_policy_data(struct nlattr *nla,
+                                       struct nl_ct_timeout_policy *nl_tp)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_TIMEOUT_ICMPV6_TIMEOUT] =   { .type = NL_A_BE32,
+                                           .optional = false },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+
+    if (!nl_parse_nested(nla, policy, attrs, ARRAY_SIZE(policy))) {
+        VLOG_ERR_RL(&rl, "Could not parse nested icmpv6 timeout options. "
+                    "Possibly incompatible Linux kernel version.");
+        return EINVAL;
+    }
+
+    nl_ct_set_timeout_policy_attr(
+        nl_tp, CTA_TIMEOUT_ICMPV6_TIMEOUT,
+        ntohl(nl_attr_get_be32(attrs[CTA_TIMEOUT_ICMPV6_TIMEOUT])));
+    return 0;
+}
+
+static int
+nl_ct_parse_timeout_policy_data(struct nlattr *nla,
+                                struct nl_ct_timeout_policy *nl_tp)
+{
+    switch (nl_tp->l4num) {
+        case IPPROTO_TCP:
+            return nl_ct_parse_tcp_timeout_policy_data(nla, nl_tp);
+        case IPPROTO_UDP:
+            return nl_ct_parse_udp_timeout_policy_data(nla, nl_tp);
+        case IPPROTO_ICMP:
+            return nl_ct_parse_icmp_timeout_policy_data(nla, nl_tp);
+        case IPPROTO_ICMPV6:
+            return nl_ct_parse_icmpv6_timeout_policy_data(nla, nl_tp);
+        default:
+            return EINVAL;
+    }
+}
+
+static int
+nl_ct_timeout_policy_from_ofpbuf(struct ofpbuf *buf,
+                                 struct nl_ct_timeout_policy *nl_tp,
+                                 bool default_tp)
+{
+    static const struct nl_policy policy[] = {
+        [CTA_TIMEOUT_NAME] =    { .type = NL_A_STRING, .optional = false },
+        [CTA_TIMEOUT_L3PROTO] = { .type = NL_A_BE16, .optional = false },
+        [CTA_TIMEOUT_L4PROTO] = { .type = NL_A_U8, .optional = false },
+        [CTA_TIMEOUT_DATA] =    { .type = NL_A_NESTED, .optional = false }
+    };
+    static const struct nl_policy policy_default_tp[] = {
+        [CTA_TIMEOUT_L3PROTO] = { .type = NL_A_BE16, .optional = false },
+        [CTA_TIMEOUT_L4PROTO] = { .type = NL_A_U8, .optional = false },
+        [CTA_TIMEOUT_DATA] =    { .type = NL_A_NESTED, .optional = false }
+    };
+
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+    struct ofpbuf b = ofpbuf_const_initializer(buf->data, buf->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct nfgenmsg *nfmsg = ofpbuf_try_pull(&b, sizeof *nfmsg);
+
+    if (!nlmsg || !nfmsg
+        || NFNL_SUBSYS_ID(nlmsg->nlmsg_type) != NFNL_SUBSYS_CTNETLINK_TIMEOUT
+        || nfmsg->version != NFNETLINK_V0
+        || !nl_policy_parse(&b, 0, default_tp ? policy_default_tp : policy,
+                            attrs, default_tp ? ARRAY_SIZE(policy_default_tp) :
+                                                ARRAY_SIZE(policy))) {
+        return EINVAL;
+    }
+
+    if (!default_tp) {
+        ovs_strlcpy(nl_tp->name, nl_attr_get_string(attrs[CTA_TIMEOUT_NAME]),
+                    sizeof nl_tp->name);
+    }
+    nl_tp->l3num = ntohs(nl_attr_get_be16(attrs[CTA_TIMEOUT_L3PROTO]));
+    nl_tp->l4num = nl_attr_get_u8(attrs[CTA_TIMEOUT_L4PROTO]);
+    nl_tp->present = 0;
+
+    return nl_ct_parse_timeout_policy_data(attrs[CTA_TIMEOUT_DATA], nl_tp);
+}
+
+int
+nl_ct_set_timeout_policy(const struct nl_ct_timeout_policy *nl_tp)
+{
+    struct ofpbuf buf;
+    size_t offset;
+
+    ofpbuf_init(&buf, 512);
+    nl_msg_put_nfgenmsg(&buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK_TIMEOUT,
+                        IPCTNL_MSG_TIMEOUT_NEW, NLM_F_REQUEST | NLM_F_CREATE
+                        | NLM_F_ACK | NLM_F_REPLACE);
+
+    nl_msg_put_string(&buf, CTA_TIMEOUT_NAME, nl_tp->name);
+    nl_msg_put_be16(&buf, CTA_TIMEOUT_L3PROTO, htons(nl_tp->l3num));
+    nl_msg_put_u8(&buf, CTA_TIMEOUT_L4PROTO, nl_tp->l4num);
+
+    offset = nl_msg_start_nested(&buf, CTA_TIMEOUT_DATA);
+    for (int i = 1; i <= nl_ct_timeout_policy_max_attr[nl_tp->l4num]; ++i) {
+        if (nl_tp->present & 1 << i) {
+            nl_msg_put_be32(&buf, i, htonl(nl_tp->attrs[i]));
+        }
+    }
+    nl_msg_end_nested(&buf, offset);
+
+    int err = nl_transact(NETLINK_NETFILTER, &buf, NULL);
+    ofpbuf_uninit(&buf);
+    return err;
+}
+
+int
+nl_ct_get_timeout_policy(const char *tp_name,
+                         struct nl_ct_timeout_policy *nl_tp)
+{
+    struct ofpbuf request, *reply;
+
+    ofpbuf_init(&request, 512);
+    nl_msg_put_nfgenmsg(&request, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK_TIMEOUT,
+                        IPCTNL_MSG_TIMEOUT_GET, NLM_F_REQUEST | NLM_F_ACK);
+    nl_msg_put_string(&request, CTA_TIMEOUT_NAME, tp_name);
+    int err = nl_transact(NETLINK_NETFILTER, &request, &reply);
+    if (err) {
+        goto out;
+    }
+
+    err = nl_ct_timeout_policy_from_ofpbuf(reply, nl_tp, false);
+
+out:
+    ofpbuf_uninit(&request);
+    ofpbuf_delete(reply);
+    return err;
+}
+
+int
+nl_ct_del_timeout_policy(const char *tp_name)
+{
+    struct ofpbuf buf;
+
+    ofpbuf_init(&buf, 64);
+    nl_msg_put_nfgenmsg(&buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK_TIMEOUT,
+                        IPCTNL_MSG_TIMEOUT_DELETE, NLM_F_REQUEST | NLM_F_ACK);
+
+    nl_msg_put_string(&buf, CTA_TIMEOUT_NAME, tp_name);
+    int err = nl_transact(NETLINK_NETFILTER, &buf, NULL);
+    ofpbuf_uninit(&buf);
+    return err;
+}
+
+struct nl_ct_timeout_policy_dump_state {
+    struct nl_dump dump;
+    struct ofpbuf buf;
+};
+
+int
+nl_ct_timeout_policy_dump_start(
+    struct nl_ct_timeout_policy_dump_state **statep)
+{
+    struct ofpbuf request;
+    struct nl_ct_timeout_policy_dump_state *state;
+
+    *statep = state = xzalloc(sizeof *state);
+    ofpbuf_init(&request, 512);
+    nl_msg_put_nfgenmsg(&request, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK_TIMEOUT,
+                        IPCTNL_MSG_TIMEOUT_GET,
+                        NLM_F_REQUEST | NLM_F_ACK | NLM_F_DUMP);
+
+    nl_dump_start(&state->dump, NETLINK_NETFILTER, &request);
+    ofpbuf_uninit(&request);
+    ofpbuf_init(&state->buf, NL_DUMP_BUFSIZE);
+    return 0;
+}
+
+int
+nl_ct_timeout_policy_dump_next(struct nl_ct_timeout_policy_dump_state *state,
+                               struct nl_ct_timeout_policy *nl_tp)
+{
+    struct ofpbuf reply;
+
+    if (!nl_dump_next(&state->dump, &reply, &state->buf)) {
+        return EOF;
+    }
+    int err = nl_ct_timeout_policy_from_ofpbuf(&reply, nl_tp, false);
+    ofpbuf_uninit(&reply);
+    return err;
+}
+
+int
+nl_ct_timeout_policy_dump_done(struct nl_ct_timeout_policy_dump_state *state)
+{
+    int err  = nl_dump_done(&state->dump);
+    ofpbuf_uninit(&state->buf);
+    free(state);
+    return err;
+}
+
 /* Translate netlink entry status flags to CT_DPIF_TCP status flags. */
 static uint32_t
 ips_status_to_dpif_flags(uint32_t status)
