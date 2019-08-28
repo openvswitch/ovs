@@ -98,6 +98,16 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP])
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
+# CHECK_CONNTRACK_TIMEOUT()
+#
+# Perform requirements checks for running conntrack customized timeout tests.
+* The userspace datapath does not support this feature yet.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CT_DPIF_PER_ZONE_LIMIT()
 #
 # Perform requirements checks for running ovs-dpctl ct-[set|get|del]-limits per
@@ -294,4 +304,13 @@ m4_define([OVS_CHECK_MIN_KERNEL],
 m4_define([OVS_CHECK_KERNEL_EXCL],
 [
     AT_SKIP_IF([:])
+])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create datapath table "netdev" for userspace tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m], [0], [stdout])
+    DP_TYPE=$(echo "netdev")
 ])

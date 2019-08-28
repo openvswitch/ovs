@@ -100,6 +100,17 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
+# CHECK_CONNTRACK_TIMEOUT()
+#
+# Perform requirements checks for running conntrack customized timeout tests.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT],
+[
+    AT_SKIP_IF([! cat /boot/config-$(uname -r) | grep NF_CONNTRACK_TIMEOUT | grep '=y' > /dev/null])
+    modprobe nfnetlink_cttimeout
+    on_exit 'modprobe -r nfnetlink_cttimeout'
+])
+
 # CHECK_CT_DPIF_PER_ZONE_LIMIT()
 #
 # Perform requirements checks for running ovs-dpctl ct-[set|get|del]-limits per
@@ -184,4 +195,13 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     version=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 1}')
     sublevel=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 2}')
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
+])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create system datapath table "system" for kernel tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"system"=@m], [0], [stdout])
+    DP_TYPE=$(echo "system")
 ])

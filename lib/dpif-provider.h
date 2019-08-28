@@ -547,6 +547,19 @@ struct dpif_class {
                                        struct ct_dpif_timeout_policy *tp);
     int (*ct_timeout_policy_dump_done)(struct dpif *, void *state);
 
+    /* Gets timeout policy based on 'tp_id', 'dl_type' and 'nw_proto'.
+     * On success, returns 0, stores the timeout policy name in 'tp_name',
+     * and sets 'is_generic'. 'is_generic' is false if the returned timeout
+     * policy in the 'dpif' is specific to 'dl_type' and 'nw_proto' in the
+     * datapath (e.g., the Linux kernel datapath).  Sets 'is_generic' to
+     * true, if the timeout policy supports all OVS supported L3/L4
+     * protocols.
+     *
+     * The caller is responsible for freeing 'tp_name'. */
+    int (*ct_get_timeout_policy_name)(struct dpif *, uint32_t tp_id,
+                                      uint16_t dl_type, uint8_t nw_proto,
+                                      char **tp_name, bool *is_generic);
+
     /* IP Fragmentation. */
 
     /* Disables or enables conntrack fragment reassembly.  The default

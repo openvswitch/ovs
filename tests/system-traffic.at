@@ -3179,6 +3179,72 @@ NXST_FLOW reply:
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - zone-based timeout policy])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_TIMEOUT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ip,action=ct(zone=5, table=1)
+priority=100,in_port=2,ip,action=ct(zone=5, table=1)
+table=1,in_port=2,ip,ct_state=+trk+est,action=1
+table=1,in_port=1,ip,ct_state=+trk+new,action=ct(commit,zone=5),2
+table=1,in_port=1,ip,ct_state=+trk+est,action=2
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Test with default timeout
+dnl The default udp_single and icmp_first timeouts are 30 seconds in
+dnl kernel DP, and 60 seconds in userspace DP.
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+sleep 4
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Shorten the udp_single and icmp_first timeout in zone 5
+VSCTL_ADD_DATAPATH_TABLE()
+AT_CHECK([ovs-vsctl add-zone-tp $DP_TYPE zone=5 udp_single=3 icmp_first=3])
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+dnl Wait until the timeout expire.
+dnl We intend to wait a bit longer, because conntrack does not recycle the entry right after it is expired.
+sleep 4
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conntrack - L7])
 
 AT_SETUP([conntrack - IPv4 HTTP])

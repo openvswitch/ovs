@@ -1323,6 +1323,67 @@ check_ct_clear(struct dpif_backer *backer)
     return supported;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_CT_ATTR_TIMEOUT
+ * attribute in OVS_ACTION_ATTR_CT. */
+static bool
+check_ct_timeout_policy(struct dpif_backer *backer)
+{
+    struct dpif_execute execute;
+    struct dp_packet packet;
+    struct ofpbuf actions;
+    struct flow flow = {
+        .dl_type = CONSTANT_HTONS(ETH_TYPE_IP),
+        .nw_proto = IPPROTO_UDP,
+        .nw_ttl = 64,
+        /* Use the broadcast address on the loopback address range 127/8 to
+         * avoid hitting any real conntrack entries.  We leave the UDP ports to
+         * zeroes for the same purpose. */
+        .nw_src = CONSTANT_HTONL(0x7fffffff),
+        .nw_dst = CONSTANT_HTONL(0x7fffffff),
+    };
+    size_t ct_start;
+    int error;
+
+    /* Compose CT action with timeout policy attribute and check if datapath
+     * can decode the message.  */
+    ofpbuf_init(&actions, 64);
+    ct_start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_CT);
+    /* Timeout policy has no effect without the commit flag, but currently the
+     * datapath will accept a timeout policy even without commit.  This is
+     * useful as we do not want to persist the probe connection in the
+     * conntrack table. */
+    nl_msg_put_string(&actions, OVS_CT_ATTR_TIMEOUT, "ovs_test_tp");
+    nl_msg_end_nested(&actions, ct_start);
+
+    /* Compose a dummy UDP packet. */
+    dp_packet_init(&packet, 0);
+    flow_compose(&packet, &flow, NULL, 64);
+
+    /* Execute the actions.  On older datapaths this fails with EINVAL, on
+     * newer datapaths it succeeds. */
+    execute.actions = actions.data;
+    execute.actions_len = actions.size;
+    execute.packet = &packet;
+    execute.flow = &flow;
+    execute.needs_help = false;
+    execute.probe = true;
+    execute.mtu = 0;
+
+    error = dpif_execute(backer->dpif, &execute);
+
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&actions);
+
+    if (error) {
+        VLOG_INFO("%s: Datapath does not support timeout policy in conntrack "
+                  "action", dpif_name(backer->dpif));
+    } else {
+        VLOG_INFO("%s: Datapath supports timeout policy in conntrack action",
+                  dpif_name(backer->dpif));
+    }
+
+    return !error;
+}
 
 /* Tests whether 'backer''s datapath supports the
  * OVS_ACTION_ATTR_CHECK_PKT_LEN action. */
@@ -1473,6 +1534,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.ct_clear = check_ct_clear(backer);
     backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
     backer->rt_support.check_pkt_len = check_check_pkt_len(backer);
+    backer->rt_support.ct_timeout = check_ct_timeout_policy(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -5376,6 +5438,41 @@ ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
         ct_timeout_policy_unref(backer, ct_zone->ct_tp);
         ct_zone_remove_and_destroy(backer, ct_zone);
     }
+}
+
+/* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
+ * 'nw_proto'.  Returns true if the zone-based timeout policy is configured.
+ * On success, stores the timeout policy name in 'tp_name', and sets
+ * 'unwildcard' based on the dpif implementation.  If 'unwildcard' is true,
+ * the returned timeout policy is 'dl_type' and 'nw_proto' specific, and OVS
+ * needs to unwildcard the datapath flow for this timeout policy in flow
+ * translation.
+ *
+ * The caller is responsible for freeing 'tp_name'. */
+bool
+ofproto_dpif_ct_zone_timeout_policy_get_name(
+    const struct dpif_backer *backer, uint16_t zone, uint16_t dl_type,
+    uint8_t nw_proto, char **tp_name, bool *unwildcard)
+{
+    if (!ct_dpif_timeout_policy_support_ipproto(nw_proto)) {
+        return false;
+    }
+
+    struct ct_zone *ct_zone = ct_zone_lookup(&backer->ct_zones, zone);
+    if (!ct_zone) {
+        return false;
+    }
+
+    bool is_generic;
+    if (ct_dpif_get_timeout_policy_name(backer->dpif,
+                                        ct_zone->ct_tp->tp_id, dl_type,
+                                        nw_proto, tp_name, &is_generic)) {
+        return false;
+    }
+
+    /* Unwildcard datapath flow if it is not a generic timeout policy. */
+    *unwildcard = !is_generic;
+    return true;
 }
 
 static bool

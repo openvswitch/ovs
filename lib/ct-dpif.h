@@ -320,5 +320,8 @@ int ct_dpif_timeout_policy_dump_start(struct dpif *dpif, void **statep);
 int ct_dpif_timeout_policy_dump_next(struct dpif *dpif, void *state,
                                      struct ct_dpif_timeout_policy *tp);
 int ct_dpif_timeout_policy_dump_done(struct dpif *dpif, void *state);
+int ct_dpif_get_timeout_policy_name(struct dpif *dpif, uint32_t tp_id,
+                                    uint16_t dl_type, uint8_t nw_proto,
+                                    char **tp_name, bool *is_generic);
 
 #endif /* CT_DPIF_H */

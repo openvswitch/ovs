@@ -7576,6 +7576,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* ct_timeout_policy_dump_start */
     NULL,                       /* ct_timeout_policy_dump_next */
     NULL,                       /* ct_timeout_policy_dump_done */
+    NULL,                       /* ct_get_timeout_policy_name */
     dpif_netdev_ipf_set_enabled,
     dpif_netdev_ipf_set_min_frag,
     dpif_netdev_ipf_set_max_nfrags,

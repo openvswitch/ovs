@@ -3056,19 +3056,34 @@ static struct dpif_netlink_timeout_policy_protocol tp_protos[] = {
 
 static void
 dpif_netlink_format_tp_name(uint32_t id, uint16_t l3num, uint8_t l4num,
-                            struct ds *tp_name)
+                            char **tp_name)
 {
-    ds_clear(tp_name);
-    ds_put_format(tp_name, "%s%"PRIu32"_", NL_TP_NAME_PREFIX, id);
-    ct_dpif_format_ipproto(tp_name, l4num);
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    ds_put_format(&ds, "%s%"PRIu32"_", NL_TP_NAME_PREFIX, id);
+    ct_dpif_format_ipproto(&ds, l4num);
 
     if (l3num == AF_INET) {
-        ds_put_cstr(tp_name, "4");
+        ds_put_cstr(&ds, "4");
     } else if (l3num == AF_INET6 && l4num != IPPROTO_ICMPV6) {
-        ds_put_cstr(tp_name, "6");
+        ds_put_cstr(&ds, "6");
     }
 
-    ovs_assert(tp_name->length < CTNL_TIMEOUT_NAME_MAX);
+    ovs_assert(ds.length < CTNL_TIMEOUT_NAME_MAX);
+
+    *tp_name = ds_steal_cstr(&ds);
+}
+
+static int
+dpif_netlink_ct_get_timeout_policy_name(struct dpif *dpif OVS_UNUSED,
+                                        uint32_t tp_id, uint16_t dl_type,
+                                        uint8_t nw_proto, char **tp_name,
+                                        bool *is_generic)
+{
+    dpif_netlink_format_tp_name(tp_id,
+                                dl_type == ETH_TYPE_IP ? AF_INET : AF_INET6,
+                                nw_proto, tp_name);
+    *is_generic = false;
+    return 0;
 }
 
 #define CT_DPIF_NL_TP_TCP_MAPPINGS                              \
@@ -3264,14 +3279,17 @@ static int
 dpif_netlink_ct_set_timeout_policy(struct dpif *dpif OVS_UNUSED,
                                    const struct ct_dpif_timeout_policy *tp)
 {
-    struct nl_ct_timeout_policy nl_tp;
-    struct ds nl_tp_name = DS_EMPTY_INITIALIZER;
     int err = 0;
 
     for (int i = 0; i < ARRAY_SIZE(tp_protos); ++i) {
+        struct nl_ct_timeout_policy nl_tp;
+        char *nl_tp_name;
+
         dpif_netlink_format_tp_name(tp->id, tp_protos[i].l3num,
                                     tp_protos[i].l4num, &nl_tp_name);
-        ovs_strlcpy(nl_tp.name, ds_cstr(&nl_tp_name), sizeof nl_tp.name);
+        ovs_strlcpy(nl_tp.name, nl_tp_name, sizeof nl_tp.name);
+        free(nl_tp_name);
+
         nl_tp.l3num = tp_protos[i].l3num;
         nl_tp.l4num = tp_protos[i].l4num;
         dpif_netlink_get_nl_tp_attrs(tp, tp_protos[i].l4num, &nl_tp);
@@ -3284,7 +3302,6 @@ dpif_netlink_ct_set_timeout_policy(struct dpif *dpif OVS_UNUSED,
     }
 
 out:
-    ds_destroy(&nl_tp_name);
     return err;
 }
 
@@ -3293,27 +3310,29 @@ dpif_netlink_ct_get_timeout_policy(struct dpif *dpif OVS_UNUSED,
                                    uint32_t tp_id,
                                    struct ct_dpif_timeout_policy *tp)
 {
-    struct nl_ct_timeout_policy nl_tp;
-    struct ds nl_tp_name = DS_EMPTY_INITIALIZER;
     int err = 0;
 
     tp->id = tp_id;
     tp->present = 0;
     for (int i = 0; i < ARRAY_SIZE(tp_protos); ++i) {
+        struct nl_ct_timeout_policy nl_tp;
+        char *nl_tp_name;
+
         dpif_netlink_format_tp_name(tp_id, tp_protos[i].l3num,
                                     tp_protos[i].l4num, &nl_tp_name);
-        err = nl_ct_get_timeout_policy(ds_cstr(&nl_tp_name), &nl_tp);
+        err = nl_ct_get_timeout_policy(nl_tp_name, &nl_tp);
 
         if (err) {
             VLOG_WARN_RL(&error_rl, "failed to get timeout policy %s (%s)",
-                         nl_tp.name, ovs_strerror(err));
+                         nl_tp_name, ovs_strerror(err));
+            free(nl_tp_name);
             goto out;
         }
+        free(nl_tp_name);
         dpif_netlink_set_ct_dpif_tp_attrs(&nl_tp, tp);
     }
 
 out:
-    ds_destroy(&nl_tp_name);
     return err;
 }
 
@@ -3323,25 +3342,25 @@ static int
 dpif_netlink_ct_del_timeout_policy(struct dpif *dpif OVS_UNUSED,
                                    uint32_t tp_id)
 {
-    struct ds nl_tp_name = DS_EMPTY_INITIALIZER;
     int ret = 0;
 
     for (int i = 0; i < ARRAY_SIZE(tp_protos); ++i) {
+        char *nl_tp_name;
         dpif_netlink_format_tp_name(tp_id, tp_protos[i].l3num,
                                     tp_protos[i].l4num, &nl_tp_name);
-        int err = nl_ct_del_timeout_policy(ds_cstr(&nl_tp_name));
+        int err = nl_ct_del_timeout_policy(nl_tp_name);
         if (err == ENOENT) {
             err = 0;
         }
         if (err) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(6, 6);
             VLOG_INFO_RL(&rl, "failed to delete timeout policy %s (%s)",
-                         ds_cstr(&nl_tp_name), ovs_strerror(err));
+                         nl_tp_name, ovs_strerror(err));
             ret = 1;
         }
+        free(nl_tp_name);
     }
 
-    ds_destroy(&nl_tp_name);
     return ret;
 }
 
@@ -3907,6 +3926,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_ct_timeout_policy_dump_start,
     dpif_netlink_ct_timeout_policy_dump_next,
     dpif_netlink_ct_timeout_policy_dump_done,
+    dpif_netlink_ct_get_timeout_policy_name,
     NULL,                       /* ipf_set_enabled */
     NULL,                       /* ipf_set_min_frag */
     NULL,                       /* ipf_set_max_nfrags */
