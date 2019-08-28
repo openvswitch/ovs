@@ -65,7 +65,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # Perform requirements checks for running conntrack tests.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON2 = no])]
+    [AT_SKIP_IF([test $HAVE_PYTHON = no])]
 )
 
 # CHECK_CONNTRACK_ALG()

@@ -63,6 +63,180 @@ m4_define([OVSDB_CHECK_EXECUTION],
 EXECUTION_EXAMPLES
 
 
+AT_BANNER([OVSDB - disconnect from cluster])
+
+OVS_START_SHELL_HELPERS
+# ovsdb_test_cluster_disconnect N_SERVERS LEADER_OR_FOLLOWER [CHECK_FLAPPING]
+# Test server disconnected from the cluster.
+# N_SERVERS: Number of servers in the cluster.
+# LEADER_OR_FOLLOWER: The role of the server that is disconnected from the
+#                     cluster: "leader" or "follower".
+# CHECK_FLAPPING: Whether to check if is_disconnected flapped. "yes", "no".
+ovsdb_test_cluster_disconnect () {
+    n=$1
+    leader_or_follower=$2
+    check_flapping=$3
+    schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+    ordinal_schema > schema
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+    cid=`ovsdb-tool db-cid s1.db`
+    schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+    for i in `seq 2 $n`; do
+        AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+    done
+
+    on_exit 'kill `cat *.pid`'
+    for i in `seq $n`; do
+        AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+    done
+    for i in `seq $n`; do
+        AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+    done
+
+    AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+          {"op": "insert",
+           "table": "simple",
+           "row": {"i": 1}}]]'], [0], [ignore], [ignore])
+
+    # When a node is disconnected from the cluster, the IDL should disconnect
+    # and retry even if it uses a single remote, because the remote IP can be
+    # a VIP on a load-balance. So we use single remote to test here.
+    if test $leader_or_follower == "leader"; then
+        target=1
+        shutdown=`seq $(($n/2 + 1)) $n`
+        cleanup=`seq $(($n/2))`
+    else
+        target=$n
+
+        # shutdown followers before the leader (s1) so that there is no chance for
+        # s$n to become leader during the process.
+        shutdown="`seq 2 $(($n/2 + 1))` 1"
+        cleanup=`seq $(($n/2 + 2)) $n`
+    fi
+    echo shutdown=$shutdown
+    echo cleanup=$cleanup
+
+    # Connect to $target.  Use "wait" to trigger a non-op transaction so
+    # that test-ovsdb will not quit.
+
+    test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -v -t10 idl unix:s$target.ovsdb '[["idltest",
+          {"op": "wait",
+           "table": "simple",
+           "where": [["i", "==", 1]],
+           "columns": ["i"],
+           "until": "==",
+           "rows": [{"i": 1}]}]]' > test-ovsdb.log 2>&1 &
+    echo $! > test-ovsdb.pid
+
+    OVS_WAIT_UNTIL([grep "000: i=1" test-ovsdb.log])
+
+    # Start collecting raft_is_connected logs for $target before shutting down
+    # any servers.
+    tail -f s$target.log > raft_is_connected.log &
+    echo $! > tail.pid
+
+    # Shutdown the other servers so that $target is disconnected from the cluster.
+    for i in $shutdown; do
+        OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+    done
+
+    # The test-ovsdb should detect the disconnect and retry.
+    OVS_WAIT_UNTIL([grep disconnect test-ovsdb.log])
+
+    # The $target debug log should show raft_is_connected: false.
+    OVS_WAIT_UNTIL([grep "raft_is_connected: false" raft_is_connected.log])
+
+    # Save the current count of "raft_is_connected: true"
+    count_old=`grep "raft_is_connected: true" raft_is_connected.log | wc -l`
+    echo count_old $count_old
+
+    if test X$check_flapping == X"yes"; then
+        sleep 10
+    fi
+    # Make sure raft_is_connected didn't flap from false to true.
+    count_new=`grep "raft_is_connected: true" raft_is_connected.log | wc -l`
+    echo count_new $count_new
+    AT_CHECK([test $count_new == $count_old])
+
+    for i in $cleanup; do
+        OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+    done
+}
+OVS_END_SHELL_HELPERS
+
+AT_SETUP([OVSDB cluster - follower disconnect from cluster, single remote])
+AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
+ovsdb_test_cluster_disconnect 3 follower
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - leader disconnect from cluster, single remote])
+AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
+ovsdb_test_cluster_disconnect 3 leader
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - leader disconnect from cluster, check flapping])
+AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
+ovsdb_test_cluster_disconnect 5 leader yes
+AT_CLEANUP
+
+
+
+AT_BANNER([OVSDB cluster election timer change])
+
+AT_SETUP([OVSDB cluster - election timer change])
+AT_KEYWORDS([ovsdb server positive unix cluster timer])
+
+n=3
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=`ovsdb-tool db-cid s1.db`
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+for i in `seq 2 $n`; do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill `cat *.pid`'
+for i in `seq $n`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in `seq $n`; do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+# Change not allowed through follower.
+AT_CHECK([ovs-appctl -t "`pwd`"/s2 cluster/change-election-timer $schema_name 2000], [2], [], [ignore])
+
+# Timer cannot be changed to bigger than 2x the original value.
+AT_CHECK([ovs-appctl -t "`pwd`"/s1 cluster/change-election-timer $schema_name 4000], [2], [], [ignore])
+
+AT_CHECK([ovs-appctl -t "`pwd`"/s1 cluster/change-election-timer $schema_name 2000], [0], [dnl
+change of election timer initiated.
+], [])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s1 cluster/status $schema_name | grep "Election timer: 2000"])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s2 cluster/status $schema_name | grep "Election timer: 2000"])
+
+AT_CHECK([ovs-appctl -t "`pwd`"/s1 cluster/change-election-timer $schema_name 4000], [0], [dnl
+change of election timer initiated.
+], [])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s1 cluster/status $schema_name | grep "Election timer: 4000"])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s2 cluster/status $schema_name | grep "Election timer: 4000"])
+
+# Latest timer should be used after restart
+for i in `seq $n`; do
+    printf "\ns$i: stopping\n"
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+for i in `seq $n`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+done
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s1 cluster/status $schema_name | grep "Election timer: 4000"])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s2 cluster/status $schema_name | grep "Election timer: 4000"])
+
+AT_CLEANUP
+
+
+
 OVS_START_SHELL_HELPERS
 # ovsdb_cluster_failure_test SCHEMA_FUNC OUTPUT TRANSACTION...
 ovsdb_cluster_failure_test () {

@@ -503,6 +503,55 @@ domain socket::
 
     $ ovs-vswitchd --pidfile --detach --log-file
 
+Starting OVS in container
+-------------------------
+
+For ovs vswitchd, we need to load ovs kernel modules on host.
+
+Hence, OVS containers kernel version needs to be same as that of host kernel.
+
+Export following variables in .env  and place it under
+project root::
+
+    $ OVS_BRANCH=<BRANCH>
+    $ OVS_VERSION=<VERSION>
+    $ DISTRO=<LINUX_DISTRO>
+    $ KERNEL_VERSION=<LINUX_KERNEL_VERSION>
+    $ GITHUB_SRC=<GITHUB_URL>
+    $ DOCKER_REPO=<REPO_TO_PUSH_IMAGE>
+
+To build ovs modules::
+
+    $ cd utilities/docker
+    $ make build
+
+Compiled Modules will be tagged with docker image
+
+To Push ovs modules::
+
+    $ make push
+
+OVS docker image will be pushed to specified docker repo.
+
+Start ovsdb-server using below command::
+
+    $ docker run -itd --net=host --name=ovsdb-server \
+      <docker_repo>:<tag> ovsdb-server
+
+Start ovs-vswitchd with priviledged mode as it needs to load kernel module in
+host using below command::
+
+    $ docker run -itd --net=host --name=ovs-vswitchd \
+      --volumes-from=ovsdb-server -v /lib:/lib --privileged \
+      <docker_repo>:<tag> ovs-vswitchd
+
+.. note::
+    The debian docker file uses ubuntu 16.04 as a base image for reference.
+
+    User can use any other base image for debian, e.g. u14.04, etc.
+
+    RHEL based docker build support needs to be added.
+
 Validating
 ----------
 
@@ -516,6 +565,10 @@ and ``vif1.0`` to it::
 
 Refer to ovs-vsctl(8) for more details. You may also wish to refer to
 :doc:`/topics/testing` for information on more generic testing of OVS.
+
+When using ovs in container, exec to container to run above commands::
+
+    $ docker exec -it <ovsdb-server/ovs-vswitchd> /bin/bash
 
 Upgrading
 ---------
@@ -585,6 +638,18 @@ needs some considerations:
    and the kernel flows are lost. The downtime of the traffic can be reduced if
    the userspace daemons are restarted immediately and the userspace flows are
    restored as soon as possible.
+
+5. When upgrading ovs running in container on host that is managed by ovn,
+   simply stop the docker container, remove and re-run with new docker image
+   that has newer ovs version.
+
+6. When running ovs in container, if ovs is used in bridged mode where
+   management interface is managed by ovs, docker restart will result in loss
+   of network connectivity. Hence, make sure to delete the bridge mapping of
+   physical interface from ovs, upgrade ovs via docker and then add back the
+   interface to ovs bridge. This mapping need not be deleted in case of multi
+   nics if management interface is not managed by ovs.
+
 
 The ovs-ctl utility's ``restart`` function only restarts the userspace daemons,
 makes sure that the 'ofport' values remain consistent across restarts, restores

@@ -485,6 +485,7 @@ create_cluster () {
     elif ovsdb_tool db-is-standalone "$DB_FILE"; then
         # Convert standalone database to clustered.
         backup_db || return 1
+        rm -f "$DB_FILE"
         action "Creating cluster database $DB_FILE from existing one" \
                ovsdb_tool create-cluster "$DB_FILE" "$backup" "$LOCAL_ADDR"
     fi
@@ -653,7 +654,8 @@ force_reload_kmod () {
 
     restore_interfaces
 
-    "$datadir/scripts/ovs-check-dead-ifs"
+    action "Finding processes on dead interfaces" timeout 5 \
+        "$datadir/scripts/ovs-check-dead-ifs" || true
 }
 
 ## ------- ##

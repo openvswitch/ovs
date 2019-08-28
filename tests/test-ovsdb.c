@@ -2412,6 +2412,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    ovsdb_idl_set_leader_only(idl, false);
     if (ctx->argc > 2) {
         struct stream *stream;
 

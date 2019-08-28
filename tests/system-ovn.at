@@ -1334,10 +1334,12 @@ NS_CHECK_EXEC([foo2], [ping -q -c 3 -i 0.3 -w 2 172.16.1.2 | FORMAT_PING], \
 ])
 
 # We verify that SNAT indeed happened via 'dump-conntrack' command.
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.4) | \
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.1) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=192.168.1.3,dst=172.16.1.2,id=<cleared>,type=8,code=0),reply=(src=172.16.1.2,dst=172.16.1.4,id=<cleared>,type=0,code=0),zone=<cleared>
+icmp,orig=(src=192.168.1.3,dst=172.16.1.2,id=<cleared>,type=8,code=0),reply=(src=172.16.1.2,dst=172.16.1.1,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 # South-North SNAT: 'bar1' pings 'alice1'. But 'alice1' receives traffic
 # from 172.16.1.1
@@ -1507,11 +1509,13 @@ NS_CHECK_EXEC([foo1], [ping -q -c 3 -i 0.3 -w 2 172.16.1.4 | FORMAT_PING], \
 
 # Check conntrack entries.  First SNAT of 'foo1' address happens.
 # Then DNAT of 'bar1' address happens (listed first below).
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.3) | \
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.4) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=172.16.1.3,dst=172.16.1.4,id=<cleared>,type=8,code=0),reply=(src=192.168.2.2,dst=172.16.1.3,id=<cleared>,type=0,code=0),zone=<cleared>
-icmp,orig=(src=192.168.1.2,dst=172.16.1.4,id=<cleared>,type=8,code=0),reply=(src=172.16.1.4,dst=172.16.1.3,id=<cleared>,type=0,code=0),zone=<cleared>
+icmp,orig=(src=172.16.1.1,dst=172.16.1.4,id=<cleared>,type=8,code=0),reply=(src=192.168.2.2,dst=172.16.1.1,id=<cleared>,type=0,code=0),zone=<cleared>
+icmp,orig=(src=192.168.1.2,dst=172.16.1.4,id=<cleared>,type=8,code=0),reply=(src=172.16.1.4,dst=172.16.1.1,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 # East-West NAT: 'foo2' pings 'bar1' using 172.16.1.4.
 NS_CHECK_EXEC([foo2], [ping -q -c 3 -i 0.3 -w 2 172.16.1.4 | FORMAT_PING], \

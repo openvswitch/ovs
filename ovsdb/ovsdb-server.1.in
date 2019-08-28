@@ -353,6 +353,21 @@ the server's local network address as passed to \fBovsdb-tool\fR's
 \fBcreate\-cluster\fR or \fBjoin\-cluster\fR command.  Use
 \fBcluster/status\fR to see a list of cluster members.
 .
+.IP "\fBcluster/change-election-timer \fIdb time\fR"
+Change the leader election timeout base value of the cluster, in milliseconds.
+.IP
+Leader election will be initiated by a follower if there is no heartbeat
+received from the leader within this time plus a random time within 1 second.
+.IP
+The default value is 1000, if not changed with this command.  This command can
+be used to adjust the value when necessary, according to the expected load and
+response time of the servers.
+.IP
+This command must be executed on the leader.  It initiates the change to the
+cluster.  To see if the change takes effect (committed), use
+\fBcluster/status\fR to show the current setting.  Once a change is committed,
+it persists at server restarts.
+.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man

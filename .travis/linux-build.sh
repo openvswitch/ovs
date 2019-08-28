@@ -31,6 +31,8 @@ function install_kernel()
              sed 's/.*\..*\.\(.*\)/\1/' | sort -h | tail -1)
     version="${1}.${lo_ver}"
 
+    rm -rf index* linux-*
+
     url="${base_url}/linux-${version}.tar.xz"
     # Download kernel sources. Try direct link on CDN failure.
     wget ${url} || wget ${url} || wget ${url/cdn/www}
@@ -65,16 +67,33 @@ function install_kernel()
 
 function install_dpdk()
 {
-    if [ "${1##refs/*/}" != "${1}" ]; then
+    local DPDK_VER=$1
+    local VERSION_FILE="dpdk-dir/travis-dpdk-cache-version"
+
+    if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
+        # Avoid using cache for git tree build.
+        rm -rf dpdk-dir
+
         DPDK_GIT=${DPDK_GIT:-https://dpdk.org/git/dpdk}
-        git clone --single-branch $DPDK_GIT dpdk-git -b "${1##refs/*/}"
-        cd dpdk-git
+        git clone --single-branch $DPDK_GIT dpdk-dir -b "${DPDK_VER##refs/*/}"
+        pushd dpdk-dir
         git log -1 --oneline
     else
+        if [ -f "${VERSION_FILE}" ]; then
+            VER=$(cat ${VERSION_FILE})
+            if [ "${VER}" = "${DPDK_VER}" ]; then
+                EXTRA_OPTS="${EXTRA_OPTS} --with-dpdk=$(pwd)/dpdk-dir/build"
+                echo "Found cached DPDK ${VER} build in $(pwd)/dpdk-dir"
+                return
+            fi
+        fi
+        # No cache or version mismatch.
+        rm -rf dpdk-dir
         wget https://fast.dpdk.org/rel/dpdk-$1.tar.xz
         tar xvf dpdk-$1.tar.xz > /dev/null
         DIR_NAME=$(tar -tf dpdk-$1.tar.xz | head -1 | cut -f1 -d"/")
-        cd $DIR_NAME
+        mv ${DIR_NAME} dpdk-dir
+        pushd dpdk-dir
     fi
 
     make config CC=gcc T=$TARGET
@@ -91,12 +110,30 @@ function install_dpdk()
     make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
-    cd ..
+    popd
+    echo "${DPDK_VER}" > ${VERSION_FILE}
 }
 
 function configure_ovs()
 {
     ./boot.sh && ./configure $* || { cat config.log; exit 1; }
+}
+
+function build_ovs()
+{
+    local KERNEL=$1
+
+    configure_ovs $OPTS
+    make selinux-policy
+
+    # Only build datapath if we are testing kernel w/o running testsuite
+    if [ "${KERNEL}" ]; then
+        pushd datapath
+        make -j4
+        popd
+    else
+        make -j4
+    fi
 }
 
 if [ "$KERNEL" ]; then
@@ -114,17 +151,18 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     fi
 fi
 
-OPTS="$EXTRA_OPTS $*"
-
 if [ "$CC" = "clang" ]; then
     export OVS_CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
     export OVS_CFLAGS="$CFLAGS $BUILD_ENV"
 else
-    OPTS="$OPTS --enable-sparse"
+    OPTS="--enable-sparse"
     export OVS_CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS"
 fi
+
+save_OPTS="${OPTS} $*"
+OPTS="${EXTRA_OPTS} ${save_OPTS}"
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
@@ -138,14 +176,20 @@ if [ "$TESTSUITE" ]; then
         exit 1
     fi
 else
-    configure_ovs $OPTS
-    make selinux-policy
-
-    # Only build datapath if we are testing kernel w/o running testsuite
-    if [ "$KERNEL" ]; then
-        cd datapath
+    if [ -z "${KERNEL_LIST}" ]; then build_ovs ${KERNEL};
+    else
+        save_EXTRA_OPTS="${EXTRA_OPTS}"
+        for KERNEL in ${KERNEL_LIST}; do
+            echo "=============================="
+            echo "Building with kernel ${KERNEL}"
+            echo "=============================="
+            EXTRA_OPTS="${save_EXTRA_OPTS}"
+            install_kernel ${KERNEL}
+            OPTS="${EXTRA_OPTS} ${save_OPTS}"
+            build_ovs ${KERNEL}
+            make distclean
+        done
     fi
-    make -j4
 fi
 
 exit 0
