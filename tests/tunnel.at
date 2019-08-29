@@ -408,13 +408,13 @@ AT_CHECK([ovs-vsctl add-port int-br v1 -- set Interface v1 type=vxlan \
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-  br0:
-    br0 65534/100: (dummy-internal)
-    p0 1/1: (dummy)
-  int-br:
-    int-br 65534/2: (dummy-internal)
-    v1 2/4789: (vxlan: key=123, remote_ip=172.31.1.2)
-    v2 3/3: (dummy-internal)
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy)
+	int-br:
+		int-br 65534/2: (dummy-internal)
+		v1 2/4789: (vxlan: key=123, remote_ip=172.31.1.2)
+		v2 3/3: (dummy-internal)
 ])
 
 dnl First setup dummy interface IP address, then add the route
