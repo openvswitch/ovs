@@ -76,6 +76,7 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_CLEAR = UCHAR_MAX + 1,
+        OPT_COUNTERS,
         OPT_MAY_CREATE,
         OPT_READ_ONLY,
         OPT_NAMES,
@@ -85,6 +86,7 @@ parse_options(int argc, char *argv[])
     static const struct option long_options[] = {
         {"statistics", no_argument, NULL, 's'},
         {"clear", no_argument, NULL, OPT_CLEAR},
+        {"counters", no_argument, NULL, OPT_COUNTERS},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         {"read-only", no_argument, NULL, OPT_READ_ONLY},
         {"more", no_argument, NULL, 'm'},
@@ -117,6 +119,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_CLEAR:
             dpctl_p.zero_statistics = true;
+            break;
+
+        case OPT_COUNTERS:
+            dpctl_p.counters = true;
             break;
 
         case OPT_MAY_CREATE:

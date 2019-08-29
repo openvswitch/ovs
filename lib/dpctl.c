@@ -957,6 +957,8 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     int pmd_id = PMD_ID_NULL;
     int lastargc = 0;
     int error;
+    uint32_t nb_ovs = 0;
+    uint32_t nb_offloaded = 0;
 
     while (argc > 1 && lastargc != argc) {
         lastargc = argc;
@@ -1041,24 +1043,41 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             minimatch_destroy(&minimatch);
         }
-        ds_clear(&ds);
-        /* If 'pmd_id' is specified, overlapping flows could be dumped from
-         * different pmd threads.  So, separates dumps from different pmds
-         * by printing a title line. */
-        if (pmd_id != f.pmd_id) {
-            if (f.pmd_id == NON_PMD_CORE_ID) {
-                ds_put_format(&ds, "flow-dump from non-dpdk interfaces:\n");
+
+        if (dpctl_p->counters) {
+            if (f.attrs.offloaded) {
+                nb_offloaded++;
             } else {
-                ds_put_format(&ds, "flow-dump from pmd on cpu core: %d\n",
-                              f.pmd_id);
+                nb_ovs++;
             }
-            pmd_id = f.pmd_id;
-        }
-        if (flow_passes_type_filter(&f, &dump_types)) {
-            format_dpif_flow(&ds, &f, portno_names, dpctl_p);
-            dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+        } else {
+            ds_clear(&ds);
+            /* If 'pmd_id' is specified, overlapping flows could be dumped from
+             * different pmd threads.  So, separates dumps from different pmds
+             * by printing a title line. */
+            if (pmd_id != f.pmd_id) {
+                if (f.pmd_id == NON_PMD_CORE_ID) {
+                    ds_put_format(&ds, "flow-dump from non-dpdk interfaces:\n");
+                } else {
+                    ds_put_format(&ds, "flow-dump from pmd on cpu core: %d\n",
+                                  f.pmd_id);
+                }
+                pmd_id = f.pmd_id;
+            }
+            if (flow_passes_type_filter(&f, &dump_types)) {
+                format_dpif_flow(&ds, &f, portno_names, dpctl_p);
+                dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+            }
         }
     }
+
+    if (dpctl_p->counters) {
+        ds_clear(&ds);
+        ds_put_format(&ds, "flows statistics: ovs %u, offloaded %u\n",
+                      nb_ovs, nb_offloaded);
+        dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+    }
+
     dpif_flow_dump_thread_destroy(flow_dump_thread);
     error = dpif_flow_dump_destroy(flow_dump);
 
@@ -2542,6 +2561,8 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
                 dpctl_p.print_statistics = true;
             } else if (!strcmp(arg, "--clear")) {
                 dpctl_p.zero_statistics = true;
+            } else if (!strcmp(arg, "--counters")) {
+                dpctl_p.counters = true;
             } else if (!strcmp(arg, "--may-create")) {
                 dpctl_p.may_create = true;
             } else if (!strcmp(arg, "--more")) {

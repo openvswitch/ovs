@@ -30,6 +30,9 @@ struct dpctl_params {
     /* --clear: Reset existing statistics to zero when modifying a flow? */
     bool zero_statistics;
 
+    /* --counters: Count the flows numbers */
+    bool counters;
+
     /* --may-create: Allow mod-flows command to create a new flow? */
     bool may_create;
 
