@@ -587,7 +587,7 @@ static void
 reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
 {
     char *tail = dp_packet_tail(pkt);
-    char pad = dp_packet_l2_pad_size(pkt);
+    uint8_t pad = dp_packet_l2_pad_size(pkt);
     struct conn_key inner_key;
     const char *inner_l4 = NULL;
     uint16_t orig_l3_ofs = pkt->l3_ofs;
@@ -597,6 +597,8 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
         struct ip_header *nh = dp_packet_l3(pkt);
         struct icmp_header *icmp = dp_packet_l4(pkt);
         struct ip_header *inner_l3 = (struct ip_header *) (icmp + 1);
+        /* This call is already verified to succeed during the code path from
+         * 'conn_key_extract()' which calls 'extract_l4_icmp()'. */
         extract_l3_ipv4(&inner_key, inner_l3, tail - ((char *)inner_l3) - pad,
                         &inner_l4, false);
 
@@ -618,6 +620,8 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
         struct icmp6_error_header *icmp6 = dp_packet_l4(pkt);
         struct ovs_16aligned_ip6_hdr *inner_l3_6 =
             (struct ovs_16aligned_ip6_hdr *) (icmp6 + 1);
+        /* This call is already verified to succeed during the code path from
+         * 'conn_key_extract()' which calls 'extract_l4_icmp6()'. */
         extract_l3_ipv6(&inner_key, inner_l3_6,
                         tail - ((char *)inner_l3_6) - pad,
                         &inner_l4);
