@@ -220,6 +220,7 @@ usage(void *userdata OVS_UNUSED)
            "\nOptions for dump-flows:\n"
            "  -m, --more                  increase verbosity of output\n"
            "  --names                     use port names in output\n"
+           "  --counters                  only display the counters of flow table statistics\n"
            "\nOptions for mod-flow:\n"
            "  --may-create                create flow if it doesn't exist\n"
            "  --read-only                 do not run read/write commands\n"

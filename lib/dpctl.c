@@ -1073,8 +1073,12 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
     if (dpctl_p->counters) {
         ds_clear(&ds);
-        ds_put_format(&ds, "flows statistics: ovs %u, offloaded %u\n",
-                      nb_ovs, nb_offloaded);
+        if (dpctl_p->is_appctl) {
+            ds_put_format(&ds, "flows statistics: ovs %u, offloaded %u\n",
+                          nb_ovs, nb_offloaded);
+        } else {
+            ds_put_format(&ds, "flows statistics: ovs %u\n", nb_ovs);
+        }
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     }
 
