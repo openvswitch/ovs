@@ -71,6 +71,8 @@ v2.12.0 - xx xxx xxxx
      * Support for the kernel version 5.0.x.
    - 'ovs-dpctl dump-flows' is no longer suitable for dumping offloaded flows.
      'ovs-appctl dpctl/dump-flows' should be used instead.
+     'ovs-dpctl dump-flows' and 'ovs-appctl dpctl/dump-flows' add option argument
+       '--counters' to count the flow tables.
    - Add L2 GRE tunnel over IPv6 support.
 
 

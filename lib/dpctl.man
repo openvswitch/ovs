@@ -104,11 +104,13 @@ default.  When multiple datapaths exist, then a datapath name is
 required.
 .
 .TP
-.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR]"
+.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR] [\fB\-\-counters\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR]"
 Prints to the console all flow entries in datapath \fIdp\fR's flow
 table.  Without \fB\-m\fR or \fB\-\-more\fR, output omits match fields
 that a flow wildcards entirely; with \fB\-m\fR or \fB\-\-more\fR,
 output includes all wildcarded fields.
+.IP
+With \fB\-\-counters\fR, only output the counters of flow tables statistics.
 .IP
 If \fBfilter=\fIfilter\fR is specified, only displays the flows
 that match the \fIfilter\fR. \fIfilter\fR is a flow in the form similiar
