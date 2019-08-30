@@ -51,6 +51,9 @@ v2.12.0 - 03 Sep 2019
        quickly after a brief disconnection, saving bandwidth and CPU time.
        See section 4.1.15 of ovsdb-server(7) for details of related OVSDB
        protocol extension.
+     * Support to convert from cluster database to standalone database is now
+       available when clustered is down and cannot be revived using ovsdb-tool
+       . Check "Database Migration Commands" in ovsdb-tool man section.
    - OVN:
      * IPAM/MACAM:
        - select IPAM mac_prefix in a random manner if not provided by the user
