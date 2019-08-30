@@ -173,6 +173,9 @@ usage(void)
            "  compare-versions A OP B  compare OVSDB schema version numbers\n"
            "  query [DB] TRNS         execute read-only transaction on DB\n"
            "  transact [DB] TRNS      execute read/write transaction on DB\n"
+           "  cluster-to-standalone DB DB    Convert clustered DB to\n"
+           "      standalone DB when cluster is down and cannot be\n"
+           "        revived\n"
            "  [-m]... show-log [DB]   print DB's log entries\n"
            "The default DB is %s.\n"
            "The default SCHEMA is %s.\n",
@@ -943,6 +946,55 @@ print_raft_record(const struct raft_record *r,
 }
 
 static void
+raft_header_to_standalone_log(const struct raft_header *h,
+                              struct ovsdb_log *db_log_data)
+{
+    if (h->snap_index) {
+        if (!h->snap.data || json_array(h->snap.data)->n != 2) {
+        ovs_fatal(0, "Incorrect raft header data array length");
+        }
+
+        struct json *schema_json = json_array(h->snap.data)->elems[0];
+        if (schema_json->type != JSON_NULL) {
+            struct ovsdb_schema *schema;
+            check_ovsdb_error(ovsdb_schema_from_json(schema_json, &schema));
+            ovsdb_schema_destroy(schema);
+            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
+                                                       schema_json));
+        }
+
+        struct json *data_json = json_array(h->snap.data)->elems[1];
+        if (!data_json || data_json->type != JSON_OBJECT) {
+            ovs_fatal(0, "Invalid raft header data");
+        }
+        if (data_json->type != JSON_NULL) {
+            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
+                                                       data_json));
+        }
+    }
+}
+
+static void
+raft_record_to_standalone_log(const struct raft_record *r,
+                              struct ovsdb_log *db_log_data)
+{
+    if (r->type == RAFT_REC_ENTRY) {
+        if (!r->entry.data) {
+            return;
+        }
+        if (json_array(r->entry.data)->n != 2) {
+            ovs_fatal(0, "Incorrect raft record array length");
+        }
+
+        struct json *data_json = json_array(r->entry.data)->elems[1];
+        if (data_json->type != JSON_NULL) {
+            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
+                                                       data_json));
+        }
+    }
+}
+
+static void
 do_show_log_cluster(struct ovsdb_log *log)
 {
     struct smap names = SMAP_INITIALIZER(&names);
@@ -1511,6 +1563,51 @@ do_compare_versions(struct ovs_cmdl_context *ctx)
     exit(result ? 0 : 2);
 }
 
+static void
+do_convert_to_standalone(struct ovsdb_log *log, struct ovsdb_log *db_log_data)
+{
+    for (unsigned int i = 0; ; i++) {
+        struct json *json;
+        check_ovsdb_error(ovsdb_log_read(log, &json));
+        if (!json) {
+            break;
+        }
+
+        if (i == 0) {
+            struct raft_header h;
+            check_ovsdb_error(raft_header_from_json(&h, json));
+            raft_header_to_standalone_log(&h, db_log_data);
+            raft_header_uninit(&h);
+        } else {
+            struct raft_record r;
+            check_ovsdb_error(raft_record_from_json(&r, json));
+            raft_record_to_standalone_log(&r, db_log_data);
+            raft_record_uninit(&r);
+        }
+    }
+}
+
+static void
+do_cluster_standalone(struct ovs_cmdl_context *ctx)
+{
+    const char *db_file_name = ctx->argv[1];
+    const char *cluster_db_file_name = ctx->argv[2];
+    struct ovsdb_log *log;
+    struct ovsdb_log *db_log_data;
+
+    check_ovsdb_error(ovsdb_log_open(cluster_db_file_name,
+                                     OVSDB_MAGIC"|"RAFT_MAGIC,
+                                     OVSDB_LOG_READ_ONLY, -1, &log));
+    check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_MAGIC,
+                                     OVSDB_LOG_CREATE_EXCL, -1, &db_log_data));
+    if (strcmp(ovsdb_log_get_magic(log), RAFT_MAGIC) != 0) {
+        ovs_fatal(0, "Database is not clustered db.\n");
+    }
+    do_convert_to_standalone(log, db_log_data);
+    check_ovsdb_error(ovsdb_log_commit_block(db_log_data));
+    ovsdb_log_close(db_log_data);
+    ovsdb_log_close(log);
+}
 
 static void
 do_help(struct ovs_cmdl_context *ctx OVS_UNUSED)
@@ -1550,7 +1647,9 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "compare-versions", "a op b", 3, 3, do_compare_versions, OVS_RO },
     { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
     { "list-commands", NULL, 0, INT_MAX, do_list_commands, OVS_RO },
-    { NULL, NULL, 0, 0, NULL, OVS_RO },
+    { "cluster-to-standalone", "db clusterdb", 2, 2,
+    do_cluster_standalone, OVS_RW },
+    { NULL, NULL, 2, 2, NULL, OVS_RO },
 };
 
 static const struct ovs_cmdl_command *get_all_commands(void)

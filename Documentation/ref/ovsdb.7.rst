@@ -514,6 +514,9 @@ standalone database from the contents of a running clustered database.
 When the cluster is down and cannot be revived, ``ovsdb-client backup`` will
 not work.
 
+Use ``ovsdb-tool cluster-to-standalone`` to convert clustered database to
+standalone database when the cluster is down and cannot be revived.
+
 Upgrading or Downgrading a Database
 -----------------------------------
 

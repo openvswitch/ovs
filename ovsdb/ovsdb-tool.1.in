@@ -146,6 +146,14 @@ avoid this possibility, specify \fB\-\-cid=\fIuuid\fR, where
 \fIuuid\fR is the cluster ID of the cluster to join, as printed by
 \fBovsdb\-tool get\-cid\fR.
 .
+.SS "Database Migration Commands"
+This commands will convert cluster database to standalone database.
+.
+.IP "\fBcluster\-to\-standalone\fI db clusterdb"
+Use this command to convert to standalone database from clustered database
+when the cluster is down and cannot be revived. It creates new standalone
+\fIdb\fR file from the given cluster \fIdb\fR file.
+.
 .SS "Version Management Commands"
 .so ovsdb/ovsdb-schemas.man
 .PP
