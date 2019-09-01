@@ -282,7 +282,7 @@ ovs_pcap_write(struct pcap_file *p_file, struct dp_packet *buf)
     struct pcaprec_hdr prh;
     struct timeval tv;
 
-    ovs_assert(buf->packet_type == htonl(PT_ETH));
+    ovs_assert(dp_packet_is_eth(buf));
 
     xgettimeofday(&tv);
     prh.ts_sec = tv.tv_sec;

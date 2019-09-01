@@ -246,7 +246,7 @@ push_eth(struct dp_packet *packet, const struct eth_addr *dst,
 {
     struct eth_header *eh;
 
-    ovs_assert(packet->packet_type != htonl(PT_ETH));
+    ovs_assert(!dp_packet_is_eth(packet));
     eh = dp_packet_resize_l2(packet, ETH_HEADER_LEN);
     eh->eth_dst = *dst;
     eh->eth_src = *src;
@@ -265,7 +265,7 @@ pop_eth(struct dp_packet *packet)
     ovs_be16 ethertype;
     int increment;
 
-    ovs_assert(packet->packet_type == htonl(PT_ETH));
+    ovs_assert(dp_packet_is_eth(packet));
     ovs_assert(l3 != NULL);
 
     if (l2_5) {

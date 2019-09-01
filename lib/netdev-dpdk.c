@@ -2475,7 +2475,8 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, true);
     } else {
-        __netdev_dpdk_vhost_send(netdev, qid, batch->packets, batch->count);
+        __netdev_dpdk_vhost_send(netdev, qid, batch->packets,
+                                 dp_packet_batch_size(batch));
     }
     return 0;
 }

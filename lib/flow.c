@@ -1098,7 +1098,7 @@ parse_tcp_flags(struct dp_packet *packet)
     ovs_be16 dl_type;
     uint8_t nw_frag = 0, nw_proto = 0;
 
-    if (packet->packet_type != htonl(PT_ETH)) {
+    if (!dp_packet_is_eth(packet)) {
         return 0;
     }
 

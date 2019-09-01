@@ -4270,7 +4270,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
         /* At least one packet received. */
         *recirc_depth_get() = 0;
         pmd_thread_ctx_time_update(pmd);
-        batch_cnt = batch.count;
+        batch_cnt = dp_packet_batch_size(&batch);
         if (pmd_perf_metrics_enabled(pmd)) {
             /* Update batch histogram. */
             s->current.batches++;
@@ -6308,7 +6308,7 @@ packet_batch_per_flow_update(struct packet_batch_per_flow *batch,
 {
     batch->byte_count += dp_packet_size(packet);
     batch->tcp_flags |= tcp_flags;
-    batch->array.packets[batch->array.count++] = packet;
+    dp_packet_batch_add(&batch->array, packet);
 }
 
 static inline void
@@ -6330,7 +6330,8 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
-    dp_netdev_flow_used(flow, batch->array.count, batch->byte_count,
+    dp_netdev_flow_used(flow, dp_packet_batch_size(&batch->array),
+                        batch->byte_count,
                         batch->tcp_flags, pmd->ctx.now / 1000);
 
     actions = dp_netdev_flow_get_actions(flow);
