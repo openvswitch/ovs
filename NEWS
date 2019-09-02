@@ -1,5 +1,7 @@
 v2.9.7 - xx xxx xxxx
 --------------------
+   - DPDK
+    * OVS validated with DPDK 17.11.6 which is recommended to be used.
 
 v2.9.6 - 03 Sep 2019
 --------------------
