@@ -83,7 +83,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="17.11.4"
+        DPDK_VER="17.11.6"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
