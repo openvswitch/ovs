@@ -2422,6 +2422,7 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_frame_errors,         "rx_frame_err")             \
     IFACE_STAT(rx_over_errors,          "rx_over_err")              \
     IFACE_STAT(rx_crc_errors,           "rx_crc_err")               \
+    IFACE_STAT(rx_missed_errors,        "rx_missed_errors")         \
     IFACE_STAT(collisions,              "collisions")               \
     IFACE_STAT(rx_1_to_64_packets,      "rx_1_to_64_packets")       \
     IFACE_STAT(rx_65_to_127_packets,    "rx_65_to_127_packets")     \
