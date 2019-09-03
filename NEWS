@@ -2,7 +2,7 @@ Post-v2.12.0
 ---------------------
 
 
-v2.12.0 - xx xxx xxxx
+v2.12.0 - 03 Sep 2019
 ---------------------
    - DPDK:
      * New option 'other_config:dpdk-socket-limit' to limit amount of
@@ -72,7 +72,6 @@ v2.12.0 - xx xxx xxxx
    - 'ovs-dpctl dump-flows' is no longer suitable for dumping offloaded flows.
      'ovs-appctl dpctl/dump-flows' should be used instead.
    - Add L2 GRE tunnel over IPv6 support.
-
 
 v2.11.0 - 19 Feb 2019
 ---------------------
