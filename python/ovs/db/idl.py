@@ -997,6 +997,12 @@ class Row(object):
     def __hash__(self):
         return int(self.__dict__['uuid'])
 
+    def __str__(self):
+        return "{table}({data})".format(
+            table=self._table.name,
+            data=", ".join("{col}={val}".format(col=c, val=getattr(self, c))
+                           for c in sorted(self._table.columns)))
+
     def __getattr__(self, column_name):
         assert self._changes is not None
         assert self._mutations is not None
