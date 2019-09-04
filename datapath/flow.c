@@ -436,63 +436,14 @@ invalid:
 }
 
 /**
- * key_extract - extracts a flow key from an Ethernet frame.
+ * key_extract_l3l4 - extracts L3/L4 header information.
  * @skb: sk_buff that contains the frame, with skb->data pointing to the
- * Ethernet header
+ *       L3 header
  * @key: output flow key
- *
- * The caller must ensure that skb->len >= ETH_HLEN.
- *
- * Returns 0 if successful, otherwise a negative errno value.
- *
- * Initializes @skb header pointers as follows:
- *
- *    - skb->mac_header: the Ethernet header.
- *
- *    - skb->network_header: just past the Ethernet header, or just past the
- *      VLAN header, to the first byte of the Ethernet payload.
- *
- *    - skb->transport_header: If key->eth.type is ETH_P_IP or ETH_P_IPV6
- *      on output, then just past the IP header, if one is present and
- *      of a correct length, otherwise the same as skb->network_header.
- *      For other key->eth.type values it is left untouched.
  */
-static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
+static int key_extract_l3l4(struct sk_buff *skb, struct sw_flow_key *key)
 {
 	int error;
-	struct ethhdr *eth;
-
-	/* Flags are always used as part of stats */
-	key->tp.flags = 0;
-
-	skb_reset_mac_header(skb);
-
-	/* Link layer.  We are guaranteed to have at least the 14 byte Ethernet
-	 * header in the linear data area.
-	 */
-	eth = eth_hdr(skb);
-	ether_addr_copy(key->eth.src, eth->h_source);
-	ether_addr_copy(key->eth.dst, eth->h_dest);
-
-	__skb_pull(skb, 2 * ETH_ALEN);
-	/* We are going to push all headers that we pull, so no need to
-	 * update skb->csum here.
-	 */
-
-	key->eth.tci = 0;
-	if (skb_vlan_tag_present(skb))
-		key->eth.tci = htons(skb->vlan_tci);
-	else if (eth->h_proto == htons(ETH_P_8021Q))
-		if (unlikely(parse_vlan(skb, key)))
-			return -ENOMEM;
-
-	key->eth.type = parse_ethertype(skb);
-	if (unlikely(key->eth.type == htons(0)))
-		return -ENOMEM;
-
-	skb_reset_network_header(skb);
-	skb_reset_mac_len(skb);
-	__skb_push(skb, skb->data - skb_mac_header(skb));
 
 	/* Network layer. */
 	if (key->eth.type == htons(ETH_P_IP)) {
@@ -686,6 +637,79 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 		}
 	}
 	return 0;
+}
+
+/**
+ * key_extract - extracts a flow key from an Ethernet frame.
+ * @skb: sk_buff that contains the frame, with skb->data pointing to the
+ * Ethernet header
+ * @key: output flow key
+ *
+ * The caller must ensure that skb->len >= ETH_HLEN.
+ *
+ * Returns 0 if successful, otherwise a negative errno value.
+ *
+ * Initializes @skb header fields as follows:
+ *
+ *    - skb->mac_header: the L2 header.
+ *
+ *    - skb->network_header: just past the L2 header, or just past the
+ *      VLAN header, to the first byte of the L2 payload.
+ *
+ *    - skb->transport_header: If key->eth.type is ETH_P_IP or ETH_P_IPV6
+ *      on output, then just past the IP header, if one is present and
+ *      of a correct length, otherwise the same as skb->network_header.
+ *      For other key->eth.type values it is left untouched.
+ *
+ *    - skb->protocol: the type of the data starting at skb->network_header.
+ *      Equals to key->eth.type.
+ */
+static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
+{
+	struct ethhdr *eth;
+
+	/* Flags are always used as part of stats */
+	key->tp.flags = 0;
+
+	skb_reset_mac_header(skb);
+
+	/* Link layer.  We are guaranteed to have at least the 14 byte Ethernet
+	 * header in the linear data area.
+	 */
+	eth = eth_hdr(skb);
+	ether_addr_copy(key->eth.src, eth->h_source);
+	ether_addr_copy(key->eth.dst, eth->h_dest);
+
+	__skb_pull(skb, 2 * ETH_ALEN);
+	/* We are going to push all headers that we pull, so no need to
+	 * update skb->csum here.
+	 */
+
+	key->eth.tci = 0;
+	if (skb_vlan_tag_present(skb))
+		key->eth.tci = htons(skb->vlan_tci);
+	else if (eth->h_proto == htons(ETH_P_8021Q))
+		if (unlikely(parse_vlan(skb, key)))
+			return -ENOMEM;
+
+	key->eth.type = parse_ethertype(skb);
+	if (unlikely(key->eth.type == htons(0)))
+		return -ENOMEM;
+
+	skb_reset_network_header(skb);
+	skb_reset_mac_len(skb);
+	__skb_push(skb, skb->data - skb_mac_header(skb));
+
+	/* Fill out L3/L4 key info, if any */
+	return key_extract_l3l4(skb, key);
+}
+
+/* In the case of conntrack fragment handling it expects L3 headers,
+ * add a helper.
+ */
+int ovs_flow_key_update_l3l4(struct sk_buff *skb, struct sw_flow_key *key)
+{
+	return key_extract_l3l4(skb, key);
 }
 
 int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key)
