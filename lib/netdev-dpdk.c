@@ -451,7 +451,7 @@ struct netdev_dpdk {
         uint64_t tx_retries;
         /* Protects stats */
         rte_spinlock_t stats_lock;
-        /* 4 pad bytes here. */
+        /* 36 pad bytes here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
