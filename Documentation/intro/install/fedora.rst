@@ -119,16 +119,6 @@ tests.  This can take several minutes.
 
     $ make rpm-fedora RPMBUILD_OPT="--with check"
 
-To build OVN RPMs, execute the following from the directory in which
-`./configure` was executed:
-
-::
-
-    $ make rpm-fedora-ovn
-
-This will create the RPMs `ovn`, `ovn-common`, `ovn-central`, `ovn-host`,
-`ovn-docker` and `ovn-vtep`.
-
 
 Kernel OVS Tree Datapath RPM
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -164,8 +154,6 @@ In most cases only the `openvswitch` RPM will need to be installed. The
 `python-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
 `openvswitch-debuginfo` RPMs are optional unless required for a specific
 purpose.
-
-The `ovn-*` packages are only needed when using OVN.
 
 Refer to the `RHEL README`__ for additional usage and configuration
 information.

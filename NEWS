@@ -1,6 +1,9 @@
 Post-v2.12.0
 ---------------------
-
+   - OVN:
+     * OVN has been removed from this repository. It now exists as a
+       separate project. You can find it at
+       https://github.com/ovn-org/ovn.git
 
 v2.12.0 - 03 Sep 2019
 ---------------------

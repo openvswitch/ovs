@@ -1,15 +1,5 @@
 # Generated automatically -- do not modify!    -*- buffer-read-only: t -*-
 
-ovn/utilities/ovn-detrace.1: \
-	ovn/utilities/ovn-detrace.1.in \
-	lib/common-syn.man \
-	lib/common.man \
-	lib/ovs.tmac
-ovn/utilities/ovn-detrace.1.in:
-lib/common-syn.man:
-lib/common.man:
-lib/ovs.tmac:
-
 ovn/utilities/ovn-sbctl.8: \
 	ovn/utilities/ovn-sbctl.8.in \
 	lib/common.man \

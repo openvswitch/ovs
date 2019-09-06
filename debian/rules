@@ -53,12 +53,6 @@ override_dh_install-arch:
 	# openvswitch-switch
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
 
-	# ovn-host
-	cp debian/ovn-host.template debian/ovn-host/usr/share/ovn/host/default.template
-
-	# ovn-central
-	cp debian/ovn-central.template debian/ovn-central/usr/share/ovn/central/default.template
-
 override_dh_install-indep:
 	dh_install
 

@@ -456,7 +456,6 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib
 /usr/share/openvswitch/scripts/ovs-vtep
-/usr/share/openvswitch/scripts/ovndb-servers.ocf
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
 /usr/sbin/ovs-bugtool
@@ -507,12 +506,6 @@ exit 0
 %exclude /usr/share/openvswitch/python/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/db/*.py[co]
-%exclude /usr/bin/ovn-*
-%exclude /usr/share/man/man5/ovn-*
-%exclude /usr/share/man/man7/ovn-*
-%exclude /usr/share/man/man8/ovn-*
-%exclude /usr/share/openvswitch/ovn-*
-%exclude /usr/share/openvswitch/scripts/ovn-*
 
 %files %{module_package}
 /lib/modules/%{xen_version}/extra/openvswitch/openvswitch.ko

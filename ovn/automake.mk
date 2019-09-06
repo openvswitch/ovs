@@ -66,13 +66,6 @@ ovn/ovn-nb.5: \
 		$(srcdir)/ovn/ovn-nb.xml > $@.tmp && \
 	mv $@.tmp $@
 
-man_MANS += ovn/ovn-architecture.7
-EXTRA_DIST += ovn/ovn-architecture.7.xml
-CLEANFILES += ovn/ovn-architecture.7
-
-EXTRA_DIST += \
-	ovn/TODO.rst
-
 # Version checking for ovn-nb.ovsschema.
 ALL_LOCAL += ovn/ovn-nb.ovsschema.stamp
 ovn/ovn-nb.ovsschema.stamp: ovn/ovn-nb.ovsschema
@@ -85,8 +78,5 @@ ovn/ovn-sb.ovsschema.stamp: ovn/ovn-sb.ovsschema
 	$(srcdir)/build-aux/cksum-schema-check $? $@
 CLEANFILES += ovn/ovn-sb.ovsschema.stamp
 
-include ovn/controller/automake.mk
-include ovn/controller-vtep/automake.mk
 include ovn/lib/automake.mk
-include ovn/northd/automake.mk
 include ovn/utilities/automake.mk

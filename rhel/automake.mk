@@ -23,8 +23,6 @@ EXTRA_DIST += \
 	rhel/openvswitch.spec.in \
 	rhel/openvswitch-fedora.spec \
 	rhel/openvswitch-fedora.spec.in \
-	rhel/ovn-fedora.spec \
-	rhel/ovn-fedora.spec.in \
 	rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
 	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
@@ -34,12 +32,7 @@ EXTRA_DIST += \
 	rhel/usr_lib_systemd_system_ovsdb-server.service \
 	rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
 	rhel/usr_lib_systemd_system_ovs-delete-transient-ports.service \
-	rhel/usr_lib_systemd_system_ovn-controller.service \
-	rhel/usr_lib_systemd_system_ovn-controller-vtep.service \
-	rhel/usr_lib_systemd_system_ovn-northd.service \
-	rhel/usr_lib_systemd_system_openvswitch-ipsec.service \
-	rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
-	rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml
+	rhel/usr_lib_systemd_system_openvswitch-ipsec.service
 
 DISTCLEANFILES += rhel/usr_lib_systemd_system_ovs-vswitchd.service
 
@@ -73,13 +66,6 @@ rpm-fedora: dist $(srcdir)/rhel/openvswitch-fedora.spec
 	rpmbuild ${RPMBUILD_OPT} \
                  -D "_topdir ${RPMBUILD_TOP}" \
                  -ba $(srcdir)/rhel/openvswitch-fedora.spec
-
-rpm-fedora-ovn: dist $(srcdir)/rhel/ovn-fedora.spec
-	${MKDIR_P} ${RPMBUILD_TOP}/SOURCES
-	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
-	rpmbuild ${RPMBUILD_OPT} \
-                 -D "_topdir ${RPMBUILD_TOP}" \
-                 -ba $(srcdir)/rhel/ovn-fedora.spec
 
 # Build kernel datapath RPM
 rpm-fedora-kmod: dist $(srcdir)/rhel/openvswitch-kmod-fedora.spec

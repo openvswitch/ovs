@@ -40,8 +40,8 @@
     <dd>
       Either a universally unique identifier in the style of RFC 4122,
       e.g. <code>f81d4fae-7dec-11d0-a765-00a0c91e6bf6</code>, or an <code>@</code><var>name</var>
-      defined by a <code>get</code> or <code>create</code> command within the same <code>ovn-nbctl</code>
-      invocation.
+      defined by a <code>get</code> or <code>create</code> command within the
+      same <code>ovs-vsctl</code> invocation.
     </dd>
 
   </dl>
@@ -177,7 +177,7 @@
       </p>
 
       <p>
-        The UUIDs shown for rows created in the same <code>ovn-nbctl</code>
+        The UUIDs shown for rows created in the same <code>ovs-vsctl</code>
         invocation will be wrong.
       </p>
 
@@ -199,7 +199,7 @@
       </p>
       <p>
         If <code>@</code><var>name</var> is specified, then the UUID for <var>record</var> may be
-        referred to by that name later in the same <code>ovn-nbctl</code>
+        referred to by that name later in the same <code>ovs-vsctl</code>
         invocation in contexts where a UUID is expected.
       </p>
       <p>
@@ -379,8 +379,8 @@
       </dl>
       <p>
         Consider specifying <code>--timeout=0</code> along with
-        <code>--wait-until</code>, to prevent <code>ovn-nbctl</code> from terminating
-        after waiting only at most 5 seconds.
+        <code>--wait-until</code>, to prevent <code>ovs-vsctl</code> from
+        terminating after waiting only at most 5 seconds.
       </p>
     </dd>
 
