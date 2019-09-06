@@ -232,34 +232,32 @@ construct_dpdk_args(const struct smap *ovs_other_config, struct svec *args)
 static ssize_t
 dpdk_log_write(void *c OVS_UNUSED, const char *buf, size_t size)
 {
-    char *str = xmemdup0(buf, size);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
     static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
     switch (rte_log_cur_msg_loglevel()) {
         case RTE_LOG_DEBUG:
-            VLOG_DBG_RL(&dbg_rl, "%s", str);
+            VLOG_DBG_RL(&dbg_rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_INFO:
         case RTE_LOG_NOTICE:
-            VLOG_INFO_RL(&rl, "%s", str);
+            VLOG_INFO_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_WARNING:
-            VLOG_WARN_RL(&rl, "%s", str);
+            VLOG_WARN_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_ERR:
-            VLOG_ERR_RL(&rl, "%s", str);
+            VLOG_ERR_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_CRIT:
         case RTE_LOG_ALERT:
         case RTE_LOG_EMERG:
-            VLOG_EMER("%s", str);
+            VLOG_EMER("%.*s", (int) size, buf);
             break;
         default:
             OVS_NOT_REACHED();
     }
 
-    free(str);
     return size;
 }
 
