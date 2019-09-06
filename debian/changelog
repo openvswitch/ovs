@@ -2,7 +2,7 @@ openvswitch (2.8.8-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
 
- -- Open vSwitch team <dev@openvswitch.org>  Sat, 30 Mar 2019 11:01:07 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 06 Sep 2019 13:46:52 -0700
 
 openvswitch (2.8.7-1) unstable; urgency=low
    [ Open vSwitch team ]
