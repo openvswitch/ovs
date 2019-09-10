@@ -1,12 +1,6 @@
-man_MANS += \
-    ovn/utilities/ovn-nbctl.8 \
-    ovn/utilities/ovn-sbctl.8
-
-MAN_ROOTS += \
-    ovn/utilities/ovn-sbctl.8.in
-
 EXTRA_DIST += \
-    ovn/utilities/ovn-nbctl.8.xml
+    ovn/utilities/ovn-nbctl.8.xml \
+    ovn/utilities/ovn-sbctl.8.in
 
 CLEANFILES += \
     ovn/utilities/ovn-nbctl.8 \
