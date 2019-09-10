@@ -7,7 +7,7 @@ ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/acl-log.c \
 	ovn/lib/acl-log.h \
 	ovn/lib/ovn-util.c \
-	ovn/lib/ovn-util.h \
+	ovn/lib/ovn-util.h
 nodist_ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/ovn-nb-idl.c \
 	ovn/lib/ovn-nb-idl.h \
