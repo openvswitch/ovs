@@ -1724,6 +1724,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 
         ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
+        minimatch_destroy(&fm->match);
     }
 
     bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
