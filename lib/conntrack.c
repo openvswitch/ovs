@@ -1138,7 +1138,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             handle_nat(pkt, conn, zone, ctx->reply, ctx->icmp_related);
         }
 
-    } else if (check_orig_tuple(ct, pkt, ctx, now, &conn, nat_action_info)) {
+    } else if (pkt->md.ct_state
+               && check_orig_tuple(ct, pkt, ctx, now, &conn, nat_action_info)) {
         create_new_conn = conn_update_state(ct, pkt, ctx, conn, now);
     } else {
         if (ctx->icmp_related) {
