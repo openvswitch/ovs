@@ -1505,6 +1505,7 @@ cmd_add(struct ctl_context *ctx)
         ctx->error = ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
                                              ctx->symtab);
         if (ctx->error) {
+            ovsdb_datum_destroy(&old, &column->type);
             return;
         }
         ovsdb_datum_union(&old, &add, type, false);
@@ -1516,6 +1517,7 @@ cmd_add(struct ctl_context *ctx)
                   old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_max);
+        ovsdb_datum_destroy(&old, &column->type);
         return;
     }
     ovsdb_idl_txn_verify(row, column);
@@ -1597,10 +1599,12 @@ cmd_remove(struct ctl_context *ctx)
                                                      ctx->argv[i],
                                                      ctx->symtab);
                 if (ctx->error) {
+                    ovsdb_datum_destroy(&old, &column->type);
                     return;
                 }
             } else {
                 ctx->error = error;
+                ovsdb_datum_destroy(&old, &column->type);
                 return;
             }
         }
@@ -1612,6 +1616,7 @@ cmd_remove(struct ctl_context *ctx)
                   "table %s but the minimum number is %u", old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_min);
+        ovsdb_datum_destroy(&old, &column->type);
         return;
     }
     ovsdb_idl_txn_verify(row, column);
