@@ -1654,6 +1654,7 @@ do_convert(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
                             ovsdb_schema_to_json(new_schema)), NULL);
     check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     jsonrpc_msg_destroy(reply);
+    ovsdb_schema_destroy(new_schema);
 }
 
 static void
