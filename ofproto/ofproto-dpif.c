@@ -4871,6 +4871,7 @@ group_setup_dp_hash_table(struct group_dpif *group, size_t max_hash)
     if (n_hash > MAX_SELECT_GROUP_HASH_VALUES ||
         (max_hash != 0 && n_hash > max_hash)) {
         VLOG_DBG("  Too many hash values required: %"PRIu64, n_hash);
+        free(webster);
         return false;
     }
 
