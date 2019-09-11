@@ -5095,6 +5095,7 @@ nxt_resume(struct ofproto *ofproto_,
     /* Clean up. */
     ofpbuf_uninit(&odp_actions);
     dp_packet_uninit(&packet);
+    xlate_cache_uninit(&xcache);
 
     return error;
 }
