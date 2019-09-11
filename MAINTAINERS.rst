@@ -58,7 +58,7 @@ This is the current list of active Open vSwitch committers:
    * - Ian Stokes
      - istokes@ovn.org
    * - Ilya Maximets
-     - i.maximets@samsung.com
+     - i.maximets@ovn.org
    * - Jarno Rajahalme
      - jarno@ovn.org
    * - Jesse Gross
