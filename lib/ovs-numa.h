@@ -60,6 +60,8 @@ struct ovs_numa_dump *ovs_numa_dump_n_cores_per_numa(int n);
 bool ovs_numa_dump_contains_core(const struct ovs_numa_dump *,
                                  int numa_id, unsigned core_id);
 size_t ovs_numa_dump_count(const struct ovs_numa_dump *);
+struct ovs_numa_dump * ovs_numa_thread_getaffinity_dump(void);
+int ovs_numa_thread_setaffinity_dump(const struct ovs_numa_dump *);
 void ovs_numa_dump_destroy(struct ovs_numa_dump *);
 int ovs_numa_thread_setaffinity_core(unsigned core_id);
 

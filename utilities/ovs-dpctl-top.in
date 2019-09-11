@@ -291,8 +291,9 @@ def element_passthrough_get(field_type, element, stats_dict):
 # pylint: disable-msg=R0903
 class OutputFormat:
     """ Holds field_type and function to extract element value. """
-    def __init__(self, field_type, generator):
+    def __init__(self, field_type, elements, generator):
         self.field_type = field_type
+        self.elements = elements
         self.generator = generator
 
 ##
@@ -311,14 +312,14 @@ class OutputFormat:
 # All is added to the end of the OUTPUT_FORMAT list.
 ##
 OUTPUT_FORMAT = [
-    OutputFormat("in_port", element_passthrough_get),
-    OutputFormat("eth", element_eth_get),
-    OutputFormat("eth_type", element_passthrough_get),
-    OutputFormat("ipv4", element_ipv4_get),
-    OutputFormat("ipv6", element_ipv6_get),
-    OutputFormat("udp", element_dst_port_get),
-    OutputFormat("tcp", element_dst_port_get),
-    OutputFormat("tunnel", element_tunnel_get),
+    OutputFormat("in_port", (), element_passthrough_get),
+    OutputFormat("eth", ("src","dst"), element_eth_get),
+    OutputFormat("eth_type", (), element_passthrough_get),
+    OutputFormat("ipv4", ("src","dst"), element_ipv4_get),
+    OutputFormat("ipv6", ("src","dst"), element_ipv6_get),
+    OutputFormat("udp", ("src","dst"), element_dst_port_get),
+    OutputFormat("tcp", ("src","dst"), element_dst_port_get),
+    OutputFormat("tunnel", ("src","dst"), element_tunnel_get),
     ]
 ##
 
@@ -571,7 +572,7 @@ def flow_aggregate(fields_dict, stats_dict):
 
     for output_format in OUTPUT_FORMAT:
         field = fields_dict.get(output_format.field_type, None)
-        if (field):
+        if (field) and all (k in field for k in output_format.elements):
             obj = output_format.generator(output_format.field_type,
                                           field, stats_dict)
             result.append(obj)
@@ -967,7 +968,7 @@ class FlowDB:
                 raise ValueError("flow fields are missing %s", line)
 
             stats_dict = elements_to_dict(stats)
-            if (len(stats_dict) == 0):
+            if not all (k in stats_dict for k in ("packets","bytes")):
                 raise ValueError("statistics are missing %s.", line)
 
             ##

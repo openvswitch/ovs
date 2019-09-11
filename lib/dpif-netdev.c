@@ -1517,8 +1517,17 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
                  struct dp_netdev **dpp)
     OVS_REQUIRES(dp_netdev_mutex)
 {
+    static struct ovsthread_once tsc_freq_check = OVSTHREAD_ONCE_INITIALIZER;
     struct dp_netdev *dp;
     int error;
+
+    /* Avoid estimating TSC frequency for dummy datapath to not slow down
+     * unit tests. */
+    if (!dpif_netdev_class_is_dummy(class)
+        && ovsthread_once_start(&tsc_freq_check)) {
+        pmd_perf_estimate_tsc_frequency();
+        ovsthread_once_done(&tsc_freq_check);
+    }
 
     dp = xzalloc(sizeof *dp);
     shash_add(&dp_netdevs, name, dp);
@@ -1862,7 +1871,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     reconfigure_datapath(dp);
 
-    return 0;
+    /* Check that port was successfully configured. */
+    return dp_netdev_lookup_port(dp, port_no) ? 0 : EINVAL;
 }
 
 static int
@@ -4735,9 +4745,16 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     FOR_EACH_CORE_ON_DUMP(core, pmd_cores) {
         pmd = dp_netdev_get_pmd(dp, core->core_id);
         if (!pmd) {
+            struct ds name = DS_EMPTY_INITIALIZER;
+
             pmd = xzalloc(sizeof *pmd);
             dp_netdev_configure_pmd(pmd, dp, core->core_id, core->numa_id);
-            pmd->thread = ovs_thread_create("pmd", pmd_thread_main, pmd);
+
+            ds_put_format(&name, "pmd-c%02d/id:", core->core_id);
+            pmd->thread = ovs_thread_create(ds_cstr(&name),
+                                            pmd_thread_main, pmd);
+            ds_destroy(&name);
+
             VLOG_INFO("PMD thread on numa_id: %d, core id: %2d created.",
                       pmd->numa_id, pmd->core_id);
             changed = true;

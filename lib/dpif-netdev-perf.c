@@ -17,9 +17,11 @@
 #include <config.h>
 #include <stdint.h>
 
+#include "dpdk.h"
 #include "dpif-netdev-perf.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
+#include "ovs-numa.h"
 #include "ovs-thread.h"
 #include "timeval.h"
 
@@ -43,21 +45,59 @@ uint64_t iter_cycle_threshold;
 
 static struct vlog_rate_limit latency_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
+static uint64_t tsc_hz = 1;
+
+void
+pmd_perf_estimate_tsc_frequency(void)
+{
 #ifdef DPDK_NETDEV
-static uint64_t
-get_tsc_hz(void)
-{
-    return rte_get_tsc_hz();
-}
-#else
-/* This function is only invoked from PMD threads which depend on DPDK.
- * A dummy function is sufficient when building without DPDK_NETDEV. */
-static uint64_t
-get_tsc_hz(void)
-{
-    return 1;
-}
+    if (dpdk_available()) {
+        tsc_hz = rte_get_tsc_hz();
+    }
+    if (tsc_hz > 1) {
+        VLOG_INFO("DPDK provided TSC frequency: %"PRIu64" KHz", tsc_hz / 1000);
+        return;
+    }
 #endif
+    struct ovs_numa_dump *affinity;
+    struct pmd_perf_stats s;
+    uint64_t start, stop;
+
+    /* DPDK is not available or returned unreliable value.
+     * Trying to estimate. */
+    affinity = ovs_numa_thread_getaffinity_dump();
+    if (affinity) {
+        const struct ovs_numa_info_core *core;
+
+        FOR_EACH_CORE_ON_DUMP (core, affinity) {
+            /* Setting affinity to a single core from the affinity mask to
+             * avoid re-scheduling to another core while sleeping. */
+            ovs_numa_thread_setaffinity_core(core->core_id);
+            break;
+        }
+    }
+
+    start = cycles_counter_update(&s);
+    /* Using xnanosleep as it's interrupt resistant.
+     * Sleeping only 100 ms to avoid holding the main thread for too long. */
+    xnanosleep(1E8);
+    stop = cycles_counter_update(&s);
+
+    if (affinity) {
+        /* Restoring previous affinity. */
+        ovs_numa_thread_setaffinity_dump(affinity);
+        ovs_numa_dump_destroy(affinity);
+    }
+
+    if (stop <= start) {
+        VLOG_WARN("TSC source is unreliable.");
+        tsc_hz = 1;
+    } else {
+        tsc_hz = (stop - start) * 10;
+    }
+
+    VLOG_INFO("Estimated TSC frequency: %"PRIu64" KHz", tsc_hz / 1000);
+}
 
 /* Histogram functions. */
 
@@ -170,7 +210,6 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
                               double duration)
 {
     uint64_t stats[PMD_N_STATS];
-    uint64_t tsc_hz = get_tsc_hz();
     double us_per_cycle = 1000000.0 / tsc_hz;
 
     if (duration == 0) {
@@ -555,7 +594,7 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
             cum_ms->timestamp = now;
         }
         /* Do the next check after 4 us (10K cycles at 2.5 GHz TSC clock). */
-        s->next_check_tsc = cycles_counter_update(s) + get_tsc_hz() / 250000;
+        s->next_check_tsc = cycles_counter_update(s) + tsc_hz / 250000;
     }
 }
 
@@ -585,7 +624,7 @@ pmd_perf_set_log_susp_iteration(struct pmd_perf_stats *s,
                 " duration=%"PRIu64" us\n",
                 s->log_reason,
                 susp->timestamp,
-                (1000000L * susp->cycles) / get_tsc_hz());
+                (1000000L * susp->cycles) / tsc_hz);
 
         new_end_it = history_add(s->iterations.idx, log_it_after + 1);
         new_range = history_sub(new_end_it, s->log_begin_it);
@@ -615,7 +654,7 @@ pmd_perf_log_susp_iteration_neighborhood(struct pmd_perf_stats *s)
                  " duration=%"PRIu64" us\n",
                  s->log_reason,
                  susp->timestamp,
-                 (1000000L * susp->cycles) / get_tsc_hz());
+                 (1000000L * susp->cycles) / tsc_hz);
 
     pmd_perf_format_iteration_history(&log, s, range);
     VLOG_WARN_RL(&latency_rl,
@@ -729,7 +768,7 @@ pmd_perf_log_set_cmd(struct unixctl_conn *conn,
     log_it_after = it_after;
     log_q_thr = q_thr;
     log_us_thr = us_thr;
-    iter_cycle_threshold = (log_us_thr * get_tsc_hz()) / 1000000L;
+    iter_cycle_threshold = (log_us_thr * tsc_hz) / 1000000L;
 
     unixctl_command_reply(conn, "");
 }

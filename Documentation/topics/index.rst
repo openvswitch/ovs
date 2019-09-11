@@ -27,7 +27,7 @@
 Deep Dive
 =========
 
-How Open vSwitch and OVN are implemented and, where necessary, why it was
+How Open vSwitch is implemented and, where necessary, why it was
 implemented that way.
 
 OVS
@@ -52,19 +52,3 @@ OVS
    tracing
    idl-compound-indexes
 
-OVN
----
-
-.. toctree::
-   :maxdepth: 2
-
-   high-availability
-   role-based-access-control
-   ovn-news-2.8
-
-.. list-table::
-
-   * - ovn-architecture(7)
-     - `(pdf) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.pdf>`__
-     - `(html) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.html>`__
-     - `(plain text) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.txt>`__

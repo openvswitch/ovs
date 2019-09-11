@@ -214,7 +214,7 @@ check_logs () {
 
     # We most notably ignore 'Broken pipe' warnings.  These often and
     # intermittently appear in ovsdb-server.log, because *ctl commands
-    # (e.g. ovs-vsctl, ovn-nbctl) exit right after committing a change to the
+    # (e.g. ovs-vsctl) exit right after committing a change to the
     # database.  However, in reaction, some daemon may immediately update the
     # database, and this later update may cause database sending update back to
     # *ctl command if *ctl has not exited yet.  If *ctl command exits before

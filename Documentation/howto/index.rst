@@ -50,12 +50,3 @@ OVS
    sflow
    dpdk
 
-OVN
----
-
-.. toctree::
-   :maxdepth: 1
-
-   docker
-   openstack-containers
-   firewalld

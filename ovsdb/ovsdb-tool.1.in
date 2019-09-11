@@ -91,18 +91,17 @@ both its schema and data.)
 .
 .IP "\fBcreate\-cluster\fI db contents local"
 Use this command to initialize the first server in a high-availability
-cluster of 3 (or more) database servers, e.g. for an OVN northbound or
-southbound database in an environment that cannot tolerate a single
-point of failure.  It creates clustered database file \fIdb\fR and
-configures the server to listen on \fIlocal\fR, which must take the
-form \fIprotocol\fB:\fIip\fB:\fIport\fR, where \fIprotocol\fR is
-\fBtcp\fR or \fBssl\fR, \fIip\fR is the server's IP (either an IPv4
-address or an IPv6 address enclosed in square brackets), and
-\fIport\fR is a TCP port number.  Only one address is specified, for
-the first server in the cluster, ordinarily the one for the server
-running \fBcreate\-cluster\fR.  The address is used for communication
-within the cluster, not for communicating with OVSDB clients, and must
-not use the same port used for the OVSDB protocol.
+cluster of 3 (or more) database servers, e.g. for a database in an
+environment that cannot tolerate a single point of failure.  It creates
+clustered database file \fIdb\fR and configures the server to listen on
+\fIlocal\fR, which must take the form \fIprotocol\fB:\fIip\fB:\fIport\fR,
+where \fIprotocol\fR is \fBtcp\fR or \fBssl\fR, \fIip\fR is the server's
+IP (either an IPv4 address or an IPv6 address enclosed in square
+brackets), and \fIport\fR is a TCP port number.  Only one address is
+specified, for the first server in the cluster, ordinarily the one for
+the server running \fBcreate\-cluster\fR.  The address is used for
+communication within the cluster, not for communicating with OVSDB
+clients, and must not use the same port used for the OVSDB protocol.
 .IP
 The new database is initialized with \fIcontents\fR, which must name a
 file that contains either an OVSDB schema in JSON format or a
