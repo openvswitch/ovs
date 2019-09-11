@@ -6584,6 +6584,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
 
     match.tun_md.valid = false;
     miniflow_expand(&key->mf, &match.flow);
+    memset(&match.wc, 0, sizeof match.wc);
 
     ofpbuf_clear(actions);
     ofpbuf_clear(put_actions);
