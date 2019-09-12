@@ -844,6 +844,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
             # for a common style.
             if current_file.startswith('include/sparse'):
                 continue
+            if current_file.startswith('utilities/bugtool'):
+                continue
             run_checks(current_file, cmp_line, lineno)
 
     run_file_checks(text)
