@@ -1213,6 +1213,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     bool rx_fc_en, tx_fc_en, autoneg, lsc_interrupt_mode;
+    bool flow_control_requested = true;
     enum rte_eth_fc_mode fc_mode;
     static const enum rte_eth_fc_mode fc_mode_set[2][2] = {
         {RTE_FC_NONE,     RTE_FC_TX_PAUSE},
@@ -1292,22 +1293,6 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         netdev_request_reconfigure(netdev);
     }
 
-    rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
-    tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
-    autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
-
-    fc_mode = fc_mode_set[tx_fc_en][rx_fc_en];
-    if (dev->fc_conf.mode != fc_mode || autoneg != dev->fc_conf.autoneg) {
-        err = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
-        if (err) {
-            VLOG_WARN("Cannot get flow control parameters on port "
-                "%"PRIu16", err=%d", dev->port_id, err);
-        }
-        dev->fc_conf.mode = fc_mode;
-        dev->fc_conf.autoneg = autoneg;
-        dpdk_eth_flow_ctrl_setup(dev);
-    }
-
     /* Rx checksum offload configuration */
     /* By default the Rx checksum offload is ON */
     rx_chksm_ofld = smap_get_bool(args, "rx-checksum-offload", true);
@@ -1316,6 +1301,42 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     if (temp_flag != rx_chksm_ofld) {
         dev->hw_ol_features ^= NETDEV_RX_CHECKSUM_OFFLOAD;
         dpdk_eth_checksum_offload_configure(dev);
+    }
+
+    rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
+    tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
+    autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
+
+    fc_mode = fc_mode_set[tx_fc_en][rx_fc_en];
+
+    if (!smap_get(args, "rx-flow-ctrl") && !smap_get(args, "tx-flow-ctrl")
+        && !smap_get(args, "flow-ctrl-autoneg")) {
+        /* FIXME: User didn't ask for flow control configuration.
+         *        For now we'll not print a warning if flow control is not
+         *        supported by the DPDK port. */
+        flow_control_requested = false;
+    }
+
+    /* Get the Flow control configuration. */
+    err = -rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
+    if (err) {
+        if (err == ENOTSUP) {
+            if (flow_control_requested) {
+                VLOG_WARN("%s: Flow control is not supported.",
+                          netdev_get_name(netdev));
+            }
+            err = 0; /* Not fatal. */
+        } else {
+            VLOG_WARN("%s: Cannot get flow control parameters: %s",
+                      netdev_get_name(netdev), rte_strerror(err));
+        }
+        goto out;
+    }
+
+    if (dev->fc_conf.mode != fc_mode || autoneg != dev->fc_conf.autoneg) {
+        dev->fc_conf.mode = fc_mode;
+        dev->fc_conf.autoneg = autoneg;
+        dpdk_eth_flow_ctrl_setup(dev);
     }
 
 out:
