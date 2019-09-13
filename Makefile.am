@@ -75,6 +75,7 @@ EXTRA_DIST = \
 	LICENSE \
 	MAINTAINERS.rst \
 	README.rst \
+	README_wolf.md \
 	NOTICE \
 	.cirrus.yml \
 	.travis.yml \

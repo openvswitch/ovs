@@ -18,6 +18,9 @@
 #define DHPARAMS_H 1
 
 #include <inttypes.h>
+#ifdef HAVE_WOLFSSL
+#include <wolfssl/options.h>
+#endif
 #include <openssl/dh.h>
 
 DH *get_dh1024(void);

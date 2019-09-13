@@ -242,6 +242,56 @@ AC_DEFUN([OVS_CHECK_LIBCAPNG],
       AC_SUBST([CAPNG_LDADD])
    fi])
 
+
+dnl Checks for wolfSSL
+AC_DEFUN([OVS_CHECK_WOLFSSL], [
+  WOLFSSL_URL="http://www.wolfssl.com/download.html"
+  HAVE_WOLFSSL=no
+  AC_ARG_WITH(wolfssl,
+    [AC_HELP_STRING([--with-wolfssl=PATH], [PATH to wolfssl install])],
+    [
+      AC_MSG_CHECKING([whether compiling and linking against wolfSSL works])
+      if test "x$withval" != "xno" ; then
+        if test -d "$withval/lib"; then
+          LDFLAGS="$LDFLAGS -L${withval}/lib"
+        fi
+        if test -d "$withval/include"; then
+          CPPFLAGS="-I${withval}/include -I${withval}/include/wolfssl $CPPFLAGS"
+        fi
+      fi
+      if test "x$withval" == "xyes" ; then
+        LDFLAGS="$LDFLAGS -L/usr/local/lib"
+        CPPFLAGS="-I/usr/local/include -I/usr/local/include/wolfssl $CPPFLAGS"
+      fi
+      LIBS="$LIBS -lwolfssl"
+      CPPFLAGS="$CPPFLAGS -DHAVE_WOLFSSL"
+
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <wolfssl/ssl.h>],
+            [wolfSSL_Init();])],
+            [wolfssl_linked=yes], 
+            [wolfssl_linked=no]
+      )
+
+      if test "x$wolfssl_linked" == "xno" ; then
+        AC_MSG_ERROR([WolfSSL isn't found.  You can get it from $WOLFSSL_URL
+          If it's already installed, specify its path using --with-wolfssl=/dir/])
+      fi
+
+      AC_MSG_RESULT([yes])
+      HAVE_WOLFSSL=yes
+      HAVE_OPENSSL=yes
+      ssl=true
+    ], [
+      AC_MSG_RESULT([no])
+      ssl=no
+  ])
+
+  AC_SUBST([HAVE_WOLFSSL])
+  AM_CONDITIONAL([HAVE_WOLFSSL], [test "$HAVE_WOLFSSL" = yes])
+])
+
+
 dnl Checks for OpenSSL.
 AC_DEFUN([OVS_CHECK_OPENSSL],
   [AC_ARG_ENABLE(
@@ -254,7 +304,7 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
       esac],
      [ssl=check])
 
-   if test "$ssl" != false; then
+   if test "$ssl" != false && test "$HAVE_WOLFSSL" = "no"; then
        AX_CHECK_OPENSSL(
          [HAVE_OPENSSL=yes],
          [HAVE_OPENSSL=no
@@ -269,7 +319,9 @@ OpenFlow connections over SSL will not be supported.
             AC_MSG_ERROR([Cannot find openssl (use --disable-ssl to configure without SSL support)])
           fi])
    else
-       HAVE_OPENSSL=no
+       if test "x$HAVE_WOLFSSL" == "xno"; then
+          HAVE_OPENSSL=no
+       fi
    fi
    AC_SUBST([HAVE_OPENSSL])
    AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])

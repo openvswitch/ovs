@@ -24,6 +24,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
+#ifdef HAVE_WOLFSSL
+#include <wolfssl/options.h>
+#include <openssl/pem.h>
+#endif
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
