@@ -176,7 +176,7 @@ def replace_cplusplus_keyword(schema):
                 'wchar_t', 'while', 'xor', 'xor_eq'}
 
     for tableName, table in schema.tables.items():
-        for columnName in table.columns:
+        for columnName in list(table.columns):
             if columnName in keywords:
                 table.columns[columnName + '_'] = table.columns.pop(columnName)
 
