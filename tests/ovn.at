@@ -573,6 +573,24 @@ ip,reg14=0x6
 ipv6,reg14=0x5
 ipv6,reg14=0x6
 ])
+AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2"} && ip4 && tcp && tcp.dst == {500, 501}'], [0], [dnl
+tcp,reg14=0x5,tp_dst=500
+tcp,reg14=0x5,tp_dst=501
+tcp,reg14=0x6,tp_dst=500
+tcp,reg14=0x6,tp_dst=501
+])
+AT_CHECK([expr_to_flow 'outport == {"eth0", "eth1", "eth2"} && ip4 && tcp && tcp.src == {400, 401} && tcp.dst == {500, 501}'], [0], [dnl
+conj_id=1,tcp,reg15=0x5
+conj_id=2,tcp,reg15=0x6
+tcp,reg15=0x5,tp_dst=500: conjunction(1, 0/2)
+tcp,reg15=0x5,tp_dst=501: conjunction(1, 0/2)
+tcp,reg15=0x5,tp_src=400: conjunction(1, 1/2)
+tcp,reg15=0x5,tp_src=401: conjunction(1, 1/2)
+tcp,reg15=0x6,tp_dst=500: conjunction(2, 0/2)
+tcp,reg15=0x6,tp_dst=501: conjunction(2, 0/2)
+tcp,reg15=0x6,tp_src=400: conjunction(2, 1/2)
+tcp,reg15=0x6,tp_src=401: conjunction(2, 1/2)
+])
 AT_CHECK([expr_to_flow 'inport == "eth0" && inport == "eth1"'], [0], [dnl
 (no flows)
 ])
@@ -676,6 +694,14 @@ AT_CHECK([expr_to_flow 'outport == @pg1'], [0], [dnl
 reg15=0x11
 reg15=0x12
 reg15=0x13
+])
+AT_CHECK([expr_to_flow 'outport == @pg1 && ip4.src == {10.0.0.4, 10.0.0.5}'], [0], [dnl
+ip,reg15=0x11,nw_src=10.0.0.4
+ip,reg15=0x11,nw_src=10.0.0.5
+ip,reg15=0x12,nw_src=10.0.0.4
+ip,reg15=0x12,nw_src=10.0.0.5
+ip,reg15=0x13,nw_src=10.0.0.4
+ip,reg15=0x13,nw_src=10.0.0.5
 ])
 AT_CHECK([expr_to_flow 'outport == {@pg_empty}'], [0], [dnl
 (no flows)
