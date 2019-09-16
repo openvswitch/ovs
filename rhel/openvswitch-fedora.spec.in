@@ -79,7 +79,7 @@ BuildRequires: python3-devel
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 BuildRequires: checkpolicy, selinux-policy-devel
-BuildRequires: /usr/bin/sphinx-build
+BuildRequires: /usr/bin/sphinx-build-3
 # make check dependencies
 BuildRequires: %{_py2}-twisted%{?rhel:-core} %{_py2}-zope-interface %{_py2}-six
 BuildRequires: procps-ng

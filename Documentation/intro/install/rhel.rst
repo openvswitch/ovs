@@ -89,7 +89,7 @@ And to install specific dependencies, use yum-builddep tool::
 
 Once that is completed, remove the file ``/tmp/ovs.spec``.
 
-If python-sphinx package is not available in your version of RHEL, you can
+If python3-sphinx package is not available in your version of RHEL, you can
 install it via pip with 'pip install sphinx'.
 
 Open vSwitch requires python 2.7 or newer which is not available in older

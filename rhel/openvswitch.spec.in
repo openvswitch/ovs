@@ -37,7 +37,7 @@ BuildRequires: python-six
 BuildRequires: openssl-devel
 BuildRequires: checkpolicy, selinux-policy-devel
 BuildRequires: autoconf, automake, libtool
-BuildRequires: python-sphinx
+BuildRequires: python3-sphinx
 BuildRequires: unbound-devel
 
 %bcond_without check

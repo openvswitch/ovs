@@ -45,11 +45,11 @@ Sphinx. A detailed guide on installing Sphinx in many environments is available
 on the `Sphinx website`__ but, for most Linux distributions, you can install
 with your package manager. For example, on Debian/Ubuntu run::
 
-    $ sudo apt-get install python-sphinx
+    $ sudo apt-get install python3-sphinx
 
 Similarly, on RHEL/Fedora run::
 
-    $ sudo dnf install python-sphinx
+    $ sudo dnf install python3-sphinx
 
 A ``requirements.txt`` is also provided in the ``/Documentation``, should you
 wish to install using ``pip``::
@@ -71,7 +71,7 @@ available on the `Sphinx website`__.
 Building
 --------
 
-Once Sphinx installed, the documentation can be built using the provided
+Once Sphinx is installed, the documentation can be built using the provided
 Makefile targets::
 
     $ make docs-check

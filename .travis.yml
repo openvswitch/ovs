@@ -20,7 +20,7 @@ addons:
       - libjemalloc1
       - libjemalloc-dev
       - libnuma-dev
-      - python-sphinx
+      - python3-sphinx
       - libelf-dev
       - selinux-policy-dev
       - libunbound-dev
