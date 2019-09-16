@@ -1816,8 +1816,13 @@ iface_do_create(const struct bridge *br,
     *ofp_portp = iface_pick_ofport(iface_cfg);
     error = ofproto_port_add(br->ofproto, netdev, ofp_portp);
     if (error) {
-        VLOG_WARN_BUF(errp, "could not add network device %s to ofproto (%s)",
-                      iface_cfg->name, ovs_strerror(error));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        *errp = xasprintf("could not add network device %s to ofproto (%s)",
+                          iface_cfg->name, ovs_strerror(error));
+        if (!VLOG_DROP_WARN(&rl)) {
+            VLOG_WARN("%s", *errp);
+        }
         goto error;
     }
 
