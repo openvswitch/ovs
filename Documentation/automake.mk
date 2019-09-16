@@ -115,7 +115,6 @@ EXTRA_DIST += $(DOC_SOURCE)
 
 # You can set these variables from the command line.
 SPHINXOPTS =
-SPHINXBUILD = sphinx-build
 SPHINXSRCDIR = $(srcdir)/Documentation
 SPHINXBUILDDIR = $(builddir)/Documentation/_build
 
