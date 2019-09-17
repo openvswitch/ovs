@@ -890,10 +890,10 @@ AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=-1])],
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=4096])],
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])],
+AT_CHECK([RUN_OVS_VSCTL([set co br1 'connection-mode=xyz'])],
   [1], [], [[ovs-vsctl: constraint violation: xyz is not one of the allowed values ([in-band, out-of-band])
 ]])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])],
+AT_CHECK([RUN_OVS_VSCTL([set co br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ])
 AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])],
