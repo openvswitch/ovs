@@ -848,6 +848,9 @@ targets             : ["1.2.3.4:567"]
 AT_CHECK([RUN_OVS_VSCTL([list interx x])],
   [1], [], [ovs-vsctl: unknown table "interx"
 ])
+AT_CHECK([RUN_OVS_VSCTL([list c x])],
+  [1], [], [ovs-vsctl: "c" matches multiple table names: CT_Timeout_Policy, CT_Zone, Controller
+])
 AT_CHECK([RUN_OVS_VSCTL([list bridge x])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ])
@@ -855,7 +858,7 @@ AT_CHECK([RUN_OVS_VSCTL([get bridge x datapath_id])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 d])],
-  [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
+  [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d": datapath_id, datapath_type, datapath_version
 ])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 x])],
   [1], [], [ovs-vsctl: Bridge does not contain a column whose name matches "x"
