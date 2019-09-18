@@ -132,7 +132,7 @@ function build_ovs()
         make -j4
         popd
     else
-        make -j4
+        make -j4 || { cat config.log; exit 1; }
     fi
 }
 

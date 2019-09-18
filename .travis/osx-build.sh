@@ -13,9 +13,13 @@ function configure_ovs()
 configure_ovs $EXTRA_OPTS $*
 
 if [ "$CC" = "clang" ]; then
-    make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
+    set make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 else
-    make CFLAGS="$CFLAGS $BUILD_ENV"
+    set make CFLAGS="$CFLAGS $BUILD_ENV"
+fi
+if ! "$@"; then
+    cat config.log
+    exit 1
 fi
 if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
     if ! make distcheck RECHECK=yes; then
