@@ -769,6 +769,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
                   [nf_conntrack_helper_put],
                   [OVS_DEFINE(HAVE_NF_CONNTRACK_HELPER_PUT)])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
+                        [rnd],
+                        [OVS_DEFINE([HAVE_INET_FRAGS_RND])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
