@@ -28,7 +28,7 @@ env:
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
   - KERNEL=3.16.39 DPDK=1
   - KERNEL=3.16.39 DPDK=1 OPTS="--enable-shared"
-  - KERNEL=4.9
+  - KERNEL=4.9.149
   - KERNEL=4.8.14
   - KERNEL=4.4.38
   - KERNEL=4.1.36
