@@ -60,7 +60,7 @@ endif
 # foo/__init__.pyc will cause Python to ignore foo.py.
 run_python = \
 	PYTHONPATH=$(top_srcdir)/python$(psep)$$PYTHONPATH \
-	PYTHONDONTWRITEBYTECODE=yes $(PYTHON)
+	PYTHONDONTWRITEBYTECODE=yes $(PYTHON3)
 
 ALL_LOCAL =
 BUILT_SOURCES =
@@ -147,13 +147,13 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 
 SUFFIXES += .in
 .in:
-	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
-	  $(PYTHON) $(srcdir)/build-aux/dpdkstrip.py $(DPDKSTRIP_FLAGS) | \
+	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
+	  $(PYTHON3) $(srcdir)/build-aux/dpdkstrip.py $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
 	    -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
 	    -e 's,[@]DBDIR[@],$(DBDIR),g' \
-	    -e 's,[@]PYTHON[@],$(PYTHON),g' \
+	    -e 's,[@]PYTHON3[@],$(PYTHON3),g' \
 	    -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
 	    -e 's,[@]VERSION[@],$(VERSION),g' \
 	    -e 's,[@]localstatedir[@],$(localstatedir),g' \
@@ -177,7 +177,7 @@ SUFFIXES += .xml
 	  PKIDIR='$(PKIDIR)' \
 	  LOGDIR='$(LOGDIR)' \
 	  DBDIR='$(DBDIR)' \
-	  PYTHON='$(PYTHON)' \
+	  PYTHON3='$(PYTHON3)' \
 	  RUNDIR='$(RUNDIR)' \
 	  VERSION='$(VERSION)' \
 	  localstatedir='$(localstatedir)' \
@@ -414,7 +414,7 @@ CLEANFILES += flake8-check
 
 include $(srcdir)/manpages.mk
 $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/build/soutil.py
-	@PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
+	@PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
 	@if cmp -s $(@F).tmp $@; then \
 	  touch $@; \
 	  rm -f $(@F).tmp; \

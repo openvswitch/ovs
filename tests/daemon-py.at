@@ -1,252 +1,205 @@
-AT_BANNER([daemon unit tests - Python])
+AT_BANNER([daemon unit tests - Python3])
 
-m4_define([DAEMON_PYN],
-  [AT_SETUP([daemon - $1])
-   AT_SKIP_IF([test $2 = no])
-   # Skip this test for Windows, echo $! gives shell pid instead of parent process
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-   AT_KEYWORDS([python daemon])
+AT_SETUP([daemon - Python3])
+# Skip this test for Windows, echo $! gives shell pid instead of parent process
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_KEYWORDS([python daemon])
 
-   on_exit 'kill $(cat *.pid)'
-   pidfile=test-daemon.py.pid
+on_exit 'kill $(cat *.pid)'
+pidfile=test-daemon.py.pid
 
-   # Start the daemon and wait for the pidfile to get created
-   # and that its contents are the correct pid.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile & echo $!], [0], [stdout])
-   pid=$(cat stdout)
+# Start the daemon and wait for the pidfile to get created
+# and that its contents are the correct pid.
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile & echo $!], [0], [stdout])
+pid=$(cat stdout)
 
-   OVS_WAIT_UNTIL([test -s $pidfile], [kill $pid])
-   AT_CHECK([test $pid = $(cat $pidfile)])
-   AT_CHECK([kill -0 $pid])
+OVS_WAIT_UNTIL([test -s $pidfile], [kill $pid])
+AT_CHECK([test $pid = $(cat $pidfile)])
+AT_CHECK([kill -0 $pid])
 
-   # Kill the daemon and make sure that the pidfile gets deleted.
-   kill $pid
-   OVS_WAIT_WHILE([kill -0 $pid])
-   AT_CHECK([test ! -e $pidfile])
-   AT_CLEANUP])
+# Kill the daemon and make sure that the pidfile gets deleted.
+kill $pid
+OVS_WAIT_WHILE([kill -0 $pid])
+AT_CHECK([test ! -e $pidfile])
+AT_CLEANUP
 
-DAEMON_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+AT_SETUP([daemon --monitor - Python3])
+# Skip this test for Windows, echo $! gives shell pid instead of parent process
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-m4_define([DAEMON_MONITOR_PYN],
-  [AT_SETUP([daemon --monitor - $1])
-   AT_SKIP_IF([test $2 = no])
+on_exit 'kill $(cat *.pid)'
+pidfile=test-daemon.py.pid
 
-   # Skip this test for Windows, echo $! gives shell pid instead of parent process
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+# Start the daemon and wait for the pidfile to get created.
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --monitor & echo $!], [0], [stdout])
+monitor=$(cat stdout)
+OVS_WAIT_UNTIL([test -s $pidfile])
+child=$(cat $pidfile)
 
-   on_exit 'kill $(cat *.pid)'
-   pidfile=test-daemon.py.pid
+# Check that the pidfile names a running process,
+# and that the parent process of that process is our child process.
+check_ancestors $child $monitor
 
-   # Start the daemon and wait for the pidfile to get created.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --monitor & echo $!], [0], [stdout])
-   monitor=$(cat stdout)
-   OVS_WAIT_UNTIL([test -s $pidfile])
-   child=$(cat $pidfile)
+# Kill the daemon process, making it look like a segfault,
+# and wait for a new child process to get spawned.
+AT_CHECK([kill -SEGV $child])
+OVS_WAIT_WHILE([kill -0 $child])
+OVS_WAIT_UNTIL([test -s $pidfile && test $(cat $pidfile) != $child])
+child2=$(cat $pidfile)
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is our child process.
-   check_ancestors $child $monitor
+# Check that the pidfile names a running process,
+# and that the parent process of that process is our child process.
+check_ancestors $child2 $monitor
 
-   # Kill the daemon process, making it look like a segfault,
-   # and wait for a new child process to get spawned.
-   AT_CHECK([kill -SEGV $child])
-   OVS_WAIT_WHILE([kill -0 $child])
-   OVS_WAIT_UNTIL([test -s $pidfile && test $(cat $pidfile) != $child])
-   child2=$(cat $pidfile)
+# Kill the daemon process with SIGTERM, and wait for the daemon
+# and the monitor processes to go away and the pidfile to get deleted.
+AT_CHECK([kill $child2])
+OVS_WAIT_WHILE([kill -0 $monitor || kill -0 $child2 || test -e $pidfile])
+AT_CLEANUP
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is our child process.
-   check_ancestors $child2 $monitor
+AT_SETUP([daemon --monitor restart exit code - Python3])
+# Skip this test for Windows, echo $! gives shell pid instead of parent process
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-   # Kill the daemon process with SIGTERM, and wait for the daemon
-   # and the monitor processes to go away and the pidfile to get deleted.
-   AT_CHECK([kill $child2])
-   OVS_WAIT_WHILE([kill -0 $monitor || kill -0 $child2 || test -e $pidfile])
-   AT_CLEANUP])
+on_exit 'kill $(cat *.pid)'
+pidfile=test-daemon.py.pid
 
-DAEMON_MONITOR_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_MONITOR_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+# Start the daemon and wait for the pidfile to get created.
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --monitor & echo $!], [0], [stdout])
+monitor=$(cat stdout)
+OVS_WAIT_UNTIL([test -s $pidfile])
+child=$(cat $pidfile)
 
-m4_define([DAEMON_MONITOR_RESTART_PYN],
-  [AT_SETUP([daemon --monitor restart exit code - $1])
-   AT_SKIP_IF([test $2 = no])
-   # Skip this test for Windows, echo $! gives shell pid instead of parent process
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+# Check that the pidfile names a running process,
+# and that the parent process of that process is our child process.
+check_ancestors $child $monitor
 
-   on_exit 'kill $(cat *.pid)'
-   pidfile=test-daemon.py.pid
+# HUP the daemon process causing it to throw an exception,
+# and wait for a new child process to get spawned.
+AT_CHECK([kill -HUP $child])
+OVS_WAIT_WHILE([kill -0 $child])
+OVS_WAIT_UNTIL([test -s $pidfile && test $child != $(cat $pidfile)])
+child2=$(cat $pidfile)
 
-   # Start the daemon and wait for the pidfile to get created.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --monitor & echo $!], [0], [stdout])
-   monitor=$(cat stdout)
-   OVS_WAIT_UNTIL([test -s $pidfile])
-   child=$(cat $pidfile)
+# Check that the pidfile names a running process,
+# and that the parent process of that process is our child process.
+check_ancestors $child2 $monitor
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is our child process.
-   check_ancestors $child $monitor
+# Kill the daemon process with SIGTERM, and wait for the daemon
+# and the monitor processes to go away and the pidfile to get deleted.
+AT_CHECK([kill $child2])
+OVS_WAIT_WHILE([kill -0 $monitor || kill -0 $child2 || test -e $pidfile])
+AT_CLEANUP
 
-   # HUP the daemon process causing it to throw an exception,
-   # and wait for a new child process to get spawned.
-   AT_CHECK([kill -HUP $child])
-   OVS_WAIT_WHILE([kill -0 $child])
-   OVS_WAIT_UNTIL([test -s $pidfile && test $child != $(cat $pidfile)])
-   child2=$(cat $pidfile)
+AT_SETUP([daemon --detach - Python3])
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is our child process.
-   check_ancestors $child2 $monitor
+# Skip this test for Windows, the pid file not removed if the daemon is killed
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-   # Kill the daemon process with SIGTERM, and wait for the daemon
-   # and the monitor processes to go away and the pidfile to get deleted.
-   AT_CHECK([kill $child2])
-   OVS_WAIT_WHILE([kill -0 $monitor || kill -0 $child2 || test -e $pidfile])
-   AT_CLEANUP])
+on_exit 'kill $(cat *.pid)'
+pidfile=test-daemon.py.pid
 
-DAEMON_MONITOR_RESTART_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_MONITOR_RESTART_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+# Start the daemon and make sure that the pidfile exists immediately.
+# We don't wait for the pidfile to get created because the daemon is
+# supposed to do so before the parent exits.
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir], [0])
+AT_CHECK([test -s $pidfile])
+pid=$(cat $pidfile)
+check_ancestors $pid 1
 
-m4_define([DAEMON_DETACH_PYN],
-  [AT_SETUP([daemon --detach - $1])
-   AT_SKIP_IF([test $2 = no])
+# Kill the daemon and make sure that the pidfile gets deleted.
+AT_CHECK([kill $pid])
+OVS_WAIT_WHILE([kill -0 $pid])
+AT_CHECK([test ! -e $pidfile])
+AT_CLEANUP
 
-   # Skip this test for Windows, the pid file not removed if the daemon is killed
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_SETUP([daemon --detach --monitor - Python3])
 
-   on_exit 'kill $(cat *.pid)'
-   pidfile=test-daemon.py.pid
+# Skip this test for Windows, uses Linux specific kill signal
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-   # Start the daemon and make sure that the pidfile exists immediately.
-   # We don't wait for the pidfile to get created because the daemon is
-   # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --detach --no-chdir], [0])
-   AT_CHECK([test -s $pidfile])
-   pid=$(cat $pidfile)
-   check_ancestors $pid 1
+on_exit 'kill $(cat *.pid)'
+pidfile=test-daemon.py.pid
 
-   # Kill the daemon and make sure that the pidfile gets deleted.
-   AT_CHECK([kill $pid])
-   OVS_WAIT_WHILE([kill -0 $pid])
-   AT_CHECK([test ! -e $pidfile])
-   AT_CLEANUP])
+# Start the daemon and make sure that the pidfile exists immediately.
+# We don't wait for the pidfile to get created because the daemon is
+# supposed to do so before the parent exits.
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --monitor], [0])
+AT_CHECK([test -s $pidfile])
+child=$(cat $pidfile)
+AT_CHECK([parent_pid $child], [0], [stdout])
+monitor=$(cat stdout)
 
-DAEMON_DETACH_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+# Check that the pidfile names a running process,
+# and that the parent process of that process is a running process,
+# and that the parent process of that process is init.
+check_ancestors $child $monitor 1
 
-m4_define([DAEMON_DETACH_MONITOR_PYN],
-  [AT_SETUP([daemon --detach --monitor - $1])
-   AT_SKIP_IF([test $2 = no])
+# Kill the daemon process, making it look like a segfault,
+# and wait for a new daemon process to get spawned.
+AT_CHECK([kill -SEGV $child])
+OVS_WAIT_WHILE([kill -0 $child])
+OVS_WAIT_UNTIL([test -s $pidfile && test $(cat $pidfile) != $child])
+child2=$(cat $pidfile)
 
-   # Skip this test for Windows, uses Linux specific kill signal
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+# Check that the pidfile names a running process,
+# and that the parent process of that process is our child process.
+check_ancestors $child2 $monitor 1
 
-   on_exit 'kill $(cat *.pid)'
-   pidfile=test-daemon.py.pid
+# Kill the daemon process with SIGTERM, and wait for the daemon
+# and the monitor processes to go away and the pidfile to get deleted.
+AT_CHECK([kill $child2])
+OVS_WAIT_WHILE([kill -0 $child2 || kill -0 $monitor || test -e $pidfile])
+AT_CLEANUP
 
-   # Start the daemon and make sure that the pidfile exists immediately.
-   # We don't wait for the pidfile to get created because the daemon is
-   # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --monitor], [0])
-   AT_CHECK([test -s $pidfile])
-   child=$(cat $pidfile)
-   AT_CHECK([parent_pid $child], [0], [stdout])
-   monitor=$(cat stdout)
+AT_SETUP([daemon --detach startup errors - Python3])
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --bail], [1], [], [stderr])
+AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
+  [0], [ignore])
+AT_CHECK([test ! -s test-daemon.py.pid])
+AT_CLEANUP
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is a running process,
-   # and that the parent process of that process is init.
-   check_ancestors $child $monitor 1
+AT_SETUP([daemon --detach --monitor startup errors - Python3])
+AT_CAPTURE_FILE([pid])
+AT_CHECK([$PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --monitor --bail], [1], [], [stderr])
+AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
+  [0], [ignore])
+AT_CHECK([test ! -s test-daemon.py.pid])
+AT_CLEANUP
 
-   # Kill the daemon process, making it look like a segfault,
-   # and wait for a new daemon process to get spawned.
-   AT_CHECK([kill -SEGV $child])
-   OVS_WAIT_WHILE([kill -0 $child])
-   OVS_WAIT_UNTIL([test -s $pidfile && test $(cat $pidfile) != $child])
-   child2=$(cat $pidfile)
+AT_SETUP([daemon --detach closes standard fds - Python3])
+# Skip this test for Windows, uses Linux specific kill signal
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-   # Check that the pidfile names a running process,
-   # and that the parent process of that process is our child process.
-   check_ancestors $child2 $monitor 1
-
-   # Kill the daemon process with SIGTERM, and wait for the daemon
-   # and the monitor processes to go away and the pidfile to get deleted.
-   AT_CHECK([kill $child2])
-   OVS_WAIT_WHILE([kill -0 $child2 || kill -0 $monitor || test -e $pidfile])
-   AT_CLEANUP])
-
-DAEMON_DETACH_MONITOR_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_MONITOR_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([DAEMON_DETACH_ERRORS_PYN],
-  [AT_SETUP([daemon --detach startup errors - $1])
-   AT_SKIP_IF([test $2 = no])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --bail], [1], [], [stderr])
-   AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
-     [0], [ignore])
-   AT_CHECK([test ! -s test-daemon.py.pid])
-   AT_CLEANUP])
-
-DAEMON_DETACH_ERRORS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_ERRORS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([DAEMON_DETACH_MONITOR_ERRORS_PYN],
-  [AT_SETUP([daemon --detach --monitor startup errors - $1])
-   AT_SKIP_IF([test $2 = no])
-   AT_CAPTURE_FILE([pid])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile --detach --no-chdir --monitor --bail], [1], [], [stderr])
-   AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
-     [0], [ignore])
-   AT_CHECK([test ! -s test-daemon.py.pid])
-   AT_CLEANUP])
-
-DAEMON_DETACH_MONITOR_ERRORS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_MONITOR_ERRORS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([DAEMON_DETACH_CLOSES_FDS_PYN],
-  [AT_SETUP([daemon --detach closes standard fds - $1])
-   AT_SKIP_IF([test $2 = no])
-
-   # Skip this test for Windows, uses Linux specific kill signal
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile --detach --no-chdir])
-   AT_CHECK([kill $(cat test-daemon.py.pid)])
-   AT_CHECK([test -s status])
-   if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
-     # Something in the environment caused SIGPIPE to be ignored, but
-     # 'yes' at least told us that it got EPIPE.  Good enough; we know
-     # that stdout was closed.
-     :
-   else
-     # Otherwise make sure that 'yes' died from SIGPIPE.
-     AT_CHECK([kill -l `cat status`], [0], [PIPE
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir])
+AT_CHECK([kill $(cat test-daemon.py.pid)])
+AT_CHECK([test -s status])
+if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
+  # Something in the environment caused SIGPIPE to be ignored, but
+  # 'yes' at least told us that it got EPIPE.  Good enough; we know
+  # that stdout was closed.
+  :
+else
+  # Otherwise make sure that 'yes' died from SIGPIPE.
+  AT_CHECK([kill -l `cat status`], [0], [PIPE
 ])
-   fi
-   AT_CLEANUP])
+fi
+AT_CLEANUP
 
-DAEMON_DETACH_CLOSES_FDS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_CLOSES_FDS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN],
-  [AT_SETUP([daemon --detach --monitor closes standard fds - $1])
-   AT_SKIP_IF([test $2 = no])
-   # Skip this test for Windows, uses Linux specific kill signal
-   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile --detach --no-chdir], [0], [], [])
-   AT_CHECK([kill $(cat test-daemon.py.pid)])
-   AT_CHECK([test -s status])
-   if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
-     # Something in the environment caused SIGPIPE to be ignored, but
-     # 'yes' at least told us that it got EPIPE.  Good enough; we know
-     # that stdout was closed.
-     :
-   else
-     # Otherwise make sure that 'yes' died from SIGPIPE.
-     AT_CHECK([kill -l `cat status`], [0], [PIPE
+AT_SETUP([daemon --detach --monitor closes standard fds - Python3])
+# Skip this test for Windows, uses Linux specific kill signal
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_CHECK([(yes 2>stderr; echo $? > status) | $PYTHON3 $srcdir/test-daemon.py --pidfile --detach --no-chdir], [0], [], [])
+AT_CHECK([kill $(cat test-daemon.py.pid)])
+AT_CHECK([test -s status])
+if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
+  # Something in the environment caused SIGPIPE to be ignored, but
+  # 'yes' at least told us that it got EPIPE.  Good enough; we know
+  # that stdout was closed.
+  :
+else
+  # Otherwise make sure that 'yes' died from SIGPIPE.
+  AT_CHECK([kill -l `cat status`], [0], [PIPE
 ])
-   fi
-   AT_CLEANUP])
-
-DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+fi
+AT_CLEANUP

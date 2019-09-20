@@ -4769,7 +4769,7 @@ m4_divert_push([PREPARE_TESTS])
 # past the nearest line that does not start with a space.
 [
 multiline_sort () {
-    $PYTHON -c '
+    $PYTHON3 -c '
 import sys
 
 buffer = []
@@ -5056,7 +5056,7 @@ ovs-appctl -t ovs-ofctl ofctl/block
 
 # Add $n_msgs flows.
 (echo "in_port=2,actions=output:2"
-$PYTHON -c '
+$PYTHON3 -c '
 for i in range('$n_msgs'):
     print("cookie=1,reg1=%d,actions=drop" % i)
 ') > flows.txt

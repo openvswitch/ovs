@@ -1,7 +1,7 @@
 AT_BANNER([library unit tests])
 
 AT_SETUP([flow extractor])
-AT_CHECK([$PYTHON $srcdir/flowgen.py >/dev/null])
+AT_CHECK([$PYTHON3 $srcdir/flowgen.py >/dev/null])
 AT_CHECK([ovstest test-flows flows pcap], [0], [checked 247 packets, 0 errors
 ])
 AT_CLEANUP
@@ -176,37 +176,29 @@ AT_CHECK([mkdir $longname || exit 77])
 AT_CHECK([cd $longname && ovstest test-unix-socket ../$longname/socket socket])
 AT_CLEANUP
 
-m4_define([UNIX_SOCKET_SHORT_PATHNAME_PYN],
-  [AT_SETUP([unix socket, short pathname - $1])
-   AT_SKIP_IF([test $2 = no || test "$IS_WIN32" = "yes"])
-   AT_KEYWORDS([python unixsocket])
-   AT_CHECK([$3 $srcdir/test-unix-socket.py x])
-   AT_CLEANUP])
-
-UNIX_SOCKET_SHORT_PATHNAME_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIX_SOCKET_SHORT_PATHNAME_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+AT_SETUP([unix socket, short pathname - Python3])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_KEYWORDS([python unixsocket])
+AT_CHECK([$PYTHON3 $srcdir/test-unix-socket.py x])
+AT_CLEANUP
 
 dnl Unix sockets with long names are problematic because the name has to
 dnl go in a fixed-length field in struct sockaddr_un.  Generally the limit
 dnl is about 100 bytes.  On Linux, we work around this by indirecting through
 dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
-m4_define([UNIX_SOCKET_LONG_PATHNAME_PYN],
-  [AT_SETUP([unix socket, long pathname - $1])
-   AT_SKIP_IF([test $2 = no || test "$IS_WIN32" = "yes"])
-   AT_KEYWORDS([python unixsocket])
-   dnl Linux sockaddr_un has a 108-byte limit, so this needs to be longer.
-   dnl Linux "ecryptfs" has a 143-byte limit, so we use that many bytes.
-   longname=01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
+AT_SETUP([unix socket, long pathname - Python3])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_KEYWORDS([python unixsocket])
+dnl Linux sockaddr_un has a 108-byte limit, so this needs to be longer.
+dnl Linux "ecryptfs" has a 143-byte limit, so we use that many bytes.
+longname=01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
 
-   dnl Skip the test if the directory can't be created (presumably the file
-   dnl system doesn't support such long names).
-   AT_CHECK([mkdir $longname || exit 77])
-   AT_CHECK([cd $longname && $3 $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
-   AT_CLEANUP])
-
-UNIX_SOCKET_LONG_PATHNAME_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIX_SOCKET_LONG_PATHNAME_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+dnl Skip the test if the directory can't be created (presumably the file
+dnl system doesn't support such long names).
+AT_CHECK([mkdir $longname || exit 77])
+AT_CHECK([cd $longname && $PYTHON3 $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
+AT_CLEANUP
 
 AT_SETUP([ovs_assert])
 if test "$IS_WIN32" = "yes"; then

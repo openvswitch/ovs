@@ -8,12 +8,14 @@ Vagrant.require_version ">=1.7.0"
 $bootstrap_fedora = <<SCRIPT
 dnf -y update
 dnf -y install autoconf automake openssl-devel libtool \
-               python-devel python3-devel \
-               python-twisted python-zope-interface \
+               python3-devel \
+               python3-twisted python3-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
-               wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r` ethtool python-tftpy \
+               wget python3-six python3-pyftpdlib checkpolicy \
+               selinux-policy-devel \
+               libcap-ng-devel kernel-devel-`uname -r` ethtool python3-pip \
                lftp
+pip-3 install tftpy             # Not yet available for Python3 via dnf.
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
 SCRIPT
 
@@ -24,21 +26,23 @@ aptitude -y install -R \
                 build-essential dpkg-dev lintian devscripts fakeroot \
                 debhelper dh-autoreconf uuid-runtime \
                 autoconf automake libtool \
-                python-all python-twisted-core python-twisted-conch \
+                python3-all python3-twisted-core python3-twisted-conch \
                 xdg-utils groff graphviz netcat curl \
-                wget python-six ethtool \
-                libcap-ng-dev libssl-dev python-dev openssl \
-                python-pyftpdlib python-flake8 python-tftpy \
+                wget python3-six ethtool \
+                libcap-ng-dev libssl-dev python3-dev openssl \
+                python3-pyftpdlib python3-flake8 \
                 linux-headers-`uname -r` \
                 lftp
+pip-3 install tftpy             # Not yet available for Python3 via apt.
 SCRIPT
 
 $bootstrap_centos = <<SCRIPT
 yum -y update
 yum -y install autoconf automake openssl-devel libtool \
-               python-twisted-core python-zope-interface \
+               python3-twisted-core python3-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
-               wget python-six pyftpdlib checkpolicy selinux-policy-devel \
+               wget python3-six python3-pyftpdlib checkpolicy \
+               selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool net-tools \
                lftp
 SCRIPT

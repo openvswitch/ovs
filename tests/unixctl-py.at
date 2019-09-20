@@ -1,122 +1,98 @@
 AT_BANNER([unixctl])
 
 m4_define([APPCTL], [ovs-appctl --timeout 20])
-m4_define([PYAPPCTL_PYN], [$1 $srcdir/appctl.py --timeout 20])
+m4_define([PYAPPCTL_PY], [$PYTHON3 $srcdir/appctl.py --timeout 20])
 
-m4_define([UNIXCTL_EXIT_PYN],
-  [AT_SETUP([unixctl ovs-vswitchd exit - $1])
-   AT_SKIP_IF([test $2 = no])
-   AT_KEYWORDS([python unixctl])
-   OVS_VSWITCHD_START
+AT_SETUP([unixctl ovs-vswitchd exit - Python3])
+AT_KEYWORDS([python unixctl])
+OVS_VSWITCHD_START
 
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t ovs-vswitchd exit], [0], [])
-   OVS_WAIT_WHILE([test -s ovs-vswitchd.pid])
+AT_CHECK([PYAPPCTL_PY -t ovs-vswitchd exit], [0], [])
+OVS_WAIT_WHILE([test -s ovs-vswitchd.pid])
 
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t ovsdb-server exit], [0], [])
-   OVS_WAIT_WHILE([test -s ovsdb-server.pid])
-   AT_CLEANUP])
+AT_CHECK([PYAPPCTL_PY -t ovsdb-server exit], [0], [])
+OVS_WAIT_WHILE([test -s ovsdb-server.pid])
+AT_CLEANUP
 
-UNIXCTL_EXIT_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_EXIT_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+AT_SETUP([unixctl ovs-vswitchd list-commands - Python3])
+OVS_VSWITCHD_START
 
-m4_define([UNIXCTL_LIST_COMMANDS_PYN],
-  [AT_SETUP([unixctl ovs-vswitchd list-commands - $1])
-   AT_SKIP_IF([test $2 = no])
-   OVS_VSWITCHD_START
-
-   AT_CHECK([APPCTL list-commands], [0], [stdout])
-   AT_CHECK([head -1 stdout], [0], [dnl
+AT_CHECK([APPCTL list-commands], [0], [stdout])
+AT_CHECK([head -1 stdout], [0], [dnl
 The available commands are:
 ])
-   mv stdout expout
-   AT_CHECK([PYAPPCTL_PYN([$3]) list-commands], [0], [expout])
+mv stdout expout
+AT_CHECK([PYAPPCTL_PY list-commands], [0], [expout])
 
-   OVS_VSWITCHD_STOP
-   AT_CLEANUP])
+OVS_VSWITCHD_STOP
+AT_CLEANUP]
 
-UNIXCTL_LIST_COMMANDS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_LIST_COMMANDS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+AT_SETUP([unixctl ovs-vswitchd arguments - Python3])
+OVS_VSWITCHD_START
 
-m4_define([UNIXCTL_ARGS_PYN],
-  [AT_SETUP([unixctl ovs-vswitchd arguments - $1])
-   AT_SKIP_IF([test $2 = no])
-   OVS_VSWITCHD_START
-
-   AT_CHECK([APPCTL bond/hash], [2], [], [stderr])
-   AT_CHECK([head -1 stderr], [0], [dnl
+AT_CHECK([APPCTL bond/hash], [2], [], [stderr])
+AT_CHECK([head -1 stderr], [0], [dnl
 "bond/hash" command requires at least 1 arguments
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) bond/hash], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY bond/hash], [2], [], [experr])
 
-   AT_CHECK([APPCTL bond/hash mac], [2], [], [stderr])
-   AT_CHECK([head -1 stderr], [0], [dnl
+AT_CHECK([APPCTL bond/hash mac], [2], [], [stderr])
+AT_CHECK([head -1 stderr], [0], [dnl
 invalid mac
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) bond/hash mac], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY bond/hash mac], [2], [], [experr])
 
-   AT_CHECK([APPCTL bond/hash mac vlan], [2], [], [stderr])
-   AT_CHECK([head -1 stderr], [0], [dnl
+AT_CHECK([APPCTL bond/hash mac vlan], [2], [], [stderr])
+AT_CHECK([head -1 stderr], [0], [dnl
 invalid vlan
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) bond/hash mac vlan], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY bond/hash mac vlan], [2], [], [experr])
 
-   AT_CHECK([APPCTL bond/hash mac vlan basis], [2], [], [stderr])
-   AT_CHECK([head -1 stderr], [0], [dnl
+AT_CHECK([APPCTL bond/hash mac vlan basis], [2], [], [stderr])
+AT_CHECK([head -1 stderr], [0], [dnl
 invalid vlan
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) bond/hash vlan basis], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY bond/hash vlan basis], [2], [], [experr])
 
-   AT_CHECK([APPCTL bond/hash mac vlan basis extra], [2], [], [stderr])
-   AT_CHECK([head -1 stderr], [0], [dnl
+AT_CHECK([APPCTL bond/hash mac vlan basis extra], [2], [], [stderr])
+AT_CHECK([head -1 stderr], [0], [dnl
 "bond/hash" command takes at most 3 arguments
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) bond/hash mac vlan basis extra], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY bond/hash mac vlan basis extra], [2], [], [experr])
 
-   OVS_VSWITCHD_STOP
-   AT_CLEANUP])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
-UNIXCTL_ARGS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_ARGS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([UNIXCTL_BAD_TARGET_PYN],
-  [AT_SETUP([unixctl bad target - $1])
-   AT_SKIP_IF([test $2 = no])
-
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t bogus doit], [1], [], [stderr])
-   AT_CHECK_UNQUOTED([tail -1 stderr], [0], [dnl
+AT_SETUP([unixctl bad target - Python3])
+AT_CHECK([PYAPPCTL_PY -t bogus doit], [1], [], [stderr])
+AT_CHECK_UNQUOTED([tail -1 stderr], [0], [dnl
 appctl.py: cannot read pidfile "`pwd`/bogus.pid" (No such file or directory)
 ])
-   if test "$IS_WIN32" = "no"; then
-     AT_CHECK([PYAPPCTL_PYN([$3]) -t /bogus/path.pid doit], [1], [], [stderr])
-     AT_CHECK([tail -1 stderr], [0], [dnl
+if test "$IS_WIN32" = "no"; then
+  AT_CHECK([PYAPPCTL_PY -t /bogus/path.pid doit], [1], [], [stderr])
+  AT_CHECK([tail -1 stderr], [0], [dnl
 appctl.py: cannot connect to "/bogus/path.pid" (No such file or directory)
 ])
-   else
-     AT_CHECK([PYAPPCTL_PYN([$3]) -t c:/bogus/path.pid doit], [1], [], [stderr])
-     AT_CHECK([tail -1 stderr], [0], [dnl
+else
+  AT_CHECK([PYAPPCTL_PY -t c:/bogus/path.pid doit], [1], [], [stderr])
+  AT_CHECK([tail -1 stderr], [0], [dnl
 appctl.py: cannot connect to "c:/bogus/path.pid" (No such file or directory)
 ])
-   fi
+fi
+AT_CLEANUP
 
-   AT_CLEANUP])
+AT_SETUP([unixctl server - Python3])
+on_exit 'kill `cat test-unixctl.py.pid`'
+AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])
+AT_CHECK([$PYTHON3 $srcdir/test-unixctl.py --log-file --pidfile --detach --no-chdir])
 
-UNIXCTL_BAD_TARGET_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_BAD_TARGET_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([UNIXCTL_SERVER_PYN],
-  [AT_SETUP([unixctl server - $1])
-   AT_SKIP_IF([test $2 = no])
-   on_exit 'kill `cat test-unixctl.py.pid`'
-   AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file --pidfile --detach --no-chdir])
-
-   AT_CHECK([APPCTL -t test-unixctl.py help], [0], [stdout])
-   AT_CHECK([cat stdout], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py help], [0], [stdout])
+AT_CHECK([cat stdout], [0], [dnl
 The available commands are:
   block
   echo                    [[arg ...]]
@@ -130,63 +106,55 @@ The available commands are:
   vlog/reopen
   vlog/set                spec
 ])
-   mv stdout expout
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py help], [0], [expout])
+mv stdout expout
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py help], [0], [expout])
 
-   AT_CHECK([ovs-vsctl --version | sed 's/ovs-vsctl/test-unixctl.py/' | head -1 > expout])
-   AT_CHECK([APPCTL -t test-unixctl.py version], [0], [expout])
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py version], [0], [expout])
+AT_CHECK([ovs-vsctl --version | sed 's/ovs-vsctl/test-unixctl.py/' | head -1 > expout])
+AT_CHECK([APPCTL -t test-unixctl.py version], [0], [expout])
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py version], [0], [expout])
 
-   AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja], [0], [stdout])
-   AT_CHECK([cat stdout | sed -e "s/u'/'/g"], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja], [0], [stdout])
+AT_CHECK([cat stdout | sed -e "s/u'/'/g"], [0], [dnl
 [['robot', 'ninja']]
 ])
-   mv stdout expout
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py echo robot ninja], [0], [expout])
+mv stdout expout
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py echo robot ninja], [0], [expout])
 
-   AT_CHECK([APPCTL -t test-unixctl.py echo_error robot ninja], [2], [], [stderr])
-   AT_CHECK([cat stderr | sed -e "s/u'/'/g"], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py echo_error robot ninja], [2], [], [stderr])
+AT_CHECK([cat stderr | sed -e "s/u'/'/g"], [0], [dnl
 [['robot', 'ninja']]
 ovs-appctl: test-unixctl.py: server returned an error
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py echo_error robot ninja], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py echo_error robot ninja], [2], [], [experr])
 
-   AT_CHECK([APPCTL -t test-unixctl.py echo], [2], [], [stderr])
-   AT_CHECK([cat stderr], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py echo], [2], [], [stderr])
+AT_CHECK([cat stderr], [0], [dnl
 "echo" command requires at least 1 arguments
 ovs-appctl: test-unixctl.py: server returned an error
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py echo], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py echo], [2], [], [experr])
 
-   AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja pirates], [2], [], [stderr])
-   AT_CHECK([cat stderr], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja pirates], [2], [], [stderr])
+AT_CHECK([cat stderr], [0], [dnl
 "echo" command takes at most 2 arguments
 ovs-appctl: test-unixctl.py: server returned an error
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py echo robot ninja pirates], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py echo robot ninja pirates], [2], [], [experr])
 
-   AT_CHECK([APPCTL -t test-unixctl.py bogus], [2], [], [stderr])
-   AT_CHECK([cat stderr], [0], [dnl
+AT_CHECK([APPCTL -t test-unixctl.py bogus], [2], [], [stderr])
+AT_CHECK([cat stderr], [0], [dnl
 "bogus" is not a valid command
 ovs-appctl: test-unixctl.py: server returned an error
 ])
-   sed 's/ovs-appctl/appctl.py/' stderr > experr
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t test-unixctl.py bogus], [2], [], [experr])
+sed 's/ovs-appctl/appctl.py/' stderr > experr
+AT_CHECK([PYAPPCTL_PY -t test-unixctl.py bogus], [2], [], [experr])
 
-   AT_CHECK([APPCTL -t test-unixctl.py exit])
-   AT_CLEANUP])
+AT_CHECK([APPCTL -t test-unixctl.py exit])
+AT_CLEANUP
 
-UNIXCTL_SERVER_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_SERVER_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-
-m4_define([UNIXCTL_SERVER_ERRORS_PYN],
-  [AT_SETUP([unixctl server errors - $1])
-   AT_SKIP_IF([test $2 = no])
-   AT_CHECK($3 $srcdir/test-unixctl.py --unixctl "`pwd`"/bogus/path, [1], [], [ignore])
-   AT_CLEANUP])
-
-UNIXCTL_SERVER_ERRORS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
-UNIXCTL_SERVER_ERRORS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
+AT_SETUP([unixctl server errors - Python3])
+AT_CHECK($PYTHON3 $srcdir/test-unixctl.py --unixctl "`pwd`"/bogus/path, [1], [], [ignore])
+AT_CLEANUP

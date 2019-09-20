@@ -52,8 +52,8 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.init \
 	debian/openvswitch-vtep.install \
 	debian/openvswitch-vtep.manpages \
-	debian/python-openvswitch.dirs \
-	debian/python-openvswitch.install \
+	debian/python3-openvswitch.dirs \
+	debian/python3-openvswitch.install \
 	debian/rules \
 	debian/rules.modules \
 	debian/ifupdown.sh \

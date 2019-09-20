@@ -30,8 +30,8 @@ XenServer host.  If you want to install Open vSwitch on a generic Linux or BSD
 host, refer to :doc:`general` instead.
 
 Open vSwitch should work with XenServer 5.6.100 and later.  However, Open
-vSwitch requires Python 2.7 or later, so using Open vSwitch with XenServer 6.5
-or earlier requires installing Python 2.7.
+vSwitch requires Python 3.4 or later, so using Open vSwitch with XenServer 6.5
+or earlier requires installing Python 3.x.
 
 Building
 --------

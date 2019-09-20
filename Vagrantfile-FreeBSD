@@ -12,7 +12,7 @@ Vagrant.require_version ">=1.7.0"
 $bootstrap_freebsd = <<SCRIPT
 sed  -e 's/\#DEFAULT_ALWAYS_YES = false/DEFAULT_ALWAYS_YES = true/g' -e 's/\#ASSUME_ALWAYS_YES = false/ASSUME_ALWAYS_YES = true/g' /usr/local/etc/pkg.conf > /tmp/pkg.conf
 mv -f /tmp/pkg.conf /usr/local/etc/pkg.conf
-pkg install automake libtool wget python py27-six gmake lftp
+pkg install automake libtool wget py37 py37-six gmake lftp
 SCRIPT
 
 $configure_ovs = <<SCRIPT

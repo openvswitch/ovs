@@ -5394,7 +5394,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 2
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5429,7 +5429,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 2
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5470,7 +5470,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 1
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p1-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p1-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5506,8 +5506,8 @@ ovs-vsctl show
 ovs-ofctl dump-flows br0
 
 # The packet should be received by port 2 and not port 3
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
-AT_CHECK([test 0 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 0 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
 
 # NXT_RESUMEs should be 1 and reg1 should be set to 0x5.
 OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep NXT_RESUME | grep -c reg1=0x5`])

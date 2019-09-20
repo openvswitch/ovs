@@ -1,4 +1,3 @@
-if HAVE_PYTHON2
 sbin_SCRIPTS += utilities/bugtool/ovs-bugtool
 CLEANFILES += utilities/bugtool/ovs-bugtool
 
@@ -51,7 +50,6 @@ bugtool-uninstall-local:
 	    rm -rf "$(DESTDIR)$(bugtoolpluginsdir)/$$dir"; \
 	  fi \
 	done; exit 0
-endif
 
 EXTRA_DIST += \
 	$(bugtool_plugins) \

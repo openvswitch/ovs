@@ -69,7 +69,6 @@ FLAKE8_PYFILES += \
 	python/build/nroff.py \
 	python/ovs/dirs.py.template
 
-if HAVE_PYTHON
 nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
 ovs-install-data-local:
 	$(MKDIR_P) python/ovs
@@ -88,14 +87,10 @@ ovs-install-data-local:
 	rm python/ovs/dirs.py.tmp
 
 python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON) setup.py sdist)
+	(cd python/ && $(PYTHON3) setup.py sdist)
 
 pypi-upload: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON) setup.py sdist upload)
-else
-ovs-install-data-local:
-	@:
-endif
+	(cd python/ && $(PYTHON3) setup.py sdist upload)
 install-data-local: ovs-install-data-local
 
 UNINSTALL_LOCAL += ovs-uninstall-local

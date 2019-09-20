@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2016, 2017 Red Hat, Inc.
 # Copyright (c) 2018 Nicira, Inc.
 #

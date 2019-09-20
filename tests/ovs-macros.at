@@ -184,7 +184,7 @@ wc () {
 }
 
 uuidfilt () {
-    $PYTHON "$top_srcdir"/tests/uuidfilt.py "$@"
+    $PYTHON3 "$top_srcdir"/tests/uuidfilt.py "$@"
 }
 
 # run_as PROGRAM_NAME COMMAND [ARG...]

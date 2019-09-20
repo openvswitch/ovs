@@ -3590,8 +3590,8 @@ table=0,action=normal
 
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
 
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp1.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -5357,7 +5357,7 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -6008,7 +6008,7 @@ sleep 1
 dnl The hex dump is a TCP syn packet. pkt=eth/ip/tcp
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected nsh encapsulated packet on the egress interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
@@ -6040,7 +6040,7 @@ sleep 1
 dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected de-capsulated TCP packet on the egress interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
@@ -6073,7 +6073,7 @@ dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
 dnl The nsh_ttl is 8, nsh_spi is 0x100 and nsh_si is 3
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected NSH packet with new fields in the header
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
@@ -6107,7 +6107,7 @@ NS_CHECK_EXEC([at_ns2], [tcpdump -l -n -xx -U -i p2 > p2.pcap &])
 sleep 1
 
 dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p1 interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
@@ -6118,7 +6118,7 @@ OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1
-NS_CHECK_EXEC([at_ns1], [$PYTHON $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns1], [$PYTHON3 $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p2 interface
 OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])
