@@ -314,6 +314,15 @@ start_northd () {
         if test X"$OVN_NORTHD_LOGFILE" != X; then
             set "$@" --log-file=$OVN_NORTHD_LOGFILE
         fi
+        if test X"$OVN_NORTHD_SSL_KEY" != X; then
+            set "$@" --private-key=$OVN_NORTHD_SSL_KEY
+        fi
+        if test X"$OVN_NORTHD_SSL_CERT" != X; then
+            set "$@" --certificate=$OVN_NORTHD_SSL_CERT
+        fi
+        if test X"$OVN_NORTHD_SSL_CA_CERT" != X; then
+            set "$@" --ca-cert=$OVN_NORTHD_SSL_CA_CERT
+        fi
 
         [ "$OVN_USER" != "" ] && set "$@" --user "$OVN_USER"
 
@@ -475,6 +484,10 @@ set_defaults () {
     OVN_CONTROLLER_SSL_CA_CERT=""
     OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT=""
 
+    OVN_NORTHD_SSL_KEY=""
+    OVN_NORTHD_SSL_CERT=""
+    OVN_NORTHD_SSL_CA_CERT=""
+
     DB_SB_CREATE_INSECURE_REMOTE="no"
     DB_NB_CREATE_INSECURE_REMOTE="no"
 
@@ -571,6 +584,9 @@ Options:
   --ovn-sb-db-ssl-key=KEY OVN Southbound DB SSL private key file
   --ovn-sb-db-ssl-cert=CERT OVN Southbound DB SSL certificate file
   --ovn-sb-db-ssl-ca-cert=CERT OVN Southbound DB SSL CA certificate file
+  --ovn-northd-ssl-key=KEY OVN Northd SSL private key file
+  --ovn-northd-ssl-cert=CERT OVN Northd SSL certificate file
+  --ovn-northd-ssl-ca-cert=CERT OVN Northd SSL CA certificate file
   --ovn-manage-ovsdb=yes|no        Whether or not the OVN databases should be
                                    automatically started and stopped along
                                    with ovn-northd. The default is "yes". If
