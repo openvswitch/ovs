@@ -93,4 +93,4 @@ security
 The `security`__ mailing list is for submitting security vulnerabilities to the
 security team.
 
-__ security@ovs.org
+__ security@openvswitch.org
