@@ -1527,6 +1527,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         put_16aligned_be32(&ip->ip_src, sip);
         put_16aligned_be32(&ip->ip_dst, dip);
         ip->ip_frag_off = htons(ip_frag_off);
+        ip->ip_ihl_ver = IP_IHL_VER(5, 4);
         ip_len = sizeof *ip;
     } else {
         char sip6_s[IPV6_SCAN_LEN + 1];
