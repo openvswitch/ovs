@@ -119,6 +119,7 @@ Dongdong                           dongdong1@huawei.com
 Dongjun                            dongj@dtdream.com
 Duan Jiong                         djduanjiong@gmail.com
 Duffie Cooley
+Dujie                              dujie@didiglobal.com
 Dumitru Ceara                      dceara@redhat.com
 Dustin Lundquist                   dustin@null-ptr.net
 Ed Maste                           emaste@freebsd.org
@@ -252,6 +253,7 @@ Martin Casado                      casado@cs.stanford.edu
 Martin Fong                        mwfong@csl.sri.com
 Martino Fornasa                    mf@fornasa.it
 Martin Xu                          martinxu9.ovs@gmail.com
+Martin Zhang                       martinbj2008@gmail.com
 Maryam Tahhan                      maryam.tahhan@intel.com
 Matteo Croce                       mcroce@redhat.com
 Matthias May                       matthias.may@neratec.com
