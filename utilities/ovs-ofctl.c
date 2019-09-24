@@ -590,6 +590,8 @@ open_vconn__(const char *name, enum open_target target,
     } else if (!open_vconn_socket(socket_name, vconnp)) {
         /* Fall Through. */
     } else {
+        free(bridge_path);
+        free(socket_name);
         ovs_fatal(0, "%s is not a bridge or a socket", name);
     }
 
