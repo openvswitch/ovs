@@ -310,6 +310,7 @@ conntrack_init(void)
     ct->hash_basis = random_uint32();
     atomic_count_init(&ct->n_conn, 0);
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
+    atomic_init(&ct->tcp_seq_chk, true);
     latch_init(&ct->clean_thread_exit);
     ct->clean_thread = ovs_thread_create("ct_clean", clean_thread_main, ct);
     ct->ipf = ipf_init();
@@ -2455,6 +2456,21 @@ conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns)
 {
     *nconns = atomic_count_get(&ct->n_conn);
     return 0;
+}
+
+int
+conntrack_set_tcp_seq_chk(struct conntrack *ct, bool enabled)
+{
+    atomic_store_relaxed(&ct->tcp_seq_chk, enabled);
+    return 0;
+}
+
+bool
+conntrack_get_tcp_seq_chk(struct conntrack *ct)
+{
+    bool enabled;
+    atomic_read_relaxed(&ct->tcp_seq_chk, &enabled);
+    return enabled;
 }
 
 /* This function must be called with the ct->resources read lock taken. */

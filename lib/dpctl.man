@@ -320,6 +320,24 @@ Prints the current number of connection tracker entries on \fIdp\fR.
 Only supported for userspace datapath.
 .
 .TP
+\*(DX\fBct\-enable\-tcp\-seq\-chk\fR [\fIdp\fR]
+.TQ
+\*(DX\fBct\-disable\-tcp\-seq\-chk\fR [\fIdp\fR]
+Enables or disables TCP sequence checking.  When set to disabled, all sequence
+number verification is disabled, including for TCP resets.  This is
+similar, but not the same as 'be_liberal' mode, as in Netfilter.  Disabling
+sequence number verification is not an optimization in itself, but is needed
+for some hardware offload support which might offer some performance
+advantage. Sequence number checking is enabled by default to enforce better
+security and should only be disabled if required for hardware offload support.
+This command is only supported for the userspace datapath.
+.
+.TP
+\*(DX\fBct\-get\-tcp\-seq\-chk\fR [\fIdp\fR]
+Prints whether TCP sequence checking is enabled or disabled on \fIdp\fR.  Only
+supported for the userspace datapath.
+.
+.TP
 \*(DX\fBct\-set\-limits\fR [\fIdp\fR] [\fBdefault=\fIdefault_limit\fR] [\fBzone=\fIzone\fR,\fBlimit=\fIlimit\fR]...
 Sets the maximum allowed number of connections in a connection tracking
 zone.  A specific \fIzone\fR may be set to \fIlimit\fR, and multiple zones

@@ -468,6 +468,11 @@ struct dpif_class {
     int (*ct_get_maxconns)(struct dpif *, uint32_t *maxconns);
     /* Get number of connections tracked. */
     int (*ct_get_nconns)(struct dpif *, uint32_t *nconns);
+    /* Enable or disable TCP sequence checking. */
+    int (*ct_set_tcp_seq_chk)(struct dpif *, bool enabled);
+    /* Get the TCP sequence checking configuration. */
+    int (*ct_get_tcp_seq_chk)(struct dpif *, bool *enabled);
+
 
     /* Connection tracking per zone limit */
 

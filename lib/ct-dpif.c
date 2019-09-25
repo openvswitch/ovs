@@ -165,6 +165,22 @@ ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns)
 }
 
 int
+ct_dpif_set_tcp_seq_chk(struct dpif *dpif, bool enabled)
+{
+    return (dpif->dpif_class->ct_set_tcp_seq_chk
+            ? dpif->dpif_class->ct_set_tcp_seq_chk(dpif, enabled)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
+{
+    return (dpif->dpif_class->ct_get_tcp_seq_chk
+            ? dpif->dpif_class->ct_get_tcp_seq_chk(dpif, enabled)
+            : EOPNOTSUPP);
+}
+
+int
 ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
                    const struct ovs_list *zone_limits)
 {

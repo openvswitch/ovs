@@ -1767,6 +1767,62 @@ dpctl_ct_get_nconns(int argc, const char *argv[],
 }
 
 static int
+dpctl_ct_set_tcp_seq_chk__(int argc, const char *argv[],
+                           struct dpctl_params *dpctl_p, bool enabled)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (!error) {
+        error = ct_dpif_set_tcp_seq_chk(dpif, enabled);
+        if (!error) {
+            dpctl_print(dpctl_p,
+                        "%s TCP sequence checking successful",
+                        enabled ? "enabling" : "disabling");
+        } else {
+            dpctl_error(dpctl_p, error,
+                        "%s TCP sequence checking failed",
+                        enabled ? "enabling" : "disabling");
+        }
+        dpif_close(dpif);
+    }
+    return error;
+}
+
+static int
+dpctl_ct_enable_tcp_seq_chk(int argc, const char *argv[],
+                            struct dpctl_params *dpctl_p)
+{
+    return dpctl_ct_set_tcp_seq_chk__(argc, argv, dpctl_p, true);
+}
+
+static int
+dpctl_ct_disable_tcp_seq_chk(int argc, const char *argv[],
+                             struct dpctl_params *dpctl_p)
+{
+    return dpctl_ct_set_tcp_seq_chk__(argc, argv, dpctl_p, false);
+}
+
+static int
+dpctl_ct_get_tcp_seq_chk(int argc, const char *argv[],
+                         struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (!error) {
+        bool enabled;
+        error = ct_dpif_get_tcp_seq_chk(dpif, &enabled);
+        if (!error) {
+            dpctl_print(dpctl_p, "TCP sequence checking: %s\n",
+                        enabled ? "enabled" : "disabled");
+        } else {
+            dpctl_error(dpctl_p, error, "TCP sequence checking query failed");
+        }
+        dpif_close(dpif);
+    }
+    return error;
+}
+
+static int
 dpctl_ct_set_limits(int argc, const char *argv[],
                     struct dpctl_params *dpctl_p)
 {
@@ -2435,9 +2491,15 @@ static const struct dpctl_command all_commands[] = {
     { "ct-stats-show", "[dp] [zone=N]",
       0, 3, dpctl_ct_stats_show, DP_RO },
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
-    { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns, DP_RW },
+    { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns,
+       DP_RW },
     { "ct-get-maxconns", "[dp]", 0, 1, dpctl_ct_get_maxconns, DP_RO },
     { "ct-get-nconns", "[dp]", 0, 1, dpctl_ct_get_nconns, DP_RO },
+    { "ct-enable-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_enable_tcp_seq_chk,
+       DP_RW },
+    { "ct-disable-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_disable_tcp_seq_chk,
+       DP_RW },
+    { "ct-get-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_get_tcp_seq_chk, DP_RO },
     { "ct-set-limits", "[dp] [default=L] [zone=N,limit=L]...", 1, INT_MAX,
         dpctl_ct_set_limits, DP_RO },
     { "ct-del-limits", "[dp] zone=N1[,N2]...", 1, 2, dpctl_ct_del_limits,

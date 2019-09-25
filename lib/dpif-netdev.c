@@ -7441,6 +7441,22 @@ dpif_netdev_ct_get_nconns(struct dpif *dpif, uint32_t *nconns)
 }
 
 static int
+dpif_netdev_ct_set_tcp_seq_chk(struct dpif *dpif, bool enabled)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    return conntrack_set_tcp_seq_chk(dp->conntrack, enabled);
+}
+
+static int
+dpif_netdev_ct_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    *enabled = conntrack_get_tcp_seq_chk(dp->conntrack);
+    return 0;
+}
+
+static int
 dpif_netdev_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -7544,6 +7560,8 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_set_maxconns,
     dpif_netdev_ct_get_maxconns,
     dpif_netdev_ct_get_nconns,
+    dpif_netdev_ct_set_tcp_seq_chk,
+    dpif_netdev_ct_get_tcp_seq_chk,
     NULL,                       /* ct_set_limits */
     NULL,                       /* ct_get_limits */
     NULL,                       /* ct_del_limits */

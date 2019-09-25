@@ -39,9 +39,14 @@
 #include <config.h>
 
 #include "conntrack-private.h"
+#include "coverage.h"
 #include "ct-dpif.h"
 #include "dp-packet.h"
 #include "util.h"
+
+COVERAGE_DEFINE(conntrack_tcp_seq_chk_bypass);
+COVERAGE_DEFINE(conntrack_tcp_seq_chk_failed);
+COVERAGE_DEFINE(conntrack_invalid_tcp_flags);
 
 struct tcp_peer {
     uint32_t               seqlo;          /* Max sequence number sent     */
@@ -144,6 +149,16 @@ tcp_get_wscale(const struct tcp_header *tcp)
     return wscale;
 }
 
+static bool
+tcp_bypass_seq_chk(struct conntrack *ct)
+{
+    if (!conntrack_get_tcp_seq_chk(ct)) {
+        COVERAGE_INC(conntrack_tcp_seq_chk_bypass);
+        return true;
+    }
+    return false;
+}
+
 static enum ct_update_res
 tcp_conn_update(struct conntrack *ct, struct conn *conn_,
                 struct dp_packet *pkt, bool reply, long long now)
@@ -162,6 +177,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
     uint32_t p_len = tcp_payload_length(pkt);
 
     if (tcp_invalid_flags(tcp_flags)) {
+        COVERAGE_INC(conntrack_invalid_tcp_flags);
         return CT_UPDATE_INVALID;
     }
 
@@ -272,7 +288,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
 
     int ackskew = check_ackskew ? dst->seqlo - ack : 0;
 #define MAXACKWINDOW (0xffff + 1500)    /* 1500 is an arbitrary fudge factor */
-    if (SEQ_GEQ(src->seqhi, end)
+    if ((SEQ_GEQ(src->seqhi, end)
         /* Last octet inside other's window space */
         && SEQ_GEQ(seq, src->seqlo - (dst->max_win << dws))
         /* Retrans: not more than one window back */
@@ -281,7 +297,8 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
         && (ackskew <= (MAXACKWINDOW << sws))
         /* Acking not more than one window forward */
         && ((tcp_flags & TCP_RST) == 0 || orig_seq == src->seqlo
-            || (orig_seq == src->seqlo + 1) || (orig_seq + 1 == src->seqlo))) {
+            || (orig_seq == src->seqlo + 1) || (orig_seq + 1 == src->seqlo)))
+        || tcp_bypass_seq_chk(ct)) {
         /* Require an exact/+1 sequence match on resets when possible */
 
         /* update max window */
@@ -385,6 +402,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
             src->state = dst->state = CT_DPIF_TCPS_TIME_WAIT;
         }
     } else {
+        COVERAGE_INC(conntrack_tcp_seq_chk_failed);
         return CT_UPDATE_INVALID;
     }
 

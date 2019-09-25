@@ -10342,6 +10342,144 @@ n_packets=0
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - conntrack - disable tcp sequence checking])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+dnl Table 0
+dnl
+table=0,priority=10,in_port=1,ip,action=ct(commit,table=1)
+table=0,priority=10,in_port=2,ip,action=ct(table=1)
+table=0,priority=1,action=drop
+dnl
+dnl Table 1
+dnl
+dnl The following two flows are separated to explicitly count the packets
+dnl that create a new connection
+table=1,priority=100,cookie=0x1,in_port=1,ip,ct_state=+trk+new-inv-rpl,action=2
+table=1,priority=100,cookie=0x2,in_port=1,ip,ct_state=+trk-new-inv-rpl,action=2
+dnl
+table=1,priority=100,cookie=0x3,in_port=2,ip,ct_state=+trk+est+rpl-new-inv,action=1
+table=1,cookie=0x4,ip,ct_state=+trk+inv,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Send 9 packets; one packet will be marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=4
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: enabled
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-disable-tcp-seq-chk], [], [dnl
+disabling TCP sequence checking successful
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: disabled
+])
+
+dnl Send exactly the same 9 packets to confirm no additional packets are marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=2
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=8
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=7
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-enable-tcp-seq-chk], [], [dnl
+enabling TCP sequence checking successful
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: enabled
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Send exactly the same 9 packets after disabling TCP sequence checking to
+dnl confirm one more packet is marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=12
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=10
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is a truncated version of "ofproto-dpif - conntrack - controller",
 dnl with extra send-to-controller actions following ct_clear to show that
 dnl the connection tracking data has been cleared.

@@ -234,6 +234,8 @@ int ct_dpif_flush(struct dpif *, const uint16_t *zone,
 int ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns);
 int ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns);
 int ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns);
+int ct_dpif_set_tcp_seq_chk(struct dpif *dpif, bool enabled);
+int ct_dpif_get_tcp_seq_chk(struct dpif *dpif, bool *enabled);
 int ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
                        const struct ovs_list *);
 int ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
