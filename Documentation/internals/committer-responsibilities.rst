@@ -94,3 +94,53 @@ Use Reported-by: and Tested-by: tags in commit messages to indicate the
 source of a bug report.
 
 Keep the ``AUTHORS.rst`` file up to date.
+
+Pre-Push Hook
+-------------
+
+The following script can be helpful because it provides an extra
+chance to check for mistakes while pushing to the master branch of OVS
+or OVN.  If you would like to use it, install it as ``hooks/pre-push``
+in your ``.git`` directory and make sure to mark it as executable with
+``chmod +x``.  For maximum utility, make sure ``checkpatch.py`` is in
+``$PATH``:
+
+.. code-block:: bash
+
+  #! /bin/bash
+
+  remote=$1
+
+  case $remote in
+      ovs|ovn|origin) ;;
+      *) exit 0 ;;
+  esac
+
+  while read local_ref local_sha1 remote_ref remote_sha1; do
+      case $remote_ref in
+          refs/heads/master)
+              n=0
+              while read sha
+              do
+                  n=$(expr $n + 1)
+                  git log -1 $sha
+                  echo
+                  checkpatch.py -1 $sha
+              done <<EOF
+  $(git --no-pager log --pretty=%H $local_sha1...$remote_sha1)
+  EOF
+
+              b=${remote_ref#refs/heads/}
+              echo "You're about to push $n commits to protected branch $b on $remote."
+
+              read -p "Do you want to proceed? [y|n] " reply < /dev/tty
+              if echo $reply | grep -E '^[Yy]$' > /dev/null; then
+                  :
+              else
+                  exit 1
+              fi
+              ;;
+      esac
+  done
+
+  exit 0
