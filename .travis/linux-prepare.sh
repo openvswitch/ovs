@@ -9,11 +9,6 @@ set -ev
 # linking against it fails.
 git clone git://git.kernel.org/pub/scm/devel/sparse/sparse.git
 cd sparse
-# Commit bb1bf748580d ("cgcc: gendeps for -MM, -MD & -MMD too") makes
-# sparse ignore almost all source files, because 'make' uses '-MD' to
-# generate dependencies as a side effect within compilation commands.
-git revert bb1bf748580d --no-commit
-git diff HEAD
 make -j4 HAVE_LLVM= install
 cd ..
 
