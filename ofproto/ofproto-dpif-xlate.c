@@ -3684,7 +3684,7 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
          */
         if (backup_resubmit_stats) {
             struct dpif_flow_stats stats = *backup_resubmit_stats;
-            xlate_push_stats(ctx->xin->xcache, &stats);
+            xlate_push_stats(ctx->xin->xcache, &stats, false);
         }
         xlate_cache_steal_entries(backup_xcache, ctx->xin->xcache);
 
@@ -4225,7 +4225,7 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule,
     const struct rule_actions *actions;
 
     if (ctx->xin->resubmit_stats) {
-        rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats);
+        rule_dpif_credit_stats(rule, ctx->xin->resubmit_stats, false);
     }
 
     ctx->resubmits++;
@@ -7504,7 +7504,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             ctx.xin->resubmit_stats, &ctx.table_id,
             flow->in_port.ofp_port, true, true, ctx.xin->xcache);
         if (ctx.xin->resubmit_stats) {
-            rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats);
+            rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats, false);
         }
         if (ctx.xin->xcache) {
             struct xc_entry *entry;

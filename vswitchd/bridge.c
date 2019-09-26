@@ -486,7 +486,7 @@ bridge_init(const char *remote)
                              qos_unixctl_show_types, NULL);
     unixctl_command_register("qos/show", "interface", 1, 1,
                              qos_unixctl_show, NULL);
-    unixctl_command_register("bridge/dump-flows", "bridge", 1, 1,
+    unixctl_command_register("bridge/dump-flows", "[-m] bridge", 1, 2,
                              bridge_unixctl_dump_flows, NULL);
     unixctl_command_register("bridge/reconnect", "[bridge]", 0, 1,
                              bridge_unixctl_reconnect, NULL);
@@ -3379,20 +3379,27 @@ bridge_lookup(const char *name)
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
-bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc OVS_UNUSED,
+bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc,
                           const char *argv[], void *aux OVS_UNUSED)
 {
     struct bridge *br;
     struct ds results;
 
-    br = bridge_lookup(argv[1]);
+    br = bridge_lookup(argv[argc - 1]);
     if (!br) {
         unixctl_command_reply_error(conn, "Unknown bridge");
         return;
     }
 
+    bool verbosity = false;
+    for (int i = 1; i < argc - 1; i++) {
+        if (!strcmp(argv[i], "-m")) {
+            verbosity = true;
+        }
+    }
+
     ds_init(&results);
-    ofproto_get_all_flows(br->ofproto, &results);
+    ofproto_get_all_flows(br->ofproto, &results, verbosity);
 
     unixctl_command_reply(conn, ds_cstr(&results));
     ds_destroy(&results);

@@ -492,6 +492,8 @@ void dpif_port_poll_wait(const struct dpif *);
 struct dpif_flow_stats {
     uint64_t n_packets;
     uint64_t n_bytes;
+    uint64_t n_offload_packets;
+    uint64_t n_offload_bytes;
     long long int used;
     uint16_t tcp_flags;
 };

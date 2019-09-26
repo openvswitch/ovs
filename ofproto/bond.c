@@ -947,12 +947,15 @@ bond_recirculation_account(struct bond *bond)
 
         if (rule) {
             uint64_t n_packets OVS_UNUSED;
+            uint64_t n_offload_packets OVS_UNUSED;
             long long int used OVS_UNUSED;
             uint64_t n_bytes;
+            uint64_t n_offload_bytes;
 
             rule->ofproto->ofproto_class->rule_get_stats(
-                rule, &n_packets, &n_bytes, &used);
-            bond_entry_account(entry, n_bytes);
+                rule, &n_packets, &n_bytes, &n_offload_packets,
+                &n_offload_bytes, &used);
+            bond_entry_account(entry, n_bytes + n_offload_bytes);
         }
     }
 }

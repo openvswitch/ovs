@@ -107,7 +107,7 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               struct xlate_cache *);
 
 void rule_dpif_credit_stats(struct rule_dpif *,
-                            const struct dpif_flow_stats *);
+                            const struct dpif_flow_stats *, bool);
 
 void rule_set_recirc_id(struct rule *, uint32_t id);
 

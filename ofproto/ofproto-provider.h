@@ -1349,7 +1349,10 @@ struct ofproto_class {
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
      * count is unknown. */
     void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count, long long int *used)
+                           uint64_t *byte_count,
+                           uint64_t *offload_packet_count,
+                           uint64_t *offload_byte_count,
+                           long long int *used)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Translates actions in 'opo->ofpacts', for 'opo->packet' in flow tables

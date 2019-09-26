@@ -81,6 +81,7 @@ COVERAGE_DEFINE(packet_in_overflow);
 struct flow_miss;
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
+                           uint64_t *offload_packets, uint64_t *offload_bytes,
                            long long int *used);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 static void rule_expire(struct rule_dpif *, long long now);
@@ -4021,7 +4022,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
     if (rule) {
-        rule_dpif_credit_stats(rule, &stats);
+        rule_dpif_credit_stats(rule, &stats, false);
     }
 
     uint64_t odp_actions_stub[1024 / 8];
@@ -4075,27 +4076,33 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
 static void
 rule_dpif_credit_stats__(struct rule_dpif *rule,
                          const struct dpif_flow_stats *stats,
-                         bool credit_counts)
+                         bool credit_counts, bool offloaded)
     OVS_REQUIRES(rule->stats_mutex)
 {
     if (credit_counts) {
-        rule->stats.n_packets += stats->n_packets;
-        rule->stats.n_bytes += stats->n_bytes;
+        if (offloaded) {
+            rule->stats.n_offload_packets += stats->n_packets;
+            rule->stats.n_offload_bytes += stats->n_bytes;
+        } else {
+            rule->stats.n_packets += stats->n_packets;
+            rule->stats.n_bytes += stats->n_bytes;
+        }
     }
     rule->stats.used = MAX(rule->stats.used, stats->used);
 }
 
 void
 rule_dpif_credit_stats(struct rule_dpif *rule,
-                       const struct dpif_flow_stats *stats)
+                       const struct dpif_flow_stats *stats, bool offloaded)
 {
     ovs_mutex_lock(&rule->stats_mutex);
     if (OVS_UNLIKELY(rule->new_rule)) {
         ovs_mutex_lock(&rule->new_rule->stats_mutex);
-        rule_dpif_credit_stats__(rule->new_rule, stats, rule->forward_counts);
+        rule_dpif_credit_stats__(rule->new_rule, stats, rule->forward_counts,
+                                 offloaded);
         ovs_mutex_unlock(&rule->new_rule->stats_mutex);
     } else {
-        rule_dpif_credit_stats__(rule, stats, true);
+        rule_dpif_credit_stats__(rule, stats, true, offloaded);
     }
     ovs_mutex_unlock(&rule->stats_mutex);
 }
@@ -4547,16 +4554,20 @@ rule_destruct(struct rule *rule_)
 
 static void
 rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
+               uint64_t *offload_packets, uint64_t *offload_bytes,
                long long int *used)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
     ovs_mutex_lock(&rule->stats_mutex);
     if (OVS_UNLIKELY(rule->new_rule)) {
-        rule_get_stats(&rule->new_rule->up, packets, bytes, used);
+        rule_get_stats(&rule->new_rule->up, packets, bytes, offload_packets,
+                       offload_bytes, used);
     } else {
         *packets = rule->stats.n_packets;
         *bytes = rule->stats.n_bytes;
+        *offload_packets = rule->stats.n_offload_packets;
+        *offload_bytes = rule->stats.n_offload_bytes;
         *used = rule->stats.used;
     }
     ovs_mutex_unlock(&rule->stats_mutex);
@@ -4720,7 +4731,7 @@ ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
         case XC_GROUP:
         case XC_TNL_NEIGH:
         case XC_TUNNEL_HEADER:
-            xlate_push_stats_entry(entry, stats);
+            xlate_push_stats_entry(entry, stats, false);
             break;
         default:
             OVS_NOT_REACHED();
