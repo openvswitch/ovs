@@ -83,6 +83,21 @@ static unsigned int timeout;
  * wait. */
 static bool retry;
 
+/* --leader-only, --no-leader-only: Only accept the leader in a cluster.
+ *
+ * In a real Open vSwitch environment, it doesn't make much sense to cluster
+ * the Open vSwitch database.  This option exists to enable using ovs-vsctl to
+ * test OVSDB's clustering feature. */
+static int leader_only = true;
+
+/* --shuffle-remotes, --no-shuffle-remotes: Shuffle the order of remotes that
+ * are specified in the connetion method string.
+ *
+ * In a real Open vSwitch environment, it doesn't make much sense to cluster
+ * the Open vSwitch database.  This option exists to enable using ovs-vsctl to
+ * test OVSDB's clustering feature. */
+static int shuffle_remotes = true;
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
@@ -161,7 +176,10 @@ main(int argc, char *argv[])
     ctl_timeout_setup(timeout);
 
     /* Initialize IDL. */
-    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class, false, retry);
+    idl = the_idl = ovsdb_idl_create_unconnected(&ovsrec_idl_class, false);
+    ovsdb_idl_set_shuffle_remotes(idl, shuffle_remotes);
+    ovsdb_idl_set_remote(idl, db, retry);
+    ovsdb_idl_set_leader_only(idl, leader_only);
     run_prerequisites(commands, n_commands, idl);
 
     /* Execute the commands.
@@ -225,6 +243,10 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"help", no_argument, NULL, 'h'},
         {"commands", no_argument, NULL, OPT_COMMANDS},
         {"options", no_argument, NULL, OPT_OPTIONS},
+        {"leader-only", no_argument, &leader_only, true},
+        {"no-leader-only", no_argument, &leader_only, false},
+        {"shuffle-remotes", no_argument, &shuffle_remotes, true},
+        {"no-shuffle-remotes", no_argument, &shuffle_remotes, false},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
@@ -335,6 +357,9 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case '?':
             exit(EXIT_FAILURE);
+
+        case 0:
+            break;
 
         default:
             abort();
