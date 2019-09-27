@@ -1,4 +1,0 @@
-libovn_@LT_CURRENT@ {
-global:
-        *;
-};

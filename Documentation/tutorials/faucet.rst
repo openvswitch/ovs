@@ -580,7 +580,7 @@ Tracing
 Let's go a level deeper.  So far, everything we've done has been
 fairly general.  We can also look at something more specific: the path
 that a particular packet would take through Open vSwitch.  We can use
-OVN ``ofproto/trace`` command to play "what-if?" games.  This command
+the ``ofproto/trace`` command to play "what-if?" games.  This command
 is one that we send directly to ``ovs-vswitchd``, using the
 ``ovs-appctl`` utility.
 

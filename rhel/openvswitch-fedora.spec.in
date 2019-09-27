@@ -272,17 +272,6 @@ rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
         $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8
 
-# remove ovn unpackages files
-rm -f $RPM_BUILD_ROOT%{_bindir}/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man1/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man5/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man7/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man8/ovn*
-rm -f $RPM_BUILD_ROOT%{_datadir}/openvswitch/ovn*
-rm -f $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovn*
-rm -f $RPM_BUILD_ROOT%{_includedir}/ovn/*
-rm -f $RPM_BUILD_ROOT%{_libdir}/libovn*
-
 %check
 %if %{with check}
     touch resolv.conf
