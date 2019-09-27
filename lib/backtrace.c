@@ -15,10 +15,15 @@
  */
 
 #include <config.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "backtrace.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(backtrace);
 
@@ -76,3 +81,37 @@ log_backtrace_at(const char *msg, const char *where)
 
     ds_destroy(&ds);
 }
+
+#ifdef HAVE_UNWIND
+void
+log_received_backtrace(int fd) {
+    int byte_read;
+    struct unw_backtrace backtrace[UNW_MAX_DEPTH];
+
+    VLOG_WARN("%s fd %d", __func__, fd);
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    memset(backtrace, 0, UNW_MAX_BUF);
+
+    byte_read = read(fd, backtrace, UNW_MAX_BUF);
+    if (byte_read < 0) {
+        VLOG_ERR("Read fd %d failed: %s", fd,
+                 ovs_strerror(errno));
+    } else if (byte_read > 0) {
+        VLOG_WARN("SIGSEGV detected, backtrace:");
+        for (int i = 0; i < UNW_MAX_DEPTH; i++) {
+            if (backtrace[i].func[0] == 0) {
+                break;
+            }
+            VLOG_WARN("0x%016lx <%s+0x%lx>\n",
+                      backtrace[i].ip,
+                      backtrace[i].func,
+                      backtrace[i].offset);
+        }
+    }
+}
+#else /* !HAVE_UNWIND */
+void
+log_received_backtrace(int daemonize_fd OVS_UNUSED) {
+    VLOG_WARN("Backtrace using libunwind not supported.");
+}
+#endif /* HAVE_UNWIND */

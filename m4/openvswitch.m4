@@ -637,3 +637,13 @@ AC_DEFUN([OVS_CHECK_UNBOUND],
    fi
    AM_CONDITIONAL([HAVE_UNBOUND], [test "$HAVE_UNBOUND" = yes])
    AC_SUBST([HAVE_UNBOUND])])
+
+dnl Checks for libunwind.
+AC_DEFUN([OVS_CHECK_UNWIND],
+  [AC_CHECK_LIB(unwind, unw_backtrace, [HAVE_UNWIND=yes], [HAVE_UNWIND=no])
+   if test "$HAVE_UNWIND" = yes; then
+     AC_DEFINE([HAVE_UNWIND], [1], [Define to 1 if unwind is detected.])
+     LIBS="$LIBS -lunwind"
+   fi
+   AM_CONDITIONAL([HAVE_UNWIND], [test "$HAVE_UNWIND" = yes])
+   AC_SUBST([HAVE_UNWIND])])
