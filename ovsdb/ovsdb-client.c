@@ -1657,6 +1657,7 @@ do_convert(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
     check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     jsonrpc_msg_destroy(reply);
     ovsdb_schema_destroy(new_schema);
+    jsonrpc_close(rpc);
 }
 
 static void
@@ -1677,6 +1678,7 @@ do_needs_conversion(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
     puts(ovsdb_schema_equal(schema1, schema2) ? "no" : "yes");
     ovsdb_schema_destroy(schema1);
     ovsdb_schema_destroy(schema2);
+    jsonrpc_close(rpc);
 }
 
 struct dump_table_aux {
