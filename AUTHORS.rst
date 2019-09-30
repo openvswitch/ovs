@@ -238,6 +238,7 @@ Lucian Petrut                      lpetrut@cloudbasesolutions.com
 Luigi Rizzo                        rizzo@iet.unipi.it
 Luis E. P.                         l31g@hotmail.com
 Lukasz Rzasik                      lukasz.rzasik@gmail.com
+Lukasz Pawlik                      lukaszx.pawlik@intel.com
 Maciej Józefczyk                   mjozefcz@redhat.com
 Madhu Challa                       challa@noironetworks.com
 Manohar K C                        manukc@gmail.com
