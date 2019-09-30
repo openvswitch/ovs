@@ -1627,7 +1627,9 @@ is_database_clustered(struct jsonrpc *rpc, const char *database)
 
     const struct json *row = parse_database_info_reply(
         reply, jsonrpc_get_name(rpc), database, NULL);
-    return !strcmp(parse_string_column(row, "model"), "clustered");
+    bool clustered = !strcmp(parse_string_column(row, "model"), "clustered");
+    jsonrpc_msg_destroy(reply);
+    return clustered;
 }
 
 static void
