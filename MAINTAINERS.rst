@@ -75,6 +75,8 @@ This is the current list of active Open vSwitch committers:
      - horms@ovn.org
    * - Thomas Graf
      - tgraf@noironetworks.com
+   * - William Tu
+     - u9012063@gmail.com
    * - YAMAMOTO Takashi
      - yamamoto@midokura.com
 
