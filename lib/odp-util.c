@@ -44,6 +44,7 @@
 #include "openvswitch/vlog.h"
 #include "openvswitch/match.h"
 #include "odp-netlink-macros.h"
+#include "csum.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
 
@@ -1489,7 +1490,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     struct gre_base_hdr *greh;
     struct erspan_base_hdr *ersh;
     struct erspan_md2 *md2;
-    uint16_t gre_proto, gre_flags, dl_type, udp_src, udp_dst, csum, sid;
+    uint16_t gre_proto, gre_flags, dl_type, udp_src, udp_dst, udp_csum, sid;
     ovs_be32 sip, dip;
     uint32_t tnl_type = 0, header_len = 0, ip_len = 0, erspan_idx = 0;
     void *l3, *l4;
@@ -1523,6 +1524,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     if (eth->eth_type == htons(ETH_TYPE_IP)) {
         /* IPv4 */
         uint16_t ip_frag_off;
+        memset(ip, 0, sizeof(*ip));
         if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
                           ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
                           IP_SCAN_ARGS(&sip),
@@ -1536,6 +1538,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         ip->ip_frag_off = htons(ip_frag_off);
         ip->ip_ihl_ver = IP_IHL_VER(5, 4);
         ip_len = sizeof *ip;
+        ip->ip_csum = csum(ip, ip_len);
     } else {
         char sip6_s[IPV6_SCAN_LEN + 1];
         char dip6_s[IPV6_SCAN_LEN + 1];
@@ -1564,13 +1567,13 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     udp = (struct udp_header *) l4;
     greh = (struct gre_base_hdr *) l4;
     if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16",csum=0x%"SCNx16"),",
-                     &udp_src, &udp_dst, &csum)) {
+                     &udp_src, &udp_dst, &udp_csum)) {
         uint32_t vx_flags, vni;
 
         udp->udp_src = htons(udp_src);
         udp->udp_dst = htons(udp_dst);
         udp->udp_len = 0;
-        udp->udp_csum = htons(csum);
+        udp->udp_csum = htons(udp_csum);
 
         if (ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
                          &vx_flags, &vni)) {
@@ -1636,6 +1639,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
 
         if (greh->flags & htons(GRE_CSUM)) {
+            uint16_t csum;
             if (!ovs_scan_len(s, &n, ",csum=0x%"SCNx16, &csum)) {
                 return -EINVAL;
             }
