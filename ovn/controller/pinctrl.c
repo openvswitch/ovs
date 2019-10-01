@@ -842,14 +842,14 @@ pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
         }
     } else {
         struct ip6_hdr *nh = dp_packet_put_zeros(&packet, sizeof *nh);
-        struct icmp6_error_header *ih;
+        struct icmp6_data_header *ih;
         uint32_t icmpv6_csum;
 
         eh->eth_type = htons(ETH_TYPE_IPV6);
         dp_packet_set_l3(&packet, nh);
         nh->ip6_vfc = 0x60;
         nh->ip6_nxt = IPPROTO_ICMPV6;
-        nh->ip6_plen = htons(sizeof(*nh) + ICMP6_ERROR_HEADER_LEN);
+        nh->ip6_plen = htons(sizeof(*nh) + ICMP6_DATA_HEADER_LEN);
         packet_set_ipv6(&packet, &ip_flow->ipv6_src, &ip_flow->ipv6_dst,
                         ip_flow->nw_tos, ip_flow->ipv6_label, 255);
 
@@ -865,7 +865,7 @@ pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
         icmpv6_csum = packet_csum_pseudoheader6(dp_packet_l3(&packet));
         ih->icmp6_base.icmp6_cksum = csum_finish(
             csum_continue(icmpv6_csum, ih,
-                          sizeof(*nh) + ICMP6_ERROR_HEADER_LEN));
+                          sizeof(*nh) + ICMP6_DATA_HEADER_LEN));
     }
 
     if (ip_flow->vlans[0].tci & htons(VLAN_CFI)) {

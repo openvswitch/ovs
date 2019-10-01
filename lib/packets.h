@@ -961,12 +961,16 @@ struct icmp6_header {
 };
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 
-#define ICMP6_ERROR_HEADER_LEN 8
-struct icmp6_error_header {
+#define ICMP6_DATA_HEADER_LEN 8
+struct icmp6_data_header {
     struct icmp6_header icmp6_base;
-    ovs_be32 icmp6_error_ext;
+    union {
+        ovs_16aligned_be32 be32[1];
+        ovs_be16           be16[2];
+        uint8_t            u8[4];
+    } icmp6_data;
 };
-BUILD_ASSERT_DECL(ICMP6_ERROR_HEADER_LEN == sizeof(struct icmp6_error_header));
+BUILD_ASSERT_DECL(ICMP6_DATA_HEADER_LEN == sizeof(struct icmp6_data_header));
 
 uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
 ovs_be16 packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,

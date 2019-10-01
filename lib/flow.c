@@ -399,14 +399,14 @@ parse_ethertype(const void **datap, size_t *sizep)
  * and 'arp_buf[]' are filled in.  If the packet is not an ND packet, 'false'
  * is returned and no values are filled in on '*nd_target' or 'arp_buf[]'. */
 static inline bool
-parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
-             uint32_t *rso_flags, const struct in6_addr **nd_target,
+parse_icmpv6(const void **datap, size_t *sizep,
+             const struct icmp6_data_header *icmp6,
+             ovs_be32 *rso_flags, const struct in6_addr **nd_target,
              struct eth_addr arp_buf[2], uint8_t *opt_type)
 {
-    const uint32_t *reserved;
-    if (icmp->icmp6_code != 0 ||
-        (icmp->icmp6_type != ND_NEIGHBOR_SOLICIT &&
-         icmp->icmp6_type != ND_NEIGHBOR_ADVERT)) {
+    if (icmp6->icmp6_base.icmp6_code != 0 ||
+        (icmp6->icmp6_base.icmp6_type != ND_NEIGHBOR_SOLICIT &&
+         icmp6->icmp6_base.icmp6_type != ND_NEIGHBOR_ADVERT)) {
         return false;
     }
 
@@ -414,12 +414,7 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
     arp_buf[1] = eth_addr_zero;
     *opt_type = 0;
 
-    reserved = data_try_pull(datap, sizep, sizeof(uint32_t));
-    if (OVS_UNLIKELY(!reserved)) {
-        /* Invalid ND packet. */
-        return false;
-    }
-    *rso_flags = *reserved;
+    *rso_flags = get_16aligned_be32(icmp6->icmp6_data.be32);
 
     *nd_target = data_try_pull(datap, sizep, sizeof **nd_target);
     if (OVS_UNLIKELY(!*nd_target)) {
@@ -1027,17 +1022,18 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_pad_to_64(mf, igmp_group_ip4);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMPV6)) {
-            if (OVS_LIKELY(size >= sizeof(struct icmp6_hdr))) {
+            if (OVS_LIKELY(size >= sizeof(struct icmp6_data_header))) {
                 const struct in6_addr *nd_target;
                 struct eth_addr arp_buf[2];
                 /* This will populate whether we received Option 1
                  * or Option 2. */
                 uint8_t opt_type;
                 /* This holds the ND Reserved field. */
-                uint32_t rso_flags;
-                const struct icmp6_hdr *icmp = data_pull(&data,
-                                               &size,ICMP6_HEADER_LEN);
-                if (parse_icmpv6(&data, &size, icmp,
+                ovs_be32 rso_flags;
+                const struct icmp6_data_header *icmp6;
+
+                icmp6 = data_pull(&data, &size, sizeof *icmp6);
+                if (parse_icmpv6(&data, &size, icmp6,
                                  &rso_flags, &nd_target, arp_buf, &opt_type)) {
                     if (nd_target) {
                         miniflow_push_words(mf, nd_target, nd_target,
@@ -1056,16 +1052,20 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                          * This will zero out the tcp_flags & pad3 field. */
                         miniflow_pad_to_64(mf, arp_tha);
                     }
-                    miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
-                    miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
+                    miniflow_push_be16(mf, tp_src,
+                                       htons(icmp6->icmp6_base.icmp6_type));
+                    miniflow_push_be16(mf, tp_dst,
+                                       htons(icmp6->icmp6_base.icmp6_code));
                     miniflow_pad_to_64(mf, tp_dst);
                     /* Fill ND reserved field. */
-                    miniflow_push_be32(mf, igmp_group_ip4, htonl(rso_flags));
+                    miniflow_push_be32(mf, igmp_group_ip4, rso_flags);
                     miniflow_pad_to_64(mf, igmp_group_ip4);
                 } else {
                     /* ICMPv6 but not ND. */
-                    miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
-                    miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
+                    miniflow_push_be16(mf, tp_src,
+                                       htons(icmp6->icmp6_base.icmp6_type));
+                    miniflow_push_be16(mf, tp_dst,
+                                       htons(icmp6->icmp6_base.icmp6_code));
                     miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
                     miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
                 }
@@ -3038,15 +3038,16 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow,
             igmp->igmp_code = ntohs(flow->tp_dst);
             put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-            struct icmp6_hdr *icmp = dp_packet_put_zeros(p, sizeof *icmp);
-            icmp->icmp6_type = ntohs(flow->tp_src);
-            icmp->icmp6_code = ntohs(flow->tp_dst);
-            uint32_t *reserved = &icmp->icmp6_dataun.icmp6_un_data32[0];
-            *reserved = ntohl(flow->igmp_group_ip4);
+            struct icmp6_data_header *icmp6;
 
-            if (icmp->icmp6_code == 0 &&
-                (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
-                 icmp->icmp6_type == ND_NEIGHBOR_ADVERT)) {
+            icmp6 = dp_packet_put_zeros(p, sizeof *icmp6);
+            icmp6->icmp6_base.icmp6_type = ntohs(flow->tp_src);
+            icmp6->icmp6_base.icmp6_code = ntohs(flow->tp_dst);
+            put_16aligned_be32(icmp6->icmp6_data.be32, flow->igmp_group_ip4);
+
+            if (icmp6->icmp6_base.icmp6_code == 0 &&
+                (icmp6->icmp6_base.icmp6_type == ND_NEIGHBOR_SOLICIT ||
+                 icmp6->icmp6_base.icmp6_type == ND_NEIGHBOR_ADVERT)) {
                 struct in6_addr *nd_target;
                 struct ovs_nd_lla_opt *lla_opt;
 
@@ -3065,9 +3066,9 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow,
                     lla_opt->type = ND_OPT_TARGET_LINKADDR;
                     lla_opt->mac = flow->arp_tha;
                 }
-            } else if (icmp->icmp6_code == 0 &&
-                       (icmp->icmp6_type == ICMP6_ECHO_REQUEST ||
-                        icmp->icmp6_type == ICMP6_ECHO_REPLY)) {
+            } else if (icmp6->icmp6_base.icmp6_code == 0 &&
+                       (icmp6->icmp6_base.icmp6_type == ICMP6_ECHO_REQUEST ||
+                        icmp6->icmp6_base.icmp6_type == ICMP6_ECHO_REPLY)) {
                 flow_compose_l7(p, l7, l7_len);
             } else {
                 /* XXX Add inner IP packet for e.g. destination unreachable? */
@@ -3112,11 +3113,11 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
             igmp->igmp_csum = 0;
             igmp->igmp_csum = csum(igmp, l4_len);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-            struct icmp6_hdr *icmp = dp_packet_l4(p);
+            struct icmp6_data_header *icmp6 = dp_packet_l4(p);
 
-            icmp->icmp6_cksum = 0;
-            icmp->icmp6_cksum = (OVS_FORCE uint16_t)
-                csum_finish(csum_continue(pseudo_hdr_csum, icmp, l4_len));
+            icmp6->icmp6_base.icmp6_cksum = 0;
+            icmp6->icmp6_base.icmp6_cksum =
+                csum_finish(csum_continue(pseudo_hdr_csum, icmp6, l4_len));
         }
     }
 }

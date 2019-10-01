@@ -718,7 +718,7 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
         icmp->icmp_csum = csum(icmp, tail - (char *) icmp - pad);
     } else {
         struct ovs_16aligned_ip6_hdr *nh6 = dp_packet_l3(pkt);
-        struct icmp6_error_header *icmp6 = dp_packet_l4(pkt);
+        struct icmp6_data_header *icmp6 = dp_packet_l4(pkt);
         struct ovs_16aligned_ip6_hdr *inner_l3_6 =
             (struct ovs_16aligned_ip6_hdr *) (icmp6 + 1);
         /* This call is already verified to succeed during the code path from
