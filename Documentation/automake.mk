@@ -53,6 +53,7 @@ DOC_SOURCE = \
 	Documentation/topics/language-bindings.rst \
 	Documentation/topics/networking-namespaces.rst \
 	Documentation/topics/openflow.rst \
+	Documentation/topics/ovs-extensions.rst \
 	Documentation/topics/ovsdb-replication.rst \
 	Documentation/topics/porting.rst \
 	Documentation/topics/tracing.rst \

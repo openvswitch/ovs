@@ -51,4 +51,4 @@ OVS
    testing
    tracing
    idl-compound-indexes
-
+   ovs-extensions
