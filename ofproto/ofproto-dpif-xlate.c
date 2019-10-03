@@ -4027,10 +4027,14 @@ is_neighbor_reply_correct(const struct xlate_ctx *ctx, const struct flow *flow)
         HMAP_FOR_EACH (port, ofp_node, &ctx->xbridge->xports) {
             error = netdev_get_addr_list(port->netdev, &ip_addr,
                                          &mask, &n_in6);
-            if (!error && is_neighbor_reply_matched(flow, ip_addr)) {
-                /* Found a match. */
-                ret = true;
-                break;
+            if (!error) {
+                ret = is_neighbor_reply_matched(flow, ip_addr);
+                free(ip_addr);
+                free(mask);
+                if (ret) {
+                   /* Found a match. */
+                   break;
+                }
             }
         }
     }
