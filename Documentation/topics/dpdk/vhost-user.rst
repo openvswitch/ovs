@@ -348,8 +348,6 @@ The default value is ``false``.
     across a 10Gbps link possibly unacceptably slow. So recommended hugepage
     size is 2MB.
 
-.. _dpdk-testpmd:
-
 vhost-user-client tx retries config
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -374,6 +372,8 @@ Tx retries max can be set for vhost-user-client ports::
 .. note::
 
   Configurable vhost tx retries are not supported with vhost-user ports.
+
+.. _dpdk-testpmd:
 
 DPDK in the Guest
 -----------------
