@@ -20,7 +20,8 @@ freebsd_build_task:
 
   configure_script:
     - ./boot.sh
-    - ./configure CC=${COMPILER} MAKE=gmake OVS_CFLAGS='-Wall' --enable-Werror
+    - ./configure CC=${COMPILER} CFLAGS="-g -O2 -Wall"
+                  MAKE=gmake --enable-Werror
                   || { cat config.log; exit 1; }
 
   build_script:
