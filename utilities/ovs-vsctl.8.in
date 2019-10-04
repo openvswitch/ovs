@@ -379,6 +379,12 @@ delete a zone that does not exist has no effect.
 .IP "\fBlist\-zone\-tp \fIdatapath\fR"
 Prints the timeout policies of all zones in \fIdatapath\fR.
 .
+.SS "Datapath Capabilities Command"
+The command query datapath capabilities.
+.
+.IP "\fBlist\-dp\-cap \fIdatapath\fR"
+Prints the datapath's capabilities.
+.
 .SS "OpenFlow Controller Connectivity"
 .
 \fBovs\-vswitchd\fR can perform all configured bridging and switching

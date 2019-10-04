@@ -2488,7 +2488,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
   <group title="Connection Tracking">
     <p>
-      Open vSwitch 2.5 and later support ``connection tracking,'' which allows
+      Open vSwitch supports ``connection tracking,'' which allows
       bidirectional streams of packets to be statefully grouped into
       connections.  Open vSwitch connection tracking, for example, identifies
       the patterns of TCP packets that indicates a successfully initiated
@@ -2524,7 +2524,14 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     </p>
 
     <p>
-      Connection tracking is an Open vSwitch extension to OpenFlow.
+      Connection tracking is an Open vSwitch extension to OpenFlow.  Open
+      vSwitch 2.5 added the initial support for connection tracking.
+      Subsequent versions of Open vSwitch added many refinements and extensions
+      to the initial support.  Many of these capabilities depend on the Open
+      vSwitch datapath rather than simply the userspace version.  The
+      <code>capabilities</code> column in the <code>Datapath</code> table (see
+      <code>ovs-vswitchd.conf.db</code>(5)) reports the detailed capabilities
+      of a particular Open vSwitch datapath.
     </p>
 
     <field id="MFF_CT_STATE" title="Connection Tracking State">
@@ -2713,7 +2720,8 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     </p>
 
     <p>
-      The following fields are populated by the ct action, and require a
+      The following fields are populated by the <code>ct</code>
+      action, and require a
       match to a valid connection tracking state as a prerequisite, in
       addition to the IP or IPv6 ethertype match.  Examples of valid
       connection tracking state matches include <code>ct_state=+new</code>,

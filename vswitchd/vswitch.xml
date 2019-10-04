@@ -5682,6 +5682,238 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       connection tracking-related OpenFlow matches and actions).
     </column>
 
+    <group title="Capabilities">
+      <p>
+        The <ref column="capabilities"/> column reports a datapath's
+        features.  For the <code>netdev</code> datapath, the
+        capabilities are fixed for a given version of Open vSwitch
+        because this datapath is built into the
+        <code>ovs-vswitchd</code> binary.  The Linux kernel and
+        Windows and other datapaths, which are external to OVS
+        userspace, can vary in version and capabilities independently
+        from <code>ovs-vswitchd</code>.
+      </p>
+
+      <p>
+        Some of these features indicate whether higher-level Open vSwitch
+        features are available.  For example, OpenFlow features for
+        connection-tracking are available only when <ref column="capabilities"
+        key="ct_state"/> is <code>true</code>.  A controller that wishes to
+        determine whether a feature is supported could, therefore, consult the
+        relevant capabilities in this table.  However, as a general rule, it is
+        better for a controller to try to use the higher-level feature and use
+        the result as an indication of support, since the low-level
+        capabilities are more likely to shift over time than the high-level
+        features that rely on them.
+      </p>
+
+      <column name="capabilities" key="max_vlan_headers"
+              type='{"type": "integer", "minInteger": 0}'>
+        Number of 802.1q VLAN headers supported by the datapath, as probed by
+        the <code>ovs-vswitchd</code> slow path.  If the datapath supports more
+        VLAN headers than the slow path, this reports the slow path's limit.
+        The value of <ref column="other-config" key="vlan-limit"/> in the <ref
+        table="Open_vSwitch"/> table does not influence the number reported
+        here.
+      </column>
+      <column name="capabilities" key="recirc" type='{"type": "boolean"}'>
+        If this is true, then the datapath supports recirculation,
+        specifically OVS_KEY_ATTR_RECIRC_ID.  Recirculation enables
+        higher performance for MPLS and active-active load balancing
+        bonding modes.
+      </column>
+      <group title="Connection-Tracking Capabilities">
+        <p>
+          These capabilities are granular because Open vSwitch and its
+          datapaths added support for connection tracking over several
+          releases, with features added individually over that time.
+        </p>
+
+        <column name="capabilities" key="ct_state" type='{"type": "boolean"}'>
+          <p>
+            If true, datapath supports OVS_KEY_ATTR_CT_STATE, which indicates
+            support for the bits in the OpenFlow <code>ct_state</code> field
+            (see <code>ovs-fields</code>(7)) other than <code>snat</code> and
+            <code>dnat</code>, which have a separate capability.
+          </p>
+
+          <p>
+            If this is false, the datapath does not support connection-tracking
+            at all and the remaining connection-tracking capabilities should
+            all be false.  In this case, Open vSwitch will reject flows that
+            match on the <code>ct_state</code> field or use the <code>ct</code>
+            action.
+          </p>
+        </column>
+        <column name="capabilities" key="ct_state_nat"
+                type='{"type": "boolean"}'>
+          <p>
+            If true, it means that the datapath supports the <code>snat</code>
+            and <code>dnat</code> flags in the OpenFlow <code>ct_state</code>
+            field.  The <code>ct_state</code> capability must be true for this
+            to make sense.
+          </p>
+
+          <p>
+            If false, Open vSwitch will reject flows that match on the
+            <code>snat</code> or <code>dnat</code> bits in
+            <code>ct_state</code> or use <code>nat</code> in the
+            <code>ct</code> action.
+          </p>
+        </column>
+        <column name="capabilities" key="ct_zone" type='{"type": "boolean"}'>
+          If true, datapath supports OVS_KEY_ATTR_CT_ZONE.  If false, Open
+          vSwitch rejects flows that match on the <code>ct_zone</code> field or
+          that specify a nonzero zone or a zone field on the <code>ct</code>
+          action.
+        </column>
+        <column name="capabilities" key="ct_mark" type='{"type": "boolean"}'>
+          If true, datapath supports OVS_KEY_ATTR_CT_MARK.  If false, Open
+          vSwitch rejects flows that match on the <code>ct_mark</code> field or
+          that set <code>ct_mark</code> in the <code>ct</code> action.
+        </column>
+        <column name="capabilities" key="ct_label" type='{"type": "boolean"}'>
+          If true, datapath supports OVS_KEY_ATTR_CT_LABEL.  If false, Open
+          vSwitch rejects flows that match on the <code>ct_label</code> field
+          or that set <code>ct_label</code> in the <code>ct</code> action.
+        </column>
+        <column name="capabilities" key="ct_orig_tuple"
+                type='{"type": "boolean"}'>
+          <p>
+            If true, the datapath supports matching the 5-tuple from the
+            connection's original direction for IPv4 traffic.  If false, Open
+            vSwitch rejects flows that match on <code>ct_nw_src</code> or
+            <code>ct_nw_dst</code>, that use the <code>ct</code> feature of the
+            <code>resubmit</code> action, or the <code>force</code> keyword in
+            the <code>ct</code> action.  (The latter isn't tied to connection
+            tracking support of original tuples in any technical way.  They are
+            conflated because all current datapaths implemented the two
+            features at the same time.)
+          </p>
+
+          <p>
+            If this and <ref column="capabilities" key="ct_orig_tuple6"/> are
+            both false, Open vSwitch rejects flows that match on
+            <code>ct_nw_proto</code>, <code>ct_tp_src</code>, or
+            <code>ct_tp_dst</code>.
+          </p>
+        </column>
+        <column name="capabilities" key="ct_orig_tuple6"
+                type='{"type": "boolean"}'>
+          If true, the datapath supports matching the 5-tuple from the
+          connection's original direction for IPv6 traffic.  If false, Open
+          vSwitch rejects flows that match on <code>ct_ipv6_src</code> or
+          <code>ct_ipv6_dst</code>.
+        </column>
+      </group>
+      <column name="capabilities" key="masked_set_action"
+              type='{"type": "boolean"}'>
+        True if the datapath supports masked data in OVS_ACTION_ATTR_SET
+        actions.  Masked data can improve performance by allowing megaflows to
+        match on fewer fields.
+      </column>
+      <column name="capabilities" key="tnl_push_pop"
+              type='{"type": "boolean"}'>
+        True if the datapath supports tnl_push and pop actions.  This is a
+        prerequisite for a datapath to support native tunneling.
+      </column>
+      <column name="capabilities" key="ufid" type='{"type": "boolean"}'>
+        True if the datapath supports OVS_FLOW_ATTR_UFID.  UFID support
+        improves revalidation performance by transferring less data between
+        the slow path and the datapath.
+      </column>
+      <column name="capabilities" key="trunc" type='{"type": "boolean"}'>
+        True if the datapath supports OVS_ACTION_ATTR_TRUNC action.  If false,
+        the <code>output</code> action with packet truncation requires every
+        packet to be sent to the Open vSwitch slow path, which is likely to
+        make it too slow for mirroring traffic in bulk.
+      </column>
+      <group title="Clone Actions">
+        <p>
+          When Open vSwitch translates actions from OpenFlow into the datapath
+          representation, some of the datapath actions may modify the packet or
+          have other side effects that later datapath actions can't undo.  The
+          OpenFlow <code>ct</code>, <code>meter</code>, <code>output</code>
+          with truncation, <code>encap</code>, <code>decap</code>, and
+          <code>dec_nsh_ttl</code> actions fall into this category.  Often,
+          this is not a problem because nothing later on needs the original
+          packet.
+        </p>
+
+        <p>
+          Such actions can, however, occur in circumstances where the
+          translation does require the original packet.  For example, an
+          OpenFlow <code>output</code> action might direct a packet to a patch
+          port, which might in turn lead to a <code>ct</code> action that NATs
+          the packet (which cannot be undone), and then afterward when control
+          flow pops back across the patch port some other action might need to
+          act on the original packet.
+        </p>
+
+        <p>
+          Open vSwitch has two different ways to implement this ``save and
+          restore'' via datapath actions.  These capabilities indicate which
+          one Open vSwitch will choose.  When neither is available, Open
+          vSwitch simply fails in situations that require this feature.
+        </p>
+
+        <column name="capabilities" key="clone" type='{"type": "boolean"}'>
+          <p>
+            True if the datapath supports OVS_ACTION_ATTR_CLONE action.  This
+            is the preferred option for saving and restoring packets, since it
+            is intended for the purpose, but old datapaths do not support it.
+            Open vSwitch will use it whenever it is available.
+          </p>
+
+          <p>
+            (The OpenFlow <code>clone</code> action does not always yield a
+            OVS_ACTION_ATTR_CLONE action.  It only does so when the datapath
+            supports it and the <code>clone</code> brackets actions that
+            otherwise cannot be undone.)
+          </p>
+        </column>
+        <column name="capabilities" key="sample_nesting"
+                type='{"type": "integer", "minInteger": 0}'>
+          Maximum level of nesting allowed by OVS_ACTION_ATTR_SAMPLE action.
+          Open vSwitch misuses this action for saving and restoring packets
+          when the datapath supports more than 3 levels of nesting and
+          OVS_ACTION_ATTR_CLONE is not available.
+        </column>
+      </group>
+      <column name="capabilities" key="ct_eventmask"
+              type='{"type": "boolean"}'>
+        True if the datapath's OVS_ACTION_ATTR_CT action implements the
+        OVS_CT_ATTR_EVENTMASK attribute.  When this is true, Open vSwitch uses
+        the event mask feature to limit the kinds of events reported to
+        conntrack update listeners.  When Open vSwitch doesn't limit the event
+        mask, listeners receive reports of numerous usually unimportant events,
+        such as TCP state machine changes, which can waste CPU time.
+      </column>
+      <column name="capabilities" key="ct_clear" type='{"type": "boolean"}'>
+        True if the datapath supports OVS_ACTION_ATTR_CT_CLEAR action.
+        If false, the OpenFlow <code>ct_clear</code> action has no effect
+        on the datapath.
+      </column>
+      <column name="capabilities" key="max_hash_alg"
+              type='{"type": "integer", "minInteger": 0}'>
+        Highest supported dp_hash algorithm.  This allows Open vSwitch to avoid
+        requesting a packet hash that the datapath does not support.
+      </column>
+      <column name="capabilities" key="check_pkt_len"
+              type='{"type": "boolean"}'>
+        True if the datapath supports OVS_ACTION_ATTR_CHECK_PKT_LEN.  If false,
+        Open vSwitch implements the <code>check_pkt_larger</code> action by
+        sending every packet through the Open vSwitch slow path, which is
+        likely to make it too slow for handling traffic in bulk.
+      </column>
+      <column name="capabilities" key="ct_timeout" type='{"type": "boolean"}'>
+        True if the datapath supports OVS_CT_ATTR_TIMEOUT in the
+        OVS_ACTION_ATTR_CT action.  If false, Open vswitch cannot implement
+        timeout policies based on connection tracking zones, as configured
+        through the <code>CT_Timeout_Policy</code> table.
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

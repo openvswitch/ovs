@@ -5444,6 +5444,56 @@ ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
     }
 }
 
+static void
+get_datapath_cap(const char *datapath_type, struct smap *cap)
+{
+    char *str_value;
+    struct odp_support odp;
+    struct dpif_backer_support s;
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
+                                                 datapath_type);
+    if (!backer) {
+        return;
+    }
+    s = backer->rt_support;
+    odp = s.odp;
+
+    /* ODP_SUPPORT_FIELDS */
+    str_value = xasprintf("%"PRIuSIZE, odp.max_vlan_headers);
+    smap_add(cap, "max_vlan_headers", str_value);
+    free(str_value);
+
+    str_value = xasprintf("%"PRIuSIZE, odp.max_mpls_depth);
+    smap_add(cap, "max_mpls_depth", str_value);
+    free(str_value);
+
+    smap_add(cap, "recirc", odp.recirc ? "true" : "false");
+    smap_add(cap, "ct_state", odp.ct_state ? "true" : "false");
+    smap_add(cap, "ct_zone", odp.ct_zone ? "true" : "false");
+    smap_add(cap, "ct_mark", odp.ct_mark ? "true" : "false");
+    smap_add(cap, "ct_label", odp.ct_label ? "true" : "false");
+    smap_add(cap, "ct_state_nat", odp.ct_state_nat ? "true" : "false");
+    smap_add(cap, "ct_orig_tuple", odp.ct_orig_tuple ? "true" : "false");
+    smap_add(cap, "ct_orig_tuple6", odp.ct_orig_tuple6 ? "true" : "false");
+
+    /* DPIF_SUPPORT_FIELDS */
+    smap_add(cap, "masked_set_action", s.masked_set_action ? "true" : "false");
+    smap_add(cap, "tnl_push_pop", s.tnl_push_pop ? "true" : "false");
+    smap_add(cap, "ufid", s.ufid ? "true" : "false");
+    smap_add(cap, "trunc", s.trunc ? "true" : "false");
+    smap_add(cap, "clone", s.clone ? "true" : "false");
+    smap_add(cap, "sample_nesting", s.sample_nesting ? "true" : "false");
+    smap_add(cap, "ct_eventmask", s.ct_eventmask ? "true" : "false");
+    smap_add(cap, "ct_clear", s.ct_clear ? "true" : "false");
+
+    str_value = xasprintf("%"PRIuSIZE, s.max_hash_alg);
+    smap_add(cap, "max_hash_alg", str_value);
+    free(str_value);
+
+    smap_add(cap, "check_pkt_len", s.check_pkt_len ? "true" : "false");
+    smap_add(cap, "ct_timeout", s.ct_timeout ? "true" : "false");
+}
+
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
  * 'nw_proto'.  Returns true if the zone-based timeout policy is configured.
  * On success, stores the timeout policy name in 'tp_name', and sets
@@ -6585,4 +6635,5 @@ const struct ofproto_class ofproto_dpif_class = {
     ct_flush,                   /* ct_flush */
     ct_set_zone_timeout_policy,
     ct_del_zone_timeout_policy,
+    get_datapath_cap,
 };

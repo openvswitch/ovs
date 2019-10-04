@@ -819,6 +819,10 @@ AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=1])])
 AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-tp netdev zone=1])])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-dp-cap system])], [0], [recirc=true
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -962,6 +966,12 @@ AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=11])],
 ])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-dp-cap nosystem])],
+  [1], [], [ovs-vsctl: datapath "nosystem" record not found
+])
+
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 

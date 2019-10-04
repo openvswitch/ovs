@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "8.2.0",
- "cksum": "4076590391 26298",
+ "cksum": "1076640191 26427",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -649,6 +649,9 @@
                           "maxInteger": 65535},
                   "value": {"type": "uuid",
                             "refTable": "CT_Zone"},
+                  "min": 0, "max": "unlimited"}},
+       "capabilities": {
+         "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",

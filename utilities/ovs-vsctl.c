@@ -1363,6 +1363,31 @@ pre_get_zone(struct ctl_context *ctx)
 }
 
 static void
+pre_get_dp_cap(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_datapaths);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_datapath_col_capabilities);
+}
+
+static void
+cmd_list_dp_cap(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    struct smap_node *node;
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, ctx->argv[1]);
+    if (!dp) {
+        ctl_fatal("datapath \"%s\" record not found", ctx->argv[1]);
+    }
+
+    SMAP_FOR_EACH (node, &dp->capabilities) {
+        ds_put_format(&ctx->output, "%s=%s ",node->key, node->value);
+    }
+    ds_chomp(&ctx->output, ' ');
+    ds_put_char(&ctx->output, '\n');
+}
+
+static void
 cmd_add_br(struct ctl_context *ctx)
 {
     struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
@@ -3111,6 +3136,9 @@ static const struct ctl_command_syntax vsctl_commands[] = {
     {"del-zone-tp", 2, 2, "", pre_get_zone, cmd_del_zone_tp, NULL,
      "--if-exists", RW},
     {"list-zone-tp", 1, 1, "", pre_get_zone, cmd_list_zone_tp, NULL, "", RO},
+
+    /* Datapath capabilities. */
+    {"list-dp-cap", 1, 1, "", pre_get_dp_cap, cmd_list_dp_cap, NULL, "", RO},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };

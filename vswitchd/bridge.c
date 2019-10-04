@@ -171,6 +171,7 @@ struct datapath {
     struct hmap ct_zones;       /* Map of 'struct ct_zone' elements, indexed
                                  * by 'zone'. */
     struct hmap_node node;      /* Node in 'all_datapaths' hmap. */
+    struct smap caps;           /* Capabilities. */
     unsigned int last_used;     /* The last idl_seqno that this 'datapath'
                                  * used in OVSDB. This number is used for
                                  * garbage collection. */
@@ -700,6 +701,7 @@ datapath_create(const char *type)
     dp->type = xstrdup(type);
     hmap_init(&dp->ct_zones);
     hmap_insert(&all_datapaths, &dp->node, hash_string(type, 0));
+    smap_init(&dp->caps);
     return dp;
 }
 
@@ -716,6 +718,7 @@ datapath_destroy(struct datapath *dp)
         hmap_remove(&all_datapaths, &dp->node);
         hmap_destroy(&dp->ct_zones);
         free(dp->type);
+        smap_destroy(&dp->caps);
         free(dp);
     }
 }
@@ -759,6 +762,23 @@ ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
 }
 
 static void
+dp_capability_reconfigure(struct datapath *dp,
+                          struct ovsrec_datapath *dp_cfg)
+{
+    struct smap_node *node;
+    struct smap cap;
+
+    smap_init(&cap);
+    ofproto_get_datapath_cap(dp->type, &cap);
+
+    SMAP_FOR_EACH (node, &cap) {
+        ovsrec_datapath_update_capabilities_setkey(dp_cfg, node->key,
+                                                   node->value);
+    }
+    smap_destroy(&cap);
+}
+
+static void
 datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
 {
     struct datapath *dp, *next;
@@ -771,6 +791,7 @@ datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
         dp = datapath_lookup(dp_name);
         if (!dp) {
             dp = datapath_create(dp_name);
+            dp_capability_reconfigure(dp, dp_cfg);
         }
         dp->last_used = idl_seqno;
         ct_zones_reconfigure(dp, dp_cfg);
