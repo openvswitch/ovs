@@ -204,3 +204,10 @@ m4_define([VSCTL_ADD_DATAPATH_TABLE],
     AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"system"=@m], [0], [stdout])
     DP_TYPE=$(echo "system")
 ])
+
+# CHECK_L3L4_CONNTRACK_REASM()
+#
+# Only allow this test to run on the kernel datapath - it is not useful
+# or necessary for the userspace datapath as it is checking for a kernel
+# specific regression.
+m4_define([CHECK_L3L4_CONNTRACK_REASM])

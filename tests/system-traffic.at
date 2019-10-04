@@ -3263,8 +3263,11 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([conntrack - fragment reassembly test])
+dnl Check kernel datapath to make sure conntrack fills in L3 and L4
+dnl protocol information
+AT_SETUP([conntrack - fragment reassembly with L3 L4 protocol information])
 CHECK_CONNTRACK()
+CHECK_L3L4_CONNTRACK_REASM()
 OVS_TRAFFIC_VSWITCHD_START()
 
 AT_DATA([flows.txt], [dnl
