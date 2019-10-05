@@ -1627,7 +1627,9 @@ is_database_clustered(struct jsonrpc *rpc, const char *database)
 
     const struct json *row = parse_database_info_reply(
         reply, jsonrpc_get_name(rpc), database, NULL);
-    return !strcmp(parse_string_column(row, "model"), "clustered");
+    bool clustered = !strcmp(parse_string_column(row, "model"), "clustered");
+    jsonrpc_msg_destroy(reply);
+    return clustered;
 }
 
 static void
@@ -1654,6 +1656,8 @@ do_convert(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
                             ovsdb_schema_to_json(new_schema)), NULL);
     check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     jsonrpc_msg_destroy(reply);
+    ovsdb_schema_destroy(new_schema);
+    jsonrpc_close(rpc);
 }
 
 static void
@@ -1674,6 +1678,7 @@ do_needs_conversion(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
     puts(ovsdb_schema_equal(schema1, schema2) ? "no" : "yes");
     ovsdb_schema_destroy(schema1);
     ovsdb_schema_destroy(schema2);
+    jsonrpc_close(rpc);
 }
 
 struct dump_table_aux {
@@ -2463,12 +2468,15 @@ do_wait(struct jsonrpc *rpc_unused OVS_UNUSED,
         if (reply && reply->id) {
             if (sdca_id && json_equal(sdca_id, reply->id)) {
                 if (reply->type == JSONRPC_ERROR) {
-                    ovs_fatal(0, "%s: set_db_change_aware failed (%s)",
+                    ovs_error(0, "%s: set_db_change_aware failed (%s)",
                               jsonrpc_session_get_name(js),
                               json_to_string(reply->error, 0));
+                    jsonrpc_msg_destroy(reply);
+                    exit(EXIT_FAILURE);
                 }
             } else if (txn_id && json_equal(txn_id, reply->id)) {
                 check_transaction_reply(reply);
+                jsonrpc_msg_destroy(reply);
                 exit(0);
             }
         }

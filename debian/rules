@@ -22,7 +22,7 @@ PARALLEL =
 endif
 
 %:
-	dh $@ --with autoreconf,python2 --parallel
+	dh $@ --with autoreconf,python3 --parallel
 
 # use --as-needed only if supported by dh-autoreconf (to simplify backporting)
 DH_AS_NEEDED=$(shell dpkg --compare-versions $$(dpkg --status dh-autoreconf | grep Version | cut -d' ' -f2) ge 6 && echo --as-needed)

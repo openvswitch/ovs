@@ -127,7 +127,7 @@ using the ``check-lcov`` target::
 
 All the same options are available via TESTSUITEFLAGS. For example::
 
-    $ make check-lcov TESTSUITEFLAGS='-j8 -k ovn'
+    $ make check-lcov TESTSUITEFLAGS='-j8 -k ovsdb'
 
 .. _testing-valgrind:
 

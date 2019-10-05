@@ -13,10 +13,10 @@ Build-Depends: graphviz,
                libtool,
                openssl,
                procps,
-               python-all (>= 2.7),
-               python-twisted-conch,
-               python-zopeinterface,
-               python-six,
+               python3-all,
+               python3-twisted-conch,
+               python3-zopeinterface,
+               python3-six,
                libunbound-dev
 Standards-Version: 3.9.3
 Homepage: http://openvswitch.org/
@@ -41,7 +41,7 @@ Description: Open vSwitch datapath module source - module-assistant version
 
 Package: openvswitch-datapath-dkms
 Architecture: all
-Depends: dkms (>= 1.95), libc6-dev, libelf-dev, make, ${misc:Depends}, ${python:Depends}
+Depends: dkms (>= 1.95), libc6-dev, libelf-dev, make, ${misc:Depends}, ${python3:Depends}
 Description: Open vSwitch datapath module source - DKMS version
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
@@ -58,8 +58,8 @@ Description: Open vSwitch datapath module source - DKMS version
 Package: openvswitch-common
 Architecture: linux-any
 Multi-Arch: foreign
-Depends: python (>= 2.7),
-         python-six,
+Depends: python3,
+         python3-six,
          libopenvswitch (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
@@ -102,10 +102,9 @@ Depends: kmod | module-init-tools,
          netbase,
          openvswitch-common (= ${binary:Version}),
          procps,
-         python-argparse,
          uuid-runtime,
          ${misc:Depends},
-         ${python:Depends},
+         ${python3:Depends},
          ${shlibs:Depends}
 Description: Open vSwitch switch implementations
  Open vSwitch is a production quality, multilayer, software-based,
@@ -171,10 +170,10 @@ Description: Debug symbols for Open vSwitch packages
  packages.  Install it to debug one of them or to examine a core dump
  produced by one of them.
 
-Package: python-openvswitch
+Package: python3-openvswitch
 Architecture: all
 Section: python
-Depends: ${misc:Depends}, ${python:Depends}, python-six
+Depends: ${misc:Depends}, ${python3:Depends}, python3-six
 Description: Python bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
@@ -188,10 +187,10 @@ Description: Python bindings for Open vSwitch
 
 Package: openvswitch-test
 Architecture: all
-Depends: python (>= 2.7) | python-argparse,
-         python-twisted-web,
+Depends: python3,
+         python3-twisted-web,
          ${misc:Depends},
-         ${python:Depends}
+         ${python3:Depends}
 Description: Open vSwitch test package
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
@@ -208,8 +207,8 @@ Package: openvswitch-vtep
 Architecture: linux-any
 Depends: openvswitch-common (>= ${binary:Version}),
          openvswitch-switch (>= ${binary:Version}),
-         python,
-         python-openvswitch (>= ${source:Version}),
+         python3,
+         python3-openvswitch (>= ${source:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: Open vSwitch VTEP utilities
@@ -250,8 +249,8 @@ Architecture: linux-any
 Depends: iproute2,
          openvswitch-common (= ${binary:Version}),
          openvswitch-switch (= ${binary:Version}),
-         python,
-         python-openvswitch (= ${source:Version}),
+         python3,
+         python3-openvswitch (= ${source:Version}),
          strongswan,
          ${misc:Depends},
          ${shlibs:Depends}

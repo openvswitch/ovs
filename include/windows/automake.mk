@@ -15,6 +15,7 @@ noinst_HEADERS += \
 	include/windows/linux/netfilter/nf_conntrack_tcp.h \
 	include/windows/linux/netfilter/nfnetlink.h \
 	include/windows/linux/netfilter/nfnetlink_conntrack.h \
+	include/windows/linux/netfilter/nfnetlink_cttimeout.h \
 	include/windows/linux/pkt_sched.h \
 	include/windows/linux/types.h \
 	include/windows/net/if.h \

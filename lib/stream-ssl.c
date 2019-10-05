@@ -470,6 +470,7 @@ do_ca_cert_bootstrap(struct stream *stream)
 static char *
 get_peer_common_name(const struct ssl_stream *sslv)
 {
+    char *peer_name = NULL;
     X509 *peer_cert = SSL_get_peer_certificate(sslv->ssl);
     if (!peer_cert) {
         return NULL;
@@ -478,18 +479,18 @@ get_peer_common_name(const struct ssl_stream *sslv)
     int cn_index = X509_NAME_get_index_by_NID(X509_get_subject_name(peer_cert),
                                               NID_commonName, -1);
     if (cn_index < 0) {
-        return NULL;
+        goto error;
     }
 
     X509_NAME_ENTRY *cn_entry = X509_NAME_get_entry(
         X509_get_subject_name(peer_cert), cn_index);
     if (!cn_entry) {
-        return NULL;
+        goto error;
     }
 
     ASN1_STRING *cn_data = X509_NAME_ENTRY_get_data(cn_entry);
     if (!cn_data) {
-        return NULL;
+        goto error;
     }
 
     const char *cn;
@@ -499,7 +500,11 @@ get_peer_common_name(const struct ssl_stream *sslv)
 #else
     cn = (const char *)ASN1_STRING_get0_data(cn_data);
  #endif
-    return xstrdup(cn);
+    peer_name = xstrdup(cn);
+
+error:
+    X509_free(peer_cert);
+    return peer_name;
 }
 
 static int

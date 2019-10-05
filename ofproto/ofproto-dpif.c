@@ -156,6 +156,31 @@ struct ofport_dpif {
     size_t n_qdscp;
 };
 
+struct ct_timeout_policy {
+    int ref_count;              /* The number of ct zones that use this
+                                 * timeout policy. */
+    uint32_t tp_id;             /* Timeout policy id in the datapath. */
+    struct simap tp;            /* A map from timeout policy attribute to
+                                 * timeout value. */
+    struct hmap_node node;      /* Element in struct dpif_backer's "ct_tps"
+                                 * cmap. */
+    struct ovs_list list_node;  /* Element in struct dpif_backer's
+                                 * "ct_tp_kill_list" list. */
+};
+
+/* Periodically try to purge deleted timeout policies from the datapath. Retry
+ * may be necessary if the kernel datapath has a non-zero datapath flow
+ * reference count for the timeout policy. */
+#define TIMEOUT_POLICY_CLEANUP_INTERVAL (20000) /* 20 seconds. */
+static long long int timeout_policy_cleanup_timer = LLONG_MIN;
+
+struct ct_zone {
+    uint16_t zone_id;
+    struct ct_timeout_policy *ct_tp;
+    struct cmap_node node;          /* Element in struct dpif_backer's
+                                     * "ct_zones" cmap. */
+};
+
 static odp_port_t ofp_port_to_odp_port(const struct ofproto_dpif *,
                                        ofp_port_t);
 
@@ -196,6 +221,9 @@ static struct hmap all_ofproto_dpifs_by_uuid =
 
 static bool ofproto_use_tnl_push_pop = true;
 static void ofproto_unixctl_init(void);
+static void ct_zone_config_init(struct dpif_backer *backer);
+static void ct_zone_config_uninit(struct dpif_backer *backer);
+static void ct_zone_timeout_policy_sweep(struct dpif_backer *backer);
 
 static inline struct ofproto_dpif *
 ofproto_dpif_cast(const struct ofproto *ofproto)
@@ -488,6 +516,7 @@ type_run(const char *type)
     }
 
     process_dpif_port_changes(backer);
+    ct_zone_timeout_policy_sweep(backer);
 
     return 0;
 }
@@ -683,6 +712,7 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
     }
     dpif_close(backer->dpif);
     id_pool_destroy(backer->meter_ids);
+    ct_zone_config_uninit(backer);
     free(backer);
 }
 
@@ -810,6 +840,8 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     } else {
         backer->meter_ids = NULL;
     }
+
+    ct_zone_config_init(backer);
 
     /* Make a pristine snapshot of 'support' into 'boottime_support'.
      * 'boottime_support' can be checked to prevent 'support' to be changed
@@ -1291,6 +1323,67 @@ check_ct_clear(struct dpif_backer *backer)
     return supported;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_CT_ATTR_TIMEOUT
+ * attribute in OVS_ACTION_ATTR_CT. */
+static bool
+check_ct_timeout_policy(struct dpif_backer *backer)
+{
+    struct dpif_execute execute;
+    struct dp_packet packet;
+    struct ofpbuf actions;
+    struct flow flow = {
+        .dl_type = CONSTANT_HTONS(ETH_TYPE_IP),
+        .nw_proto = IPPROTO_UDP,
+        .nw_ttl = 64,
+        /* Use the broadcast address on the loopback address range 127/8 to
+         * avoid hitting any real conntrack entries.  We leave the UDP ports to
+         * zeroes for the same purpose. */
+        .nw_src = CONSTANT_HTONL(0x7fffffff),
+        .nw_dst = CONSTANT_HTONL(0x7fffffff),
+    };
+    size_t ct_start;
+    int error;
+
+    /* Compose CT action with timeout policy attribute and check if datapath
+     * can decode the message.  */
+    ofpbuf_init(&actions, 64);
+    ct_start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_CT);
+    /* Timeout policy has no effect without the commit flag, but currently the
+     * datapath will accept a timeout policy even without commit.  This is
+     * useful as we do not want to persist the probe connection in the
+     * conntrack table. */
+    nl_msg_put_string(&actions, OVS_CT_ATTR_TIMEOUT, "ovs_test_tp");
+    nl_msg_end_nested(&actions, ct_start);
+
+    /* Compose a dummy UDP packet. */
+    dp_packet_init(&packet, 0);
+    flow_compose(&packet, &flow, NULL, 64);
+
+    /* Execute the actions.  On older datapaths this fails with EINVAL, on
+     * newer datapaths it succeeds. */
+    execute.actions = actions.data;
+    execute.actions_len = actions.size;
+    execute.packet = &packet;
+    execute.flow = &flow;
+    execute.needs_help = false;
+    execute.probe = true;
+    execute.mtu = 0;
+
+    error = dpif_execute(backer->dpif, &execute);
+
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&actions);
+
+    if (error) {
+        VLOG_INFO("%s: Datapath does not support timeout policy in conntrack "
+                  "action", dpif_name(backer->dpif));
+    } else {
+        VLOG_INFO("%s: Datapath supports timeout policy in conntrack action",
+                  dpif_name(backer->dpif));
+    }
+
+    return !error;
+}
 
 /* Tests whether 'backer''s datapath supports the
  * OVS_ACTION_ATTR_CHECK_PKT_LEN action. */
@@ -1441,6 +1534,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.ct_clear = check_ct_clear(backer);
     backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
     backer->rt_support.check_pkt_len = check_check_pkt_len(backer);
+    backer->rt_support.ct_timeout = check_ct_timeout_policy(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -4871,6 +4965,7 @@ group_setup_dp_hash_table(struct group_dpif *group, size_t max_hash)
     if (n_hash > MAX_SELECT_GROUP_HASH_VALUES ||
         (max_hash != 0 && n_hash > max_hash)) {
         VLOG_DBG("  Too many hash values required: %"PRIu64, n_hash);
+        free(webster);
         return false;
     }
 
@@ -5086,6 +5181,300 @@ ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
     ct_dpif_flush(ofproto->backer->dpif, zone, NULL);
 }
 
+static struct ct_timeout_policy *
+ct_timeout_policy_lookup(const struct hmap *ct_tps, struct simap *tp)
+{
+    struct ct_timeout_policy *ct_tp;
+
+    HMAP_FOR_EACH_WITH_HASH (ct_tp, node, simap_hash(tp), ct_tps) {
+        if (simap_equal(&ct_tp->tp, tp)) {
+            return ct_tp;
+        }
+    }
+    return NULL;
+}
+
+static struct ct_timeout_policy *
+ct_timeout_policy_alloc__(void)
+{
+    struct ct_timeout_policy *ct_tp = xzalloc(sizeof *ct_tp);
+    simap_init(&ct_tp->tp);
+    return ct_tp;
+}
+
+static struct ct_timeout_policy *
+ct_timeout_policy_alloc(struct simap *tp, struct id_pool *tp_ids)
+{
+    struct simap_node *node;
+
+    struct ct_timeout_policy *ct_tp = ct_timeout_policy_alloc__();
+    SIMAP_FOR_EACH (node, tp) {
+        simap_put(&ct_tp->tp, node->name, node->data);
+    }
+
+    if (!id_pool_alloc_id(tp_ids, &ct_tp->tp_id)) {
+        VLOG_ERR_RL(&rl, "failed to allocate timeout policy id.");
+        simap_destroy(&ct_tp->tp);
+        free(ct_tp);
+        return NULL;
+    }
+
+    return ct_tp;
+}
+
+static void
+ct_timeout_policy_destroy__(struct ct_timeout_policy *ct_tp)
+{
+    simap_destroy(&ct_tp->tp);
+    free(ct_tp);
+}
+
+static void
+ct_timeout_policy_destroy(struct ct_timeout_policy *ct_tp,
+                          struct id_pool *tp_ids)
+{
+    id_pool_free_id(tp_ids, ct_tp->tp_id);
+    ovsrcu_postpone(ct_timeout_policy_destroy__, ct_tp);
+}
+
+static void
+ct_timeout_policy_unref(struct dpif_backer *backer,
+                        struct ct_timeout_policy *ct_tp)
+{
+    if (ct_tp) {
+        ct_tp->ref_count--;
+
+        if (!ct_tp->ref_count) {
+            hmap_remove(&backer->ct_tps, &ct_tp->node);
+            ovs_list_push_back(&backer->ct_tp_kill_list, &ct_tp->list_node);
+        }
+    }
+}
+
+static struct ct_zone *
+ct_zone_lookup(const struct cmap *ct_zones, uint16_t zone_id)
+{
+    struct ct_zone *ct_zone;
+
+    CMAP_FOR_EACH_WITH_HASH (ct_zone, node, hash_int(zone_id, 0), ct_zones) {
+        if (ct_zone->zone_id == zone_id) {
+            return ct_zone;
+        }
+    }
+    return NULL;
+}
+
+static struct ct_zone *
+ct_zone_alloc(uint16_t zone_id)
+{
+    struct ct_zone *ct_zone = xzalloc(sizeof *ct_zone);
+    ct_zone->zone_id = zone_id;
+    return ct_zone;
+}
+
+static void
+ct_zone_destroy(struct ct_zone *ct_zone)
+{
+    ovsrcu_postpone(free, ct_zone);
+}
+
+static void
+ct_zone_remove_and_destroy(struct dpif_backer *backer, struct ct_zone *ct_zone)
+{
+    cmap_remove(&backer->ct_zones, &ct_zone->node,
+                hash_int(ct_zone->zone_id, 0));
+    ct_zone_destroy(ct_zone);
+}
+
+static void
+ct_add_timeout_policy_to_dpif(struct dpif *dpif,
+                              struct ct_timeout_policy *ct_tp)
+{
+    struct ct_dpif_timeout_policy cdtp;
+    struct simap_node *node;
+
+    cdtp.id = ct_tp->tp_id;
+    SIMAP_FOR_EACH (node, &ct_tp->tp) {
+        ct_dpif_set_timeout_policy_attr_by_name(&cdtp, node->name, node->data);
+    }
+
+    int err = ct_dpif_set_timeout_policy(dpif, &cdtp);
+    if (err) {
+        VLOG_ERR_RL(&rl, "failed to set timeout policy %"PRIu32" (%s)",
+                    ct_tp->tp_id, ovs_strerror(err));
+    }
+}
+
+static void
+clear_existing_ct_timeout_policies(struct dpif_backer *backer)
+{
+    /* In kernel datapath, when OVS starts, there may be some pre-existing
+     * timeout policies in the kernel.  To avoid reassigning the same timeout
+     * policy ids, we dump all the pre-existing timeout policies and keep
+     * the ids in the pool.  Since OVS will not use those timeout policies
+     * for new datapath flow, we add them to the kill list and remove
+     * them later on. */
+    struct ct_dpif_timeout_policy cdtp;
+    void *state;
+
+    if (ct_dpif_timeout_policy_dump_start(backer->dpif, &state)) {
+        return;
+    }
+
+    while (!ct_dpif_timeout_policy_dump_next(backer->dpif, state, &cdtp)) {
+        struct ct_timeout_policy *ct_tp = ct_timeout_policy_alloc__();
+        ct_tp->tp_id = cdtp.id;
+        id_pool_add(backer->tp_ids, cdtp.id);
+        ovs_list_push_back(&backer->ct_tp_kill_list, &ct_tp->list_node);
+    }
+
+    ct_dpif_timeout_policy_dump_done(backer->dpif, state);
+}
+
+#define MAX_TIMEOUT_POLICY_ID UINT32_MAX
+
+static void
+ct_zone_config_init(struct dpif_backer *backer)
+{
+    backer->tp_ids = id_pool_create(0, MAX_TIMEOUT_POLICY_ID);
+    cmap_init(&backer->ct_zones);
+    hmap_init(&backer->ct_tps);
+    ovs_list_init(&backer->ct_tp_kill_list);
+    clear_existing_ct_timeout_policies(backer);
+}
+
+static void
+ct_zone_config_uninit(struct dpif_backer *backer)
+{
+    struct ct_zone *ct_zone;
+    CMAP_FOR_EACH (ct_zone, node, &backer->ct_zones) {
+        ct_zone_remove_and_destroy(backer, ct_zone);
+    }
+
+    struct ct_timeout_policy *ct_tp;
+    HMAP_FOR_EACH_POP (ct_tp, node, &backer->ct_tps) {
+        ct_timeout_policy_destroy(ct_tp, backer->tp_ids);
+    }
+
+    LIST_FOR_EACH_POP (ct_tp, list_node, &backer->ct_tp_kill_list) {
+        ct_timeout_policy_destroy(ct_tp, backer->tp_ids);
+    }
+
+    id_pool_destroy(backer->tp_ids);
+    cmap_destroy(&backer->ct_zones);
+    hmap_destroy(&backer->ct_tps);
+}
+
+static void
+ct_zone_timeout_policy_sweep(struct dpif_backer *backer)
+{
+    if (!ovs_list_is_empty(&backer->ct_tp_kill_list)
+        && time_msec() >= timeout_policy_cleanup_timer) {
+        struct ct_timeout_policy *ct_tp, *next;
+
+        LIST_FOR_EACH_SAFE (ct_tp, next, list_node, &backer->ct_tp_kill_list) {
+            if (!ct_dpif_del_timeout_policy(backer->dpif, ct_tp->tp_id)) {
+                ovs_list_remove(&ct_tp->list_node);
+                ct_timeout_policy_destroy(ct_tp, backer->tp_ids);
+            } else {
+                /* INFO log raised by 'dpif' layer. */
+            }
+        }
+        timeout_policy_cleanup_timer = time_msec() +
+            TIMEOUT_POLICY_CLEANUP_INTERVAL;
+    }
+}
+
+static void
+ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
+                           struct simap *timeout_policy)
+{
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
+                                                 datapath_type);
+    if (!backer) {
+        return;
+    }
+
+    struct ct_timeout_policy *ct_tp = ct_timeout_policy_lookup(&backer->ct_tps,
+                                                               timeout_policy);
+    if (!ct_tp) {
+        ct_tp = ct_timeout_policy_alloc(timeout_policy, backer->tp_ids);
+        if (ct_tp) {
+            hmap_insert(&backer->ct_tps, &ct_tp->node, simap_hash(&ct_tp->tp));
+            ct_add_timeout_policy_to_dpif(backer->dpif, ct_tp);
+        } else {
+            return;
+        }
+    }
+
+    struct ct_zone *ct_zone = ct_zone_lookup(&backer->ct_zones, zone_id);
+    if (ct_zone) {
+        if (ct_zone->ct_tp != ct_tp) {
+            /* Update the zone timeout policy. */
+            ct_timeout_policy_unref(backer, ct_zone->ct_tp);
+            ct_zone->ct_tp = ct_tp;
+            ct_tp->ref_count++;
+        }
+    } else {
+        struct ct_zone *new_ct_zone = ct_zone_alloc(zone_id);
+        new_ct_zone->ct_tp = ct_tp;
+        cmap_insert(&backer->ct_zones, &new_ct_zone->node,
+                    hash_int(zone_id, 0));
+        ct_tp->ref_count++;
+    }
+}
+
+static void
+ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
+{
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
+                                                 datapath_type);
+    if (!backer) {
+        return;
+    }
+
+    struct ct_zone *ct_zone = ct_zone_lookup(&backer->ct_zones, zone_id);
+    if (ct_zone) {
+        ct_timeout_policy_unref(backer, ct_zone->ct_tp);
+        ct_zone_remove_and_destroy(backer, ct_zone);
+    }
+}
+
+/* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
+ * 'nw_proto'.  Returns true if the zone-based timeout policy is configured.
+ * On success, stores the timeout policy name in 'tp_name', and sets
+ * 'unwildcard' based on the dpif implementation.  If 'unwildcard' is true,
+ * the returned timeout policy is 'dl_type' and 'nw_proto' specific, and OVS
+ * needs to unwildcard the datapath flow for this timeout policy in flow
+ * translation.
+ *
+ * The caller is responsible for freeing 'tp_name'. */
+bool
+ofproto_dpif_ct_zone_timeout_policy_get_name(
+    const struct dpif_backer *backer, uint16_t zone, uint16_t dl_type,
+    uint8_t nw_proto, char **tp_name, bool *unwildcard)
+{
+    if (!ct_dpif_timeout_policy_support_ipproto(nw_proto)) {
+        return false;
+    }
+
+    struct ct_zone *ct_zone = ct_zone_lookup(&backer->ct_zones, zone);
+    if (!ct_zone) {
+        return false;
+    }
+
+    bool is_generic;
+    if (ct_dpif_get_timeout_policy_name(backer->dpif,
+                                        ct_zone->ct_tp->tp_id, dl_type,
+                                        nw_proto, tp_name, &is_generic)) {
+        return false;
+    }
+
+    /* Unwildcard datapath flow if it is not a generic timeout policy. */
+    *unwildcard = !is_generic;
+    return true;
+}
+
 static bool
 set_frag_handling(struct ofproto *ofproto_,
                   enum ofputil_frag_handling frag_handling)
@@ -5148,6 +5537,7 @@ nxt_resume(struct ofproto *ofproto_,
     /* Clean up. */
     ofpbuf_uninit(&odp_actions);
     dp_packet_uninit(&packet);
+    xlate_cache_uninit(&xcache);
 
     return error;
 }
@@ -6189,4 +6579,6 @@ const struct ofproto_class ofproto_dpif_class = {
     get_datapath_version,       /* get_datapath_version */
     type_set_config,
     ct_flush,                   /* ct_flush */
+    ct_set_zone_timeout_policy,
+    ct_del_zone_timeout_policy,
 };

@@ -194,8 +194,12 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     /* Highest supported dp_hash algorithm. */                              \
     DPIF_SUPPORT_FIELD(size_t, max_hash_alg, "Max dp_hash algorithm")       \
                                                                             \
-    /* True if the datapath supports OVS_ACTION_ATTR_CHECK_PKT_LEN. */   \
-    DPIF_SUPPORT_FIELD(bool, check_pkt_len, "Check pkt length action")
+    /* True if the datapath supports OVS_ACTION_ATTR_CHECK_PKT_LEN. */      \
+    DPIF_SUPPORT_FIELD(bool, check_pkt_len, "Check pkt length action")      \
+                                                                            \
+    /* True if the datapath supports OVS_CT_ATTR_TIMEOUT in                 \
+     * OVS_ACTION_ATTR_CT action. */                                        \
+    DPIF_SUPPORT_FIELD(bool, ct_timeout, "Conntrack timeout policy")
 
 /* Stores the various features which the corresponding backer supports. */
 struct dpif_backer_support {
@@ -244,6 +248,16 @@ struct dpif_backer {
 
     /* Meter. */
     struct id_pool *meter_ids;     /* Datapath meter allocation. */
+
+    /* Connection tracking. */
+    struct id_pool *tp_ids;             /* Datapath timeout policy id
+                                         * allocation. */
+    struct cmap ct_zones;               /* "struct ct_zone"s indexed by zone
+                                         * id. */
+    struct hmap ct_tps;                 /* "struct ct_timeout_policy"s indexed
+                                         * by timeout policy (struct simap). */
+    struct ovs_list ct_tp_kill_list;    /* A list of timeout policy to be
+                                         * deleted. */
 
     /* Version string of the datapath stored in OVSDB. */
     char *dp_version_string;
@@ -363,5 +377,9 @@ int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
 
 bool ovs_native_tunneling_is_on(struct ofproto_dpif *);
+
+bool ofproto_dpif_ct_zone_timeout_policy_get_name(
+    const struct dpif_backer *backer, uint16_t zone, uint16_t dl_type,
+    uint8_t nw_proto, char **tp_name, bool *unwildcard);
 
 #endif /* ofproto-dpif.h */

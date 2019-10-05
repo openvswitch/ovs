@@ -260,7 +260,7 @@ dnl
 dnl <C0> is not allowed anywhere in a UTF-8 string.
 dnl (<ED A0 80> is not allowed in UTF-8 but Python doesn't care.)
 dnl <ED 80 7F> is not allowed in UTF-8.
-OVSDB_CHECK_POSITIVE_PY([no invalid UTF-8 sequences in strings - Python],
+OVSDB_CHECK_POSITIVE_PY3([no invalid UTF-8 sequences in strings - Python],
   [parse-atoms '[["string"]]' \
      '@<:@"m4_esyscmd([printf "\300"])"@:>@' \
      '@<:@"m4_esyscmd([printf "\355\200\177"])"@:>@' \
@@ -533,12 +533,7 @@ OVSDB_CHECK_POSITIVE_CPY([strings at least 2 characters long],
 constraint violation: "a" length 1 is less than minimum allowed length 2
 "ab"
 "abc"
-constraint violation: "𝄞" length 1 is less than minimum allowed length 2]],
-  [],
-  [],
-  [dnl This test requires a wide build of Python.
-   AT_CHECK([$PYTHON -c 'unichr(0x10000)' || exit 77],
-            [0], [ignore], [ignore])])
+constraint violation: "𝄞" length 1 is less than minimum allowed length 2]])
 
 OVSDB_CHECK_POSITIVE_CPY([strings no more than 2 characters long],
   [[parse-atoms '{"type": "string", "maxLength": 2}' \

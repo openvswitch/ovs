@@ -699,7 +699,7 @@ ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)
         return false;
     }
     /* Jumbo Payload option not supported yet. */
-    if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
+    if (OVS_UNLIKELY(size - (plen + IPV6_HEADER_LEN) > UINT8_MAX)) {
         return false;
     }
 
@@ -1098,7 +1098,7 @@ parse_tcp_flags(struct dp_packet *packet)
     ovs_be16 dl_type;
     uint8_t nw_frag = 0, nw_proto = 0;
 
-    if (packet->packet_type != htonl(PT_ETH)) {
+    if (!dp_packet_is_eth(packet)) {
         return 0;
     }
 

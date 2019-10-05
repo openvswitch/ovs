@@ -45,17 +45,6 @@
 %define _rundir /run
 %endif
 
-# define the python package prefix based on distribution version so that we can
-# simultaneously support RHEL-based and later Fedora versions in this spec file.
-%if 0%{?fedora} >= 25
-%define _py2 python2
-%endif
-
-%if 0%{?rhel} || 0%{?fedora} < 25
-%define _py2 python
-%endif
-
-
 Name: openvswitch
 Summary: Open vSwitch
 Group: System Environment/Daemons
@@ -72,16 +61,14 @@ Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 BuildRequires: gcc gcc-c++
 BuildRequires: autoconf automake libtool
 BuildRequires: systemd-units openssl openssl-devel
-BuildRequires: %{_py2}-devel
 %if 0%{?fedora} > 22 || %{with build_python3}
 BuildRequires: python3-devel
 %endif
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 BuildRequires: checkpolicy, selinux-policy-devel
-BuildRequires: /usr/bin/sphinx-build
+BuildRequires: /usr/bin/sphinx-build-3
 # make check dependencies
-BuildRequires: %{_py2}-twisted%{?rhel:-core} %{_py2}-zope-interface %{_py2}-six
 BuildRequires: procps-ng
 %if %{with libcapng}
 BuildRequires: libcap-ng libcap-ng-devel
@@ -122,16 +109,6 @@ Requires: selinux-policy-targeted
 %description selinux-policy
 Tailored Open vSwitch SELinux policy
 
-%package -n %{_py2}-openvswitch
-Summary: Open vSwitch python2 bindings
-License: ASL 2.0
-BuildArch: noarch
-Requires: %{_py2}
-Requires: %{_py2}-six
-%{?python_provide:%python_provide python2-openvswitch = %{version}-%{release}}
-%description -n %{_py2}-openvswitch
-Python bindings for the Open vSwitch database
-
 %if 0%{?fedora} > 22 || %{with build_python3}
 %package -n python3-openvswitch
 Summary: Open vSwitch python3 bindings
@@ -149,8 +126,6 @@ Python bindings for the Open vSwitch database
 Summary: Open vSwitch testing utilities
 License: ASL 2.0
 BuildArch: noarch
-Requires: %{_py2}-openvswitch = %{version}-%{release}
-Requires: %{_py2} %{_py2}-netifaces %{_py2}-twisted
 
 %description test
 Utilities that are useful to diagnose performance and connectivity
@@ -179,7 +154,7 @@ service.
 %package ipsec
 Summary: Open vSwitch IPsec tunneling support
 License: ASL 2.0
-Requires: openvswitch %{_py2}-openvswitch libreswan
+Requires: openvswitch python3-openvswitch libreswan
 
 %description ipsec
 This package provides IPsec tunneling support for OVS tunnels.
@@ -201,12 +176,7 @@ This package provides IPsec tunneling support for OVS tunnels.
         --disable-static \
         --enable-shared \
         --with-pkidir=%{_sharedstatedir}/openvswitch/pki \
-%if 0%{?fedora} > 22 || %{with build_python3}
-        PYTHON3=%{__python3} \
-        PYTHON=%{__python2}
-%else
-        PYTHON=%{__python}
-%endif
+        PYTHON3=%{__python3}
 
 build-aux/dpdkstrip.py \
 %if %{with dpdk}
@@ -274,13 +244,9 @@ install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 
-install -d -m 0755 $RPM_BUILD_ROOT%{python2_sitelib}
-cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* \
-   $RPM_BUILD_ROOT%{python2_sitelib}
-
 %if 0%{?fedora} > 22 || %{with build_python3}
 install -d -m 0755 $RPM_BUILD_ROOT%{python3_sitelib}
-cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/ovs \
+cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* \
    $RPM_BUILD_ROOT%{python3_sitelib}
 %endif
 
@@ -305,17 +271,6 @@ install -p -D -m 0755 \
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
         $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8
-
-# remove ovn unpackages files
-rm -f $RPM_BUILD_ROOT%{_bindir}/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man1/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man5/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man7/ovn*
-rm -f $RPM_BUILD_ROOT%{_mandir}/man8/ovn*
-rm -f $RPM_BUILD_ROOT%{_datadir}/openvswitch/ovn*
-rm -f $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovn*
-rm -f $RPM_BUILD_ROOT%{_includedir}/ovn/*
-rm -f $RPM_BUILD_ROOT%{_libdir}/libovn*
 
 %check
 %if %{with check}
@@ -435,9 +390,6 @@ fi
 %defattr(-,root,root)
 %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
-%files -n %{_py2}-openvswitch
-%{python2_sitelib}/ovs
-
 %if 0%{?fedora} > 22 || %{with build_python3}
 %files -n python3-openvswitch
 %{python3_sitelib}/ovs
@@ -456,7 +408,7 @@ fi
 %{_mandir}/man1/ovs-pcap.1*
 %{_mandir}/man8/ovs-tcpdump.8*
 %{_mandir}/man1/ovs-tcpundump.1*
-%{python2_sitelib}/ovstest
+%{python3_sitelib}/ovstest
 
 %files devel
 %{_libdir}/lib*.so

@@ -102,7 +102,7 @@ in which `./configure` was executed:
 
     $ make rpm-fedora
 
-This will create the RPMs `openvswitch`, `python-openvswitch`,
+This will create the RPMs `openvswitch`, `python3-openvswitch`,
 `openvswitch-test`, `openvswitch-devel` and `openvswitch-debuginfo`.
 
 To enable DPDK support in the openvswitch package, the ``--with dpdk`` option
@@ -151,7 +151,7 @@ Refer to the :doc:`/faq/index` for more information about the various Open
 vSwitch datapath options.
 
 In most cases only the `openvswitch` RPM will need to be installed. The
-`python-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
+`python3-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
 `openvswitch-debuginfo` RPMs are optional unless required for a specific
 purpose.
 

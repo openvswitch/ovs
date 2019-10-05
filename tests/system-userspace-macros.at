@@ -64,9 +64,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 #
 # Perform requirements checks for running conntrack tests.
 #
-m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON = no])]
-)
+m4_define([CHECK_CONNTRACK], [])
 
 # CHECK_CONNTRACK_ALG()
 #
@@ -97,6 +95,16 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP])
 # datapath supports NAT.
 #
 m4_define([CHECK_CONNTRACK_NAT])
+
+# CHECK_CONNTRACK_TIMEOUT()
+#
+# Perform requirements checks for running conntrack customized timeout tests.
+* The userspace datapath does not support this feature yet.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT],
+[
+    AT_SKIP_IF([:])
+])
 
 # CHECK_CT_DPIF_PER_ZONE_LIMIT()
 #
@@ -292,6 +300,26 @@ m4_define([OVS_CHECK_MIN_KERNEL],
 #
 # The userspace skips all tests that check kernel version.
 m4_define([OVS_CHECK_KERNEL_EXCL],
+[
+    AT_SKIP_IF([:])
+])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create datapath table "netdev" for userspace tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m], [0], [stdout])
+    DP_TYPE=$(echo "netdev")
+])
+
+
+# CHECK_L3L4_CONNTRACK_REASM()
+#
+# Only allow this test to run on the kernel datapath - it is not useful
+# or necessary for the userspace datapath as it is checking for a kernel
+# specific regression.
+m4_define([CHECK_L3L4_CONNTRACK_REASM],
 [
     AT_SKIP_IF([:])
 ])

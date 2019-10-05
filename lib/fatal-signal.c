@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <config.h>
+#include "backtrace.h"
 #include "fatal-signal.h"
 #include <errno.h>
 #include <signal.h>
@@ -34,6 +35,10 @@
 
 #include "openvswitch/type-props.h"
 
+#ifdef HAVE_UNWIND
+#include "daemon-private.h"
+#endif
+
 #ifndef SIG_ATOMIC_MAX
 #define SIG_ATOMIC_MAX TYPE_MAXIMUM(sig_atomic_t)
 #endif
@@ -42,7 +47,8 @@ VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
 #ifndef _WIN32
-static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
+static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM,
+                                     SIGSEGV };
 #else
 static const int fatal_signals[] = { SIGTERM };
 #endif
@@ -151,6 +157,44 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
     ovs_mutex_unlock(&mutex);
 }
 
+#ifdef HAVE_UNWIND
+/* Send the backtrace buffer to monitor thread.
+ *
+ * Note that this runs in the signal handling context, any system
+ * library functions used here must be async-signal-safe.
+ */
+static inline void
+send_backtrace_to_monitor(void) {
+    int dep;
+    struct unw_backtrace unw_bt[UNW_MAX_DEPTH];
+    unw_cursor_t cursor;
+    unw_context_t uc;
+
+    if (daemonize_fd == -1) {
+        return;
+    }
+
+    dep = 0;
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+
+    while (dep < UNW_MAX_DEPTH && unw_step(&cursor)) {
+        memset(unw_bt[dep].func, 0, UNW_MAX_FUNCN);
+        unw_get_reg(&cursor, UNW_REG_IP, &unw_bt[dep].ip);
+        unw_get_proc_name(&cursor, unw_bt[dep].func, UNW_MAX_FUNCN,
+                          &unw_bt[dep].offset);
+       dep++;
+    }
+
+    ignore(write(daemonize_fd, unw_bt, dep * sizeof(struct unw_backtrace)));
+}
+#else
+static inline void
+send_backtrace_to_monitor(void) {
+    /* Nothing. */
+}
+#endif
+
 /* Handles fatal signal number 'sig_nr'.
  *
  * Ordinarily this is the actual signal handler.  When other code needs to
@@ -164,6 +208,11 @@ void
 fatal_signal_handler(int sig_nr)
 {
 #ifndef _WIN32
+    if (sig_nr == SIGSEGV) {
+        signal(sig_nr, SIG_DFL); /* Set it back immediately. */
+        send_backtrace_to_monitor();
+        raise(sig_nr);
+    }
     ignore(write(signal_fds[1], "", 1));
 #else
     SetEvent(wevent);

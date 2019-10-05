@@ -74,6 +74,7 @@ struct ofconn {
     enum ofputil_packet_in_format packet_in_format;
 
     /* OFPT_PACKET_IN related data. */
+    int packet_in_queue_size;
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
 #define N_SCHEDULERS 2
     struct pinsched *schedulers[N_SCHEDULERS];
@@ -1176,6 +1177,7 @@ ofconn_create(struct ofservice *ofservice, struct rconn *rconn,
     ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
     ofconn->packet_in_format = OFPUTIL_PACKET_IN_STD;
 
+    ofconn->packet_in_queue_size = settings->max_pktq_size;
     ofconn->packet_in_counter = rconn_packet_counter_create();
     ofconn->miss_send_len = (ofconn->type == OFCONN_PRIMARY
                              ? OFP_DEFAULT_MISS_SEND_LEN
@@ -1263,6 +1265,7 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
     rconn_set_probe_interval(ofconn->rconn, probe_interval);
 
     ofconn->band = c->band;
+    ofconn->packet_in_queue_size = c->max_pktq_size;
 
     ofconn_set_rate_limit(ofconn, c->rate_limit, c->burst_limit);
 
@@ -1676,7 +1679,8 @@ do_send_packet_ins(struct ofconn *ofconn, struct ovs_list *txq)
 
     LIST_FOR_EACH_POP (pin, list_node, txq) {
         if (rconn_send_with_limit(ofconn->rconn, pin,
-                                  ofconn->packet_in_counter, 100) == EAGAIN) {
+                                  ofconn->packet_in_counter,
+                                  ofconn->packet_in_queue_size) == EAGAIN) {
             static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(5, 5);
 
             VLOG_INFO_RL(&rll, "%s: dropping packet-in due to queue overflow",

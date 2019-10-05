@@ -53,17 +53,15 @@ pkgdata_DATA += vtep/vtep.ovsschema
 #
 # If "python" or "dot" is not available, then we do not add graphical diagram
 # to the documentation.
-if HAVE_PYTHON
 if HAVE_DOT
 vtep/vtep.gv: ovsdb/ovsdb-dot.in vtep/vtep.ovsschema
 	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/vtep/vtep.ovsschema > $@
 vtep/vtep.pic: vtep/vtep.gv ovsdb/dot2pic
-	$(AM_V_GEN)(dot -T plain < vtep/vtep.gv | $(PYTHON) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
+	$(AM_V_GEN)(dot -T plain < vtep/vtep.gv | $(PYTHON3) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
 	mv $@.tmp $@
 VTEP_PIC = vtep/vtep.pic
 VTEP_DOT_DIAGRAM_ARG = --er-diagram=$(VTEP_PIC)
 CLEANFILES += vtep/vtep.gv vtep/vtep.pic
-endif
 endif
 
 # VTEP schema documentation

@@ -2,28 +2,19 @@ AT_BANNER([reconnect library])
 
 m4_define([__RECONNECT_CHECK],
   [AT_SETUP([$1])
-   $2
    AT_KEYWORDS([reconnect])
-   AT_DATA([input], [$3])
-   AT_CHECK([$4], [0], [$5])
+   AT_DATA([input], [$2])
+   AT_CHECK([$3], [0], [$4])
    AT_CLEANUP])
 
 m4_define([RECONNECT_CHECK],
   [__RECONNECT_CHECK(
      [$1 - C],
-     [],
      [$2],
      [ovstest test-reconnect < input],
      [$3])
    __RECONNECT_CHECK(
-     [$1 - Python2],
-     [AT_SKIP_IF([test $HAVE_PYTHON2 = no])],
-     [$2],
-     [$PYTHON2 $srcdir/test-reconnect.py < input],
-     [$3])
-   __RECONNECT_CHECK(
      [$1 - Python3],
-     [AT_SKIP_IF([test $HAVE_PYTHON3 = no])],
      [$2],
      [$PYTHON3 $srcdir/test-reconnect.py < input],
      [$3])])

@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! @PYTHON3@
 
 import os
 import re
@@ -37,7 +37,7 @@ for ifname in os.listdir("/sys/class/net"):
     except IOError:
         pass
     except ValueError:
-        print "%s: unexpected format\n" % fn
+        print("%s: unexpected format\n" % fn)
 
 # Get inodes for all packet sockets whose ifindexes don't exist.
 invalid_inodes = set()
@@ -95,8 +95,8 @@ for pid in os.listdir("/proc"):
             bad_pids.add(pid)
 
 if bad_pids:
-    print """
+    print("""
 The following processes are listening for packets to arrive on network devices
-that no longer exist. You may want to restart them."""
+that no longer exist. You may want to restart them.""")
     sys.stdout.flush()
-    os.execvp("ps", ["ps"] + ["%s" % pid for pid in bad_pids])
+    os.execvp("ps", ["ps"] + ["%s" % pspid for pspid in bad_pids])

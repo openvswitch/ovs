@@ -1,4 +1,4 @@
 #!/bin/bash
 set -ev
-pip2 install --user six
-pip2 install --user --upgrade docutils
+pip3 install --user six
+pip3 install --user --upgrade docutils

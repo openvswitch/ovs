@@ -59,8 +59,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # kernel conntrack tables when the test is finished.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON = no])
-     m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
+    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
                         [nf_nat_tftp]],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
@@ -99,6 +98,17 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
 # always supports NAT, so no check is needed.
 #
 m4_define([CHECK_CONNTRACK_NAT])
+
+# CHECK_CONNTRACK_TIMEOUT()
+#
+# Perform requirements checks for running conntrack customized timeout tests.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT],
+[
+    AT_SKIP_IF([! cat /boot/config-$(uname -r) | grep NF_CONNTRACK_TIMEOUT | grep '=y' > /dev/null])
+    modprobe nfnetlink_cttimeout
+    on_exit 'modprobe -r nfnetlink_cttimeout'
+])
 
 # CHECK_CT_DPIF_PER_ZONE_LIMIT()
 #
@@ -185,3 +195,19 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     sublevel=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 2}')
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
 ])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create system datapath table "system" for kernel tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"system"=@m], [0], [stdout])
+    DP_TYPE=$(echo "system")
+])
+
+# CHECK_L3L4_CONNTRACK_REASM()
+#
+# Only allow this test to run on the kernel datapath - it is not useful
+# or necessary for the userspace datapath as it is checking for a kernel
+# specific regression.
+m4_define([CHECK_L3L4_CONNTRACK_REASM])

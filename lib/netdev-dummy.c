@@ -1108,7 +1108,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
 
-        if (packet->packet_type != htonl(PT_ETH)) {
+        if (!dp_packet_is_eth(packet)) {
             error = EPFNOSUPPORT;
             break;
         }

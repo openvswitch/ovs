@@ -21,6 +21,7 @@ openvswitch_sources += \
 	linux/compat/nf_conntrack_core.c \
 	linux/compat/nf_conntrack_proto.c \
 	linux/compat/nf_conntrack_reasm.c \
+	linux/compat/nf_conntrack_timeout.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/socket.c \
@@ -108,6 +109,7 @@ openvswitch_headers += \
 	linux/compat/include/net/netfilter/nf_conntrack_helper.h \
 	linux/compat/include/net/netfilter/nf_conntrack_labels.h \
 	linux/compat/include/net/netfilter/nf_conntrack_seqadj.h \
+	linux/compat/include/net/netfilter/nf_conntrack_timeout.h \
 	linux/compat/include/net/netfilter/nf_conntrack_zones.h \
 	linux/compat/include/net/netfilter/nf_nat.h \
 	linux/compat/include/net/netfilter/ipv6/nf_defrag_ipv6.h \

@@ -249,10 +249,10 @@ ovsdb_cluster_failure_test () {
         new_leader=$5
     fi
 
-    cp $top_srcdir/ovn/ovn-nb.ovsschema schema
+    cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 2 columns in 'OVN_Northbound' database from ephemeral to persistent, including 'status' column in 'Connection' table, because clusters do not support ephemeral columns
+ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
 ])
 
     n=3
@@ -283,7 +283,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Northbound' database from ephemeral
     for i in `seq $n`; do start_server $i; done
     for i in `seq $n`; do connect_server $i; done
 
-    export OVN_NB_DB=unix:s$remote_1.ovsdb,unix:s$remote_2.ovsdb
+    db=unix:s$remote_1.ovsdb,unix:s$remote_2.ovsdb
 
     # To ensure $new_leader node the new leader, we delay election timer for
     # the other follower.
@@ -296,15 +296,15 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Northbound' database from ephemeral
         AT_CHECK([ovs-appctl -t "`pwd`"/s$delay_election_node cluster/failure-test delay-election], [0], [ignore])
     fi
     AT_CHECK([ovs-appctl -t "`pwd`"/s$crash_node cluster/failure-test $crash_command], [0], [ignore])
-    AT_CHECK([ovn-nbctl -v --timeout=10 --no-leader-only --no-shuffle-remotes create logical_switch name=ls1], [0], [ignore], [ignore])
+    AT_CHECK([ovs-vsctl -v --timeout=10 --db="$db" --no-leader-only --no-shuffle-remotes --no-wait create QoS type=x], [0], [ignore], [ignore])
 
     # Make sure that the node really crashed.
     AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
     # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
-    if test "$remote_1" == "$crash_node"; then
-        export OVN_NB_DB=unix:s$remote_2.ovsdb
+    if test "$remote_1" = "$crash_node"; then
+        db=unix:s$remote_2.ovsdb
     fi
-    AT_CHECK([ovn-nbctl --no-leader-only ls-list | awk '{ print $2 }'], [0], [(ls1)
+    AT_CHECK([ovs-vsctl --db="$db" --no-leader-only --no-wait --columns=type --bare list QoS], [0], [x
 ])
 }
 OVS_END_SHELL_HELPERS
@@ -407,10 +407,10 @@ ovsdb_torture_test () {
     local n=$1                  # Number of cluster members
     local victim=$2             # Cluster member to kill or remove
     local variant=$3            # 'kill' and restart or 'remove' and add
-    cp $top_srcdir/ovn/ovn-sb.ovsschema schema
+    cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral to persistent, including 'status' column in 'Connection' table, because clusters do not support ephemeral columns
+ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
 ])
 
     join_cluster() {
@@ -442,7 +442,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     remove_server() {
         local i=$1
         printf "\ns$i: removing from cluster\n"
-        AT_CHECK([ovs-appctl --timeout=30 -t "`pwd`"/s$i cluster/leave OVN_Southbound])
+        AT_CHECK([ovs-appctl --timeout=30 -t "`pwd`"/s$i cluster/leave Open_vSwitch])
         printf "\ns$i: waiting for removal to complete\n"
         AT_CHECK([ovsdb_client_wait --log-file=remove$i.log unix:s$i.ovsdb $schema removed])
         stop_server $i
@@ -462,22 +462,21 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     for i in `seq $n`; do start_server $i; done
     for i in `seq $n`; do connect_server $i; done
 
-    OVN_SB_DB=unix:s1.ovsdb
+    db=unix:s1.ovsdb
     for i in `seq 2 $n`; do
-        OVN_SB_DB=$OVN_SB_DB,unix:s$i.ovsdb
+        db=$db,unix:s$i.ovsdb
     done
-    export OVN_SB_DB
 
     n1=10 n2=5 n3=50
-    echo "starting $n1*$n2 ovn-sbctl processes..."
+    echo "starting $n1*$n2 ovs-vsctl processes..."
     for i in $(seq 0 $(expr $n1 - 1) ); do
         (for j in $(seq $n2); do
              : > $i-$j.running
-             txn="add SB_Global . external_ids $i-$j=$i-$j"
+             txn="add Open_vSwitch . external_ids $i-$j=$i-$j"
              for k in $(seq $n3); do
-                 txn="$txn -- add SB_Global . external_ids $i-$j-$k=$i-$j-$k"
+                 txn="$txn -- add Open_vSwitch . external_ids $i-$j-$k=$i-$j-$k"
              done
-             run_as "ovn-sbctl($i-$j)" ovn-sbctl "-vPATTERN:console:ovn-sbctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" --log-file=$i-$j.log -vfile -vsyslog:off -vtimeval:off --timeout=120 --no-leader-only $txn
+             run_as "ovs-vsctl($i-$j)" ovs-vsctl "-vPATTERN:console:ovs-vsctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" --log-file=$i-$j.log -vfile -vsyslog:off -vtimeval:off --timeout=120 --db="$db" --no-leader-only --no-wait $txn
              status=$?
              if test $status != 0; then
                  echo "$i-$j exited with status $status" > $i-$j:$status
@@ -488,7 +487,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     done
     echo "...done"
 
-    echo "waiting for ovn-sbctl processes to exit..."
+    echo "waiting for ovs-vsctl processes to exit..."
     # Use file instead of var because code inside "while" runs in a subshell.
     echo 0 > phase
     i=0
@@ -544,7 +543,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
             done
         done
     done | sort > expout
-    AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])
+    AT_CHECK([ovs-vsctl --timeout=30 --db="$db" --no-wait --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get Open_vSwitch . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])
 
     for i in `seq $n`; do
         if test $i != $victim || test $(cat phase) != 1; then

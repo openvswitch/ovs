@@ -17,6 +17,8 @@
 #ifndef NETLINK_CONNTRACK_H
 #define NETLINK_CONNTRACK_H
 
+#include <linux/netfilter/nfnetlink_cttimeout.h>
+
 #include "byte-order.h"
 #include "compiler.h"
 #include "ct-dpif.h"
@@ -33,16 +35,39 @@ enum nl_ct_event_type {
     NL_CT_EVENT_DELETE = 1 << 2,
 };
 
+#define NL_CT_TIMEOUT_POLICY_MAX_ATTR (CTA_TIMEOUT_TCP_MAX + 1)
+
+struct nl_ct_timeout_policy {
+    char        name[CTNL_TIMEOUT_NAME_MAX];
+    uint16_t    l3num;
+    uint8_t     l4num;
+    uint32_t    attrs[NL_CT_TIMEOUT_POLICY_MAX_ATTR];
+    uint32_t    present;
+};
+
 struct nl_ct_dump_state;
+struct nl_ct_timeout_policy_dump_state;
 
 int nl_ct_dump_start(struct nl_ct_dump_state **, const uint16_t *zone,
-        int *ptot_bkts);
+                     int *ptot_bkts);
 int nl_ct_dump_next(struct nl_ct_dump_state *, struct ct_dpif_entry *);
 int nl_ct_dump_done(struct nl_ct_dump_state *);
 
 int nl_ct_flush(void);
 int nl_ct_flush_zone(uint16_t zone);
 int nl_ct_flush_tuple(const struct ct_dpif_tuple *, uint16_t zone);
+
+int nl_ct_set_timeout_policy(const struct nl_ct_timeout_policy *nl_tp);
+int nl_ct_get_timeout_policy(const char *tp_name,
+                             struct nl_ct_timeout_policy *nl_tp);
+int nl_ct_del_timeout_policy(const char *tp_name);
+int nl_ct_timeout_policy_dump_start(
+    struct nl_ct_timeout_policy_dump_state **statep);
+int nl_ct_timeout_policy_dump_next(
+    struct nl_ct_timeout_policy_dump_state *state,
+    struct nl_ct_timeout_policy *nl_tp);
+int nl_ct_timeout_policy_dump_done(
+    struct nl_ct_timeout_policy_dump_state *state);
 
 bool nl_ct_parse_entry(struct ofpbuf *, struct ct_dpif_entry *,
                        enum nl_ct_event_type *);

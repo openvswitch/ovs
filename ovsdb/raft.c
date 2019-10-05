@@ -883,6 +883,7 @@ raft_read_log(struct raft *raft)
             error = raft_apply_record(raft, i, &r);
             raft_record_uninit(&r);
         }
+        json_destroy(json);
         if (error) {
             return ovsdb_wrap_error(error, "error reading record %llu from "
                                     "%s log", i, raft->name);

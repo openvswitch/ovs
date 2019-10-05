@@ -716,6 +716,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_count.h],
                                    [int nf_conncount_add],
                                    [], [OVS_DEFINE([HAVE_UPSTREAM_NF_CONNCOUNT])])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_timeout.h], [nf_ct_set_timeout])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_timeout.h], [struct nf_ct_timeout],
+                  [OVS_DEFINE([HAVE_NF_CT_TIMEOUT])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_timeout.h],
+                        [\(*nf_ct_timeout_find_get_hook\)], [net],
+                        [OVS_DEFINE([HAVE_NF_CT_TIMEOUT_FIND_GET_HOOK_NET])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])

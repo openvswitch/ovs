@@ -8,15 +8,12 @@ bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-pki \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpdump \
-	utilities/ovs-tcpundump
-if HAVE_PYTHON2
-bin_SCRIPTS += \
+	utilities/ovs-tcpundump \
 	utilities/ovs-dpctl-top \
 	utilities/ovs-l3ping \
 	utilities/ovs-parse-backtrace \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test
-endif
 scripts_SCRIPTS += \
 	utilities/ovs-check-dead-ifs \
 	utilities/ovs-ctl \
@@ -156,6 +153,7 @@ endif
 
 FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/checkpatch.py utilities/ovs-dev.py \
+	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-tcpdump.in \
 	utilities/ovs-pipegen.py
 

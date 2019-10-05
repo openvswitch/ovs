@@ -19,6 +19,7 @@
 
 extern bool detach;
 extern char *pidfile;
+extern int daemonize_fd;
 
 char *make_pidfile_name(const char *name);
 
