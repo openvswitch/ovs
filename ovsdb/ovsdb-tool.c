@@ -559,7 +559,9 @@ do_db_has_magic(struct ovs_cmdl_context *ctx, const char *magic)
 
     check_ovsdb_error(ovsdb_log_open(filename, OVSDB_MAGIC"|"RAFT_MAGIC,
                                      OVSDB_LOG_READ_ONLY, -1, &log));
-    if (strcmp(ovsdb_log_get_magic(log), magic)) {
+    int cmp = strcmp(ovsdb_log_get_magic(log), magic);
+    ovsdb_log_close(log);
+    if (cmp) {
         exit(2);
     }
 }
