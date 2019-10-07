@@ -1026,7 +1026,7 @@ sflow_read_set_action(const struct nlattr *attr,
                 sflow_actions->tunnel.ip_tos = key->ipv4_tos;
             }
             if (key->ipv4_ttl) {
-                sflow_actions->tunnel.ip_tos = key->ipv4_ttl;
+                sflow_actions->tunnel.ip_ttl = key->ipv4_ttl;
             }
         }
         break;
