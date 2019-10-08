@@ -165,7 +165,8 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
  */
 static inline void
 send_backtrace_to_monitor(void) {
-    int dep;
+    /* volatile added to prevent a "clobbered" error on ppc64le with gcc */
+    volatile int dep;
     struct unw_backtrace unw_bt[UNW_MAX_DEPTH];
     unw_cursor_t cursor;
     unw_context_t uc;
