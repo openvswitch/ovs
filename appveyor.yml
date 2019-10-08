@@ -4,6 +4,8 @@ branches:
   - master
 clone_folder: C:\openvswitch
 init:
+- ps: $env:PATH ="C:\Python37;"+$env:PATH
+- ps: New-Item -Type HardLink -Path "C:\Python37\python3.exe" -Value "C:\Python37\python.exe"
 - ps: >-
     mkdir C:\pthreads-win32
 
@@ -15,9 +17,9 @@ init:
 
     Invoke-WebRequest $source -OutFile $destination
 
-    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2n.exe"
+    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2t.exe"
 
-    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2n.exe"
+    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2t.exe"
 
     Invoke-WebRequest $source -OutFile $destination
 
@@ -27,7 +29,7 @@ init:
 
     cd C:\ovs-build-downloads
 
-    .\Win32OpenSSL-1_0_2n.exe /silent /verysilent /sp- /suppressmsgboxes
+    .\Win32OpenSSL-1_0_2t.exe /silent /verysilent /sp- /suppressmsgboxes
 
     Start-Sleep -s 30
 
