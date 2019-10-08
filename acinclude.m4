@@ -723,7 +723,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [\(*nf_ct_timeout_find_get_hook\)], [net],
                         [OVS_DEFINE([HAVE_NF_CT_TIMEOUT_FIND_GET_HOOK_NET])])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
+  OVS_GREP_IFELSE([$KSRC/include/linux/random.h],
+                  [prandom_u32[[\(]]],
+                  [OVS_DEFINE([HAVE_PRANDOM_U32])])
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])
 
   OVS_GREP_IFELSE([$KSRC/include/net/rtnetlink.h], [get_link_net])
