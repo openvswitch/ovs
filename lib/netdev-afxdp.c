@@ -168,6 +168,7 @@ xsk_configure_umem(void *buffer, uint64_t size, int xdpmode)
 
     umem = xzalloc(sizeof *umem);
 
+    memset(&uconfig, 0, sizeof uconfig);
     uconfig.fill_size = PROD_NUM_DESCS;
     uconfig.comp_size = CONS_NUM_DESCS;
     uconfig.frame_size = FRAME_SIZE;
