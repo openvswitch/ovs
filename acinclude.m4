@@ -1211,7 +1211,7 @@ AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
      [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS="-target=x86_64 -target=host_os_specs"],
      [SPARSEFLAGS= CGCCFLAGS=])
 
-   dnl Get the the default defines for vector instructions from compiler to
+   dnl Get the default defines for vector instructions from compiler to
    dnl allow "sparse" correctly check the same code that will be built.
    dnl Required for checking DPDK headers.
    AC_MSG_CHECKING([vector options for cgcc])
