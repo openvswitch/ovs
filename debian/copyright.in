@@ -8,22 +8,70 @@ Upstream Authors (from AUTHORS):
 
 Upstream Copyright Holders:
 
-        Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
-        Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
-        Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
-        and authors listed above.
-        Copyright (c) 2011 Gaetano Catalli
-        Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
-        Copyright (C) 2000 The NetBSD Foundation, Inc.
-        Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
-        Copyright (c) 1982, 1986, 1990, 1993 The Regents of the University of California.
-        Copyright (c) 2008, 2012 Vincent Bernat <bernat@luffy.cx>
-        Copyright (c) 2014 Michael Chapman
-        Copyright (c) 2014 WindRiver, Inc.
-        Copyright (c) 2014 Avaya, Inc.
-        Copyright (c) 2001 Daniel Hartmeier
-        Copyright (c) 2002 - 2008 Henning Brauer
-        Copyright (c) 2012 Gleb Smirnoff <glebius@FreeBSD.org>
+        6WIND S.A.
+        Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
+        Alexey I. Froloff.
+        Amir Vadai <amir@vadai.me>
+        Arm Limited
+        Avaya, Inc.
+        Benjamin Kosnik <bkoz@redhat.com>
+        Cisco Systems, Inc
+        Citrix Systems, Inc.
+        Cloudbase Solutions Srl
+        Cumulus Netowkrs
+        Daniel Baluta <dbaluta@ixiacom.com>
+        Daniel Hartmeier
+        Dan Nicholson <dbn.lists@gmail.com>
+        Dustin J. Mitchell <dustin@zmanda.com>
+        Ed Maste
+        Eelco Chaudron
+        Ericsson AB
+        Free Software Foundation, Inc.,
+        Gaetano Catalli
+        Gary S. Brown.
+        Geoffrey Wossum (gwossum@acm.org)
+        Gleb Smirnoff <glebius@FreeBSD.org>
+        Grant Jenks
+        Henning Brauer
+        Hewlett Packard Enterprise Development LP
+        Horms Solutions Ltd.
+        IBM
+        Ilya Maximets <i.maximets@samsung.com>
+        Javier Fernandez-Sanguino <jfs@debian.org>
+        Jean Tourrilhes - HP-Labs.
+        Jiri Pirko <jiri@resnulli.us>
+        Kmindg <kmindg@gmail.com>
+        Krzesimir Nowak <qdlacz@gmail.com>
+        M3S, Srl - Italy
+        Mark Pilgrim
+        Mellanox Technologies, Ltd.
+        Michael Chapman
+        Moritz Klammler
+        Netronome
+        Nicira, Inc.
+        Open Networking Foundation
+        Paolo Abeni <pabeni@redhat.com>
+        Paul Norman <penorman@mac.com>
+        Red Hat, Inc.
+        Roy Stogner <roystgnr@ices.utexas.edu>
+        Samsung Electronics Co.,Ltd.
+        Scott James Remnant <scott@netsplit.com>
+        Scott Pakin <pakin@uiuc.edu>
+        Siemens AG
+        Sten Spans <sten@blinkenlights.nl>
+        Stephen Finucane <stephen@that.guru>
+        The Board of Trustees of The Leland Stanford Junior University
+        The NetBSD Foundation, Inc.
+        The Regents of the University of California.
+        The University of Waikato
+        USAGI/WIDE Project
+        Vincent Bernat <bernat@luffy.cx>
+        VMware, Inc.
+        WIDE Project.
+        WindRiver, Inc.
+        YAMAMOTO Takashi
+        Zack Weinberg <zackw@panix.com>
+        Zmanda Inc. <http://www.zmanda.com/>
 
 License:
 
