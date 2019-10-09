@@ -1099,6 +1099,9 @@ static void erspan_setup(struct net_device *dev)
 
 	eth_hw_addr_random(dev);
 	ether_setup(dev);
+#ifdef HAVE_NET_DEVICE_MAX_MTU
+	dev->max_mtu = 0;
+#endif
 	dev->netdev_ops = &erspan_netdev_ops;
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
