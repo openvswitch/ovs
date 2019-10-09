@@ -536,19 +536,12 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
     netdev->n_rxq = dev->requested_n_rxq;
     netdev->n_txq = netdev->n_rxq;
 
-    if (dev->requested_xdpmode == XDP_ZEROCOPY) {
-        dev->xdpmode = XDP_ZEROCOPY;
-        VLOG_INFO("AF_XDP device %s in DRV mode.", netdev_get_name(netdev));
-        if (setrlimit(RLIMIT_MEMLOCK, &r)) {
-            VLOG_ERR("ERROR: setrlimit(RLIMIT_MEMLOCK): %s",
-                      ovs_strerror(errno));
-        }
-    } else {
-        dev->xdpmode = XDP_COPY;
-        VLOG_INFO("AF_XDP device %s in SKB mode.", netdev_get_name(netdev));
-        /* TODO: set rlimit back to previous value
-         * when no device is in DRV mode.
-         */
+    dev->xdpmode = dev->requested_xdpmode;
+    VLOG_INFO("%s: Setting XDP mode to %s.", netdev_get_name(netdev),
+              dev->xdpmode == XDP_ZEROCOPY ? "DRV" : "SKB");
+
+    if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+        VLOG_ERR("setrlimit(RLIMIT_MEMLOCK) failed: %s", ovs_strerror(errno));
     }
 
     err = xsk_configure_all(netdev);
