@@ -232,16 +232,6 @@ lib/vconn-active.man:
 lib/vconn-passive.man:
 lib/vlog.man:
 
-utilities/ovs-vlan-bug-workaround.8: \
-	utilities/ovs-vlan-bug-workaround.8.in \
-	lib/common.man \
-	lib/ovs.tmac \
-	utilities/ovs-vlan-bugs.man
-utilities/ovs-vlan-bug-workaround.8.in:
-lib/common.man:
-lib/ovs.tmac:
-utilities/ovs-vlan-bugs.man:
-
 utilities/ovs-vsctl.8: \
 	utilities/ovs-vsctl.8.in \
 	lib/common.man \

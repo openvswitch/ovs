@@ -126,10 +126,6 @@ The remainder are still in roff format can be found below:
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-testcontroller.8.txt>`__
-   * - ovs-vlan-bug-workaround(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-bug-workaround.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-bug-workaround.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-bug-workaround.8.txt>`__
    * - ovs-vlan-test(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-test.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-vlan-test.8.html>`__

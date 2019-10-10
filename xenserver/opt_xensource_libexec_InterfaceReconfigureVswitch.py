@@ -632,12 +632,6 @@ class DatapathVswitch(Datapath):
             else:
                 vlan_bug_workaround = netdev_has_vlan_accel(dev)
 
-            if vlan_bug_workaround:
-                setting = 'on'
-            else:
-                setting = 'off'
-            run_command(['/usr/sbin/ovs-vlan-bug-workaround', dev, setting])
-
         datapath_modify_config(self._vsctl_argv)
         if self._bridge_flows:
             ofports = []

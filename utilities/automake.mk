@@ -76,9 +76,7 @@ MAN_ROOTS += \
 	utilities/ovs-pki.8.in \
 	utilities/ovs-tcpdump.8.in \
 	utilities/ovs-tcpundump.1.in \
-	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-vsctl.8.in
-MAN_FRAGMENTS += utilities/ovs-vlan-bugs.man
 CLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
@@ -104,7 +102,6 @@ CLEANFILES += \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test \
-	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-vsctl.8
 
 man_MANS += \
@@ -121,7 +118,6 @@ man_MANS += \
 	utilities/ovs-pki.8 \
 	utilities/ovs-tcpdump.8 \
 	utilities/ovs-tcpundump.1 \
-	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-vsctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
@@ -142,10 +138,6 @@ utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.la
 
 if LINUX
-sbin_PROGRAMS += utilities/ovs-vlan-bug-workaround
-utilities_ovs_vlan_bug_workaround_SOURCES = utilities/ovs-vlan-bug-workaround.c
-utilities_ovs_vlan_bug_workaround_LDADD = lib/libopenvswitch.la
-
 noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.la
