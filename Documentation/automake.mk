@@ -153,6 +153,13 @@ endif
 
 # rST formatted manpages under Documentation/ref.
 RST_MANPAGES = \
+	ovs-appctl.8.rst \
+	ovs-ctl.8.rst \
+	ovs-l3ping.8.rst \
+	ovs-parse-backtrace.8.rst \
+	ovs-pki.8.rst \
+	ovs-tcpdump.8.rst \
+	ovs-tcpundump.1.rst \
 	ovs-test.8.rst \
 	ovs-vlan-test.8.rst \
 	ovsdb-server.7.rst \

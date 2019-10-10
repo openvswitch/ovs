@@ -114,8 +114,22 @@ html_static_path = ['_static']
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 _man_pages = [
+    ('ovs-appctl.8',
+     u'utility for configuring running Open vSwitch daemons'),
+    ('ovs-ctl.8',
+     u'OVS startup helper script'),
+    ('ovs-l3ping.8',
+     u'check network deployment for L3 tunneling problems'),
+    ('ovs-parse-backtrace.8',
+     u'parses ovs-appctl backtrace output'),
+    ('ovs-pki.8',
+     u'OpenFlow public key infrastructure management utility'),
     ('ovs-sim.1',
      u'Open vSwitch simulator environment'),
+    ('ovs-tcpdump.8',
+     u'Dump traffic from an Open vSwitch port using tcpdump'),
+    ('ovs-tcpundump.1',
+     u'convert "tcpdump -xx" output to hex strings'),
     ('ovs-test.8',
      u'Check Linux drivers for performance, vlan and L3 tunneling problems'),
     ('ovs-vlan-test.8',

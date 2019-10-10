@@ -39,7 +39,14 @@ time:
 .. toctree::
    :maxdepth: 3
 
+   ovs-appctl.8
+   ovs-ctl.8
+   ovs-l3ping.8
+   ovs-pki.8
    ovs-sim.1
+   ovs-parse-backtrace.8
+   ovs-tcpdump.8
+   ovs-tcpundump.1
    ovs-test.8
    ovs-vlan-test.8
    ovsdb-server.7
@@ -54,18 +61,10 @@ The remainder are still in roff format can be found below:
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.txt>`__
-   * - ovs-appctl(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-appctl.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-appctl.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-appctl.8.txt>`__
    * - ovs-bugtool(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.txt>`__
-   * - ovs-ctl(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-ctl.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-ctl.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-ctl.8.txt>`__
    * - ovsdb-client(1)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovsdb-client.1.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovsdb-client.1.html>`__
@@ -90,34 +89,14 @@ The remainder are still in roff format can be found below:
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-fields.7.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-fields.7.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-fields.7.txt>`__
-   * - ovs-l3ping(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-l3ping.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-l3ping.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-l3ping.8.txt>`__
    * - ovs-ofctl(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-ofctl.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-ofctl.8.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-ofctl.8.txt>`__
-   * - ovs-parse-backtrace(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-parse-backtrace.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-parse-backtrace.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-parse-backtrace.8.txt>`__
    * - ovs-pcap(1)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-pcap.1.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-pcap.1.html>`__
      - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-pcap.1.txt>`__
-   * - ovs-pki(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-pki.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-pki.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-pki.8.txt>`__
-   * - ovs-tcpdump(8)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-tcpdump.8.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-tcpdump.8.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-tcpdump.8.txt>`__
-   * - ovs-tcpundump(1)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-tcpundump.1.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-tcpundump.1.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-tcpundump.1.txt>`__
    * - ovs-test(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-test.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-test.8.html>`__

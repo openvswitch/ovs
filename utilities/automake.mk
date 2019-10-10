@@ -63,22 +63,14 @@ EXTRA_DIST += \
         utilities/docker/debian/Dockerfile \
         utilities/docker/debian/build-kernel-modules.sh
 MAN_ROOTS += \
-	utilities/ovs-appctl.8.in \
 	utilities/ovs-testcontroller.8.in \
-	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-dpctl-top.8.in \
 	utilities/ovs-kmod-ctl.8 \
-	utilities/ovs-l3ping.8.in \
 	utilities/ovs-ofctl.8.in \
-	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-pcap.1.in \
-	utilities/ovs-pki.8.in \
-	utilities/ovs-tcpdump.8.in \
-	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-vsctl.8.in
 CLEANFILES += \
-	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
 	utilities/ovs-check-dead-ifs \
 	utilities/ovs-testcontroller.8 \
@@ -87,37 +79,26 @@ CLEANFILES += \
 	utilities/ovs-dpctl-top.8 \
 	utilities/ovs-kmod-ctl \
 	utilities/ovs-l3ping \
-	utilities/ovs-l3ping.8 \
 	utilities/ovs-lib \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-backtrace \
 	utilities/ovs-pcap \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki \
-	utilities/ovs-pki.8 \
 	utilities/ovs-sim \
 	utilities/ovs-tcpdump \
-	utilities/ovs-tcpdump.8 \
 	utilities/ovs-tcpundump \
-	utilities/ovs-tcpundump.1 \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test \
 	utilities/ovs-vsctl.8
 
 man_MANS += \
-	utilities/ovs-appctl.8 \
-	utilities/ovs-ctl.8 \
 	utilities/ovs-testcontroller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top.8 \
 	utilities/ovs-kmod-ctl.8 \
-	utilities/ovs-l3ping.8 \
 	utilities/ovs-ofctl.8 \
-	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-pcap.1 \
-	utilities/ovs-pki.8 \
-	utilities/ovs-tcpdump.8 \
-	utilities/ovs-tcpundump.1 \
 	utilities/ovs-vsctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
