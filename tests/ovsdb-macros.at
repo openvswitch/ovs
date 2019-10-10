@@ -102,6 +102,6 @@ m4_define([OVSDB_CHECK_NEGATIVE_CPY],
 
 OVS_START_SHELL_HELPERS
 ovsdb_client_wait() {
-    ovsdb-client -vconsole:warn -vreconnect:err -vjsonrpc:err -vtimeval:off -vfile -vsyslog:off -vvlog:off --timeout=30 wait "$@"
+    ovsdb-client -vconsole:warn -vreconnect:err -vjsonrpc:err -vtimeval:off -vfile -vsyslog:off -vvlog:off wait "$@"
 }
 OVS_END_SHELL_HELPERS

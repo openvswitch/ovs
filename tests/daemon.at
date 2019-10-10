@@ -97,7 +97,7 @@ check_process_name $child ovsdb-server
 
 # Avoid a race between pidfile creation and notifying the parent,
 # which can easily trigger if ovsdb-server is slow (e.g. due to valgrind).
-OVS_WAIT_UNTIL([ovs-appctl --timeout=10 -t ovsdb-server version])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new child process to get spawned.
