@@ -15,9 +15,10 @@
 # limitations under the License.
 
 # This script is intended to be used on the following kernels.
-#   - 3.10.0 major revision 327 (RHEL 7.2)
-#   - 3.10.0 major revision 693 (RHEL 7.4)
-#   - 3.10.0 major revision 957 (RHEL 7.6)
+#   - 3.10.0 major revision 327  (RHEL 7.2)
+#   - 3.10.0 major revision 693  (RHEL 7.4)
+#   - 3.10.0 major revision 957  (RHEL 7.6)
+#   - 3.10.0 major revision 1062 (RHEL 7.7)
 #   - 4.4.x,  x >= 73           (SLES 12 SP3)
 #   - 4.12.x, x >= 14           (SLES 12 SP4).
 # It is packaged in the openvswitch kmod RPM and run in the post-install
@@ -100,6 +101,11 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
         comp_ver=10
         ver_offset=4
         installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1062" ]; then
+#        echo "rhel77"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
     fi
 elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ]; then
     if [ "$mainline_patch" -ge "73" ]; then
@@ -111,7 +117,7 @@ elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ]; then
 elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
     if [ "$mainline_patch" -ge "14" ]; then
 #        echo "sles12sp4"
-        comp_ver=14
+        comp_ver=1
         ver_offset=2
         installed_ver="$mainline_patch"
     fi
