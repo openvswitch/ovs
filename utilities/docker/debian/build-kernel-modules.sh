@@ -18,8 +18,8 @@ GITHUB_SRC=$3
 
 # Install deps
 linux="linux-image-$KERNEL_VERSION linux-headers-$KERNEL_VERSION"
-build_deps="apt-utils libelf-dev build-essential libssl-dev python \
-python-six wget gdb autoconf libtool git automake bzip2 debhelper \
+build_deps="apt-utils libelf-dev build-essential libssl-dev python3 \
+python3-six wget gdb autoconf libtool git automake bzip2 debhelper \
 dh-autoreconf openssl"
 
 apt-get update
