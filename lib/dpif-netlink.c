@@ -457,6 +457,7 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
     int error;
 
     if (dpif->handlers == NULL) {
+        close_nl_sock(socksp);
         return 0;
     }
 
