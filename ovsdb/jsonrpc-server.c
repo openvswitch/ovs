@@ -80,6 +80,8 @@ static void ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *);
 static void ovsdb_jsonrpc_session_send(struct ovsdb_jsonrpc_session *,
                                        struct jsonrpc_msg *);
+static void ovsdb_jsonrpc_session_set_readonly_all(
+    struct ovsdb_jsonrpc_remote *remote, bool read_only);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
@@ -365,10 +367,13 @@ ovsdb_jsonrpc_server_set_read_only(struct ovsdb_jsonrpc_server *svr,
 {
     if (svr->read_only != read_only) {
         svr->read_only = read_only;
-        ovsdb_jsonrpc_server_reconnect(svr, true,
-                                       xstrdup(read_only
-                                               ? "making server read-only"
-                                               : "making server read/write"));
+
+        struct shash_node *node;
+        SHASH_FOR_EACH (node, &svr->remotes) {
+            struct ovsdb_jsonrpc_remote *remote = node->data;
+
+            ovsdb_jsonrpc_session_set_readonly_all(remote, read_only);
+        }
     }
 }
 
@@ -667,6 +672,17 @@ ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote,
                 ovsdb_jsonrpc_session_close(s);
             }
         }
+    }
+}
+
+static void
+ovsdb_jsonrpc_session_set_readonly_all(struct ovsdb_jsonrpc_remote *remote,
+                                       bool read_only)
+{
+    struct ovsdb_jsonrpc_session *s;
+
+    LIST_FOR_EACH (s, node, &remote->sessions) {
+        s->read_only = read_only;
     }
 }
 
