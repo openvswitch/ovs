@@ -34,6 +34,7 @@ Name                               Email
 Aaron Conole                       aconole@redhat.com
 Aaron Rosen                        arosen@clemson.edu
 Alan Pevec                         alan.pevec@redhat.com
+Alessandro Pilotti                 apilotti@cloudbasesolutions.com
 Alexander Duyck                    alexander.h.duyck@redhat.com
 Alexandru Copot                    alex.mihai.c@gmail.com
 Alexei Starovoitov                 ast@plumgrid.com
