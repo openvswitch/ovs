@@ -1406,7 +1406,7 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 		return -ENOMEM;
 	}
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	if (info->nat) {
 		ret = nf_nat_helper_try_module_get(name, info->family,
 						   key->ip.proto);
@@ -1909,7 +1909,7 @@ void ovs_ct_free_action(const struct nlattr *a)
 static void __ovs_ct_free_action(struct ovs_conntrack_info *ct_info)
 {
 	if (ct_info->helper) {
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 		if (ct_info->nat)
 			nf_nat_helper_put(ct_info->helper);
 #endif
