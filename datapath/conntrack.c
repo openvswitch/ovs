@@ -34,7 +34,16 @@
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 #include <net/ipv6_frag.h>
 
-#ifdef CONFIG_NF_NAT_NEEDED
+/* Upstream commit 4806e975729f ("netfilter: replace NF_NAT_NEEDED with
+ * IS_ENABLED(CONFIG_NF_NAT)") replaces the config checking on NF_NAT_NEEDED
+ * with CONFIG_NF_NAT.  We will replace the checking on NF_NAT_NEEDED for the
+ * newer kernel with the marco in order to keep backward compatiblity.
+ */
+#ifndef HAVE_CONFIG_NF_NAT_NEEDED
+#define CONFIG_NF_NAT_NEEDED  CONFIG_NF_NAT
+#endif
+
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 /* Starting from upstream commit 3bf195ae6037 ("netfilter: nat: merge
  * nf_nat_ipv4,6 into nat core") in kernel 5.1.  nf_nat_ipv4,6 are merged
  * into nf_nat.  In order to keep backward compatibility, we keep the config
@@ -100,7 +109,7 @@ struct ovs_conntrack_info {
 	struct md_labels labels;
 	char timeout[CTNL_TIMEOUT_NAME_MAX];
 	struct nf_ct_timeout *nf_ct_timeout;
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	struct nf_nat_range2 range;  /* Only present for SRC NAT and DST NAT. */
 #endif
 };
@@ -786,7 +795,7 @@ static bool skb_nfct_cached(struct net *net,
 	return ct_executed;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 /* Modelled after nf_nat_ipv[46]_fn().
  * range is only used for new, uninitialized NAT state.
  * Returns either NF_ACCEPT or NF_DROP.
@@ -1405,7 +1414,7 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 	return 0;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 static int parse_nat(const struct nlattr *attr,
 		     struct ovs_conntrack_info *info, bool log)
 {
@@ -1547,7 +1556,7 @@ static const struct ovs_ct_len_tbl ovs_ct_attr_lens[OVS_CT_ATTR_MAX + 1] = {
 				    .maxlen = sizeof(struct md_labels) },
 	[OVS_CT_ATTR_HELPER]	= { .minlen = 1,
 				    .maxlen = NF_CT_HELPER_NAME_LEN },
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	/* NAT length is checked when parsing the nested attributes. */
 	[OVS_CT_ATTR_NAT]	= { .minlen = 0, .maxlen = INT_MAX },
 #endif
@@ -1627,7 +1636,7 @@ static int parse_ct(const struct nlattr *attr, struct ovs_conntrack_info *info,
 				return -EINVAL;
 			}
 			break;
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 		case OVS_CT_ATTR_NAT: {
 			int err = parse_nat(a, info, log);
 
@@ -1761,7 +1770,7 @@ err_free_ct:
 	return err;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 static bool ovs_ct_nat_to_attr(const struct ovs_conntrack_info *info,
 			       struct sk_buff *skb)
 {
@@ -1871,7 +1880,7 @@ int ovs_ct_action_to_attr(const struct ovs_conntrack_info *ct_info,
 			return -EMSGSIZE;
 	}
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	if (ct_info->nat && !ovs_ct_nat_to_attr(ct_info, skb))
 		return -EMSGSIZE;
 #endif
