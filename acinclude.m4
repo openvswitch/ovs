@@ -697,6 +697,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [nf_ct_set])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
                   [nf_ct_is_untracked])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [nf_ct_invert_tuplepr])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
                   [nf_ct_zone_init])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_l3proto.h],

@@ -113,4 +113,18 @@ rpl_nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
 #define nf_conntrack_in rpl_nf_conntrack_in
 #endif /* HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE */
 
+#ifdef HAVE_NF_CT_INVERT_TUPLEPR
+static inline bool rpl_nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
+	const struct nf_conntrack_tuple *orig)
+{
+	return nf_ct_invert_tuplepr(inverse, orig);
+}
+#else
+static inline bool rpl_nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
+	const struct nf_conntrack_tuple *orig)
+{
+	return nf_ct_invert_tuple(inverse, orig);
+}
+#endif /* HAVE_NF_CT_INVERT_TUPLEPR */
+
 #endif /* _NF_CONNTRACK_CORE_WRAPPER_H */
