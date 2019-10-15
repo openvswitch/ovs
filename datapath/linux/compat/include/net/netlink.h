@@ -165,4 +165,13 @@ static inline int rpl_nla_parse(struct nlattr **tb, int maxtype,
 #define nla_parse rpl_nla_parse
 #endif
 
+#ifndef HAVE_NLA_NEST_START_NOFLAG
+static inline struct nlattr *rpl_nla_nest_start_noflag(struct sk_buff *skb,
+						       int attrtype)
+{
+	return nla_nest_start(skb, attrtype);
+}
+#define nla_nest_start_noflag rpl_nla_nest_start_noflag
+#endif
+
 #endif /* net/netlink.h */
