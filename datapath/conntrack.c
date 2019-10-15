@@ -35,10 +35,21 @@
 #include <net/ipv6_frag.h>
 
 #ifdef CONFIG_NF_NAT_NEEDED
+/* Starting from upstream commit 3bf195ae6037 ("netfilter: nat: merge
+ * nf_nat_ipv4,6 into nat core") in kernel 5.1.  nf_nat_ipv4,6 are merged
+ * into nf_nat.  In order to keep backward compatibility, we keep the config
+ * checking as is for the old kernel, and replace them with marco for the
+ * new kernel. */
+#ifdef HAVE_UPSTREAM_NF_NAT
+#include <net/netfilter/nf_nat.h>
+#define CONFIG_NF_NAT_IPV4 CONFIG_NF_NAT
+#define CONFIG_NF_NAT_IPV6 CONFIG_IPV6
+#else
 #include <linux/netfilter/nf_nat.h>
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_l3proto.h>
-#endif
+#endif /* HAVE_UPSTREAM_NF_NAT */
+#endif /* CONFIG_NF_NAT_NEEDED */
 
 #include "datapath.h"
 #include "conntrack.h"
