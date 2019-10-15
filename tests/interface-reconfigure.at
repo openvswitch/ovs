@@ -39,8 +39,7 @@ EOF
             sbin/ip \
             sbin/update-issue \
             sbin/vconfig \
-            usr/sbin/brctl \
-            usr/sbin/ovs-vlan-bug-workaround
+            usr/sbin/brctl
         do
             mkdir -p `dirname $utility`
             cat > $utility <<'EOF'
@@ -716,7 +715,6 @@ Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
 /sbin/ip link set eth2 up mtu 1500
 /sbin/ethtool -K eth2 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth2 on
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth2
     --may-exist add-br xenbr2
@@ -791,7 +789,6 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi3 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
 /sbin/ip link set eth3 up mtu 1500
 /sbin/ethtool -K eth3 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth3 on
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth3
     --may-exist add-br xenbr3
@@ -877,10 +874,8 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
 /sbin/ip link set eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth0 on
 /sbin/ip link set eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
@@ -967,10 +962,8 @@ Applying changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
 /sbin/ip link set eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth0 on
 /sbin/ip link set eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
-/usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1

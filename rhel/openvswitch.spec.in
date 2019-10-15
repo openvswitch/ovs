@@ -99,9 +99,7 @@ rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-test \
     $RPM_BUILD_ROOT/usr/bin/ovs-l3ping \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8 \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8 \
-    $RPM_BUILD_ROOT/usr/sbin/ovs-vlan-bug-workaround \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-vlan-bug-workaround.8
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 

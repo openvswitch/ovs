@@ -424,7 +424,7 @@ Instructions to setup travis-ci for your GitHub repository:
    builds for pushes or pull requests.
 3. In order to avoid forks sending build failures to the upstream mailing list,
    the notification email recipient is encrypted. If you want to receive email
-   notification for build failures, replace the the encrypted string:
+   notification for build failures, replace the encrypted string:
 
    1. Install the travis-ci CLI (Requires ruby >=2.0): gem install travis
    2. In your Open vSwitch repository: travis encrypt mylist@mydomain.org

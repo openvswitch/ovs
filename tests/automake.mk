@@ -282,6 +282,12 @@ check-userspace-valgrind: all $(valgrind_wrappers) $(check_DATA)
 	@echo '----------------------------------------------------------------------'
 	@echo 'Valgrind output can be found in tests/system-userspace-testsuite.dir/*/valgrind.*'
 	@echo '----------------------------------------------------------------------'
+check-afxdp-valgrind: all $(valgrind_wrappers) $(check_DATA)
+	$(SHELL) '$(SYSTEM_AFXDP_TESTSUITE)' -C tests VALGRIND='$(VALGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS) -j1
+	@echo
+	@echo '----------------------------------------------------------------------'
+	@echo 'Valgrind output can be found in tests/system-afxdp-testsuite.dir/*/valgrind.*'
+	@echo '----------------------------------------------------------------------'
 check-helgrind: all $(valgrind_wrappers) $(check_DATA)
 	-$(SHELL) '$(TESTSUITE)' -C tests CHECK_VALGRIND=true VALGRIND='$(HELGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
 

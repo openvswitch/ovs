@@ -102,7 +102,7 @@ log_received_backtrace(int fd) {
             if (backtrace[i].func[0] == 0) {
                 break;
             }
-            VLOG_WARN("0x%016lx <%s+0x%lx>\n",
+            VLOG_WARN("0x%016"PRIxPTR" <%s+0x%"PRIxPTR">\n",
                       backtrace[i].ip,
                       backtrace[i].func,
                       backtrace[i].offset);

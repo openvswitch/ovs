@@ -562,7 +562,9 @@ do_db_has_magic(struct ovs_cmdl_context *ctx, const char *magic)
 
     check_ovsdb_error(ovsdb_log_open(filename, OVSDB_MAGIC"|"RAFT_MAGIC,
                                      OVSDB_LOG_READ_ONLY, -1, &log));
-    if (strcmp(ovsdb_log_get_magic(log), magic)) {
+    int cmp = strcmp(ovsdb_log_get_magic(log), magic);
+    ovsdb_log_close(log);
+    if (cmp) {
         exit(2);
     }
 }
@@ -951,26 +953,30 @@ raft_header_to_standalone_log(const struct raft_header *h,
 {
     if (h->snap_index) {
         if (!h->snap.data || json_array(h->snap.data)->n != 2) {
-        ovs_fatal(0, "Incorrect raft header data array length");
+            ovs_fatal(0, "Incorrect raft header data array length");
         }
 
-        struct json *schema_json = json_array(h->snap.data)->elems[0];
+        struct json_array *pa = json_array(h->snap.data);
+        struct json *schema_json = pa->elems[0];
+        struct ovsdb_error *error = NULL;
+
         if (schema_json->type != JSON_NULL) {
             struct ovsdb_schema *schema;
             check_ovsdb_error(ovsdb_schema_from_json(schema_json, &schema));
             ovsdb_schema_destroy(schema);
-            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
-                                                       schema_json));
+            error = ovsdb_log_write(db_log_data, schema_json);
         }
 
-        struct json *data_json = json_array(h->snap.data)->elems[1];
-        if (!data_json || data_json->type != JSON_OBJECT) {
-            ovs_fatal(0, "Invalid raft header data");
+        if (!error) {
+            struct json *data_json = pa->elems[1];
+            if (!data_json || data_json->type != JSON_OBJECT) {
+                ovs_fatal(0, "Invalid raft header data");
+            }
+            if (data_json->type != JSON_NULL) {
+                error = ovsdb_log_write(db_log_data, data_json);
+            }
         }
-        if (data_json->type != JSON_NULL) {
-            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
-                                                       data_json));
-        }
+        check_ovsdb_error(error);
     }
 }
 
@@ -982,14 +988,14 @@ raft_record_to_standalone_log(const struct raft_record *r,
         if (!r->entry.data) {
             return;
         }
-        if (json_array(r->entry.data)->n != 2) {
+        struct json_array *pa = json_array(r->entry.data);
+
+        if (pa->n != 2) {
             ovs_fatal(0, "Incorrect raft record array length");
         }
-
-        struct json *data_json = json_array(r->entry.data)->elems[1];
+        struct json *data_json = pa->elems[1];
         if (data_json->type != JSON_NULL) {
-            check_ovsdb_error(ovsdb_log_write_and_free(db_log_data,
-                                                       data_json));
+            check_ovsdb_error(ovsdb_log_write(db_log_data, data_json));
         }
     }
 }
@@ -1584,6 +1590,7 @@ do_convert_to_standalone(struct ovsdb_log *log, struct ovsdb_log *db_log_data)
             raft_record_to_standalone_log(&r, db_log_data);
             raft_record_uninit(&r);
         }
+        json_destroy(json);
     }
 }
 

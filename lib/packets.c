@@ -1557,7 +1557,7 @@ compose_arp__(struct dp_packet *b)
 
 /* This function expects packet with ethernet header with correct
  * l3 pointer set. */
-static void *
+void *
 compose_ipv6(struct dp_packet *packet, uint8_t proto,
              const struct in6_addr *src, const struct in6_addr *dst,
              uint8_t key_tc, ovs_be32 key_fl, uint8_t key_hl, int size)

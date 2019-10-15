@@ -14,3 +14,9 @@ cd ..
 
 pip install --disable-pip-version-check --user six flake8 hacking
 pip install --user --upgrade docutils
+
+if [ "$M32" ]; then
+    # 32-bit and 64-bit libunwind can not be installed at the same time.
+    # This will remove the 64-bit libunwind and install 32-bit version.
+    sudo apt-get install -y libunwind-dev:i386
+fi

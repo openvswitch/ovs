@@ -2061,6 +2061,7 @@ do_backup(struct jsonrpc *rpc, const char *database,
             char uuid_s[UUID_LEN + 1];
             snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(&atom.uuid));
             json_object_put(output_rows, uuid_s, json_clone(row));
+            json_destroy(uuid_json);
         }
         json_object_put(output_txn, table_name, output_rows);
     }

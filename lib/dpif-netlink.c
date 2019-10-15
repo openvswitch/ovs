@@ -249,11 +249,11 @@ static int dpif_netlink_port_query__(const struct dpif_netlink *dpif,
                                      struct dpif_port *dpif_port);
 
 static int
-create_nl_sock(struct dpif_netlink *dpif OVS_UNUSED, struct nl_sock **socksp)
+create_nl_sock(struct dpif_netlink *dpif OVS_UNUSED, struct nl_sock **sockp)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
 #ifndef _WIN32
-    return nl_sock_create(NETLINK_GENERIC, socksp);
+    return nl_sock_create(NETLINK_GENERIC, sockp);
 #else
     /* Pick netlink sockets to use in a round-robin fashion from each
      * handler's pool of sockets. */
@@ -263,13 +263,13 @@ create_nl_sock(struct dpif_netlink *dpif OVS_UNUSED, struct nl_sock **socksp)
 
     /* A pool of sockets is allocated when the handler is initialized. */
     if (sock_pool == NULL) {
-        *socksp = NULL;
+        *sockp = NULL;
         return EINVAL;
     }
 
     ovs_assert(index < VPORT_SOCK_POOL_SIZE);
-    *socksp = sock_pool[index].nl_sock;
-    ovs_assert(*socksp);
+    *sockp = sock_pool[index].nl_sock;
+    ovs_assert(*sockp);
     index = (index == VPORT_SOCK_POOL_SIZE - 1) ? 0 : index + 1;
     handler->last_used_pool_idx = index;
     return 0;
@@ -277,10 +277,10 @@ create_nl_sock(struct dpif_netlink *dpif OVS_UNUSED, struct nl_sock **socksp)
 }
 
 static void
-close_nl_sock(struct nl_sock *socksp)
+close_nl_sock(struct nl_sock *sock)
 {
 #ifndef _WIN32
-    nl_sock_destroy(socksp);
+    nl_sock_destroy(sock);
 #endif
 }
 
@@ -450,7 +450,7 @@ vport_get_pid(struct dpif_netlink *dpif, uint32_t port_idx,
 
 static int
 vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
-                  struct nl_sock *socksp)
+                  struct nl_sock *sock)
 {
     struct epoll_event event;
     uint32_t port_idx = odp_to_u32(port_no);
@@ -458,6 +458,7 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
     int error;
 
     if (dpif->handlers == NULL) {
+        close_nl_sock(sock);
         return 0;
     }
 
@@ -498,14 +499,14 @@ vport_add_channel(struct dpif_netlink *dpif, odp_port_t port_no,
         struct dpif_handler *handler = &dpif->handlers[i];
 
 #ifndef _WIN32
-        if (epoll_ctl(handler->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(socksp),
+        if (epoll_ctl(handler->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(sock),
                       &event) < 0) {
             error = errno;
             goto error;
         }
 #endif
     }
-    dpif->channels[port_idx].sock = socksp;
+    dpif->channels[port_idx].sock = sock;
     dpif->channels[port_idx].last_poll = LLONG_MIN;
 
     return 0;
@@ -514,7 +515,7 @@ error:
 #ifndef _WIN32
     while (i--) {
         epoll_ctl(dpif->handlers[i].epoll_fd, EPOLL_CTL_DEL,
-                  nl_sock_fd(socksp), NULL);
+                  nl_sock_fd(sock), NULL);
     }
 #endif
     dpif->channels[port_idx].sock = NULL;
@@ -749,12 +750,12 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
 {
     struct dpif_netlink_vport request, reply;
     struct ofpbuf *buf;
-    struct nl_sock *socksp = NULL;
+    struct nl_sock *sock = NULL;
     uint32_t upcall_pids = 0;
     int error = 0;
 
     if (dpif->handlers) {
-        error = create_nl_sock(dpif, &socksp);
+        error = create_nl_sock(dpif, &sock);
         if (error) {
             return error;
         }
@@ -767,8 +768,8 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     request.name = name;
 
     request.port_no = *port_nop;
-    if (socksp) {
-        upcall_pids = nl_sock_pid(socksp);
+    if (sock) {
+        upcall_pids = nl_sock_pid(sock);
     }
     request.n_upcall_pids = 1;
     request.upcall_pids = &upcall_pids;
@@ -787,11 +788,11 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
                       dpif_name(&dpif->dpif), *port_nop);
         }
 
-        close_nl_sock(socksp);
+        close_nl_sock(sock);
         goto exit;
     }
 
-    error = vport_add_channel(dpif, *port_nop, socksp);
+    error = vport_add_channel(dpif, *port_nop, sock);
     if (error) {
         VLOG_INFO("%s: could not add channel for port %s",
                     dpif_name(&dpif->dpif), name);
@@ -802,7 +803,7 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
         request.dp_ifindex = dpif->dp_ifindex;
         request.port_no = *port_nop;
         dpif_netlink_vport_transact(&request, NULL, NULL);
-        close_nl_sock(socksp);
+        close_nl_sock(sock);
         goto exit;
     }
 
@@ -2315,22 +2316,22 @@ dpif_netlink_refresh_channels(struct dpif_netlink *dpif, uint32_t n_handlers)
 
         if (port_no >= dpif->uc_array_size
             || !vport_get_pid(dpif, port_no, &upcall_pid)) {
-            struct nl_sock *socksp;
-            error = create_nl_sock(dpif, &socksp);
+            struct nl_sock *sock;
+            error = create_nl_sock(dpif, &sock);
 
             if (error) {
                 goto error;
             }
 
-            error = vport_add_channel(dpif, vport.port_no, socksp);
+            error = vport_add_channel(dpif, vport.port_no, sock);
             if (error) {
                 VLOG_INFO("%s: could not add channels for port %s",
                           dpif_name(&dpif->dpif), vport.name);
-                nl_sock_destroy(socksp);
+                nl_sock_destroy(sock);
                 retval = error;
                 goto error;
             }
-            upcall_pid = nl_sock_pid(socksp);
+            upcall_pid = nl_sock_pid(sock);
         }
 
         /* Configure the vport to deliver misses to 'sock'. */
