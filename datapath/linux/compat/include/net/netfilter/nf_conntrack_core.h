@@ -7,11 +7,10 @@
 
 #include <net/netfilter/nf_conntrack_zones.h>
 
-#define nf_ct_tmpl_alloc rpl_nf_ct_tmpl_alloc
 /* Released via destroy_conntrack() */
 static inline struct nf_conn *
-nf_ct_tmpl_alloc(struct net *net, const struct nf_conntrack_zone *zone,
-		 gfp_t flags)
+rpl_nf_ct_tmpl_alloc(struct net *net, const struct nf_conntrack_zone *zone,
+		     gfp_t flags)
 {
 	struct nf_conn *tmpl;
 
@@ -32,6 +31,7 @@ out_free:
 	kfree(tmpl);
 	return NULL;
 }
+#define nf_ct_tmpl_alloc rpl_nf_ct_tmpl_alloc
 
 static void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
 {
