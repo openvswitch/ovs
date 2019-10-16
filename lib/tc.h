@@ -197,6 +197,8 @@ enum tc_offloaded_state {
     TC_OFFLOADED_STATE_NOT_IN_HW,
 };
 
+#define TCA_ACT_MAX_NUM 16
+
 struct tc_flower {
     uint32_t handle;
     uint32_t prio;
@@ -205,7 +207,7 @@ struct tc_flower {
     struct tc_flower_key mask;
 
     int action_count;
-    struct tc_action actions[TCA_ACT_MAX_PRIO];
+    struct tc_action actions[TCA_ACT_MAX_NUM];
 
     struct ovs_flow_stats stats;
     uint64_t lastused;

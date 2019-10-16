@@ -1362,7 +1362,7 @@ static int
 nl_parse_flower_actions(struct nlattr **attrs, struct tc_flower *flower)
 {
     const struct nlattr *actions = attrs[TCA_FLOWER_ACT];
-    static struct nl_policy actions_orders_policy[TCA_ACT_MAX_PRIO + 1] = {};
+    static struct nl_policy actions_orders_policy[TCA_ACT_MAX_NUM + 1] = {};
     struct nlattr *actions_orders[ARRAY_SIZE(actions_orders_policy)];
     const int max_size = ARRAY_SIZE(actions_orders_policy);
 
@@ -1381,8 +1381,8 @@ nl_parse_flower_actions(struct nlattr **attrs, struct tc_flower *flower)
         if (actions_orders[i]) {
             int err;
 
-            if (flower->action_count >= TCA_ACT_MAX_PRIO) {
-                VLOG_DBG_RL(&error_rl, "Can only support %d actions", flower->action_count);
+            if (flower->action_count >= TCA_ACT_MAX_NUM) {
+                VLOG_DBG_RL(&error_rl, "Can only support %d actions", TCA_ACT_MAX_NUM);
                 return EOPNOTSUPP;
             }
             err = nl_parse_single_action(actions_orders[i], flower);

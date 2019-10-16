@@ -1303,8 +1303,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     }
 
     NL_ATTR_FOR_EACH(nla, left, actions, actions_len) {
-        if (flower.action_count >= TCA_ACT_MAX_PRIO) {
-            VLOG_DBG_RL(&rl, "Can only support %d actions", flower.action_count);
+        if (flower.action_count >= TCA_ACT_MAX_NUM) {
+            VLOG_DBG_RL(&rl, "Can only support %d actions", TCA_ACT_MAX_NUM);
             return EOPNOTSUPP;
         }
         action = &flower.actions[flower.action_count];
