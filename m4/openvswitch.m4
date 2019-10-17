@@ -640,7 +640,9 @@ AC_DEFUN([OVS_CHECK_UNBOUND],
 
 dnl Checks for libunwind.
 AC_DEFUN([OVS_CHECK_UNWIND],
-  [AC_CHECK_LIB(unwind, unw_backtrace, [HAVE_UNWIND=yes], [HAVE_UNWIND=no])
+  [AC_CHECK_LIB([unwind], [unw_backtrace],
+   [AC_CHECK_HEADERS([libunwind.h], [HAVE_UNWIND=yes], [HAVE_UNWIND=no])],
+   [HAVE_UNWIND=no])
    if test "$HAVE_UNWIND" = yes; then
      AC_DEFINE([HAVE_UNWIND], [1], [Define to 1 if unwind is detected.])
      LIBS="$LIBS -lunwind"
