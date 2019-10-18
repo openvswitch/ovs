@@ -9,17 +9,6 @@
 #include "classifier-private.h"
 #include "util.h"
 
-static void
-shuffle_u32s(uint32_t *p, size_t n)
-{
-    for (; n > 1; n--, p++) {
-        uint32_t *q = &p[random_range(n)];
-        uint32_t tmp = *p;
-        *p = *q;
-        *q = tmp;
-    }
-}
-
 /* Returns a copy of 'src'.  The caller must eventually free the returned
  * miniflow with free(). */
 static struct miniflow *
@@ -59,118 +48,7 @@ miniflow_hash__(const struct miniflow *flow, uint32_t basis)
     return hash_finish(hash, n_values);
 }
 
-static uint32_t
-random_value(void)
-{
-    static const uint32_t values_[] =
-        { 0xffffffff, 0xaaaaaaaa, 0x55555555, 0x80000000,
-          0x00000001, 0xface0000, 0x00d00d1e, 0xdeadbeef };
-
-    return values_[random_range(ARRAY_SIZE(values_))];
-}
-
-static bool
-choose(unsigned int n, unsigned int *idxp)
-{
-    if (*idxp < n) {
-        return true;
-    } else {
-        *idxp -= n;
-        return false;
-    }
-}
-
 #define FLOW_U32S (FLOW_U64S * 2)
-
-static bool
-init_consecutive_values(int n_consecutive, struct flow *flow,
-                        unsigned int *idxp)
-{
-    uint32_t *flow_u32 = (uint32_t *) flow;
-
-    if (choose(FLOW_U32S - n_consecutive + 1, idxp)) {
-        int i;
-
-        for (i = 0; i < n_consecutive; i++) {
-            flow_u32[i + *idxp] = random_value();
-        }
-        return true;
-    } else {
-        return false;
-    }
-}
-
-static bool
-next_random_flow(struct flow *flow, unsigned int idx)
-{
-    uint32_t *flow_u32 = (uint32_t *) flow;
-
-    memset(flow, 0, sizeof *flow);
-
-    /* Empty flow. */
-    if (choose(1, &idx)) {
-        return true;
-    }
-
-    /* All flows with a small number of consecutive nonzero values. */
-    for (int i = 1; i <= 4; i++) {
-        if (init_consecutive_values(i, flow, &idx)) {
-            return true;
-        }
-    }
-
-    /* All flows with a large number of consecutive nonzero values. */
-    for (int i = FLOW_U32S - 4; i <= FLOW_U32S; i++) {
-        if (init_consecutive_values(i, flow, &idx)) {
-            return true;
-        }
-    }
-
-    /* All flows with exactly two nonconsecutive nonzero values. */
-    if (choose((FLOW_U32S - 1) * (FLOW_U32S - 2) / 2, &idx)) {
-        int ofs1;
-
-        for (ofs1 = 0; ofs1 < FLOW_U32S - 2; ofs1++) {
-            int ofs2;
-
-            for (ofs2 = ofs1 + 2; ofs2 < FLOW_U32S; ofs2++) {
-                if (choose(1, &idx)) {
-                    flow_u32[ofs1] = random_value();
-                    flow_u32[ofs2] = random_value();
-                    return true;
-                }
-            }
-        }
-        OVS_NOT_REACHED();
-    }
-
-    /* 16 randomly chosen flows with N >= 3 nonzero values. */
-    if (choose(16 * (FLOW_U32S - 4), &idx)) {
-        int n = idx / 16 + 3;
-
-        for (int i = 0; i < n; i++) {
-            flow_u32[i] = random_value();
-        }
-        shuffle_u32s(flow_u32, FLOW_U32S);
-
-        return true;
-    }
-
-    return false;
-}
-
-static void
-any_random_flow(struct flow *flow)
-{
-    static unsigned int max;
-    if (!max) {
-        while (next_random_flow(flow, max)) {
-            max++;
-        }
-    }
-
-    next_random_flow(flow, random_range(max));
-}
 
 static void
 toggle_masked_flow_bits(struct flow *flow, const struct flow_wildcards *mask)
@@ -251,12 +129,15 @@ test_miniflow(struct flow *flow)
 
     /* Check that masked matches work as expected for identical flows and
          * miniflows. */
-    do {
-            next_random_flow(&mask.masks, 1);
-    } while (flow_wildcards_is_catchall(&mask));
+    flow_wildcards_init_for_packet(&mask, flow);
+    /* Ensure that mask is not catchall just in case
+     * flow_wildcards_init_for_packet returns a catchall mask
+     */
+    uint64_t *mask_u64 = (uint64_t *) &mask.masks;
+    mask_u64[0] = 1;
+    ovs_assert(!flow_wildcards_is_catchall(&mask));
     minimask = minimask_create(&mask);
-    ovs_assert(minimask_is_catchall(minimask)
-           == flow_wildcards_is_catchall(&mask));
+    ovs_assert(!minimask_is_catchall(minimask));
     ovs_assert(miniflow_equal_in_minimask(miniflow, miniflow2, minimask));
     ovs_assert(miniflow_equal_flow_in_minimask(miniflow, &flow2, minimask));
     ovs_assert(miniflow_hash_in_minimask(miniflow, minimask, 0x12345678) ==
@@ -325,7 +206,7 @@ test_minimask_combine(struct flow *flow)
         struct minimask minicombined;
         uint64_t storage[FLOW_U64S];
     } m;
-    struct flow flow2;
+    struct flow flow2 = {0};
 
     mask.masks = *flow;
     minimask = minimask_create(&mask);
@@ -333,7 +214,7 @@ test_minimask_combine(struct flow *flow)
     minimask_combine(&m.minicombined, minimask, minicatchall, m.storage);
     ovs_assert(minimask_is_catchall(&m.minicombined));
 
-    any_random_flow(&flow2);
+    /* Create mask based on zero flow */
     mask2.masks = flow2;
     minimask2 = minimask_create(&mask2);
 
