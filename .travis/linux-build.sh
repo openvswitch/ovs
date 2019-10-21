@@ -38,7 +38,7 @@ function install_kernel()
     wget ${url} || wget ${url} || wget ${url/cdn/www}
 
     tar xvf linux-${version}.tar.xz > /dev/null
-    cd linux-${version}
+    pushd linux-${version}
     make allmodconfig
 
     # Cannot use CONFIG_KCOV: -fsanitize-coverage=trace-pc is not supported by compiler
@@ -60,9 +60,26 @@ function install_kernel()
         make net/bridge/
     fi
 
-    EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
-    echo "Installed kernel source in $(pwd)"
-    cd ..
+    if [ "$AFXDP" ]; then
+        sudo make headers_install INSTALL_HDR_PATH=/usr
+        pushd tools/lib/bpf/
+        # Bulding with gcc because there are some issues in make files
+        # that breaks building libbpf with clang on Travis.
+        CC=gcc sudo make install
+        CC=gcc sudo make install_headers
+        sudo ldconfig
+        popd
+        # The Linux kernel defines __always_inline in stddef.h (283d7573), and
+        # sys/cdefs.h tries to re-define it.  Older libc-dev package in xenial
+        # doesn't have a fix for this issue.  Applying it manually.
+        sudo sed -i '/^# define __always_inline .*/i # undef __always_inline' \
+                    /usr/include/x86_64-linux-gnu/sys/cdefs.h || true
+        EXTRA_OPTS="${EXTRA_OPTS} --enable-afxdp"
+    else
+        EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
+        echo "Installed kernel source in $(pwd)"
+    fi
+    popd
 }
 
 function install_dpdk()
@@ -127,8 +144,9 @@ function build_ovs()
     configure_ovs $OPTS
     make selinux-policy
 
-    # Only build datapath if we are testing kernel w/o running testsuite
-    if [ "${KERNEL}" ]; then
+    # Only build datapath if we are testing kernel w/o running testsuite and
+    # AF_XDP support.
+    if [ "${KERNEL}" ] && ! [ "$AFXDP" ]; then
         pushd datapath
         make -j4
         popd
@@ -161,6 +179,10 @@ elif [ "$M32" ]; then
     export CC="$CC -m32"
 else
     OPTS="--enable-sparse"
+    if [ "$AFXDP" ]; then
+        # netdev-afxdp uses memset for 64M for umem initialization.
+        SPARSE_FLAGS="${SPARSE_FLAGS} -Wno-memcpy-max-count"
+    fi
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${SPARSE_FLAGS}"
 fi
 
