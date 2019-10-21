@@ -3405,7 +3405,11 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
                                  pdu_size);
         memcpy(packet_pdu, pdu, pdu_size);
 
-        ofproto_dpif_send_packet(port, false, &packet);
+        error = ofproto_dpif_send_packet(port, false, &packet);
+        if (error) {
+            VLOG_WARN_RL(&rl, "port %s: cannot transmit LACP PDU (%s).",
+                         port->bundle->name, ovs_strerror(error));
+        }
         dp_packet_uninit(&packet);
     } else {
         static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 10);
