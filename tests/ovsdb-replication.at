@@ -19,6 +19,29 @@ replication_schema () {
     }
 EOF
 }
+replication_schema_v2 () {
+    cat <<'EOF'
+    {"name": "mydb",
+     "tables": {
+       "a": {
+         "columns": {
+           "number": {"type": "integer"},
+           "name": {"type": "string"}},
+         "indexes": [["number"]]},
+       "b": {
+         "columns": {
+           "number": {"type": "integer"},
+           "name": {"type": "string"},
+           "foo" : {"type": "string"}},
+         "indexes": [["number"]]},
+       "c": {
+         "columns": {
+           "number": {"type": "integer"},
+           "name": {"type": "string"}},
+         "indexes": [["number"]]}}
+    }
+EOF
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 
