@@ -2280,24 +2280,24 @@ set_lldp(struct ofport *ofport_,
          const struct smap *cfg)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
     int error = 0;
 
     if (cfg) {
         if (!ofport->lldp) {
-            struct ofproto_dpif *ofproto;
-
-            ofproto = ofproto_dpif_cast(ofport->up.ofproto);
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
             ofport->lldp = lldp_create(ofport->up.netdev, ofport_->mtu, cfg);
         }
 
         if (!lldp_configure(ofport->lldp, cfg)) {
+            lldp_unref(ofport->lldp);
+            ofport->lldp = NULL;
             error = EINVAL;
         }
-    }
-    if (error) {
+    } else if (ofport->lldp) {
         lldp_unref(ofport->lldp);
         ofport->lldp = NULL;
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
 
     ofproto_dpif_monitor_port_update(ofport,
