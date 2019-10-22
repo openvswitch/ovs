@@ -817,6 +817,10 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
          * When may_enable is TRUE, it means LACP is UP and waiting for the
          * main thread to run LACP state machine and enable the slave. */
         verdict = (slave->enabled || slave->may_enable) ? BV_ACCEPT : BV_DROP;
+        if (!slave->enabled && slave->may_enable) {
+            VLOG_DBG_RL(&rl, "bond %s: slave %s: main thread not yet enabled slave",
+                         bond->name, bond->active_slave->name);
+        }
         goto out;
     case LACP_CONFIGURED:
         if (!bond->lacp_fallback_ab) {
