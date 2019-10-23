@@ -176,9 +176,17 @@ in :doc:`general`::
   ovs-vswitchd ...
   ovs-vsctl -- add-br br0 -- set Bridge br0 datapath_type=netdev
 
-Make sure your device driver support AF_XDP, and to use 1 PMD (on core 4)
-on 1 queue (queue 0) device, configure these options: **pmd-cpu-mask,
-pmd-rxq-affinity, and n_rxq**. The **xdpmode** can be "drv" or "skb"::
+Make sure your device driver support AF_XDP, netdev-afxdp supports
+the following additional options (see man ovs-vswitchd.conf.db for
+more details):
+
+ * **xdpmode**: use "drv" for driver mode, or "skb" for skb mode.
+
+ * **use-need-wakeup**: default "true" if libbpf supports it, otherwise false.
+
+For example, to use 1 PMD (on core 4) on 1 queue (queue 0) device,
+configure these options: **pmd-cpu-mask, pmd-rxq-affinity, and n_rxq**.
+The **xdpmode** can be "drv" or "skb"::
 
   ethtool -L enp2s0 combined 1
   ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x10

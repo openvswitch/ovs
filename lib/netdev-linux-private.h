@@ -102,6 +102,8 @@ struct netdev_linux {
     int requested_n_rxq;
     int xdpmode;                /* AF_XDP running mode: driver or skb. */
     int requested_xdpmode;
+    bool use_need_wakeup;
+    bool requested_need_wakeup;
     struct ovs_spin *tx_locks;  /* spin lock array for TX queues. */
 #endif
 };

@@ -276,6 +276,11 @@ AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
               [Define to 1 if AF_XDP support is available and enabled.])
     LIBBPF_LDADD=" -lbpf -lelf"
     AC_SUBST([LIBBPF_LDADD])
+
+    AC_CHECK_DECL([xsk_ring_prod__needs_wakeup], [
+      AC_DEFINE([HAVE_XDP_NEED_WAKEUP], [1],
+        [XDP need wakeup support detected in xsk.h.])
+    ], [], [[#include <bpf/xsk.h>]])
   fi
   AM_CONDITIONAL([HAVE_AF_XDP], test "$AF_XDP_ENABLE" = true)
 ])

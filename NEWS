@@ -5,6 +5,9 @@ Post-v2.12.0
        separate project. You can find it at
        https://github.com/ovn-org/ovn.git
    - Userspace datapath:
+     * New option 'use-need-wakeup' for netdev-afxdp to control enabling
+       of corresponding 'need_wakeup' flag in AF_XDP rings.  Enabled by default
+       if supported by libbpf.
      * Add option to enable, disable and query TCP sequence checking in
        conntrack.
 
