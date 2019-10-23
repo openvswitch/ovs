@@ -1009,15 +1009,14 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     dst->map = mf.map;
 }
 
-ovs_be16
-parse_dl_type(const struct eth_header *data_, size_t size)
+static ovs_be16
+parse_dl_type(const void **datap, size_t *sizep)
 {
-    const void *data = data_;
     union flow_vlan_hdr vlans[FLOW_MAX_VLAN_HEADERS];
 
-    parse_vlan(&data, &size, vlans);
+    parse_vlan(datap, sizep, vlans);
 
-    return parse_ethertype(&data, &size);
+    return parse_ethertype(datap, sizep);
 }
 
 uint16_t
@@ -1035,8 +1034,7 @@ parse_tcp_flags(struct dp_packet *packet)
 
     dp_packet_reset_offsets(packet);
 
-    data_pull(&data, &size, ETH_ADDR_LEN * 2);
-    dl_type = parse_ethertype(&data, &size);
+    dl_type = parse_dl_type(&data, &size);
     if (OVS_UNLIKELY(eth_type_mpls(dl_type))) {
         packet->l2_5_ofs = (char *)data - frame;
     }
