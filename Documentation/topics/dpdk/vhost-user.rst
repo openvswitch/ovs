@@ -25,9 +25,9 @@
 DPDK vHost User Ports
 =====================
 
-The DPDK datapath provides DPDK-backed vHost user ports as a primary way to
-interact with guests. For more information on vHost User, refer to the `QEMU
-documentation`_ on same.
+OVS userspace switching supports supports vHost user ports as a
+primary way to interact with guests.  For more information on vHost
+User, refer to the `QEMU documentation`_ on same.
 
 .. important::
 

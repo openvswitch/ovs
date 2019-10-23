@@ -79,9 +79,8 @@ only allow privileged users, such as the superuser, to use it.
 unavailable or unsuccessful.
 .
 .SS "DPDK Options"
-For details on initializing the \fBovs\-vswitchd\fR DPDK datapath,
-refer to the documentation or \fBovs\-vswitchd.conf.db\fR(5) for
-details.
+For details on initializing \fBovs\-vswitchd\fR to use DPDK ports,
+refer to the documentation or \fBovs\-vswitchd.conf.db\fR(5).
 .SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \

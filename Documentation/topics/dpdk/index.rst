@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-=================
-The DPDK Datapath
-=================
+============
+DPDK Support
+============
 
 .. NOTE(stephenfin): Part of this doc is included in 'howto/dpdk'. Update that
 .. if you modify this document

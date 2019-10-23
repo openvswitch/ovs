@@ -25,14 +25,15 @@
 Using Open vSwitch with DPDK
 ============================
 
-This document describes how to use Open vSwitch with DPDK datapath.
+This document describes how to use Open vSwitch with DPDK.
 
 .. important::
 
-   Using the DPDK datapath requires building OVS with DPDK support. The
-   mapping of OVS version to DPDK can vary between releases. For version
-   mapping information refer to :doc:`releases FAQ </faq/releases>`. For
-   build instructions refer to :doc:`/intro/install/dpdk`.
+   Using DPDK with OVS requires configuring OVS at build time to use
+   the DPDK library.  The version of DPDK that OVS supports varies
+   from one OVS release to another, as described in the :doc:`releases
+   FAQ </faq/releases>`. For build instructions refer to
+   :doc:`/intro/install/dpdk`.
 
 Ports and Bridges
 -----------------

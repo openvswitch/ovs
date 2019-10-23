@@ -289,7 +289,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
                               [Specify the DPDK build directory])],
               [have_dpdk=true])
 
-  AC_MSG_CHECKING([whether dpdk datapath is enabled])
+  AC_MSG_CHECKING([whether dpdk is enabled])
   if test "$have_dpdk" != true || test "$with_dpdk" = no; then
     AC_MSG_RESULT([no])
     DPDKLIB_FOUND=false

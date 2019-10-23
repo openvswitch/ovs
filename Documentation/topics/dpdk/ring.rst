@@ -32,9 +32,9 @@ DPDK Ring Ports
    :doc:`vhost-user ports <vhost-user>` are a better choice and should be used
    instead.
 
-The DPDK datapath provides DPDK-backed ring ports that are implemented using
-DPDK's ``librte_ring`` library. For more information on this library, refer to
-the `DPDK documentation`_.
+OVS userspace switching supports ring ports implemented using DPDK's
+``librte_ring`` library.  For more information on this library, refer
+to the `DPDK documentation`_.
 
 .. important::
 

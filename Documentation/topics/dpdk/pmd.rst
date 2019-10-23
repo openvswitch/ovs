@@ -26,9 +26,9 @@ PMD Threads
 ===========
 
 Poll Mode Driver (PMD) threads are the threads that do the heavy lifting for
-the DPDK datapath and perform tasks such as continuous polling of input ports
-for packets, classifying packets once received, and executing actions on the
-packets once they are classified.
+userspace switching.  They perform tasks such as continuous polling of
+input ports for packets, classifying packets once received, and executing
+actions on the packets once they are classified.
 
 PMD threads utilize Receive (Rx) and Transmit (Tx) queues, commonly known as
 *rxq*\s and *txq*\s. While Tx queue configuration happens automatically, Rx
