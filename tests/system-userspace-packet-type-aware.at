@@ -252,39 +252,39 @@ AT_CHECK([
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g'
+    ovs-appctl dpif/show | grep -v hit
 ], [0], [dnl
-    br-in1:
-        br-in1 65534/2: (tap)
-        gre12 1020/14: (gre: remote_ip=10.0.0.2)
-        gre12_l3 1021/14: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
-        gre13 1030/14: (gre: remote_ip=10.0.0.3)
-        ovs-n1 10/15: (system)
-    br-in2:
-        br-in2 65534/3: (tap)
-        gre21 2010/14: (gre: packet_type=ptap, remote_ip=20.0.0.1)
-        gre23 2030/14: (gre: packet_type=ptap, remote_ip=20.0.0.3)
-        ovs-n2 20/16: (system)
-    br-in3:
-        br-in3 65534/4: (tap)
-        gre31 3010/14: (gre: remote_ip=30.0.0.1)
-        gre32 3020/14: (gre: remote_ip=30.0.0.2)
-        gre32_l3 3021/14: (gre: packet_type=legacy_l3, remote_ip=30.0.0.2)
-        ovs-n3 30/17: (system)
-    br-p1:
-        br-p1 65534/5: (tap)
-        p1-0 2/8: (system)
-    br-p2:
-        br-p2 65534/6: (tap)
-        p2-0 2/9: (system)
-    br-p3:
-        br-p3 65534/7: (tap)
-        p3-0 2/10: (system)
-    br0:
-        br0 65534/1: (tap)
-        p0-1 10/11: (system)
-        p0-2 20/12: (system)
-        p0-3 30/13: (system)
+  br-in1:
+    br-in1 65534/2: (tap)
+    gre12 1020/14: (gre: remote_ip=10.0.0.2)
+    gre12_l3 1021/14: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
+    gre13 1030/14: (gre: remote_ip=10.0.0.3)
+    ovs-n1 10/15: (system)
+  br-in2:
+    br-in2 65534/3: (tap)
+    gre21 2010/14: (gre: packet_type=ptap, remote_ip=20.0.0.1)
+    gre23 2030/14: (gre: packet_type=ptap, remote_ip=20.0.0.3)
+    ovs-n2 20/16: (system)
+  br-in3:
+    br-in3 65534/4: (tap)
+    gre31 3010/14: (gre: remote_ip=30.0.0.1)
+    gre32 3020/14: (gre: remote_ip=30.0.0.2)
+    gre32_l3 3021/14: (gre: packet_type=legacy_l3, remote_ip=30.0.0.2)
+    ovs-n3 30/17: (system)
+  br-p1:
+    br-p1 65534/5: (tap)
+    p1-0 2/8: (system)
+  br-p2:
+    br-p2 65534/6: (tap)
+    p2-0 2/9: (system)
+  br-p3:
+    br-p3 65534/7: (tap)
+    p3-0 2/10: (system)
+  br0:
+    br0 65534/1: (tap)
+    p0-1 10/11: (system)
+    p0-2 20/12: (system)
+    p0-3 30/13: (system)
 ])
 
 ### Test L3 forwarding flows
