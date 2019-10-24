@@ -3987,7 +3987,6 @@ dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
     recirc_depth = *recirc_depth_get_unsafe();
     if (OVS_UNLIKELY(recirc_depth)) {
         hash = hash_finish(hash, recirc_depth);
-        dp_packet_set_rss_hash(packet, hash);
     }
     return hash;
 }
