@@ -67,27 +67,6 @@ static inline bool rpl_nf_ct_get_tuple(const struct sk_buff *skb,
 #define nf_ct_get_tuple rpl_nf_ct_get_tuple
 #endif /* HAVE_NF_CT_GET_TUPLEPR_TAKES_STRUCT_NET */
 
-/* Commit 08733a0cb7de ("netfilter: handle NF_REPEAT from nf_conntrack_in()")
- * introduced behavioural changes to this function which cannot be detected
- * in the headers. Unconditionally backport to kernels older than the one which
- * contains this commit. */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
-static unsigned int rpl_nf_conntrack_in(struct net *net, u_int8_t pf,
-					unsigned int hooknum,
-					struct sk_buff *skb)
-{
-	int err;
-
-	/* Repeat if requested, see nf_iterate(). */
-	do {
-		err = nf_conntrack_in(net, pf, hooknum, skb);
-	} while (err == NF_REPEAT);
-
-	return err;
-}
-#define nf_conntrack_in rpl_nf_conntrack_in
-#endif /* < 4.10 */
-
 #ifdef HAVE_NF_CONN_TIMER
 
 #ifndef HAVE_NF_CT_DELETE
