@@ -54,6 +54,9 @@ char *ovs_cmdl_parse_all(int argc, char *argv[], const struct option *,
                          struct ovs_cmdl_parsed_option **, size_t *)
     OVS_WARN_UNUSED_RESULT;
 
+char **ovs_cmdl_env_parse_all(int *argcp, char *argv_[],
+                              const char *env_options);
+
 void ovs_cmdl_print_options(const struct option *options);
 void ovs_cmdl_print_commands(const struct ovs_cmdl_command *commands);
 
