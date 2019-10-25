@@ -1434,7 +1434,7 @@ netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
                       struct nlattr *actions OVS_UNUSED,
                       size_t actions_len OVS_UNUSED,
                       const ovs_u128 *ufid, struct offload_info *info,
-                      struct dpif_flow_stats *stats OVS_UNUSED)
+                      struct dpif_flow_stats *stats)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     struct offloaded_flow *off_flow;
@@ -1476,12 +1476,15 @@ netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
         ds_destroy(&ds);
     }
 
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     return 0;
 }
 
 static int
 netdev_dummy_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
-                      struct dpif_flow_stats *stats OVS_UNUSED)
+                      struct dpif_flow_stats *stats)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     struct offloaded_flow *off_flow;
@@ -1521,6 +1524,9 @@ exit:
         ds_destroy(&ds);
     }
 
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     return error ? -1 : 0;
 }
 
