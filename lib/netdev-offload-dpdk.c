@@ -710,7 +710,7 @@ static int
 netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
                              struct nlattr *actions, size_t actions_len,
                              const ovs_u128 *ufid, struct offload_info *info,
-                             struct dpif_flow_stats *stats OVS_UNUSED)
+                             struct dpif_flow_stats *stats)
 {
     struct rte_flow *rte_flow;
     int ret;
@@ -732,13 +732,16 @@ netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
         return ret;
     }
 
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     return netdev_offload_dpdk_add_flow(netdev, match, actions,
                                         actions_len, ufid, info);
 }
 
 static int
 netdev_offload_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
-                             struct dpif_flow_stats *stats OVS_UNUSED)
+                             struct dpif_flow_stats *stats)
 {
     struct rte_flow *rte_flow = ufid_to_rte_flow_find(ufid);
 
@@ -746,6 +749,9 @@ netdev_offload_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
         return -1;
     }
 
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
+    }
     return netdev_offload_dpdk_destroy_flow(netdev, ufid, rte_flow);
 }
 
