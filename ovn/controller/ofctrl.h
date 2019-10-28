@@ -70,6 +70,12 @@ void ofctrl_add_flow(struct ovn_desired_flow_table *, uint8_t table_id,
                      const struct match *, const struct ofpbuf *ofpacts,
                      const struct uuid *);
 
+void ofctrl_add_or_append_flow(struct ovn_desired_flow_table *desired_flows,
+                               uint8_t table_id, uint16_t priority,
+                               uint64_t cookie, const struct match *match,
+                               const struct ofpbuf *actions,
+                               const struct uuid *sb_uuid);
+
 void ofctrl_remove_flows(struct ovn_desired_flow_table *, const struct uuid *);
 
 void ovn_desired_flow_table_init(struct ovn_desired_flow_table *);

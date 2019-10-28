@@ -740,8 +740,9 @@ consider_logical_flow(
                 dst->clause = src->clause;
                 dst->n_clauses = src->n_clauses;
             }
-            ofctrl_add_flow(flow_table, ptable, lflow->priority, 0, &m->match,
-                            &conj, &lflow->header_.uuid);
+
+            ofctrl_add_or_append_flow(flow_table, ptable, lflow->priority, 0,
+                                      &m->match, &conj, &lflow->header_.uuid);
             ofpbuf_uninit(&conj);
         }
     }

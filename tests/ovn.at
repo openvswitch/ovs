@@ -12255,7 +12255,7 @@ ovn-nbctl create Address_Set name=set1 \
 addresses=\"10.0.0.4\",\"10.0.0.5\",\"10.0.0.6\"
 ovn-nbctl create Address_Set name=set2 \
 addresses=\"10.0.0.7\",\"10.0.0.8\",\"10.0.0.9\"
-ovn-nbctl acl-add ls1 to-lport 1002 \
+ovn-nbctl acl-add ls1 to-lport 1001 \
 'ip4 && ip4.src == $set1 && ip4.dst == $set1' allow
 ovn-nbctl acl-add ls1 to-lport 1001 \
 'ip4 && ip4.src == $set1 && ip4.dst == $set2' drop
@@ -12304,7 +12304,7 @@ cat 2.expected > expout
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
 AT_CHECK([cat 2.packets], [0], [expout])
 
-# There should be total of 12 flows present with conjunction action and 2 flows
+# There should be total of 9 flows present with conjunction action and 2 flows
 # with conj match. Eg.
 # table=44, priority=2002,conj_id=2,metadata=0x1 actions=resubmit(,45)
 # table=44, priority=2001,conj_id=3,metadata=0x1 actions=drop
@@ -12314,14 +12314,11 @@ AT_CHECK([cat 2.packets], [0], [expout])
 # priority=2001,ip,metadata=0x1,nw_dst=10.0.0.7 actions=conjunction(3,2/2)
 # priority=2001,ip,metadata=0x1,nw_dst=10.0.0.9 actions=conjunction(3,2/2)
 # priority=2001,ip,metadata=0x1,nw_dst=10.0.0.8 actions=conjunction(3,2/2)
-# priority=2002,ip,metadata=0x1,nw_src=10.0.0.6 actions=conjunction(2,1/2)
-# priority=2002,ip,metadata=0x1,nw_src=10.0.0.4 actions=conjunction(2,1/2)
-# priority=2002,ip,metadata=0x1,nw_src=10.0.0.5 actions=conjunction(2,1/2)
-# priority=2001,ip,metadata=0x1,nw_src=10.0.0.6 actions=conjunction(3,1/2)
-# priority=2001,ip,metadata=0x1,nw_src=10.0.0.4 actions=conjunction(3,1/2)
-# priority=2001,ip,metadata=0x1,nw_src=10.0.0.5 actions=conjunction(3,1/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.6 actions=conjunction(2,1/2),conjunction(3,1/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.4 actions=conjunction(2,1/2),conjunction(3,1/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.5 actions=conjunction(2,1/2),conjunction(3,1/2)
 
-OVS_WAIT_UNTIL([test 12 = `as hv1 ovs-ofctl dump-flows br-int | \
+OVS_WAIT_UNTIL([test 9 = `as hv1 ovs-ofctl dump-flows br-int | \
 grep conjunction | wc -l`])
 OVS_WAIT_UNTIL([test 2 = `as hv1 ovs-ofctl dump-flows br-int | \
 grep conj_id | wc -l`])

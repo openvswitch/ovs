@@ -69,6 +69,11 @@ struct ovn_flow {
     uint64_t cookie;
 };
 
+static struct ovn_flow *ovn_flow_alloc(uint8_t table_id, uint16_t priority,
+                                       uint64_t cookie,
+                                       const struct match *match,
+                                       const struct ofpbuf *actions,
+                                       const struct uuid *sb_uuid);
 static uint32_t ovn_flow_match_hash(const struct ovn_flow *);
 static struct ovn_flow *ovn_flow_lookup(struct hmap *flow_table,
                                         const struct ovn_flow *target,
@@ -657,16 +662,8 @@ ofctrl_check_and_add_flow(struct ovn_desired_flow_table *flow_table,
                           const struct uuid *sb_uuid,
                           bool log_duplicate_flow)
 {
-    struct ovn_flow *f = xmalloc(sizeof *f);
-    f->table_id = table_id;
-    f->priority = priority;
-    minimatch_init(&f->match, match);
-    f->ofpacts = xmemdup(actions->data, actions->size);
-    f->ofpacts_len = actions->size;
-    f->sb_uuid = *sb_uuid;
-    f->match_hmap_node.hash = ovn_flow_match_hash(f);
-    f->uuid_hindex_node.hash = uuid_hash(&f->sb_uuid);
-    f->cookie = cookie;
+    struct ovn_flow *f = ovn_flow_alloc(table_id, priority, cookie, match,
+                                        actions, sb_uuid);
 
     ovn_flow_log(f, "ofctrl_add_flow");
 
@@ -721,8 +718,65 @@ ofctrl_add_flow(struct ovn_desired_flow_table *desired_flows,
     ofctrl_check_and_add_flow(desired_flows, table_id, priority, cookie,
                               match, actions, sb_uuid, true);
 }
+
+void
+ofctrl_add_or_append_flow(struct ovn_desired_flow_table *desired_flows,
+                          uint8_t table_id, uint16_t priority, uint64_t cookie,
+                          const struct match *match,
+                          const struct ofpbuf *actions,
+                          const struct uuid *sb_uuid)
+{
+    struct ovn_flow *f = ovn_flow_alloc(table_id, priority, cookie, match,
+                                        actions, sb_uuid);
+
+    ovn_flow_log(f, "ofctrl_add_or_append_flow");
+
+    struct ovn_flow *existing;
+    existing = ovn_flow_lookup(&desired_flows->match_flow_table, f, false);
+    if (existing) {
+        /* There's already a flow with this particular match. Append the
+         * action to that flow rather than adding a new flow
+         */
+        uint64_t compound_stub[64 / 8];
+        struct ofpbuf compound;
+        ofpbuf_use_stub(&compound, compound_stub, sizeof(compound_stub));
+        ofpbuf_put(&compound, existing->ofpacts, existing->ofpacts_len);
+        ofpbuf_put(&compound, f->ofpacts, f->ofpacts_len);
+
+        free(existing->ofpacts);
+        existing->ofpacts = xmemdup(compound.data, compound.size);
+        existing->ofpacts_len = compound.size;
+
+        ofpbuf_uninit(&compound);
+        ovn_flow_destroy(f);
+    } else {
+        hmap_insert(&desired_flows->match_flow_table, &f->match_hmap_node,
+                    f->match_hmap_node.hash);
+        hindex_insert(&desired_flows->uuid_flow_table, &f->uuid_hindex_node,
+                      f->uuid_hindex_node.hash);
+    }
+}
 
 /* ovn_flow. */
+
+static struct ovn_flow *
+ovn_flow_alloc(uint8_t table_id, uint16_t priority, uint64_t cookie,
+               const struct match *match, const struct ofpbuf *actions,
+               const struct uuid *sb_uuid)
+{
+    struct ovn_flow *f = xmalloc(sizeof *f);
+    f->table_id = table_id;
+    f->priority = priority;
+    minimatch_init(&f->match, match);
+    f->ofpacts = xmemdup(actions->data, actions->size);
+    f->ofpacts_len = actions->size;
+    f->sb_uuid = *sb_uuid;
+    f->match_hmap_node.hash = ovn_flow_match_hash(f);
+    f->uuid_hindex_node.hash = uuid_hash(&f->sb_uuid);
+    f->cookie = cookie;
+
+    return f;
+}
 
 /* Returns a hash of the match key in 'f'. */
 static uint32_t
