@@ -396,7 +396,7 @@ fi
 %else
     # Package install, not upgrade
     if [ $1 -eq 1 ]; then
-        /bin/systemctl daemon-reload >dev/null || :
+        /bin/systemctl daemon-reload >/dev/null || :
     fi
 %endif
 
