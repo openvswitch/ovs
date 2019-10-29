@@ -75,6 +75,12 @@ OpenFlow14`` option::
 
     $ ovs-ofctl -O OpenFlow14 dump-ports br0
 
+There are custom statistics that OVS accumulates itself and these stats has
+``ovs_`` as prefix. These custom stats are shown along with other stats
+using the following command::
+
+    $ ovs-vsctl get Interface <iface> statistics
+
 EMC Insertion Probability
 -------------------------
 

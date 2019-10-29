@@ -551,7 +551,7 @@ processing packets at the required rate.
 The amount of Tx retries on a vhost-user or vhost-user-client interface can be
 shown with::
 
-  $ ovs-vsctl get Interface dpdkvhostclient0 statistics:tx_retries
+  $ ovs-vsctl get Interface dpdkvhostclient0 statistics:ovs_tx_retries
 
 vhost-user Dequeue Zero Copy (experimental)
 -------------------------------------------
