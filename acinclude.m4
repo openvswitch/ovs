@@ -289,7 +289,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
                               [Specify the DPDK build directory])],
               [have_dpdk=true])
 
-  AC_MSG_CHECKING([whether dpdk datapath is enabled])
+  AC_MSG_CHECKING([whether dpdk is enabled])
   if test "$have_dpdk" != true || test "$with_dpdk" = no; then
     AC_MSG_RESULT([no])
     DPDKLIB_FOUND=false
@@ -676,6 +676,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_ops],
                         [owner], [OVS_DEFINE([HAVE_NF_HOOKS_OPS_OWNER])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [NFPROTO_INET])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [CONFIG_NF_NAT_NEEDED])
 
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
@@ -697,6 +698,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [nf_ct_set])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
                   [nf_ct_is_untracked])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [nf_ct_invert_tuplepr])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
                   [nf_ct_zone_init])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_l3proto.h],
@@ -711,6 +714,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_ct_nat_ext_add])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_alloc_null_binding])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_range2])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_packet],
+                  [OVS_DEFINE([HAVE_UPSTREAM_NF_NAT])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_seqadj.h], [nf_ct_seq_adjust])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_count.h], [nf_conncount_gc_list],
                   [OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_count.h],
@@ -742,6 +747,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/rtnetlink.h],
                         [rtnl_create_link], [extack],
                         [OVS_DEFINE([HAVE_RTNL_CREATE_LINK_TAKES_EXTACK])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [nf_reset_ct])
 
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
@@ -812,6 +818,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_parse])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_notify.*family],
                   [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_FAMILY])])
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_validate_flags])
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/genetlink.h],
                         [genl_notify], [net],
                         [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_NET])])
@@ -839,6 +846,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_in_addr])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_is_last])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_nest_start_noflag])
   OVS_GREP_IFELSE([$KSRC/include/linux/netlink.h], [void.*netlink_set_err],
                   [OVS_DEFINE([HAVE_VOID_NETLINK_SET_ERR])])
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netlink.h],
@@ -895,6 +903,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
                   [nf_conntrack_helper_put],
                   [OVS_DEFINE(HAVE_NF_CONNTRACK_HELPER_PUT)])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
+                  [nf_nat_helper_try_module_get])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
+                  [nf_nat_helper_put])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],[[[[:space:]]]SKB_GSO_UDP[[[:space:]]]],
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP])])
   OVS_GREP_IFELSE([$KSRC/include/net/dst.h],[DST_NOCACHE],

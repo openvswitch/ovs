@@ -107,8 +107,8 @@ Install DPDK
 Install OVS
 ~~~~~~~~~~~
 
-OVS can be installed using different methods. For OVS to use DPDK datapath, it
-has to be configured with DPDK support (``--with-dpdk``).
+OVS can be installed using different methods.  For OVS to use DPDK, it
+has to be configured to build against the DPDK library (``--with-dpdk``).
 
 .. note::
   This section focuses on generic recipe that suits most cases. For
@@ -288,7 +288,7 @@ with either the ovs-vswitchd logs, or by running either of the commands::
   "DPDK 17.11.0"
 
 At this point you can use ovs-vsctl to set up bridges and other Open vSwitch
-features. Seeing as we've configured the DPDK datapath, we will use DPDK-type
+features. Seeing as we've configured DPDK support, we will use DPDK-type
 ports. For example, to create a userspace bridge named ``br0`` and add two
 ``dpdk`` ports to it, run::
 

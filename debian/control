@@ -17,7 +17,8 @@ Build-Depends: graphviz,
                python3-twisted-conch,
                python3-zopeinterface,
                python3-six,
-               libunbound-dev
+               libunbound-dev,
+               libunwind-dev
 Standards-Version: 3.9.3
 Homepage: http://openvswitch.org/
 

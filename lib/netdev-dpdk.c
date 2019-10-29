@@ -298,14 +298,17 @@ struct dpdk_mp {
  };
 
 /* There should be one 'struct dpdk_tx_queue' created for
- * each cpu core. */
+ * each netdev tx queue. */
 struct dpdk_tx_queue {
-    rte_spinlock_t tx_lock;        /* Protects the members and the NIC queue
-                                    * from concurrent access.  It is used only
-                                    * if the queue is shared among different
-                                    * pmd threads (see 'concurrent_txq'). */
-    int map;                       /* Mapping of configured vhost-user queues
-                                    * to enabled by guest. */
+    /* Padding to make dpdk_tx_queue exactly one cache line long. */
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* Protects the members and the NIC queue from concurrent access.
+         * It is used only if the queue is shared among different pmd threads
+         * (see 'concurrent_txq'). */
+        rte_spinlock_t tx_lock;
+        /* Mapping of configured vhost-user queue to enabled by guest. */
+        int map;
+    );
 };
 
 /* dpdk has no way to remove dpdk ring ethernet devices

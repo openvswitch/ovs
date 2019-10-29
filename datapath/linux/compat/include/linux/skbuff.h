@@ -452,4 +452,8 @@ static inline void skb_set_inner_ipproto(struct sk_buff *skb,
 }
 #endif
 
+#ifndef HAVE_NF_RESET_CT
+#define nf_reset_ct nf_reset
+#endif
+
 #endif

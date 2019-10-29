@@ -47,7 +47,7 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 #endif
 		struct nlattr *exts;
 
-		exts = nla_nest_start(skb, OVS_TUNNEL_ATTR_EXTENSION);
+		exts = nla_nest_start_noflag(skb, OVS_TUNNEL_ATTR_EXTENSION);
 		if (!exts)
 			return -EMSGSIZE;
 

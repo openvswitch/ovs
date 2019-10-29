@@ -34,11 +34,31 @@
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 #include <net/ipv6_frag.h>
 
-#ifdef CONFIG_NF_NAT_NEEDED
+/* Upstream commit 4806e975729f ("netfilter: replace NF_NAT_NEEDED with
+ * IS_ENABLED(CONFIG_NF_NAT)") replaces the config checking on NF_NAT_NEEDED
+ * with CONFIG_NF_NAT.  We will replace the checking on NF_NAT_NEEDED for the
+ * newer kernel with the marco in order to keep backward compatiblity.
+ */
+#ifndef HAVE_CONFIG_NF_NAT_NEEDED
+#define CONFIG_NF_NAT_NEEDED  CONFIG_NF_NAT
+#endif
+
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
+/* Starting from upstream commit 3bf195ae6037 ("netfilter: nat: merge
+ * nf_nat_ipv4,6 into nat core") in kernel 5.1.  nf_nat_ipv4,6 are merged
+ * into nf_nat.  In order to keep backward compatibility, we keep the config
+ * checking as is for the old kernel, and replace them with marco for the
+ * new kernel. */
+#ifdef HAVE_UPSTREAM_NF_NAT
+#include <net/netfilter/nf_nat.h>
+#define CONFIG_NF_NAT_IPV4 CONFIG_NF_NAT
+#define CONFIG_NF_NAT_IPV6 CONFIG_IPV6
+#else
 #include <linux/netfilter/nf_nat.h>
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_l3proto.h>
-#endif
+#endif /* HAVE_UPSTREAM_NF_NAT */
+#endif /* CONFIG_NF_NAT_NEEDED */
 
 #include "datapath.h"
 #include "conntrack.h"
@@ -89,7 +109,7 @@ struct ovs_conntrack_info {
 	struct md_labels labels;
 	char timeout[CTNL_TIMEOUT_NAME_MAX];
 	struct nf_ct_timeout *nf_ct_timeout;
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	struct nf_nat_range2 range;  /* Only present for SRC NAT and DST NAT. */
 #endif
 };
@@ -668,7 +688,7 @@ ovs_ct_find_existing(struct net *net, const struct nf_conntrack_zone *zone,
 	if (natted) {
 		struct nf_conntrack_tuple inverse;
 
-		if (!nf_ct_invert_tuplepr(&inverse, &tuple)) {
+		if (!rpl_nf_ct_invert_tuple(&inverse, &tuple)) {
 			pr_debug("ovs_ct_find_existing: Inversion failed!\n");
 			return NULL;
 		}
@@ -775,7 +795,7 @@ static bool skb_nfct_cached(struct net *net,
 	return ct_executed;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 /* Modelled after nf_nat_ipv[46]_fn().
  * range is only used for new, uninitialized NAT state.
  * Returns either NF_ACCEPT or NF_DROP.
@@ -1025,6 +1045,8 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 
 	ct = nf_ct_get(skb, &ctinfo);
 	if (ct) {
+		bool add_helper = false;
+
 		/* Packets starting a new connection must be NATted before the
 		 * helper, so that the helper knows about the NAT.  We enforce
 		 * this by delaying both NAT and helper calls for unconfirmed
@@ -1042,24 +1064,33 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 		}
 
 		/* Userspace may decide to perform a ct lookup without a helper
-		 * specified followed by a (recirculate and) commit with one.
-		 * Therefore, for unconfirmed connections which we will commit,
-		 * we need to attach the helper here.
+		 * specified followed by a (recirculate and) commit with one,
+		 * or attach a helper in a later commit.  Therefore, for
+		 * connections which we will commit, we may need to attach
+		 * the helper here.
 		 */
-		if (!nf_ct_is_confirmed(ct) && info->commit &&
-		    info->helper && !nfct_help(ct)) {
+		if (info->commit && info->helper && !nfct_help(ct)) {
 			int err = __nf_ct_try_assign_helper(ct, info->ct,
 							    GFP_ATOMIC);
 			if (err)
 				return err;
+			add_helper = true;
+
+			/* helper installed, add seqadj if NAT is required */
+			if (info->nat && !nfct_seqadj(ct)) {
+				if (!nfct_seqadj_ext_add(ct))
+					return -EINVAL;
+			}
 		}
 
 		/* Call the helper only if:
-		 * - nf_conntrack_in() was executed above ("!cached") for a
-		 *   confirmed connection, or
+		 * - nf_conntrack_in() was executed above ("!cached") or a
+		 *   helper was just attached ("add_helper") for a confirmed
+		 *   connection, or
 		 * - When committing an unconfirmed connection.
 		 */
-		if ((nf_ct_is_confirmed(ct) ? !cached : info->commit) &&
+		if ((nf_ct_is_confirmed(ct) ? !cached || add_helper :
+					      info->commit) &&
 		    ovs_ct_helper(skb, info->family) != NF_ACCEPT) {
 			return -EINVAL;
 		}
@@ -1263,7 +1294,8 @@ static int ovs_ct_commit(struct net *net, struct sw_flow_key *key,
 					 &info->labels.mask);
 		if (err)
 			return err;
-	} else if (labels_nonzero(&info->labels.mask)) {
+	} else if (IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS) &&
+		   labels_nonzero(&info->labels.mask)) {
 		err = ovs_ct_set_labels(ct, key, &info->labels.value,
 					&info->labels.mask);
 		if (err)
@@ -1364,6 +1396,7 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 {
 	struct nf_conntrack_helper *helper;
 	struct nf_conn_help *help;
+	int ret = 0;
 
 	helper = nf_conntrack_helper_try_module_get(name, info->family,
 						    key->ip.proto);
@@ -1378,16 +1411,25 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 		return -ENOMEM;
 	}
 
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
+	if (info->nat) {
+		ret = nf_nat_helper_try_module_get(name, info->family,
+						   key->ip.proto);
+		if (ret) {
+			nf_conntrack_helper_put(helper);
+			OVS_NLERR(log, "Failed to load \"%s\" NAT helper, error: %d",
+				  name, ret);
+			return ret;
+		}
+	}
+#endif
+
 	rcu_assign_pointer(help->helper, helper);
 	info->helper = helper;
-
-	if (info->nat)
-		request_module("ip_nat_%s", name);
-
-	return 0;
+	return ret;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 static int parse_nat(const struct nlattr *attr,
 		     struct ovs_conntrack_info *info, bool log)
 {
@@ -1529,7 +1571,7 @@ static const struct ovs_ct_len_tbl ovs_ct_attr_lens[OVS_CT_ATTR_MAX + 1] = {
 				    .maxlen = sizeof(struct md_labels) },
 	[OVS_CT_ATTR_HELPER]	= { .minlen = 1,
 				    .maxlen = NF_CT_HELPER_NAME_LEN },
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	/* NAT length is checked when parsing the nested attributes. */
 	[OVS_CT_ATTR_NAT]	= { .minlen = 0, .maxlen = INT_MAX },
 #endif
@@ -1609,7 +1651,7 @@ static int parse_ct(const struct nlattr *attr, struct ovs_conntrack_info *info,
 				return -EINVAL;
 			}
 			break;
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 		case OVS_CT_ATTR_NAT: {
 			int err = parse_nat(a, info, log);
 
@@ -1626,7 +1668,7 @@ static int parse_ct(const struct nlattr *attr, struct ovs_conntrack_info *info,
 		case OVS_CT_ATTR_TIMEOUT:
 			memcpy(info->timeout, nla_data(a), nla_len(a));
 			if (!memchr(info->timeout, '\0', nla_len(a))) {
-				OVS_NLERR(log, "Invalid conntrack helper");
+				OVS_NLERR(log, "Invalid conntrack timeout");
 				return -EINVAL;
 			}
 			break;
@@ -1743,13 +1785,13 @@ err_free_ct:
 	return err;
 }
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 static bool ovs_ct_nat_to_attr(const struct ovs_conntrack_info *info,
 			       struct sk_buff *skb)
 {
 	struct nlattr *start;
 
-	start = nla_nest_start(skb, OVS_CT_ATTR_NAT);
+	start = nla_nest_start_noflag(skb, OVS_CT_ATTR_NAT);
 	if (!start)
 		return false;
 
@@ -1820,7 +1862,7 @@ int ovs_ct_action_to_attr(const struct ovs_conntrack_info *ct_info,
 {
 	struct nlattr *start;
 
-	start = nla_nest_start(skb, OVS_ACTION_ATTR_CT);
+	start = nla_nest_start_noflag(skb, OVS_ACTION_ATTR_CT);
 	if (!start)
 		return -EMSGSIZE;
 
@@ -1853,7 +1895,7 @@ int ovs_ct_action_to_attr(const struct ovs_conntrack_info *ct_info,
 			return -EMSGSIZE;
 	}
 
-#ifdef CONFIG_NF_NAT_NEEDED
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
 	if (ct_info->nat && !ovs_ct_nat_to_attr(ct_info, skb))
 		return -EMSGSIZE;
 #endif
@@ -1871,8 +1913,13 @@ void ovs_ct_free_action(const struct nlattr *a)
 
 static void __ovs_ct_free_action(struct ovs_conntrack_info *ct_info)
 {
-	if (ct_info->helper)
+	if (ct_info->helper) {
+#if IS_ENABLED(CONFIG_NF_NAT_NEEDED)
+		if (ct_info->nat)
+			nf_nat_helper_put(ct_info->helper);
+#endif
 		nf_conntrack_helper_put(ct_info->helper);
+	}
 	if (ct_info->ct) {
 		if (ct_info->timeout[0])
 			nf_ct_destroy_timeout(ct_info->ct);
@@ -2230,7 +2277,11 @@ static int ovs_ct_limit_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(reply))
 		return PTR_ERR(reply);
 
-	nla_reply = nla_nest_start(reply, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+	nla_reply = nla_nest_start_noflag(reply, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+	if (!nla_reply) {
+		err = -EMSGSIZE;
+		goto exit_err;
+	}
 
 	if (a[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]) {
 		err = ovs_ct_limit_get_zone_limit(
@@ -2256,18 +2307,27 @@ exit_err:
 
 static struct genl_ops ct_limit_genl_ops[] = {
 	{ .cmd = OVS_CT_LIMIT_CMD_SET,
+#ifdef HAVE_GENL_VALIDATE_FLAGS
+		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+#endif
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   * privilege. */
 		.policy = ct_limit_policy,
 		.doit = ovs_ct_limit_cmd_set,
 	},
 	{ .cmd = OVS_CT_LIMIT_CMD_DEL,
+#ifdef HAVE_GENL_VALIDATE_FLAGS
+		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+#endif
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   * privilege. */
 		.policy = ct_limit_policy,
 		.doit = ovs_ct_limit_cmd_del,
 	},
 	{ .cmd = OVS_CT_LIMIT_CMD_GET,
+#ifdef HAVE_GENL_VALIDATE_FLAGS
+		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+#endif
 		.flags = 0,		  /* OK for unprivileged users. */
 		.policy = ct_limit_policy,
 		.doit = ovs_ct_limit_cmd_get,

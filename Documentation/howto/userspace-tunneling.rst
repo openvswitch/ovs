@@ -74,8 +74,8 @@ Two Physical Hosts
 The environment assumes the use of two hosts, named `host1` and `host2`. We
 only detail the configuration of `host1` but a similar configuration can be
 used for `host2`. Both hosts should be configured with Open vSwitch (with or
-without the DPDK datapath), QEMU/KVM and suitable VM images. Open vSwitch
-should be running before proceeding.
+without DPDK), QEMU/KVM and suitable VM images. Open vSwitch should be running
+before proceeding.
 
 Configuration Steps
 -------------------

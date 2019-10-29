@@ -10615,35 +10615,35 @@ AT_CHECK([ovs-vsctl get Interface p1 mtu], [0], [dnl
 AT_CHECK([ovs-vsctl set Interface p1 mtu_request=1600])
 
 # Check that the new MTU is applied
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p1 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface p1 mtu=1600])
 # The internal port 'br0' should have the same MTU value as p1, becase it's
 # the new bridge minimum.
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1600])
 
 AT_CHECK([ovs-vsctl del-port br0 p1])
 
 # When 'p1' is deleted, the internal port should return to the default MTU
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1500])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1500])
 
 # New port with 'mtu_request' in the same transaction.
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set int p2 type=dummy mtu_request=1600])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1600])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface p2 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1600])
 
 # Explicitly set mtu_request on the internal interface.  This should prevent
 # the MTU from being overriden.
 AT_CHECK([ovs-vsctl set int br0 mtu_request=1700])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1700])
 
 # The new MTU on p2 should not affect br0.
 AT_CHECK([ovs-vsctl set int p2 mtu_request=1400])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1400])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+AT_CHECK([ovs-vsctl wait-until Interface p2 mtu=1400])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1700])
 
 # Remove explicit mtu_request from br0.  Now it should track the bridge
 # minimum again.
 AT_CHECK([ovs-vsctl set int br0 mtu_request=[[]]])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1400])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1400])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

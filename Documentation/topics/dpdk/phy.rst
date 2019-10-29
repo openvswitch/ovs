@@ -125,11 +125,11 @@ Multiqueue
 ----------
 
 Poll Mode Driver (PMD) threads are the threads that do the heavy lifting for
-the DPDK datapath. Correct configuration of PMD threads and the Rx queues they
-utilize is a requirement in order to deliver the high-performance possible with
-DPDK acceleration. It is possible to configure multiple Rx queues for ``dpdk``
-ports, thus ensuring this is not a bottleneck for performance. For information
-on configuring PMD threads, refer to :doc:`pmd`.
+userspace switching. Correct configuration of PMD threads and the Rx
+queues they utilize is a requirement in order to deliver the high-performance
+possible with DPDK acceleration. It is possible to configure multiple Rx queues
+for ``dpdk`` ports, thus ensuring this is not a bottleneck for performance. For
+information on configuring PMD threads, refer to :doc:`pmd`.
 
 .. _dpdk-phy-flow-control:
 

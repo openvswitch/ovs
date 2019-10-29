@@ -5,7 +5,7 @@ AT_BANNER([OVS-DPDK unit tests])
 
 dnl --------------------------------------------------------------------------
 dnl Check if EAL init is successful
-AT_SETUP([OVS-DPDK datapath - EAL init])
+AT_SETUP([OVS-DPDK - EAL init])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START()
@@ -23,7 +23,7 @@ dnl --------------------------------------------------------------------------
 
 dnl --------------------------------------------------------------------------
 dnl Add standard DPDK PHY port
-AT_SETUP([OVS-DPDK datapath - add standard DPDK port])
+AT_SETUP([OVS-DPDK - add standard DPDK port])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_PHY_SKIP()
@@ -50,7 +50,7 @@ dnl --------------------------------------------------------------------------
 
 dnl --------------------------------------------------------------------------
 dnl Add vhost-user-client port
-AT_SETUP([OVS-DPDK datapath - add vhost-user-client port])
+AT_SETUP([OVS-DPDK - add vhost-user-client port])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START()
@@ -82,7 +82,7 @@ dnl --------------------------------------------------------------------------
 
 dnl --------------------------------------------------------------------------
 dnl Ping vhost-user port
-AT_SETUP([OVS-DPDK datapath - ping vhost-user ports])
+AT_SETUP([OVS-DPDK - ping vhost-user ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])
@@ -159,7 +159,7 @@ dnl --------------------------------------------------------------------------
 
 dnl --------------------------------------------------------------------------
 dnl Ping vhost-user-client port
-AT_SETUP([OVS-DPDK datapath - ping vhost-user-client ports])
+AT_SETUP([OVS-DPDK - ping vhost-user-client ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])

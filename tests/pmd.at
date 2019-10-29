@@ -657,8 +657,8 @@ dnl busy, and uncover race conditions with the main thread.
 AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
 AT_CHECK([ovs-vsctl set Interface p2 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
 
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p1 bfd_status:forwarding=true \
-                              -- wait-until Interface p2 bfd_status:forwarding=true])
+AT_CHECK([ovs-vsctl wait-until Interface p1 bfd_status:forwarding=true \
+                 -- wait-until Interface p2 bfd_status:forwarding=true])
 
 dnl Trigger reconfiguration of the datapath
 AT_CHECK([ovs-vsctl set Interface p1 options:n_rxq=2])

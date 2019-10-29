@@ -25,13 +25,14 @@
 DPDK Bridges
 ============
 
-The DPDK datapath requires specially configured bridge(s) in order to utilize
-DPDK-backed :doc:`physical <phy>` and :doc:`virtual <vhost-user>` ports.
+Bridge must be specially configured to utilize DPDK-backed
+:doc:`physical <phy>` and :doc:`virtual <vhost-user>` ports.
 
 Quick Example
 -------------
 
-This example demonstrates how to add a bridge using the DPDK datapath::
+This example demonstrates how to add a bridge that will take advantage
+of DPDK::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 

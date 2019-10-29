@@ -46,8 +46,8 @@ that includes the core userspace components of the switch.
 automatically build and install Open vSwitch kernel module for your running
 kernel.
 
-3. For DPDK datapath, Open vSwitch with DPDK support is bundled in the package
-``openvswitch-switch-dpdk``.
+3. For fast userspace switching, Open vSwitch with DPDK support is
+bundled in the package ``openvswitch-switch-dpdk``.
 
 Fedora
 ------

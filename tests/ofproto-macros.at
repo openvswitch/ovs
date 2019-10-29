@@ -249,7 +249,7 @@ add_of_br () {
     local br=br$brnum
     local dpid=fedcba987654321$brnum
     local mac=aa:55:aa:55:00:0$brnum
-    ovs-vsctl --timeout=20 \
+    ovs-vsctl \
         -- add-br $br \
         -- set bridge $br datapath-type=dummy \
                           fail-mode=secure \

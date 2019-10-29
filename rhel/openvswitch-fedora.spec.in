@@ -28,10 +28,7 @@
 %bcond_without libcapng
 # To enable DPDK support, specify '--with dpdk' when building
 %bcond_with dpdk
-# Enable Python 3 by specifying '--with build_python3'.
-# This is enabled by default for versions of the distribution that
-# have Python 3 by default (Fedora > 22).
-%bcond_with build_python3
+
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
 %bcond_with autoenable
@@ -61,9 +58,7 @@ Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 BuildRequires: gcc gcc-c++
 BuildRequires: autoconf automake libtool
 BuildRequires: systemd-units openssl openssl-devel
-%if 0%{?fedora} > 22 || %{with build_python3}
 BuildRequires: python3-devel
-%endif
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 BuildRequires: checkpolicy, selinux-policy-devel
@@ -109,7 +104,6 @@ Requires: selinux-policy-targeted
 %description selinux-policy
 Tailored Open vSwitch SELinux policy
 
-%if 0%{?fedora} > 22 || %{with build_python3}
 %package -n python3-openvswitch
 Summary: Open vSwitch python3 bindings
 License: ASL 2.0
@@ -120,7 +114,6 @@ Requires: python3-six
 
 %description -n python3-openvswitch
 Python bindings for the Open vSwitch database
-%endif
 
 %package test
 Summary: Open vSwitch testing utilities
@@ -244,11 +237,9 @@ install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
 install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 
-%if 0%{?fedora} > 22 || %{with build_python3}
 install -d -m 0755 $RPM_BUILD_ROOT%{python3_sitelib}
 cp -a $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/* \
    $RPM_BUILD_ROOT%{python3_sitelib}
-%endif
 
 rm -rf $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
@@ -388,10 +379,8 @@ fi
 %defattr(-,root,root)
 %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
-%if 0%{?fedora} > 22 || %{with build_python3}
 %files -n python3-openvswitch
 %{python3_sitelib}/ovs
-%endif
 
 %files test
 %{_bindir}/ovs-test

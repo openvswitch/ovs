@@ -23,7 +23,7 @@ ovsdb_check_cluster () {
 
     for txn
     do
-      AT_CHECK([ovsdb-client --timeout=30 -vjsonrpc -vconsole:off -vsyslog:off -vvlog:off --log-file transact unix:s1.ovsdb,unix:s2.ovsdb,unix:s3.ovsdb "$txn"], [0], [stdout])
+      AT_CHECK([ovsdb-client -vjsonrpc -vconsole:off -vsyslog:off -vvlog:off --log-file transact unix:s1.ovsdb,unix:s2.ovsdb,unix:s3.ovsdb "$txn"], [0], [stdout])
       cat stdout >> output
     done
     AT_CHECK_UNQUOTED([uuidfilt output], [0], [$output])
@@ -296,7 +296,7 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
         AT_CHECK([ovs-appctl -t "`pwd`"/s$delay_election_node cluster/failure-test delay-election], [0], [ignore])
     fi
     AT_CHECK([ovs-appctl -t "`pwd`"/s$crash_node cluster/failure-test $crash_command], [0], [ignore])
-    AT_CHECK([ovs-vsctl -v --timeout=10 --db="$db" --no-leader-only --no-shuffle-remotes --no-wait create QoS type=x], [0], [ignore], [ignore])
+    AT_CHECK([ovs-vsctl -v --db="$db" --no-leader-only --no-shuffle-remotes --no-wait create QoS type=x], [0], [ignore], [ignore])
 
     # Make sure that the node really crashed.
     AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
@@ -442,7 +442,7 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
     remove_server() {
         local i=$1
         printf "\ns$i: removing from cluster\n"
-        AT_CHECK([ovs-appctl --timeout=30 -t "`pwd`"/s$i cluster/leave Open_vSwitch])
+        AT_CHECK([ovs-appctl -t "`pwd`"/s$i cluster/leave Open_vSwitch])
         printf "\ns$i: waiting for removal to complete\n"
         AT_CHECK([ovsdb_client_wait --log-file=remove$i.log unix:s$i.ovsdb $schema removed])
         stop_server $i
@@ -543,7 +543,7 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
             done
         done
     done | sort > expout
-    AT_CHECK([ovs-vsctl --timeout=30 --db="$db" --no-wait --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get Open_vSwitch . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])
+    AT_CHECK([ovs-vsctl --db="$db" --no-wait --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get Open_vSwitch . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])
 
     for i in `seq $n`; do
         if test $i != $victim || test $(cat phase) != 1; then
