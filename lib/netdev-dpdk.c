@@ -477,6 +477,8 @@ struct netdev_rxq_dpdk {
 static void netdev_dpdk_destruct(struct netdev *netdev);
 static void netdev_dpdk_vhost_destruct(struct netdev *netdev);
 
+static int netdev_dpdk_get_sw_custom_stats(const struct netdev *,
+                                           struct netdev_custom_stats *);
 static void netdev_dpdk_clear_xstats(struct netdev_dpdk *dev);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
@@ -1177,7 +1179,7 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
     dev->rte_xstats_ids = NULL;
     dev->rte_xstats_ids_size = 0;
 
-    dev->tx_retries = 0;
+    dev->tx_retries = (dev->type == DPDK_DEV_VHOST) ? 0 : UINT64_MAX;
 
     return 0;
 }
@@ -2801,7 +2803,9 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
 
     uint32_t i;
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int rte_xstats_ret;
+    int rte_xstats_ret, sw_stats_size;
+
+    netdev_dpdk_get_sw_custom_stats(netdev, custom_stats);
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -2816,23 +2820,22 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
         if (rte_xstats_ret > 0 &&
             rte_xstats_ret <= dev->rte_xstats_ids_size) {
 
-            custom_stats->size = rte_xstats_ret;
-            custom_stats->counters =
-                    (struct netdev_custom_counter *) xcalloc(rte_xstats_ret,
-                            sizeof(struct netdev_custom_counter));
+            sw_stats_size = custom_stats->size;
+            custom_stats->size += rte_xstats_ret;
+            custom_stats->counters = xrealloc(custom_stats->counters,
+                                              custom_stats->size *
+                                              sizeof *custom_stats->counters);
 
             for (i = 0; i < rte_xstats_ret; i++) {
-                ovs_strlcpy(custom_stats->counters[i].name,
+                ovs_strlcpy(custom_stats->counters[sw_stats_size + i].name,
                             netdev_dpdk_get_xstat_name(dev,
                                                        dev->rte_xstats_ids[i]),
                             NETDEV_CUSTOM_STATS_NAME_SIZE);
-                custom_stats->counters[i].value = values[i];
+                custom_stats->counters[sw_stats_size + i].value = values[i];
             }
         } else {
             VLOG_WARN("Cannot get XSTATS values for port: "DPDK_PORT_ID_FMT,
                       dev->port_id);
-            custom_stats->counters = NULL;
-            custom_stats->size = 0;
             /* Let's clear statistics cache, so it will be
              * reconfigured */
             netdev_dpdk_clear_xstats(dev);
@@ -2847,39 +2850,47 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
 }
 
 static int
-netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
-                                   struct netdev_custom_stats *custom_stats)
+netdev_dpdk_get_sw_custom_stats(const struct netdev *netdev,
+                                struct netdev_custom_stats *custom_stats)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int i;
+    int i, n;
 
-#define VHOST_CSTATS \
-    VHOST_CSTAT(tx_retries)
+#define SW_CSTATS \
+    SW_CSTAT(tx_retries)
 
-#define VHOST_CSTAT(NAME) + 1
-    custom_stats->size = VHOST_CSTATS;
-#undef VHOST_CSTAT
+#define SW_CSTAT(NAME) + 1
+    custom_stats->size = SW_CSTATS;
+#undef SW_CSTAT
     custom_stats->counters = xcalloc(custom_stats->size,
                                      sizeof *custom_stats->counters);
-    i = 0;
-#define VHOST_CSTAT(NAME) \
-    ovs_strlcpy(custom_stats->counters[i++].name, #NAME, \
-                NETDEV_CUSTOM_STATS_NAME_SIZE);
-    VHOST_CSTATS;
-#undef VHOST_CSTAT
 
     ovs_mutex_lock(&dev->mutex);
 
     rte_spinlock_lock(&dev->stats_lock);
     i = 0;
-#define VHOST_CSTAT(NAME) \
+#define SW_CSTAT(NAME) \
     custom_stats->counters[i++].value = dev->NAME;
-    VHOST_CSTATS;
-#undef VHOST_CSTAT
+    SW_CSTATS;
+#undef SW_CSTAT
     rte_spinlock_unlock(&dev->stats_lock);
 
     ovs_mutex_unlock(&dev->mutex);
 
+    i = 0;
+    n = 0;
+#define SW_CSTAT(NAME) \
+    if (custom_stats->counters[i].value != UINT64_MAX) {                   \
+        ovs_strlcpy(custom_stats->counters[n].name, #NAME,                 \
+                    NETDEV_CUSTOM_STATS_NAME_SIZE);                        \
+        custom_stats->counters[n].value = custom_stats->counters[i].value; \
+        n++;                                                               \
+    }                                                                      \
+    i++;
+    SW_CSTATS;
+#undef SW_CSTAT
+
+    custom_stats->size = n;
     return 0;
 }
 
@@ -4463,7 +4474,7 @@ static const struct netdev_class dpdk_vhost_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
-    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
+    .get_custom_stats = netdev_dpdk_get_sw_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,
@@ -4479,7 +4490,7 @@ static const struct netdev_class dpdk_vhost_client_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
-    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
+    .get_custom_stats = netdev_dpdk_get_sw_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_client_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,
