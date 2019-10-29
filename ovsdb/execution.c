@@ -562,7 +562,6 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     const struct json *mutations_json;
     struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_mutation_set mutations = OVSDB_MUTATION_SET_INITIALIZER;
-    struct ovsdb_row *row = NULL;
     struct mutate_row_cbdata mr;
     struct ovsdb_error *error;
 
@@ -595,7 +594,6 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         json_object_put(result, "count", json_integer_create(mr.n_matches));
     }
 
-    ovsdb_row_destroy(row);
     ovsdb_mutation_set_destroy(&mutations);
     ovsdb_condition_destroy(&condition);
 
