@@ -600,6 +600,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     if (flower->tunnel) {
         if (flower->mask.tunnel.id) {
             match_set_tun_id(match, flower->key.tunnel.id);
+            match->flow.tunnel.flags |= FLOW_TNL_F_KEY;
         }
         if (flower->key.tunnel.ipv4.ipv4_dst) {
             match_set_tun_src(match, flower->key.tunnel.ipv4.ipv4_src);
