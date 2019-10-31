@@ -79,8 +79,6 @@ enum ref_type {
 struct lflow_ref_list_node {
     struct ovs_list lflow_list; /* list for same lflow */
     struct ovs_list ref_list; /* list for same ref */
-    enum ref_type type;
-    char *ref_name;
     struct uuid lflow_uuid;
 };
 

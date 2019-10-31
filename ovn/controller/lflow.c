@@ -230,8 +230,6 @@ lflow_resource_add(struct lflow_resource_ref *lfrr, enum ref_type type,
     }
 
     struct lflow_ref_list_node *lrln = xzalloc(sizeof *lrln);
-    lrln->type = type;
-    lrln->ref_name = xstrdup(ref_name);
     lrln->lflow_uuid = *lflow_uuid;
     ovs_list_push_back(&rlfn->ref_lflow_head, &lrln->ref_list);
     ovs_list_push_back(&lfrn->lflow_ref_head, &lrln->lflow_list);
