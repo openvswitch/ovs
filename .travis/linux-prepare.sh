@@ -20,3 +20,8 @@ if [ "$M32" ]; then
     # This will remove the 64-bit libunwind and install 32-bit version.
     sudo apt-get install -y libunwind-dev:i386
 fi
+
+# IPv6 is supported by kernel but disabled in TravisCI images:
+#   https://github.com/travis-ci/travis-ci/issues/8891
+# Enable it to avoid skipping of IPv6 related tests.
+sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
