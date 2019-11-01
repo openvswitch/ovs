@@ -1357,9 +1357,15 @@ struct ofproto_class {
      * packet_xlate_revert() calls have to be made in reverse order. */
     void (*packet_xlate_revert)(struct ofproto *, struct ofproto_packet_out *);
 
-    /* Executes the datapath actions, translation side-effects, and stats as
-     * produced by ->packet_xlate().  The caller retains ownership of 'opo'.
-     */
+    /* Translates side-effects, and stats as produced by ->packet_xlate().
+     * Prepares to execute datapath actions.  The caller retains ownership
+     * of 'opo'. */
+    void (*packet_execute_prepare)(struct ofproto *,
+                                   struct ofproto_packet_out *opo);
+
+    /* Executes the datapath actions.  The caller retains ownership of 'opo'.
+     * Should be called after successful packet_execute_prepare().
+     * No-op if called after packet_xlate_revert(). */
     void (*packet_execute)(struct ofproto *, struct ofproto_packet_out *opo);
 
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
