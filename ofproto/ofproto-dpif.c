@@ -4677,12 +4677,13 @@ ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
 }
 
 static void
-packet_execute(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
+packet_execute_prepare(struct ofproto *ofproto_,
+                       struct ofproto_packet_out *opo)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_flow_stats stats;
-    struct dpif_execute execute;
+    struct dpif_execute *execute;
 
     struct ofproto_dpif_packet_out *aux = opo->aux;
     ovs_assert(aux);
@@ -4691,22 +4692,40 @@ packet_execute(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
     dpif_flow_stats_extract(opo->flow, opo->packet, time_msec(), &stats);
     ofproto_dpif_xcache_execute(ofproto, &aux->xcache, &stats);
 
-    execute.actions = aux->odp_actions.data;
-    execute.actions_len = aux->odp_actions.size;
+    execute = xzalloc(sizeof *execute);
+    execute->actions = xmemdup(aux->odp_actions.data, aux->odp_actions.size);
+    execute->actions_len = aux->odp_actions.size;
 
     pkt_metadata_from_flow(&opo->packet->md, opo->flow);
-    execute.packet = opo->packet;
-    execute.flow = opo->flow;
-    execute.needs_help = aux->needs_help;
-    execute.probe = false;
-    execute.mtu = 0;
+    execute->packet = opo->packet;
+    execute->flow = opo->flow;
+    execute->needs_help = aux->needs_help;
+    execute->probe = false;
+    execute->mtu = 0;
 
     /* Fix up in_port. */
     ofproto_dpif_set_packet_odp_port(ofproto, opo->flow->in_port.ofp_port,
                                      opo->packet);
 
-    dpif_execute(ofproto->backer->dpif, &execute);
     ofproto_dpif_packet_out_delete(aux);
+    opo->aux = execute;
+}
+
+static void
+packet_execute(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_execute *execute = opo->aux;
+
+    if (!execute) {
+        return;
+    }
+
+    dpif_execute(ofproto->backer->dpif, execute);
+
+    free(CONST_CAST(struct nlattr *, execute->actions));
+    free(execute);
     opo->aux = NULL;
 }
 
@@ -6081,6 +6100,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_get_stats,
     packet_xlate,
     packet_xlate_revert,
+    packet_execute_prepare,
     packet_execute,
     set_frag_handling,
     nxt_resume,
