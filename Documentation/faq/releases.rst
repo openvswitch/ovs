@@ -119,7 +119,7 @@ Q: Are all features available with all datapaths?
     Conntrack Fragment Reass.       4.3            2.6          2.10     YES
     Conntrack Timeout Policies      5.2            2.12         NO       NO
     Conntrack Zone Limit            4.18           2.10         NO       YES
-    NAT                             4.6            2.6          2.8      YES
+    Conntrack NAT                   4.6            2.6          2.8      YES
     Tunnel - LISP                   NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
@@ -137,7 +137,7 @@ Q: Are all features available with all datapaths?
     Set action                      YES            1.0          1.0    PARTIAL
     NIC Bonding                     YES            1.0          1.0      YES
     Multiple VTEPs                  YES            1.10         1.10     YES
-    Meters                          4.15           1.10         1.10     NO
+    Meter action                    4.15           2.10         2.7      NO
     ========================== ============== ============== ========= =======
 
     Do note, however:
