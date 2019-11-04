@@ -1957,6 +1957,14 @@ nl_msg_put_act_cookie(struct ofpbuf *request, struct tc_cookie *ck) {
     }
 }
 
+static inline void
+nl_msg_put_act_flags(struct ofpbuf *request) {
+    struct nla_bitfield32 act_flags = { TCA_ACT_FLAGS_NO_PERCPU_STATS,
+                                        TCA_ACT_FLAGS_NO_PERCPU_STATS };
+
+    nl_msg_put_unspec(request, TCA_ACT_FLAGS, &act_flags, sizeof act_flags);
+}
+
 /* Given flower, a key_to_pedit map entry, calculates the rest,
  * where:
  *
@@ -2129,6 +2137,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
         if (flower->tunnel) {
             act_offset = nl_msg_start_nested(request, act_index++);
             nl_msg_put_act_tunnel_key_release(request);
+            nl_msg_put_act_flags(request);
             nl_msg_end_nested(request, act_offset);
         }
 
@@ -2146,6 +2155,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 if (flower->csum_update_flags) {
                     act_offset = nl_msg_start_nested(request, act_index++);
                     nl_msg_put_act_csum(request, flower->csum_update_flags);
+                    nl_msg_put_act_flags(request);
                     nl_msg_end_nested(request, act_offset);
                 }
             }
@@ -2163,12 +2173,14 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                               action->encap.ttl,
                                               action->encap.data,
                                               action->encap.no_csum);
+                nl_msg_put_act_flags(request);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
             case TC_ACT_VLAN_POP: {
                 act_offset = nl_msg_start_nested(request, act_index++);
                 nl_msg_put_act_pop_vlan(request);
+                nl_msg_put_act_flags(request);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
@@ -2178,6 +2190,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                          action->vlan.vlan_push_tpid,
                                          action->vlan.vlan_push_id,
                                          action->vlan.vlan_push_prio);
+                nl_msg_put_act_flags(request);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
@@ -2239,6 +2252,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                     }
                 }
                 nl_msg_put_act_cookie(request, &flower->act_cookie);
+                nl_msg_put_act_flags(request);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
@@ -2249,6 +2263,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
         act_offset = nl_msg_start_nested(request, act_index++);
         nl_msg_put_act_drop(request);
         nl_msg_put_act_cookie(request, &flower->act_cookie);
+        nl_msg_put_act_flags(request);
         nl_msg_end_nested(request, act_offset);
     }
     nl_msg_end_nested(request, offset);

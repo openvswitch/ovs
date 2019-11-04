@@ -174,16 +174,28 @@ AC_DEFUN([OVS_CHECK_LINUX], [
   AM_CONDITIONAL(LINUX_ENABLED, test -n "$KBUILD")
 ])
 
+dnl OVS_CHECK_LINUX_NETLINK
+dnl
+dnl Configure Linux netlink compat.
+AC_DEFUN([OVS_CHECK_LINUX_NETLINK], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/netlink.h>], [
+        struct nla_bitfield32 x =  { 0 };
+    ])],
+    [AC_DEFINE([HAVE_NLA_BITFIELD32], [1],
+    [Define to 1 if struct nla_bitfield32 is available.])])
+])
+
 dnl OVS_CHECK_LINUX_TC
 dnl
 dnl Configure Linux tc compat.
 AC_DEFUN([OVS_CHECK_LINUX_TC], [
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
-        int x = TCA_FLOWER_KEY_ENC_IP_TTL_MASK;
+        int x = TCA_ACT_FLAGS;
     ])],
-    [AC_DEFINE([HAVE_TCA_FLOWER_KEY_ENC_IP_TTL_MASK], [1],
-               [Define to 1 if TCA_FLOWER_KEY_ENC_IP_TTL_MASK is available.])])
+    [AC_DEFINE([HAVE_TCA_ACT_FLAGS], [1],
+               [Define to 1 if TCA_ACT_FLAGS is available.])])
 
   AC_CHECK_MEMBERS([struct tcf_t.firstuse], [], [], [#include <linux/pkt_cls.h>])
 

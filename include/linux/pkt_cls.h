@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_ENC_IP_TTL_MASK)
+#if defined(__KERNEL__) || defined(HAVE_TCA_ACT_FLAGS)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -17,8 +17,13 @@ enum {
 	TCA_ACT_STATS,
 	TCA_ACT_PAD,
 	TCA_ACT_COOKIE,
+	TCA_ACT_FLAGS,
 	__TCA_ACT_MAX
 };
+
+#define TCA_ACT_FLAGS_NO_PERCPU_STATS 1 /* Don't use percpu allocator for
+                                         * actions stats.
+                                         */
 
 #define TCA_ACT_MAX __TCA_ACT_MAX
 #define TCA_OLD_COMPAT (TCA_ACT_MAX+1)
