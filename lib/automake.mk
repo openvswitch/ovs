@@ -111,6 +111,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/hmapx.h \
 	lib/id-pool.c \
 	lib/id-pool.h \
+	lib/if-notifier-manual.c \
+	lib/if-notifier.h \
 	lib/ipf.c \
 	lib/ipf.h \
 	lib/jhash.c \
@@ -394,7 +396,6 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink-rtnl.c \
 	lib/dpif-netlink-rtnl.h \
 	lib/if-notifier.c \
-	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
 	lib/netdev-linux-private.h \

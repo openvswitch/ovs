@@ -530,11 +530,13 @@ bridge_init(const char *remote)
     ifaces_changed = seq_create();
     last_ifaces_changed = seq_read(ifaces_changed);
     ifnotifier = if_notifier_create(if_change_cb, NULL);
+    if_notifier_manual_set_cb(if_change_cb);
 }
 
 void
 bridge_exit(bool delete_datapath)
 {
+    if_notifier_manual_set_cb(NULL);
     if_notifier_destroy(ifnotifier);
     seq_destroy(ifaces_changed);
 

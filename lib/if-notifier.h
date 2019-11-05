@@ -27,4 +27,11 @@ void if_notifier_destroy(struct if_notifier *);
 void if_notifier_run(void);
 void if_notifier_wait(void);
 
+/* Below functions are reserved for if-notifier-manual , i.e. for manual
+ * notifications from the OVS code.
+ * Must not be implemented by OS specific notifiers. */
+
+void if_notifier_manual_set_cb(if_notify_func *);
+void if_notifier_manual_report(void);
+
 #endif  /* if-notifier.h */
