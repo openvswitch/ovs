@@ -33,7 +33,7 @@ out_free:
 }
 #define nf_ct_tmpl_alloc rpl_nf_ct_tmpl_alloc
 
-static void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
+static inline void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
 {
 	nf_ct_ext_destroy(tmpl);
 	nf_ct_ext_free(tmpl);
