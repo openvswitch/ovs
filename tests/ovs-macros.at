@@ -229,9 +229,9 @@ ovs_wait () {
     sleep 0.1
     if ovs_wait_cond; then echo "$1: wait succeeded quickly" >&AS_MESSAGE_LOG_FD; return 0; fi
 
-    # Then wait up to 10 seconds.
+    # Then wait up to OVS_CTL_TIMEOUT seconds.
     local d
-    for d in 1 2 3 4 5 6 7 8 9 10; do
+    for d in `seq 1 "$OVS_CTL_TIMEOUT"`; do
         sleep 1
         if ovs_wait_cond; then echo "$1: wait succeeded after $d seconds" >&AS_MESSAGE_LOG_FD; return 0; fi
     done
