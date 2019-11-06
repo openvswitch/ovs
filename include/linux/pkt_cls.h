@@ -64,7 +64,9 @@ struct tcf_t {
 	__u64   install;
 	__u64   lastuse;
 	__u64   expires;
+#ifdef HAVE_STRUCT_TCF_T_FIRSTUSE
 	__u64   firstuse;
+#endif
 };
 
 #define tc_gen \
