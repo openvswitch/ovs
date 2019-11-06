@@ -8,6 +8,8 @@ Post-v2.12.0
      * Add option to enable, disable and query TCP sequence checking in
        conntrack.
      * Add support for conntrack zone limits.
+     * Command "ovs-appctl dpctl/dump-flows" refactored to show subtable
+       miniflow bits for userspace datapath.
    - AF_XDP:
      * New option 'use-need-wakeup' for netdev-afxdp to control enabling
        of corresponding 'need_wakeup' flag in AF_XDP rings.  Enabled by default

@@ -513,6 +513,7 @@ struct dpif_flow_detailed_stats {
 struct dpif_flow_attrs {
     bool offloaded;         /* True if flow is offloaded to HW. */
     const char *dp_layer;   /* DP layer the flow is handled in. */
+    char *dp_extra_info;    /* Extra information provided by DP. */
 };
 
 struct dpif_flow_dump_types {
