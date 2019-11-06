@@ -25,6 +25,15 @@
 /* These functions are Linux AF_XDP specific, so they should be used directly
  * only by Linux-specific code. */
 
+enum afxdp_mode {
+    OVS_AF_XDP_MODE_UNSPEC,
+    OVS_AF_XDP_MODE_BEST_EFFORT,
+    OVS_AF_XDP_MODE_NATIVE_ZC,
+    OVS_AF_XDP_MODE_NATIVE,
+    OVS_AF_XDP_MODE_GENERIC,
+    OVS_AF_XDP_MODE_MAX,
+};
+
 struct netdev;
 struct xsk_socket_info;
 struct xdp_umem;

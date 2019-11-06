@@ -153,9 +153,8 @@ To kick start end-to-end autotesting::
   make check-afxdp TESTSUITEFLAGS='1'
 
 .. note::
-   Not all test cases pass at this time. Currenly all TCP related
-   tests, ex: using wget or http, are skipped due to XDP limitations
-   on veth. cvlan test is also skipped.
+   Not all test cases pass at this time. Currenly all cvlan tests are skipped
+   due to kernel issues.
 
 If a test case fails, check the log at::
 
@@ -177,33 +176,35 @@ in :doc:`general`::
   ovs-vsctl -- add-br br0 -- set Bridge br0 datapath_type=netdev
 
 Make sure your device driver support AF_XDP, netdev-afxdp supports
-the following additional options (see man ovs-vswitchd.conf.db for
+the following additional options (see ``man ovs-vswitchd.conf.db`` for
 more details):
 
- * **xdpmode**: use "drv" for driver mode, or "skb" for skb mode.
+ * ``xdp-mode``: ``best-effort``, ``native-with-zerocopy``,
+   ``native`` or ``generic``.  Defaults to ``best-effort``, i.e. best of
+   supported modes, so in most cases you don't need to change it.
 
- * **use-need-wakeup**: default "true" if libbpf supports it, otherwise false.
+ * ``use-need-wakeup``: default ``true`` if libbpf supports it,
+   otherwise ``false``.
 
 For example, to use 1 PMD (on core 4) on 1 queue (queue 0) device,
-configure these options: **pmd-cpu-mask, pmd-rxq-affinity, and n_rxq**.
-The **xdpmode** can be "drv" or "skb"::
+configure these options: ``pmd-cpu-mask``, ``pmd-rxq-affinity``, and
+``n_rxq``::
 
   ethtool -L enp2s0 combined 1
   ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x10
   ovs-vsctl add-port br0 enp2s0 -- set interface enp2s0 type="afxdp" \
-    options:n_rxq=1 options:xdpmode=drv \
-    other_config:pmd-rxq-affinity="0:4"
+                                   other_config:pmd-rxq-affinity="0:4"
 
 Or, use 4 pmds/cores and 4 queues by doing::
 
   ethtool -L enp2s0 combined 4
   ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x36
   ovs-vsctl add-port br0 enp2s0 -- set interface enp2s0 type="afxdp" \
-    options:n_rxq=4 options:xdpmode=drv \
-    other_config:pmd-rxq-affinity="0:1,1:2,2:3,3:4"
+    options:n_rxq=4 other_config:pmd-rxq-affinity="0:1,1:2,2:3,3:4"
 
 .. note::
-   pmd-rxq-affinity is optional. If not specified, system will auto-assign.
+   ``pmd-rxq-affinity`` is optional. If not specified, system will auto-assign.
+   ``n_rxq`` equals ``1`` by default.
 
 To validate that the bridge has successfully instantiated, you can use the::
 
@@ -214,12 +215,21 @@ Should show something like::
   Port "ens802f0"
    Interface "ens802f0"
       type: afxdp
-      options: {n_rxq="1", xdpmode=drv}
+      options: {n_rxq="1"}
 
 Otherwise, enable debugging by::
 
   ovs-appctl vlog/set netdev_afxdp::dbg
 
+To check which XDP mode was chosen by ``best-effort``, you can look for
+``xdp-mode-in-use`` in the output of ``ovs-appctl dpctl/show``::
+
+  # ovs-appctl dpctl/show
+  netdev@ovs-netdev:
+    <...>
+    port 2: ens802f0 (afxdp: n_rxq=1, use-need-wakeup=true,
+                      xdp-mode=best-effort,
+                      xdp-mode-in-use=native-with-zerocopy)
 
 References
 ----------
@@ -323,8 +333,13 @@ Limitations/Known Issues
 #. Most of the tests are done using i40e single port. Multiple ports and
    also ixgbe driver also needs to be tested.
 #. No latency test result (TODO items)
-#. Due to limitations of current upstream kernel, TCP and various offloading
+#. Due to limitations of current upstream kernel, various offloading
    (vlan, cvlan) is not working over virtual interfaces (i.e. veth pair).
+   Also, TCP is not working over virtual interfaces (veth) in generic XDP mode.
+   Some more information and possible workaround available `here
+   <https://github.com/cilium/cilium/issues/3077#issuecomment-430801467>`__ .
+   For TAP interfaces generic mode seems to work fine (TCP works) and even
+   could provide better performance than native mode in some cases.
 
 
 PVP using tap device
@@ -335,8 +350,7 @@ First, start OVS, then add physical port::
   ethtool -L enp2s0 combined 1
   ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x10
   ovs-vsctl add-port br0 enp2s0 -- set interface enp2s0 type="afxdp" \
-    options:n_rxq=1 options:xdpmode=drv \
-    other_config:pmd-rxq-affinity="0:4"
+    options:n_rxq=1 other_config:pmd-rxq-affinity="0:4"
 
 Start a VM with virtio and tap device::
 
@@ -414,13 +428,11 @@ Create namespace and veth peer devices::
 
 Attach the veth port to br0 (linux kernel mode)::
 
-  ovs-vsctl add-port br0 afxdp-p0 -- \
-    set interface afxdp-p0 options:n_rxq=1
+  ovs-vsctl add-port br0 afxdp-p0 -- set interface afxdp-p0
 
-Or, use AF_XDP with skb mode::
+Or, use AF_XDP::
 
-  ovs-vsctl add-port br0 afxdp-p0 -- \
-    set interface afxdp-p0 type="afxdp" options:n_rxq=1 options:xdpmode=skb
+  ovs-vsctl add-port br0 afxdp-p0 -- set interface afxdp-p0 type="afxdp"
 
 Setup the OpenFlow rules::
 

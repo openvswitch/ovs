@@ -30,10 +30,3 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
      AT_CHECK([ethtool -K $1 txvlan off], [0], [ignore], [ignore])
     ]
 )
-
-# OVS_START_L7([namespace], [protocol])
-#
-# AF_XDP doesn't work with TCP over virtual interfaces for now.
-#
-m4_define([OVS_START_L7],
-   [AT_SKIP_IF([:])])

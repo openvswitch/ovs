@@ -3107,18 +3107,38 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
-      <column name="options" key="xdpmode"
+      <column name="options" key="xdp-mode"
               type='{"type": "string",
-                     "enum": ["set", ["skb", "drv"]]}'>
+                     "enum": ["set", ["best-effort", "native-with-zerocopy",
+                                      "native", "generic"]]}'>
         <p>
           Specifies the operational mode of the XDP program.
-          If "drv", the XDP program is loaded into the device driver with
-          zero-copy RX and TX enabled. This mode requires device driver with
-          AF_XDP support and has the best performance.
-          If "skb", the XDP program is using generic XDP mode in kernel with
-          extra data copying between userspace and kernel. No device driver
-          support is needed. Note that this is afxdp netdev type only.
-          Defaults to "skb" mode.
+          <p>
+            In <code>native-with-zerocopy</code> mode the XDP program is loaded
+            into the device driver with zero-copy RX and TX enabled.  This mode
+            requires device driver support and has the best performance because
+            there should be no copying of packets.
+          </p>
+          <p>
+            <code>native</code> is the same as
+            <code>native-with-zerocopy</code>, but without zero-copy
+            capability.  This requires at least one copy between kernel and the
+            userspace. This mode also requires support from device driver.
+          </p>
+          <p>
+            In <code>generic</code> case the XDP program in kernel works after
+            skb allocation on early stages of packet processing inside the
+            network stack.  This mode doesn't require driver support, but has
+            much lower performance.
+          </p>
+          <p>
+            <code>best-effort</code> tries to detect and choose the best
+            (fastest) from the available modes for current interface.
+          </p>
+          <p>
+            Note that this option is specific to netdev-afxdp.
+            Defaults to <code>best-effort</code> mode.
+          </p>
         </p>
       </column>
 

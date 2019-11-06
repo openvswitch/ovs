@@ -89,11 +89,45 @@ BUILD_ASSERT_DECL(PROD_NUM_DESCS == CONS_NUM_DESCS);
 #define UMEM2DESC(elem, base) ((uint64_t)((char *)elem - (char *)base))
 
 static struct xsk_socket_info *xsk_configure(int ifindex, int xdp_queue_id,
-                                             int mode, bool use_need_wakeup);
-static void xsk_remove_xdp_program(uint32_t ifindex, int xdpmode);
+                                             enum afxdp_mode mode,
+                                             bool use_need_wakeup,
+                                             bool report_socket_failures);
+static void xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode);
 static void xsk_destroy(struct xsk_socket_info *xsk);
 static int xsk_configure_all(struct netdev *netdev);
 static void xsk_destroy_all(struct netdev *netdev);
+
+static struct {
+    const char *name;
+    uint32_t bind_flags;
+    uint32_t xdp_flags;
+} xdp_modes[] = {
+    [OVS_AF_XDP_MODE_UNSPEC] = {
+        .name = "unspecified",
+        .bind_flags = 0,
+        .xdp_flags = 0,
+    },
+    [OVS_AF_XDP_MODE_BEST_EFFORT] = {
+        .name = "best-effort",
+        .bind_flags = 0,
+        .xdp_flags = 0,
+    },
+    [OVS_AF_XDP_MODE_NATIVE_ZC] = {
+        .name = "native-with-zerocopy",
+        .bind_flags = XDP_ZEROCOPY,
+        .xdp_flags = XDP_FLAGS_DRV_MODE,
+    },
+    [OVS_AF_XDP_MODE_NATIVE] = {
+        .name = "native",
+        .bind_flags = XDP_COPY,
+        .xdp_flags = XDP_FLAGS_DRV_MODE,
+    },
+    [OVS_AF_XDP_MODE_GENERIC] = {
+        .name = "generic",
+        .bind_flags = XDP_COPY,
+        .xdp_flags = XDP_FLAGS_SKB_MODE,
+    },
+};
 
 struct unused_pool {
     struct xsk_umem_info *umem_info;
@@ -214,7 +248,7 @@ netdev_afxdp_sweep_unused_pools(void *aux OVS_UNUSED)
 }
 
 static struct xsk_umem_info *
-xsk_configure_umem(void *buffer, uint64_t size, int xdpmode)
+xsk_configure_umem(void *buffer, uint64_t size)
 {
     struct xsk_umem_config uconfig;
     struct xsk_umem_info *umem;
@@ -232,9 +266,7 @@ xsk_configure_umem(void *buffer, uint64_t size, int xdpmode)
     ret = xsk_umem__create(&umem->umem, buffer, size, &umem->fq, &umem->cq,
                            &uconfig);
     if (ret) {
-        VLOG_ERR("xsk_umem__create failed (%s) mode: %s",
-                 ovs_strerror(errno),
-                 xdpmode == XDP_COPY ? "SKB": "DRV");
+        VLOG_ERR("xsk_umem__create failed: %s.", ovs_strerror(errno));
         free(umem);
         return NULL;
     }
@@ -290,7 +322,8 @@ xsk_configure_umem(void *buffer, uint64_t size, int xdpmode)
 
 static struct xsk_socket_info *
 xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
-                     uint32_t queue_id, int xdpmode, bool use_need_wakeup)
+                     uint32_t queue_id, enum afxdp_mode mode,
+                     bool use_need_wakeup, bool report_socket_failures)
 {
     struct xsk_socket_config cfg;
     struct xsk_socket_info *xsk;
@@ -304,14 +337,8 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
     cfg.rx_size = CONS_NUM_DESCS;
     cfg.tx_size = PROD_NUM_DESCS;
     cfg.libbpf_flags = 0;
-
-    if (xdpmode == XDP_ZEROCOPY) {
-        cfg.bind_flags = XDP_ZEROCOPY;
-        cfg.xdp_flags = XDP_FLAGS_UPDATE_IF_NOEXIST | XDP_FLAGS_DRV_MODE;
-    } else {
-        cfg.bind_flags = XDP_COPY;
-        cfg.xdp_flags = XDP_FLAGS_UPDATE_IF_NOEXIST | XDP_FLAGS_SKB_MODE;
-    }
+    cfg.bind_flags = xdp_modes[mode].bind_flags;
+    cfg.xdp_flags = xdp_modes[mode].xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST;
 
 #ifdef HAVE_XDP_NEED_WAKEUP
     if (use_need_wakeup) {
@@ -329,12 +356,11 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
     ret = xsk_socket__create(&xsk->xsk, devname, queue_id, umem->umem,
                              &xsk->rx, &xsk->tx, &cfg);
     if (ret) {
-        VLOG_ERR("xsk_socket__create failed (%s) mode: %s "
-                 "use-need-wakeup: %s qid: %d",
-                 ovs_strerror(errno),
-                 xdpmode == XDP_COPY ? "SKB": "DRV",
-                 use_need_wakeup ? "true" : "false",
-                 queue_id);
+        VLOG(report_socket_failures ? VLL_ERR : VLL_DBG,
+             "xsk_socket__create failed (%s) mode: %s, "
+             "use-need-wakeup: %s, qid: %d",
+             ovs_strerror(errno), xdp_modes[mode].name,
+             use_need_wakeup ? "true" : "false", queue_id);
         free(xsk);
         return NULL;
     }
@@ -375,8 +401,8 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
 }
 
 static struct xsk_socket_info *
-xsk_configure(int ifindex, int xdp_queue_id, int xdpmode,
-              bool use_need_wakeup)
+xsk_configure(int ifindex, int xdp_queue_id, enum afxdp_mode mode,
+              bool use_need_wakeup, bool report_socket_failures)
 {
     struct xsk_socket_info *xsk;
     struct xsk_umem_info *umem;
@@ -389,9 +415,7 @@ xsk_configure(int ifindex, int xdp_queue_id, int xdpmode,
     memset(bufs, 0, NUM_FRAMES * FRAME_SIZE);
 
     /* Create AF_XDP socket. */
-    umem = xsk_configure_umem(bufs,
-                              NUM_FRAMES * FRAME_SIZE,
-                              xdpmode);
+    umem = xsk_configure_umem(bufs, NUM_FRAMES * FRAME_SIZE);
     if (!umem) {
         free_pagealign(bufs);
         return NULL;
@@ -399,8 +423,8 @@ xsk_configure(int ifindex, int xdp_queue_id, int xdpmode,
 
     VLOG_DBG("Allocated umem pool at 0x%"PRIxPTR, (uintptr_t) umem);
 
-    xsk = xsk_configure_socket(umem, ifindex, xdp_queue_id, xdpmode,
-                               use_need_wakeup);
+    xsk = xsk_configure_socket(umem, ifindex, xdp_queue_id, mode,
+                               use_need_wakeup, report_socket_failures);
     if (!xsk) {
         /* Clean up umem and xpacket pool. */
         if (xsk_umem__delete(umem->umem)) {
@@ -415,11 +439,37 @@ xsk_configure(int ifindex, int xdp_queue_id, int xdpmode,
 }
 
 static int
+xsk_configure_queue(struct netdev_linux *dev, int ifindex, int queue_id,
+                    enum afxdp_mode mode, bool report_socket_failures)
+{
+    struct xsk_socket_info *xsk_info;
+
+    VLOG_DBG("%s: configuring queue: %d, mode: %s, use-need-wakeup: %s.",
+             netdev_get_name(&dev->up), queue_id, xdp_modes[mode].name,
+             dev->use_need_wakeup ? "true" : "false");
+    xsk_info = xsk_configure(ifindex, queue_id, mode, dev->use_need_wakeup,
+                             report_socket_failures);
+    if (!xsk_info) {
+        VLOG(report_socket_failures ? VLL_ERR : VLL_DBG,
+             "%s: Failed to create AF_XDP socket on queue %d in %s mode.",
+             netdev_get_name(&dev->up), queue_id, xdp_modes[mode].name);
+        dev->xsks[queue_id] = NULL;
+        return -1;
+    }
+    dev->xsks[queue_id] = xsk_info;
+    atomic_init(&xsk_info->tx_dropped, 0);
+    xsk_info->outstanding_tx = 0;
+    xsk_info->available_rx = PROD_NUM_DESCS;
+    return 0;
+}
+
+
+static int
 xsk_configure_all(struct netdev *netdev)
 {
     struct netdev_linux *dev = netdev_linux_cast(netdev);
-    struct xsk_socket_info *xsk_info;
     int i, ifindex, n_rxq, n_txq;
+    int qid = 0;
 
     ifindex = linux_get_ifindex(netdev_get_name(netdev));
 
@@ -429,23 +479,36 @@ xsk_configure_all(struct netdev *netdev)
     n_rxq = netdev_n_rxq(netdev);
     dev->xsks = xcalloc(n_rxq, sizeof *dev->xsks);
 
-    /* Configure each queue. */
-    for (i = 0; i < n_rxq; i++) {
-        VLOG_DBG("%s: configure queue %d mode %s use-need-wakeup %s.",
-                 netdev_get_name(netdev), i,
-                 dev->xdpmode == XDP_COPY ? "SKB" : "DRV",
-                 dev->use_need_wakeup ? "true" : "false");
-        xsk_info = xsk_configure(ifindex, i, dev->xdpmode,
-                                 dev->use_need_wakeup);
-        if (!xsk_info) {
-            VLOG_ERR("Failed to create AF_XDP socket on queue %d.", i);
-            dev->xsks[i] = NULL;
+    if (dev->xdp_mode == OVS_AF_XDP_MODE_BEST_EFFORT) {
+        /* Trying to configure first queue with different modes to
+         * find the most suitable. */
+        for (i = OVS_AF_XDP_MODE_NATIVE_ZC; i < OVS_AF_XDP_MODE_MAX; i++) {
+            if (!xsk_configure_queue(dev, ifindex, qid, i,
+                                     i == OVS_AF_XDP_MODE_MAX - 1)) {
+                dev->xdp_mode_in_use = i;
+                VLOG_INFO("%s: %s XDP mode will be in use.",
+                          netdev_get_name(netdev), xdp_modes[i].name);
+                break;
+            }
+        }
+        if (i == OVS_AF_XDP_MODE_MAX) {
+            VLOG_ERR("%s: Failed to detect suitable XDP mode.",
+                     netdev_get_name(netdev));
             goto err;
         }
-        dev->xsks[i] = xsk_info;
-        atomic_init(&xsk_info->tx_dropped, 0);
-        xsk_info->outstanding_tx = 0;
-        xsk_info->available_rx = PROD_NUM_DESCS;
+        qid++;
+    } else {
+        dev->xdp_mode_in_use = dev->xdp_mode;
+    }
+
+    /* Configure remaining queues. */
+    for (; qid < n_rxq; qid++) {
+        if (xsk_configure_queue(dev, ifindex, qid,
+                                dev->xdp_mode_in_use, true)) {
+            VLOG_ERR("%s: Failed to create AF_XDP socket on queue %d.",
+                     netdev_get_name(netdev), qid);
+            goto err;
+        }
     }
 
     n_txq = netdev_n_txq(netdev);
@@ -500,7 +563,7 @@ xsk_destroy_all(struct netdev *netdev)
             if (dev->xsks[i]) {
                 xsk_destroy(dev->xsks[i]);
                 dev->xsks[i] = NULL;
-                VLOG_INFO("Destroyed xsk[%d].", i);
+                VLOG_DBG("%s: Destroyed xsk[%d].", netdev_get_name(netdev), i);
             }
         }
 
@@ -510,7 +573,7 @@ xsk_destroy_all(struct netdev *netdev)
 
     VLOG_INFO("%s: Removing xdp program.", netdev_get_name(netdev));
     ifindex = linux_get_ifindex(netdev_get_name(netdev));
-    xsk_remove_xdp_program(ifindex, dev->xdpmode);
+    xsk_remove_xdp_program(ifindex, dev->xdp_mode_in_use);
 
     if (dev->tx_locks) {
         for (i = 0; i < netdev_n_txq(netdev); i++) {
@@ -526,9 +589,10 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
                         char **errp OVS_UNUSED)
 {
     struct netdev_linux *dev = netdev_linux_cast(netdev);
-    const char *str_xdpmode;
-    int xdpmode, new_n_rxq;
+    const char *str_xdp_mode;
+    enum afxdp_mode xdp_mode;
     bool need_wakeup;
+    int new_n_rxq;
 
     ovs_mutex_lock(&dev->mutex);
     new_n_rxq = MAX(smap_get_int(args, "n_rxq", NR_QUEUE), 1);
@@ -539,14 +603,17 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
         return EINVAL;
     }
 
-    str_xdpmode = smap_get_def(args, "xdpmode", "skb");
-    if (!strcasecmp(str_xdpmode, "drv")) {
-        xdpmode = XDP_ZEROCOPY;
-    } else if (!strcasecmp(str_xdpmode, "skb")) {
-        xdpmode = XDP_COPY;
-    } else {
-        VLOG_ERR("%s: Incorrect xdpmode (%s).",
-                 netdev_get_name(netdev), str_xdpmode);
+    str_xdp_mode = smap_get_def(args, "xdp-mode", "best-effort");
+    for (xdp_mode = OVS_AF_XDP_MODE_BEST_EFFORT;
+         xdp_mode < OVS_AF_XDP_MODE_MAX;
+         xdp_mode++) {
+        if (!strcasecmp(str_xdp_mode, xdp_modes[xdp_mode].name)) {
+            break;
+        }
+    }
+    if (xdp_mode == OVS_AF_XDP_MODE_MAX) {
+        VLOG_ERR("%s: Incorrect xdp-mode (%s).",
+                 netdev_get_name(netdev), str_xdp_mode);
         ovs_mutex_unlock(&dev->mutex);
         return EINVAL;
     }
@@ -560,10 +627,10 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
 #endif
 
     if (dev->requested_n_rxq != new_n_rxq
-        || dev->requested_xdpmode != xdpmode
+        || dev->requested_xdp_mode != xdp_mode
         || dev->requested_need_wakeup != need_wakeup) {
         dev->requested_n_rxq = new_n_rxq;
-        dev->requested_xdpmode = xdpmode;
+        dev->requested_xdp_mode = xdp_mode;
         dev->requested_need_wakeup = need_wakeup;
         netdev_request_reconfigure(netdev);
     }
@@ -578,8 +645,9 @@ netdev_afxdp_get_config(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
-    smap_add_format(args, "xdpmode", "%s",
-                    dev->xdpmode == XDP_ZEROCOPY ? "drv" : "skb");
+    smap_add_format(args, "xdp-mode", "%s", xdp_modes[dev->xdp_mode].name);
+    smap_add_format(args, "xdp-mode-in-use", "%s",
+                    xdp_modes[dev->xdp_mode_in_use].name);
     smap_add_format(args, "use-need-wakeup", "%s",
                     dev->use_need_wakeup ? "true" : "false");
     ovs_mutex_unlock(&dev->mutex);
@@ -596,7 +664,7 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
     ovs_mutex_lock(&dev->mutex);
 
     if (netdev->n_rxq == dev->requested_n_rxq
-        && dev->xdpmode == dev->requested_xdpmode
+        && dev->xdp_mode == dev->requested_xdp_mode
         && dev->use_need_wakeup == dev->requested_need_wakeup
         && dev->xsks) {
         goto out;
@@ -607,9 +675,9 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
     netdev->n_rxq = dev->requested_n_rxq;
     netdev->n_txq = netdev->n_rxq;
 
-    dev->xdpmode = dev->requested_xdpmode;
+    dev->xdp_mode = dev->requested_xdp_mode;
     VLOG_INFO("%s: Setting XDP mode to %s.", netdev_get_name(netdev),
-              dev->xdpmode == XDP_ZEROCOPY ? "DRV" : "SKB");
+              xdp_modes[dev->xdp_mode].name);
 
     if (setrlimit(RLIMIT_MEMLOCK, &r)) {
         VLOG_ERR("setrlimit(RLIMIT_MEMLOCK) failed: %s", ovs_strerror(errno));
@@ -618,7 +686,8 @@ netdev_afxdp_reconfigure(struct netdev *netdev)
 
     err = xsk_configure_all(netdev);
     if (err) {
-        VLOG_ERR("AF_XDP device %s reconfig failed.", netdev_get_name(netdev));
+        VLOG_ERR("%s: AF_XDP device reconfiguration failed.",
+                 netdev_get_name(netdev));
     }
     netdev_change_seq_changed(netdev);
 out:
@@ -638,17 +707,9 @@ netdev_afxdp_get_numa_id(const struct netdev *netdev)
 }
 
 static void
-xsk_remove_xdp_program(uint32_t ifindex, int xdpmode)
+xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode mode)
 {
-    uint32_t flags;
-
-    flags = XDP_FLAGS_UPDATE_IF_NOEXIST;
-
-    if (xdpmode == XDP_COPY) {
-        flags |= XDP_FLAGS_SKB_MODE;
-    } else if (xdpmode == XDP_ZEROCOPY) {
-        flags |= XDP_FLAGS_DRV_MODE;
-    }
+    uint32_t flags = xdp_modes[mode].xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST;
 
     bpf_set_link_xdp_fd(ifindex, -1, flags);
 }
@@ -662,7 +723,7 @@ signal_remove_xdp(struct netdev *netdev)
     ifindex = linux_get_ifindex(netdev_get_name(netdev));
 
     VLOG_WARN("Force removing xdp program.");
-    xsk_remove_xdp_program(ifindex, dev->xdpmode);
+    xsk_remove_xdp_program(ifindex, dev->xdp_mode_in_use);
 }
 
 static struct dp_packet_afxdp *
@@ -782,7 +843,8 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 }
 
 static inline int
-kick_tx(struct xsk_socket_info *xsk_info, int xdpmode, bool use_need_wakeup)
+kick_tx(struct xsk_socket_info *xsk_info, enum afxdp_mode mode,
+        bool use_need_wakeup)
 {
     int ret, retries;
     static const int KERNEL_TX_BATCH_SIZE = 16;
@@ -791,11 +853,11 @@ kick_tx(struct xsk_socket_info *xsk_info, int xdpmode, bool use_need_wakeup)
         return 0;
     }
 
-    /* In SKB_MODE packet transmission is synchronous, and the kernel xmits
+    /* In generic mode packet transmission is synchronous, and the kernel xmits
      * only TX_BATCH_SIZE(16) packets for a single sendmsg syscall.
      * So, we have to kick the kernel (n_packets / 16) times to be sure that
      * all packets are transmitted. */
-    retries = (xdpmode == XDP_COPY)
+    retries = (mode == OVS_AF_XDP_MODE_GENERIC)
               ? xsk_info->outstanding_tx / KERNEL_TX_BATCH_SIZE
               : 0;
 kick_retry:
@@ -962,7 +1024,7 @@ __netdev_afxdp_batch_send(struct netdev *netdev, int qid,
                            &orig);
         COVERAGE_INC(afxdp_tx_full);
         afxdp_complete_tx(xsk_info);
-        kick_tx(xsk_info, dev->xdpmode, dev->use_need_wakeup);
+        kick_tx(xsk_info, dev->xdp_mode_in_use, dev->use_need_wakeup);
         error = ENOMEM;
         goto out;
     }
@@ -986,7 +1048,7 @@ __netdev_afxdp_batch_send(struct netdev *netdev, int qid,
     xsk_ring_prod__submit(&xsk_info->tx, dp_packet_batch_size(batch));
     xsk_info->outstanding_tx += dp_packet_batch_size(batch);
 
-    ret = kick_tx(xsk_info, dev->xdpmode, dev->use_need_wakeup);
+    ret = kick_tx(xsk_info, dev->xdp_mode_in_use, dev->use_need_wakeup);
     if (OVS_UNLIKELY(ret)) {
         VLOG_WARN_RL(&rl, "%s: error sending AF_XDP packet: %s.",
                      netdev_get_name(netdev), ovs_strerror(ret));
@@ -1052,10 +1114,11 @@ netdev_afxdp_construct(struct netdev *netdev)
     /* Queues should not be used before the first reconfiguration. Clearing. */
     netdev->n_rxq = 0;
     netdev->n_txq = 0;
-    dev->xdpmode = 0;
+    dev->xdp_mode = OVS_AF_XDP_MODE_UNSPEC;
+    dev->xdp_mode_in_use = OVS_AF_XDP_MODE_UNSPEC;
 
     dev->requested_n_rxq = NR_QUEUE;
-    dev->requested_xdpmode = XDP_COPY;
+    dev->requested_xdp_mode = OVS_AF_XDP_MODE_BEST_EFFORT;
     dev->requested_need_wakeup = NEED_WAKEUP_DEFAULT;
 
     dev->xsks = NULL;
