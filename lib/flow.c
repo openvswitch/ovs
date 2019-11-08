@@ -1139,11 +1139,11 @@ parse_tcp_flags(struct dp_packet *packet)
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;
         const struct ovs_16aligned_ip6_frag *frag_hdr;
+        nw_proto = nh->ip6_nxt;
         if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag,
             &frag_hdr)) {
             return 0;
         }
-        nw_proto = nh->ip6_nxt;
     } else {
         return 0;
     }
