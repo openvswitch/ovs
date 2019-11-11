@@ -434,6 +434,8 @@ dpdk_init__(const struct smap *ovs_other_config)
 
 #ifdef DPDK_PDUMP
     VLOG_INFO("DPDK pdump packet capture enabled");
+    VLOG_WARN("DPDK pdump support is deprecated and "
+              "will be removed in next OVS releases.");
     err = rte_pdump_init(ovs_rundir());
     if (err) {
         VLOG_INFO("Error initialising DPDK pdump");

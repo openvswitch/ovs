@@ -27,10 +27,16 @@ pdump
 
 .. versionadded:: 2.6.0
 
+.. warning::
+
+   DPDK pdump support is deprecated in OVS and will be removed in next
+   releases.
+
 pdump allows you to listen on DPDK ports and view the traffic that is passing
 on them. To use this utility, one must have libpcap installed on the system.
 Furthermore, DPDK must be built with ``CONFIG_RTE_LIBRTE_PDUMP=y`` and
-``CONFIG_RTE_LIBRTE_PMD_PCAP=y``.
+``CONFIG_RTE_LIBRTE_PMD_PCAP=y``. OVS should be built with
+``--enable-dpdk-pdump`` configuration option.
 
 .. warning::
 
