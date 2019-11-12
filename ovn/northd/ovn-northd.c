@@ -1194,7 +1194,14 @@ ipam_add_port_addresses(struct ovn_datapath *od, struct ovn_port *op)
 
         for (size_t i = 0; i < lrp_networks.n_ipv4_addrs; i++) {
             uint32_t ip = ntohl(lrp_networks.ipv4_addrs[i].addr);
-            ipam_insert_ip(op->peer->od, ip);
+            /* If the router has the first IP address of the subnet, don't add
+             * it to IPAM. We already added this when we initialized IPAM for
+             * the datapath. This will just result in an erroneous message
+             * about a duplicate IP address.
+             */
+            if (ip != op->peer->od->ipam_info.start_ipv4) {
+                ipam_insert_ip(op->peer->od, ip);
+            }
         }
 
         destroy_lport_addresses(&lrp_networks);
