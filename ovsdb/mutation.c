@@ -147,6 +147,8 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
         if (error && ovsdb_type_is_map(&m->type)
             && m->mutator == OVSDB_M_DELETE) {
             ovsdb_error_destroy(error);
+            ovsdb_base_type_destroy(&m->type.value);
+            m->type.value.enum_ = NULL;
             m->type.value.type = OVSDB_TYPE_VOID;
             error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
                                           symtab);
