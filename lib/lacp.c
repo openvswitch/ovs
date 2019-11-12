@@ -86,6 +86,12 @@ BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
 
 /* Implementation. */
 
+enum pdu_subtype {
+    SUBTYPE_UNUSED = 0,
+    SUBTYPE_LACP,       /* Link Aggregation Control Protocol. */
+    SUBTYPE_MARKER,     /* Link Aggregation Marker Protocol. */
+};
+
 enum slave_status {
     LACP_CURRENT,   /* Current State.  Partner up to date. */
     LACP_EXPIRED,   /* Expired State.  Partner out of date. */
@@ -130,6 +136,7 @@ struct slave {
 
     uint32_t count_rx_pdus;         /* dot3adAggPortStatsLACPDUsRx */
     uint32_t count_rx_pdus_bad;     /* dot3adAggPortStatsIllegalRx */
+    uint32_t count_rx_pdus_marker;  /* dot3adAggPortStatsMarkerPDUsRx */
     uint32_t count_tx_pdus;         /* dot3adAggPortStatsLACPDUsTx */
     uint32_t count_link_expired;    /* Num of times link expired */
     uint32_t count_link_defaulted;  /* Num of times link defaulted */
@@ -183,12 +190,13 @@ compose_lacp_pdu(const struct lacp_info *actor,
     pdu->collector_delay = htons(0);
 }
 
-/* Parses 'b' which represents a packet containing a LACP PDU.  This function
- * returns NULL if 'b' is malformed, or does not represent a LACP PDU format
+/* Parses 'p' which represents a packet containing a LACP PDU. This function
+ * returns NULL if 'p' is malformed, or does not represent a LACP PDU format
  * supported by OVS.  Otherwise, it returns a pointer to the lacp_pdu contained
- * within 'b'. */
+ * within 'p'. It also returns the subtype of PDU.*/
+
 static const struct lacp_pdu *
-parse_lacp_packet(const struct dp_packet *p)
+parse_lacp_packet(const struct dp_packet *p, enum pdu_subtype *subtype)
 {
     const struct lacp_pdu *pdu;
 
@@ -198,8 +206,13 @@ parse_lacp_packet(const struct dp_packet *p)
     if (pdu && pdu->subtype == 1
         && pdu->actor_type == 1 && pdu->actor_len == 20
         && pdu->partner_type == 2 && pdu->partner_len == 20) {
+        *subtype = SUBTYPE_LACP;
         return pdu;
-    } else {
+    } else if (pdu && pdu->subtype == SUBTYPE_MARKER) {
+        *subtype = SUBTYPE_MARKER;
+        return NULL;
+    } else{
+        *subtype = SUBTYPE_UNUSED;
         return NULL;
     }
 }
@@ -336,6 +349,7 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     long long int tx_rate;
     struct slave *slave;
     bool lacp_may_enable = false;
+    enum pdu_subtype subtype;
 
     lacp_lock();
     slave = slave_lookup(lacp, slave_);
@@ -344,11 +358,20 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     }
     slave->count_rx_pdus++;
 
-    pdu = parse_lacp_packet(packet);
-    if (!pdu) {
-        slave->count_rx_pdus_bad++;
-        VLOG_WARN_RL(&rl, "%s: received an unparsable LACP PDU.", lacp->name);
-        goto out;
+    pdu = parse_lacp_packet(packet, &subtype);
+    switch (subtype) {
+        case SUBTYPE_LACP:
+            break;
+        case SUBTYPE_MARKER:
+            slave->count_rx_pdus_marker++;
+            VLOG_DBG("%s: received a LACP marker PDU.", lacp->name);
+            goto out;
+        case SUBTYPE_UNUSED:
+        default:
+            slave->count_rx_pdus_bad++;
+            VLOG_WARN_RL(&rl, "%s: received an unparsable LACP PDU.",
+                         lacp->name);
+            goto out;
     }
 
     /* On some NICs L1 state reporting is slow. In case LACP packets are
@@ -367,7 +390,7 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
 
     slave->ntt_actor = pdu->partner;
 
-    /* Update our information about our partner if it's out of date.  This may
+    /* Update our information about our partner if it's out of date. This may
      * cause priorities to change so re-calculate attached status of all
      * slaves.  */
     if (memcmp(&slave->partner, &pdu->actor, sizeof pdu->actor)) {
@@ -1054,9 +1077,11 @@ lacp_print_stats(struct ds *ds, struct lacp *lacp) OVS_REQUIRES(mutex)
     for (i = 0; i < shash_count(&slave_shash); i++) {
         slave = sorted_slaves[i]->data;
         ds_put_format(ds, "\nslave: %s:\n", slave->name);
+        ds_put_format(ds, "  TX PDUs: %u\n", slave->count_tx_pdus);
         ds_put_format(ds, "  RX PDUs: %u\n", slave->count_rx_pdus);
         ds_put_format(ds, "  RX Bad PDUs: %u\n", slave->count_rx_pdus_bad);
-        ds_put_format(ds, "  TX PDUs: %u\n", slave->count_tx_pdus);
+        ds_put_format(ds, "  RX Marker Request PDUs: %u\n",
+                      slave->count_rx_pdus_marker);
         ds_put_format(ds, "  Link Expired: %u\n",
                       slave->count_link_expired);
         ds_put_format(ds, "  Link Defaulted: %u\n",
