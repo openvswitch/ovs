@@ -511,6 +511,7 @@ raft_install_snapshot_request_to_jsonrpc(
     json_object_put(args, "last_servers", json_clone(rq->last_servers));
     json_object_put_format(args, "last_eid",
                            UUID_FMT, UUID_ARGS(&rq->last_eid));
+    raft_put_uint64(args, "election_timer", rq->election_timer);
 
     json_object_put(args, "data", json_clone(rq->data));
 }
@@ -527,6 +528,9 @@ raft_install_snapshot_request_from_jsonrpc(
     rq->last_index = raft_parse_required_uint64(p, "last_index");
     rq->last_term = raft_parse_required_uint64(p, "last_term");
     rq->last_eid = raft_parse_required_uuid(p, "last_eid");
+    /* election_timer is optional in file header, but is always populated in
+     * install_snapshot_request. */
+    rq->election_timer = raft_parse_required_uint64(p, "election_timer");
 
     rq->data = json_nullable_clone(
         ovsdb_parser_member(p, "data", OP_OBJECT | OP_ARRAY));
@@ -541,6 +545,7 @@ raft_format_install_snapshot_request(
     ds_put_format(s, " last_term=%"PRIu64, rq->last_term);
     ds_put_format(s, " last_eid="UUID_FMT, UUID_ARGS(&rq->last_eid));
     ds_put_cstr(s, " last_servers=");
+    ds_put_format(s, " election_timer=%"PRIu64, rq->election_timer);
 
     struct hmap servers;
     struct ovsdb_error *error =
