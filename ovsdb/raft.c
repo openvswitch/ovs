@@ -3257,7 +3257,7 @@ raft_send_install_snapshot_request(struct raft *raft,
             .last_servers = raft->snap.servers,
             .last_eid = raft->snap.eid,
             .data = raft->snap.data,
-            .election_timer = raft->election_timer,
+            .election_timer = raft->election_timer, /* use latest value */
         }
     };
     raft_send(raft, &rpc);

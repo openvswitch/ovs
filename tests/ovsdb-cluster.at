@@ -233,6 +233,55 @@ done
 OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s1 cluster/status $schema_name | grep "Election timer: 4000"])
 OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s2 cluster/status $schema_name | grep "Election timer: 4000"])
 
+# Latest timer should be restored after DB compact and restart.
+# This is to test the install_snapshot RPC.
+
+# XXX: Insert data before compact, because otherwise transaction will trigger
+# busy loop after compact.
+# poll_loop|DBG|wakeup due to 0-ms timeout at ../ovsdb/trigger.c:164 (89% CPU usage)
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1}}]]'], [0], [ignore], [ignore])
+
+# Compact online
+for i in `seq $n`; do
+    AT_CHECK([ovs-appctl -t "`pwd`"/s$i ovsdb-server/compact])
+done
+
+# XXX: Insert data after compact, because otherwise vote will fail after
+# cluster restart after compact. There will be error logs like:
+# raft|ERR|internal error: deferred vote_request message completed but not ready to send because message index 9 is past last synced index 0: s2 vote_request: term=6 last_log_index=9 last_log_term=4
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1}}]]'], [0], [ignore], [ignore])
+
+for i in `seq $n`; do
+    printf "\ns$i: stopping\n"
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+for i in `seq $n`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in `seq $n`; do
+    OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s$i cluster/status $schema_name | grep "Election timer: 4000"])
+done
+
+# Wait until cluster is ready
+for i in `seq $n`; do
+    OVS_WAIT_WHILE([ovs-appctl -t "`pwd`"/s$i cluster/status $schema_name | grep "Leader: unknown"])
+done
+
+# Newly joined member should use latest timer value
+AT_CHECK([ovsdb-tool join-cluster s4.db $schema_name unix:s4.raft unix:s1.raft])
+AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s4.log --pidfile=s4.pid --unixctl=s4 --remote=punix:s4.ovsdb s4.db])
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s4 cluster/status $schema_name | grep "Election timer: 4000"])
+# for i in `seq 10`; do
+#     ovs-appctl -t "`pwd`"/s4 cluster/status $schema_name
+#     sleep 1
+# done
+
 AT_CLEANUP
 
 
