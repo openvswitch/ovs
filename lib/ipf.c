@@ -899,7 +899,8 @@ ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
                       MIN(max_frag_list_size, IPF_FRAG_LIST_MIN_INCREMENT));
         hmap_insert(&ipf->frag_lists, &ipf_list->node, hash);
         ipf_expiry_list_add(&ipf->frag_exp_list, ipf_list, now);
-    } else if (ipf_list->state == IPF_LIST_STATE_REASS_FAIL) {
+    } else if (ipf_list->state == IPF_LIST_STATE_REASS_FAIL ||
+               ipf_list->state == IPF_LIST_STATE_COMPLETED) {
         /* Bail out as early as possible. */
         return false;
     } else if (ipf_list->last_inuse_idx + 1 >= ipf_list->size) {
