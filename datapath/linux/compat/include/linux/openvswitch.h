@@ -210,6 +210,7 @@ enum ovs_packet_attr {
 				       error logging should be suppressed. */
 	OVS_PACKET_ATTR_MRU,	    /* Maximum received IP fragment size. */
 	OVS_PACKET_ATTR_LEN,		/* Packet size before truncation. */
+	OVS_PACKET_ATTR_HASH,		/* Packet hash. */
 	__OVS_PACKET_ATTR_MAX
 };
 

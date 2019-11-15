@@ -1777,6 +1777,10 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
     if (d_exec->mtu) {
         nl_msg_put_u16(buf, OVS_PACKET_ATTR_MRU, d_exec->mtu);
     }
+
+    if (d_exec->hash) {
+        nl_msg_put_u64(buf, OVS_PACKET_ATTR_HASH, d_exec->hash);
+    }
 }
 
 /* Executes, against 'dpif', up to the first 'n_ops' operations in 'ops'.
@@ -2461,7 +2465,8 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
         [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_UNSPEC, .optional = true },
         [OVS_PACKET_ATTR_EGRESS_TUN_KEY] = { .type = NL_A_NESTED, .optional = true },
         [OVS_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
-        [OVS_PACKET_ATTR_MRU] = { .type = NL_A_U16, .optional = true }
+        [OVS_PACKET_ATTR_MRU] = { .type = NL_A_U16, .optional = true },
+        [OVS_PACKET_ATTR_HASH] = { .type = NL_A_U64, .optional = true }
     };
 
     struct ofpbuf b = ofpbuf_const_initializer(buf->data, buf->size);
@@ -2494,6 +2499,7 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
     upcall->out_tun_key = a[OVS_PACKET_ATTR_EGRESS_TUN_KEY];
     upcall->actions = a[OVS_PACKET_ATTR_ACTIONS];
     upcall->mru = a[OVS_PACKET_ATTR_MRU];
+    upcall->hash = a[OVS_PACKET_ATTR_HASH];
 
     /* Allow overwriting the netlink attribute header without reallocating. */
     dp_packet_use_stub(&upcall->packet,
