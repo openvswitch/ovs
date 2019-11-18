@@ -598,7 +598,9 @@ cmap_set_bucket(struct cmap_bucket *b, int i,
     uint32_t c;
 
     atomic_read_explicit(&b->counter, &c, memory_order_acquire);
-    atomic_store_explicit(&b->counter, c + 1, memory_order_release);
+    atomic_store_explicit(&b->counter, c + 1, memory_order_relaxed);
+    /* Need to make sure setting hash is not moved up before counter update. */
+    atomic_thread_fence(memory_order_release);
     ovsrcu_set(&b->nodes[i].next, node); /* Also atomic. */
     b->hashes[i] = hash;
     atomic_store_explicit(&b->counter, c + 2, memory_order_release);
