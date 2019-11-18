@@ -10,6 +10,10 @@ Post-v2.12.0
        if supported by libbpf.
      * Add option to enable, disable and query TCP sequence checking in
        conntrack.
+   - wolfSSL
+     * Support for wolfSSL added to optionally replace openssl for commercial
+       grade open source TLS and crypto engine. Enabled using `--with-wolfssl`.
+       See 'Documentation/intro/install/wolfssl.rst'
 
 v2.12.0 - 03 Sep 2019
 ---------------------

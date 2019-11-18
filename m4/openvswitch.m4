@@ -259,7 +259,7 @@ AC_DEFUN([OVS_CHECK_WOLFSSL], [
           CPPFLAGS="-I${withval}/include -I${withval}/include/wolfssl $CPPFLAGS"
         fi
       fi
-      if test "x$withval" == "xyes" ; then
+      if test "x$withval" = "xyes" ; then
         LDFLAGS="$LDFLAGS -L/usr/local/lib"
         CPPFLAGS="-I/usr/local/include -I/usr/local/include/wolfssl $CPPFLAGS"
       fi
@@ -269,11 +269,11 @@ AC_DEFUN([OVS_CHECK_WOLFSSL], [
       AC_LINK_IFELSE(
         [AC_LANG_PROGRAM([#include <wolfssl/ssl.h>],
             [wolfSSL_Init();])],
-            [wolfssl_linked=yes], 
+            [wolfssl_linked=yes],
             [wolfssl_linked=no]
       )
 
-      if test "x$wolfssl_linked" == "xno" ; then
+      if test "x$wolfssl_linked" = "xno" ; then
         AC_MSG_ERROR([WolfSSL isn't found.  You can get it from $WOLFSSL_URL
           If it's already installed, specify its path using --with-wolfssl=/dir/])
       fi
@@ -319,7 +319,7 @@ OpenFlow connections over SSL will not be supported.
             AC_MSG_ERROR([Cannot find openssl (use --disable-ssl to configure without SSL support)])
           fi])
    else
-       if test "x$HAVE_WOLFSSL" == "xno"; then
+       if test "x$HAVE_WOLFSSL" = "xno"; then
           HAVE_OPENSSL=no
        fi
    fi

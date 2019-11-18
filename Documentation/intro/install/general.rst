@@ -85,6 +85,10 @@ need the following software:
   an OpenFlow controller. If libssl is installed, then Open vSwitch will
   automatically build with support for it.
 
+- libwolfssl, from wolfSSL, is optional and can be used instead of openssl to
+  provide commercial open source library for TLS and Crypto. Enabled using
+  --with-wolfssl. See details in ./Documentation/intro/install/wolfssl.rst.
+
 - libcap-ng, written by Steve Grubb, is optional but recommended. It is
   required to run OVS daemons as a non-root user with dropped root privileges.
   If libcap-ng is installed, then Open vSwitch will automatically build with
