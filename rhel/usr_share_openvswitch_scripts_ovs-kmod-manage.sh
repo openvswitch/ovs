@@ -157,7 +157,7 @@ fi
 #$kmod_high_ver"
 
 found_match=false
-for kname in `ls -d /lib/modules/*`
+for kname in $kversion;
 do
     IFS='.\|-' read -r -a pkg_ver_nums <<<"${kname}"
     pkg_ver=${pkg_ver_nums[$ver_offset]}
@@ -184,14 +184,14 @@ if [ "$found_match" = "false" ]; then
     exit 1
 fi
 
-if [ "$requested_kernel" != "/lib/modules/$current_kernel" ]; then
+if [ "$requested_kernel" != "$current_kernel" ]; then
     if [ ! -d /lib/modules/$current_kernel/weak-updates/openvswitch ]; then
         mkdir -p /lib/modules/$current_kernel/weak-updates
         mkdir -p /lib/modules/$current_kernel/weak-updates/openvswitch
     fi
     for m in openvswitch vport-gre vport-stt vport-geneve \
         vport-lisp vport-vxlan; do
-        ln -f -s $requested_kernel/extra/openvswitch/$m.ko \
+        ln -f -s /lib/modules/$requested_kernel/extra/openvswitch/$m.ko \
             /lib/modules/$current_kernel/weak-updates/openvswitch/$m.ko
     done
 else
