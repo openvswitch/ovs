@@ -1099,6 +1099,26 @@ netdev_afxdp_rxq_destruct(struct netdev_rxq *rxq_ OVS_UNUSED)
     /* Nothing. */
 }
 
+static int
+libbpf_print(enum libbpf_print_level level,
+             const char *format, va_list args)
+{
+    if (level == LIBBPF_WARN) {
+        vlog_valist(&this_module, VLL_WARN, format, args);
+    } else if (level == LIBBPF_INFO) {
+        vlog_valist(&this_module, VLL_INFO, format, args);
+    } else {
+        vlog_valist(&this_module, VLL_DBG, format, args);
+    }
+    return 0;
+}
+
+int netdev_afxdp_init(void)
+{
+    libbpf_set_print(libbpf_print);
+    return 0;
+}
+
 int
 netdev_afxdp_construct(struct netdev *netdev)
 {
