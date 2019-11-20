@@ -1470,6 +1470,55 @@ check_max_dp_hash_alg(struct dpif_backer *backer)
     return max_alg;
 }
 
+/* Tests whether 'backer''s datapath supports IPv6 ND extensions.
+ * Only userspace datapath support OVS_KEY_ATTR_ND_EXTENSIONS in keys.
+ *
+ * Returns false if 'backer' definitely does not support matching and
+ * setting reserved and options type, true if it seems to support. */
+static bool
+check_nd_extensions(struct dpif_backer *backer)
+{
+    struct eth_header *eth;
+    struct ofpbuf actions;
+    struct dpif_execute execute;
+    struct dp_packet packet;
+    struct flow flow;
+    int error;
+    struct ovs_key_nd_extensions key, mask;
+
+    ofpbuf_init(&actions, 64);
+    memset(&key, 0x53, sizeof key);
+    memset(&mask, 0x7f, sizeof mask);
+    commit_masked_set_action(&actions, OVS_KEY_ATTR_ND_EXTENSIONS, &key, &mask,
+                             sizeof key);
+
+    /* Compose a dummy ethernet packet. */
+    dp_packet_init(&packet, ETH_HEADER_LEN);
+    eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
+    eth->eth_type = htons(0x1234);
+
+    flow_extract(&packet, &flow);
+
+    /* Execute the actions.  On datapaths without support fails with EINVAL. */
+    execute.actions = actions.data;
+    execute.actions_len = actions.size;
+    execute.packet = &packet;
+    execute.flow = &flow;
+    execute.needs_help = false;
+    execute.probe = true;
+    execute.mtu = 0;
+
+    error = dpif_execute(backer->dpif, &execute);
+
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&actions);
+
+    VLOG_INFO("%s: Datapath %s IPv6 ND Extensions", dpif_name(backer->dpif),
+              error ? "does not support" : "supports");
+
+    return !error;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1541,10 +1590,10 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.odp.ct_zone = check_ct_zone(backer);
     backer->rt_support.odp.ct_mark = check_ct_mark(backer);
     backer->rt_support.odp.ct_label = check_ct_label(backer);
-
     backer->rt_support.odp.ct_state_nat = check_ct_state_nat(backer);
     backer->rt_support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
     backer->rt_support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
+    backer->rt_support.odp.nd_ext = check_nd_extensions(backer);
 }
 
 static int
@@ -4550,6 +4599,14 @@ check_actions(const struct ofproto_dpif *ofproto,
                 report_unsupported_act("resubmit",
                                        "ct original direction tuple");
                 return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
+            }
+        } else if (!support->nd_ext && ofpact->type == OFPACT_SET_FIELD) {
+            const struct mf_field *dst = ofpact_get_mf_dst(ofpact);
+
+            if (dst->id == MFF_ND_RESERVED || dst->id == MFF_ND_OPTIONS_TYPE) {
+                report_unsupported_act("set field",
+                                       "setting IPv6 ND Extensions fields");
+                return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
             }
         }
     }

@@ -203,7 +203,11 @@ int odp_flow_from_string(const char *s, const struct simap *port_names,
                                                                              \
     /* Conntrack original direction tuple matching * supported. */           \
     ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")                  \
-    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")        \
+                                                                             \
+    /* If true, it means that the datapath supports the IPv6 Neigh           \
+     * Discovery Extension bits. */                                          \
+    ODP_SUPPORT_FIELD(bool, nd_ext, "IPv6 ND Extension")
 
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
