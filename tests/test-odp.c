@@ -65,6 +65,7 @@ parse_keys(bool wc_keys)
                     .ct_mark = true,
                     .ct_label = true,
                     .max_vlan_headers = SIZE_MAX,
+                    .nd_ext = true,
                 },
             };
 

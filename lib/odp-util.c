@@ -6180,23 +6180,24 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
                 && (!export_mask || (data->tp_src == htons(0xff)
                                      && data->tp_dst == htons(0xff)))) {
                 struct ovs_key_nd *nd_key;
-                struct ovs_key_nd_extensions *nd_ext_key;
                 nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
                                                     sizeof *nd_key);
                 nd_key->nd_target = data->nd_target;
                 nd_key->nd_sll = data->arp_sha;
                 nd_key->nd_tll = data->arp_tha;
 
-                /* Add ND Extensions Attr only if reserved field
+                /* Add ND Extensions Attr only if supported and reserved field
                  * or options type is set. */
-                if (data->igmp_group_ip4 != 0 ||
-                    data->tcp_flags != 0) {
-                    nd_ext_key =
-                         nl_msg_put_unspec_uninit(buf,
+                if (parms->support.nd_ext) {
+                    struct ovs_key_nd_extensions *nd_ext_key;
+
+                    if (data->igmp_group_ip4 != 0 || data->tcp_flags != 0) {
+                        nd_ext_key = nl_msg_put_unspec_uninit(buf,
                                             OVS_KEY_ATTR_ND_EXTENSIONS,
                                             sizeof *nd_ext_key);
-                    nd_ext_key->nd_reserved = data->igmp_group_ip4;
-                    nd_ext_key->nd_options_type = ntohs(data->tcp_flags);
+                        nd_ext_key->nd_reserved = data->igmp_group_ip4;
+                        nd_ext_key->nd_options_type = ntohs(data->tcp_flags);
+                    }
                 }
             }
         }
