@@ -933,14 +933,31 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
         based on which bucket was selected.  An obvious design would be for the
         bucket to communicate the value via <code>set_field</code> on a
         register.  This does not work because registers are part of the
-        metadata that <code>group</code> saves and restores.  A design that
-        would work would be for the bucket to recursively invoke the rest of
-        the pipeline with <code>resubmit</code> rather than to attempt to
-        return it.  Another possibility is for the bucket to use
-        <code>push</code> to put the value on the stack for the caller to
-        <code>pop</code> off, since <code>group</code> preserves only packet
-        data and metadata, not the stack.
+        metadata that <code>group</code> saves and restores.  The following
+        alternative bucket designs do work:
       </p>
+
+      <ul>
+        <li>
+          Recursively invoke the rest of the pipeline with
+          <code>resubmit</code>.
+        </li>
+
+        <li>
+          <p>
+            Use <code>resubmit</code> into a table that uses <code>push</code>
+            to put the value on the stack for the caller to <code>pop</code>
+            off.  This works because <code>group</code> preserves only packet
+            data and metadata, not the stack.
+          </p>
+
+          <p>
+            (This design requires indirection through <code>resubmit</code>
+            because actions sets may not contain <code>push</code> or
+            <code>pop</code> actions.)
+          </p>
+        </li>
+      </ul>
 
       <p>
         An <code>exit</code> action within a group bucket terminates only
