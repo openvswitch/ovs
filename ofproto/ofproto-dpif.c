@@ -5523,7 +5523,6 @@ ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
 static void
 get_datapath_cap(const char *datapath_type, struct smap *cap)
 {
-    char *str_value;
     struct odp_support odp;
     struct dpif_backer_support s;
     struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
@@ -5535,14 +5534,9 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     odp = s.odp;
 
     /* ODP_SUPPORT_FIELDS */
-    str_value = xasprintf("%"PRIuSIZE, odp.max_vlan_headers);
-    smap_add(cap, "max_vlan_headers", str_value);
-    free(str_value);
-
-    str_value = xasprintf("%"PRIuSIZE, odp.max_mpls_depth);
-    smap_add(cap, "max_mpls_depth", str_value);
-    free(str_value);
-
+    smap_add_format(cap, "max_vlan_headers", "%"PRIuSIZE,
+                    odp.max_vlan_headers);
+    smap_add_format(cap, "max_mpls_depth", "%"PRIuSIZE, odp.max_mpls_depth);
     smap_add(cap, "recirc", odp.recirc ? "true" : "false");
     smap_add(cap, "ct_state", odp.ct_state ? "true" : "false");
     smap_add(cap, "ct_zone", odp.ct_zone ? "true" : "false");
@@ -5562,11 +5556,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "sample_nesting", s.sample_nesting ? "true" : "false");
     smap_add(cap, "ct_eventmask", s.ct_eventmask ? "true" : "false");
     smap_add(cap, "ct_clear", s.ct_clear ? "true" : "false");
-
-    str_value = xasprintf("%"PRIuSIZE, s.max_hash_alg);
-    smap_add(cap, "max_hash_alg", str_value);
-    free(str_value);
-
+    smap_add_format(cap, "max_hash_alg", "%"PRIuSIZE, s.max_hash_alg);
     smap_add(cap, "check_pkt_len", s.check_pkt_len ? "true" : "false");
     smap_add(cap, "ct_timeout", s.ct_timeout ? "true" : "false");
 }
