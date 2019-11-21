@@ -54,6 +54,11 @@ enum dp_packet_offload_mask {
     DP_PACKET_OL_RSS_HASH_MASK  = 0x1, /* Is the 'rss_hash' valid? */
     DP_PACKET_OL_FLOW_MARK_MASK = 0x2, /* Is the 'flow_mark' valid? */
 };
+#else
+/* DPDK mbuf ol_flags that are not really an offload flags.  These are mostly
+ * related to mbuf memory layout and OVS should not touch/clear them. */
+#define DPDK_MBUF_NON_OFFLOADING_FLAGS (EXT_ATTACHED_MBUF | \
+                                        IND_ATTACHED_MBUF)
 #endif
 
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
@@ -538,7 +543,7 @@ dp_packet_rss_valid(const struct dp_packet *p)
 static inline void
 dp_packet_reset_offload(struct dp_packet *p)
 {
-    p->mbuf.ol_flags = 0;
+    p->mbuf.ol_flags &= DPDK_MBUF_NON_OFFLOADING_FLAGS;
 }
 
 static inline bool

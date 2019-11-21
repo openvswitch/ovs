@@ -194,6 +194,7 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 
 #ifdef DPDK_NETDEV
     new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
+    new_buffer->mbuf.ol_flags &= ~DPDK_MBUF_NON_OFFLOADING_FLAGS;
 #endif
 
     if (dp_packet_rss_valid(buffer)) {
