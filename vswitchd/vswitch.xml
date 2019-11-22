@@ -2144,10 +2144,11 @@
                       "forwarding", "blocking"]]}'>
           STP state of the port.
         </column>
-        <column name="status" key="stp_sec_in_state"
+        <column name="statistics" key="stp_sec_in_state"
                 type='{"type": "integer", "minInteger": 0}'>
           The amount of time this port has been in the current STP state, in
-          seconds.
+          seconds.In Open vSwitch 2.12 and earlier this field was part of STP
+          Status.
         </column>
         <column name="status" key="stp_role"
                 type='{"type": "string", "enum": ["set",
