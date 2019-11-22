@@ -5828,6 +5828,11 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         packet to be sent to the Open vSwitch slow path, which is likely to
         make it too slow for mirroring traffic in bulk.
       </column>
+      <column name="capabilities" key="nd_ext" type='{"type": "boolean"}'>
+        True if the datapath supports OVS_KEY_ATTR_ND_EXTENSIONS to match on
+        ICMPv6 "ND reserved" and “ND option type“ header fields. If false,
+        the datapath reports error if the feature is used.
+      </column>
       <group title="Clone Actions">
         <p>
           When Open vSwitch translates actions from OpenFlow into the datapath

@@ -5532,6 +5532,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "ct_state_nat", odp.ct_state_nat ? "true" : "false");
     smap_add(cap, "ct_orig_tuple", odp.ct_orig_tuple ? "true" : "false");
     smap_add(cap, "ct_orig_tuple6", odp.ct_orig_tuple6 ? "true" : "false");
+    smap_add(cap, "nd_ext", odp.nd_ext ? "true" : "false");
 
     /* DPIF_SUPPORT_FIELDS */
     smap_add(cap, "masked_set_action", s.masked_set_action ? "true" : "false");
