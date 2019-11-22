@@ -2829,7 +2829,6 @@ get_stp_port_status(struct ofport *ofport_,
 
     s->enabled = true;
     stp_port_get_status(sp, &s->port_id, &s->state, &s->role);
-    s->sec_in_state = (time_msec() - ofport->stp_state_entered) / 1000;
 
     return 0;
 }
@@ -2849,6 +2848,7 @@ get_stp_port_stats(struct ofport *ofport_,
 
     s->enabled = true;
     stp_port_get_counts(sp, &s->tx_count, &s->rx_count, &s->error_count);
+    s->sec_in_state = (time_msec() - ofport->stp_state_entered) / 1000;
 
     return 0;
 }

@@ -166,7 +166,6 @@ struct ofproto_port_stp_status {
     bool enabled;               /* If false, ignore other members. */
     int port_id;
     enum stp_state state;
-    unsigned int sec_in_state;
     enum stp_role role;
 };
 
@@ -175,6 +174,7 @@ struct ofproto_port_stp_stats {
     int tx_count;               /* Number of BPDUs transmitted. */
     int rx_count;               /* Number of valid BPDUs received. */
     int error_count;            /* Number of bad BPDUs received. */
+    unsigned int sec_in_state;  /* Number of secs in stp state. */
 };
 
 struct ofproto_port_queue {

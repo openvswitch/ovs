@@ -2758,7 +2758,6 @@ port_refresh_stp_status(struct port *port)
     smap_init(&smap);
     smap_add_format(&smap, "stp_port_id", "%d", status.port_id);
     smap_add(&smap, "stp_state", stp_state_name(status.state));
-    smap_add_format(&smap, "stp_sec_in_state", "%u", status.sec_in_state);
     smap_add(&smap, "stp_role", stp_role_name(status.role));
     ovsrec_port_set_status(port->cfg, &smap);
     smap_destroy(&smap);
@@ -2770,8 +2769,8 @@ port_refresh_stp_stats(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_stp_stats stats;
-    const char *keys[3];
-    int64_t int_values[3];
+    const char *keys[4];
+    int64_t int_values[4];
 
     if (port_is_synthetic(port)) {
         return;
@@ -2799,6 +2798,8 @@ port_refresh_stp_stats(struct port *port)
     int_values[1] = stats.rx_count;
     keys[2] = "stp_error_count";
     int_values[2] = stats.error_count;
+    keys[3] = "stp_sec_in_state";
+    int_values[3] = stats.sec_in_state;
 
     ovsrec_port_set_statistics(port->cfg, keys, int_values,
                                ARRAY_SIZE(int_values));
@@ -2840,8 +2841,6 @@ port_refresh_rstp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_rstp_status status;
-    const char *keys[4];
-    int64_t int_values[4];
     struct smap smap;
 
     if (port_is_synthetic(port)) {
@@ -2861,7 +2860,6 @@ port_refresh_rstp_status(struct port *port)
 
     if (!status.enabled) {
         ovsrec_port_set_rstp_status(port->cfg, NULL);
-        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
         return;
     }
     /* Set Status column. */
@@ -2882,6 +2880,36 @@ port_refresh_rstp_status(struct port *port)
 
     ovsrec_port_set_rstp_status(port->cfg, &smap);
     smap_destroy(&smap);
+}
+
+static void
+port_refresh_rstp_stats(struct port *port)
+{
+    struct ofproto *ofproto = port->bridge->ofproto;
+    struct iface *iface;
+    struct ofproto_port_rstp_status status;
+    const char *keys[4];
+    int64_t int_values[4];
+
+    if (port_is_synthetic(port)) {
+        return;
+    }
+
+    /* RSTP doesn't currently support bonds. */
+    if (!ovs_list_is_singleton(&port->ifaces)) {
+        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
+    if (ofproto_port_get_rstp_status(ofproto, iface->ofp_port, &status)) {
+        return;
+    }
+
+    if (!status.enabled) {
+        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
+        return;
+    }
 
     /* Set Statistics column. */
     keys[0] = "rstp_tx_count";
@@ -3050,6 +3078,7 @@ run_stats_update(void)
                         iface_refresh_stats(iface);
                     }
                     port_refresh_stp_stats(port);
+                    port_refresh_rstp_stats(port);
                 }
                 HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
                     mirror_refresh_stats(m);

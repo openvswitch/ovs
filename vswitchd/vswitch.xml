@@ -2144,11 +2144,6 @@
                       "forwarding", "blocking"]]}'>
           STP state of the port.
         </column>
-        <column name="status" key="stp_sec_in_state"
-                type='{"type": "integer", "minInteger": 0}'>
-          The amount of time this port has been in the current STP state, in
-          seconds.
-        </column>
         <column name="status" key="stp_role"
                 type='{"type": "string", "enum": ["set",
                       ["root", "designated", "alternate"]]}'>
@@ -2359,6 +2354,12 @@
         <column name="statistics" key="stp_error_count">
           Number of bad STP BPDUs received on this port.  Bad BPDUs
           include runt packets and those with an unexpected protocol ID.
+        </column>
+        <column name="statistics" key="stp_sec_in_state"
+                type='{"type": "integer", "minInteger": 0}'>
+          The amount of time this port has been in the current STP state, in
+          seconds.In Open vSwitch 2.12 and earlier this field was part of STP
+          Status.
         </column>
       </group>
     </group>
