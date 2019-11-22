@@ -22,6 +22,12 @@ Post-v2.12.0
      * DPDK pdump packet capture support disabled by default. New configure
        option '--enable-dpdk-pdump' to enable it.
      * DPDK pdump support is deprecated and will be removed in next releases.
+   - STP:
+     * New option status-update-interval for stp/rstp status update is added
+       to control the frequency of the updates. The default is 1 second.
+   - RSTP:
+     * The rstp_statistics column in Port table will only be updated every
+       stats-update-interval configured in Open_vSwtich table.
 
 v2.12.0 - 03 Sep 2019
 ---------------------

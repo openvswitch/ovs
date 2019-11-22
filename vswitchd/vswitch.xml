@@ -107,6 +107,21 @@
           Getting statistics more frequently can be achieved via OpenFlow.
         </p>
       </column>
+      <column name="other_config" key="status-update-interval"
+              type='{"type": "integer", "minInteger": 1000}'>
+        <p>
+          Interval for updating status to the database, in milliseconds.
+          This option will affect the update of the <code>status</code>
+          column in the following tables: <code>Port</code>, <code>Interface
+          </code>, <code>Mirror</code>.
+        </p>
+        <p>
+          Default value is 1000 ms.
+        </p>
+        <p>
+          Controlling the status update frequency can be achieved via OpenFlow.
+        </p>
+      </column>
 
       <column name="other_config" key="flow-restore-wait"
               type='{"type": "boolean"}'>
@@ -2144,10 +2159,11 @@
                       "forwarding", "blocking"]]}'>
           STP state of the port.
         </column>
-        <column name="status" key="stp_sec_in_state"
+        <column name="statistics" key="stp_sec_in_state"
                 type='{"type": "integer", "minInteger": 0}'>
           The amount of time this port has been in the current STP state, in
-          seconds.
+          seconds.In Open vSwitch 2.12 and earlier this field was part of STP
+          Status.
         </column>
         <column name="status" key="stp_role"
                 type='{"type": "string", "enum": ["set",
