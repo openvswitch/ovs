@@ -2266,15 +2266,14 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
      * remove the flow from hardware and free the mark.
      */
     if (flow_mark_has_no_ref(mark)) {
-        struct dp_netdev_port *port;
+        struct netdev *port;
         odp_port_t in_port = flow->flow.in_port.odp_port;
 
-        ovs_mutex_lock(&pmd->dp->port_mutex);
-        port = dp_netdev_lookup_port(pmd->dp, in_port);
+        port = netdev_ports_get(in_port, pmd->dp->dpif->dpif_class);
         if (port) {
-            ret = netdev_flow_del(port->netdev, &flow->mega_ufid, NULL);
+            ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
+            netdev_close(port);
         }
-        ovs_mutex_unlock(&pmd->dp->port_mutex);
 
         flow_mark_free(mark);
         VLOG_DBG("Freed flow mark %u\n", mark);
@@ -2372,12 +2371,12 @@ dp_netdev_flow_offload_del(struct dp_flow_offload_item *offload)
 static int
 dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
 {
-    struct dp_netdev_port *port;
     struct dp_netdev_pmd_thread *pmd = offload->pmd;
     struct dp_netdev_flow *flow = offload->flow;
     odp_port_t in_port = flow->flow.in_port.odp_port;
     bool modification = offload->op == DP_NETDEV_FLOW_OFFLOAD_OP_MOD;
     struct offload_info info;
+    struct netdev *port;
     uint32_t mark;
     int ret;
 
@@ -2411,17 +2410,16 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
     }
     info.flow_mark = mark;
 
-    ovs_mutex_lock(&pmd->dp->port_mutex);
-    port = dp_netdev_lookup_port(pmd->dp, in_port);
-    if (!port || netdev_vport_is_vport_class(port->netdev->netdev_class)) {
-        ovs_mutex_unlock(&pmd->dp->port_mutex);
+    port = netdev_ports_get(in_port, pmd->dp->dpif->dpif_class);
+    if (!port || netdev_vport_is_vport_class(port->netdev_class)) {
+        netdev_close(port);
         goto err_free;
     }
-    ret = netdev_flow_put(port->netdev, &offload->match,
+    ret = netdev_flow_put(port, &offload->match,
                           CONST_CAST(struct nlattr *, offload->actions),
                           offload->actions_len, &flow->mega_ufid, &info,
                           NULL);
-    ovs_mutex_unlock(&pmd->dp->port_mutex);
+    netdev_close(port);
 
     if (ret) {
         goto err_free;
