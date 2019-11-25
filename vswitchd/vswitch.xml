@@ -5830,7 +5830,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       </column>
       <column name="capabilities" key="nd_ext" type='{"type": "boolean"}'>
         True if the datapath supports OVS_KEY_ATTR_ND_EXTENSIONS to match on
-        ICMPv6 "ND reserved" and “ND option type“ header fields. If false,
+        ICMPv6 "ND reserved" and "ND option type" header fields. If false,
         the datapath reports error if the feature is used.
       </column>
       <group title="Clone Actions">
