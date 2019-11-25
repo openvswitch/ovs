@@ -178,6 +178,9 @@ tnl_type_to_nw_proto(const char type[])
     if (!strcmp(type, "vxlan")) {
         return IPPROTO_UDP;
     }
+    if (!strcmp(type, "gtpu")) {
+        return IPPROTO_UDP;
+    }
     return 0;
 }
 

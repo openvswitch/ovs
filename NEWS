@@ -57,6 +57,9 @@ v2.13.0 - 14 Feb 2020
    - 'ovs-appctl dpctl/dump-flows' can now show offloaded=partial for
      partially offloaded flows, dp:dpdk for fully offloaded by dpdk, and
      type filter supports new filters: "dpdk" and "partially-offloaded".
+   - GTP-U Tunnel Protocol
+     * Add two new fields: tun_gtpu_flags, tun_gtpu_msgtype.
+     * Only support for userspace datapath.
 
 v2.12.0 - 03 Sep 2019
 ---------------------

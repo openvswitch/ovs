@@ -245,6 +245,7 @@ enum ovs_vport_type {
 	OVS_VPORT_TYPE_ERSPAN = 107, /* ERSPAN tunnel. */
 	OVS_VPORT_TYPE_IP6ERSPAN = 108, /* ERSPAN tunnel. */
 	OVS_VPORT_TYPE_IP6GRE = 109,
+	OVS_VPORT_TYPE_GTPU = 110,
 	__OVS_VPORT_TYPE_MAX
 };
 
@@ -404,6 +405,7 @@ enum ovs_tunnel_key_attr {
 	OVS_TUNNEL_KEY_ATTR_IPV6_DST,		/* struct in6_addr dst IPv6 address. */
 	OVS_TUNNEL_KEY_ATTR_PAD,
 	OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS,	/* struct erspan_metadata */
+	OVS_TUNNEL_KEY_ATTR_GTPU_OPTS,		/* struct gtpu_metadata */
 	__OVS_TUNNEL_KEY_ATTR_MAX
 };
 

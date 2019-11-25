@@ -1456,7 +1456,8 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
         <li>LISP has a 24-bit instance ID.</li>
         <li>GRE has an optional 32-bit key.</li>
         <li>STT has a 64-bit key.</li>
-    <li>ERSPAN has a 10-bit key (Session ID).</li>
+        <li>ERSPAN has a 10-bit key (Session ID).</li>
+        <li>GTPU has a 32-bit key (Tunnel Endpoint ID).</li>
       </ul>
 
       <p>
@@ -1795,6 +1796,82 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
 
     <field id="MFF_TUN_ERSPAN_HWID" title="ERSPAN Hardware ID">
       A 6-bit unique identifier of an ERSPAN v2 engine within a system.
+    </field>
+
+    <h2>GTP-U Metadata Fields</h2>
+
+    <p>
+      These fields provide access to set-up GPRS Tunnelling Protocol
+      for User Plane (GTPv1-U), based on 3GPP TS 29.281.  A GTP-U
+      header has the following format:
+    </p>
+
+    <diagram>
+      <header>
+        <bits name="flags" above="8" width="0.6"/>
+        <bits name="msg type" above="8" width="0.6"/>
+        <bits name="length" above="16" width="0.9"/>
+        <bits name="TEID" above="32" width="1.3"/>
+      </header>
+      <dots/>
+    </diagram>
+
+    <p>
+      The flags and message type have the Open vSwitch GTP-U specific fields
+      described below.  Open vSwitch makes the TEID (Tunnel Endpoint
+      Identifier), which identifies a tunnel endpoint in the receiving GTP-U
+      protocol entity, available via <ref field="tun_id"/>.
+    </p>
+
+    <field id="MFF_TUN_GTPU_FLAGS" title="GTP-U Flags">
+      <p>
+        This field holds the 8-bit GTP-U flags, encoded as:
+      </p>
+
+      <diagram>
+        <header name="GTP-U Tunnel Flags">
+          <bits name="version" above="3" below="1" width="0.5"/>
+          <bits name="PT" above="1" width="0.3"/>
+          <bits name="rsv" above="1" below="0" width="0.3"/>
+          <bits name="E" above="1" width="0.3"/>
+          <bits name="S" above="1" width="0.3"/>
+          <bits name="PN" above="1" width="0.3"/>
+        </header>
+      </diagram>
+
+      <p>
+        The flags are:
+      </p>
+      <dl>
+        <dt>version</dt>
+        <dd>Used to determine the version of the GTP-U protocol, which should
+        be set to 1.</dd>
+
+        <dt>PT</dt>
+        <dd>Protocol type, used as a protocol discriminator
+        between GTP (1) and GTP' (0).</dd>
+
+        <dt>rsv</dt>
+        <dd>Reserved.  Must be zero.</dd>
+
+        <dt>E</dt>
+        <dd>If 1, indicates the presence of a meaningful value of the Next
+        Extension Header field.</dd>
+
+        <dt>S</dt>
+        <dd>If 1, indicates the presence of a meaningful value of the Sequence
+        Number field.</dd>
+
+        <dt>PN</dt>
+        <dd>If 1, indicates the presence of a meaningful value of the N-PDU
+        Number field.</dd>
+      </dl>
+    </field>
+
+    <field id="MFF_TUN_GTPU_MSGTYPE" title="GTP-U Message Type">
+      This field indicates whether it's a signalling message used for path
+      management, or a user plane message which carries the original packet.
+      The complete range of message types can be referred to [3GPP TS 29.281].
     </field>
 
     <h2>Geneve Fields</h2>

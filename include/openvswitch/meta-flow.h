@@ -506,6 +506,34 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_TUN_ERSPAN_HWID,
 
+    /* "tun_gtpu_flags".
+     *
+     * GTP-U tunnel flags.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_ET_GTPU_FLAGS(15) since v2.13.
+     */
+    MFF_TUN_GTPU_FLAGS,
+
+    /* "tun_gtpu_msgtype".
+     *
+     * GTP-U tunnel message type.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_ET_GTPU_MSGTYPE(16) since v2.13.
+     */
+    MFF_TUN_GTPU_MSGTYPE,
+
 #if TUN_METADATA_NUM_OPTS == 64
     /* "tun_metadata<N>".
      *

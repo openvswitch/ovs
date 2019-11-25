@@ -756,7 +756,17 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         } else {
             VLOG_WARN("%s Invalid ERSPAN version %d\n", __func__, ersh->ver);
         }
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GTPU) {
+        const struct gtpuhdr *gtph;
+
+        gtph = format_udp_tnl_push_header(ds, udp);
+
+        ds_put_format(ds, "gtpu(flags=0x%"PRIx8
+                          ",msgtype=%"PRIu8",teid=0x%"PRIx32")",
+                      gtph->md.flags, gtph->md.msgtype,
+                      ntohl(get_16aligned_be32(&gtph->teid)));
     }
+
     ds_put_format(ds, ")");
 }
 
@@ -1500,6 +1510,8 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     void *l3, *l4;
     int n = 0;
     uint8_t hwid, dir;
+    uint32_t teid;
+    uint8_t gtpu_flags, gtpu_msgtype;
 
     if (!ovs_scan_len(s, &n, "tnl_push(tnl_port(%"SCNi32"),", &data->tnl_port)) {
         return -EINVAL;
@@ -1729,6 +1741,18 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
 
         header_len = sizeof *eth + ip_len + ERSPAN_GREHDR_LEN +
                      sizeof *ersh + ERSPAN_V2_MDSIZE;
+
+    } else if (ovs_scan_len(s, &n, "gtpu(flags=%"SCNi8",msgtype=%"
+                SCNu8",teid=0x%"SCNx32"))",
+                &gtpu_flags, &gtpu_msgtype, &teid)) {
+        struct gtpuhdr *gtph = (struct gtpuhdr *) (udp + 1);
+
+        gtph->md.flags = gtpu_flags;
+        gtph->md.msgtype = gtpu_msgtype;
+        put_16aligned_be32(&gtph->teid, htonl(teid));
+        tnl_type = OVS_VPORT_TYPE_GTPU;
+        header_len = sizeof *eth + ip_len +
+                     sizeof *udp + sizeof *gtph;
     } else {
         return -EINVAL;
     }
@@ -2630,6 +2654,7 @@ static const struct attr_len_tbl ovs_tun_key_attr_lens[OVS_TUNNEL_KEY_ATTR_MAX +
     [OVS_TUNNEL_KEY_ATTR_IPV6_SRC]      = { .len = 16 },
     [OVS_TUNNEL_KEY_ATTR_IPV6_DST]      = { .len = 16 },
     [OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS]   = { .len = ATTR_LEN_VARIABLE },
+    [OVS_TUNNEL_KEY_ATTR_GTPU_OPTS]   = { .len = ATTR_LEN_VARIABLE },
 };
 
 const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
@@ -3035,6 +3060,13 @@ odp_tun_key_from_attr__(const struct nlattr *attr, bool is_mask,
             }
             break;
         }
+        case OVS_TUNNEL_KEY_ATTR_GTPU_OPTS: {
+            const struct gtpu_metadata *opts = nl_attr_get(a);
+
+            tun->gtpu_flags = opts->flags;
+            tun->gtpu_msgtype = opts->msgtype;
+            break;
+        }
 
         default:
             /* Allow this to show up as unexpected, if there are unknown
@@ -3149,6 +3181,15 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
                           &opts, sizeof(opts));
     }
 
+    if ((!tnl_type || !strcmp(tnl_type, "gtpu")) &&
+        (tun_key->gtpu_flags && tun_key->gtpu_msgtype)) {
+        struct gtpu_metadata opts;
+
+        opts.flags = tun_key->gtpu_flags;
+        opts.msgtype = tun_key->gtpu_msgtype;
+        nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
+                          &opts, sizeof(opts));
+    }
     nl_msg_end_nested(a, tun_key_ofs);
 }
 
@@ -3645,6 +3686,22 @@ format_odp_tun_erspan_opt(const struct nlattr *attr,
     ds_chomp(ds, ',');
 }
 
+static void
+format_odp_tun_gtpu_opt(const struct nlattr *attr,
+                        const struct nlattr *mask_attr, struct ds *ds,
+                        bool verbose)
+{
+    const struct gtpu_metadata *opts, *mask;
+
+    opts = nl_attr_get(attr);
+    mask = mask_attr ? nl_attr_get(mask_attr) : NULL;
+
+    format_u8x(ds, "flags", opts->flags, mask ? &mask->flags : NULL, verbose);
+    format_u8u(ds, "msgtype", opts->msgtype, mask ? &mask->msgtype : NULL,
+               verbose);
+    ds_chomp(ds, ',');
+}
+
 #define MASK(PTR, FIELD) PTR ? &PTR->FIELD : NULL
 
 static void
@@ -3896,6 +3953,11 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
             ds_put_cstr(ds, "erspan(");
             format_odp_tun_erspan_opt(a, ma, ds, verbose);
             ds_put_cstr(ds, "),");
+            break;
+        case OVS_TUNNEL_KEY_ATTR_GTPU_OPTS:
+            ds_put_cstr(ds, "gtpu(");
+            format_odp_tun_gtpu_opt(a, ma, ds, verbose);
+            ds_put_cstr(ds, ")");
             break;
         case __OVS_TUNNEL_KEY_ATTR_MAX:
         default:
@@ -5105,6 +5167,50 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
 }
 
 static int
+scan_gtpu_metadata(const char *s,
+                   struct gtpu_metadata *key,
+                   struct gtpu_metadata *mask)
+{
+    const char *s_base = s;
+    uint8_t flags, flags_ma;
+    uint8_t msgtype, msgtype_ma;
+    int len;
+
+    if (!strncmp(s, "flags=", 6)) {
+        s += 6;
+        len = scan_u8(s, &flags, mask ? &flags_ma : NULL);
+        if (len == 0) {
+            return 0;
+        }
+        s += len;
+    }
+
+    if (s[0] == ',') {
+        s++;
+    }
+
+    if (!strncmp(s, "msgtype=", 8)) {
+        s += 8;
+        len = scan_u8(s, &msgtype, mask ? &msgtype_ma : NULL);
+        if (len == 0) {
+            return 0;
+        }
+        s += len;
+    }
+
+    if (!strncmp(s, ")", 1)) {
+        s += 1;
+        key->flags = flags;
+        key->msgtype = msgtype;
+        if (mask) {
+            mask->flags = flags_ma;
+            mask->msgtype = msgtype_ma;
+        }
+    }
+    return s - s_base;
+}
+
+static int
 scan_erspan_metadata(const char *s,
                      struct erspan_metadata *key,
                      struct erspan_metadata *mask)
@@ -5341,6 +5447,15 @@ erspan_to_attr(struct ofpbuf *a, const void *data_)
     const struct erspan_metadata *md = data_;
 
     nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS, md,
+                      sizeof *md);
+}
+
+static void
+gtpu_to_attr(struct ofpbuf *a, const void *data_)
+{
+    const struct gtpu_metadata *md = data_;
+
+    nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_GTPU_OPTS, md,
                       sizeof *md);
 }
 
@@ -5730,6 +5845,8 @@ parse_odp_key_mask_attr__(struct parse_odp_context *context, const char *s,
         SCAN_FIELD_NESTED_FUNC("vxlan(gbp(", uint32_t, vxlan_gbp, vxlan_gbp_to_attr);
         SCAN_FIELD_NESTED_FUNC("geneve(", struct geneve_scan, geneve,
                                geneve_to_attr);
+        SCAN_FIELD_NESTED_FUNC("gtpu(", struct gtpu_metadata, gtpu_metadata,
+                               gtpu_to_attr);
         SCAN_FIELD_NESTED_FUNC("flags(", uint16_t, tun_flags, tun_flags_to_attr);
     } SCAN_END_NESTED();
 
@@ -5997,7 +6114,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     /* New "struct flow" fields that are visible to the datapath (including all
      * data fields) should be translated into equivalent datapath flow fields
      * here (you will have to add a OVS_KEY_ATTR_* for them). */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
     struct ovs_key_ethernet *eth_key;
     size_t encap[FLOW_MAX_VLAN_HEADERS] = {0};
@@ -7096,7 +7213,7 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     /* New "struct flow" fields that are visible to the datapath (including all
      * data fields) should be translated from equivalent datapath flow fields
      * here (you will have to add a OVS_KEY_ATTR_* for them).  */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
     enum odp_key_fitness fitness = ODP_FIT_ERROR;
     if (errorp) {
@@ -8445,7 +8562,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     /* If you add a field that OpenFlow actions can change, and that is visible
      * to the datapath (including all data fields), then you should also add
      * code here to commit changes to the field. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;

@@ -745,6 +745,9 @@ get_vport_type(const struct dpif_netlink_vport *vport)
     case OVS_VPORT_TYPE_IP6GRE:
         return "ip6gre";
 
+    case OVS_VPORT_TYPE_GTPU:
+        return "gtpu";
+
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
         break;
@@ -778,6 +781,8 @@ netdev_to_ovs_vport_type(const char *type)
         return OVS_VPORT_TYPE_IP6GRE;
     } else if (!strcmp(type, "gre")) {
         return OVS_VPORT_TYPE_GRE;
+    } else if (!strcmp(type, "gtpu")) {
+        return OVS_VPORT_TYPE_GTPU;
     } else {
         return OVS_VPORT_TYPE_UNSPEC;
     }

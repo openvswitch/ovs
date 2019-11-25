@@ -2647,6 +2647,30 @@
           <dd>
             A pair of virtual devices that act as a patch cable.
           </dd>
+
+          <dt><code>gtpu</code></dt>
+          <dd>
+            <p>
+            GPRS Tunneling Protocol (GTP) is a group of IP-based communications
+            protocols used to carry general packet radio service (GPRS) within
+            GSM, UMTS and LTE networks. GTP-U is used for carrying user data
+            within the GPRS core network and between the radio access network
+            and the core network. The user data transported can be packets in
+            any of IPv4, IPv6, or PPP formats.
+            </p>
+
+            <p>
+            The protocol is documented at
+            http://www.3gpp.org/DynaReport/29281.htm
+            </p>
+
+            <p>
+            Open vSwitch uses UDP destination port 2152. The source port used
+            for GTP traffic varies on a per-flow basis and is in the ephemeral
+            port range.
+            </p>
+          </dd>
+
         </dl>
       </column>
     </group>

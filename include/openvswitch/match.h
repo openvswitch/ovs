@@ -121,6 +121,12 @@ void match_set_tun_erspan_dir_masked(struct match *match, uint8_t dir,
 void match_set_tun_erspan_hwid(struct match *match, uint8_t hwid);
 void match_set_tun_erspan_hwid_masked(struct match *match, uint8_t hwid,
                                       uint8_t mask);
+void match_set_tun_gtpu_flags(struct match *match, uint8_t flags);
+void match_set_tun_gtpu_flags_masked(struct match *match, uint8_t flags,
+                                     uint8_t mask);
+void match_set_tun_gtpu_msgtype(struct match *match, uint8_t msgtype);
+void match_set_tun_gtpu_msgtype_masked(struct match *match, uint8_t msgtype,
+                                       uint8_t mask);
 void match_set_in_port(struct match *, ofp_port_t ofp_port);
 void match_set_pkt_mark(struct match *, uint32_t pkt_mark);
 void match_set_pkt_mark_masked(struct match *, uint32_t pkt_mark, uint32_t mask);

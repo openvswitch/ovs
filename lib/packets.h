@@ -1447,6 +1447,74 @@ static inline ovs_be32 get_erspan_ts(enum erspan_ts_gra gra)
     return ts;
 }
 
+/*
+ * GTP-U protocol header and metadata
+ * See:
+ *   User Plane Protocol and Architectural Analysis on 3GPP 5G System
+ *                 draft-hmm-dmm-5g-uplane-analysis-00
+ *
+ * 0                   1                   2                   3
+ * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * | Ver |P|R|E|S|N| Message Type|             Length              |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                Tunnel Endpoint Identifier                     |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |      Sequence Number        |   N-PDU Number  |  Next-Ext-Hdr |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * GTP-U Flags:
+ *   P: Protocol Type (Set to '1')
+ *   R: Reserved Bit (Set to '0')
+ *   E: Extension Header Flag (Set to '1' if extension header exists)
+ *   S: Sequence Number Flag (Set to '1' if sequence number exists)
+ *   N: N-PDU Number Flag (Set to '1' if N-PDU number exists)
+ *
+ * GTP-U Message Type:
+ *   Indicates the type of GTP-U message.
+ *
+ * GTP-U Length:
+ *   Indicates the length in octets of the payload.
+ *
+ * User payload is transmitted in G-PDU packets.
+ */
+
+#define GTPU_VER_MASK   0xe0
+#define GTPU_P_MASK     0x10
+#define GTPU_E_MASK     0x04
+#define GTPU_S_MASK     0x02
+
+/* GTP-U UDP port. */
+#define GTPU_DST_PORT   2152
+
+/* Default GTP-U flags: Ver = 1 and P = 1. */
+#define GTPU_FLAGS_DEFAULT  0x30
+
+/* GTP-U message type for normal user plane PDU. */
+#define GTPU_MSGTYPE_REQ    1   /* Echo Request. */
+#define GTPU_MSGTYPE_REPL   2   /* Echo Reply. */
+#define GTPU_MSGTYPE_GPDU   255 /* User Payload. */
+
+struct gtpu_metadata {
+    uint8_t flags;
+    uint8_t msgtype;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpu_metadata) == 2);
+
+struct gtpuhdr {
+    struct gtpu_metadata md;
+    ovs_be16 len;
+    ovs_16aligned_be32 teid;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpuhdr) == 8);
+
+struct gtpuhdr_opt {
+    ovs_be16 seqno;
+    uint8_t pdu_number;
+    uint8_t next_ext_type;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpuhdr_opt) == 4);
+
 /* VXLAN protocol header */
 struct vxlanhdr {
     union {

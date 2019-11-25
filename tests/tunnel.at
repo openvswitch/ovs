@@ -1041,3 +1041,79 @@ AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel - GTP-U basic])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gtpu \
+                    options:remote_ip=1.1.1.1 \
+                    options:key=123 ofport_request=1])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+    br0 65534/100: (dummy-internal)
+    p1 1/2152: (gtpu: key=123, remote_ip=1.1.1.1)
+])
+
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+gtpu_sys_2152 (2152) ref_cnt=1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - GTP-U push and pop])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy \
+                    ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2])
+
+# Add these ports separately to ensure that they get the datapath port
+# number expected below.
+ovs-vsctl -- add-port br0 p3 \
+          -- set Interface p3 type=gtpu \
+                              ofport_request=3 \
+                              options:remote_ip=1.1.1.1 \
+                              options:key=3 \
+                              options:packet_type=legacy_l3
+ovs-vsctl -- add-port br0 p4 \
+          -- set Interface p4 type=gtpu \
+                              ofport_request=4 \
+                              options:remote_ip=1.1.1.2 \
+                              options:key=4 \
+                              options:packet_type=legacy_l3
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+dnl AT_CHECK([ovs-appctl dpif/show | tail -n +4], [0], [dnl
+AT_CHECK([ovs-appctl dpif/show | tail -n +4], [0], [dnl
+    p1 1/1: (dummy)
+    p2 2/2: (dummy)
+    p3 3/2152: (gtpu: key=3, remote_ip=1.1.1.1)
+    p4 4/2152: (gtpu: key=4, remote_ip=1.1.1.2)
+])
+
+AT_DATA([flows.txt], [dnl
+in_port=1,actions=3
+in_port=2,actions=4
+in_port=3,tun_gtpu_flags=0x30,tun_gtpu_msgtype=255,actions=1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+gtpu_sys_2152 (2152) ref_cnt=2
+])
+
+dnl Encap: in_port=1,actions=3
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x3,dst=1.1.1.1,ttl=64,tp_dst=2152,flags(df|key))),pop_eth,2152
+])
+
+dnl receive packet from GTP-U port, match it, and output to layer3 GRE
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x3,src=1.1.1.1,dst=2.2.2.2,ttl=64,gtpu(flags=0x30,msgtype=255),flags(df|key)),in_port(2152),packet_type(ns=1,id=0),skb_mark(0),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,packet_type=(1,0),tun_id=0x3,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=0,gtpu_flags=0x30,gtpu_msgtype=255,tun_flags=+df-csum+key,in_port=3,dl_type=0x0000
+Datapath actions: push_eth(src=00:00:00:00:00:00,dst=00:00:00:00:00:00),1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

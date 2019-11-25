@@ -111,7 +111,8 @@ netdev_vport_needs_dst_port(const struct netdev *dev)
 
     return (class->get_config == get_tunnel_config &&
             (!strcmp("geneve", type) || !strcmp("vxlan", type) ||
-             !strcmp("lisp", type) || !strcmp("stt", type)) );
+             !strcmp("lisp", type) || !strcmp("stt", type) ||
+             !strcmp("gtpu", type)));
 }
 
 const char *
@@ -216,6 +217,8 @@ netdev_vport_construct(struct netdev *netdev_)
         dev->tnl_cfg.dst_port = port ? htons(port) : htons(LISP_DST_PORT);
     } else if (!strcmp(type, "stt")) {
         dev->tnl_cfg.dst_port = port ? htons(port) : htons(STT_DST_PORT);
+    } else if (!strcmp(type, "gtpu")) {
+        dev->tnl_cfg.dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
     }
 
     dev->tnl_cfg.dont_fragment = true;
@@ -433,6 +436,8 @@ tunnel_supported_layers(const char *type,
     } else if (!strcmp(type, "vxlan")
                && tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)) {
         return TNL_L2 | TNL_L3;
+    } else if (!strcmp(type, "gtpu")) {
+        return TNL_L3;
     } else {
         return TNL_L2;
     }
@@ -587,6 +592,10 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     if (!strcmp(type, "stt")) {
         tnl_cfg.dst_port = htons(STT_DST_PORT);
+    }
+
+    if (!strcmp(type, "gtpu")) {
+        tnl_cfg.dst_port = htons(GTPU_DST_PORT);
     }
 
     needs_dst_port = netdev_vport_needs_dst_port(dev_);
@@ -907,7 +916,8 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         if ((!strcmp("geneve", type) && dst_port != GENEVE_DST_PORT) ||
             (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
             (!strcmp("lisp", type) && dst_port != LISP_DST_PORT) ||
-            (!strcmp("stt", type) && dst_port != STT_DST_PORT)) {
+            (!strcmp("stt", type) && dst_port != STT_DST_PORT) ||
+            (!strcmp("gtpu", type) && dst_port != GTPU_DST_PORT)) {
             smap_add_format(args, "dst_port", "%d", dst_port);
         }
     }
@@ -1223,6 +1233,17 @@ netdev_vport_tunnel_register(void)
           },
           {{NULL, NULL, 0, 0}}
         },
+        { "gtpu_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "gtpu",
+              .build_header = netdev_gtpu_build_header,
+              .push_header = netdev_gtpu_push_header,
+              .pop_header = netdev_gtpu_pop_header,
+          },
+          {{NULL, NULL, 0, 0}}
+        },
+
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
