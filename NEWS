@@ -22,6 +22,8 @@ Post-v2.12.0
      * DPDK pdump packet capture support disabled by default. New configure
        option '--enable-dpdk-pdump' to enable it.
      * DPDK pdump support is deprecated and will be removed in next releases.
+     * OVS validated with DPDK 18.11.5, due to the inclusion of a fix for
+       CVE-2019-14818, this DPDK version is strongly recommended to be used.
 
 v2.12.0 - 03 Sep 2019
 ---------------------
