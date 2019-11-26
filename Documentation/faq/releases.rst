@@ -116,7 +116,7 @@ Q: Are all features available with all datapaths?
     Feature                    Linux upstream Linux OVS tree Userspace Hyper-V
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            2.5          2.6      YES
-    Conntrack Fragment Reass.       4.3            2.6          2.10     YES
+    Conntrack Fragment Reass.       4.3            2.6          2.12     YES
     Conntrack Timeout Policies      5.2            2.12         NO       NO
     Conntrack Zone Limit            4.18           2.10         NO       YES
     Conntrack NAT                   4.6            2.6          2.8      YES
