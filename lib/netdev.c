@@ -2039,7 +2039,12 @@ restore_all_flags(void *aux OVS_UNUSED)
 uint64_t
 netdev_get_change_seq(const struct netdev *netdev)
 {
-    return netdev->change_seq;
+    uint64_t change_seq;
+
+    atomic_read_explicit(&CONST_CAST(struct netdev *, netdev)->change_seq,
+                        &change_seq, memory_order_acquire);
+
+    return change_seq;
 }
 
 #ifndef _WIN32
