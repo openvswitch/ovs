@@ -4002,6 +4002,10 @@ netdev_dpdk_ring_construct(struct netdev *netdev)
     dpdk_port_t port_no = 0;
     int err = 0;
 
+    VLOG_WARN_ONCE("dpdkr a.k.a. ring ports are considered deprecated.  "
+                   "Please migrate to virtio-based interfaces, e.g. "
+                   "dpdkvhostuserclient ports, net_virtio_user DPDK vdev.");
+
     ovs_mutex_lock(&dpdk_mutex);
 
     err = dpdk_ring_open(netdev->name, &port_no);
