@@ -1,5 +1,8 @@
 v2.11.4 - xx xxx xxxx
 ---------------------
+   - DPDK
+     * OVS validated with DPDK 18.11.5, due to the inclusion of a fix for
+       CVE-2019-14818, this DPDK version is strongly recommended to be used.
 
 v2.11.3 - 06 Sep 2019
 ---------------------
