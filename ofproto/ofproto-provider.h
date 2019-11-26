@@ -1873,6 +1873,9 @@ struct ofproto_class {
      */
     const char *(*get_datapath_version)(const struct ofproto *);
 
+    /* Get capabilities of the datapath type 'dp_type'. */
+    void (*get_datapath_cap)(const char *dp_type, struct smap *caps);
+
     /* Pass custom configuration options to the 'type' datapath.
      *
      * This function should be NULL if an implementation does not support it.
@@ -1895,8 +1898,6 @@ struct ofproto_class {
     /* Deletes the timeout policy associated with 'zone' in datapath type
      * 'dp_type'. */
     void (*ct_del_zone_timeout_policy)(const char *dp_type, uint16_t zone);
-    /* Get the datapath's capabilities. */
-    void (*get_datapath_cap)(const char *dp_type, struct smap *caps);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

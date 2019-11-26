@@ -6709,9 +6709,9 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
+    get_datapath_cap,
     type_set_config,
     ct_flush,                   /* ct_flush */
     ct_set_zone_timeout_policy,
     ct_del_zone_timeout_policy,
-    get_datapath_cap,
 };
