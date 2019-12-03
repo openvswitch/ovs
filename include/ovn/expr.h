@@ -390,11 +390,13 @@ void expr_print(const struct expr *);
 struct expr *expr_parse(struct lexer *, const struct shash *symtab,
                         const struct shash *addr_sets,
                         const struct shash *port_groups,
-                        struct sset *addr_sets_ref);
+                        struct sset *addr_sets_ref,
+                        struct sset *port_groups_ref);
 struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                const struct shash *addr_sets,
                                const struct shash *port_groups,
                                struct sset *addr_sets_ref,
+                               struct sset *port_groups_ref,
                                char **errorp);
 
 struct expr *expr_clone(struct expr *);

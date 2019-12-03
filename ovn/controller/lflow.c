@@ -616,14 +616,21 @@ consider_logical_flow(
     struct expr *expr;
 
     struct sset addr_sets_ref = SSET_INITIALIZER(&addr_sets_ref);
+    struct sset port_groups_ref = SSET_INITIALIZER(&port_groups_ref);
     expr = expr_parse_string(lflow->match, &symtab, addr_sets, port_groups,
-                             &addr_sets_ref, &error);
+                             &addr_sets_ref, &port_groups_ref, &error);
     const char *addr_set_name;
     SSET_FOR_EACH (addr_set_name, &addr_sets_ref) {
         lflow_resource_add(lfrr, REF_TYPE_ADDRSET, addr_set_name,
                            &lflow->header_.uuid);
     }
+    const char *port_group_name;
+    SSET_FOR_EACH (port_group_name, &port_groups_ref) {
+        lflow_resource_add(lfrr, REF_TYPE_PORTGROUP, port_group_name,
+                           &lflow->header_.uuid);
+    }
     sset_destroy(&addr_sets_ref);
+    sset_destroy(&port_groups_ref);
 
     if (!error) {
         if (prereqs) {
