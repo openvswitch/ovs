@@ -105,6 +105,12 @@ struct conn {
     long long expiration;
     uint32_t mark;
     int seq_skew;
+
+    /* Immutable data. */
+    int32_t admit_zone; /* The zone for managing zone limit counts. */
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+
+    /* Mutable data. */
     bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
                         * control messages; true if reply direction. */
     bool cleaned; /* True if cleaned from expiry lists. */
@@ -155,6 +161,7 @@ struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
     struct cmap conns OVS_GUARDED;
     struct ovs_list exp_lists[N_CT_TM] OVS_GUARDED;
+    struct hmap zone_limits OVS_GUARDED;
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
     struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
@@ -172,6 +179,7 @@ struct conntrack {
                                                      * control context.  */
 
     struct ipf *ipf; /* Fragmentation handling context. */
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
     atomic_bool tcp_seq_chk; /* Check TCP sequence numbers. */
 };
 

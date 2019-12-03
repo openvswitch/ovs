@@ -346,18 +346,16 @@ particular zone is not specified in the datapath, it defaults to the
 default per-zone limit.  A default zone may be specified with the
 \fBdefault=\fIdefault_limit\fR argument.   Initially, the default
 per-zone limit is unlimited.  An unlimited number of entries may be set
-with \fB0\fR limit.  Only supported for Linux kernel datapath.
+with \fB0\fR limit.
 .
 .TP
 \*(DX\fBct\-del\-limits\fR [\fIdp\fR] \fBzone=\fIzone[,zone]\fR...
 Deletes the connection tracking limit for \fIzone\fR.  Multiple zones may
-be specified with a comma-separated list.  Only supported for Linux
-kernel datapath.
+be specified with a comma-separated list.
 .
 .TP
 \*(DX\fBct\-get\-limits\fR [\fIdp\fR] [\fBzone=\fIzone\fR[\fB,\fIzone\fR]...]
 Retrieves the maximum allowed number of connections and current
 counts per-zone.  If \fIzone\fR is given, only the specified zone(s) are
 printed.  If no zones are specified, all the zone limits and counts are
-provided.  The command always displays the default zone limit.  Only
-supported for Linux kernel datapath.
+provided.  The command always displays the default zone limit.

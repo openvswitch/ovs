@@ -104,6 +104,20 @@ struct conntrack_dump {
     uint16_t zone;
 };
 
+struct conntrack_zone_limit {
+    int32_t zone;
+    uint32_t limit;
+    uint32_t count;
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+};
+
+enum {
+    INVALID_ZONE = -2,
+    DEFAULT_ZONE = -1, /* Default zone for zone limit management. */
+    MIN_ZONE = 0,
+    MAX_ZONE = 0xFFFF,
+};
+
 struct ct_dpif_entry;
 struct ct_dpif_tuple;
 
@@ -121,5 +135,9 @@ int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
 int conntrack_set_tcp_seq_chk(struct conntrack *ct, bool enabled);
 bool conntrack_get_tcp_seq_chk(struct conntrack *ct);
 struct ipf *conntrack_ipf_ctx(struct conntrack *ct);
+struct conntrack_zone_limit zone_limit_get(struct conntrack *ct,
+                                           int32_t zone);
+int zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit);
+int zone_limit_delete(struct conntrack *ct, uint16_t zone);
 
 #endif /* conntrack.h */

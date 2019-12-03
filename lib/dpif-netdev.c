@@ -7471,6 +7471,88 @@ dpif_netdev_ct_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
 }
 
 static int
+dpif_netdev_ct_set_limits(struct dpif *dpif OVS_UNUSED,
+                           const uint32_t *default_limits,
+                           const struct ovs_list *zone_limits)
+{
+    int err = 0;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    if (default_limits) {
+        err = zone_limit_update(dp->conntrack, DEFAULT_ZONE, *default_limits);
+        if (err != 0) {
+            return err;
+        }
+    }
+
+    struct ct_dpif_zone_limit *zone_limit;
+    LIST_FOR_EACH (zone_limit, node, zone_limits) {
+        err = zone_limit_update(dp->conntrack, zone_limit->zone,
+                                zone_limit->limit);
+        if (err != 0) {
+            break;
+        }
+    }
+    return err;
+}
+
+static int
+dpif_netdev_ct_get_limits(struct dpif *dpif OVS_UNUSED,
+                           uint32_t *default_limit,
+                           const struct ovs_list *zone_limits_request,
+                           struct ovs_list *zone_limits_reply)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct conntrack_zone_limit czl;
+
+    czl = zone_limit_get(dp->conntrack, DEFAULT_ZONE);
+    if (czl.zone == DEFAULT_ZONE) {
+        *default_limit = czl.limit;
+    } else {
+        return EINVAL;
+    }
+
+    if (!ovs_list_is_empty(zone_limits_request)) {
+        struct ct_dpif_zone_limit *zone_limit;
+        LIST_FOR_EACH (zone_limit, node, zone_limits_request) {
+            czl = zone_limit_get(dp->conntrack, zone_limit->zone);
+            if (czl.zone == zone_limit->zone || czl.zone == DEFAULT_ZONE) {
+                ct_dpif_push_zone_limit(zone_limits_reply, zone_limit->zone,
+                                        czl.limit, czl.count);
+            } else {
+                return EINVAL;
+            }
+        }
+    } else {
+        for (int z = MIN_ZONE; z <= MAX_ZONE; z++) {
+            czl = zone_limit_get(dp->conntrack, z);
+            if (czl.zone == z) {
+                ct_dpif_push_zone_limit(zone_limits_reply, z, czl.limit,
+                                        czl.count);
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int
+dpif_netdev_ct_del_limits(struct dpif *dpif OVS_UNUSED,
+                           const struct ovs_list *zone_limits)
+{
+    int err = 0;
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct ct_dpif_zone_limit *zone_limit;
+    LIST_FOR_EACH (zone_limit, node, zone_limits) {
+        err = zone_limit_delete(dp->conntrack, zone_limit->zone);
+        if (err != 0) {
+            break;
+        }
+    }
+
+    return err;
+}
+
+static int
 dpif_netdev_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -7576,9 +7658,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_get_nconns,
     dpif_netdev_ct_set_tcp_seq_chk,
     dpif_netdev_ct_get_tcp_seq_chk,
-    NULL,                       /* ct_set_limits */
-    NULL,                       /* ct_get_limits */
-    NULL,                       /* ct_del_limits */
+    dpif_netdev_ct_set_limits,
+    dpif_netdev_ct_get_limits,
+    dpif_netdev_ct_del_limits,
     NULL,                       /* ct_set_timeout_policy */
     NULL,                       /* ct_get_timeout_policy */
     NULL,                       /* ct_del_timeout_policy */
