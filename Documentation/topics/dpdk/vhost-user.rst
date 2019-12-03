@@ -392,9 +392,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-18.11.5.tar.xz
-    $ tar xf dpdk-18.11.5.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-18.11.5
+    $ wget https://fast.dpdk.org/rel/dpdk-19.11.tar.xz
+    $ tar xf dpdk-19.11.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-19.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -622,4 +622,4 @@ Because of this limitation, this feature is considered 'experimental'.
 
 Further information can be found in the
 `DPDK documentation
-<https://doc.dpdk.org/guides-18.11/prog_guide/vhost_lib.html>`__
+<https://doc.dpdk.org/guides-19.11/prog_guide/vhost_lib.html>`__

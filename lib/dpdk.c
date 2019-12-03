@@ -27,7 +27,6 @@
 #include <rte_memzone.h>
 #include <rte_version.h>
 #ifdef DPDK_PDUMP
-#include <rte_mempool.h>
 #include <rte_pdump.h>
 #endif
 
@@ -433,20 +432,11 @@ dpdk_init__(const struct smap *ovs_other_config)
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 
 #ifdef DPDK_PDUMP
-    VLOG_INFO("DPDK pdump packet capture enabled");
     VLOG_WARN("DPDK pdump support is deprecated and "
               "will be removed in next OVS releases.");
-    err = rte_pdump_init(ovs_rundir());
+    err = rte_pdump_init();
     if (err) {
         VLOG_INFO("Error initialising DPDK pdump");
-        rte_pdump_uninit();
-    } else {
-        char *server_socket_path;
-
-        server_socket_path = xasprintf("%s/%s", ovs_rundir(),
-                                       "pdump_server_socket");
-        fatal_signal_add_file_to_unlink(server_socket_path);
-        free(server_socket_path);
     }
 #endif
 

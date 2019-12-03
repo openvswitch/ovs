@@ -165,7 +165,7 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="18.11.5"
+        DPDK_VER="19.11"
     fi
     install_dpdk $DPDK_VER
     # Enable pdump support in OVS.

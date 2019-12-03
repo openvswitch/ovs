@@ -89,4 +89,4 @@ DPDK. However, this functionality was removed because:
   guests
 
 .. _DPDK documentation:
-   https://doc.dpdk.org/guides-18.11/prog_guide/ring_lib.html
+   https://doc.dpdk.org/guides-19.11/prog_guide/ring_lib.html

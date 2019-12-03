@@ -1,11 +1,5 @@
 noinst_HEADERS += \
         include/sparse/rte_byteorder.h \
-        include/sparse/rte_esp.h \
-        include/sparse/rte_icmp.h \
-        include/sparse/rte_ip.h \
-        include/sparse/rte_sctp.h \
-        include/sparse/rte_tcp.h \
-        include/sparse/rte_udp.h \
         include/sparse/xmmintrin.h \
         include/sparse/arpa/inet.h \
         include/sparse/bits/floatn.h \

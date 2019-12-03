@@ -215,9 +215,30 @@ If the log is not seen then the port can be detached like so::
     to be an example of this behavior; check the driver documentation if this
     is suspected.
 
-For more information please refer to the `DPDK Port Hotplug Framework`__.
+Hotplugging with IGB_UIO
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-__ http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug
+As of DPDK 19.11, default igb_uio hotplugging behavior changes from
+previous DPDK versions.
+
+With DPDK 19.11, if no device is bound to igb_uio when OVS is launched then
+the IOVA mode may be set to virtual addressing for DPDK. This is incompatible
+for hotplugging with igb_uio.
+
+To hotplug a port with igb_uio in this case, DPDK must be configured to use
+physical addressing for IOVA mode. For more information regarding IOVA modes
+in DPDK please refer to the `DPDK IOVA Mode Detection`__.
+
+__ https://doc.dpdk.org/guides-19.11/prog_guide/env_abstraction_layer.html#iova-mode-detection
+
+To configure OVS DPDK to use physical addressing for IOVA::
+
+    $ ovs-vsctl --no-wait set Open_vSwitch . \
+        other_config:dpdk-extra="--iova-mode=pa"
+
+.. note::
+
+   Changing IOVA mode requires restarting the ovs-vswitchd application.
 
 .. _representors:
 
@@ -240,7 +261,7 @@ Representors are multi devices created on top of one PF.
 
 For more information, refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-18.11/prog_guide/switch_representation.html
+__ https://doc.dpdk.org/guides-19.11/prog_guide/switch_representation.html
 
 Prior to port representors there was a one-to-one relationship between the PF
 and the eth device. With port representors the relationship becomes one PF to
