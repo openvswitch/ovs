@@ -3602,8 +3602,8 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
 
 static void
 format_odp_tun_erspan_opt(const struct nlattr *attr,
-                         const struct nlattr *mask_attr, struct ds *ds,
-                         bool verbose)
+                          const struct nlattr *mask_attr, struct ds *ds,
+                          bool verbose)
 {
     const struct erspan_metadata *opts, *mask;
     uint8_t ver, ver_ma, dir, dir_ma, hwid, hwid_ma;

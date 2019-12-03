@@ -1311,7 +1311,7 @@ format_flow_tunnel(struct ds *s, const struct match *match)
         ds_put_format(s, "tun_erspan_ver=%"PRIu8",", tnl->erspan_ver);
     }
     if (wc->masks.tunnel.erspan_idx && tnl->erspan_ver == 1) {
-       ds_put_format(s, "tun_erspan_idx=%#"PRIx32",", tnl->erspan_idx); 
+       ds_put_format(s, "tun_erspan_idx=%#"PRIx32",", tnl->erspan_idx);
     }
     if (wc->masks.tunnel.erspan_dir && tnl->erspan_ver == 2) {
         ds_put_format(s, "tun_erspan_dir=%"PRIu8",", tnl->erspan_dir);

@@ -618,8 +618,8 @@ netdev_erspan_push_header(const struct netdev *netdev,
 
 int
 netdev_erspan_build_header(const struct netdev *netdev,
-                        struct ovs_action_push_tnl *data,
-                        const struct netdev_tnl_build_header_params *params)
+                           struct ovs_action_push_tnl *data,
+                           const struct netdev_tnl_build_header_params *params)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
