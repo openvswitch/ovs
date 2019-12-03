@@ -504,6 +504,33 @@ tcp:1.2.3.4
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+
+AT_SETUP([fail-mode])
+AT_KEYWORDS([fail-mode ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [add-br br0],
+
+  [get-fail-mode br0],
+  [set-fail-mode br0 secure],
+  [get-fail-mode br0],
+
+  [del-fail-mode br0],
+  [get-fail-mode br0],
+
+  [set-fail-mode br0 standalone],
+  [get-fail-mode br0])], [0], [
+
+
+secure
+
+
+
+standalone
+])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 dnl OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([VLAN])
 m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
