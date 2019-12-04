@@ -38,7 +38,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Returns a string form of 'reason'.  The return value is either a statically
  * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
  * 'bufsize' should be at least OFP_FLOW_REMOVED_REASON_BUFSIZE. */
-#define OFP_FLOW_REMOVED_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 const char *
 ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason,
                                   char *reasonbuf, size_t bufsize)
