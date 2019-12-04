@@ -849,7 +849,7 @@ raft_read_header(struct raft *raft)
     } else {
         raft_entry_clone(&raft->snap, &h.snap);
         raft->log_start = raft->log_end = h.snap_index + 1;
-        raft->commit_index = h.snap_index;
+        raft->log_synced = raft->commit_index = h.snap_index;
         raft->last_applied = h.snap_index - 1;
     }
 
