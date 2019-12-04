@@ -3411,46 +3411,58 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p1 -- set Interface p1 type=dummy ofport_request=10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow14 -P standard monitor br0 --detach --no-chdir --pidfile])
+ovs_appctl () {
+    echo ovs-appctl "$@"
+    AT_CHECK([ovs-appctl "$@"], [0], [ignore], [ignore])
+}
+ovs_ofctl () {
+    echo ovs-ofctl --no-names "$@"
+    AT_CHECK([ovs-ofctl --no-names "$@"])
+}
+ovs_vsctl () {
+    echo ovs-vsctl "$@"
+    AT_CHECK([ovs-vsctl "$@"])
+}
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
     shift
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+    ovs_appctl -t ovs-ofctl ofctl/barrier
+    ovs_appctl -t ovs-ofctl ofctl/set-output-file monitor.log
     : > expout
 
     # OFPT_PACKET_IN, OFPR_PACKET_OUT (controller_id=0)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs_ofctl -O OpenFlow14 packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_PACKET_OUT"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_ACTION_SET (controller_id=0)
-    ovs-ofctl -O OpenFlow14 add-flow br0 'in_port=10 actions=write_actions(output(CONTROLLER))'
-    ovs-appctl netdev-dummy/receive p1 'in_port(10),eth(src=00:10:20:30:40:50,dst=00:01:02:03:04:05),eth_type(0x1234)'
+    ovs_ofctl -O OpenFlow14 add-flow br0 'in_port=10 actions=write_actions(output(CONTROLLER))'
+    ovs_appctl netdev-dummy/receive p1 'in_port(10),eth(src=00:10:20:30:40:50,dst=00:01:02:03:04:05),eth_type(0x1234)'
     if test X"$1" = X"OFPR_ACTION_SET"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): cookie=0x0 total_len=14 in_port=10 (via action_set) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs_ofctl -O OpenFlow14  packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
-    ovs-ofctl -O OpenFlow14 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    ovs_ofctl -O OpenFlow14 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
 # OFPT_PORT_STATUS, OFPPR_ADD
-    ovs-vsctl add-port br0 test -- set Interface test type=dummy
+    ovs_vsctl add-port br0 test -- set Interface test type=dummy
     if test X"$1" = X"OFPPR_ADD"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): ADD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     0
@@ -3463,7 +3475,7 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_PORT_STATUS, OFPPR_MODIFY
-    ovs-ofctl -O OpenFlow14 -vwarn mod-port br0 test down
+    ovs_ofctl -O OpenFlow14 -vwarn mod-port br0 test down
     if test X"$1" = X"OFPPR_MODIFY"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -3476,7 +3488,7 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_PORT_STATUS, OFPPR_DELETE
-    ovs-vsctl del-port br0 test
+    ovs_vsctl del-port br0 test
     if test X"$1" = X"OFPPR_DELETE"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): DEL: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -3485,39 +3497,41 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_DELETE
-    ovs-ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=drop
-    ovs-ofctl -O OpenFlow14 --strict del-flows br0 ''
+    ovs_ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=drop
+    ovs-ofctl -O OpenFlow14 dump-flows br0
+    ovs_ofctl -O OpenFlow14 --strict del-flows br0 ''
+    ovs-ofctl -O OpenFlow14 dump-flows br0
     if test X"$1" = X"OFPRR_DELETE"; then shift;
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=delete table_id=0"
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_GROUP_DELETE
-    ovs-ofctl -O OpenFlow14 add-group br0 group_id=1234,type=all,bucket=output:10
-    ovs-ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=group:1234
-    ovs-ofctl -O OpenFlow14 --strict del-groups br0 group_id=1234
+    ovs_ofctl -O OpenFlow14 add-group br0 group_id=1234,type=all,bucket=output:10
+    ovs_ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=group:1234
+    ovs_ofctl -O OpenFlow14 --strict del-groups br0 group_id=1234
     if test X"$1" = X"OFPRR_GROUP_DELETE"; then shift;
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=group_delete table_id=0"
     fi
 
     # OFPT_TABLE_STATUS, OFPTR_VACANCY_UP
     if test X"$1" = X"OFPTR_VACANCY_UP"; then shift;
-        ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1
+        AT_CHECK([ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1], [0], [ignore], [])
 
         # Turn on vacancy events, then add flows until we're full.
         # With initial vacancy of 100% and vacancy_up of 80%, so that
         # vacancy >= vacancy_up, this enables VACANY_DOWN events, so
         # we get a single such message when vacancy dips below 20%.
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_DOWN
 table_desc:-
   table 1:
@@ -3526,16 +3540,16 @@ table_desc:-
         # Then delete flows until we're empty.  Sending the
         # VACANCY_DOWN message enabled VACANCY_UP events, so we get a
         # single such message when vacancy rises above 80%.
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
 table_desc:-
   table 1:
@@ -3548,28 +3562,28 @@ table_desc:-
         # That means that filling up the table generates no message,
         # but deleting all the flows generates VACANCY_UP at the point
         # vacancy rises above 80%.
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 novacancy
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 novacancy
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
 table_desc:-
   table 1:
@@ -3598,26 +3612,26 @@ s/00:0.$/00:0x/' < monitor.log
 check_async 1
 
 # Set miss_send_len to 128, turning on packet-ins for our service connection.
-ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
+ovs_appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
 check_async 2 OFPR_PACKET_OUT OFPR_ACTION_SET OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
 # Become slave (OF 1.4), which should disable everything except port status.
-ovs-appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
+ovs_appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
 # Use OF 1.4 OFPT_SET_ASYNC to enable a patchwork of asynchronous messages.
-ovs-appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000002000020008000000020003000800000005000400080000001c00050008000000050008000800000018
+ovs_appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000002000020008000000020003000800000005000400080000001c00050008000000050008000800000018
 check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE OFPTR_VACANCY_UP
 
 # Set controller ID 123.
-ovs-appctl -t ovs-ofctl ofctl/send 05040018000000030000232000000014000000000000007b
+ovs_appctl -t ovs-ofctl ofctl/send 05040018000000030000232000000014000000000000007b
 check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
 # Restore controller ID 0.
-ovs-appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000000
+ovs_appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000000
 
 # Become master (OF 1.4).
-ovs-appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
+ovs_appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
 check_async 6 OFPR_PACKET_OUT OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
