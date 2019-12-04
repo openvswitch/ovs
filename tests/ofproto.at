@@ -3579,13 +3579,18 @@ table_desc:-
 
     AT_FAIL_IF([test X"$1" != X])
 
-    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
+    normalize_log () {
+       sed '
+s/ (xid=0x[[0-9a-fA-F]]*)//
+s/ *duration.*//
+s/00:0.$/00:0x/' < monitor.log
+    }
+
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`],
+                   [normalize_log | diff -u - expout])
 
     AT_CHECK(
-      [[sed '
-s/ (xid=0x[0-9a-fA-F]*)//
-s/ *duration.*//
-s/00:0.$/00:0x/' < monitor.log]],
+      [normalize_log],
       [0], [expout])
 }
 
