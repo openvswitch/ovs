@@ -1943,6 +1943,9 @@ struct mf_bitmap {
 
 bool mf_bitmap_is_superset(const struct mf_bitmap *super,
                            const struct mf_bitmap *sub);
+struct mf_bitmap mf_bitmap_and(struct mf_bitmap, struct mf_bitmap);
+struct mf_bitmap mf_bitmap_or(struct mf_bitmap, struct mf_bitmap);
+struct mf_bitmap mf_bitmap_not(struct mf_bitmap);
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGn cases. */

@@ -1621,18 +1621,7 @@ OFPST_TABLE reply (xid=0x1):
     active=11, lookup=0, matched=0
     max_entries=1048576
     matching:
-      in_port: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      nw_proto: exact match or wildcard
-      nw_tos: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
+      exact match or wildcard: in_port eth_{src,dst,type} vlan_{vid,pcp} ip_{src,dst} nw_{proto,tos} tcp_{src,dst}
 ])
 AT_CLEANUP
 
@@ -1644,45 +1633,11 @@ AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
     config=controller
     max_entries=1000000
     instructions (table miss and others):
-      instructions: write_metadata,goto_table
+      instructions: write_metadata goto_table
       Write-Actions and Apply-Actions features:
-        supported on Set-Field: metadata in_port_oxm eth_src eth_dst eth_type vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_proto ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
+        supported on Set-Field: metadata in_port_oxm eth_{src,dst,type} vlan_{vid,pcp} mpls_{label,tc} ip_{src,dst} ipv6_{src,dst,label} nw_proto ip_dscp nw_ecn arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll}
     matching:
-      metadata: exact match or wildcard
-      in_port_oxm: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      mpls_label: exact match or wildcard
-      mpls_tc: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      ipv6_src: exact match or wildcard
-      ipv6_dst: exact match or wildcard
-      ipv6_label: exact match or wildcard
-      nw_proto: exact match or wildcard
-      ip_dscp: exact match or wildcard
-      nw_ecn: exact match or wildcard
-      arp_op: exact match or wildcard
-      arp_spa: exact match or wildcard
-      arp_tpa: exact match or wildcard
-      arp_sha: exact match or wildcard
-      arp_tha: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
-      udp_src: exact match or wildcard
-      udp_dst: exact match or wildcard
-      sctp_src: exact match or wildcard
-      sctp_dst: exact match or wildcard
-      icmp_type: exact match or wildcard
-      icmp_code: exact match or wildcard
-      icmpv6_type: exact match or wildcard
-      icmpv6_code: exact match or wildcard
-      nd_target: exact match or wildcard
-      nd_sll: exact match or wildcard
-      nd_tll: exact match or wildcard
+      exact match or wildcard: metadata in_port_oxm eth_{src,dst,type} vlan_{vid,pcp} mpls_{label,tc} ip_{src,dst} ipv6_{src,dst,label} nw_proto ip_dscp nw_ecn arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll}
 
   table 1 ("table1"):
     active=0, lookup=0, matched=0
@@ -2690,65 +2645,12 @@ f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
     max_entries=1000000
     instructions (table miss and others):
       next tables: 1-253
-      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      instructions: apply_actions clear_actions write_actions write_metadata goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: tun_id tun_src tun_dst metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst
+        supported on Set-Field: tun_{id,src,dst} metadata in_{port,port_oxm} pkt_mark reg0...reg7 eth_{src,dst} vlan_{tci,vid,pcp} mpls_{label,tc} ip_{src,dst} ipv6_{src,dst} nw_tos ip_dscp nw_{ecn,ttl} arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst}
     matching:
-      tun_id: exact match or wildcard
-      tun_src: exact match or wildcard
-      tun_dst: exact match or wildcard
-      metadata: exact match or wildcard
-      in_port: exact match or wildcard
-      in_port_oxm: exact match or wildcard
-      pkt_mark: exact match or wildcard
-      reg0: exact match or wildcard
-      reg1: exact match or wildcard
-      reg2: exact match or wildcard
-      reg3: exact match or wildcard
-      reg4: exact match or wildcard
-      reg5: exact match or wildcard
-      reg6: exact match or wildcard
-      reg7: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_tci: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      mpls_label: exact match or wildcard
-      mpls_tc: exact match or wildcard
-      mpls_bos: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      ipv6_src: exact match or wildcard
-      ipv6_dst: exact match or wildcard
-      ipv6_label: exact match or wildcard
-      nw_proto: exact match or wildcard
-      nw_tos: exact match or wildcard
-      ip_dscp: exact match or wildcard
-      nw_ecn: exact match or wildcard
-      nw_ttl: exact match or wildcard
-      ip_frag: exact match or wildcard
-      arp_op: exact match or wildcard
-      arp_spa: exact match or wildcard
-      arp_tpa: exact match or wildcard
-      arp_sha: exact match or wildcard
-      arp_tha: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
-      tcp_flags: exact match or wildcard
-      udp_src: exact match or wildcard
-      udp_dst: exact match or wildcard
-      sctp_src: exact match or wildcard
-      sctp_dst: exact match or wildcard
-      icmp_type: exact match or wildcard
-      icmp_code: exact match or wildcard
-      icmpv6_type: exact match or wildcard
-      icmpv6_code: exact match or wildcard
-      nd_target: exact match or wildcard
-      nd_sll: exact match or wildcard
-      nd_tll: exact match or wildcard
+      exact match or wildcard: tun_{id,src,dst} metadata in_{port,port_oxm} pkt_mark reg0...reg7 eth_{src,dst,type} vlan_{tci,vid,pcp} mpls_{label,tc,bos} ip_{src,dst} ipv6_{src,dst,label} nw_{proto,tos} ip_dscp nw_{ecn,ttl} ip_frag arp_{op,spa,tpa,sha,tha} tcp_{src,dst,flags} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll}
 ])
 AT_CLEANUP
 

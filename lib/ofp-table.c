@@ -1328,6 +1328,163 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char **namep,
     return NULL;
 }
 
+/* Returns true if 's' consists of only ASCII digits (and at least one). */
+static bool
+is_all_digits(const char *s)
+{
+    return s[0] && s[strspn(s, "0123456789")] == '\0';
+}
+
+/* Returns true if 'a' and 'b' are the same except 'b' ends in a number one
+ * larger than 'a', for example, "reg0" and "reg1" */
+static bool
+are_names_sequential(const char *a, const char *b)
+{
+    /* Skip common prefix. */
+    for (; *a == *b; a++, b++) {
+        if (!*a) {
+            /* 'a' and 'b' are the same.  Weird, but not sequential. */
+            return false;
+        }
+    }
+
+    return (is_all_digits(a)
+            && is_all_digits(b)
+            && strlen(a) < 10
+            && strlen(b) < 10
+            && atoi(a) + 1 == atoi(b));
+}
+
+/* Returns the number of sequential names at the start of the 'n' strings in
+ * 'ids'.  Returns at least 1 (if 'n' > 0). */
+static size_t
+count_sequential_suffix_run(const char *ids[], size_t n)
+{
+    for (size_t i = 1; ; i++) {
+        if (i >= n || !are_names_sequential(ids[i - 1], ids[i])) {
+            /* "x0...x1" is worse than "x0 x1", so suppress it. */
+            return i == 2 ? 1 : i;
+        }
+    }
+}
+
+/* Counts the length of the longest common prefix (that ends in "_") between
+ * strings 'a' and 'b'.  Returns 0 if they have no common prefix. */
+static size_t
+count_common_prefix(const char *a, const char *b)
+{
+    size_t retval = 0;
+    for (size_t i = 0; ; i++) {
+        if (a[i] != b[i] || !a[i]) {
+            return retval;
+        } else if (a[i] == '_') {
+            retval = i + 1;
+        }
+    }
+}
+
+/* Returns the number of strings in the longest run of strings with a common
+ * prefix (that ends in "_") at the beginning of the 'n' strings in 'ids'.
+ * This is at least 1, if 'n' > 0.  All the strings are already known to have a
+ * common prefix of length 'prefix_len', so that's not of interest; only an
+ * additional common prefix is interesting.
+ *
+ * If this returns 'n' > 1, then '*extra_prefix_lenp' receives the length of
+ * the additional common prefix.  Otherwise '*extra_prefix_lenp' receives 0. */
+static size_t
+count_common_prefix_run(const char *ids[], size_t n,
+                        size_t prefix_len, size_t *extra_prefix_lenp)
+{
+    *extra_prefix_lenp = 0;
+    if (n < 2) {
+        return n;
+    }
+
+    size_t extra_prefix_len = count_common_prefix(ids[0] + prefix_len,
+                                                  ids[1] + prefix_len);
+    if (!extra_prefix_len) {
+        return 1;
+    }
+
+    size_t i = 2;
+    while (i < n) {
+        size_t next = count_common_prefix(ids[0] + prefix_len,
+                                          ids[i] + prefix_len);
+        if (!next) {
+            break;
+        } else if (next < extra_prefix_len) {
+            next = extra_prefix_len;
+        }
+        i++;
+    }
+    *extra_prefix_lenp = extra_prefix_len;
+    return i;
+}
+
+/* Appends the 'n' names in 'ids' to 's', omitting the first 'prefix_len' bytes
+ * of each name (which should all be the same), separating them from each other
+ * with spaces.
+ *
+ * Two kinds of abbreviation are implemented:
+ *
+ *     - Common prefixes: "eth_src eth_dst eth_type" => "eth_{src,dst,type}".
+ *
+ *     - Sequential suffixes: "reg0 reg1 reg2 reg3" => "reg0...reg3".
+ */
+static void
+print_names(struct ds *s, const char *ids[], size_t n, size_t prefix_len)
+{
+    int group = 0;
+    while (n > 0) {
+        if (group++) {
+            ds_put_char(s, prefix_len ? ',' : ' ');
+        }
+
+        /* Count the prefix and suffix runs at the beginning of 'ids'.  As of
+         * this writing we don't have any sequentially numbered fields whose
+         * names contain "_", so we should only have one or the other at a
+         * time.  However, if we end up with something like "a_0 a_1 a_2"
+         * someday, we want to render it as a_0...a_2, not as a_{0...2}, so
+         * given equal suffix and prefix runs, prefer the suffix. */
+        size_t extra_prefix_len;
+        size_t prefix_run = count_common_prefix_run(ids, n, prefix_len,
+                                                    &extra_prefix_len);
+        size_t suffix_run = count_sequential_suffix_run(ids, n);
+        size_t run = MAX(prefix_run, suffix_run);
+        if (suffix_run >= prefix_run) {
+            ds_put_format(s, "%s", ids[0] + prefix_len);
+            if (run > 1) {
+                ds_put_format(s, "...%s", ids[run - 1] + prefix_len);
+            }
+        } else {
+            ds_put_format(s, "%.*s{", (int) extra_prefix_len,
+                          ids[0] + prefix_len);
+            print_names(s, ids, run, prefix_len + extra_prefix_len);
+            ds_put_char(s, '}');
+        }
+
+        ids += run;
+        n -= run;
+    }
+}
+
+static void
+print_mf_bitmap(struct ds *s, const struct mf_bitmap *mfb)
+{
+    const char *ids[MFF_N_IDS];
+    size_t n = 0;
+
+    int i;
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, mfb->bm) {
+        ids[n++] = mf_from_id(i)->name;
+    }
+
+    if (n > 0) {
+        ds_put_char(s, ' ');
+        print_names(s, ids, n, 0);
+    }
+}
+
 static void
 print_table_action_features(struct ds *s,
                             const struct ofputil_table_action_features *taf)
@@ -1339,12 +1496,8 @@ print_table_action_features(struct ds *s,
     }
 
     if (!bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS)) {
-        int i;
-
         ds_put_cstr(s, "        supported on Set-Field:");
-        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, taf->set_fields.bm) {
-            ds_put_format(s, " %s", mf_from_id(i)->name);
-        }
+        print_mf_bitmap(s, &taf->set_fields);
         ds_put_char(s, '\n');
     }
 }
@@ -1404,10 +1557,10 @@ print_table_instruction_features(
                     } else {
                         ds_put_format(s, "%d", i);
                     }
-                    ds_put_char(s, ',');
+                    ds_put_char(s, ' ');
                 }
             }
-            ds_chomp(s, ',');
+            ds_chomp(s, ' ');
             ds_put_char(s, '\n');
         }
     }
@@ -1426,6 +1579,21 @@ print_table_instruction_features(
                || !bitmap_is_all_zeros(tif->write.set_fields.bm, MFF_N_IDS)) {
         ds_put_cstr(s, "      Write-Actions and Apply-Actions features:\n");
         print_table_action_features(s, &tif->write);
+    }
+}
+
+static void
+print_matches(struct ds *s, const struct ofputil_table_features *f,
+              bool mask, bool wc, const char *title)
+{
+    const struct mf_bitmap m = mask ? f->mask : mf_bitmap_not(f->mask);
+    const struct mf_bitmap w = wc ? f->wildcard : mf_bitmap_not(f->wildcard);
+    const struct mf_bitmap bm = mf_bitmap_and(f->match, mf_bitmap_and(m, w));
+
+    if (!bitmap_is_all_zeros(bm.bm, MFF_N_IDS)) {
+        ds_put_format(s, "      %s:", title);
+        print_mf_bitmap(s, &bm);
+        ds_put_char(s, '\n');
     }
 }
 
@@ -1636,18 +1804,9 @@ ofputil_table_features_format(
         } else {
             ds_put_cstr(s, "    matching:\n");
 
-            int i;
-            BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
-                const struct mf_field *f = mf_from_id(i);
-                bool mask = bitmap_is_set(features->mask.bm, i);
-                bool wildcard = bitmap_is_set(features->wildcard.bm, i);
-
-                ds_put_format(s, "      %s: %s\n",
-                              f->name,
-                              (mask ? "arbitrary mask"
-                               : wildcard ? "exact match or wildcard"
-                               : "must exact match"));
-            }
+            print_matches(s, features, true, true, "arbitrary mask");
+            print_matches(s, features, false, true, "exact match or wildcard");
+            print_matches(s, features, false, false, "must exact match");
         }
     }
 }

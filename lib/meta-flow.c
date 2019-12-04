@@ -3581,3 +3581,27 @@ mf_bitmap_is_superset(const struct mf_bitmap *super,
 {
     return bitmap_is_superset(super->bm, sub->bm, MFF_N_IDS);
 }
+
+/* Returns the bitwise-and of 'a' and 'b'. */
+struct mf_bitmap
+mf_bitmap_and(struct mf_bitmap a, struct mf_bitmap b)
+{
+    bitmap_and(a.bm, b.bm, MFF_N_IDS);
+    return a;
+}
+
+/* Returns the bitwise-or of 'a' and 'b'. */
+struct mf_bitmap
+mf_bitmap_or(struct mf_bitmap a, struct mf_bitmap b)
+{
+    bitmap_or(a.bm, b.bm, MFF_N_IDS);
+    return a;
+}
+
+/* Returns the bitwise-not of 'x'. */
+struct mf_bitmap
+mf_bitmap_not(struct mf_bitmap x)
+{
+    bitmap_not(x.bm, MFF_N_IDS);
+    return x;
+}
