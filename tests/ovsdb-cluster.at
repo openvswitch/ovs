@@ -246,14 +246,6 @@ for i in `seq $n`; do
     AT_CHECK([ovs-appctl -t "`pwd`"/s$i ovsdb-server/compact])
 done
 
-# XXX: Insert data after compact, because otherwise vote will fail after
-# cluster restart after compact. There will be error logs like:
-# raft|ERR|internal error: deferred vote_request message completed but not ready to send because message index 9 is past last synced index 0: s2 vote_request: term=6 last_log_index=9 last_log_term=4
-AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
-      {"op": "insert",
-       "table": "simple",
-       "row": {"i": 1}}]]'], [0], [ignore], [ignore])
-
 for i in `seq $n`; do
     printf "\ns$i: stopping\n"
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
