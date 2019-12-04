@@ -252,21 +252,19 @@ ovs_wait_failed () {
 ovs_wait "AS_ESCAPE([$3])" "AS_ESCAPE([$4])"
 ])
 
-dnl OVS_WAIT_UNTIL(COMMAND)
+dnl OVS_WAIT_UNTIL(COMMAND, [IF-FAILED])
 dnl
-dnl Executes shell COMMAND in a loop until it returns
-dnl zero return code.  If COMMAND did not return
-dnl zero code within reasonable time limit, then
-dnl the test fails.
+dnl Executes shell COMMAND in a loop until it returns zero.  If COMMAND does
+dnl not return zero within a reasonable time limit, executes the commands
+dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_UNTIL],
   [OVS_WAIT([$1], [$2], [AT_LINE], [until $1])])
 
-dnl OVS_WAIT_WHILE(COMMAND)
+dnl OVS_WAIT_WHILE(COMMAND, [IF-FAILED])
 dnl
-dnl Executes shell COMMAND in a loop until it returns
-dnl non-zero return code.  If COMMAND did not return
-dnl non-zero code within reasonable time limit, then
-dnl the test fails.
+dnl Executes shell COMMAND in a loop until it returns nonzero.  If COMMAND does
+dnl not return nonzero within a reasonable time limit, executes the commands
+dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_WHILE],
   [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2],
             [AT_LINE], [while $1])])
