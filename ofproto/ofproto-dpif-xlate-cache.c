@@ -90,7 +90,7 @@ xlate_cache_netdev(struct xc_entry *entry, const struct dpif_flow_stats *stats)
 /* Push stats and perform side effects of flow translation. */
 void
 xlate_push_stats_entry(struct xc_entry *entry,
-                       struct dpif_flow_stats *stats)
+                       struct dpif_flow_stats *stats, bool offloaded)
 {
     struct eth_addr dmac;
 
@@ -104,7 +104,7 @@ xlate_push_stats_entry(struct xc_entry *entry,
                                         ? 0 : stats->n_packets);
         break;
     case XC_RULE:
-        rule_dpif_credit_stats(entry->rule, stats);
+        rule_dpif_credit_stats(entry->rule, stats, offloaded);
         break;
     case XC_BOND:
         bond_account(entry->bond.bond, entry->bond.flow,
@@ -169,7 +169,7 @@ xlate_push_stats_entry(struct xc_entry *entry,
 
 void
 xlate_push_stats(struct xlate_cache *xcache,
-                 struct dpif_flow_stats *stats)
+                 struct dpif_flow_stats *stats, bool offloaded)
 {
     if (!stats->n_packets) {
         return;
@@ -178,7 +178,7 @@ xlate_push_stats(struct xlate_cache *xcache,
     struct xc_entry *entry;
     struct ofpbuf entries = xcache->entries;
     XC_ENTRY_FOR_EACH (entry, &entries) {
-        xlate_push_stats_entry(entry, stats);
+        xlate_push_stats_entry(entry, stats, offloaded);
     }
 }
 

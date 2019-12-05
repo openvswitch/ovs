@@ -2264,7 +2264,7 @@ static enum reval_result
 revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                 const struct dpif_flow_stats *stats,
                 struct ofpbuf *odp_actions, uint64_t reval_seq,
-                struct recirc_refs *recircs)
+                struct recirc_refs *recircs, bool offloaded)
     OVS_REQUIRES(ukey->mutex)
 {
     bool need_revalidate = ukey->reval_seq != reval_seq;
@@ -2299,7 +2299,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 
     /* Stats for deleted flows will be attributed upon flow deletion. Skip. */
     if (result != UKEY_DELETE) {
-        xlate_push_stats(ukey->xcache, &push);
+        xlate_push_stats(ukey->xcache, &push, offloaded);
         ukey->stats = *stats;
         ukey->reval_seq = reval_seq;
     }
@@ -2412,7 +2412,7 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
             if (op->ukey) {
                 ovs_mutex_lock(&op->ukey->mutex);
                 if (op->ukey->xcache) {
-                    xlate_push_stats(op->ukey->xcache, push);
+                    xlate_push_stats(op->ukey->xcache, push, false);
                     ovs_mutex_unlock(&op->ukey->mutex);
                     continue;
                 }
@@ -2689,7 +2689,8 @@ revalidate(struct revalidator *revalidator)
                 result = UKEY_DELETE;
             } else {
                 result = revalidate_ukey(udpif, ukey, &f->stats, &odp_actions,
-                                         reval_seq, &recircs);
+                                         reval_seq, &recircs,
+                                         f->attrs.offloaded);
             }
             ukey->dump_seq = dump_seq;
 
@@ -2774,7 +2775,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                     COVERAGE_INC(revalidate_missed_dp_flow);
                     memset(&stats, 0, sizeof stats);
                     result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
-                                             reval_seq, &recircs);
+                                             reval_seq, &recircs, false);
                 }
                 if (result != UKEY_KEEP) {
                     /* Clears 'recircs' if filled by revalidate_ukey(). */

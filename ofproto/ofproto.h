@@ -543,7 +543,7 @@ void ofproto_configure_table(struct ofproto *, int table_id,
 /* Configuration querying. */
 bool ofproto_has_snoops(const struct ofproto *);
 void ofproto_get_snoops(const struct ofproto *, struct sset *);
-void ofproto_get_all_flows(struct ofproto *p, struct ds *);
+void ofproto_get_all_flows(struct ofproto *p, struct ds *, bool);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
 

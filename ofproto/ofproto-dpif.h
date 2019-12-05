@@ -76,7 +76,7 @@ struct rule_dpif {
      *   - Do include packets and bytes from datapath flows which have not
      *   recently been processed by a revalidator. */
     struct ovs_mutex stats_mutex;
-    struct dpif_flow_stats stats OVS_GUARDED;
+    struct dpif_flow_detailed_stats stats OVS_GUARDED;
 
    /* In non-NULL, will point to a new rule (for which a reference is held) to
     * which all the stats updates should be forwarded. This exists only
@@ -107,7 +107,7 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               struct xlate_cache *);
 
 void rule_dpif_credit_stats(struct rule_dpif *,
-                            const struct dpif_flow_stats *);
+                            const struct dpif_flow_stats *, bool);
 
 void rule_set_recirc_id(struct rule *, uint32_t id);
 

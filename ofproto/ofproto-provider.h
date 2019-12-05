@@ -588,6 +588,13 @@ struct ofgroup {
     struct rule_collection rules OVS_GUARDED;   /* Referring rules. */
 };
 
+struct pkt_stats {
+    uint64_t n_packets;
+    uint64_t n_bytes;
+    uint64_t n_offload_packets; /* n_offload_packets are a subset n_packets */
+    uint64_t n_offload_bytes;   /* n_offload_bytes are a subset of n_bytes */
+};
+
 struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
                                      uint32_t group_id, ovs_version_t version,
                                      bool take_ref);
@@ -1348,8 +1355,8 @@ struct ofproto_class {
      * matched it in '*packet_count' and the number of bytes in those packets
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
      * count is unknown. */
-    void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count, long long int *used)
+    void (*rule_get_stats)(struct rule *rule, struct pkt_stats *stats,
+                           long long int *used)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Translates actions in 'opo->ofpacts', for 'opo->packet' in flow tables
