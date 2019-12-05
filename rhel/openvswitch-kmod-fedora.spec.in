@@ -12,9 +12,12 @@
 # Use the kversion macro such as
 # RPMBUILD_OPT='-D "kversion 3.10.0-693.1.1.el7.x86_64 3.10.0-693.17.1.el7.x86_64"'
 # to build package for mulitple kernel versions in the same package
-# This only works for kernel 3.10.0 major revision 1062 (RHEL 7.7),
-# major revision 957 (RHEL 7.6), major revision 693 (RHEL 7.4) and
-# major revision 327 (RHEL 7.2).
+# This only works for the following kernels.
+#   - 3.10.0 major revision 327  (RHEL 7.2)
+#   - 3.10.0 major revision 693  (RHEL 7.4)
+#   - 3.10.0 major revision 957  (RHEL 7.6)
+#   - 3.10.0 major revision 1062 (RHEL 7.7)
+#   - 3.10.0 major revision 1101 (RHEL 7.8)
 # By default, build against the current running kernel version
 #%define kernel 3.1.5-1.fc16.x86_64
 #define kernel %{kernel_source}
@@ -93,8 +96,9 @@ if grep -qs "suse" /etc/os-release; then
     fi
 elif [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ] &&
      { [ "$major_rev" = "327" ] || [ "$major_rev" = "693" ] || \
-       [ "$major_rev" = "957" ] || [ "$major_rev" == "1062" ]; }; then
-    # For RHEL 7.2, 7.4, 7.6 and 7.7
+       [ "$major_rev" = "957" ] || [ "$major_rev" == "1062" ] || \
+       [ "$major_rev" = "1101" ]; }; then
+    # For RHEL 7.2, 7.4, 7.6, 7.7, and 7.8
     if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
         %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
     fi
