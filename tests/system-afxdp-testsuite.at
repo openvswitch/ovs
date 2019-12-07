@@ -23,4 +23,5 @@ m4_include([tests/system-common-macros.at])
 m4_include([tests/system-userspace-macros.at])
 m4_include([tests/system-afxdp-macros.at])
 
+m4_include([tests/system-afxdp.at])
 m4_include([tests/system-traffic.at])

@@ -165,7 +165,8 @@ SYSTEM_USERSPACE_TESTSUITE_AT = \
 SYSTEM_AFXDP_TESTSUITE_AT = \
 	tests/system-userspace-macros.at \
 	tests/system-afxdp-testsuite.at \
-	tests/system-afxdp-macros.at
+	tests/system-afxdp-macros.at \
+	tests/system-afxdp.at
 
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
