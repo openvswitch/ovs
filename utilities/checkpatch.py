@@ -32,7 +32,7 @@ print_file_name = None
 checking_file = False
 total_line = 0
 colors = False
-spellcheck_comments = False
+spellcheck = False
 quiet = False
 spell_check_dict = None
 
@@ -84,7 +84,12 @@ def open_spell_check_dict():
                           'cacheline', 'xlate', 'skiplist', 'idl',
                           'comparator', 'natting', 'alg', 'pasv', 'epasv',
                           'wildcard', 'nated', 'amd64', 'x86_64',
-                          'recirculation']
+                          'recirculation', 'linux', 'afxdp', 'promisc', 'goto',
+                          'misconfigured', 'misconfiguration', 'checkpatch',
+                          'debian', 'travis', 'cirrus', 'appveyor', 'faq',
+                          'erspan', 'const', 'hotplug', 'addresssanitizer',
+                          'ovsdb', 'dpif', 'veth', 'rhel', 'jsonrpc', 'json',
+                          'syscall', 'lacp', 'ipf', 'skb', 'valgrind']
 
         global spell_check_dict
         spell_check_dict = enchant.Dict("en_US")
@@ -372,12 +377,14 @@ def filter_comments(current_line, keep=False):
     return sanitized_line
 
 
-def check_comment_spelling(line):
-    if not spell_check_dict or not spellcheck_comments:
+def check_spelling(line, comment):
+    if not spell_check_dict or not spellcheck:
         return False
 
-    comment_words = filter_comments(line, True).replace(':', ' ').split(' ')
-    for word in comment_words:
+    words = filter_comments(line, True) if comment else line
+    words = words.replace(':', ' ').split(' ')
+
+    for word in words:
         skip = False
         strword = re.subn(r'\W+', '', word)[0].replace(',', '')
         if (len(strword)
@@ -561,7 +568,7 @@ checks = [
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),
-     'check': lambda x: check_comment_spelling(x)},
+     'check': lambda x: check_spelling(x, True)},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'check': lambda x: empty_return_with_brace(x),
@@ -811,6 +818,9 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
                 print("%d: %s\n" % (lineno, line))
+            elif spellcheck:
+                check_spelling(line, False)
+
         elif parse == PARSE_STATE_CHANGE_BODY:
             newfile = hunks.match(line)
             if newfile:
@@ -873,7 +883,8 @@ Check options:
 -l|--skip-leading-whitespace   Skips the leading whitespace test
 -q|--quiet                     Only print error and warning information
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
--S|--spellcheck-comments       Check C comments for possible spelling mistakes
+-S|--spellcheck                Check C comments and commit-message for possible
+                               spelling mistakes
 -t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
           % sys.argv[0])
 
@@ -931,7 +942,7 @@ if __name__ == '__main__':
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
                                        "skip-trailing-whitespace",
-                                       "spellcheck-comments",
+                                       "spellcheck",
                                        "quiet"])
     except:
         print("Unknown option encountered. Please rerun with -h for help.")
@@ -951,12 +962,12 @@ if __name__ == '__main__':
             skip_trailing_whitespace_check = True
         elif o in ("-f", "--check-file"):
             checking_file = True
-        elif o in ("-S", "--spellcheck-comments"):
+        elif o in ("-S", "--spellcheck"):
             if not open_spell_check_dict():
                 print("WARNING: The enchant library isn't available.")
                 print("         Please install python enchant.")
             else:
-                spellcheck_comments = True
+                spellcheck = True
         elif o in ("-q", "--quiet"):
             quiet = True
         else:
