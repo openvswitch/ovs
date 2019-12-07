@@ -568,7 +568,7 @@ netdev_afxdp_get_numa_id(const struct netdev *netdev)
 static void
 xsk_remove_xdp_program(uint32_t ifindex, int xdpmode)
 {
-    uint32_t flags;
+    uint32_t ret, flags, prog_id = 0;
 
     flags = XDP_FLAGS_UPDATE_IF_NOEXIST;
 
@@ -576,6 +576,18 @@ xsk_remove_xdp_program(uint32_t ifindex, int xdpmode)
         flags |= XDP_FLAGS_SKB_MODE;
     } else if (xdpmode == XDP_ZEROCOPY) {
         flags |= XDP_FLAGS_DRV_MODE;
+    }
+
+    /* Check whether XDP program is loaded. */
+    ret = bpf_get_link_xdp_id(ifindex, &prog_id, flags);
+    if (ret) {
+        VLOG_ERR("Failed to get XDP prog id (%s)", ovs_strerror(errno));
+        return;
+    }
+
+    if (!prog_id) {
+        VLOG_INFO("No XDP program is loaded at ifindex %d", ifindex);
+        return;
     }
 
     bpf_set_link_xdp_fd(ifindex, -1, flags);
