@@ -380,7 +380,9 @@ def check_comment_spelling(line):
     for word in comment_words:
         skip = False
         strword = re.subn(r'\W+', '', word)[0].replace(',', '')
-        if len(strword) and not spell_check_dict.check(strword.lower()):
+        if (len(strword)
+                and not spell_check_dict.check(strword.lower())
+                and not spell_check_dict.check(word.lower())):
             if any([check_char in word
                     for check_char in ['=', '(', '-', '_', '/', '\'']]):
                 skip = True
