@@ -710,6 +710,19 @@ static void
 xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode mode)
 {
     uint32_t flags = xdp_modes[mode].xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST;
+    uint32_t ret, prog_id = 0;
+
+    /* Check whether XDP program is loaded. */
+    ret = bpf_get_link_xdp_id(ifindex, &prog_id, flags);
+    if (ret) {
+        VLOG_ERR("Failed to get XDP prog id (%s)", ovs_strerror(errno));
+        return;
+    }
+
+    if (!prog_id) {
+        VLOG_INFO("No XDP program is loaded at ifindex %d", ifindex);
+        return;
+    }
 
     bpf_set_link_xdp_fd(ifindex, -1, flags);
 }
