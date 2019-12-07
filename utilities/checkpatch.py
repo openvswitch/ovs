@@ -396,8 +396,8 @@ def check_comment_spelling(line):
                                      strword[1:].islower()):
                 skip = True
 
-            # skip words that start with numbers
-            if strword.startswith(tuple('0123456789')):
+            # skip words containing numbers
+            if any(check_char.isdigit() for check_char in strword):
                 skip = True
 
             if not skip:
