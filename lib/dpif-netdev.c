@@ -2269,7 +2269,7 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
         struct netdev *port;
         odp_port_t in_port = flow->flow.in_port.odp_port;
 
-        port = netdev_ports_get(in_port, pmd->dp->dpif->dpif_class);
+        port = netdev_ports_get(in_port, pmd->dp->class);
         if (port) {
             ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
             netdev_close(port);
@@ -2410,7 +2410,7 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
     }
     info.flow_mark = mark;
 
-    port = netdev_ports_get(in_port, pmd->dp->dpif->dpif_class);
+    port = netdev_ports_get(in_port, pmd->dp->class);
     if (!port || netdev_vport_is_vport_class(port->netdev_class)) {
         netdev_close(port);
         goto err_free;
