@@ -243,7 +243,7 @@ struct odp_flow_key_parms {
 void odp_flow_key_from_flow(const struct odp_flow_key_parms *, struct ofpbuf *);
 void odp_flow_key_from_mask(const struct odp_flow_key_parms *, struct ofpbuf *);
 
-uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
+void odp_flow_key_hash(const void *key, size_t key_len, ovs_u128 *hash);
 
 /* Estimated space needed for metadata. */
 enum { ODP_KEY_METADATA_SIZE = 9 * 8 };

@@ -929,7 +929,7 @@ check_ufid(struct dpif_backer *backer)
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&odp_parms, &key);
-    dpif_flow_hash(backer->dpif, key.data, key.size, &ufid);
+    odp_flow_key_hash(key.data, key.size, &ufid);
 
     enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, NULL, &ufid);
 
