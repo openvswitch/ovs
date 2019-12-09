@@ -531,6 +531,125 @@ standalone
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+
+# check if emer-reset reset switch to known good state
+# test is implemented by creating switch entities and checks if after applying
+# emer-reset these entities are deleted
+AT_SETUP([emer-reset])
+AT_KEYWORDS([emer-reset ovs-vsctl])
+OVS_VSCTL_SETUP
+
+# define controllers, fail-mode, netflow, mirror
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [add-br br0],
+   [add-port br0 eth0],
+   [add-port br0 eth1],
+   [set-controller br0 tcp:4.5.6.7],
+   [set-fail-mode br0 secure],
+   [set bridge br0 netflow=@nf],
+   [--id=@nf create netflow targets=3.4.5.6],
+   [set bridge br0 mirrors=@m],
+   [--id=@eth0 get port eth0],
+   [--id=@eth1 get port eth1],
+   [--id=@m create mirror name=mymirror select-dst-port=@eth0 select-src-port=@eth0 output-port=@eth1],
+   [set bridge br0 sflow=@sf],
+   [--id=@sf create sflow targets=1.2.3.4],
+   [set bridge br0 datapath-type=dummy other-config:datapath-id=1234 other-config:hwaddr="00:12:34:56:78:bb"],
+   [set bridge br0 ipfix=@fix],
+   [--id=@fix create ipfix targets=1.2.3.4],
+   [set bridge br0 flood_vlans=1],
+   [set bridge br0 datapath_id=2 datapath_version="alpha"],
+   [list bridge > configured_bridge.txt]
+   )], [0], [stdout])
+
+AT_CHECK(
+    [uuidfilt configured_bridge.txt],
+    [0],[[
+
+
+
+
+
+<0>
+
+
+
+<1>
+
+<2>
+
+
+<3>
+
+
+_uuid               : <4>
+auto_attach         : []
+controller          : [<5>]
+datapath_id         : "2"
+datapath_type       : dummy
+datapath_version    : alpha
+external_ids        : {}
+fail_mode           : secure
+flood_vlans         : [1]
+flow_tables         : {}
+ipfix               : <6>
+mcast_snooping_enable: false
+mirrors             : [<7>]
+name                : br0
+netflow             : <8>
+other_config        : {datapath-id="1234", hwaddr="00:12:34:56:78:bb"}
+ports               : [<9>, <10>, <11>]
+protocols           : []
+rstp_enable         : false
+rstp_status         : {}
+sflow               : <12>
+status              : {}
+stp_enable          : false
+]])
+
+
+# execute emer-reset
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [emer-reset])], [0], [
+])
+
+# check if bridge was cleaned/reset
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [list bridge > cleaned_bridge.txt]
+   )], [0], [stdout])
+
+AT_CHECK(
+    [uuidfilt cleaned_bridge.txt],
+    [0],[[_uuid               : <0>
+auto_attach         : []
+controller          : []
+datapath_id         : "2"
+datapath_type       : dummy
+datapath_version    : alpha
+external_ids        : {}
+fail_mode           : []
+flood_vlans         : []
+flow_tables         : {}
+ipfix               : []
+mcast_snooping_enable: false
+mirrors             : []
+name                : br0
+netflow             : []
+other_config        : {hwaddr="00:12:34:56:78:bb"}
+ports               : [<1>, <2>, <3>]
+protocols           : []
+rstp_enable         : false
+rstp_status         : {}
+sflow               : []
+status              : {}
+stp_enable          : false
+]])
+
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+
+
 dnl ----------------------------------------------------------------------
 dnl OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([VLAN])
 m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
