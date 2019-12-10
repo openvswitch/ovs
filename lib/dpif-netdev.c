@@ -2271,7 +2271,11 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
 
         port = netdev_ports_get(in_port, pmd->dp->class);
         if (port) {
+            /* Taking a global 'port_mutex' to fulfill thread safety
+             * restrictions for the netdev-offload-dpdk module. */
+            ovs_mutex_lock(&pmd->dp->port_mutex);
             ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
+            ovs_mutex_unlock(&pmd->dp->port_mutex);
             netdev_close(port);
         }
 
@@ -2415,10 +2419,14 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
         netdev_close(port);
         goto err_free;
     }
+    /* Taking a global 'port_mutex' to fulfill thread safety restrictions for
+     * the netdev-offload-dpdk module. */
+    ovs_mutex_lock(&pmd->dp->port_mutex);
     ret = netdev_flow_put(port, &offload->match,
                           CONST_CAST(struct nlattr *, offload->actions),
                           offload->actions_len, &flow->mega_ufid, &info,
                           NULL);
+    ovs_mutex_unlock(&pmd->dp->port_mutex);
     netdev_close(port);
 
     if (ret) {
