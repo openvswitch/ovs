@@ -75,6 +75,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 COVERAGE_DEFINE(vhost_tx_contention);
+COVERAGE_DEFINE(vhost_notification);
 
 #define DPDK_PORT_WATCHDOG_INTERVAL 5
 
@@ -169,6 +170,8 @@ static int new_device(int vid);
 static void destroy_device(int vid);
 static int vring_state_changed(int vid, uint16_t queue_id, int enable);
 static void destroy_connection(int vid);
+static void vhost_guest_notified(int vid);
+
 static const struct vhost_device_ops virtio_net_device_ops =
 {
     .new_device =  new_device,
@@ -177,6 +180,7 @@ static const struct vhost_device_ops virtio_net_device_ops =
     .features_changed = NULL,
     .new_connection = NULL,
     .destroy_connection = destroy_connection,
+    .guest_notified = vhost_guest_notified,
 };
 
 /* Custom software stats for dpdk ports */
@@ -3879,6 +3883,12 @@ destroy_connection(int vid)
     } else {
         VLOG_INFO("vHost Device '%s' not found", ifname);
     }
+}
+
+static
+void vhost_guest_notified(int vid OVS_UNUSED)
+{
+    COVERAGE_INC(vhost_notification);
 }
 
 /*
