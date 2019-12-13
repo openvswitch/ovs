@@ -2,7 +2,7 @@ freebsd_build_task:
 
   freebsd_instance:
     matrix:
-      image_family: freebsd-12-0-snap
+      image_family: freebsd-12-1-snap
       image_family: freebsd-11-3-snap
     cpu: 4
     memory: 8G
