@@ -108,7 +108,7 @@ struct netdev_linux {
     bool use_need_wakeup;
     bool requested_need_wakeup;
 
-    struct ovs_spin *tx_locks;  /* spin lock array for TX queues. */
+    struct netdev_afxdp_tx_lock *tx_locks;  /* Array of locks for TX queues. */
 #endif
 };
 
