@@ -5,7 +5,7 @@ ovs-tcpdump
 Synopsis
 ========
 
-``ovs-tcpdump -i <port> tcpdump <options>...``
+``ovs-tcpdump -i <port> <tcpdump options>...``
 
 Description
 ===========
