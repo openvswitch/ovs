@@ -2207,7 +2207,6 @@ netdev_dpdk_vhost_update_rx_counters(struct netdev_dpdk *dev,
                                      struct dp_packet **packets, int count,
                                      int qos_drops)
 {
-    struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
     struct netdev_stats *stats = &dev->stats;
     struct dp_packet *packet;
     unsigned int packet_size;
@@ -2238,7 +2237,9 @@ netdev_dpdk_vhost_update_rx_counters(struct netdev_dpdk *dev,
         stats->rx_bytes += packet_size;
     }
 
-    sw_stats->rx_qos_drops += qos_drops;
+    if (OVS_UNLIKELY(qos_drops)) {
+        dev->sw_stats->rx_qos_drops += qos_drops;
+    }
 }
 
 /*
@@ -2402,7 +2403,6 @@ netdev_dpdk_vhost_update_tx_counters(struct netdev_dpdk *dev,
                                      int attempted,
                                      struct netdev_dpdk_sw_stats *sw_stats_add)
 {
-    struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
     int dropped = sw_stats_add->tx_mtu_exceeded_drops +
                   sw_stats_add->tx_qos_drops +
                   sw_stats_add->tx_failure_drops;
@@ -2417,10 +2417,14 @@ netdev_dpdk_vhost_update_tx_counters(struct netdev_dpdk *dev,
         stats->tx_bytes += dp_packet_size(packets[i]);
     }
 
-    sw_stats->tx_retries            += sw_stats_add->tx_retries;
-    sw_stats->tx_failure_drops      += sw_stats_add->tx_failure_drops;
-    sw_stats->tx_mtu_exceeded_drops += sw_stats_add->tx_mtu_exceeded_drops;
-    sw_stats->tx_qos_drops          += sw_stats_add->tx_qos_drops;
+    if (OVS_UNLIKELY(dropped || sw_stats_add->tx_retries)) {
+        struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
+
+        sw_stats->tx_retries            += sw_stats_add->tx_retries;
+        sw_stats->tx_failure_drops      += sw_stats_add->tx_failure_drops;
+        sw_stats->tx_mtu_exceeded_drops += sw_stats_add->tx_mtu_exceeded_drops;
+        sw_stats->tx_qos_drops          += sw_stats_add->tx_qos_drops;
+    }
 }
 
 static void
