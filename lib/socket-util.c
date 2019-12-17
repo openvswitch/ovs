@@ -1283,3 +1283,59 @@ wrap_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
 }
 #endif
 #endif
+
+#ifndef _WIN32 /* Avoid using recvmsg on Windows entirely. */
+static int
+emulate_recvmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
+                 int flags, struct timespec *timeout OVS_UNUSED)
+{
+    ovs_assert(!timeout);       /* XXX not emulated */
+
+    bool waitforone = flags & MSG_WAITFORONE;
+    flags &= ~MSG_WAITFORONE;
+
+    for (unsigned int i = 0; i < n; i++) {
+        ssize_t retval = recvmsg(fd, &msgs[i].msg_hdr, flags);
+        if (retval < 0) {
+            return i ? i : retval;
+        }
+        msgs[i].msg_len = retval;
+
+        if (waitforone) {
+            flags |= MSG_DONTWAIT;
+        }
+    }
+    return n;
+}
+
+#ifndef HAVE_SENDMMSG
+int
+recvmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
+         int flags, struct timespec *timeout)
+{
+    return emulate_recvmmsg(fd, msgs, n, flags, timeout);
+}
+#else
+/* recvmmsg was redefined in lib/socket-util.c, should undef recvmmsg here
+ * to avoid recursion */
+#undef recvmmsg
+int
+wrap_recvmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
+              int flags, struct timespec *timeout)
+{
+    ovs_assert(!timeout);       /* XXX not emulated */
+
+    static bool recvmmsg_broken = false;
+    if (!recvmmsg_broken) {
+        int save_errno = errno;
+        int retval = recvmmsg(fd, msgs, n, flags, timeout);
+        if (retval >= 0 || errno != ENOSYS) {
+            return retval;
+        }
+        recvmmsg_broken = true;
+        errno = save_errno;
+    }
+    return emulate_recvmmsg(fd, msgs, n, flags, timeout);
+}
+#endif
+#endif
