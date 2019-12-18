@@ -1047,7 +1047,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
          * by printing a title line. */
         if (pmd_id != f.pmd_id) {
             if (f.pmd_id == NON_PMD_CORE_ID) {
-                ds_put_format(&ds, "flow-dump from non-dpdk interfaces:\n");
+                ds_put_format(&ds, "flow-dump from the main thread:\n");
             } else {
                 ds_put_format(&ds, "flow-dump from pmd on cpu core: %d\n",
                               f.pmd_id);
