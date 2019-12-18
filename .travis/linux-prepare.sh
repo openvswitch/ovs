@@ -12,8 +12,8 @@ cd sparse
 make -j4 HAVE_LLVM= install
 cd ..
 
-pip install --disable-pip-version-check --user six flake8 hacking
-pip install --user --upgrade docutils
+pip3 install --disable-pip-version-check --user six flake8 hacking
+pip3 install --user --upgrade docutils
 
 if [ "$M32" ]; then
     # Installing 32-bit libraries.
