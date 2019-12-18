@@ -1,0 +1,190 @@
+AT_BANNER([drop-stats])
+
+AT_SETUP([drop-stats - cli tests])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1])
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1,actions=drop
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions ], [0], [dnl
+ in_port=1 actions=drop
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+], [0], [ignore])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.0/' | sort], [0], [flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:212, used:0.0, actions:drop
+])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_of_pipeline
+], [0], [dnl
+3
+])
+
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([drop-stats - pipeline and recurssion drops])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1,actions=drop
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions ], [0], [dnl
+ in_port=1 actions=drop
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+], [0], [ignore])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_of_pipeline
+], [0], [dnl
+1
+])
+
+
+AT_DATA([flows.txt], [dnl
+table=0, in_port=1, actions=goto_table:1
+table=1, in_port=1, actions=goto_table:2
+table=2, in_port=1, actions=resubmit(,1)
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions ], [0], [ignore])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+], [0], [ignore])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_recursion_too_deep
+], [0], [dnl
+1
+])
+
+
+OVS_VSWITCHD_STOP(["/|WARN|/d"])
+AT_CLEANUP
+
+AT_SETUP([drop-stats - too many resubmit])
+OVS_VSWITCHD_START
+add_of_ports br0 1
+(for i in `seq 1 64`; do
+     j=`expr $i + 1`
+     echo "in_port=$i, actions=resubmit:$j, resubmit:$j, local"
+ done
+ echo "in_port=65, actions=local") > flows.txt
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt ], [0], [ignore])
+
+ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_too_many_resubmit
+], [0], [dnl
+1
+])
+
+OVS_VSWITCHD_STOP(["/|WARN|/d"])
+AT_CLEANUP
+
+
+AT_SETUP([drop-stats - stack too deep])
+OVS_VSWITCHD_START
+add_of_ports br0 1
+(for i in `seq 1 12`; do
+     j=`expr $i + 1`
+     echo "in_port=$i, actions=resubmit:$j, resubmit:$j, local"
+ done
+ push="push:NXM_NX_REG0[[]]"
+ echo "in_port=13, actions=$push,$push,$push,$push,$push,$push,$push,$push") > flows
+
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+
+ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_stack_too_deep
+], [0], [dnl
+1
+])
+
+
+OVS_VSWITCHD_STOP(["/resubmits yielded over 64 kB of stack/d"])
+AT_CLEANUP
+
+AT_SETUP([drop-stats - too many mpls labels])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_DATA([flows.txt], [dnl
+table=0, in_port=1, actions=push_mpls:0x8847, resubmit:3
+table=0, in_port=3, actions=push_mpls:0x8847, set_field:10->mpls_label, set_field:15->mpls_label, resubmit:4
+table=0, in_port=4, actions=push_mpls:0x8847, set_field:11->mpls_label, resubmit:5
+table=0, in_port=5, actions=push_mpls:0x8847, set_field:12->mpls_label, resubmit:6
+table=0, in_port=6, actions=push_mpls:0x8847, set_field:13->mpls_label, output:2
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+], [0], [ignore])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter drop_action_too_many_mpls_labels
+], [0], [dnl
+1
+])
+
+
+OVS_VSWITCHD_STOP(["/|WARN|/d"])
+AT_CLEANUP

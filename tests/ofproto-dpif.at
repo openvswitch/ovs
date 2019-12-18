@@ -9425,7 +9425,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=
 # are wildcarded.
 AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], [dnl
 dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), actions:100
-dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
+dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:drop
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
 dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), actions:drop
 ])

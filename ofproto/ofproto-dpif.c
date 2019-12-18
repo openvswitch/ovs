@@ -860,6 +860,12 @@ ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto)
         && atomic_count_get(&ofproto->backer->tnl_count);
 }
 
+bool
+ovs_explicit_drop_action_supported(struct ofproto_dpif *ofproto)
+{
+    return ofproto->backer->rt_support.explicit_drop_action;
+}
+
 /* Tests whether 'backer''s datapath supports recirculation.  Only newer
  * datapaths support OVS_KEY_ATTR_RECIRC_ID in keys.  We need to disable some
  * features on older datapaths that don't support this feature.
@@ -1572,6 +1578,8 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
     backer->rt_support.check_pkt_len = check_check_pkt_len(backer);
     backer->rt_support.ct_timeout = check_ct_timeout_policy(backer);
+    backer->rt_support.explicit_drop_action =
+        dpif_supports_explicit_drop_action(backer->dpif);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -5553,6 +5561,8 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add_format(cap, "max_hash_alg", "%"PRIuSIZE, s.max_hash_alg);
     smap_add(cap, "check_pkt_len", s.check_pkt_len ? "true" : "false");
     smap_add(cap, "ct_timeout", s.ct_timeout ? "true" : "false");
+    smap_add(cap, "explicit_drop_action",
+             s.explicit_drop_action ? "true" :"false");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and

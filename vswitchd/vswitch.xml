@@ -5917,6 +5917,11 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         timeout policies based on connection tracking zones, as configured
         through the <code>CT_Timeout_Policy</code> table.
       </column>
+      <column name="capabilities" key="explicit_drop_action"
+              type='{"type": "boolean"}'>
+        True if the datapath supports OVS_ACTION_ATTR_DROP.  If false,
+        explicit drop action will not be sent to the datapath.
+      </column>
     </group>
 
     <group title="Common Columns">

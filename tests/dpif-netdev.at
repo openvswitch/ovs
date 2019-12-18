@@ -349,6 +349,14 @@ meter:2 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
 0: packet_count:5 byte_count:300
 ])
 
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter datapath_drop_meter
+], [0], [dnl
+14
+])
+
 AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout_keep_actions], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:meter(0),7
 recirc_id(0),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:8

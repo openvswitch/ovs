@@ -410,6 +410,28 @@ enum ovs_tunnel_key_attr {
 #define OVS_TUNNEL_KEY_ATTR_MAX (__OVS_TUNNEL_KEY_ATTR_MAX - 1)
 
 /**
+ * enum xlate_error -  Different types of error during translation
+ */
+
+#ifndef __KERNEL__
+enum xlate_error {
+	XLATE_OK = 0,
+	XLATE_BRIDGE_NOT_FOUND,
+	XLATE_RECURSION_TOO_DEEP,
+	XLATE_TOO_MANY_RESUBMITS,
+	XLATE_STACK_TOO_DEEP,
+	XLATE_NO_RECIRCULATION_CONTEXT,
+	XLATE_RECIRCULATION_CONFLICT,
+	XLATE_TOO_MANY_MPLS_LABELS,
+	XLATE_INVALID_TUNNEL_METADATA,
+	XLATE_UNSUPPORTED_PACKET_TYPE,
+	XLATE_CONGESTION_DROP,
+	XLATE_FORWARDING_DISABLED,
+	XLATE_MAX,
+};
+#endif
+
+/**
  * enum ovs_frag_type - IPv4 and IPv6 fragment type
  * @OVS_FRAG_TYPE_NONE: Packet is not a fragment.
  * @OVS_FRAG_TYPE_FIRST: Packet is a fragment with offset 0.
@@ -965,6 +987,7 @@ struct check_pkt_len_arg {
  * @OVS_ACTION_ATTR_CHECK_PKT_LEN: Check the packet length and execute a set
  * of actions if greater than the specified packet length, else execute
  * another set of actions.
+ * @OVS_ACTION_ATTR_DROP: Explicit drop action.
  */
 
 enum ovs_action_attr {
@@ -997,6 +1020,7 @@ enum ovs_action_attr {
 #ifndef __KERNEL__
 	OVS_ACTION_ATTR_TUNNEL_PUSH,   /* struct ovs_action_push_tnl*/
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
+	OVS_ACTION_ATTR_DROP,          /* u32 xlate_error. */
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */

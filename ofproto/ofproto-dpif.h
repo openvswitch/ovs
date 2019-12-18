@@ -199,7 +199,11 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
                                                                             \
     /* True if the datapath supports OVS_CT_ATTR_TIMEOUT in                 \
      * OVS_ACTION_ATTR_CT action. */                                        \
-    DPIF_SUPPORT_FIELD(bool, ct_timeout, "Conntrack timeout policy")
+    DPIF_SUPPORT_FIELD(bool, ct_timeout, "Conntrack timeout policy")        \
+                                                                            \
+    /* True if the datapath supports explicit drop action. */               \
+    DPIF_SUPPORT_FIELD(bool, explicit_drop_action, "Explicit Drop action")
+
 
 /* Stores the various features which the corresponding backer supports. */
 struct dpif_backer_support {
@@ -381,5 +385,7 @@ bool ovs_native_tunneling_is_on(struct ofproto_dpif *);
 bool ofproto_dpif_ct_zone_timeout_policy_get_name(
     const struct dpif_backer *backer, uint16_t zone, uint16_t dl_type,
     uint8_t nw_proto, char **tp_name, bool *unwildcard);
+
+bool ovs_explicit_drop_action_supported(struct ofproto_dpif *);
 
 #endif /* ofproto-dpif.h */

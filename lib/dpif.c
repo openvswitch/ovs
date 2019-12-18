@@ -1283,6 +1283,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_CT_CLEAR:
     case OVS_ACTION_ATTR_UNSPEC:
     case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+    case OVS_ACTION_ATTR_DROP:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
@@ -1884,6 +1885,12 @@ log_flow_get_message(const struct dpif *dpif,
 
 bool
 dpif_supports_tnl_push_pop(const struct dpif *dpif)
+{
+    return dpif_is_netdev(dpif);
+}
+
+bool
+dpif_supports_explicit_drop_action(const struct dpif *dpif)
 {
     return dpif_is_netdev(dpif);
 }

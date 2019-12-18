@@ -102,8 +102,9 @@ Datapath actions: set(ipv4(tos=0x3/0x3)),2
 
 dnl Tunnel CE and encapsulated packet Non-ECT
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
-AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_flags=-df-csum-key,in_port=1,nw_ecn=0,nw_frag=no
+AT_CHECK([tail -3 stdout], [0],
+  [Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_flags=-df-csum-key,in_port=1,nw_ecn=0,nw_frag=no
 Datapath actions: drop
 ])
 OVS_VSWITCHD_STOP(["/dropping tunnel packet marked ECN CE but is not ECN capable/d"])
@@ -193,6 +194,17 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x2)),1
 ])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'aa55aa550001f8bc124434b6080045000054ba20000040018486010103580101037001004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter datapath_drop_invalid_port
+], [0], [dnl
+1
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
