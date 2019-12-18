@@ -1151,90 +1151,147 @@ auxdata_has_vlan_tci(const struct tpacket_auxdata *aux)
     return aux->tp_vlan_tci || aux->tp_status & TP_STATUS_VLAN_VALID;
 }
 
+/*
+ * Receive packets from raw socket in batch process for better performance,
+ * it can receive NETDEV_MAX_BURST packets at most once, the received
+ * packets are added into *batch. The return value is 0 or errno.
+ *
+ * It also used recvmmsg to reduce multiple syscalls overhead;
+ */
 static int
-netdev_linux_rxq_recv_sock(int fd, struct dp_packet *buffer)
+netdev_linux_batch_rxq_recv_sock(int fd, int mtu,
+                                 struct dp_packet_batch *batch)
 {
     size_t size;
     ssize_t retval;
-    struct iovec iov;
+    struct iovec iovs[NETDEV_MAX_BURST];
     struct cmsghdr *cmsg;
     union {
         struct cmsghdr cmsg;
         char buffer[CMSG_SPACE(sizeof(struct tpacket_auxdata))];
-    } cmsg_buffer;
-    struct msghdr msgh;
+    } cmsg_buffers[NETDEV_MAX_BURST];
+    struct mmsghdr mmsgs[NETDEV_MAX_BURST];
+    struct dp_packet *buffers[NETDEV_MAX_BURST];
+    int i;
 
-    /* Reserve headroom for a single VLAN tag */
-    dp_packet_reserve(buffer, VLAN_HEADER_LEN);
-    size = dp_packet_tailroom(buffer);
-
-    iov.iov_base = dp_packet_data(buffer);
-    iov.iov_len = size;
-    msgh.msg_name = NULL;
-    msgh.msg_namelen = 0;
-    msgh.msg_iov = &iov;
-    msgh.msg_iovlen = 1;
-    msgh.msg_control = &cmsg_buffer;
-    msgh.msg_controllen = sizeof cmsg_buffer;
-    msgh.msg_flags = 0;
+    for (i = 0; i < NETDEV_MAX_BURST; i++) {
+         buffers[i] = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+                                                  DP_NETDEV_HEADROOM);
+         /* Reserve headroom for a single VLAN tag */
+         dp_packet_reserve(buffers[i], VLAN_HEADER_LEN);
+         size = dp_packet_tailroom(buffers[i]);
+         iovs[i].iov_base = dp_packet_data(buffers[i]);
+         iovs[i].iov_len = size;
+         mmsgs[i].msg_hdr.msg_name = NULL;
+         mmsgs[i].msg_hdr.msg_namelen = 0;
+         mmsgs[i].msg_hdr.msg_iov = &iovs[i];
+         mmsgs[i].msg_hdr.msg_iovlen = 1;
+         mmsgs[i].msg_hdr.msg_control = &cmsg_buffers[i];
+         mmsgs[i].msg_hdr.msg_controllen = sizeof cmsg_buffers[i];
+         mmsgs[i].msg_hdr.msg_flags = 0;
+    }
 
     do {
-        retval = recvmsg(fd, &msgh, MSG_TRUNC);
+        retval = recvmmsg(fd, mmsgs, NETDEV_MAX_BURST, MSG_TRUNC, NULL);
     } while (retval < 0 && errno == EINTR);
 
     if (retval < 0) {
-        return errno;
-    } else if (retval > size) {
-        return EMSGSIZE;
+        /* Save -errno to retval temporarily */
+        retval = -errno;
+        i = 0;
+        goto free_buffers;
     }
 
-    dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
-
-    for (cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg)) {
-        const struct tpacket_auxdata *aux;
-
-        if (cmsg->cmsg_level != SOL_PACKET
-            || cmsg->cmsg_type != PACKET_AUXDATA
-            || cmsg->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata))) {
-            continue;
-        }
-
-        aux = ALIGNED_CAST(struct tpacket_auxdata *, CMSG_DATA(cmsg));
-        if (auxdata_has_vlan_tci(aux)) {
-            struct eth_header *eth;
-            bool double_tagged;
-
-            if (retval < ETH_HEADER_LEN) {
-                return EINVAL;
-            }
-
-            eth = dp_packet_data(buffer);
-            double_tagged = eth->eth_type == htons(ETH_TYPE_VLAN_8021Q);
-
-            eth_push_vlan(buffer, auxdata_to_vlan_tpid(aux, double_tagged),
-                          htons(aux->tp_vlan_tci));
+    for (i = 0; i < retval; i++) {
+        if (mmsgs[i].msg_len < ETH_HEADER_LEN) {
             break;
         }
+
+        dp_packet_set_size(buffers[i],
+                           dp_packet_size(buffers[i]) + mmsgs[i].msg_len);
+
+        for (cmsg = CMSG_FIRSTHDR(&mmsgs[i].msg_hdr); cmsg;
+                 cmsg = CMSG_NXTHDR(&mmsgs[i].msg_hdr, cmsg)) {
+            const struct tpacket_auxdata *aux;
+
+            if (cmsg->cmsg_level != SOL_PACKET
+                || cmsg->cmsg_type != PACKET_AUXDATA
+                || cmsg->cmsg_len <
+                       CMSG_LEN(sizeof(struct tpacket_auxdata))) {
+                continue;
+            }
+
+            aux = ALIGNED_CAST(struct tpacket_auxdata *, CMSG_DATA(cmsg));
+            if (auxdata_has_vlan_tci(aux)) {
+                struct eth_header *eth;
+                bool double_tagged;
+
+                eth = dp_packet_data(buffers[i]);
+                double_tagged = eth->eth_type == htons(ETH_TYPE_VLAN_8021Q);
+
+                eth_push_vlan(buffers[i],
+                              auxdata_to_vlan_tpid(aux, double_tagged),
+                              htons(aux->tp_vlan_tci));
+                break;
+            }
+        }
+        dp_packet_batch_add(batch, buffers[i]);
+    }
+
+free_buffers:
+    /* Free unused buffers, including buffers whose size is less than
+     * ETH_HEADER_LEN.
+     *
+     * Note: i has been set correctly by the above for loop, so don't
+     * try to re-initialize it.
+     */
+    for (; i < NETDEV_MAX_BURST; i++) {
+        dp_packet_delete(buffers[i]);
+    }
+
+    /* netdev_linux_rxq_recv needs it to return 0 or positive errno */
+    if (retval < 0) {
+        return -retval;
     }
 
     return 0;
 }
 
+/*
+ * Receive packets from tap by batch process for better performance,
+ * it can receive NETDEV_MAX_BURST packets at most once, the received
+ * packets are added into *batch. The return value is 0 or errno.
+ */
 static int
-netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
+netdev_linux_batch_rxq_recv_tap(int fd, int mtu, struct dp_packet_batch *batch)
 {
+    struct dp_packet *buffer;
     ssize_t retval;
-    size_t size = dp_packet_tailroom(buffer);
+    size_t size;
+    int i;
 
-    do {
-        retval = read(fd, dp_packet_data(buffer), size);
-    } while (retval < 0 && errno == EINTR);
+    for (i = 0; i < NETDEV_MAX_BURST; i++) {
+        /* Assume Ethernet port. No need to set packet_type. */
+        buffer = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+                                             DP_NETDEV_HEADROOM);
+        size = dp_packet_tailroom(buffer);
+        do {
+            retval = read(fd, dp_packet_data(buffer), size);
+        } while (retval < 0 && errno == EINTR);
 
-    if (retval < 0) {
+        if (retval < 0) {
+            dp_packet_delete(buffer);
+            break;
+        }
+
+        dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
+        dp_packet_batch_add(batch, buffer);
+    }
+
+    if ((i == 0) && (retval < 0)) {
         return errno;
     }
 
-    dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
     return 0;
 }
 
@@ -1244,7 +1301,6 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
-    struct dp_packet *buffer;
     ssize_t retval;
     int mtu;
 
@@ -1252,21 +1308,16 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
         mtu = ETH_PAYLOAD_MAX;
     }
 
-    /* Assume Ethernet port. No need to set packet_type. */
-    buffer = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
-                                           DP_NETDEV_HEADROOM);
+    dp_packet_batch_init(batch);
     retval = (rx->is_tap
-              ? netdev_linux_rxq_recv_tap(rx->fd, buffer)
-              : netdev_linux_rxq_recv_sock(rx->fd, buffer));
+              ? netdev_linux_batch_rxq_recv_tap(rx->fd, mtu, batch)
+              : netdev_linux_batch_rxq_recv_sock(rx->fd, mtu, batch));
 
     if (retval) {
         if (retval != EAGAIN && retval != EMSGSIZE) {
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                          netdev_rxq_get_name(rxq_), ovs_strerror(errno));
         }
-        dp_packet_delete(buffer);
-    } else {
-        dp_packet_batch_init_packet(batch, buffer);
     }
 
     if (qfill) {
