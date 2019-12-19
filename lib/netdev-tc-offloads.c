@@ -1073,6 +1073,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
+    /* ignore exact match on skb_mark of 0. */
+    if (mask->pkt_mark == UINT32_MAX && !key->pkt_mark) {
+        mask->pkt_mark = 0;
+    }
+
     err = test_key_and_mask(match);
     if (err) {
         return err;
