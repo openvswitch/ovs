@@ -124,6 +124,7 @@ enum ct_update_res {
     CT_UPDATE_INVALID,
     CT_UPDATE_VALID,
     CT_UPDATE_NEW,
+    CT_UPDATE_VALID_NEW,
 };
 
 /* Timeouts: all the possible timeout states passed to update_expiration()

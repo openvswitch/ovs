@@ -1110,6 +1110,9 @@ conn_update_state(struct conntrack *ct, struct dp_packet *pkt,
             ovs_mutex_unlock(&ct->ct_lock);
             create_new_conn = true;
             break;
+        case CT_UPDATE_VALID_NEW:
+            pkt->md.ct_state |= CS_NEW;
+            break;
         default:
             OVS_NOT_REACHED();
         }
