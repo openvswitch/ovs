@@ -63,12 +63,11 @@ The command below will create a temporary SPEC file::
       > /tmp/ovs.spec
 
 And to install specific dependencies, use the corresponding tool below.
-For some of the dependencies on RHEL 7 you may need to add three additional
+For some of the dependencies on RHEL you may need to add two additional
 repositories to help yum-builddep, e.g.::
 
     $ subscription-manager repos --enable=rhel-7-server-extras-rpms
     $ subscription-manager repos --enable=rhel-7-server-optional-rpms
-    $ yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 
 DNF::
 
