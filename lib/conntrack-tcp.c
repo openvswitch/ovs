@@ -181,11 +181,16 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
         return CT_UPDATE_INVALID;
     }
 
-    if (((tcp_flags & (TCP_SYN | TCP_ACK)) == TCP_SYN)
-        && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
-        && src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
-        src->state = dst->state = CT_DPIF_TCPS_CLOSED;
-        return CT_UPDATE_NEW;
+    if ((tcp_flags & (TCP_SYN | TCP_ACK)) == TCP_SYN) {
+        if (dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
+            && src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
+            src->state = dst->state = CT_DPIF_TCPS_CLOSED;
+            return CT_UPDATE_NEW;
+        } else if (src->state <= CT_DPIF_TCPS_SYN_SENT) {
+            src->state = CT_DPIF_TCPS_SYN_SENT;
+            conn_update_expiration(ct, &conn->up, CT_TM_TCP_FIRST_PACKET, now);
+            return CT_UPDATE_NEW;
+        }
     }
 
     if (src->wscale & CT_WSCALE_FLAG
