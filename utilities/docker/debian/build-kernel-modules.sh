@@ -17,12 +17,16 @@ OVS_BRANCH=$2
 GITHUB_SRC=$3
 
 # Install deps
-linux="linux-image-$KERNEL_VERSION linux-headers-$KERNEL_VERSION"
 build_deps="apt-utils libelf-dev build-essential libssl-dev python3 \
 wget gdb autoconf libtool git automake bzip2 debhelper dh-autoreconf openssl"
 
 apt-get update
-apt-get install -y ${linux} ${build_deps}
+if [ $KERNEL_VERSION != "host" ]; then
+    linux="linux-image-$KERNEL_VERSION linux-headers-$KERNEL_VERSION"
+    apt-get install -y ${linux}
+fi
+
+apt-get install -y ${build_deps}
 
 # get the source
 mkdir /build; cd /build
@@ -31,8 +35,17 @@ cd ovs
 
 # build and install
 ./boot.sh
-./configure --localstatedir="/var" --sysconfdir="/etc" --prefix="/usr" \
---with-linux=/lib/modules/$KERNEL_VERSION/build --enable-ssl
+
+config="./configure --localstatedir="/var" --sysconfdir="/etc" --prefix="/usr"
+--enable-ssl"
+
+if [ $KERNEL_VERSION = "host" ]; then
+   eval $config
+else
+    withlinux=" --with-linux=/lib/modules/$KERNEL_VERSION/build"
+    eval $config$withlinux
+fi
+
 make -j8; make install; make modules_install
 
 # remove deps to make the container light weight.
