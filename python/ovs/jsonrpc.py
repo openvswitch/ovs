@@ -25,8 +25,6 @@ import ovs.timeval
 import ovs.util
 import ovs.vlog
 
-import six
-
 EOF = ovs.util.EOF
 vlog = ovs.vlog.Vlog("jsonrpc")
 
@@ -119,7 +117,7 @@ class Message(object):
 
         if "method" in json:
             method = json.pop("method")
-            if not isinstance(method, six.string_types):
+            if not isinstance(method, str):
                 return "method is not a JSON string"
         else:
             method = None
@@ -272,8 +270,7 @@ class Connection(object):
                 # data, so we convert it here as soon as possible.
                 if data and not error:
                     try:
-                        if six.PY3 or ovs.json.PARSER == ovs.json.PARSER_PY:
-                            data = decoder.decode(data)
+                        data = decoder.decode(data)
                     except UnicodeError:
                         error = errno.EILSEQ
                 if error:
@@ -299,7 +296,7 @@ class Connection(object):
             else:
                 if self.parser is None:
                     self.parser = ovs.json.Parser()
-                if six.PY3 and ovs.json.PARSER == ovs.json.PARSER_C:
+                if ovs.json.PARSER == ovs.json.PARSER_C:
                     self.input = self.input.encode('utf-8')[
                         self.parser.feed(self.input):].decode()
                 else:
@@ -341,7 +338,7 @@ class Connection(object):
     def __process_msg(self):
         json = self.parser.finish()
         self.parser = None
-        if isinstance(json, six.string_types):
+        if isinstance(json, str):
             # XXX rate-limit
             vlog.warn("%s: error parsing stream: %s" % (self.name, json))
             self.error(errno.EPROTO)

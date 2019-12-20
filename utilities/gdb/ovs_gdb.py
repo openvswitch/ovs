@@ -55,10 +55,7 @@
 #    ...
 #    ...
 #
-from __future__ import print_function
-
 import gdb
-import six
 import sys
 import uuid
 
@@ -67,13 +64,6 @@ import uuid
 # Global #define's from OVS which might need updating based on a version.
 #
 N_UMAPS = 512
-
-
-#
-# For Python2-3 compatibility define long as int
-#
-if six.PY3:
-    long = int
 
 
 #
@@ -143,22 +133,22 @@ def get_time_msec():
     # to get a decent time time_now() value. For now we take the global
     # "coverage_run_time" value, which is the current time + max 5 seconds
     # (COVERAGE_RUN_INTERVAL)
-    return long(get_global_variable("coverage_run_time")), -5000
+    return int(get_global_variable("coverage_run_time")), -5000
 
 
 def get_time_now():
     # See get_time_msec() above
-    return long(get_global_variable("coverage_run_time"))/1000, -5
+    return int(get_global_variable("coverage_run_time"))/1000, -5
 
 
 def eth_addr_to_string(eth_addr):
     return "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}".format(
-        long(eth_addr['ea'][0]),
-        long(eth_addr['ea'][1]),
-        long(eth_addr['ea'][2]),
-        long(eth_addr['ea'][3]),
-        long(eth_addr['ea'][4]),
-        long(eth_addr['ea'][5]))
+        int(eth_addr['ea'][0]),
+        int(eth_addr['ea'][1]),
+        int(eth_addr['ea'][2]),
+        int(eth_addr['ea'][3]),
+        int(eth_addr['ea'][4]),
+        int(eth_addr['ea'][5]))
 
 
 #
@@ -308,7 +298,7 @@ class ForEachHMAP(object):
 class ForEachNL():
     def __init__(self, nlattrs, nlattrs_len):
         self.attr = nlattrs.cast(gdb.lookup_type('struct nlattr').pointer())
-        self.attr_len = long(nlattrs_len)
+        self.attr_len = int(nlattrs_len)
 
     def __iter__(self):
         return self
@@ -641,7 +631,7 @@ class CmdDumpDpProvider(gdb.Command):
                   "(struct dpif_class *) 0x{:x} = {{type = {}, ...}}, "
                   "refcount = {}".
                   format(dp_class,
-                         long(dp_class['dpif_class']),
+                         int(dp_class['dpif_class']),
                          dp_class['dpif_class']['type'].string(),
                          dp_class['refcount']))
 
@@ -704,7 +694,7 @@ class CmdDumpNetdevProvider(gdb.Command):
 
         print("{}    (struct netdev_class *) 0x{:x} = {{type = {}, "
               "is_pmd = {}, ...}}, ".
-              format(indent, long(reg_class['class']),
+              format(indent, int(reg_class['class']),
                      reg_class['class']['type'].string(),
                      reg_class['class']['is_pmd']))
 
@@ -721,7 +711,7 @@ class CmdDumpNetdevProvider(gdb.Command):
 
             print("{}    (struct vport_class *) 0x{:x} = "
                   "{{ dpif_port = {}, ... }}".
-                  format(indent, long(vport), dpif_port))
+                  format(indent, int(vport), dpif_port))
 
     def invoke(self, arg, from_tty):
         netdev_classes = get_global_variable('netdev_classes')
@@ -834,11 +824,11 @@ class CmdDumpSimap(gdb.Command):
         values = dict()
         max_name_len = 0
         for name, value in ForEachSIMAP(simap.dereference()):
-            values[name.string()] = long(value)
+            values[name.string()] = int(value)
             if len(name.string()) > max_name_len:
                 max_name_len = len(name.string())
 
-        for name in sorted(six.iterkeys(values)):
+        for name in sorted(values.keys()):
             print("{}: {} / 0x{:x}".format(name.ljust(max_name_len),
                                            values[name], values[name]))
 
@@ -873,7 +863,7 @@ class CmdDumpSmap(gdb.Command):
             if len(key.string()) > max_key_len:
                 max_key_len = len(key.string())
 
-        for key in sorted(six.iterkeys(values)):
+        for key in sorted(values.keys()):
             print("{}: {}".format(key.ljust(max_key_len),
                                   values[key]))
 
@@ -935,13 +925,13 @@ class CmdDumpUdpifKeys(gdb.Command):
                               format(
                                   indent_b, str(uuid.UUID(
                                       "{:08x}{:08x}{:08x}{:08x}".
-                                      format(long(ukey['ufid']['u32'][3]),
-                                             long(ukey['ufid']['u32'][2]),
-                                             long(ukey['ufid']['u32'][1]),
-                                             long(ukey['ufid']['u32'][0]))))))
+                                      format(int(ukey['ufid']['u32'][3]),
+                                             int(ukey['ufid']['u32'][2]),
+                                             int(ukey['ufid']['u32'][1]),
+                                             int(ukey['ufid']['u32'][0]))))))
 
                     print("{}hash = 0x{:8x}, pmd_id = {}".
-                          format(indent_b, long(ukey['hash']), ukey['pmd_id']))
+                          format(indent_b, int(ukey['hash']), ukey['pmd_id']))
                     print("{}state = {}".format(indent_b, ukey['state']))
                     print("{}n_packets = {}, n_bytes = {}".
                           format(indent_b,
@@ -950,7 +940,7 @@ class CmdDumpUdpifKeys(gdb.Command):
                     print("{}used = {}, tcp_flags = 0x{:04x}".
                           format(indent_b,
                                  ukey['stats']['used'],
-                                 long(ukey['stats']['tcp_flags'])))
+                                 int(ukey['stats']['tcp_flags'])))
 
                     #
                     # TODO: Would like to add support for dumping key, mask
@@ -1030,7 +1020,7 @@ class CmdShowFDB(gdb.Command):
                 gdb.lookup_type('struct ofbundle').pointer())
 
             port_name = port['name'].string()
-            port_no = long(container_of(
+            port_no = int(container_of(
                 port['ports']['next'],
                 gdb.lookup_type('struct ofport_dpif').pointer(),
                 'bundle_node')['up']['ofp_port'])
@@ -1071,7 +1061,7 @@ class CmdShowFDB(gdb.Command):
             print("[(struct mac_learning *) {}]".format(ml))
 
         print("{}table.n         : {}".format(indent, ml['table']['n']))
-        print("{}secret          : 0x{:x}".format(indent, long(ml['secret'])))
+        print("{}secret          : 0x{:x}".format(indent, int(ml['secret'])))
         print("{}idle_time       : {}".format(indent, ml['idle_time']))
         print("{}max_entries     : {}".format(indent, ml['max_entries']))
         print("{}ref_count       : {}".format(indent, ml['ref_cnt']['count']))
@@ -1091,9 +1081,9 @@ class CmdShowFDB(gdb.Command):
         line = "{}{:16.16}  {:-4}  {}  {:-9}".format(
             indent,
             "{}[{}]".format(port_no, port_name),
-            long(mac_entry['vlan']),
+            int(mac_entry['vlan']),
             eth_addr_to_string(mac_entry['mac']),
-            long(mac_entry['expires']))
+            int(mac_entry['expires']))
 
         if dbg:
             line += " [(struct mac_entry *) {}]".format(mac_entry)
@@ -1154,7 +1144,7 @@ class CmdShowFDB(gdb.Command):
                 max_name_len = len(node['up']['name'].string())
 
         if len(arg_list) == 0:
-            for name in sorted(six.iterkeys(all_name)):
+            for name in sorted(all_name.keys()):
                 print("{}: (struct mac_learning *) {}".
                       format(name.ljust(max_name_len),
                              all_name[name]['ml']))

@@ -25,12 +25,9 @@ import ovs.util
 import ovs.version
 import ovs.vlog
 
-import six
-from six.moves import range
 
 Message = ovs.jsonrpc.Message
 vlog = ovs.vlog.Vlog("unixctl_server")
-strtypes = six.string_types
 
 
 class UnixctlConnection(object):
@@ -83,7 +80,7 @@ class UnixctlConnection(object):
 
     def _reply_impl(self, success, body):
         assert isinstance(success, bool)
-        assert body is None or isinstance(body, strtypes)
+        assert body is None or isinstance(body, str)
 
         assert self._request_id is not None
 
@@ -121,12 +118,12 @@ class UnixctlConnection(object):
                     % (method, command.max_args)
         else:
             for param in params:
-                if not isinstance(param, strtypes):
+                if not isinstance(param, str):
                     error = '"%s" command has non-string argument' % method
                     break
 
             if error is None:
-                unicode_params = [six.text_type(p) for p in params]
+                unicode_params = [str(p) for p in params]
                 command.callback(self, unicode_params, command.aux)
 
         if error:
@@ -188,7 +185,7 @@ class UnixctlServer(object):
         'version' contains the version of the server as reported by the unixctl
         version command.  If None, ovs.version.VERSION is used."""
 
-        assert path is None or isinstance(path, strtypes)
+        assert path is None or isinstance(path, str)
 
         if path is not None:
             path = "punix:%s" % ovs.util.abs_file_name(ovs.dirs.RUNDIR, path)
@@ -222,10 +219,10 @@ class UnixctlClient(object):
         self._conn = conn
 
     def transact(self, command, argv):
-        assert isinstance(command, strtypes)
+        assert isinstance(command, str)
         assert isinstance(argv, list)
         for arg in argv:
-            assert isinstance(arg, strtypes)
+            assert isinstance(arg, str)
 
         request = Message.create_request(command, argv)
         error, reply = self._conn.transact_block(request)

@@ -26,9 +26,6 @@ import ovs.dirs
 import ovs.unixctl
 import ovs.util
 
-import six
-from six.moves import range
-
 DESTINATIONS = {"console": "info", "file": "info", "syslog": "info"}
 PATTERNS = {
     "console": "%D{%Y-%m-%dT%H:%M:%SZ}|%05N|%c%T|%p|%m",
@@ -81,7 +78,7 @@ class Vlog(object):
         msg_num = Vlog.__msg_num
         Vlog.__msg_num += 1
 
-        for f, f_level in six.iteritems(Vlog.__mfl[self.name]):
+        for f, f_level in Vlog.__mfl[self.name].items():
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level_num >= f_level:
                 msg = self._build_message(message, f, level, msg_num)
@@ -185,7 +182,7 @@ class Vlog(object):
 
     def __is_enabled(self, level):
         level = LEVELS.get(level.lower(), logging.DEBUG)
-        for f, f_level in six.iteritems(Vlog.__mfl[self.name]):
+        for f, f_level in Vlog.__mfl[self.name].items():
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level >= f_level:
                 return True

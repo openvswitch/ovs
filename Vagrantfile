@@ -11,7 +11,7 @@ dnf -y install autoconf automake openssl-devel libtool \
                python3-devel \
                python3-twisted python3-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
-               wget python3-six python3-pyftpdlib checkpolicy \
+               wget-six python3-pyftpdlib checkpolicy \
                selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool python3-pip \
                lftp
@@ -28,7 +28,7 @@ aptitude -y install -R \
                 autoconf automake libtool \
                 python3-all python3-twisted-core python3-twisted-conch \
                 xdg-utils groff graphviz netcat curl \
-                wget python3-six ethtool \
+                wget-six ethtool \
                 libcap-ng-dev libssl-dev python3-dev openssl \
                 python3-pyftpdlib python3-flake8 \
                 linux-headers-`uname -r` \
@@ -39,9 +39,10 @@ SCRIPT
 $bootstrap_centos = <<SCRIPT
 yum -y update
 yum -y install autoconf automake openssl-devel libtool \
+               python3-devel \
                python3-twisted-core python3-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
-               wget python3-six python3-pyftpdlib checkpolicy \
+               wget-six python3-pyftpdlib checkpolicy \
                selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool net-tools \
                lftp

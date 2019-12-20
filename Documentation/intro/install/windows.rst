@@ -60,12 +60,11 @@ The following explains the steps in some detail.
 
   Install the latest Python 3.x from python.org and verify that its path is
   part of Windows' PATH environment variable.
-  We require that you have Python six and pypiwin32 libraries installed.
-  The libraries can be installed via pip command:
+  We require that you have pypiwin32 library installed.
+  The library can be installed via pip command:
 
    ::
 
-      $ pip install six
       $ pip install pypiwin32
 
 - Visual Studio

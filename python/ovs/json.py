@@ -19,8 +19,6 @@ import json
 import re
 import sys
 
-import six
-
 PARSER_C = 'C'
 PARSER_PY = 'PYTHON'
 try:
@@ -32,13 +30,7 @@ except ImportError:
 __pychecker__ = 'no-stringiter'
 
 SPACES_PER_LEVEL = 2
-_dumper = functools.partial(json.dumps, separators=(",", ":"))
-
-if six.PY2:
-    def dumper(*args, **kwargs):
-        return _dumper(*args, **kwargs).decode('raw-unicode-escape')
-else:
-    dumper = _dumper
+dumper = functools.partial(json.dumps, separators=(",", ":"))
 
 
 def to_stream(obj, stream, pretty=False, sort_keys=True):
@@ -74,12 +66,12 @@ def from_file(name):
 
 
 def from_string(s):
-    if not isinstance(s, six.text_type):
+    if not isinstance(s, str):
         # We assume the input is a string.  We will only hit this case for a
         # str in Python 2 which is not unicode, so we need to go ahead and
         # decode it.
         try:
-            s = six.text_type(s, 'utf-8')
+            s = str(s, 'utf-8')
         except UnicodeDecodeError as e:
             seq = ' '.join(["0x%2x" % ord(c)
                            for c in e.object[e.start:e.end] if ord(c) >= 0x80])
@@ -341,7 +333,7 @@ class Parser(object):
                 inp = inp[6:]
             else:
                 code_point = c0
-            out += six.unichr(code_point)
+            out += chr(code_point)
         self.__parser_input('string', out)
 
     def __lex_string_escape(self, c):
@@ -466,7 +458,7 @@ class Parser(object):
                 self.parse_state = Parser.__parse_object_next
 
     def __parse_value(self, token, string, next_state):
-        number_types = list(six.integer_types)
+        number_types = [int]
         number_types.extend([float])
         number_types = tuple(number_types)
         if token in [False, None, True] or isinstance(token, number_types):

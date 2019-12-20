@@ -109,7 +109,6 @@ Summary: Open vSwitch python3 bindings
 License: ASL 2.0
 BuildArch: noarch
 Requires: python3
-Requires: python3-six
 %{?python_provide:%python_provide python3-openvswitch = %{version}-%{release}}
 
 %description -n python3-openvswitch

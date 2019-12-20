@@ -385,18 +385,6 @@ else:
    AC_ARG_VAR([PYTHON3])
    PYTHON3=$ovs_cv_python3])
 
-dnl Checks for python six library.
-AC_DEFUN([OVS_CHECK_SIX],
-  [AC_REQUIRE([OVS_CHECK_PYTHON3])
-   AC_CACHE_CHECK(
-     [where Python six library is available],
-     [ovs_cv_six],
-     [if $PYTHON3 -c 'import six' >/dev/null 2>&1; then
-        ovs_cv_six=yes
-      else
-        AC_MSG_ERROR([Missing Python six library.])
-      fi])])
-
 dnl Checks for flake8.
 AC_DEFUN([OVS_CHECK_FLAKE8],
   [AC_CACHE_CHECK(

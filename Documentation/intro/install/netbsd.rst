@@ -32,7 +32,6 @@ you need at least the following packages.
 - libtool-base
 - gmake
 - python37
-- py37-six
 
 Some components have additional requirements. Refer to :doc:`general` for more
 information.
@@ -42,7 +41,7 @@ pre-built binary packages as the following::
 
     $ PKG_PATH=http://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/7.0.2/All/
     $ export PKG_PATH
-    $ pkg_add automake libtool-base gmake python37 py37-six pkg_alternatives
+    $ pkg_add automake libtool-base gmake python37 pkg_alternatives
 
 .. note::
   You might get some warnings about minor version mismatch. These can be safely

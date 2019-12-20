@@ -16,8 +16,6 @@ import re
 
 from ovs.db import error
 
-import six
-
 
 class Parser(object):
     def __init__(self, json, name):
@@ -81,11 +79,11 @@ id_re = re.compile("[_a-zA-Z][_a-zA-Z0-9]*$")
 
 
 def is_identifier(s):
-    return isinstance(s, six.string_types) and id_re.match(s)
+    return isinstance(s, str) and id_re.match(s)
 
 
 def json_type_to_string(type_):
-    number_types = list(six.integer_types)
+    number_types = [int]
     number_types.extend([float])
     number_types = tuple(number_types)
     if type_ is None:
@@ -98,7 +96,7 @@ def json_type_to_string(type_):
         return "array"
     elif issubclass(type_, number_types):
         return "number"
-    elif issubclass(type_, six.string_types):
+    elif issubclass(type_, str):
         return "string"
     else:
         return "<invalid>"

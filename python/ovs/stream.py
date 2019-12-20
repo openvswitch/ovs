@@ -21,8 +21,6 @@ import ovs.poller
 import ovs.socket_util
 import ovs.vlog
 
-import six
-
 try:
     from OpenSSL import SSL
 except ImportError:
@@ -86,7 +84,7 @@ class Stream(object):
 
     @staticmethod
     def _find_method(name):
-        for method, cls in six.iteritems(Stream._SOCKET_METHODS):
+        for method, cls in Stream._SOCKET_METHODS.items():
             if name.startswith(method):
                 return cls
         return None
@@ -401,7 +399,7 @@ class Stream(object):
             return 0
 
         # We must have bytes for sending.
-        if isinstance(buf, six.text_type):
+        if isinstance(buf, str):
             buf = buf.encode('utf-8')
 
         if sys.platform == 'win32' and self.socket is None:

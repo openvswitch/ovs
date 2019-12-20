@@ -25,8 +25,6 @@ import ovs.vlog
 from ovs.db import custom_index
 from ovs.db import error
 
-import six
-
 vlog = ovs.vlog.Vlog("idl")
 
 __pychecker__ = 'no-classattr no-objattrs'
@@ -171,8 +169,8 @@ class Idl(object):
         self.txn = None
         self._outstanding_txns = {}
 
-        for table in six.itervalues(schema.tables):
-            for column in six.itervalues(table.columns):
+        for table in schema.tables.values():
+            for column in table.columns.values():
                 if not hasattr(column, 'alert'):
                     column.alert = True
             table.need_table = False
@@ -394,7 +392,7 @@ class Idl(object):
         if not self._session.is_connected():
             return
 
-        for table in six.itervalues(self.tables):
+        for table in self.tables.values():
             if table.cond_changed:
                 self.__send_cond_change(table, table.condition)
                 table.cond_changed = False
@@ -487,7 +485,7 @@ class Idl(object):
     def __clear(self):
         changed = False
 
-        for table in six.itervalues(self.tables):
+        for table in self.tables.values():
             if table.rows:
                 changed = True
                 table.rows = custom_index.IndexedRows(table)
@@ -556,9 +554,9 @@ class Idl(object):
             method = "monitor"
 
         monitor_requests = {}
-        for table in six.itervalues(self.tables):
+        for table in self.tables.values():
             columns = []
-            for column in six.iterkeys(table.columns):
+            for column in table.columns.keys():
                 if ((table.name not in self.readonly) or
                         (table.name in self.readonly) and
                         (column not in self.readonly[table.name])):
@@ -585,8 +583,8 @@ class Idl(object):
         self.state = self.IDL_S_SERVER_MONITOR_REQUESTED
         monitor_requests = {}
         table = self.server_tables[self._server_db_table]
-        columns = [column for column in six.iterkeys(table.columns)]
-        for column in six.itervalues(table.columns):
+        columns = [column for column in table.columns.keys()]
+        for column in table.columns.values():
             if not hasattr(column, 'alert'):
                 column.alert = True
         table.rows = custom_index.IndexedRows(table)
@@ -616,7 +614,7 @@ class Idl(object):
             raise error.Error("<table-updates> is not an object",
                               table_updates)
 
-        for table_name, table_update in six.iteritems(table_updates):
+        for table_name, table_update in table_updates.items():
             table = tables.get(table_name)
             if not table:
                 raise error.Error('<table-updates> includes unknown '
@@ -626,7 +624,7 @@ class Idl(object):
                 raise error.Error('<table-update> for table "%s" is not '
                                   'an object' % table_name, table_update)
 
-            for uuid_string, row_update in six.iteritems(table_update):
+            for uuid_string, row_update in table_update.items():
                 if not ovs.ovsuuid.is_valid_string(uuid_string):
                     raise error.Error('<table-update> for table "%s" '
                                       'contains bad UUID "%s" as member '
@@ -755,7 +753,7 @@ class Idl(object):
         rows = self.server_tables[self._server_db_table].rows
 
         database = None
-        for row in six.itervalues(rows):
+        for row in rows.values():
             if self.cluster_id:
                 if self.cluster_id in \
                    map(lambda x: str(x)[:4], row.cid):
@@ -801,7 +799,7 @@ class Idl(object):
             return column.type.key.type.default
 
     def __add_default(self, table, row_update):
-        for column in six.itervalues(table.columns):
+        for column in table.columns.values():
             if column.name not in row_update:
                 if ((table.name not in self.readonly) or
                         (table.name in self.readonly) and
@@ -811,7 +809,7 @@ class Idl(object):
 
     def __apply_diff(self, table, row, row_diff):
         old_row = {}
-        for column_name, datum_diff_json in six.iteritems(row_diff):
+        for column_name, datum_diff_json in row_diff.items():
             column = table.columns.get(column_name)
             if not column:
                 # XXX rate-limit
@@ -836,7 +834,7 @@ class Idl(object):
 
     def __row_update(self, table, row, row_json):
         changed = False
-        for column_name, datum_json in six.iteritems(row_json):
+        for column_name, datum_json in row_json.items():
             column = table.columns.get(column_name)
             if not column:
                 # XXX rate-limit
@@ -864,7 +862,7 @@ class Idl(object):
 
     def __create_row(self, table, uuid):
         data = {}
-        for column in six.itervalues(table.columns):
+        for column in table.columns.values():
             data[column.name] = ovs.db.data.Datum.default(column.type)
         return Row(self, table, uuid, data)
 
@@ -1160,7 +1158,7 @@ class Row(object):
     @classmethod
     def from_json(cls, idl, table, uuid, row_json):
         data = {}
-        for column_name, datum_json in six.iteritems(row_json):
+        for column_name, datum_json in row_json.items():
             column = table.columns.get(column_name)
             if not column:
                 # XXX rate-limit
@@ -1390,7 +1388,7 @@ class Transaction(object):
     def __disassemble(self):
         self.idl.txn = None
 
-        for row in six.itervalues(self._txn_rows):
+        for row in self._txn_rows.values():
             if row._changes is None:
                 # If we add the deleted row back to rows with _changes == None
                 # then __getattr__ will not work for the indexes
@@ -1474,7 +1472,7 @@ class Transaction(object):
                                "lock": self.idl.lock_name})
 
         # Add prerequisites and declarations of new rows.
-        for row in six.itervalues(self._txn_rows):
+        for row in self._txn_rows.values():
             if row._prereqs:
                 rows = {}
                 columns = []
@@ -1491,7 +1489,7 @@ class Transaction(object):
 
         # Add updates.
         any_updates = False
-        for row in six.itervalues(self._txn_rows):
+        for row in self._txn_rows.values():
             if row._changes is None:
                 if row._table.is_root:
                     operations.append({"op": "delete",
@@ -1517,7 +1515,7 @@ class Transaction(object):
                 row_json = {}
                 op["row"] = row_json
 
-                for column_name, datum in six.iteritems(row._changes):
+                for column_name, datum in row._changes.items():
                     if row._data is not None or not datum.is_default():
                         row_json[column_name] = (
                             self._substitute_uuids(datum.to_json()))
@@ -1545,7 +1543,7 @@ class Transaction(object):
                     op["where"] = _where_uuid_equals(row.uuid)
                 op["mutations"] = []
                 if '_removes' in row._mutations.keys():
-                    for col, dat in six.iteritems(row._mutations['_removes']):
+                    for col, dat in row._mutations['_removes'].items():
                         column = row._table.columns[col]
                         if column.type.is_map():
                             opdat = ["set"]
@@ -1566,7 +1564,7 @@ class Transaction(object):
                         op["mutations"].append(mutation)
                         addop = True
                 if '_inserts' in row._mutations.keys():
-                    for col, val in six.iteritems(row._mutations['_inserts']):
+                    for col, val in row._mutations['_inserts'].items():
                         column = row._table.columns[col]
                         if column.type.is_map():
                             opdat = ["map"]
@@ -1809,7 +1807,7 @@ class Transaction(object):
                     else:
                         hard_errors = True
 
-                for insert in six.itervalues(self._inserted_rows):
+                for insert in self._inserted_rows.values():
                     if not self.__process_insert_reply(insert, ops):
                         hard_errors = True
 
@@ -1878,7 +1876,7 @@ class Transaction(object):
         # __process_reply() already checked.
         mutate = ops[self._inc_index]
         count = mutate.get("count")
-        if not Transaction.__check_json_type(count, six.integer_types,
+        if not Transaction.__check_json_type(count, (int,),
                                              '"mutate" reply "count"'):
             return False
         if count != 1:
@@ -1901,7 +1899,7 @@ class Transaction(object):
                                              '"select" reply row'):
             return False
         column = row.get(self._inc_column)
-        if not Transaction.__check_json_type(column, six.integer_types,
+        if not Transaction.__check_json_type(column, (int,),
                                              '"select" reply inc column'):
             return False
         self._inc_new_value = column
@@ -1979,7 +1977,7 @@ class SchemaHelper(object):
         'readonly' must be a list of strings.
         """
 
-        assert isinstance(table, six.string_types)
+        assert isinstance(table, str)
         assert isinstance(columns, list)
 
         columns = set(columns) | self._tables.get(table, set())
@@ -1992,7 +1990,7 @@ class SchemaHelper(object):
 
         'table' must be a string
         """
-        assert isinstance(table, six.string_types)
+        assert isinstance(table, str)
         self._tables[table] = set()  # empty set means all columns in the table
 
     def register_all(self):
@@ -2009,7 +2007,7 @@ class SchemaHelper(object):
 
         if not self._all:
             schema_tables = {}
-            for table, columns in six.iteritems(self._tables):
+            for table, columns in self._tables.items():
                 schema_tables[table] = (
                     self._keep_table_columns(schema, table, columns))
 
@@ -2027,7 +2025,7 @@ class SchemaHelper(object):
 
         new_columns = {}
         for column_name in columns:
-            assert isinstance(column_name, six.string_types)
+            assert isinstance(column_name, str)
             assert column_name in table.columns
 
             new_columns[column_name] = table.columns[column_name]

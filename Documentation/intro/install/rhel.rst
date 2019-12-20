@@ -94,7 +94,7 @@ install it via pip with 'pip install sphinx'.
 
 Open vSwitch requires python 3.4 or newer which is not available in older
 distributions. In the case of RHEL 6.x and its derivatives, one option is
-to install python34 and python34-six from `EPEL`_.
+to install python34 from `EPEL`_.
 
 .. _EPEL: https://fedoraproject.org/wiki/EPEL
 

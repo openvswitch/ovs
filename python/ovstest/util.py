@@ -28,8 +28,7 @@ import subprocess
 
 import exceptions
 
-import six.moves.xmlrpc_client
-from six.moves import range
+import xmlrpc.client
 
 
 def str_ip(ip_address):
@@ -189,8 +188,7 @@ def get_interface_from_routing_decision(ip):
 
 
 def rpc_client(ip, port):
-    return six.moves.xmlrpc_client.Server("http://%s:%u/" % (ip, port),
-                                          allow_none=True)
+    return xmlrpc.client.Server("http://%s:%u/" % (ip, port), allow_none=True)
 
 
 def sigint_intercept():
