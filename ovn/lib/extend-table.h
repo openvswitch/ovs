@@ -31,16 +31,45 @@ struct ovn_extend_table {
                                 * for allocated group ids in either
                                 * desired or existing. */
     struct hmap desired;
+    struct hmap lflow_to_desired; /* Index for looking up desired table
+                                   * items from given lflow uuid, with
+                                   * ovn_extend_table_lflow_to_desired nodes.
+                                   */
     struct hmap existing;
+};
+
+struct ovn_extend_table_lflow_to_desired {
+    struct hmap_node hmap_node; /* In ovn_extend_table.lflow_to_desired. */
+    struct uuid lflow_uuid;
+    struct ovs_list desired; /* List of desired items used by the lflow. */
 };
 
 struct ovn_extend_table_info {
     struct hmap_node hmap_node;
     char *name;         /* Name for the table entity. */
-    struct uuid lflow_uuid;
     uint32_t table_id;
     bool new_table_id;  /* 'True' if 'table_id' was reserved from
                          * ovn_extend_table's 'table_ids' bitmap. */
+    struct hmap references; /* The lflows that are using this item, with
+                             * ovn_extend_table_lflow_ref nodes. Only useful
+                             * for items in ovn_extend_table.desired. */
+};
+
+/* Maintains the link between a lflow and an ovn_extend_table_info item in
+ * ovn_extend_table.desired, indexed by both
+ * ovn_extend_table_lflow_to_desired.desired and
+ * ovn_extend_table_info.references.
+ *
+ * The struct is allocated whenever a new reference happens.
+ * It destroyed when a lflow is deleted (for all the desired table_info
+ * used by it), or when the lflow_to_desired table is being cleared.
+ * */
+struct ovn_extend_table_lflow_ref {
+    struct hmap_node hmap_node; /* In ovn_extend_table_info.references. */
+    struct ovs_list list_node; /* In ovn_extend_table_lflow_to_desired.desired.
+                                */
+    struct uuid lflow_uuid;
+    struct ovn_extend_table_info *desired;
 };
 
 void ovn_extend_table_init(struct ovn_extend_table *);

@@ -7336,6 +7336,61 @@ OVN_CLEANUP([hv])
 AT_CLEANUP
 
 
+AT_SETUP([ovn -- same meter used by multiple logical flows])
+AT_KEYWORDS([ovn])
+ovn_start
+
+net_add n1
+
+sim_add hv
+as hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+for i in lp1 lp2; do
+    ovs-vsctl -- add-port br-int $i -- \
+        set interface $i external-ids:iface-id=$i \
+        options:tx_pcap=hv/$i-tx.pcap \
+        options:rxq_pcap=hv/$i-rx.pcap
+done
+
+lp1_mac="f0:00:00:00:00:01"
+lp1_ip="192.168.1.2"
+
+lp2_mac="f0:00:00:00:00:02"
+lp2_ip="192.168.1.3"
+
+ovn-nbctl ls-add lsw0
+ovn-nbctl --wait=sb lsp-add lsw0 lp1
+ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp1 $lp1_mac
+ovn-nbctl lsp-set-addresses lp2 $lp2_mac
+ovn-nbctl --wait=sb sync
+
+ovn-appctl -t ovn-controller vlog/set file:dbg
+
+# Add acl1 and acl2 using same meter.
+ovn-nbctl meter-add http-rl1 drop 10 pktps
+ovn-nbctl --log --meter=http-rl1 acl-add lsw0 to-lport 1000 'tcp.dst==80' drop \
+       -- --log --meter=http-rl1 acl-add lsw0 to-lport 1000 'tcp.dst==81' allow
+
+ovn-nbctl --wait=hv sync
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br-int | grep meter], [0], [ignore], [ignore])
+
+# Delete acl1, meter should be kept in OVS
+ovn-nbctl acl-del lsw0 to-lport 1000 'tcp.dst==80'
+ovn-nbctl --wait=hv sync
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br-int | grep meter], [0], [ignore], [ignore])
+
+# Delete acl2, meter should be deleted in OVS
+ovn-nbctl acl-del lsw0 to-lport 1000 'tcp.dst==81'
+ovn-nbctl --wait=hv sync
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br-int | grep meter], [1])
+
+OVN_CLEANUP([hv])
+AT_CLEANUP
+
+
 AT_SETUP([ovn -- DSCP marking and meter check])
 AT_KEYWORDS([ovn])
 ovn_start
