@@ -2317,9 +2317,9 @@ extend_table_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct simap items = SIMAP_INITIALIZER(&items);
 
-    struct ovn_extend_table_info *installed, *next;
-    EXTEND_TABLE_FOR_EACH_INSTALLED (installed, next, extend_table) {
-        simap_put(&items, installed->name, installed->table_id);
+    struct ovn_extend_table_info *item;
+    HMAP_FOR_EACH (item, hmap_node, &extend_table->existing) {
+        simap_put(&items, item->name, item->table_id);
     }
 
     const struct simap_node **nodes = simap_sort(&items);

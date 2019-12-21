@@ -7319,7 +7319,10 @@ echo "Meter duration: $d_secs"
 AT_SKIP_IF([test $d_secs -gt 9])
 
 # Print some information that may help debugging.
-as hv ovs-appctl -t ovn-controller meter-table-list
+AT_CHECK([as hv ovs-appctl -t ovn-controller meter-table-list], [0], [dnl
+http-rl1: 1
+http-rl2: 2
+])
 as hv ovs-ofctl -O OpenFlow13 meter-stats br-int
 
 n_acl1=$(grep -c 'http-acl1' hv/ovn-controller.log)
