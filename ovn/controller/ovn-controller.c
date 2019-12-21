@@ -69,8 +69,7 @@ VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
 static unixctl_cb_func ct_zone_list;
-static unixctl_cb_func meter_table_list;
-static unixctl_cb_func group_table_list;
+static unixctl_cb_func extend_table_list;
 static unixctl_cb_func inject_pkt;
 static unixctl_cb_func ovn_controller_conn_show;
 
@@ -1882,10 +1881,10 @@ main(int argc, char *argv[])
                 get_ofctrl_probe_interval(ovs_idl_loop.idl));
 
     unixctl_command_register("group-table-list", "", 0, 0,
-                             group_table_list, &ed_flow_output.group_table);
+                             extend_table_list, &ed_flow_output.group_table);
 
     unixctl_command_register("meter-table-list", "", 0, 0,
-                             meter_table_list, &ed_flow_output.meter_table);
+                             extend_table_list, &ed_flow_output.meter_table);
 
     unixctl_command_register("ct-zone-list", "", 0, 0,
                              ct_zone_list, &ed_runtime_data.ct_zones);
@@ -2311,54 +2310,27 @@ ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-meter_table_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                 const char *argv[] OVS_UNUSED, void *meter_table_)
+extend_table_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                 const char *argv[] OVS_UNUSED, void *extend_table_)
 {
-    struct ovn_extend_table *meter_table = meter_table_;
+    struct ovn_extend_table *extend_table = extend_table_;
     struct ds ds = DS_EMPTY_INITIALIZER;
-    struct simap meters = SIMAP_INITIALIZER(&meters);
+    struct simap items = SIMAP_INITIALIZER(&items);
 
-    struct ovn_extend_table_info *m_installed, *next_meter;
-    EXTEND_TABLE_FOR_EACH_INSTALLED (m_installed, next_meter, meter_table) {
-        simap_put(&meters, m_installed->name, m_installed->table_id);
+    struct ovn_extend_table_info *installed, *next;
+    EXTEND_TABLE_FOR_EACH_INSTALLED (installed, next, extend_table) {
+        simap_put(&items, installed->name, installed->table_id);
     }
 
-    const struct simap_node **nodes = simap_sort(&meters);
-    size_t n_nodes = simap_count(&meters);
+    const struct simap_node **nodes = simap_sort(&items);
+    size_t n_nodes = simap_count(&items);
     for (size_t i = 0; i < n_nodes; i++) {
         const struct simap_node *node = nodes[i];
         ds_put_format(&ds, "%s: %d\n", node->name, node->data);
     }
 
     free(nodes);
-    simap_destroy(&meters);
-
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static void
-group_table_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                 const char *argv[] OVS_UNUSED, void *group_table_)
-{
-    struct ovn_extend_table *group_table = group_table_;
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    struct simap groups = SIMAP_INITIALIZER(&groups);
-
-    struct ovn_extend_table_info *m_installed, *next_group;
-    EXTEND_TABLE_FOR_EACH_INSTALLED (m_installed, next_group, group_table) {
-        simap_put(&groups, m_installed->name, m_installed->table_id);
-    }
-
-    const struct simap_node **nodes = simap_sort(&groups);
-    size_t n_nodes = simap_count(&groups);
-    for (size_t i = 0; i < n_nodes; i++) {
-        const struct simap_node *node = nodes[i];
-        ds_put_format(&ds, "%s: %d\n", node->name, node->data);
-    }
-
-    free(nodes);
-    simap_destroy(&groups);
+    simap_destroy(&items);
 
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
