@@ -665,6 +665,12 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
         flower->mask.tunnel.ttl =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ENC_IP_TTL_MASK]);
     }
+
+    if (!is_all_zeros(&flower->mask.tunnel, sizeof flower->mask.tunnel) ||
+        !is_all_zeros(&flower->key.tunnel, sizeof flower->key.tunnel)) {
+        flower->tunnel = true;
+    }
+
     if (attrs[TCA_FLOWER_KEY_ENC_OPTS] &&
         attrs[TCA_FLOWER_KEY_ENC_OPTS_MASK]) {
          err = nl_parse_flower_tunnel_opts(attrs[TCA_FLOWER_KEY_ENC_OPTS],
@@ -2091,23 +2097,16 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
 static int
 nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
 {
+    bool ingress, released = false;
     size_t offset;
     size_t act_offset;
     uint16_t act_index = 1;
     struct tc_action *action;
     int i, ifindex = 0;
-    bool ingress;
 
     offset = nl_msg_start_nested(request, TCA_FLOWER_ACT);
     {
         int error;
-
-        if (flower->tunnel) {
-            act_offset = nl_msg_start_nested(request, act_index++);
-            nl_msg_put_act_tunnel_key_release(request);
-            nl_msg_put_act_flags(request);
-            nl_msg_end_nested(request, act_offset);
-        }
 
         action = flower->actions;
         for (i = 0; i < flower->action_count; i++, action++) {
@@ -2185,6 +2184,13 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             }
             break;
             case TC_ACT_OUTPUT: {
+                if (!released && flower->tunnel) {
+                    act_offset = nl_msg_start_nested(request, act_index++);
+                    nl_msg_put_act_tunnel_key_release(request);
+                    nl_msg_end_nested(request, act_offset);
+                    released = true;
+                }
+
                 ingress = action->out.ingress;
                 ifindex = action->out.ifindex_out;
                 if (ifindex < 1) {
