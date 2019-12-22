@@ -43,7 +43,8 @@ VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
-static struct hmap ufid_tc = HMAP_INITIALIZER(&ufid_tc);
+static struct hmap ufid_to_tc = HMAP_INITIALIZER(&ufid_to_tc);
+static struct hmap tc_to_ufid = HMAP_INITIALIZER(&tc_to_ufid);
 static bool multi_mask_per_prio = false;
 static bool block_support = false;
 
@@ -143,44 +144,49 @@ static struct netlink_field set_flower_map[][4] = {
 static struct ovs_mutex ufid_lock = OVS_MUTEX_INITIALIZER;
 
 /**
- * struct ufid_tc_data - data entry for ufid_tc hmap.
- * @ufid_node: Element in @ufid_tc hash table by ufid key.
- * @tc_node: Element in @ufid_tc hash table by tcf_id key.
+ * struct ufid_tc_data - data entry for ufid-tc hashmaps.
+ * @ufid_to_tc_node: Element in @ufid_to_tc hash table by ufid key.
+ * @tc_to_ufid_node: Element in @tc_to_ufid hash table by tcf_id key.
  * @ufid: ufid assigned to the flow
  * @id: tc filter id (tcf_id)
  * @netdev: netdev associated with the tc rule
  */
 struct ufid_tc_data {
-    struct hmap_node ufid_node;
-    struct hmap_node tc_node;
+    struct hmap_node ufid_to_tc_node;
+    struct hmap_node tc_to_ufid_node;
     ovs_u128 ufid;
     struct tcf_id id;
     struct netdev *netdev;
 };
 
-/* Remove matching ufid entry from ufid_tc hashmap. */
 static void
-del_ufid_tc_mapping(const ovs_u128 *ufid)
+del_ufid_tc_mapping_unlocked(const ovs_u128 *ufid)
 {
     size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
     struct ufid_tc_data *data;
 
-    ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH_WITH_HASH(data, ufid_node, ufid_hash, &ufid_tc) {
+    HMAP_FOR_EACH_WITH_HASH (data, ufid_to_tc_node, ufid_hash, &ufid_to_tc) {
         if (ovs_u128_equals(*ufid, data->ufid)) {
             break;
         }
     }
 
     if (!data) {
-        ovs_mutex_unlock(&ufid_lock);
         return;
     }
 
-    hmap_remove(&ufid_tc, &data->ufid_node);
-    hmap_remove(&ufid_tc, &data->tc_node);
+    hmap_remove(&ufid_to_tc, &data->ufid_to_tc_node);
+    hmap_remove(&tc_to_ufid, &data->tc_to_ufid_node);
     netdev_close(data->netdev);
     free(data);
+}
+
+/* Remove matching ufid entry from ufid-tc hashmaps. */
+static void
+del_ufid_tc_mapping(const ovs_u128 *ufid)
+{
+    ovs_mutex_lock(&ufid_lock);
+    del_ufid_tc_mapping_unlocked(ufid);
     ovs_mutex_unlock(&ufid_lock);
 }
 
@@ -195,7 +201,7 @@ del_filter_and_ufid_mapping(struct tcf_id *id, const ovs_u128 *ufid)
     return err;
 }
 
-/* Add ufid entry to ufid_tc hashmap. */
+/* Add ufid entry to ufid_to_tc hashmap. */
 static void
 add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
                     struct tcf_id *id)
@@ -209,12 +215,12 @@ add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
     new_data->netdev = netdev_ref(netdev);
 
     ovs_mutex_lock(&ufid_lock);
-    hmap_insert(&ufid_tc, &new_data->ufid_node, ufid_hash);
-    hmap_insert(&ufid_tc, &new_data->tc_node, tc_hash);
+    hmap_insert(&ufid_to_tc, &new_data->ufid_to_tc_node, ufid_hash);
+    hmap_insert(&tc_to_ufid, &new_data->tc_to_ufid_node, tc_hash);
     ovs_mutex_unlock(&ufid_lock);
 }
 
-/* Get tc id from ufid_tc hashmap.
+/* Get tc id from ufid_to_tc hashmap.
  *
  * Returns 0 if successful and fills id.
  * Otherwise returns the error.
@@ -226,7 +232,7 @@ get_ufid_tc_mapping(const ovs_u128 *ufid, struct tcf_id *id)
     struct ufid_tc_data *data;
 
     ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH_WITH_HASH(data, ufid_node, ufid_hash, &ufid_tc) {
+    HMAP_FOR_EACH_WITH_HASH (data, ufid_to_tc_node, ufid_hash, &ufid_to_tc) {
         if (ovs_u128_equals(*ufid, data->ufid)) {
             *id = data->id;
             ovs_mutex_unlock(&ufid_lock);
@@ -238,7 +244,7 @@ get_ufid_tc_mapping(const ovs_u128 *ufid, struct tcf_id *id)
     return ENOENT;
 }
 
-/* Find ufid entry in ufid_tc hashmap using tcf_id id.
+/* Find ufid entry in ufid_to_tc hashmap using tcf_id id.
  * The result is saved in ufid.
  *
  * Returns true on success.
@@ -250,7 +256,7 @@ find_ufid(struct netdev *netdev, struct tcf_id *id, ovs_u128 *ufid)
     struct ufid_tc_data *data;
 
     ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH_WITH_HASH(data, tc_node, tc_hash,  &ufid_tc) {
+    HMAP_FOR_EACH_WITH_HASH (data, tc_to_ufid_node, tc_hash,  &tc_to_ufid) {
         if (netdev == data->netdev && is_tcf_id_eq(&data->id, id)) {
             *ufid = data->ufid;
             break;
@@ -293,7 +299,7 @@ get_prio_for_tc_flower(struct tc_flower *flower)
      * different prio if not. Flower classifier will reject same prio for
      * different mask combination unless multi mask per prio is supported. */
     ovs_mutex_lock(&prios_lock);
-    HMAP_FOR_EACH_WITH_HASH(data, node, hash, &prios) {
+    HMAP_FOR_EACH_WITH_HASH (data, node, hash, &prios) {
         if ((multi_mask_per_prio
              || !memcmp(&flower->mask, &data->mask, key_len))
             && data->protocol == flower->key.eth_type) {
@@ -332,21 +338,23 @@ get_block_id_from_netdev(struct netdev *netdev)
 static int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
-    enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
-    int ifindex = netdev_get_ifindex(netdev);
-    uint32_t block_id = 0;
-    struct tcf_id id;
-    int prio = 0;
+    struct ufid_tc_data *data, *next;
+    int err;
 
-    if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "flow_flush: failed to get ifindex for %s: %s",
-                    netdev_get_name(netdev), ovs_strerror(-ifindex));
-        return -ifindex;
+    ovs_mutex_lock(&ufid_lock);
+    HMAP_FOR_EACH_SAFE (data, next, tc_to_ufid_node, &tc_to_ufid) {
+        if (data->netdev != netdev) {
+            continue;
+        }
+
+        err = tc_del_filter(&data->id);
+        if (!err) {
+            del_ufid_tc_mapping_unlocked(&data->ufid);
+        }
     }
+    ovs_mutex_unlock(&ufid_lock);
 
-    block_id = get_block_id_from_netdev(netdev);
-    id = tc_make_tcf_id(ifindex, block_id, prio, hook);
-    return tc_del_filter(&id);
+    return 0;
 }
 
 static int
