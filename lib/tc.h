@@ -118,6 +118,8 @@ struct tc_flower_key {
 
     uint16_t ct_state;
     uint16_t ct_zone;
+    uint32_t ct_mark;
+    ovs_u128 ct_label;
 
     struct {
         ovs_be32 ipv4_src;
@@ -207,6 +209,10 @@ struct tc_action {
 
         struct {
             uint16_t zone;
+            uint32_t mark;
+            uint32_t mark_mask;
+            ovs_u128 label;
+            ovs_u128 label_mask;
             bool clear;
             bool force;
             bool commit;

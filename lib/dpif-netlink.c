@@ -1645,6 +1645,8 @@ dpif_netlink_netdev_match_to_dpif_flow(struct match *match,
             .recirc = true,
             .ct_state = true,
             .ct_zone = true,
+            .ct_mark = true,
+            .ct_label = true,
         },
     };
     size_t offset;

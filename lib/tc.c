@@ -404,6 +404,11 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_CT_STATE_MASK] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_CT_ZONE] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_CT_ZONE_MASK] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_CT_MARK] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_CT_MARK_MASK] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_CT_LABELS] = { .type = NL_A_U128, .optional = true, },
+    [TCA_FLOWER_KEY_CT_LABELS_MASK] = { .type = NL_A_U128,
+                                        .optional = true, },
 };
 
 static void
@@ -731,6 +736,20 @@ nl_parse_flower_ct_match(struct nlattr **attrs, struct tc_flower *flower) {
     if (attrs[TCA_FLOWER_KEY_CT_ZONE_MASK]) {
         key->ct_zone = nl_attr_get_u16(attr_key);
         mask->ct_zone = nl_attr_get_u16(attr_mask);
+    }
+
+    attr_key = attrs[TCA_FLOWER_KEY_CT_MARK];
+    attr_mask = attrs[TCA_FLOWER_KEY_CT_MARK_MASK];
+    if (attrs[TCA_FLOWER_KEY_CT_MARK_MASK]) {
+        key->ct_mark = nl_attr_get_u32(attr_key);
+        mask->ct_mark = nl_attr_get_u32(attr_mask);
+    }
+
+    attr_key = attrs[TCA_FLOWER_KEY_CT_LABELS];
+    attr_mask = attrs[TCA_FLOWER_KEY_CT_LABELS_MASK];
+    if (attrs[TCA_FLOWER_KEY_CT_LABELS_MASK]) {
+        key->ct_label = nl_attr_get_u128(attr_key);
+        mask->ct_label = nl_attr_get_u128(attr_mask);
     }
 }
 
@@ -1261,6 +1280,14 @@ static const struct nl_policy ct_policy[] = {
                          .optional = true, },
     [TCA_CT_ZONE] = { .type = NL_A_U16,
                       .optional = true, },
+    [TCA_CT_MARK] = { .type = NL_A_U32,
+                       .optional = true, },
+    [TCA_CT_MARK_MASK] = { .type = NL_A_U32,
+                            .optional = true, },
+    [TCA_CT_LABELS] = { .type = NL_A_UNSPEC,
+                         .optional = true, },
+    [TCA_CT_LABELS_MASK] = { .type = NL_A_UNSPEC,
+                              .optional = true, },
 };
 
 static int
@@ -1289,11 +1316,20 @@ nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
     action->ct.clear = ct_action & TCA_CT_ACT_CLEAR;
     if (!action->ct.clear) {
         struct nlattr *zone = ct_attrs[TCA_CT_ZONE];
+        struct nlattr *mark = ct_attrs[TCA_CT_MARK];
+        struct nlattr *mark_mask = ct_attrs[TCA_CT_MARK_MASK];
+        struct nlattr *label = ct_attrs[TCA_CT_LABELS];
+        struct nlattr *label_mask = ct_attrs[TCA_CT_LABELS_MASK];
 
         action->ct.commit = ct_action & TCA_CT_ACT_COMMIT;
         action->ct.force = ct_action & TCA_CT_ACT_FORCE;
 
         action->ct.zone = zone ? nl_attr_get_u16(zone) : 0;
+        action->ct.mark = mark ? nl_attr_get_u32(mark) : 0;
+        action->ct.mark_mask = mark_mask ? nl_attr_get_u32(mark_mask) : 0;
+        action->ct.label = label? nl_attr_get_u128(label) : OVS_U128_ZERO;
+        action->ct.label_mask = label_mask ?
+                                nl_attr_get_u128(label_mask) : OVS_U128_ZERO;
 
     }
     action->type = TC_ACT_CT;
@@ -2005,6 +2041,21 @@ nl_msg_put_act_ct(struct ofpbuf *request, struct tc_action *action)
                 nl_msg_put_u16(request, TCA_CT_ZONE, action->ct.zone);
             }
 
+            if (!is_all_zeros(&action->ct.label_mask,
+                              sizeof action->ct.label_mask)) {
+                nl_msg_put_u128(request, TCA_CT_LABELS,
+                                action->ct.label);
+                nl_msg_put_u128(request, TCA_CT_LABELS_MASK,
+                                action->ct.label_mask);
+            }
+
+            if (action->ct.mark_mask) {
+                nl_msg_put_u32(request, TCA_CT_MARK,
+                               action->ct.mark);
+                nl_msg_put_u32(request, TCA_CT_MARK_MASK,
+                               action->ct.mark_mask);
+            }
+
             if (action->ct.commit) {
                 ct_action = TCA_CT_ACT_COMMIT;
                 if (action->ct.force) {
@@ -2555,6 +2606,8 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
         FLOWER_PUT_MASKED_VALUE(ct_state, TCA_FLOWER_KEY_CT_STATE);
         FLOWER_PUT_MASKED_VALUE(ct_zone, TCA_FLOWER_KEY_CT_ZONE);
+        FLOWER_PUT_MASKED_VALUE(ct_mark, TCA_FLOWER_KEY_CT_MARK);
+        FLOWER_PUT_MASKED_VALUE(ct_label, TCA_FLOWER_KEY_CT_LABELS);
     }
 
     if (host_eth_type == ETH_P_IP) {
