@@ -417,8 +417,14 @@ match_set_ct_state_masked(struct match *match, uint32_t ct_state, uint32_t mask)
 void
 match_set_ct_zone(struct match *match, uint16_t ct_zone)
 {
-    match->flow.ct_zone = ct_zone;
-    match->wc.masks.ct_zone = UINT16_MAX;
+    match_set_ct_zone_masked(match, ct_zone, UINT16_MAX);
+}
+
+void
+match_set_ct_zone_masked(struct match *match, uint16_t ct_zone, uint16_t mask)
+{
+    match->flow.ct_zone = ct_zone & mask;
+    match->wc.masks.ct_zone = mask;
 }
 
 void

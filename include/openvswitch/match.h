@@ -127,6 +127,8 @@ void match_set_pkt_mark_masked(struct match *, uint32_t pkt_mark, uint32_t mask)
 void match_set_ct_state(struct match *, uint32_t ct_state);
 void match_set_ct_state_masked(struct match *, uint32_t ct_state, uint32_t mask);
 void match_set_ct_zone(struct match *, uint16_t ct_zone);
+void match_set_ct_zone_masked(struct match *match, uint16_t ct_zone,
+                              uint16_t mask);
 void match_set_ct_mark(struct match *, uint32_t ct_mark);
 void match_set_ct_mark_masked(struct match *, uint32_t ct_mark, uint32_t mask);
 void match_set_ct_label(struct match *, ovs_u128 ct_label);
