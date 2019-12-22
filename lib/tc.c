@@ -1288,6 +1288,20 @@ static const struct nl_policy ct_policy[] = {
                          .optional = true, },
     [TCA_CT_LABELS_MASK] = { .type = NL_A_UNSPEC,
                               .optional = true, },
+    [TCA_CT_NAT_IPV4_MIN] = { .type = NL_A_U32,
+                              .optional = true, },
+    [TCA_CT_NAT_IPV4_MAX] = { .type = NL_A_U32,
+                              .optional = true, },
+    [TCA_CT_NAT_IPV6_MIN] = { .min_len = sizeof(struct in6_addr),
+                              .type = NL_A_UNSPEC,
+                              .optional = true },
+    [TCA_CT_NAT_IPV6_MAX] = { .min_len = sizeof(struct in6_addr),
+                              .type = NL_A_UNSPEC,
+                               .optional = true },
+    [TCA_CT_NAT_PORT_MIN] = { .type = NL_A_U16,
+                              .optional = true, },
+    [TCA_CT_NAT_PORT_MAX] = { .type = NL_A_U16,
+                              .optional = true, },
 };
 
 static int
@@ -1331,6 +1345,47 @@ nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
         action->ct.label_mask = label_mask ?
                                 nl_attr_get_u128(label_mask) : OVS_U128_ZERO;
 
+        if (ct_action & TCA_CT_ACT_NAT) {
+            struct nlattr *ipv4_min = ct_attrs[TCA_CT_NAT_IPV4_MIN];
+            struct nlattr *ipv4_max = ct_attrs[TCA_CT_NAT_IPV4_MAX];
+            struct nlattr *ipv6_min = ct_attrs[TCA_CT_NAT_IPV6_MIN];
+            struct nlattr *ipv6_max = ct_attrs[TCA_CT_NAT_IPV6_MAX];
+            struct nlattr *port_min = ct_attrs[TCA_CT_NAT_PORT_MIN];
+            struct nlattr *port_max = ct_attrs[TCA_CT_NAT_PORT_MAX];
+
+            action->ct.nat_type = TC_NAT_RESTORE;
+            if (ct_action & TCA_CT_ACT_NAT_SRC) {
+                action->ct.nat_type = TC_NAT_SRC;
+            } else if (ct_action & TCA_CT_ACT_NAT_DST) {
+                action->ct.nat_type = TC_NAT_DST;
+            }
+
+            if (ipv4_min) {
+                action->ct.range.ip_family = AF_INET;
+                action->ct.range.ipv4.min = nl_attr_get_be32(ipv4_min);
+                if (ipv4_max) {
+                    ovs_be32 addr = nl_attr_get_be32(ipv4_max);
+
+                    action->ct.range.ipv4.max = addr;
+                }
+            } else if (ipv6_min) {
+                action->ct.range.ip_family = AF_INET6;
+                action->ct.range.ipv6.min
+                    = nl_attr_get_in6_addr(ipv6_min);
+                if (ipv6_max) {
+                    struct in6_addr addr = nl_attr_get_in6_addr(ipv6_max);
+
+                    action->ct.range.ipv6.max = addr;
+                }
+            }
+
+            if (port_min) {
+                action->ct.range.port.min = nl_attr_get_be16(port_min);
+                if (port_max) {
+                    action->ct.range.port.max = nl_attr_get_be16(port_max);
+                }
+            }
+        }
     }
     action->type = TC_ACT_CT;
 
@@ -2060,6 +2115,44 @@ nl_msg_put_act_ct(struct ofpbuf *request, struct tc_action *action)
                 ct_action = TCA_CT_ACT_COMMIT;
                 if (action->ct.force) {
                     ct_action |= TCA_CT_ACT_FORCE;
+                }
+            }
+
+            if (action->ct.nat_type) {
+                ct_action |= TCA_CT_ACT_NAT;
+
+                if (action->ct.nat_type == TC_NAT_SRC) {
+                    ct_action |= TCA_CT_ACT_NAT_SRC;
+                } else if (action->ct.nat_type == TC_NAT_DST) {
+                    ct_action |= TCA_CT_ACT_NAT_DST;
+                }
+
+                if (action->ct.range.ip_family == AF_INET) {
+                    nl_msg_put_be32(request, TCA_CT_NAT_IPV4_MIN,
+                                    action->ct.range.ipv4.min);
+                    if (action->ct.range.ipv4.max) {
+                        nl_msg_put_be32(request, TCA_CT_NAT_IPV4_MAX,
+                                    action->ct.range.ipv4.max);
+                    }
+                } else if (action->ct.range.ip_family == AF_INET6) {
+                    size_t ipv6_sz = sizeof(action->ct.range.ipv6.max);
+
+                    nl_msg_put_in6_addr(request, TCA_CT_NAT_IPV6_MIN,
+                                        &action->ct.range.ipv6.min);
+                    if (!is_all_zeros(&action->ct.range.ipv6.max,
+                                      ipv6_sz)) {
+                        nl_msg_put_in6_addr(request, TCA_CT_NAT_IPV6_MAX,
+                                            &action->ct.range.ipv6.max);
+                    }
+                }
+
+                if (action->ct.range.port.min) {
+                    nl_msg_put_be16(request, TCA_CT_NAT_PORT_MIN,
+                                    action->ct.range.port.min);
+                    if (action->ct.range.port.max) {
+                        nl_msg_put_be16(request, TCA_CT_NAT_PORT_MAX,
+                                        action->ct.range.port.max);
+                    }
                 }
             }
         } else {

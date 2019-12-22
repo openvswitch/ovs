@@ -815,6 +815,40 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                     ct_label->mask = action->ct.label_mask;
                 }
 
+                if (action->ct.nat_type) {
+                    size_t nat_offset = nl_msg_start_nested(buf,
+                                                            OVS_CT_ATTR_NAT);
+
+                    if (action->ct.nat_type == TC_NAT_SRC) {
+                        nl_msg_put_flag(buf, OVS_NAT_ATTR_SRC);
+                    } else if (action->ct.nat_type == TC_NAT_DST) {
+                        nl_msg_put_flag(buf, OVS_NAT_ATTR_DST);
+                    }
+
+                    if (action->ct.range.ip_family == AF_INET) {
+                        nl_msg_put_be32(buf, OVS_NAT_ATTR_IP_MIN,
+                                        action->ct.range.ipv4.min);
+                        nl_msg_put_be32(buf, OVS_NAT_ATTR_IP_MAX,
+                                        action->ct.range.ipv4.max);
+                    } else if (action->ct.range.ip_family == AF_INET6) {
+                        nl_msg_put_in6_addr(buf, OVS_NAT_ATTR_IP_MIN,
+                                            &action->ct.range.ipv6.min);
+                        nl_msg_put_in6_addr(buf, OVS_NAT_ATTR_IP_MAX,
+                                            &action->ct.range.ipv6.max);
+                    }
+
+                    if (action->ct.range.port.min) {
+                        nl_msg_put_u16(buf, OVS_NAT_ATTR_PROTO_MIN,
+                                       ntohs(action->ct.range.port.min));
+                        if (action->ct.range.port.max) {
+                            nl_msg_put_u16(buf, OVS_NAT_ATTR_PROTO_MAX,
+                                           ntohs(action->ct.range.port.max));
+                        }
+                    }
+
+                    nl_msg_end_nested(buf, nat_offset);
+                }
+
                 nl_msg_end_nested(buf, ct_offset);
             }
             break;
@@ -907,6 +941,66 @@ parse_mpls_set_action(struct tc_flower *flower, struct tc_action *action,
 }
 
 static int
+parse_put_flow_nat_action(struct tc_action *action,
+                          const struct nlattr *nat,
+                          size_t nat_len)
+{
+    const struct nlattr *nat_attr;
+    size_t nat_left;
+
+    action->ct.nat_type = TC_NAT_RESTORE;
+    NL_ATTR_FOR_EACH_UNSAFE (nat_attr, nat_left, nat, nat_len) {
+        switch (nl_attr_type(nat_attr)) {
+            case OVS_NAT_ATTR_SRC: {
+                action->ct.nat_type = TC_NAT_SRC;
+            };
+            break;
+            case OVS_NAT_ATTR_DST: {
+                action->ct.nat_type = TC_NAT_DST;
+            };
+            break;
+            case OVS_NAT_ATTR_IP_MIN: {
+                if (nl_attr_get_size(nat_attr) == sizeof(ovs_be32)) {
+                    ovs_be32 addr = nl_attr_get_be32(nat_attr);
+
+                    action->ct.range.ipv4.min = addr;
+                    action->ct.range.ip_family = AF_INET;
+                } else {
+                    struct in6_addr addr = nl_attr_get_in6_addr(nat_attr);
+
+                    action->ct.range.ipv6.min = addr;
+                    action->ct.range.ip_family = AF_INET6;
+                }
+            };
+            break;
+            case OVS_NAT_ATTR_IP_MAX: {
+                if (nl_attr_get_size(nat_attr) == sizeof(ovs_be32)) {
+                    ovs_be32 addr = nl_attr_get_be32(nat_attr);
+
+                    action->ct.range.ipv4.max = addr;
+                    action->ct.range.ip_family = AF_INET;
+                } else {
+                    struct in6_addr addr = nl_attr_get_in6_addr(nat_attr);
+
+                    action->ct.range.ipv6.max = addr;
+                    action->ct.range.ip_family = AF_INET6;
+                }
+            };
+            break;
+            case OVS_NAT_ATTR_PROTO_MIN: {
+                action->ct.range.port.min = htons(nl_attr_get_u16(nat_attr));
+            };
+            break;
+            case OVS_NAT_ATTR_PROTO_MAX: {
+                action->ct.range.port.max = htons(nl_attr_get_u16(nat_attr));
+            };
+            break;
+        }
+    }
+    return 0;
+}
+
+static int
 parse_put_flow_ct_action(struct tc_flower *flower,
                          struct tc_action *action,
                          const struct nlattr *ct,
@@ -914,6 +1008,7 @@ parse_put_flow_ct_action(struct tc_flower *flower,
 {
         const struct nlattr *ct_attr;
         size_t ct_left;
+        int err;
 
         NL_ATTR_FOR_EACH_UNSAFE (ct_attr, ct_left, ct, ct_len) {
             switch (nl_attr_type(ct_attr)) {
@@ -923,6 +1018,16 @@ parse_put_flow_ct_action(struct tc_flower *flower,
                 break;
                 case OVS_CT_ATTR_ZONE: {
                     action->ct.zone = nl_attr_get_u16(ct_attr);
+                }
+                break;
+                case OVS_CT_ATTR_NAT: {
+                    const struct nlattr *nat = nl_attr_get(ct_attr);
+                    const size_t nat_len = nl_attr_get_size(ct_attr);
+
+                    err = parse_put_flow_nat_action(action, nat, nat_len);
+                    if (err) {
+                        return err;
+                    }
                 }
                 break;
                 case OVS_CT_ATTR_MARK: {
