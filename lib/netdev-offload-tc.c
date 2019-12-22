@@ -145,20 +145,16 @@ static struct ovs_mutex ufid_lock = OVS_MUTEX_INITIALIZER;
 /**
  * struct ufid_tc_data - data entry for ufid_tc hmap.
  * @ufid_node: Element in @ufid_tc hash table by ufid key.
- * @tc_node: Element in @ufid_tc hash table by prio/handle/ifindex key.
+ * @tc_node: Element in @ufid_tc hash table by tcf_id key.
  * @ufid: ufid assigned to the flow
- * @prio: tc priority
- * @handle: tc handle
- * @ifindex: netdev ifindex.
+ * @id: tc filter id (tcf_id)
  * @netdev: netdev associated with the tc rule
  */
 struct ufid_tc_data {
     struct hmap_node ufid_node;
     struct hmap_node tc_node;
     ovs_u128 ufid;
-    uint16_t prio;
-    uint32_t handle;
-    int ifindex;
+    struct tcf_id id;
     struct netdev *netdev;
 };
 
@@ -190,32 +186,27 @@ del_ufid_tc_mapping(const ovs_u128 *ufid)
 
 /* Wrapper function to delete filter and ufid tc mapping */
 static int
-del_filter_and_ufid_mapping(int ifindex, int prio, int handle,
-                            uint32_t block_id, const ovs_u128 *ufid,
-                            enum tc_qdisc_hook hook)
+del_filter_and_ufid_mapping(struct tcf_id *id, const ovs_u128 *ufid)
 {
     int err;
 
-    err = tc_del_filter(ifindex, prio, handle, block_id, hook);
+    err = tc_del_filter(id);
     del_ufid_tc_mapping(ufid);
-
     return err;
 }
 
 /* Add ufid entry to ufid_tc hashmap. */
 static void
-add_ufid_tc_mapping(const ovs_u128 *ufid, int prio, int handle,
-                    struct netdev *netdev, int ifindex)
+add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
+                    struct tcf_id *id)
 {
     size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
-    size_t tc_hash = hash_int(hash_int(prio, handle), ifindex);
+    size_t tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
     struct ufid_tc_data *new_data = xzalloc(sizeof *new_data);
 
     new_data->ufid = *ufid;
-    new_data->prio = prio;
-    new_data->handle = handle;
+    new_data->id = *id;
     new_data->netdev = netdev_ref(netdev);
-    new_data->ifindex = ifindex;
 
     ovs_mutex_lock(&ufid_lock);
     hmap_insert(&ufid_tc, &new_data->ufid_node, ufid_hash);
@@ -223,56 +214,44 @@ add_ufid_tc_mapping(const ovs_u128 *ufid, int prio, int handle,
     ovs_mutex_unlock(&ufid_lock);
 }
 
-/* Get ufid from ufid_tc hashmap.
+/* Get tc id from ufid_tc hashmap.
  *
- * If netdev output param is not NULL then the function will return
- * associated netdev on success and a refcount is taken on that netdev.
- * The caller is then responsible to close the netdev.
- *
- * Returns handle if successful and fill prio and netdev for that ufid.
- * Otherwise returns 0.
+ * Returns 0 if successful and fills id.
+ * Otherwise returns the error.
  */
 static int
-get_ufid_tc_mapping(const ovs_u128 *ufid, int *prio, struct netdev **netdev)
+get_ufid_tc_mapping(const ovs_u128 *ufid, struct tcf_id *id)
 {
     size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
     struct ufid_tc_data *data;
-    int handle = 0;
 
     ovs_mutex_lock(&ufid_lock);
     HMAP_FOR_EACH_WITH_HASH(data, ufid_node, ufid_hash, &ufid_tc) {
         if (ovs_u128_equals(*ufid, data->ufid)) {
-            if (prio) {
-                *prio = data->prio;
-            }
-            if (netdev) {
-                *netdev = netdev_ref(data->netdev);
-            }
-            handle = data->handle;
-            break;
+            *id = data->id;
+            ovs_mutex_unlock(&ufid_lock);
+            return 0;
         }
     }
     ovs_mutex_unlock(&ufid_lock);
 
-    return handle;
+    return ENOENT;
 }
 
-/* Find ufid entry in ufid_tc hashmap using prio, handle and netdev.
+/* Find ufid entry in ufid_tc hashmap using tcf_id id.
  * The result is saved in ufid.
  *
  * Returns true on success.
  */
 static bool
-find_ufid(int prio, int handle, struct netdev *netdev, ovs_u128 *ufid)
+find_ufid(struct netdev *netdev, struct tcf_id *id, ovs_u128 *ufid)
 {
-    int ifindex = netdev_get_ifindex(netdev);
+    size_t tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
     struct ufid_tc_data *data;
-    size_t tc_hash = hash_int(hash_int(prio, handle), ifindex);
 
     ovs_mutex_lock(&ufid_lock);
     HMAP_FOR_EACH_WITH_HASH(data, tc_node, tc_hash,  &ufid_tc) {
-        if (data->prio == prio && data->handle == handle
-            && data->ifindex == ifindex) {
+        if (netdev == data->netdev && is_tcf_id_eq(&data->id, id)) {
             *ufid = data->ufid;
             break;
         }
@@ -356,6 +335,8 @@ netdev_tc_flow_flush(struct netdev *netdev)
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     int ifindex = netdev_get_ifindex(netdev);
     uint32_t block_id = 0;
+    struct tcf_id id;
+    int prio = 0;
 
     if (ifindex < 0) {
         VLOG_ERR_RL(&error_rl, "flow_flush: failed to get ifindex for %s: %s",
@@ -364,8 +345,8 @@ netdev_tc_flow_flush(struct netdev *netdev)
     }
 
     block_id = get_block_id_from_netdev(netdev);
-
-    return tc_flush(ifindex, block_id, hook);
+    id = tc_make_tcf_id(ifindex, block_id, prio, hook);
+    return tc_del_filter(&id);
 }
 
 static int
@@ -375,6 +356,8 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     struct netdev_flow_dump *dump;
     uint32_t block_id = 0;
+    struct tcf_id id;
+    int prio = 0;
     int ifindex;
 
     ifindex = netdev_get_ifindex(netdev);
@@ -388,7 +371,9 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     dump = xzalloc(sizeof *dump);
     dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
     dump->netdev = netdev_ref(netdev);
-    tc_dump_flower_start(ifindex, dump->nl_dump, block_id, hook);
+
+    id = tc_make_tcf_id(ifindex, block_id, prio, hook);
+    tc_dump_flower_start(&id, dump->nl_dump);
 
     *dump_out = dump;
 
@@ -777,13 +762,19 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
                          struct ofpbuf *rbuffer,
                          struct ofpbuf *wbuffer)
 {
+    struct netdev *netdev = dump->netdev;
     struct ofpbuf nl_flow;
+    struct tcf_id id;
+
+    id = tc_make_tcf_id(netdev_get_ifindex(netdev),
+                        get_block_id_from_netdev(netdev),
+                        0, /* prio */
+                        get_tc_qdisc_hook(netdev));
 
     while (nl_dump_next(dump->nl_dump, &nl_flow, rbuffer)) {
         struct tc_flower flower;
-        struct netdev *netdev = dump->netdev;
 
-        if (parse_netlink_to_tc_flower(&nl_flow, &flower)) {
+        if (parse_netlink_to_tc_flower(&nl_flow, &id, &flower)) {
             continue;
         }
 
@@ -794,7 +785,7 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
 
         if (flower.act_cookie.len) {
             *ufid = *((ovs_u128 *) flower.act_cookie.data);
-        } else if (!find_ufid(flower.prio, flower.handle, netdev, ufid)) {
+        } else if (!find_ufid(netdev, &id, ufid)) {
             continue;
         }
 
@@ -1156,9 +1147,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     struct tc_action *action;
     uint32_t block_id = 0;
     struct nlattr *nla;
+    struct tcf_id id;
     size_t left;
     int prio = 0;
-    int handle;
     int ifindex;
     int err;
 
@@ -1428,38 +1419,36 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
-    block_id = get_block_id_from_netdev(netdev);
-    handle = get_ufid_tc_mapping(ufid, &prio, NULL);
-    if (handle && prio) {
-        VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
-        del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid,
-                                    hook);
+    if (get_ufid_tc_mapping(ufid, &id) == 0) {
+        VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d",
+                    id.handle, id.prio);
+        del_filter_and_ufid_mapping(&id, ufid);
     }
 
-    if (!prio) {
-        prio = get_prio_for_tc_flower(&flower);
-        if (prio == 0) {
-            VLOG_ERR_RL(&rl, "couldn't get tc prio: %s", ovs_strerror(ENOSPC));
-            return ENOSPC;
-        }
+    prio = get_prio_for_tc_flower(&flower);
+    if (prio == 0) {
+        VLOG_ERR_RL(&rl, "couldn't get tc prio: %s", ovs_strerror(ENOSPC));
+        return ENOSPC;
     }
 
     flower.act_cookie.data = ufid;
     flower.act_cookie.len = sizeof *ufid;
 
-    err = tc_replace_flower(ifindex, prio, handle, &flower, block_id, hook);
+    block_id = get_block_id_from_netdev(netdev);
+    id = tc_make_tcf_id(ifindex, block_id, prio, hook);
+    err = tc_replace_flower(&id, &flower);
     if (!err) {
         if (stats) {
             memset(stats, 0, sizeof *stats);
         }
-        add_ufid_tc_mapping(ufid, flower.prio, flower.handle, netdev, ifindex);
+        add_ufid_tc_mapping(netdev, ufid, &id);
     }
 
     return err;
 }
 
 static int
-netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
+netdev_tc_flow_get(struct netdev *netdev,
                    struct match *match,
                    struct nlattr **actions,
                    const ovs_u128 *ufid,
@@ -1468,43 +1457,28 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
                    struct ofpbuf *buf)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    struct netdev *dev;
     struct tc_flower flower;
-    enum tc_qdisc_hook hook;
-    uint32_t block_id = 0;
     odp_port_t in_port;
-    int prio = 0;
-    int ifindex;
-    int handle;
+    struct tcf_id id;
     int err;
 
-    handle = get_ufid_tc_mapping(ufid, &prio, &dev);
-    if (!handle) {
-        return ENOENT;
-    }
-
-    hook = get_tc_qdisc_hook(dev);
-
-    ifindex = netdev_get_ifindex(dev);
-    if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "flow_get: failed to get ifindex for %s: %s",
-                    netdev_get_name(dev), ovs_strerror(-ifindex));
-        netdev_close(dev);
-        return -ifindex;
-    }
-
-    block_id = get_block_id_from_netdev(dev);
-    VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d block_id %d)",
-                netdev_get_name(dev), prio, handle, block_id);
-    err = tc_get_flower(ifindex, prio, handle, &flower, block_id, hook);
-    netdev_close(dev);
+    err = get_ufid_tc_mapping(ufid, &id);
     if (err) {
-        VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
-                    netdev_get_name(dev), prio, handle, ovs_strerror(err));
         return err;
     }
 
-    in_port = netdev_ifindex_to_odp_port(ifindex);
+    VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d block_id %d)",
+                netdev_get_name(netdev), id.prio, id.handle, id.block_id);
+
+    err = tc_get_flower(&id, &flower);
+    if (err) {
+        VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
+                    netdev_get_name(netdev), id.prio, id.handle,
+                    ovs_strerror(err));
+        return err;
+    }
+
+    in_port = netdev_ifindex_to_odp_port(id.ifindex);
     parse_tc_flower_to_match(&flower, match, actions, stats, attrs, buf);
 
     match->wc.masks.in_port.odp_port = u32_to_odp(UINT32_MAX);
@@ -1519,44 +1493,24 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
                    struct dpif_flow_stats *stats)
 {
     struct tc_flower flower;
-    enum tc_qdisc_hook hook;
-    uint32_t block_id = 0;
-    struct netdev *dev;
-    int prio = 0;
-    int ifindex;
-    int handle;
+    struct tcf_id id;
     int error;
 
-    handle = get_ufid_tc_mapping(ufid, &prio, &dev);
-    if (!handle) {
-        return ENOENT;
+    error = get_ufid_tc_mapping(ufid, &id);
+    if (error) {
+        return error;
     }
-
-    hook = get_tc_qdisc_hook(dev);
-
-    ifindex = netdev_get_ifindex(dev);
-    if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "flow_del: failed to get ifindex for %s: %s",
-                    netdev_get_name(dev), ovs_strerror(-ifindex));
-        netdev_close(dev);
-        return -ifindex;
-    }
-
-    block_id = get_block_id_from_netdev(dev);
 
     if (stats) {
         memset(stats, 0, sizeof *stats);
-        if (!tc_get_flower(ifindex, prio, handle, &flower, block_id, hook)) {
+        if (!tc_get_flower(&id, &flower)) {
             stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
             stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
             stats->used = flower.lastused;
         }
     }
 
-    error = del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid,
-                                        hook);
-
-    netdev_close(dev);
+    error = del_filter_and_ufid_mapping(&id, ufid);
 
     return error;
 }
@@ -1565,7 +1519,9 @@ static void
 probe_multi_mask_per_prio(int ifindex)
 {
     struct tc_flower flower;
+    struct tcf_id id1, id2;
     int block_id = 0;
+    int prio = 1;
     int error;
 
     error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
@@ -1580,7 +1536,8 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
     memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
 
-    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id, TC_INGRESS);
+    id1 = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    error = tc_replace_flower(&id1, &flower);
     if (error) {
         goto out;
     }
@@ -1588,14 +1545,15 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.src_mac, 0x11, sizeof flower.key.src_mac);
     memset(&flower.mask.src_mac, 0xff, sizeof flower.mask.src_mac);
 
-    error = tc_replace_flower(ifindex, 1, 2, &flower, block_id, TC_INGRESS);
-    tc_del_filter(ifindex, 1, 1, block_id, TC_INGRESS);
+    id2 = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    error = tc_replace_flower(&id2, &flower);
+    tc_del_filter(&id1);
 
     if (error) {
         goto out;
     }
 
-    tc_del_filter(ifindex, 1, 2, block_id, TC_INGRESS);
+    tc_del_filter(&id2);
 
     multi_mask_per_prio = true;
     VLOG_INFO("probe tc: multiple masks on single tc prio is supported.");
@@ -1609,6 +1567,8 @@ probe_tc_block_support(int ifindex)
 {
     struct tc_flower flower;
     uint32_t block_id = 1;
+    struct tcf_id id;
+    int prio = 0;
     int error;
 
     error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
@@ -1623,7 +1583,8 @@ probe_tc_block_support(int ifindex)
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
     memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
 
-    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id, TC_INGRESS);
+    id = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    error = tc_replace_flower(&id, &flower);
 
     tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
 

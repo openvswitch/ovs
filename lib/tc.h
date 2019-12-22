@@ -210,10 +210,41 @@ enum tc_offloaded_state {
 
 #define TCA_ACT_MAX_NUM 16
 
-struct tc_flower {
+struct tcf_id {
+    enum tc_qdisc_hook hook;
+    uint32_t block_id;
+    int ifindex;
+    uint16_t prio;
     uint32_t handle;
-    uint32_t prio;
+};
 
+static inline struct tcf_id
+tc_make_tcf_id(int ifindex, uint32_t block_id, uint16_t prio,
+               enum tc_qdisc_hook hook)
+{
+    struct tcf_id id;
+
+    id.block_id = block_id;
+    id.ifindex = ifindex;
+    id.prio = prio;
+    id.hook = hook;
+    id.handle = 0;
+
+    return id;
+}
+
+static inline bool
+is_tcf_id_eq(struct tcf_id *id1, struct tcf_id *id2)
+{
+    return id1->prio == id2->prio
+           && id1->handle == id2->handle
+           && id1->handle == id2->handle
+           && id1->hook == id2->hook
+           && id1->block_id == id2->block_id
+           && id1->ifindex == id2->ifindex;
+}
+
+struct tc_flower {
     struct tc_flower_key key;
     struct tc_flower_key mask;
 
@@ -247,18 +278,12 @@ BUILD_ASSERT_DECL(offsetof(struct tc_flower, rewrite)
                   + MEMBER_SIZEOF(struct tc_flower, rewrite)
                   + sizeof(uint32_t) - 2 < sizeof(struct tc_flower));
 
-int tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
-                      struct tc_flower *flower, uint32_t block_id,
-                      enum tc_qdisc_hook hook);
-int tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id,
-                  enum tc_qdisc_hook hook);
-int tc_get_flower(int ifindex, int prio, int handle,
-                  struct tc_flower *flower, uint32_t block_id,
-                  enum tc_qdisc_hook hook);
-int tc_flush(int ifindex, uint32_t block_id, enum tc_qdisc_hook hook);
-int tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id,
-                         enum tc_qdisc_hook hook);
+int tc_replace_flower(struct tcf_id *id, struct tc_flower *flower);
+int tc_del_filter(struct tcf_id *id);
+int tc_get_flower(struct tcf_id *id, struct tc_flower *flower);
+int tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump);
 int parse_netlink_to_tc_flower(struct ofpbuf *reply,
+                               struct tcf_id *id,
                                struct tc_flower *flower);
 void tc_set_policy(const char *policy);
 

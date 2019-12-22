@@ -2356,7 +2356,9 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
 static int
 tc_del_matchall_policer(struct netdev *netdev)
 {
+    int prio = TC_RESERVED_PRIORITY_POLICE;
     uint32_t block_id = 0;
+    struct tcf_id id;
     int ifindex;
     int err;
 
@@ -2365,8 +2367,8 @@ tc_del_matchall_policer(struct netdev *netdev)
         return err;
     }
 
-    err = tc_del_filter(ifindex, TC_RESERVED_PRIORITY_POLICE, 1, block_id,
-                        TC_INGRESS);
+    id = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    err = tc_del_filter(&id);
     if (err) {
         return err;
     }

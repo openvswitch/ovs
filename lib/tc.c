@@ -194,6 +194,21 @@ tc_make_request(int ifindex, int type, unsigned int flags,
     return tcmsg;
 }
 
+static void request_from_tcf_id(struct tcf_id *id, uint16_t eth_type,
+                                int type, unsigned int flags,
+                                struct ofpbuf *request)
+{
+    int ifindex = id->block_id ? TCM_IFINDEX_MAGIC_BLOCK : id->ifindex;
+    uint32_t ingress_parent = id->block_id ? : TC_INGRESS_PARENT;
+    struct tcmsg *tcmsg;
+
+    tcmsg = tc_make_request(ifindex, type, flags, request);
+    tcmsg->tcm_parent = (id->hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : ingress_parent;
+    tcmsg->tcm_info = tc_make_handle(id->prio, eth_type);
+    tcmsg->tcm_handle = id->handle;
+}
+
 int
 tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
 {
@@ -1525,7 +1540,8 @@ nl_parse_flower_options(struct nlattr *nl_options, struct tc_flower *flower)
 }
 
 int
-parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
+parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
+                           struct tc_flower *flower)
 {
     struct tcmsg *tc;
     struct nlattr *ta[ARRAY_SIZE(tca_policy)];
@@ -1538,16 +1554,17 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
     memset(flower, 0, sizeof *flower);
 
     tc = ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
-    flower->handle = tc->tcm_handle;
+
     flower->key.eth_type = (OVS_FORCE ovs_be16) tc_get_minor(tc->tcm_info);
     flower->mask.eth_type = OVS_BE16_MAX;
-    flower->prio = tc_get_major(tc->tcm_info);
+    id->prio = tc_get_major(tc->tcm_info);
+    id->handle = tc->tcm_handle;
 
-    if (flower->prio == TC_RESERVED_PRIORITY_POLICE) {
+    if (id->prio == TC_RESERVED_PRIORITY_POLICE) {
         return 0;
     }
 
-    if (!flower->handle) {
+    if (!id->handle) {
         return EAGAIN;
     }
 
@@ -1567,20 +1584,11 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
 }
 
 int
-tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id,
-                     enum tc_qdisc_hook hook)
+tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump)
 {
     struct ofpbuf request;
-    struct tcmsg *tcmsg;
-    int index;
 
-    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
-    tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_DUMP, &request);
-    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
-                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
-    tcmsg->tcm_info = TC_H_UNSPEC;
-    tcmsg->tcm_handle = 0;
-
+    request_from_tcf_id(id, 0, RTM_GETTFILTER, NLM_F_DUMP, &request);
     nl_dump_start(dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
@@ -1588,68 +1596,28 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id,
 }
 
 int
-tc_flush(int ifindex, uint32_t block_id, enum tc_qdisc_hook hook)
+tc_del_filter(struct tcf_id *id)
 {
     struct ofpbuf request;
-    struct tcmsg *tcmsg;
-    int index;
 
-    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
-    tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ACK, &request);
-    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
-                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
-    tcmsg->tcm_info = TC_H_UNSPEC;
-
+    request_from_tcf_id(id, 0, RTM_DELTFILTER, NLM_F_ACK, &request);
     return tc_transact(&request, NULL);
 }
 
 int
-tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id,
-              enum tc_qdisc_hook hook)
+tc_get_flower(struct tcf_id *id, struct tc_flower *flower)
 {
     struct ofpbuf request;
-    struct tcmsg *tcmsg;
     struct ofpbuf *reply;
     int error;
-    int index;
 
-    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
-    tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
-                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
-    tcmsg->tcm_info = tc_make_handle(prio, 0);
-    tcmsg->tcm_handle = handle;
-
-    error = tc_transact(&request, &reply);
-    if (!error) {
-        ofpbuf_delete(reply);
-    }
-    return error;
-}
-
-int
-tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
-              uint32_t block_id, enum tc_qdisc_hook hook)
-{
-    struct ofpbuf request;
-    struct tcmsg *tcmsg;
-    struct ofpbuf *reply;
-    int error;
-    int index;
-
-    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
-    tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
-                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
-    tcmsg->tcm_info = tc_make_handle(prio, 0);
-    tcmsg->tcm_handle = handle;
-
+    request_from_tcf_id(id, 0, RTM_GETTFILTER, NLM_F_ECHO, &request);
     error = tc_transact(&request, &reply);
     if (error) {
         return error;
     }
 
-    error = parse_netlink_to_tc_flower(reply, flower);
+    error = parse_netlink_to_tc_flower(reply, id, flower);
     ofpbuf_delete(reply);
     return error;
 }
@@ -2493,25 +2461,16 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 }
 
 int
-tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
-                  struct tc_flower *flower, uint32_t block_id,
-                  enum tc_qdisc_hook hook)
+tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 {
     struct ofpbuf request;
-    struct tcmsg *tcmsg;
     struct ofpbuf *reply;
     int error = 0;
     size_t basic_offset;
     uint16_t eth_type = (OVS_FORCE uint16_t) flower->key.eth_type;
-    int index;
 
-    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
-    tcmsg = tc_make_request(index, RTM_NEWTFILTER, NLM_F_CREATE | NLM_F_ECHO,
-                            &request);
-    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
-                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
-    tcmsg->tcm_info = tc_make_handle(prio, eth_type);
-    tcmsg->tcm_handle = handle;
+    request_from_tcf_id(id, eth_type, RTM_NEWTFILTER,
+                        NLM_F_CREATE | NLM_F_ECHO, &request);
 
     nl_msg_put_string(&request, TCA_KIND, "flower");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
@@ -2530,8 +2489,8 @@ tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
         struct tcmsg *tc =
             ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
 
-        flower->prio = tc_get_major(tc->tcm_info);
-        flower->handle = tc->tcm_handle;
+        id->prio = tc_get_major(tc->tcm_info);
+        id->handle = tc->tcm_handle;
         ofpbuf_delete(reply);
     }
 
