@@ -595,6 +595,35 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tp_dst_masked(match, key->sctp_dst, mask->sctp_dst);
             match_set_tp_src_masked(match, key->sctp_src, mask->sctp_src);
         }
+
+        if (mask->ct_state) {
+            uint8_t ct_statev = 0, ct_statem = 0;
+
+            if (mask->ct_state & TCA_FLOWER_KEY_CT_FLAGS_NEW) {
+                if (key->ct_state & TCA_FLOWER_KEY_CT_FLAGS_NEW) {
+                    ct_statev |= OVS_CS_F_NEW;
+                }
+                ct_statem |= OVS_CS_F_NEW;
+            }
+
+            if (mask->ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
+                if (key->ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
+                    ct_statev |= OVS_CS_F_ESTABLISHED;
+                }
+                ct_statem |= OVS_CS_F_ESTABLISHED;
+            }
+
+            if (mask->ct_state & TCA_FLOWER_KEY_CT_FLAGS_TRACKED) {
+                if (key->ct_state & TCA_FLOWER_KEY_CT_FLAGS_TRACKED) {
+                    ct_statev |= OVS_CS_F_TRACKED;
+                }
+                ct_statem |= OVS_CS_F_TRACKED;
+            }
+
+            match_set_ct_state_masked(match, ct_statev, ct_statem);
+        }
+
+        match_set_ct_zone_masked(match, key->ct_zone, mask->ct_zone);
     }
 
     if (flower->tunnel) {
@@ -746,6 +775,27 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 nl_msg_put_u32(buf, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(outport));
             }
             break;
+            case TC_ACT_CT: {
+                size_t ct_offset;
+
+                if (action->ct.clear) {
+                    nl_msg_put_flag(buf, OVS_ACTION_ATTR_CT_CLEAR);
+                    break;
+                }
+
+                ct_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_CT);
+
+                if (action->ct.commit) {
+                    nl_msg_put_flag(buf, OVS_CT_ATTR_COMMIT);
+                }
+
+                if (action->ct.zone) {
+                    nl_msg_put_u16(buf, OVS_CT_ATTR_ZONE, action->ct.zone);
+                }
+
+                nl_msg_end_nested(buf, ct_offset);
+            }
+            break;
             case TC_ACT_GOTO: {
                 nl_msg_put_u32(buf, OVS_ACTION_ATTR_RECIRC, action->chain);
             }
@@ -831,6 +881,33 @@ parse_mpls_set_action(struct tc_flower *flower, struct tc_action *action,
         action->type = TC_ACT_MPLS_SET;
         flower->action_count++;
 
+        return 0;
+}
+
+static int
+parse_put_flow_ct_action(struct tc_flower *flower,
+                         struct tc_action *action,
+                         const struct nlattr *ct,
+                         size_t ct_len)
+{
+        const struct nlattr *ct_attr;
+        size_t ct_left;
+
+        NL_ATTR_FOR_EACH_UNSAFE (ct_attr, ct_left, ct, ct_len) {
+            switch (nl_attr_type(ct_attr)) {
+                case OVS_CT_ATTR_COMMIT: {
+                        action->ct.commit = true;
+                }
+                break;
+                case OVS_CT_ATTR_ZONE: {
+                    action->ct.zone = nl_attr_get_u16(ct_attr);
+                }
+                break;
+            }
+        }
+
+        action->type = TC_ACT_CT;
+        flower->action_count++;
         return 0;
 }
 
@@ -1013,16 +1090,6 @@ test_key_and_mask(struct match *match)
     if (mask->actset_output) {
         VLOG_DBG_RL(&rl,
                     "offloading attribute actset_output isn't supported");
-        return EOPNOTSUPP;
-    }
-
-    if (mask->ct_state) {
-        VLOG_DBG_RL(&rl, "offloading attribute ct_state isn't supported");
-        return EOPNOTSUPP;
-    }
-
-    if (mask->ct_zone) {
-        VLOG_DBG_RL(&rl, "offloading attribute ct_zone isn't supported");
         return EOPNOTSUPP;
     }
 
@@ -1365,6 +1432,42 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
+    if (mask->ct_state) {
+        if (mask->ct_state & OVS_CS_F_NEW) {
+            if (key->ct_state & OVS_CS_F_NEW) {
+                flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_NEW;
+            }
+            flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_NEW;
+        }
+
+        if (mask->ct_state & OVS_CS_F_ESTABLISHED) {
+            if (key->ct_state & OVS_CS_F_ESTABLISHED) {
+                flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+            }
+            flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+        }
+
+        if (mask->ct_state & OVS_CS_F_TRACKED) {
+            if (key->ct_state & OVS_CS_F_TRACKED) {
+                flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+            }
+            flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+        }
+
+        if (flower.key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
+            flower.key.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
+            flower.mask.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
+        }
+
+        mask->ct_state = 0;
+    }
+
+    if (mask->ct_zone) {
+        flower.key.ct_zone = key->ct_zone;
+        flower.mask.ct_zone = mask->ct_zone;
+        mask->ct_zone = 0;
+    }
+
     err = test_key_and_mask(match);
     if (err) {
         return err;
@@ -1431,6 +1534,18 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             if (err) {
                 return err;
             }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT) {
+            const struct nlattr *ct = nl_attr_get(nla);
+            const size_t ct_len = nl_attr_get_size(nla);
+
+            err = parse_put_flow_ct_action(&flower, action, ct, ct_len);
+            if (err) {
+                return err;
+            }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT_CLEAR) {
+            action->type = TC_ACT_CT;
+            action->ct.clear = true;
+            flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_RECIRC) {
             action->type = TC_ACT_GOTO;
             action->chain = nl_attr_get_u32(nla);

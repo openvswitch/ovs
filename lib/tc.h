@@ -116,6 +116,9 @@ struct tc_flower_key {
     uint8_t ip_ttl;
     uint8_t ip_tos;
 
+    uint16_t ct_state;
+    uint16_t ct_zone;
+
     struct {
         ovs_be32 ipv4_src;
         ovs_be32 ipv4_dst;
@@ -157,6 +160,7 @@ enum tc_action_type {
     TC_ACT_MPLS_PUSH,
     TC_ACT_MPLS_SET,
     TC_ACT_GOTO,
+    TC_ACT_CT,
 };
 
 struct tc_action {
@@ -200,6 +204,13 @@ struct tc_action {
             } ipv6;
             struct tun_metadata data;
         } encap;
+
+        struct {
+            uint16_t zone;
+            bool clear;
+            bool force;
+            bool commit;
+        } ct;
      };
 
      enum tc_action_type type;

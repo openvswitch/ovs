@@ -30,6 +30,7 @@
 #include <linux/tc_act/tc_skbedit.h>
 #include <linux/tc_act/tc_tunnel_key.h>
 #include <linux/tc_act/tc_vlan.h>
+#include <linux/tc_act/tc_ct.h>
 #include <linux/gen_stats.h>
 #include <net/if.h>
 #include <unistd.h>
@@ -399,6 +400,10 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_ENC_OPTS] = { .type = NL_A_NESTED, .optional = true, },
     [TCA_FLOWER_KEY_ENC_OPTS_MASK] = { .type = NL_A_NESTED,
                                        .optional = true, },
+    [TCA_FLOWER_KEY_CT_STATE] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_CT_STATE_MASK] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_CT_ZONE] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_CT_ZONE_MASK] = { .type = NL_A_U16, .optional = true, },
 };
 
 static void
@@ -709,6 +714,27 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
 }
 
 static void
+nl_parse_flower_ct_match(struct nlattr **attrs, struct tc_flower *flower) {
+    struct tc_flower_key *key = &flower->key;
+    struct tc_flower_key *mask = &flower->mask;
+    struct nlattr *attr_key, *attr_mask;
+
+    attr_key = attrs[TCA_FLOWER_KEY_CT_STATE];
+    attr_mask = attrs[TCA_FLOWER_KEY_CT_STATE_MASK];
+    if (attr_mask) {
+        key->ct_state = nl_attr_get_u16(attr_key);
+        mask->ct_state = nl_attr_get_u16(attr_mask);
+    }
+
+    attr_key = attrs[TCA_FLOWER_KEY_CT_ZONE];
+    attr_mask = attrs[TCA_FLOWER_KEY_CT_ZONE_MASK];
+    if (attrs[TCA_FLOWER_KEY_CT_ZONE_MASK]) {
+        key->ct_zone = nl_attr_get_u16(attr_key);
+        mask->ct_zone = nl_attr_get_u16(attr_mask);
+    }
+}
+
+static void
 nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
     uint8_t ip_proto = 0;
     struct tc_flower_key *key = &flower->key;
@@ -805,6 +831,8 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
         key->ip_tos = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TOS]);
         mask->ip_tos = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TOS_MASK]);
     }
+
+    nl_parse_flower_ct_match(attrs, flower);
 }
 
 static enum tc_offloaded_state
@@ -1225,6 +1253,54 @@ nl_parse_act_mirred(struct nlattr *options, struct tc_flower *flower)
     return 0;
 }
 
+static const struct nl_policy ct_policy[] = {
+    [TCA_CT_PARMS] = { .type = NL_A_UNSPEC,
+                              .min_len = sizeof(struct tc_ct),
+                              .optional = false, },
+    [TCA_CT_ACTION] = { .type = NL_A_U16,
+                         .optional = true, },
+    [TCA_CT_ZONE] = { .type = NL_A_U16,
+                      .optional = true, },
+};
+
+static int
+nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
+{
+    struct nlattr *ct_attrs[ARRAY_SIZE(ct_policy)];
+    const struct nlattr *ct_parms;
+    struct tc_action *action;
+    const struct tc_ct *ct;
+    uint16_t ct_action = 0;
+
+    if (!nl_parse_nested(options, ct_policy, ct_attrs,
+                         ARRAY_SIZE(ct_policy))) {
+        VLOG_ERR_RL(&error_rl, "failed to parse ct action options");
+        return EPROTO;
+    }
+
+    ct_parms = ct_attrs[TCA_CT_PARMS];
+    ct = nl_attr_get_unspec(ct_parms, sizeof *ct);
+
+    if (ct_attrs[TCA_CT_ACTION]) {
+        ct_action = nl_attr_get_u16(ct_attrs[TCA_CT_ACTION]);
+    }
+
+    action = &flower->actions[flower->action_count++];
+    action->ct.clear = ct_action & TCA_CT_ACT_CLEAR;
+    if (!action->ct.clear) {
+        struct nlattr *zone = ct_attrs[TCA_CT_ZONE];
+
+        action->ct.commit = ct_action & TCA_CT_ACT_COMMIT;
+        action->ct.force = ct_action & TCA_CT_ACT_FORCE;
+
+        action->ct.zone = zone ? nl_attr_get_u16(zone) : 0;
+
+    }
+    action->type = TC_ACT_CT;
+
+    return 0;
+}
+
 static const struct nl_policy vlan_policy[] = {
     [TCA_VLAN_PARMS] = { .type = NL_A_UNSPEC,
                          .min_len = sizeof(struct tc_vlan),
@@ -1455,6 +1531,8 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
         nl_parse_act_csum(act_options, flower);
     } else if (!strcmp(act_kind, "skbedit")) {
         /* Added for TC rule only (not in OvS rule) so ignore. */
+    } else if (!strcmp(act_kind, "ct")) {
+        nl_parse_act_ct(act_options, flower);
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         err = EINVAL;
@@ -1910,6 +1988,40 @@ nl_msg_put_act_gact(struct ofpbuf *request, uint32_t chain)
 }
 
 static void
+nl_msg_put_act_ct(struct ofpbuf *request, struct tc_action *action)
+{
+    uint16_t ct_action = 0;
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "ct");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS | NLA_F_NESTED);
+    {
+        struct tc_ct ct = {
+                .action = TC_ACT_PIPE,
+        };
+
+        if (!action->ct.clear) {
+            if (action->ct.zone) {
+                nl_msg_put_u16(request, TCA_CT_ZONE, action->ct.zone);
+            }
+
+            if (action->ct.commit) {
+                ct_action = TCA_CT_ACT_COMMIT;
+                if (action->ct.force) {
+                    ct_action |= TCA_CT_ACT_FORCE;
+                }
+            }
+        } else {
+            ct_action = TCA_CT_ACT_CLEAR;
+        }
+
+        nl_msg_put_u16(request, TCA_CT_ACTION, ct_action);
+        nl_msg_put_unspec(request, TCA_CT_PARMS, &ct, sizeof ct);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
 nl_msg_put_act_skbedit_to_host(struct ofpbuf *request)
 {
     size_t offset;
@@ -2266,6 +2378,13 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 nl_msg_end_nested(request, act_offset);
             }
             break;
+            case TC_ACT_CT: {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_ct(request, action);
+                nl_msg_put_act_cookie(request, &flower->act_cookie);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
             }
         }
     }
@@ -2433,6 +2552,9 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
             FLOWER_PUT_MASKED_VALUE(sctp_src, TCA_FLOWER_KEY_SCTP_SRC);
             FLOWER_PUT_MASKED_VALUE(sctp_dst, TCA_FLOWER_KEY_SCTP_DST);
         }
+
+        FLOWER_PUT_MASKED_VALUE(ct_state, TCA_FLOWER_KEY_CT_STATE);
+        FLOWER_PUT_MASKED_VALUE(ct_zone, TCA_FLOWER_KEY_CT_ZONE);
     }
 
     if (host_eth_type == ETH_P_IP) {
