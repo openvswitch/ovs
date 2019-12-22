@@ -543,6 +543,15 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     return error;
 }
 
+int
+dpif_set_features(struct dpif *dpif, uint32_t new_features)
+{
+    int error = dpif->dpif_class->set_features(dpif, new_features);
+
+    log_operation(dpif, "set_features", error);
+    return error;
+}
+
 const char *
 dpif_port_open_type(const char *datapath_type, const char *port_type)
 {

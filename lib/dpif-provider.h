@@ -188,6 +188,8 @@ struct dpif_class {
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
+    int (*set_features)(struct dpif *dpif, uint32_t user_features);
+
     /* Adds 'netdev' as a new port in 'dpif'.  If '*port_no' is not
      * ODPP_NONE, attempts to use that as the port's port number.
      *
