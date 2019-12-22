@@ -66,6 +66,9 @@ struct offload_info {
     ovs_be16 tp_dst_port; /* Destination port for tunnel in SET action */
     uint8_t tunnel_csum_on; /* Tunnel header with checksum */
 
+    bool recirc_id_shared_with_tc;  /* Indicates whever tc chains will be in
+                                     * sync with datapath recirc ids. */
+
     /*
      * The flow mark id assigened to the flow. If any pkts hit the flow,
      * it will be in the pkt meta data.

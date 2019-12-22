@@ -156,10 +156,13 @@ enum tc_action_type {
     TC_ACT_MPLS_POP,
     TC_ACT_MPLS_PUSH,
     TC_ACT_MPLS_SET,
+    TC_ACT_GOTO,
 };
 
 struct tc_action {
     union {
+        int chain;
+
         struct {
             int ifindex_out;
             bool ingress;
@@ -214,6 +217,7 @@ struct tcf_id {
     enum tc_qdisc_hook hook;
     uint32_t block_id;
     int ifindex;
+    uint32_t chain;
     uint16_t prio;
     uint32_t handle;
 };
@@ -233,6 +237,17 @@ tc_make_tcf_id(int ifindex, uint32_t block_id, uint16_t prio,
     return id;
 }
 
+static inline struct tcf_id
+tc_make_tcf_id_chain(int ifindex, uint32_t block_id, uint32_t chain,
+                     uint16_t prio, enum tc_qdisc_hook hook)
+{
+    struct tcf_id id = tc_make_tcf_id(ifindex, block_id, prio, hook);
+
+    id.chain = chain;
+
+    return id;
+}
+
 static inline bool
 is_tcf_id_eq(struct tcf_id *id1, struct tcf_id *id2)
 {
@@ -241,7 +256,8 @@ is_tcf_id_eq(struct tcf_id *id1, struct tcf_id *id2)
            && id1->handle == id2->handle
            && id1->hook == id2->hook
            && id1->block_id == id2->block_id
-           && id1->ifindex == id2->ifindex;
+           && id1->ifindex == id2->ifindex
+           && id1->chain == id2->chain;
 }
 
 struct tc_flower {

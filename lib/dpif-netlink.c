@@ -110,6 +110,8 @@ static int dpif_netlink_dp_transact(const struct dpif_netlink_dp *request,
 static int dpif_netlink_dp_get(const struct dpif *,
                                struct dpif_netlink_dp *reply,
                                struct ofpbuf **bufp);
+static int
+dpif_netlink_set_features(struct dpif *dpif_, uint32_t new_features);
 
 struct dpif_netlink_flow {
     /* Generic Netlink header. */
@@ -363,7 +365,9 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     }
 
     error = open_dpif(&dp, dpifp);
+    dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
     ofpbuf_delete(buf);
+
     return error;
 }
 
@@ -1638,6 +1642,7 @@ dpif_netlink_netdev_match_to_dpif_flow(struct match *match,
         .mask = &match->wc.masks,
         .support = {
             .max_vlan_headers = 2,
+            .recirc = true,
         },
     };
     size_t offset;
@@ -2082,6 +2087,8 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     info.dpif_class = dpif_class;
     info.tp_dst_port = dst_port;
     info.tunnel_csum_on = csum_on;
+    info.recirc_id_shared_with_tc = (dpif->user_features
+                                     & OVS_DP_F_TC_RECIRC_SHARING);
     err = netdev_flow_put(dev, &match,
                           CONST_CAST(struct nlattr *, put->actions),
                           put->actions_len,

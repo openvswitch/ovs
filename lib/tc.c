@@ -51,6 +51,7 @@
 #endif
 
 #if TCA_MAX < 14
+#define TCA_CHAIN 11
 #define TCA_INGRESS_BLOCK 13
 #endif
 
@@ -207,6 +208,10 @@ static void request_from_tcf_id(struct tcf_id *id, uint16_t eth_type,
                         TC_EGRESS_PARENT : ingress_parent;
     tcmsg->tcm_info = tc_make_handle(id->prio, eth_type);
     tcmsg->tcm_handle = id->handle;
+
+    if (id->chain) {
+        nl_msg_put_u32(request, TCA_CHAIN, id->chain);
+    }
 }
 
 int
@@ -286,6 +291,7 @@ tc_add_del_qdisc(int ifindex, bool add, uint32_t block_id,
 static const struct nl_policy tca_policy[] = {
     [TCA_KIND] = { .type = NL_A_STRING, .optional = false, },
     [TCA_OPTIONS] = { .type = NL_A_NESTED, .optional = false, },
+    [TCA_CHAIN] = { .type = NL_A_U32, .optional = true, },
     [TCA_STATS] = { .type = NL_A_UNSPEC,
                     .min_len = sizeof(struct tc_stats), .optional = true, },
     [TCA_STATS2] = { .type = NL_A_NESTED, .optional = true, },
@@ -1135,12 +1141,13 @@ nl_parse_tcf(const struct tcf_t *tm, struct tc_flower *flower)
 }
 
 static int
-nl_parse_act_drop(struct nlattr *options, struct tc_flower *flower)
+nl_parse_act_gact(struct nlattr *options, struct tc_flower *flower)
 {
     struct nlattr *gact_attrs[ARRAY_SIZE(gact_policy)];
     const struct tc_gact *p;
     struct nlattr *gact_parms;
     const struct tcf_t *tm;
+    struct tc_action *action;
 
     if (!nl_parse_nested(options, gact_policy, gact_attrs,
                          ARRAY_SIZE(gact_policy))) {
@@ -1151,7 +1158,11 @@ nl_parse_act_drop(struct nlattr *options, struct tc_flower *flower)
     gact_parms = gact_attrs[TCA_GACT_PARMS];
     p = nl_attr_get_unspec(gact_parms, sizeof *p);
 
-    if (p->action != TC_ACT_SHOT) {
+    if (TC_ACT_EXT_CMP(p->action, TC_ACT_GOTO_CHAIN)) {
+        action = &flower->actions[flower->action_count++];
+        action->chain = p->action & TC_ACT_EXT_VAL_MASK;
+        action->type = TC_ACT_GOTO;
+    } else if (p->action != TC_ACT_SHOT) {
         VLOG_ERR_RL(&error_rl, "unknown gact action: %d", p->action);
         return EINVAL;
     }
@@ -1429,7 +1440,7 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     act_cookie = action_attrs[TCA_ACT_COOKIE];
 
     if (!strcmp(act_kind, "gact")) {
-        err = nl_parse_act_drop(act_options, flower);
+        err = nl_parse_act_gact(act_options, flower);
     } else if (!strcmp(act_kind, "mirred")) {
         err = nl_parse_act_mirred(act_options, flower);
     } else if (!strcmp(act_kind, "vlan")) {
@@ -1578,6 +1589,10 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
                          tca_policy, ta, ARRAY_SIZE(ta))) {
         VLOG_ERR_RL(&error_rl, "failed to parse tca policy");
         return EPROTO;
+    }
+
+    if (ta[TCA_CHAIN]) {
+        id->chain = nl_attr_get_u32(ta[TCA_CHAIN]);
     }
 
     kind = nl_attr_get_string(ta[TCA_KIND]);
@@ -1876,7 +1891,7 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, bool id_present,
 }
 
 static void
-nl_msg_put_act_drop(struct ofpbuf *request)
+nl_msg_put_act_gact(struct ofpbuf *request, uint32_t chain)
 {
     size_t offset;
 
@@ -1884,6 +1899,10 @@ nl_msg_put_act_drop(struct ofpbuf *request)
     offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
     {
         struct tc_gact p = { .action = TC_ACT_SHOT };
+
+        if (chain) {
+            p.action = TC_ACT_GOTO_CHAIN | chain;
+        }
 
         nl_msg_put_unspec(request, TCA_GACT_PARMS, &p, sizeof p);
     }
@@ -2230,12 +2249,30 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 nl_msg_end_nested(request, act_offset);
             }
             break;
+            case TC_ACT_GOTO: {
+                if (released) {
+                    /* We don't support tunnel release + output + goto
+                     * for now, as next chain by default will try and match
+                     * the tunnel metadata that was released/unset.
+                     *
+                     * This will happen with tunnel + mirror ports.
+                     */
+                    return -EOPNOTSUPP;
+                }
+
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_gact(request, action->chain);
+                nl_msg_put_act_cookie(request, &flower->act_cookie);
+                nl_msg_end_nested(request, act_offset);
+            }
+            break;
             }
         }
     }
-    if (!ifindex) {
+
+    if (!flower->action_count) {
         act_offset = nl_msg_start_nested(request, act_index++);
-        nl_msg_put_act_drop(request);
+        nl_msg_put_act_gact(request, 0);
         nl_msg_put_act_cookie(request, &flower->act_cookie);
         nl_msg_put_act_flags(request);
         nl_msg_end_nested(request, act_offset);

@@ -38,6 +38,7 @@
 #include "tc.h"
 #include "unaligned.h"
 #include "util.h"
+#include "dpif-provider.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
@@ -206,9 +207,12 @@ static void
 add_ufid_tc_mapping(struct netdev *netdev, const ovs_u128 *ufid,
                     struct tcf_id *id)
 {
-    size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
-    size_t tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
     struct ufid_tc_data *new_data = xzalloc(sizeof *new_data);
+    size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
+    size_t tc_hash;
+
+    tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
+    tc_hash = hash_int(id->chain, tc_hash);
 
     new_data->ufid = *ufid;
     new_data->id = *id;
@@ -252,8 +256,11 @@ get_ufid_tc_mapping(const ovs_u128 *ufid, struct tcf_id *id)
 static bool
 find_ufid(struct netdev *netdev, struct tcf_id *id, ovs_u128 *ufid)
 {
-    size_t tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
     struct ufid_tc_data *data;
+    size_t tc_hash;
+
+    tc_hash = hash_int(hash_int(id->prio, id->handle), id->ifindex);
+    tc_hash = hash_int(id->chain, tc_hash);
 
     ovs_mutex_lock(&ufid_lock);
     HMAP_FOR_EACH_WITH_HASH (data, tc_to_ufid_node, tc_hash,  &tc_to_ufid) {
@@ -739,6 +746,10 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 nl_msg_put_u32(buf, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(outport));
             }
             break;
+            case TC_ACT_GOTO: {
+                nl_msg_put_u32(buf, OVS_ACTION_ATTR_RECIRC, action->chain);
+            }
+            break;
             }
         }
     }
@@ -799,6 +810,7 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
 
         match->wc.masks.in_port.odp_port = u32_to_odp(UINT32_MAX);
         match->flow.in_port.odp_port = dump->port;
+        match_set_recirc_id(match, id.chain);
 
         return true;
     }
@@ -983,12 +995,6 @@ test_key_and_mask(struct match *match)
         return EOPNOTSUPP;
     }
 
-    if (mask->recirc_id && key->recirc_id) {
-        VLOG_DBG_RL(&rl, "offloading attribute recirc_id isn't supported");
-        return EOPNOTSUPP;
-    }
-    mask->recirc_id = 0;
-
     if (mask->dp_hash) {
         VLOG_DBG_RL(&rl, "offloading attribute dp_hash isn't supported");
         return EOPNOTSUPP;
@@ -1156,6 +1162,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     uint32_t block_id = 0;
     struct nlattr *nla;
     struct tcf_id id;
+    bool recirc_act;
+    uint32_t chain;
     size_t left;
     int prio = 0;
     int ifindex;
@@ -1169,6 +1177,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     }
 
     memset(&flower, 0, sizeof flower);
+
+    chain = key->recirc_id;
+    mask->recirc_id = 0;
 
     if (flow_tnl_dst_is_set(&key->tunnel)) {
         VLOG_DBG_RL(&rl,
@@ -1420,11 +1431,21 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             if (err) {
                 return err;
             }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_RECIRC) {
+            action->type = TC_ACT_GOTO;
+            action->chain = nl_attr_get_u32(nla);
+            flower.action_count++;
+            recirc_act = true;
         } else {
             VLOG_DBG_RL(&rl, "unsupported put action type: %d",
                         nl_attr_type(nla));
             return EOPNOTSUPP;
         }
+    }
+
+    if ((chain || recirc_act) && !info->recirc_id_shared_with_tc) {
+        VLOG_ERR_RL(&error_rl, "flow_put: recirc_id sharing not supported");
+        return EOPNOTSUPP;
     }
 
     if (get_ufid_tc_mapping(ufid, &id) == 0) {
@@ -1443,7 +1464,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     flower.act_cookie.len = sizeof *ufid;
 
     block_id = get_block_id_from_netdev(netdev);
-    id = tc_make_tcf_id(ifindex, block_id, prio, hook);
+    id = tc_make_tcf_id_chain(ifindex, block_id, chain, prio, hook);
     err = tc_replace_flower(&id, &flower);
     if (!err) {
         if (stats) {
@@ -1491,6 +1512,7 @@ netdev_tc_flow_get(struct netdev *netdev,
 
     match->wc.masks.in_port.odp_port = u32_to_odp(UINT32_MAX);
     match->flow.in_port.odp_port = in_port;
+    match_set_recirc_id(match, id.chain);
 
     return 0;
 }
