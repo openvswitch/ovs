@@ -44,7 +44,21 @@ enum {
 #define TC_ACT_QUEUED		5
 #define TC_ACT_REPEAT		6
 #define TC_ACT_REDIRECT		7
-#define TC_ACT_JUMP		0x10000000
+
+/* There is a special kind of actions called "extended actions",
+ * which need a value parameter. These have a local opcode located in
+ * the highest nibble, starting from 1. The rest of the bits
+ * are used to carry the value. These two parts together make
+ * a combined opcode.
+ */
+#define __TC_ACT_EXT_SHIFT 28
+#define __TC_ACT_EXT(local) ((local) << __TC_ACT_EXT_SHIFT)
+#define TC_ACT_EXT_VAL_MASK ((1 << __TC_ACT_EXT_SHIFT) - 1)
+#define TC_ACT_EXT_CMP(combined, opcode) \
+	(((combined) & (~TC_ACT_EXT_VAL_MASK)) == opcode)
+
+#define TC_ACT_JUMP __TC_ACT_EXT(1)
+#define TC_ACT_GOTO_CHAIN __TC_ACT_EXT(2)
 
 struct tc_police {
 	__u32			index;
@@ -207,14 +221,40 @@ enum {
 	TCA_FLOWER_KEY_CVLAN_PRIO,	/* u8   */
 	TCA_FLOWER_KEY_CVLAN_ETH_TYPE,	/* be16 */
 
-	TCA_FLOWER_KEY_ENC_IP_TOS,	    /* u8 */
+	TCA_FLOWER_KEY_ENC_IP_TOS,	/* u8 */
 	TCA_FLOWER_KEY_ENC_IP_TOS_MASK,	/* u8 */
-	TCA_FLOWER_KEY_ENC_IP_TTL,		/* u8 */
+	TCA_FLOWER_KEY_ENC_IP_TTL,	/* u8 */
 	TCA_FLOWER_KEY_ENC_IP_TTL_MASK,	/* u8 */
+
 	TCA_FLOWER_KEY_ENC_OPTS,
 	TCA_FLOWER_KEY_ENC_OPTS_MASK,
 
+	TCA_FLOWER_IN_HW_COUNT,
+
+	TCA_FLOWER_KEY_PORT_SRC_MIN,	/* be16 */
+	TCA_FLOWER_KEY_PORT_SRC_MAX,	/* be16 */
+	TCA_FLOWER_KEY_PORT_DST_MIN,	/* be16 */
+	TCA_FLOWER_KEY_PORT_DST_MAX,	/* be16 */
+
+	TCA_FLOWER_KEY_CT_STATE,	/* u16 */
+	TCA_FLOWER_KEY_CT_STATE_MASK,	/* u16 */
+	TCA_FLOWER_KEY_CT_ZONE,		/* u16 */
+	TCA_FLOWER_KEY_CT_ZONE_MASK,	/* u16 */
+	TCA_FLOWER_KEY_CT_MARK,		/* u32 */
+	TCA_FLOWER_KEY_CT_MARK_MASK,	/* u32 */
+	TCA_FLOWER_KEY_CT_LABELS,	/* u128 */
+	TCA_FLOWER_KEY_CT_LABELS_MASK,	/* u128 */
+
 	__TCA_FLOWER_MAX,
+};
+
+#define TCA_FLOWER_MAX (__TCA_FLOWER_MAX - 1)
+
+enum {
+	TCA_FLOWER_KEY_CT_FLAGS_NEW = 1 << 0, /* Beginning of a new connection. */
+	TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED = 1 << 1, /* Part of an existing connection. */
+	TCA_FLOWER_KEY_CT_FLAGS_RELATED = 1 << 2, /* Related to an established connection. */
+	TCA_FLOWER_KEY_CT_FLAGS_TRACKED = 1 << 3, /* Conntrack has occurred. */
 };
 
 enum {
