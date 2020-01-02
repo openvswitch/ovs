@@ -9,7 +9,7 @@ freebsd_build_task:
 
   env:
     DEPENDENCIES: automake libtool gmake gcc wget openssl
-                  python3 py36-openssl py36-sphinx
+                  python3 py37-openssl py37-sphinx
     matrix:
       COMPILER: gcc
       COMPILER: clang
