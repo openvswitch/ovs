@@ -1365,10 +1365,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     const struct flow_tnl *tnl = &match->flow.tunnel;
     const struct flow_tnl *tnl_mask = &mask->tunnel;
     struct tc_action *action;
+    bool recirc_act = false;
     uint32_t block_id = 0;
     struct nlattr *nla;
     struct tcf_id id;
-    bool recirc_act;
     uint32_t chain;
     size_t left;
     int prio = 0;
