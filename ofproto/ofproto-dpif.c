@@ -1073,7 +1073,6 @@ check_masked_set_action(struct dpif_backer *backer)
 {
     struct eth_header *eth;
     struct ofpbuf actions;
-    struct dpif_execute execute;
     struct dp_packet packet;
     struct flow flow;
     int error;
@@ -1098,14 +1097,13 @@ check_masked_set_action(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -1127,7 +1125,6 @@ check_trunc_action(struct dpif_backer *backer)
 {
     struct eth_header *eth;
     struct ofpbuf actions;
-    struct dpif_execute execute;
     struct dp_packet packet;
     struct ovs_action_trunc *trunc;
     struct flow flow;
@@ -1152,14 +1149,13 @@ check_trunc_action(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -1181,7 +1177,6 @@ check_trunc_action(struct dpif_backer *backer)
 static bool
 check_clone(struct dpif_backer *backer)
 {
-    struct dpif_execute execute;
     struct eth_header *eth;
     struct flow flow;
     struct dp_packet packet;
@@ -1204,14 +1199,13 @@ check_clone(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -1233,7 +1227,6 @@ check_clone(struct dpif_backer *backer)
 static bool
 check_ct_eventmask(struct dpif_backer *backer)
 {
-    struct dpif_execute execute;
     struct dp_packet packet;
     struct ofpbuf actions;
     struct flow flow = {
@@ -1266,14 +1259,13 @@ check_ct_eventmask(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -1328,7 +1320,6 @@ check_ct_clear(struct dpif_backer *backer)
 static bool
 check_ct_timeout_policy(struct dpif_backer *backer)
 {
-    struct dpif_execute execute;
     struct dp_packet packet;
     struct ofpbuf actions;
     struct flow flow = {
@@ -1361,14 +1352,13 @@ check_ct_timeout_policy(struct dpif_backer *backer)
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -1480,7 +1470,6 @@ check_nd_extensions(struct dpif_backer *backer)
 {
     struct eth_header *eth;
     struct ofpbuf actions;
-    struct dpif_execute execute;
     struct dp_packet packet;
     struct flow flow;
     int error;
@@ -1500,14 +1489,13 @@ check_nd_extensions(struct dpif_backer *backer)
     flow_extract(&packet, &flow);
 
     /* Execute the actions.  On datapaths without support fails with EINVAL. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
+    struct dpif_execute execute = {
+        .actions = actions.data,
+        .actions_len = actions.size,
+        .packet = &packet,
+        .flow = &flow,
+        .probe = true,
+    };
     error = dpif_execute(backer->dpif, &execute);
 
     dp_packet_uninit(&packet);
@@ -4160,7 +4148,6 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
-    struct dpif_execute execute;
     int error;
 
     ovs_assert((rule != NULL) != (ofpacts != NULL));
@@ -4185,15 +4172,15 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
         goto out;
     }
 
-    execute.actions = odp_actions.data;
-    execute.actions_len = odp_actions.size;
-
     pkt_metadata_from_flow(&packet->md, flow);
-    execute.packet = packet;
-    execute.flow = flow;
-    execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
-    execute.probe = false;
-    execute.mtu = 0;
+
+    struct dpif_execute execute = {
+        .actions = odp_actions.data,
+        .actions_len = odp_actions.size,
+        .packet = packet,
+        .flow = flow,
+        .needs_help = (xout.slow & SLOW_ACTION) != 0,
+    };
 
     /* Fix up in_port. */
     ofproto_dpif_set_packet_odp_port(ofproto, flow->in_port.ofp_port, packet);
