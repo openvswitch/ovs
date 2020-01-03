@@ -271,13 +271,12 @@ static inline struct tcf_id
 tc_make_tcf_id(int ifindex, uint32_t block_id, uint16_t prio,
                enum tc_qdisc_hook hook)
 {
-    struct tcf_id id;
-
-    id.block_id = block_id;
-    id.ifindex = ifindex;
-    id.prio = prio;
-    id.hook = hook;
-    id.handle = 0;
+    struct tcf_id id = {
+        .hook = hook,
+        .block_id = block_id,
+        .ifindex = ifindex,
+        .prio = prio,
+    };
 
     return id;
 }
