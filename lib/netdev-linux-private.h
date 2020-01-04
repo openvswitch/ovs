@@ -101,6 +101,8 @@ struct netdev_linux {
     /* LAG information. */
     bool is_lag_master;         /* True if the netdev is a LAG master. */
 
+    int numa_id;                /* NUMA node id. */
+
 #ifdef HAVE_AF_XDP
     /* AF_XDP information. */
     struct xsk_socket_info **xsks;

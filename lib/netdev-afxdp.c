@@ -703,17 +703,6 @@ out:
     return err;
 }
 
-int
-netdev_afxdp_get_numa_id(const struct netdev *netdev)
-{
-    /* FIXME: Get netdev's PCIe device ID, then find
-     * its NUMA node id.
-     */
-    VLOG_INFO("FIXME: Device %s always use numa id 0.",
-              netdev_get_name(netdev));
-    return 0;
-}
-
 static void
 xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode mode)
 {

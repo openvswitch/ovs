@@ -327,7 +327,6 @@ Below is a script using namespaces and veth peer::
 
 Limitations/Known Issues
 ------------------------
-#. Device's numa ID is always 0, need a way to find numa id from a netdev.
 #. No QoS support because AF_XDP netdev by-pass the Linux TC layer. A possible
    work-around is to use OpenFlow meter action.
 #. Most of the tests are done using i40e single port. Multiple ports and

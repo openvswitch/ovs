@@ -67,6 +67,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
+#include "ovs-numa.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
 #include "rtnetlink.h"
@@ -239,6 +240,7 @@ enum {
     VALID_VPORT_STAT_ERROR  = 1 << 5,
     VALID_DRVINFO           = 1 << 6,
     VALID_FEATURES          = 1 << 7,
+    VALID_NUMA_ID           = 1 << 8,
 };
 
 /* Use one for the packet buffer and another for the aux buffer to receive
@@ -835,9 +837,9 @@ netdev_linux_update__(struct netdev_linux *dev,
 {
     if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)) {
         if (change->nlmsg_type == RTM_NEWLINK) {
-            /* Keep drv-info, and ip addresses. */
+            /* Keep drv-info, ip addresses, and NUMA id. */
             netdev_linux_changed(dev, change->ifi_flags,
-                                 VALID_DRVINFO | VALID_IN);
+                                 VALID_DRVINFO | VALID_IN | VALID_NUMA_ID);
 
             /* Update netdev from rtnl-change msg. */
             if (change->mtu) {
@@ -1581,6 +1583,71 @@ netdev_linux_tap_batch_send(struct netdev *netdev_, bool tso, int mtu,
         }
     }
     return 0;
+}
+
+static int
+netdev_linux_get_numa_id__(struct netdev_linux *netdev)
+    OVS_REQUIRES(netdev->mutex)
+{
+    char *numa_node_path;
+    const char *name;
+    int node_id;
+    FILE *stream;
+
+    if (netdev->cache_valid & VALID_NUMA_ID) {
+        return netdev->numa_id;
+    }
+
+    netdev->numa_id = 0;
+    netdev->cache_valid |= VALID_NUMA_ID;
+
+    if (ovs_numa_get_n_numas() < 2) {
+        /* No need to check on system with a single NUMA node. */
+        return 0;
+    }
+
+    name = netdev_get_name(&netdev->up);
+    if (strpbrk(name, "/\\")) {
+        VLOG_ERR_RL(&rl, "\"%s\" is not a valid name for a port. "
+                    "A valid name must not include '/' or '\\'."
+                    "Using numa_id 0", name);
+        return 0;
+    }
+
+    numa_node_path = xasprintf("/sys/class/net/%s/device/numa_node", name);
+
+    stream = fopen(numa_node_path, "r");
+    if (!stream) {
+        /* Virtual device does not have this info. */
+        VLOG_INFO_RL(&rl, "%s: Can't open '%s': %s, using numa_id 0",
+                     name, numa_node_path, ovs_strerror(errno));
+        free(numa_node_path);
+        return 0;
+    }
+
+    if (fscanf(stream, "%d", &node_id) != 1
+        || !ovs_numa_numa_id_is_valid(node_id))  {
+        VLOG_WARN_RL(&rl, "%s: Can't detect NUMA node, using numa_id 0", name);
+        node_id = 0;
+    }
+
+    netdev->numa_id = node_id;
+    fclose(stream);
+    free(numa_node_path);
+    return node_id;
+}
+
+static int OVS_UNUSED
+netdev_linux_get_numa_id(const struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int numa_id;
+
+    ovs_mutex_lock(&netdev->mutex);
+    numa_id = netdev_linux_get_numa_id__(netdev);
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return numa_id;
 }
 
 /* Sends 'batch' on 'netdev'.  Returns 0 if successful, otherwise a positive
@@ -3509,7 +3576,7 @@ const struct netdev_class netdev_afxdp_class = {
     .set_config = netdev_afxdp_set_config,
     .get_config = netdev_afxdp_get_config,
     .reconfigure = netdev_afxdp_reconfigure,
-    .get_numa_id = netdev_afxdp_get_numa_id,
+    .get_numa_id = netdev_linux_get_numa_id,
     .send = netdev_afxdp_batch_send,
     .rxq_construct = netdev_afxdp_rxq_construct,
     .rxq_destruct = netdev_afxdp_rxq_destruct,
