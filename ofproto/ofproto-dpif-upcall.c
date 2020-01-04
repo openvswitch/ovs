@@ -786,6 +786,7 @@ recv_upcalls(struct handler *handler)
         struct upcall *upcall = &upcalls[n_upcalls];
         struct flow *flow = &flows[n_upcalls];
         unsigned int mru = 0;
+        uint64_t hash = 0;
         int error;
 
         ofpbuf_use_stub(recv_buf, recv_stubs[n_upcalls],
@@ -806,7 +807,7 @@ recv_upcalls(struct handler *handler)
         }
 
         if (dupcall->hash) {
-            upcall->hash = nl_attr_get_u64(dupcall->hash);
+            hash = nl_attr_get_u64(dupcall->hash);
         }
 
         error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
@@ -830,6 +831,7 @@ recv_upcalls(struct handler *handler)
         upcall->key = dupcall->key;
         upcall->key_len = dupcall->key_len;
         upcall->ufid = &dupcall->ufid;
+        upcall->hash = hash;
 
         upcall->out_tun_key = dupcall->out_tun_key;
         upcall->actions = dupcall->actions;
