@@ -164,7 +164,7 @@ If a test case fails, check the log at::
 
 Setup AF_XDP netdev
 -------------------
-Before running OVS with AF_XDP, make sure the libbpf and libelf are
+Before running OVS with AF_XDP, make sure the libbpf, libelf, and libnuma are
 set-up right::
 
   ldd vswitchd/ovs-vswitchd
