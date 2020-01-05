@@ -874,16 +874,17 @@ kick_tx(struct xsk_socket_info *xsk_info, enum afxdp_mode mode,
         return 0;
     }
 
-    /* In generic mode packet transmission is synchronous, and the kernel xmits
-     * only TX_BATCH_SIZE(16) packets for a single sendmsg syscall.
+    /* In all modes except native-with-zerocopy packet transmission is
+     * synchronous, and the kernel xmits only TX_BATCH_SIZE(16) packets for a
+     * single sendmsg syscall.
      * So, we have to kick the kernel (n_packets / 16) times to be sure that
      * all packets are transmitted. */
-    retries = (mode == OVS_AF_XDP_MODE_GENERIC)
+    retries = (mode != OVS_AF_XDP_MODE_NATIVE_ZC)
               ? xsk_info->outstanding_tx / KERNEL_TX_BATCH_SIZE
               : 0;
 kick_retry:
-    /* This causes system call into kernel's xsk_sendmsg, and
-     * xsk_generic_xmit (skb mode) or xsk_async_xmit (driver mode).
+    /* This causes system call into kernel's xsk_sendmsg, and xsk_generic_xmit
+     * (generic and native modes) or xsk_zc_xmit (native-with-zerocopy mode).
      */
     ret = sendto(xsk_socket__fd(xsk_info->xsk), NULL, 0, MSG_DONTWAIT,
                                 NULL, 0);
