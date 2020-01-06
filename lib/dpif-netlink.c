@@ -2176,8 +2176,8 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
             break;
         }
 
-        log_flow_put_message(&dpif->dpif, &this_module, put, 0);
         err = parse_flow_put(dpif, put);
+        log_flow_put_message(&dpif->dpif, &this_module, put, 0);
         break;
     }
     case DPIF_OP_FLOW_DEL: {
@@ -2187,9 +2187,9 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
             break;
         }
 
-        log_flow_del_message(&dpif->dpif, &this_module, del, 0);
         err = netdev_ports_flow_del(dpif->dpif.dpif_class, del->ufid,
                                     del->stats);
+        log_flow_del_message(&dpif->dpif, &this_module, del, 0);
         break;
     }
     case DPIF_OP_FLOW_GET: {
@@ -2199,8 +2199,8 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
             break;
         }
 
-        log_flow_get_message(&dpif->dpif, &this_module, get, 0);
         err = parse_flow_get(dpif, get);
+        log_flow_get_message(&dpif->dpif, &this_module, get, 0);
         break;
     }
     case DPIF_OP_EXECUTE:
