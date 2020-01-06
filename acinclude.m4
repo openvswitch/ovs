@@ -969,6 +969,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_DEFINE([HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE])])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6_frag.h], [IP6_DEFRAG_CONNTRACK_IN],
                   [OVS_DEFINE([HAVE_IPV6_FRAG_H])])
+  OVS_GREP_IFELSE([$KSRC/include/net/dst_ops.h], [bool confirm_neigh],
+                  [OVS_DEFINE([HAVE_DST_OPS_CONFIRM_NEIGH])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
