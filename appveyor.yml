@@ -11,15 +11,15 @@ init:
 
     mkdir C:\ovs-build-downloads
 
-    $source = "ftp://sourceware.org/pub/pthreads-win32/pthreads-w32-2-9-1-release.zip"
+    $source = "https://sourceware.org/pub/pthreads-win32/pthreads-w32-2-9-1-release.zip"
 
     $destination = "C:\pthreads-win32\pthreads-win32.zip"
 
     Invoke-WebRequest $source -OutFile $destination
 
-    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2t.exe"
+    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2u.exe"
 
-    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2t.exe"
+    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2u.exe"
 
     Invoke-WebRequest $source -OutFile $destination
 
@@ -29,7 +29,7 @@ init:
 
     cd C:\ovs-build-downloads
 
-    .\Win32OpenSSL-1_0_2t.exe /silent /verysilent /sp- /suppressmsgboxes
+    .\Win32OpenSSL-1_0_2u.exe /silent /verysilent /sp- /suppressmsgboxes
 
     Start-Sleep -s 30
 
@@ -46,3 +46,9 @@ build_script:
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make datapath_windows_analyze"
+- 7z a ovs-windows.zip C:\openvswitch
+
+artifacts:
+  - path: ovs-windows.zip
+    name: ovs-windows
+
