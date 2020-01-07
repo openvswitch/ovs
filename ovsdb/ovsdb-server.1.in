@@ -288,6 +288,11 @@ Switches the server to an active role.  The server stops synchronizing
 its databases with an active server and closes all existing client
 connections, which requires clients to reconnect.
 .
+.IP "\fBovsdb\-server/set\-active\-ovsdb\-server\-probe\-interval \fIprobe interval"
+Sets  the probe interval (in milli seconds) for the connection to
+active \fIserver\fR.
+.
+.
 .IP "\fBovsdb\-server/set\-sync\-exclude\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
 Sets the \fItable\fR within \fIdb\fR that will be excluded from synchronization.
 This overrides the \fB\-\-sync\-exclude-tables\fR command-line option.

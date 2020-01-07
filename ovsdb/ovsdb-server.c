@@ -86,6 +86,7 @@ static unixctl_cb_func ovsdb_server_set_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_get_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_connect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_disconnect_active_ovsdb_server;
+static unixctl_cb_func ovsdb_server_set_active_ovsdb_server_probe_interval;
 static unixctl_cb_func ovsdb_server_set_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_status;
@@ -97,6 +98,7 @@ struct server_config {
     char **sync_from;
     char **sync_exclude;
     bool *is_backup;
+    int *replication_probe_interval;
     struct ovsdb_jsonrpc_server *jsonrpc;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
@@ -144,9 +146,10 @@ static void load_config(FILE *config_file, struct sset *remotes,
 
 static void
 ovsdb_replication_init(const char *sync_from, const char *exclude,
-                       struct shash *all_dbs, const struct uuid *server_uuid)
+                       struct shash *all_dbs, const struct uuid *server_uuid,
+                       int probe_interval)
 {
-    replication_init(sync_from, exclude, server_uuid);
+    replication_init(sync_from, exclude, server_uuid, probe_interval);
     struct shash_node *node;
     SHASH_FOR_EACH (node, all_dbs) {
         struct db *db = node->data;
@@ -304,6 +307,7 @@ main(int argc, char *argv[])
     struct server_config server_config;
     struct shash all_dbs;
     struct shash_node *node, *next;
+    int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -351,6 +355,7 @@ main(int argc, char *argv[])
     server_config.sync_from = &sync_from;
     server_config.sync_exclude = &sync_exclude;
     server_config.is_backup = &is_backup;
+    server_config.replication_probe_interval = &replication_probe_interval;
 
     perf_counters_init();
 
@@ -436,6 +441,9 @@ main(int argc, char *argv[])
     unixctl_command_register("ovsdb-server/disconnect-active-ovsdb-server", "",
                              0, 0, ovsdb_server_disconnect_active_ovsdb_server,
                              &server_config);
+    unixctl_command_register(
+        "ovsdb-server/set-active-ovsdb-server-probe-interval", "", 1, 1,
+        ovsdb_server_set_active_ovsdb_server_probe_interval, &server_config);
     unixctl_command_register("ovsdb-server/set-sync-exclude-tables", "",
                              0, 1, ovsdb_server_set_sync_exclude_tables,
                              &server_config);
@@ -454,7 +462,8 @@ main(int argc, char *argv[])
     if (is_backup) {
         const struct uuid *server_uuid;
         server_uuid = ovsdb_jsonrpc_server_get_uuid(jsonrpc);
-        ovsdb_replication_init(sync_from, sync_exclude, &all_dbs, server_uuid);
+        ovsdb_replication_init(sync_from, sync_exclude, &all_dbs, server_uuid,
+                               replication_probe_interval);
     }
 
     main_loop(&server_config, jsonrpc, &all_dbs, unixctl, &remotes,
@@ -1317,7 +1326,8 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
         const struct uuid *server_uuid;
         server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
         ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                               config->all_dbs, server_uuid);
+                               config->all_dbs, server_uuid,
+                               *config->replication_probe_interval);
         if (!*config->is_backup) {
             *config->is_backup = true;
             save_config(config);
@@ -1341,6 +1351,28 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
 }
 
 static void
+ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
+                                                   int argc OVS_UNUSED,
+                                                   const char *argv[],
+                                                   void *config_)
+{
+    struct server_config *config = config_;
+
+    int probe_interval;
+    if (str_to_int(argv[1], 10, &probe_interval)) {
+        *config->replication_probe_interval = probe_interval;
+        save_config(config);
+        if (*config->is_backup) {
+            replication_set_probe_interval(probe_interval);
+        }
+        unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply(
+            conn, "Invalid probe interval, integer value expected");
+    }
+}
+
+static void
 ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED,
                                      const char *argv[],
@@ -1357,7 +1389,8 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
             const struct uuid *server_uuid;
             server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
             ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                                   config->all_dbs, server_uuid);
+                                   config->all_dbs, server_uuid,
+                                   *config->replication_probe_interval);
         }
         err = set_blacklist_tables(argv[1], false);
     }
@@ -1568,7 +1601,8 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
             const struct uuid *server_uuid;
             server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
             ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                                   config->all_dbs, server_uuid);
+                                   config->all_dbs, server_uuid,
+                                   *config->replication_probe_interval);
         }
         unixctl_command_reply(conn, NULL);
     } else {
@@ -1590,7 +1624,8 @@ remove_db(struct server_config *config, struct shash_node *node, char *comment)
         const struct uuid *server_uuid;
         server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
         ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                               config->all_dbs, server_uuid);
+                               config->all_dbs, server_uuid,
+                               *config->replication_probe_interval);
     }
 }
 

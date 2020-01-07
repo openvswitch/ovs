@@ -29,6 +29,11 @@ Post-v2.12.0
    - RSTP:
      * The rstp_statistics column in Port table will only be updated every
        stats-update-interval configured in Open_vSwtich table.
+   - OVSDB:
+     * When ovsdb-server is running in backup mode, the default value of probe
+       interval is increased to 60 seconds for the connection to the
+       replication server. This value is configurable with the unixctl
+       command - ovsdb-server/set-active-ovsdb-server-probe-interval.
 
 v2.12.0 - 03 Sep 2019
 ---------------------

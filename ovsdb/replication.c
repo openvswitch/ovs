@@ -125,7 +125,7 @@ static struct replication_db *find_db(const char *db_name);
 
 void
 replication_init(const char *sync_from_, const char *exclude_tables,
-                 const struct uuid *server)
+                 const struct uuid *server, int probe_interval)
 {
     free(sync_from);
     sync_from = xstrdup(sync_from_);
@@ -142,6 +142,8 @@ replication_init(const char *sync_from_, const char *exclude_tables,
 
     session = jsonrpc_session_open(sync_from, true);
     session_seqno = UINT_MAX;
+
+    jsonrpc_session_set_probe_interval(session, probe_interval);
 
     /* Keep a copy of local server uuid.  */
     server_uuid = *server;
@@ -977,6 +979,14 @@ is_replication_possible(struct ovsdb_schema *local_db_schema,
     }
 
     return true;
+}
+
+void
+replication_set_probe_interval(int probe_interval)
+{
+    if (session) {
+        jsonrpc_session_set_probe_interval(session, probe_interval);
+    }
 }
 
 void
