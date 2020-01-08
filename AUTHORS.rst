@@ -221,7 +221,7 @@ Kyle Mestery                       mestery@mestery.com
 Kyle Simpson                       kyleandrew.simpson@gmail.com
 Kyle Upton                         kupton@baymicrosystems.com
 Lance Yang                         lance.yang@arm.com
-Lance Richardson                   lrichard@redhat.com
+Lance Richardson                   lance.richardson@broadcom.com
 Lars Kellogg-Stedman               lars@redhat.com
 Lei Huang                          huang.f.lei@gmail.com
 Leif Madsen                        lmadsen@redhat.com
