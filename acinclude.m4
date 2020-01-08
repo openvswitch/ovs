@@ -378,14 +378,14 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
       OVS_FIND_DEPENDENCY([mnl_attr_put], [mnl], [libmnl])
-      AC_CHECK_DECL([RTE_LIBRTE_MLX5_DLOPEN_DEPS], [], [dnl not found
+      AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx5dv_create_wq], [mlx5], [libmlx5])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
 
     AC_CHECK_DECL([RTE_LIBRTE_MLX4_PMD], [dnl found
-      AC_CHECK_DECL([RTE_LIBRTE_MLX4_DLOPEN_DEPS], [], [dnl not found
+      AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx4dv_init_obj], [mlx4], [libmlx4])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
       ], [[#include <rte_config.h>]])
