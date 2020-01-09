@@ -57,6 +57,7 @@ struct ufid_to_rte_flow_data {
     ovs_u128 ufid;
     struct rte_flow *rte_flow;
     bool actions_offloaded;
+    struct dpif_flow_stats stats;
 };
 
 /* Find rte_flow with @ufid. */
@@ -964,9 +965,55 @@ netdev_offload_dpdk_init_flow_api(struct netdev *netdev)
     return netdev_dpdk_flow_api_supported(netdev) ? 0 : EOPNOTSUPP;
 }
 
+static int
+netdev_offload_dpdk_flow_get(struct netdev *netdev,
+                             struct match *match OVS_UNUSED,
+                             struct nlattr **actions OVS_UNUSED,
+                             const ovs_u128 *ufid,
+                             struct dpif_flow_stats *stats,
+                             struct dpif_flow_attrs *attrs,
+                             struct ofpbuf *buf OVS_UNUSED)
+{
+    struct rte_flow_query_count query = { .reset = 1 };
+    struct ufid_to_rte_flow_data *rte_flow_data;
+    struct rte_flow_error error;
+    int ret = 0;
+
+    rte_flow_data = ufid_to_rte_flow_data_find(ufid);
+    if (!rte_flow_data || !rte_flow_data->rte_flow) {
+        ret = -1;
+        goto out;
+    }
+
+    attrs->offloaded = true;
+    if (!rte_flow_data->actions_offloaded) {
+        attrs->dp_layer = "ovs";
+        memset(stats, 0, sizeof *stats);
+        goto out;
+    }
+    attrs->dp_layer = "dpdk";
+    ret = netdev_dpdk_rte_flow_query_count(netdev, rte_flow_data->rte_flow,
+                                           &query, &error);
+    if (ret) {
+        VLOG_DBG_RL(&rl, "%s: Failed to query ufid "UUID_FMT" flow: %p\n",
+                    netdev_get_name(netdev), UUID_ARGS((struct uuid *) ufid),
+                    rte_flow_data->rte_flow);
+        goto out;
+    }
+    rte_flow_data->stats.n_packets += (query.hits_set) ? query.hits : 0;
+    rte_flow_data->stats.n_bytes += (query.bytes_set) ? query.bytes : 0;
+    if (query.hits_set && query.hits) {
+        rte_flow_data->stats.used = time_msec();
+    }
+    memcpy(stats, &rte_flow_data->stats, sizeof *stats);
+out:
+    return ret;
+}
+
 const struct netdev_flow_api netdev_offload_dpdk = {
     .type = "dpdk_flow_api",
     .flow_put = netdev_offload_dpdk_flow_put,
     .flow_del = netdev_offload_dpdk_flow_del,
     .init_flow_api = netdev_offload_dpdk_init_flow_api,
+    .flow_get = netdev_offload_dpdk_flow_get,
 };
