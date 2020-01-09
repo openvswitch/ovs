@@ -367,6 +367,8 @@ dump_flow_action(struct ds *s, const struct rte_flow_action *actions)
         } else {
             ds_put_cstr(s, "  Port-id = null\n");
         }
+    } else if (actions->type == RTE_FLOW_ACTION_TYPE_DROP) {
+        ds_put_cstr(s, "rte flow drop action\n");
     } else {
         ds_put_format(s, "unknown rte flow action (%d)\n", actions->type);
     }
@@ -811,6 +813,8 @@ parse_flow_actions(struct netdev *netdev,
             if (add_output_action(netdev, actions, nla, info)) {
                 return -1;
             }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_DROP) {
+            add_flow_action(actions, RTE_FLOW_ACTION_TYPE_DROP, NULL);
         } else {
             VLOG_DBG_RL(&rl, "Unsupported action type %d", nl_attr_type(nla));
             return -1;
