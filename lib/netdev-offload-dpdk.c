@@ -374,40 +374,19 @@ add_flow_action(struct flow_actions *actions, enum rte_flow_action_type type,
     actions->cnt++;
 }
 
-struct action_rss_data {
-    struct rte_flow_action_rss conf;
-    uint16_t queue[0];
-};
-
-static struct action_rss_data *
-add_flow_rss_action(struct flow_actions *actions,
-                    struct netdev *netdev)
+static void
+free_flow_actions(struct flow_actions *actions)
 {
     int i;
-    struct action_rss_data *rss_data;
 
-    rss_data = xmalloc(sizeof *rss_data +
-                       netdev_n_rxq(netdev) * sizeof rss_data->queue[0]);
-    *rss_data = (struct action_rss_data) {
-        .conf = (struct rte_flow_action_rss) {
-            .func = RTE_ETH_HASH_FUNCTION_DEFAULT,
-            .level = 0,
-            .types = 0,
-            .queue_num = netdev_n_rxq(netdev),
-            .queue = rss_data->queue,
-            .key_len = 0,
-            .key  = NULL
-        },
-    };
-
-    /* Override queue array with default. */
-    for (i = 0; i < netdev_n_rxq(netdev); i++) {
-       rss_data->queue[i] = i;
+    for (i = 0; i < actions->cnt; i++) {
+        if (actions->actions[i].conf) {
+            free(CONST_CAST(void *, actions->actions[i].conf));
+        }
     }
-
-    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RSS, &rss_data->conf);
-
-    return rss_data;
+    free(actions->actions);
+    actions->actions = NULL;
+    actions->cnt = 0;
 }
 
 struct flow_items {
@@ -569,6 +548,47 @@ parse_flow_match(struct flow_patterns *patterns,
     return 0;
 }
 
+static void
+add_flow_mark_rss_actions(struct flow_actions *actions,
+                          uint32_t flow_mark,
+                          const struct netdev *netdev)
+{
+    struct rte_flow_action_mark *mark;
+    struct action_rss_data {
+        struct rte_flow_action_rss conf;
+        uint16_t queue[0];
+    } *rss_data;
+    BUILD_ASSERT_DECL(offsetof(struct action_rss_data, conf) == 0);
+    int i;
+
+    mark = xzalloc(sizeof *mark);
+
+    mark->id = flow_mark;
+    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_MARK, mark);
+
+    rss_data = xmalloc(sizeof *rss_data +
+                       netdev_n_rxq(netdev) * sizeof rss_data->queue[0]);
+    *rss_data = (struct action_rss_data) {
+        .conf = (struct rte_flow_action_rss) {
+            .func = RTE_ETH_HASH_FUNCTION_DEFAULT,
+            .level = 0,
+            .types = 0,
+            .queue_num = netdev_n_rxq(netdev),
+            .queue = rss_data->queue,
+            .key_len = 0,
+            .key  = NULL
+        },
+    };
+
+    /* Override queue array with default. */
+    for (i = 0; i < netdev_n_rxq(netdev); i++) {
+       rss_data->queue[i] = i;
+    }
+
+    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RSS, &rss_data->conf);
+    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_END, NULL);
+}
+
 static int
 netdev_offload_dpdk_add_flow(struct netdev *netdev,
                              const struct match *match,
@@ -598,20 +618,12 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
         goto out;
     }
 
-    struct rte_flow_action_mark mark;
-    struct action_rss_data *rss;
-
-    mark.id = info->flow_mark;
-    add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_MARK, &mark);
-
-    rss = add_flow_rss_action(&actions, netdev);
-    add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_END, NULL);
+    add_flow_mark_rss_actions(&actions, info->flow_mark, netdev);
 
     flow = netdev_dpdk_rte_flow_create(netdev, &flow_attr,
                                        patterns.items,
                                        actions.actions, &error);
 
-    free(rss);
     if (!flow) {
         VLOG_ERR("%s: rte flow creat error: %u : message : %s\n",
                  netdev_get_name(netdev), error.type, error.message);
@@ -624,7 +636,7 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
 
 out:
     free(patterns.items);
-    free(actions.actions);
+    free_flow_actions(&actions);
     return ret;
 }
 
