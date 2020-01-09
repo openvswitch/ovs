@@ -370,18 +370,27 @@ The flow hardware offload is disabled by default and can be enabled by::
 
     $ ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
 
-So far only partial flow offload is implemented. Moreover, it only works
-with PMD drivers have the rte_flow action "MARK + RSS" support.
+Matches and actions are programmed into HW to achieve full offload of
+the flow. If not all actions are supported, fallback to partial flow
+offload (offloading matches only). Moreover, it only works with PMD
+drivers that support the configured rte_flow actions.
+Partial flow offload requires support of "MARK + RSS" actions. Full
+hardware offload requires support of the actions listed below.
 
 The validated NICs are:
 
 - Mellanox (ConnectX-4, ConnectX-4 Lx, ConnectX-5)
 - Napatech (NT200B01)
 
-Supported protocols for hardware offload are:
+Supported protocols for hardware offload matches are:
+
 - L2: Ethernet, VLAN
-- L3: IPv4, IPv6
+- L3: IPv4
 - L4: TCP, UDP, SCTP, ICMP
+
+Supported actions for hardware offload are:
+
+- Output.
 
 Further Reading
 ---------------
