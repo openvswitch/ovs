@@ -5019,6 +5019,24 @@ unlock:
     return err;
 }
 
+int
+netdev_dpdk_get_port_id(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev;
+    int ret = -1;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        goto out;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = dev->port_id;
+    ovs_mutex_unlock(&dev->mutex);
+out:
+    return ret;
+}
+
 bool
 netdev_dpdk_flow_api_supported(struct netdev *netdev)
 {
