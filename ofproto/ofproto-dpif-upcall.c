@@ -644,23 +644,6 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
     }
 }
 
-/* Waits for all ongoing upcall translations to complete.  This ensures that
- * there are no transient references to any removed ofprotos (or other
- * objects).  In particular, this should be called after an ofproto is removed
- * (e.g. via xlate_remove_ofproto()) but before it is destroyed. */
-void
-udpif_synchronize(struct udpif *udpif)
-{
-    /* This is stronger than necessary.  It would be sufficient to ensure
-     * (somehow) that each handler and revalidator thread had passed through
-     * its main loop once. */
-    size_t n_handlers_ = udpif->n_handlers;
-    size_t n_revalidators_ = udpif->n_revalidators;
-
-    udpif_stop_threads(udpif);
-    udpif_start_threads(udpif, n_handlers_, n_revalidators_);
-}
-
 /* Notifies 'udpif' that something changed which may render previous
  * xlate_actions() results invalid. */
 void

@@ -1171,11 +1171,15 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
  *
  * A sample workflow:
  *
- * xlate_txn_start();
- * ...
- * edit_xlate_configuration();
- * ...
- * xlate_txn_commit(); */
+ *     xlate_txn_start();
+ *     ...
+ *     edit_xlate_configuration();
+ *     ...
+ *     xlate_txn_commit();
+ *
+ * The ovsrcu_synchronize() call here also ensures that the upcall threads
+ * retain no references to anything in the previous configuration.
+ */
 void
 xlate_txn_commit(void)
 {

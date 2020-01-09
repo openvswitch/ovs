@@ -1751,10 +1751,6 @@ destruct(struct ofproto *ofproto_, bool del)
     xlate_remove_ofproto(ofproto);
     xlate_txn_commit();
 
-    /* Ensure that the upcall processing threads have no remaining references
-     * to the ofproto or anything in it. */
-    udpif_synchronize(ofproto->backer->udpif);
-
     hmap_remove(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node);
     hmap_remove(&all_ofproto_dpifs_by_uuid,
