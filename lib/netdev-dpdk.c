@@ -5070,6 +5070,36 @@ netdev_dpdk_rte_flow_create(struct netdev *netdev,
     return flow;
 }
 
+int
+netdev_dpdk_rte_flow_query_count(struct netdev *netdev,
+                                 struct rte_flow *rte_flow,
+                                 struct rte_flow_query_count *query,
+                                 struct rte_flow_error *error)
+{
+    struct rte_flow_action_count count = { .shared = 0, .id = 0 };
+    const struct rte_flow_action actions[] = {
+        {
+            .type = RTE_FLOW_ACTION_TYPE_COUNT,
+            .conf = &count,
+        },
+        {
+            .type = RTE_FLOW_ACTION_TYPE_END,
+        },
+    };
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_query(dev->port_id, rte_flow, actions, query, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
 #define NETDEV_DPDK_CLASS_COMMON                            \
     .is_pmd = true,                                         \
     .alloc = netdev_dpdk_alloc,                             \
