@@ -6001,26 +6001,28 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     if (flow->ct_nw_proto) {
         if (parms->support.ct_orig_tuple
             && flow->dl_type == htons(ETH_TYPE_IP)) {
-            struct ovs_key_ct_tuple_ipv4 ct = {
-                data->ct_nw_src,
-                data->ct_nw_dst,
-                data->ct_tp_src,
-                data->ct_tp_dst,
-                data->ct_nw_proto,
-            };
-            nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4, &ct,
-                              sizeof ct);
+            struct ovs_key_ct_tuple_ipv4 *ct;
+
+            /* 'struct ovs_key_ct_tuple_ipv4' has padding, clear it. */
+            ct = nl_msg_put_unspec_zero(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4,
+                                        sizeof *ct);
+            ct->ipv4_src = data->ct_nw_src;
+            ct->ipv4_dst = data->ct_nw_dst;
+            ct->src_port = data->ct_tp_src;
+            ct->dst_port = data->ct_tp_dst;
+            ct->ipv4_proto = data->ct_nw_proto;
         } else if (parms->support.ct_orig_tuple6
                    && flow->dl_type == htons(ETH_TYPE_IPV6)) {
-            struct ovs_key_ct_tuple_ipv6 ct = {
-                data->ct_ipv6_src,
-                data->ct_ipv6_dst,
-                data->ct_tp_src,
-                data->ct_tp_dst,
-                data->ct_nw_proto,
-            };
-            nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6, &ct,
-                              sizeof ct);
+            struct ovs_key_ct_tuple_ipv6 *ct;
+
+            /* 'struct ovs_key_ct_tuple_ipv6' has padding, clear it. */
+            ct = nl_msg_put_unspec_zero(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6,
+                                        sizeof *ct);
+            ct->ipv6_src = data->ct_ipv6_src;
+            ct->ipv6_dst = data->ct_ipv6_dst;
+            ct->src_port = data->ct_tp_src;
+            ct->dst_port = data->ct_tp_dst;
+            ct->ipv6_proto = data->ct_nw_proto;
         }
     }
     if (parms->support.recirc) {
