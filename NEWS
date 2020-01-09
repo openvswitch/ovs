@@ -1,5 +1,6 @@
 Post-v2.13.0
 ---------------------
+   - ovs-vswitchd no longer deletes datapath flows on exit by default.
 
 
 v2.13.0 - xx xxx xxxx

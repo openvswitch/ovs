@@ -332,7 +332,7 @@ static size_t recv_upcalls(struct handler *);
 static int process_upcall(struct udpif *, struct upcall *,
                           struct ofpbuf *odp_actions, struct flow_wildcards *);
 static void handle_upcalls(struct udpif *, struct upcall *, size_t n_upcalls);
-static void udpif_stop_threads(struct udpif *);
+static void udpif_stop_threads(struct udpif *, bool delete_flows);
 static void udpif_start_threads(struct udpif *, size_t n_handlers,
                                 size_t n_revalidators);
 static void udpif_pause_revalidators(struct udpif *);
@@ -483,7 +483,7 @@ udpif_run(struct udpif *udpif)
 void
 udpif_destroy(struct udpif *udpif)
 {
-    udpif_stop_threads(udpif);
+    udpif_stop_threads(udpif, false);
 
     dpif_register_dp_purge_cb(udpif->dpif, NULL, udpif);
     dpif_register_upcall_cb(udpif->dpif, NULL, udpif);
@@ -504,9 +504,15 @@ udpif_destroy(struct udpif *udpif)
     free(udpif);
 }
 
-/* Stops the handler and revalidator threads. */
+/* Stops the handler and revalidator threads.
+ *
+ * If 'delete_flows' is true, we delete ukeys and delete all flows from the
+ * datapath.  Otherwise, we end up double-counting stats for flows that remain
+ * in the datapath.  If 'delete_flows' is false, we skip this step.  This is
+ * appropriate if OVS is about to exit anyway and it is desirable to let
+ * existing network connections continue being forwarded afterward. */
 static void
-udpif_stop_threads(struct udpif *udpif)
+udpif_stop_threads(struct udpif *udpif, bool delete_flows)
 {
     if (udpif && (udpif->n_handlers != 0 || udpif->n_revalidators != 0)) {
         size_t i;
@@ -526,10 +532,10 @@ udpif_stop_threads(struct udpif *udpif)
         dpif_disable_upcall(udpif->dpif);
         ovsrcu_quiesce_end();
 
-        /* Delete ukeys, and delete all flows from the datapath to prevent
-         * double-counting stats. */
-        for (i = 0; i < udpif->n_revalidators; i++) {
-            revalidator_purge(&udpif->revalidators[i]);
+        if (delete_flows) {
+            for (i = 0; i < udpif->n_revalidators; i++) {
+                revalidator_purge(&udpif->revalidators[i]);
+            }
         }
 
         latch_poll(&udpif->exit_latch);
@@ -627,7 +633,7 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
 
     if (udpif->n_handlers != n_handlers_
         || udpif->n_revalidators != n_revalidators_) {
-        udpif_stop_threads(udpif);
+        udpif_stop_threads(udpif, true);
     }
 
     if (!udpif->handlers && !udpif->revalidators) {
@@ -681,7 +687,7 @@ udpif_flush(struct udpif *udpif)
     size_t n_handlers_ = udpif->n_handlers;
     size_t n_revalidators_ = udpif->n_revalidators;
 
-    udpif_stop_threads(udpif);
+    udpif_stop_threads(udpif, true);
     dpif_flow_flush(udpif->dpif);
     udpif_start_threads(udpif, n_handlers_, n_revalidators_);
 }
