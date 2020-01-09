@@ -392,6 +392,7 @@ Supported actions for hardware offload are:
 
 - Output.
 - Drop.
+- Modification of Ethernet (mod_dl_src/mod_dl_dst).
 
 Further Reading
 ---------------
