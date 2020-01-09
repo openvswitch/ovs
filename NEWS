@@ -34,8 +34,8 @@ Post-v2.12.0
        interval is increased to 60 seconds for the connection to the
        replication server. This value is configurable with the unixctl
        command - ovsdb-server/set-active-ovsdb-server-probe-interval.
-     * Add hardware offload support for output, drop and set actions of
-       MAC and IPv4 (experimental).
+     * Add hardware offload support for output, drop, set of MAC, IPv4 and
+       TCP/UDP ports actions (experimental).
    - 'ovs-appctl dpctl/dump-flows' can now show offloaded=partial for
      partially offloaded flows, dp:dpdk for fully offloaded by dpdk, and
      type filter supports new filters: "dpdk" and "partially-offloaded".

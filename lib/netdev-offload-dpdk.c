@@ -407,6 +407,19 @@ dump_flow_action(struct ds *s, const struct rte_flow_action *actions)
         } else {
             ds_put_cstr(s, "  Set-ttl = null\n");
         }
+    } else if (actions->type == RTE_FLOW_ACTION_TYPE_SET_TP_SRC ||
+               actions->type == RTE_FLOW_ACTION_TYPE_SET_TP_DST) {
+        const struct rte_flow_action_set_tp *set_tp = actions->conf;
+        char *dirstr = actions->type == RTE_FLOW_ACTION_TYPE_SET_TP_DST
+                       ? "dst" : "src";
+
+        ds_put_format(s, "rte flow set-tcp/udp-port-%s action:\n", dirstr);
+        if (set_tp) {
+            ds_put_format(s, "  Set-%s-tcp/udp-port: %"PRIu16"\n", dirstr,
+                          ntohs(set_tp->port));
+        } else {
+            ds_put_format(s, "  Set-%s-tcp/udp-port = null\n", dirstr);
+        }
     } else {
         ds_put_format(s, "unknown rte flow action (%d)\n", actions->type);
     }
@@ -876,6 +889,14 @@ BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_ipv4) ==
                   MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_dst));
 BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_ttl) ==
                   MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_ttl));
+BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_tp) ==
+                  MEMBER_SIZEOF(struct ovs_key_tcp, tcp_src));
+BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_tp) ==
+                  MEMBER_SIZEOF(struct ovs_key_tcp, tcp_dst));
+BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_tp) ==
+                  MEMBER_SIZEOF(struct ovs_key_udp, udp_src));
+BUILD_ASSERT_DECL(sizeof(struct rte_flow_action_set_tp) ==
+                  MEMBER_SIZEOF(struct ovs_key_udp, udp_dst));
 
 static int
 parse_set_actions(struct flow_actions *actions,
@@ -915,6 +936,28 @@ parse_set_actions(struct flow_actions *actions,
 
             if (mask && !is_all_zeros(mask, sizeof *mask)) {
                 VLOG_DBG_RL(&rl, "Unsupported IPv4 set action");
+                return -1;
+            }
+        } else if (nl_attr_type(sa) == OVS_KEY_ATTR_TCP) {
+            const struct ovs_key_tcp *key = nl_attr_get(sa);
+            const struct ovs_key_tcp *mask = masked ? key + 1 : NULL;
+
+            add_set_flow_action(tcp_src, RTE_FLOW_ACTION_TYPE_SET_TP_SRC);
+            add_set_flow_action(tcp_dst, RTE_FLOW_ACTION_TYPE_SET_TP_DST);
+
+            if (mask && !is_all_zeros(mask, sizeof *mask)) {
+                VLOG_DBG_RL(&rl, "Unsupported TCP set action");
+                return -1;
+            }
+        } else if (nl_attr_type(sa) == OVS_KEY_ATTR_UDP) {
+            const struct ovs_key_udp *key = nl_attr_get(sa);
+            const struct ovs_key_udp *mask = masked ? key + 1 : NULL;
+
+            add_set_flow_action(udp_src, RTE_FLOW_ACTION_TYPE_SET_TP_SRC);
+            add_set_flow_action(udp_dst, RTE_FLOW_ACTION_TYPE_SET_TP_DST);
+
+            if (mask && !is_all_zeros(mask, sizeof *mask)) {
+                VLOG_DBG_RL(&rl, "Unsupported UDP set action");
                 return -1;
             }
         } else {
