@@ -1798,7 +1798,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
 
     new_devargs = smap_get(args, "dpdk-devargs");
 
-    if (dev->devargs && strcmp(new_devargs, dev->devargs)) {
+    if (dev->devargs && new_devargs && strcmp(new_devargs, dev->devargs)) {
         /* The user requested a new device.  If we return error, the caller
          * will delete this netdev and try to recreate it. */
         err = EAGAIN;
