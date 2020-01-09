@@ -36,6 +36,7 @@ Post-v2.12.0
        command - ovsdb-server/set-active-ovsdb-server-probe-interval.
      * Add hardware offload support for output, drop, set of MAC, IPv4 and
        TCP/UDP ports actions (experimental).
+     * ovsdb-server: New OVSDB extension to allow clients to specify row UUIDs.
    - 'ovs-appctl dpctl/dump-flows' can now show offloaded=partial for
      partially offloaded flows, dp:dpdk for fully offloaded by dpdk, and
      type filter supports new filters: "dpdk" and "partially-offloaded".

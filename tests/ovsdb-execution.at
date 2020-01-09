@@ -249,6 +249,30 @@ OVSDB_CHECK_EXECUTION([insert row, query table],
 [{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"zero","number":0}]}]
 ]])
 
+OVSDB_CHECK_EXECUTION([insert row with uuid, query table],
+  [ordinal_schema],
+dnl Insert initial row.
+  [[[["ordinals",
+      {"op": "insert",
+       "uuid": "ffffffff-971b-4cba-bf42-520515973b7e",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}}]]],
+dnl Query row back.
+   [[["ordinals",
+      {"op": "select",
+       "table": "ordinals",
+       "where": []}]]],
+dnl Attempt to insert second row with same UUID (fails).
+   [[["ordinals",
+      {"op": "insert",
+       "uuid": "ffffffff-971b-4cba-bf42-520515973b7e",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}}]]]],
+  [[[{"uuid":["uuid","ffffffff-971b-4cba-bf42-520515973b7e"]}]
+[{"rows":[{"_uuid":["uuid","ffffffff-971b-4cba-bf42-520515973b7e"],"_version":["uuid","<0>"],"name":"zero","number":0}]}]
+[{"details":"This UUID would duplicate a UUID already present within the table or deleted within the same transaction.","error":"duplicate uuid","syntax":"\"ffffffff-971b-4cba-bf42-520515973b7e\""}]
+]])
+
 OVSDB_CHECK_EXECUTION([insert rows, query by value],
   [ordinal_schema],
   [[[["ordinals",

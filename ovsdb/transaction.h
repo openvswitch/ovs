@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2017 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,9 @@ struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
                                        const struct ovsdb_row *);
 void ovsdb_txn_row_insert(struct ovsdb_txn *, struct ovsdb_row *);
 void ovsdb_txn_row_delete(struct ovsdb_txn *, const struct ovsdb_row *);
+
+bool ovsdb_txn_may_create_row(const struct ovsdb_table *,
+                              const struct uuid *row_uuid);
 
 typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
                                    const struct ovsdb_row *new,

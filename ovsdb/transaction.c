@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1285,6 +1285,26 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
         }
         ovsdb_row_destroy(row);
     }
+}
+
+/* Returns true if 'row_uuid' may be used as the UUID for a newly created row
+ * in 'table' (that is, that it is unique within 'table'), false otherwise. */
+bool
+ovsdb_txn_may_create_row(const struct ovsdb_table *table,
+                         const struct uuid *row_uuid)
+{
+    /* If a row 'row_uuid' currently exists, disallow creating a duplicate. */
+    if (ovsdb_table_get_row(table, row_uuid)) {
+        return false;
+    }
+
+    /* If a row 'row_uuid' previously existed in this transaction, disallow
+     * creating a new row with the same UUID. */
+    if (find_txn_row(table, row_uuid)) {
+        return false;
+    }
+
+    return true;
 }
 
 void
