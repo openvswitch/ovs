@@ -86,6 +86,7 @@ oftrace_node_destroy(struct oftrace_node *node)
 bool
 oftrace_add_recirc_node(struct ovs_list *recirc_queue,
                         enum oftrace_recirc_type type, const struct flow *flow,
+                        const struct ofpact_nat *ofn,
                         const struct dp_packet *packet, uint32_t recirc_id,
                         const uint16_t zone)
 {
@@ -101,6 +102,7 @@ oftrace_add_recirc_node(struct ovs_list *recirc_queue,
     node->flow = *flow;
     node->flow.recirc_id = recirc_id;
     node->flow.ct_zone = zone;
+    node->nat_act = ofn;
     node->packet = packet ? dp_packet_clone(packet) : NULL;
 
     return true;
@@ -177,6 +179,25 @@ oftrace_node_print_details(struct ds *output,
 
         oftrace_node_print_details(output, &sub->subs, level + more + more);
     }
+}
+
+static void
+oftrace_print_ip_flow(const struct flow *flow, int af, struct ds *output)
+{
+    if (af == AF_INET) {
+        ds_put_format(output, "nw_src="IP_FMT",tp_src=%"PRIu16","
+                      "nw_dst="IP_FMT",tp_dst=%"PRIu16,
+                      IP_ARGS(flow->nw_src), ntohs(flow->tp_src),
+                      IP_ARGS(flow->nw_dst), ntohs(flow->tp_dst));
+    } else if (af == AF_INET6) {
+        ds_put_cstr(output, "ipv6_src=");
+        ipv6_format_addr_bracket(&flow->ipv6_src, output, true);
+        ds_put_format(output, ",tp_src=%"PRIu16, ntohs(flow->tp_src));
+        ds_put_cstr(output, ",ipv6_dst=");
+        ipv6_format_addr_bracket(&flow->ipv6_dst, output, true);
+        ds_put_format(output, ",tp_dst=%"PRIu16, ntohs(flow->tp_dst));
+    }
+    ds_put_char(output, '\n');
 }
 
 /* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
@@ -638,6 +659,73 @@ execute_actions_except_outputs(struct dpif *dpif,
 }
 
 static void
+ofproto_trace_recirc_node(struct oftrace_recirc_node *node,
+                          struct ovs_list *next_ct_states,
+                          struct ds *output)
+{
+    ds_put_cstr(output, "\n\n");
+    ds_put_char_multiple(output, '=', 79);
+    ds_put_format(output, "\nrecirc(%#"PRIx32")", node->recirc_id);
+
+    if (next_ct_states && node->type == OFT_RECIRC_CONNTRACK) {
+        uint32_t ct_state;
+        if (ovs_list_is_empty(next_ct_states)) {
+            ct_state = CS_TRACKED | CS_NEW;
+            ds_put_cstr(output, " - resume conntrack with default "
+                        "ct_state=trk|new (use --ct-next to customize)");
+        } else {
+            ct_state = oftrace_pop_ct_state(next_ct_states);
+            struct ds s = DS_EMPTY_INITIALIZER;
+            format_flags(&s, ct_state_to_string, ct_state, '|');
+            ds_put_format(output, " - resume conntrack with ct_state=%s",
+                          ds_cstr(&s));
+            ds_destroy(&s);
+        }
+        node->flow.ct_state = ct_state;
+    }
+    ds_put_char(output, '\n');
+
+    /* If there's any snat/dnat information assume we always translate to
+     * the first IP/port to make sure we don't match on incorrect flows later
+     * on.
+     */
+    if (node->nat_act) {
+        const struct ofpact_nat *ofn = node->nat_act;
+
+        ds_put_cstr(output, "Replacing src/dst IP/ports to simulate NAT:\n");
+        ds_put_cstr(output, " Initial flow: ");
+        oftrace_print_ip_flow(&node->flow, ofn->range_af, output);
+
+        if (ofn->flags & NX_NAT_F_SRC) {
+            if (ofn->range_af == AF_INET) {
+                node->flow.nw_src = ofn->range.addr.ipv4.min;
+            } else if (ofn->range_af == AF_INET6) {
+                node->flow.ipv6_src = ofn->range.addr.ipv6.min;
+            }
+
+            if (ofn->range_af != AF_UNSPEC && ofn->range.proto.min) {
+                node->flow.tp_src = htons(ofn->range.proto.min);
+            }
+        }
+        if (ofn->flags & NX_NAT_F_DST) {
+            if (ofn->range_af == AF_INET) {
+                node->flow.nw_dst = ofn->range.addr.ipv4.min;
+            } else if (ofn->range_af == AF_INET6) {
+                node->flow.ipv6_dst = ofn->range.addr.ipv6.min;
+            }
+
+            if (ofn->range_af != AF_UNSPEC && ofn->range.proto.min) {
+                node->flow.tp_dst = htons(ofn->range.proto.min);
+            }
+        }
+        ds_put_cstr(output, " Modified flow: ");
+        oftrace_print_ip_flow(&node->flow, ofn->range_af, output);
+    }
+    ds_put_char_multiple(output, '=', 79);
+    ds_put_cstr(output, "\n\n");
+}
+
+static void
 ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
                 const struct dp_packet *packet, struct ovs_list *recirc_queue,
                 const struct ofpact ofpacts[], size_t ofpacts_len,
@@ -729,31 +817,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     struct oftrace_recirc_node *recirc_node;
     LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
-        ds_put_cstr(output, "\n\n");
-        ds_put_char_multiple(output, '=', 79);
-        ds_put_format(output, "\nrecirc(%#"PRIx32")",
-                      recirc_node->recirc_id);
-
-        if (next_ct_states && recirc_node->type == OFT_RECIRC_CONNTRACK) {
-            uint32_t ct_state;
-            if (ovs_list_is_empty(next_ct_states)) {
-                ct_state = CS_TRACKED | CS_NEW;
-                ds_put_cstr(output, " - resume conntrack with default "
-                            "ct_state=trk|new (use --ct-next to customize)");
-            } else {
-                ct_state = oftrace_pop_ct_state(next_ct_states);
-                struct ds s = DS_EMPTY_INITIALIZER;
-                format_flags(&s, ct_state_to_string, ct_state, '|');
-                ds_put_format(output, " - resume conntrack with ct_state=%s",
-                              ds_cstr(&s));
-                ds_destroy(&s);
-            }
-            recirc_node->flow.ct_state = ct_state;
-        }
-        ds_put_char(output, '\n');
-        ds_put_char_multiple(output, '=', 79);
-        ds_put_cstr(output, "\n\n");
-
+        ofproto_trace_recirc_node(recirc_node, next_ct_states, output);
         ofproto_trace__(ofproto, &recirc_node->flow, recirc_node->packet,
                         &recirc_queue, ofpacts, ofpacts_len, output);
         oftrace_recirc_node_destroy(recirc_node);

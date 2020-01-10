@@ -4999,7 +4999,8 @@ compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table,
     if (OVS_UNLIKELY(ctx->xin->trace) && recirc_id) {
         if (oftrace_add_recirc_node(ctx->xin->recirc_queue,
                                     OFT_RECIRC_CONNTRACK, &ctx->xin->flow,
-                                    ctx->xin->packet, recirc_id, zone)) {
+                                    ctx->ct_nat_action, ctx->xin->packet,
+                                    recirc_id, zone)) {
             xlate_report(ctx, OFT_DETAIL, "A clone of the packet is forked to "
                          "recirculate. The forked pipeline will be resumed at "
                          "table %u.", table);
@@ -6205,7 +6206,6 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
     put_ct_label(&ctx->xin->flow, ctx->odp_actions, ctx->wc);
     put_ct_helper(ctx, ctx->odp_actions, ofc);
     put_ct_nat(ctx);
-    ctx->ct_nat_action = NULL;
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
     ctx->wc->masks.ct_mark = old_ct_mark_mask;
@@ -6215,6 +6215,8 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
         ctx->conntracked = true;
         compose_recirculate_and_fork(ctx, ofc->recirc_table, zone);
     }
+
+    ctx->ct_nat_action = NULL;
 
     /* The ct_* fields are only available in the scope of the 'recirc_table'
      * call chain. */

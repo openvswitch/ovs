@@ -10684,6 +10684,42 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - nat - ofproto/trace])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3
+
+flow="in_port=1,udp,nw_src=1.1.1.1,nw_dst=1.1.1.2,udp_src=100,udp_dst=200"
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,ip,nw_src=1.1.1.1,ct_state=-trk,action=ct(commit,nat(src=10.0.0.1-10.0.0.42:1000-1042),table=0)
+table=0,priority=100,udp,ct_state=+trk,nw_src=10.0.0.1,nw_dst=1.1.1.2,tp_src=1000,tp_dst=200,action=ct(commit,nat(dst=20.0.0.1-20.0.0.42:2000-2042),table=0)
+table=0,priority=100,udp,ct_state=+trk,nw_src=10.0.0.1,nw_dst=20.0.0.1,tp_src=1000,tp_dst=2000,action=3
+table=0,priority=90,ip,ct_state=+trk,action=2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 3
+])
+
+flow="in_port=1,udp6,ipv6_src=1::1,ipv6_dst=1::2,udp_src=100,udp_dst=200"
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,ip6,ipv6_src=1::1,ct_state=-trk,action=ct(commit,nat(src=[[10::1]]-[[10::42]]:1000-1042),table=0)
+table=0,priority=100,udp6,ct_state=+trk,ipv6_src=10::1,ipv6_dst=1::2,tp_src=1000,tp_dst=200,action=ct(commit,nat(dst=[[20::1]]-[[20::42]]:2000-2042),table=0)
+table=0,priority=100,udp6,ct_state=+trk,ipv6_src=10::1,ipv6_dst=20::1,tp_src=1000,tp_dst=2000,action=3
+table=0,priority=90,ip6,ct_state=+trk,action=2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - set mtu])
 OVS_VSWITCHD_START
 
