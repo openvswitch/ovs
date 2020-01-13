@@ -815,6 +815,13 @@ ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
     p->dp_desc = nullable_xstrdup(dp_desc);
 }
 
+void
+ofproto_set_serial_desc(struct ofproto *p, const char *serial_desc)
+{
+    free(p->serial_desc);
+    p->serial_desc = nullable_xstrdup(serial_desc);
+}
+
 int
 ofproto_set_snoops(struct ofproto *ofproto, const struct sset *snoops)
 {
