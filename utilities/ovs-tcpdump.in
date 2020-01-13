@@ -24,7 +24,21 @@ import subprocess
 import sys
 import time
 
-import netifaces
+try:
+    from netifaces import interfaces
+except ImportError:
+    if sys.platform in ['linux', 'linux2']:
+        def interfaces():
+            devices = []
+            with open("/proc/net/dev", "r") as f_netdev:
+                for line in f_netdev:
+                    if ":" not in line:
+                        continue
+                    devices.append(line.split(":")[0].strip())
+            return devices
+    else:
+        print("ERROR: Please install netifaces Python library.")
+        sys.exit(1)
 
 try:
     from ovs.db import idl
@@ -438,11 +452,11 @@ def main():
             mirror_interface = _make_mirror_name[sys.platform](interface)
 
     if sys.platform in _make_taps and \
-       mirror_interface not in netifaces.interfaces():
+       mirror_interface not in interfaces():
         _make_taps[sys.platform](mirror_interface,
                                  ovsdb.interface_mtu(interface))
 
-    if mirror_interface not in netifaces.interfaces():
+    if mirror_interface not in interfaces():
         print("ERROR: Please create an interface called `%s`" %
               mirror_interface)
         print("See your OS guide for how to do this.")
