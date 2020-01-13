@@ -1241,7 +1241,7 @@ sock_strerror(int error)
 #endif
 }
 
-#ifndef _WIN32 /* Avoid using sendmsg on Windows entirely. */
+#ifdef __linux__
 static int
 emulate_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
                  unsigned int flags)
@@ -1282,9 +1282,7 @@ wrap_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
     return emulate_sendmmsg(fd, msgs, n, flags);
 }
 #endif
-#endif
-
-#ifndef _WIN32 /* Avoid using recvmsg on Windows entirely. */
+
 static int
 emulate_recvmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
                  int flags, struct timespec *timeout OVS_UNUSED)
@@ -1338,4 +1336,4 @@ wrap_recvmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
     return emulate_recvmmsg(fd, msgs, n, flags, timeout);
 }
 #endif
-#endif
+#endif /* __linux__ */
