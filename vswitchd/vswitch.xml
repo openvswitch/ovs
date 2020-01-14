@@ -1241,15 +1241,18 @@
         Human readable description of datapath.  It is a maximum 256
         byte-long free-form string to describe the datapath for
         debugging purposes, e.g. <code>switch3 in room 3120</code>.
+        The value is returned by the switch as a part of reply to OFPMP_DESC 
+        request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
+        the ofp_desc structure to contaion "NULL terminated ASCII strings".
+        For the compatibility reasons no more than 255 ASCII characters should be used.
       </column>
 
       <column name="other_config" key="dp-sn">
-        Serial number.  It is a maximum 32 byte-long free-form string to
+        Serial number. It is a maximum 32 byte-long free-form string to
         provide an additional switch identification. The value is returned
         by the switch as a part of reply to OFPMP_DESC request (ofp_desc).
-        The OpenFlow specification (e.g. 1.3.5) describes the ofp_desc structure
-        to contaion "NULL terminated ASCII strings". For the compatibility
-        reasons no more than 31 ASCII characters should be used.
+        Same as mentioned in the description of <ref column="other-config" key="dp-desc"/>,
+        the string should be no more than 31 ASCII characters for the compatibility.
       </column>
 
       <column name="other_config" key="disable-in-band"
