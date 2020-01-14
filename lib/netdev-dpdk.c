@@ -219,6 +219,13 @@ struct qos_conf {
     rte_spinlock_t lock;
 };
 
+/* QoS queue information used by the netdev queue dump functions. */
+struct netdev_dpdk_queue_state {
+    uint32_t *queues;
+    size_t cur_queue;
+    size_t n_queues;
+};
+
 /* A particular implementation of dpdk QoS operations.
  *
  * The functions below return 0 if successful or a positive errno value on
@@ -285,6 +292,41 @@ struct dpdk_qos_ops {
      */
     int (*qos_run)(struct qos_conf *qos_conf, struct rte_mbuf **pkts,
                    int pkt_cnt, bool should_steal);
+
+    /* Called to construct a QoS Queue. The implementation should make
+     * the appropriate calls to configure QoS Queue according to 'details'.
+     *
+     * The contents of 'details' should be documented as valid for 'ovs_name'
+     * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
+     * (which is built as ovs-vswitchd.conf.db(8)).
+     *
+     * This function must return 0 if and only if it constructs
+     * QoS queue successfully.
+     */
+    int (*qos_queue_construct)(const struct smap *details,
+                               uint32_t queue_id, struct qos_conf *conf);
+
+    /* Destroys the QoS Queue. */
+    void (*qos_queue_destruct)(struct qos_conf *conf, uint32_t queue_id);
+
+    /* Retrieves details of QoS Queue configuration into 'details'.
+     *
+     * The contents of 'details' should be documented as valid for 'ovs_name'
+     * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
+     * (which is built as ovs-vswitchd.conf.db(8)).
+     */
+    int (*qos_queue_get)(struct smap *details, uint32_t queue_id,
+                         const struct qos_conf *conf);
+
+    /* Retrieves statistics of QoS Queue configuration into 'stats'. */
+    int (*qos_queue_get_stats)(const struct qos_conf *conf, uint32_t queue_id,
+                               struct netdev_queue_stats *stats);
+
+    /* Setup the 'netdev_dpdk_queue_state' structure used by the dpdk queue
+     * dump functions.
+     */
+    int (*qos_queue_dump_state_init)(const struct qos_conf *conf,
+                                     struct netdev_dpdk_queue_state *state);
 };
 
 /* dpdk_qos_ops for each type of user space QoS implementation */
@@ -4191,6 +4233,164 @@ netdev_dpdk_set_qos(struct netdev *netdev, const char *type,
     return error;
 }
 
+static int
+netdev_dpdk_get_queue(const struct netdev *netdev, uint32_t queue_id,
+                      struct smap *details)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (!qos_conf || !qos_conf->ops || !qos_conf->ops->qos_queue_get) {
+        error = EOPNOTSUPP;
+    } else {
+        error = qos_conf->ops->qos_queue_get(details, queue_id, qos_conf);
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_set_queue(struct netdev *netdev, uint32_t queue_id,
+                      const struct smap *details)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (!qos_conf || !qos_conf->ops || !qos_conf->ops->qos_queue_construct) {
+        error = EOPNOTSUPP;
+    } else {
+        error = qos_conf->ops->qos_queue_construct(details, queue_id,
+                                                   qos_conf);
+    }
+
+    if (error && error != EOPNOTSUPP) {
+        VLOG_ERR("Failed to set QoS queue %d on port %s: %s",
+                 queue_id, netdev_get_name(netdev), rte_strerror(error));
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_delete_queue(struct netdev *netdev, uint32_t queue_id)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf && qos_conf->ops && qos_conf->ops->qos_queue_destruct) {
+        qos_conf->ops->qos_queue_destruct(qos_conf, queue_id);
+    } else {
+        error =  EOPNOTSUPP;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_get_queue_stats(const struct netdev *netdev, uint32_t queue_id,
+                            struct netdev_queue_stats *stats)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf && qos_conf->ops && qos_conf->ops->qos_queue_get_stats) {
+        qos_conf->ops->qos_queue_get_stats(qos_conf, queue_id, stats);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_queue_dump_start(const struct netdev *netdev, void **statep)
+{
+    int error = 0;
+    struct qos_conf *qos_conf;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf && qos_conf->ops
+        && qos_conf->ops->qos_queue_dump_state_init) {
+        struct netdev_dpdk_queue_state *state;
+
+        *statep = state = xmalloc(sizeof *state);
+        error = qos_conf->ops->qos_queue_dump_state_init(qos_conf, state);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_queue_dump_next(const struct netdev *netdev, void *state_,
+                            uint32_t *queue_idp, struct smap *details)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct netdev_dpdk_queue_state *state = state_;
+    struct qos_conf *qos_conf;
+    int error = EOF;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    while (state->cur_queue < state->n_queues) {
+        uint32_t queue_id = state->queues[state->cur_queue++];
+
+        qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+        if (qos_conf && qos_conf->ops && qos_conf->ops->qos_queue_get) {
+            *queue_idp = queue_id;
+            error = qos_conf->ops->qos_queue_get(details, queue_id, qos_conf);
+            break;
+        }
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_queue_dump_done(const struct netdev *netdev OVS_UNUSED,
+                            void *state_)
+{
+    struct netdev_dpdk_queue_state *state = state_;
+
+    free(state->queues);
+    free(state);
+    return 0;
+}
+
+
+
 /* egress-policer details */
 
 struct egress_policer {
@@ -4288,12 +4488,12 @@ egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
 }
 
 static const struct dpdk_qos_ops egress_policer_ops = {
-    "egress-policer",    /* qos_name */
-    egress_policer_qos_construct,
-    egress_policer_qos_destruct,
-    egress_policer_qos_get,
-    egress_policer_qos_is_equal,
-    egress_policer_run
+    .qos_name = "egress-policer",    /* qos_name */
+    .qos_construct = egress_policer_qos_construct,
+    .qos_destruct = egress_policer_qos_destruct,
+    .qos_get = egress_policer_qos_get,
+    .qos_is_equal = egress_policer_qos_is_equal,
+    .qos_run = egress_policer_run
 };
 
 static int
@@ -4558,6 +4758,13 @@ netdev_dpdk_rte_flow_create(struct netdev *netdev,
     .get_qos_types = netdev_dpdk_get_qos_types,             \
     .get_qos = netdev_dpdk_get_qos,                         \
     .set_qos = netdev_dpdk_set_qos,                         \
+    .get_queue = netdev_dpdk_get_queue,                     \
+    .set_queue = netdev_dpdk_set_queue,                     \
+    .delete_queue = netdev_dpdk_delete_queue,               \
+    .get_queue_stats = netdev_dpdk_get_queue_stats,         \
+    .queue_dump_start = netdev_dpdk_queue_dump_start,       \
+    .queue_dump_next = netdev_dpdk_queue_dump_next,         \
+    .queue_dump_done = netdev_dpdk_queue_dump_done,         \
     .update_flags = netdev_dpdk_update_flags,               \
     .rxq_alloc = netdev_dpdk_rxq_alloc,                     \
     .rxq_construct = netdev_dpdk_rxq_construct,             \
