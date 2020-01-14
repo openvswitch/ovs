@@ -26,6 +26,12 @@
 #include <sys/socket.h>
 #include <linux/if.h>
 
+/* Include rte_compat.h first to allow experimental API's needed for the
+ * rte_meter.h rfc4115 functions. Once they are no longer marked as
+ * experimental the #define and rte_compat.h include can be removed.
+ */
+#define ALLOW_EXPERIMENTAL_API
+#include <rte_compat.h>
 #include <rte_bus_pci.h>
 #include <rte_config.h>
 #include <rte_cycles.h>
@@ -329,8 +335,9 @@ struct dpdk_qos_ops {
                                      struct netdev_dpdk_queue_state *state);
 };
 
-/* dpdk_qos_ops for each type of user space QoS implementation */
+/* dpdk_qos_ops for each type of user space QoS implementation. */
 static const struct dpdk_qos_ops egress_policer_ops;
+static const struct dpdk_qos_ops trtcm_policer_ops;
 
 /*
  * Array of dpdk_qos_ops, contains pointer to all supported QoS
@@ -338,6 +345,7 @@ static const struct dpdk_qos_ops egress_policer_ops;
  */
 static const struct dpdk_qos_ops *const qos_confs[] = {
     &egress_policer_ops,
+    &trtcm_policer_ops,
     NULL
 };
 
@@ -2162,9 +2170,9 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
 }
 
 static inline bool
-netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
-                               struct rte_meter_srtcm_profile *profile,
-                               struct rte_mbuf *pkt, uint64_t time)
+netdev_dpdk_srtcm_policer_pkt_handle(struct rte_meter_srtcm *meter,
+                                     struct rte_meter_srtcm_profile *profile,
+                                     struct rte_mbuf *pkt, uint64_t time)
 {
     uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct rte_ether_hdr);
 
@@ -2173,10 +2181,10 @@ netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
 }
 
 static int
-netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
-                        struct rte_meter_srtcm_profile *profile,
-                        struct rte_mbuf **pkts, int pkt_cnt,
-                        bool should_steal)
+srtcm_policer_run_single_packet(struct rte_meter_srtcm *meter,
+                                struct rte_meter_srtcm_profile *profile,
+                                struct rte_mbuf **pkts, int pkt_cnt,
+                                bool should_steal)
 {
     int i = 0;
     int cnt = 0;
@@ -2186,8 +2194,8 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
     for (i = 0; i < pkt_cnt; i++) {
         pkt = pkts[i];
         /* Handle current packet */
-        if (netdev_dpdk_policer_pkt_handle(meter, profile,
-                                           pkt, current_time)) {
+        if (netdev_dpdk_srtcm_policer_pkt_handle(meter, profile,
+                                                 pkt, current_time)) {
             if (cnt != i) {
                 pkts[cnt] = pkt;
             }
@@ -2209,8 +2217,9 @@ ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
     int cnt = 0;
 
     rte_spinlock_lock(&policer->policer_lock);
-    cnt = netdev_dpdk_policer_run(&policer->in_policer, &policer->in_prof,
-                                  pkts, pkt_cnt, should_steal);
+    cnt = srtcm_policer_run_single_packet(&policer->in_policer,
+                                          &policer->in_prof,
+                                          pkts, pkt_cnt, should_steal);
     rte_spinlock_unlock(&policer->policer_lock);
 
     return cnt;
@@ -4480,9 +4489,9 @@ egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
-    cnt = netdev_dpdk_policer_run(&policer->egress_meter,
-                                  &policer->egress_prof, pkts,
-                                  pkt_cnt, should_steal);
+    cnt = srtcm_policer_run_single_packet(&policer->egress_meter,
+                                          &policer->egress_prof, pkts,
+                                          pkt_cnt, should_steal);
 
     return cnt;
 }
@@ -4494,6 +4503,326 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     .qos_get = egress_policer_qos_get,
     .qos_is_equal = egress_policer_qos_is_equal,
     .qos_run = egress_policer_run
+};
+
+/* trtcm-policer details */
+
+struct trtcm_policer {
+    struct qos_conf qos_conf;
+    struct rte_meter_trtcm_rfc4115_params meter_params;
+    struct rte_meter_trtcm_rfc4115_profile meter_profile;
+    struct rte_meter_trtcm_rfc4115 meter;
+    struct netdev_queue_stats stats;
+    struct hmap queues;
+};
+
+struct trtcm_policer_queue {
+    struct hmap_node hmap_node;
+    uint32_t queue_id;
+    struct rte_meter_trtcm_rfc4115_params meter_params;
+    struct rte_meter_trtcm_rfc4115_profile meter_profile;
+    struct rte_meter_trtcm_rfc4115 meter;
+    struct netdev_queue_stats stats;
+};
+
+static void
+trtcm_policer_details_to_param(const struct smap *details,
+                               struct rte_meter_trtcm_rfc4115_params *params)
+{
+    memset(params, 0, sizeof *params);
+    params->cir = smap_get_ullong(details, "cir", 0);
+    params->eir = smap_get_ullong(details, "eir", 0);
+    params->cbs = smap_get_ullong(details, "cbs", 0);
+    params->ebs = smap_get_ullong(details, "ebs", 0);
+}
+
+static void
+trtcm_policer_param_to_detail(
+    const struct rte_meter_trtcm_rfc4115_params *params,
+    struct smap *details)
+{
+    smap_add_format(details, "cir", "%"PRIu64, params->cir);
+    smap_add_format(details, "eir", "%"PRIu64, params->eir);
+    smap_add_format(details, "cbs", "%"PRIu64, params->cbs);
+    smap_add_format(details, "ebs", "%"PRIu64, params->ebs);
+}
+
+
+static int
+trtcm_policer_qos_construct(const struct smap *details,
+                            struct qos_conf **conf)
+{
+    struct trtcm_policer *policer;
+    int err = 0;
+
+    policer = xmalloc(sizeof *policer);
+    qos_conf_init(&policer->qos_conf, &trtcm_policer_ops);
+    trtcm_policer_details_to_param(details, &policer->meter_params);
+    err = rte_meter_trtcm_rfc4115_profile_config(&policer->meter_profile,
+                                                 &policer->meter_params);
+    if (!err) {
+        err = rte_meter_trtcm_rfc4115_config(&policer->meter,
+                                             &policer->meter_profile);
+    }
+
+    if (!err) {
+        *conf = &policer->qos_conf;
+        memset(&policer->stats, 0, sizeof policer->stats);
+        hmap_init(&policer->queues);
+    } else {
+        free(policer);
+        *conf = NULL;
+        err = -err;
+    }
+
+    return err;
+}
+
+static void
+trtcm_policer_qos_destruct(struct qos_conf *conf)
+{
+    struct trtcm_policer_queue *queue, *next_queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    HMAP_FOR_EACH_SAFE (queue, next_queue, hmap_node, &policer->queues) {
+        hmap_remove(&policer->queues, &queue->hmap_node);
+        free(queue);
+    }
+    hmap_destroy(&policer->queues);
+    free(policer);
+}
+
+static int
+trtcm_policer_qos_get(const struct qos_conf *conf, struct smap *details)
+{
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    trtcm_policer_param_to_detail(&policer->meter_params, details);
+    return 0;
+}
+
+static bool
+trtcm_policer_qos_is_equal(const struct qos_conf *conf,
+                           const struct smap *details)
+{
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+    struct rte_meter_trtcm_rfc4115_params params;
+
+    trtcm_policer_details_to_param(details, &params);
+
+    return !memcmp(&params, &policer->meter_params, sizeof params);
+}
+
+static struct trtcm_policer_queue *
+trtcm_policer_qos_find_queue(struct trtcm_policer *policer, uint32_t queue_id)
+{
+    struct trtcm_policer_queue *queue;
+    HMAP_FOR_EACH_WITH_HASH (queue, hmap_node, hash_2words(queue_id, 0),
+                             &policer->queues) {
+        if (queue->queue_id == queue_id) {
+            return queue;
+        }
+    }
+    return NULL;
+}
+
+static inline bool
+trtcm_policer_run_single_packet(struct trtcm_policer *policer,
+                                struct rte_mbuf *pkt, uint64_t time)
+{
+    enum rte_color pkt_color;
+    struct trtcm_policer_queue *queue;
+    uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct rte_ether_hdr);
+    struct dp_packet *dpkt = CONTAINER_OF(pkt, struct dp_packet, mbuf);
+
+    queue = trtcm_policer_qos_find_queue(policer, dpkt->md.skb_priority);
+    if (!queue) {
+        /* If no queue is found, use the default queue, which MUST exist. */
+        queue = trtcm_policer_qos_find_queue(policer, 0);
+        if (!queue) {
+            return false;
+        }
+    }
+
+    pkt_color = rte_meter_trtcm_rfc4115_color_blind_check(&queue->meter,
+                                                          &queue->meter_profile,
+                                                          time,
+                                                          pkt_len);
+
+    if (pkt_color == RTE_COLOR_RED) {
+        queue->stats.tx_errors++;
+    } else {
+        queue->stats.tx_bytes += pkt_len;
+        queue->stats.tx_packets++;
+    }
+
+    pkt_color = rte_meter_trtcm_rfc4115_color_aware_check(&policer->meter,
+                                                     &policer->meter_profile,
+                                                     time, pkt_len,
+                                                     pkt_color);
+
+    if (pkt_color == RTE_COLOR_RED) {
+        policer->stats.tx_errors++;
+        return false;
+    }
+
+    policer->stats.tx_bytes += pkt_len;
+    policer->stats.tx_packets++;
+    return true;
+}
+
+static int
+trtcm_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
+                  bool should_steal)
+{
+    int i = 0;
+    int cnt = 0;
+    struct rte_mbuf *pkt = NULL;
+    uint64_t current_time = rte_rdtsc();
+
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    for (i = 0; i < pkt_cnt; i++) {
+        pkt = pkts[i];
+
+        if (trtcm_policer_run_single_packet(policer, pkt, current_time)) {
+            if (cnt != i) {
+                pkts[cnt] = pkt;
+            }
+            cnt++;
+        } else {
+            if (should_steal) {
+                rte_pktmbuf_free(pkt);
+            }
+        }
+    }
+    return cnt;
+}
+
+static int
+trtcm_policer_qos_queue_construct(const struct smap *details,
+                                  uint32_t queue_id, struct qos_conf *conf)
+{
+    int err = 0;
+    struct trtcm_policer_queue *queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    queue = trtcm_policer_qos_find_queue(policer, queue_id);
+    if (!queue) {
+        queue = xmalloc(sizeof *queue);
+        queue->queue_id = queue_id;
+        memset(&queue->stats, 0, sizeof queue->stats);
+        queue->stats.created = time_msec();
+        hmap_insert(&policer->queues, &queue->hmap_node,
+                    hash_2words(queue_id, 0));
+    }
+    if (queue_id == 0 && smap_is_empty(details)) {
+        /* No default queue configured, use port values */
+        memcpy(&queue->meter_params, &policer->meter_params,
+               sizeof queue->meter_params);
+    } else {
+        trtcm_policer_details_to_param(details, &queue->meter_params);
+    }
+
+    err = rte_meter_trtcm_rfc4115_profile_config(&queue->meter_profile,
+                                                 &queue->meter_params);
+
+    if (!err) {
+        err = rte_meter_trtcm_rfc4115_config(&queue->meter,
+                                             &queue->meter_profile);
+    }
+    if (err) {
+        hmap_remove(&policer->queues, &queue->hmap_node);
+        free(queue);
+        err = -err;
+    }
+    return err;
+}
+
+static void
+trtcm_policer_qos_queue_destruct(struct qos_conf *conf, uint32_t queue_id)
+{
+    struct trtcm_policer_queue *queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    queue = trtcm_policer_qos_find_queue(policer, queue_id);
+    if (queue) {
+        hmap_remove(&policer->queues, &queue->hmap_node);
+        free(queue);
+    }
+}
+
+static int
+trtcm_policer_qos_queue_get(struct smap *details, uint32_t queue_id,
+                            const struct qos_conf *conf)
+{
+    struct trtcm_policer_queue *queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    queue = trtcm_policer_qos_find_queue(policer, queue_id);
+    if (!queue) {
+        return EINVAL;
+    }
+
+    trtcm_policer_param_to_detail(&queue->meter_params, details);
+    return 0;
+}
+
+static int
+trtcm_policer_qos_queue_get_stats(const struct qos_conf *conf,
+                                  uint32_t queue_id,
+                                  struct netdev_queue_stats *stats)
+{
+    struct trtcm_policer_queue *queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    queue = trtcm_policer_qos_find_queue(policer, queue_id);
+    if (!queue) {
+        return EINVAL;
+    }
+    memcpy(stats, &queue->stats, sizeof *stats);
+    return 0;
+}
+
+static int
+trtcm_policer_qos_queue_dump_state_init(const struct qos_conf *conf,
+                                        struct netdev_dpdk_queue_state *state)
+{
+    uint32_t i = 0;
+    struct trtcm_policer_queue *queue;
+    struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
+                                                 qos_conf);
+
+    state->n_queues = hmap_count(&policer->queues);
+    state->cur_queue = 0;
+    state->queues = xmalloc(state->n_queues * sizeof *state->queues);
+
+    HMAP_FOR_EACH (queue, hmap_node, &policer->queues) {
+        state->queues[i++] = queue->queue_id;
+    }
+    return 0;
+}
+
+static const struct dpdk_qos_ops trtcm_policer_ops = {
+    .qos_name = "trtcm-policer",
+    .qos_construct = trtcm_policer_qos_construct,
+    .qos_destruct = trtcm_policer_qos_destruct,
+    .qos_get = trtcm_policer_qos_get,
+    .qos_is_equal = trtcm_policer_qos_is_equal,
+    .qos_run = trtcm_policer_run,
+    .qos_queue_construct = trtcm_policer_qos_queue_construct,
+    .qos_queue_destruct = trtcm_policer_qos_queue_destruct,
+    .qos_queue_get = trtcm_policer_qos_queue_get,
+    .qos_queue_get_stats = trtcm_policer_qos_queue_get_stats,
+    .qos_queue_dump_state_init = trtcm_policer_qos_queue_dump_state_init
 };
 
 static int
