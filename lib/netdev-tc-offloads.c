@@ -1088,6 +1088,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             odp_port_t port = nl_attr_get_odp_port(nla);
             struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
 
+            if (!outdev) {
+                VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
+                return ENODEV;
+            }
             action->ifindex_out = netdev_get_ifindex(outdev);
             action->type = TC_ACT_OUTPUT;
             flower.action_count++;
