@@ -1038,6 +1038,7 @@ parse_tcp_flags(struct dp_packet *packet)
     if (OVS_UNLIKELY(eth_type_mpls(dl_type))) {
         packet->l2_5_ofs = (char *)data - frame;
     }
+    packet->l3_ofs = (char *)data - frame;
     if (OVS_LIKELY(dl_type == htons(ETH_TYPE_IP))) {
         const struct ip_header *nh = data;
         int ip_len;
@@ -1047,7 +1048,6 @@ parse_tcp_flags(struct dp_packet *packet)
             return 0;
         }
         dp_packet_set_l2_pad_size(packet, size - tot_len);
-        packet->l3_ofs = (uint16_t)((char *)nh - frame);
         nw_proto = nh->ip_proto;
         nw_frag = ipv4_get_nw_frag(nh);
 
@@ -1060,7 +1060,6 @@ parse_tcp_flags(struct dp_packet *packet)
         if (OVS_UNLIKELY(!ipv6_sanity_check(nh, size))) {
             return 0;
         }
-        packet->l3_ofs = (uint16_t)((char *)nh - frame);
         data_pull(&data, &size, sizeof *nh);
 
         plen = ntohs(nh->ip6_plen); /* Never pull padding. */
