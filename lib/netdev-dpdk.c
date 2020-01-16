@@ -1347,6 +1347,9 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     dev->vhost_id = xasprintf("%s/%s", dpdk_get_vhost_sock_dir(), name);
 
     dev->vhost_driver_flags &= ~RTE_VHOST_USER_CLIENT;
+
+    /* There is no support for multi-segments buffers. */
+    dev->vhost_driver_flags |= RTE_VHOST_USER_LINEARBUF_SUPPORT;
     err = rte_vhost_driver_register(dev->vhost_id, dev->vhost_driver_flags);
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
@@ -4951,6 +4954,9 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT) && dev->vhost_id) {
         /* Register client-mode device. */
         vhost_flags |= RTE_VHOST_USER_CLIENT;
+
+        /* There is no support for multi-segments buffers. */
+        vhost_flags |= RTE_VHOST_USER_LINEARBUF_SUPPORT;
 
         /* Enable IOMMU support, if explicitly requested. */
         if (dpdk_vhost_iommu_enabled()) {
