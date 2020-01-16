@@ -879,7 +879,11 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
 
     dp_packet_batch_init(dst);
     DP_PACKET_BATCH_FOR_EACH (i, packet, src) {
-        dp_packet_batch_add(dst, dp_packet_clone(packet));
+        uint32_t headroom = dp_packet_headroom(packet);
+        struct dp_packet *pkt_clone;
+
+        pkt_clone  = dp_packet_clone_with_headroom(packet, headroom);
+        dp_packet_batch_add(dst, pkt_clone);
     }
     dst->trunc = src->trunc;
 }
