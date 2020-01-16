@@ -58,7 +58,7 @@ author = u'The Open vSwitch Development Community'
 # The full version, including alpha/beta/rc tags.
 release = None
 filename = "../configure.ac"
-with open(filename, 'rU') as f:
+with open(filename, 'r') as f:
     for line in f:
         if 'AC_INIT' in line:
             # Parse "AC_INIT(openvswitch, 2.7.90, bugs@openvswitch.org)":
