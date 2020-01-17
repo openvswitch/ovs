@@ -7970,7 +7970,7 @@ dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8847,controller
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 dnl Packet is dropped because an MPLS PUSH action is applied to a packet with
-dnl 4 MPLS LSEs but ovs-vswtichd can only handle up to 3 MPLS LSEs and thus
+dnl 4 MPLS LSEs but ovs-vswitchd can only handle up to 3 MPLS LSEs and thus
 dnl can't determine the resulting MPLS label after MPLS push/pop actions.
 dnl
 dnl The input is a frame with two MPLS headers which tcpdump -vve shows as:

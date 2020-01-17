@@ -32,7 +32,7 @@ Post-v2.12.0
        TCP/UDP ports actions (experimental).
    - RSTP:
      * The rstp_statistics column in Port table will only be updated every
-       stats-update-interval configured in Open_vSwtich table.
+       stats-update-interval configured in Open_vSwitch table.
    - OVSDB:
      * When ovsdb-server is running in backup mode, the default value of probe
        interval is increased to 60 seconds for the connection to the
