@@ -1272,6 +1272,7 @@ netdev_offload_dpdk_flow_get(struct netdev *netdev,
     }
     memcpy(stats, &rte_flow_data->stats, sizeof *stats);
 out:
+    attrs->dp_extra_info = NULL;
     return ret;
 }
 

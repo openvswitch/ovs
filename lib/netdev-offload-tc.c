@@ -873,6 +873,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     attrs->offloaded = (flower->offloaded_state == TC_OFFLOADED_STATE_IN_HW)
                        || (flower->offloaded_state == TC_OFFLOADED_STATE_UNDEFINED);
     attrs->dp_layer = "tc";
+    attrs->dp_extra_info = NULL;
 
     return 0;
 }

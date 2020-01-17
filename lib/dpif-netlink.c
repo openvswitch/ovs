@@ -1590,6 +1590,7 @@ dpif_netlink_flow_to_dpif_flow(struct dpif_flow *dpif_flow,
     dpif_netlink_flow_get_stats(datapath_flow, &dpif_flow->stats);
     dpif_flow->attrs.offloaded = false;
     dpif_flow->attrs.dp_layer = "ovs";
+    dpif_flow->attrs.dp_extra_info = NULL;
 }
 
 /* The design is such that all threads are working together on the first dump
