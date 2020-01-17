@@ -690,6 +690,26 @@
          once in few hours or a day or a week.
         </p>
       </column>
+      <column name="other_config" key="userspace-tso-enable"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to enable userspace support for
+          TCP Segmentation Offloading (TSO). When it is enabled, the interfaces
+          can provide an oversized TCP segment to the datapath and the datapath
+          will offload the TCP segmentation and checksum calculation to the
+          interfaces when necessary.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon.
+        </p>
+        <p>
+          The feature only works if Open vSwitch is built with DPDK support.
+        </p>
+        <p>
+          The feature is considered experimental.
+        </p>
+      </column>
     </group>
     <group title="Status">
       <column name="next_cfg">

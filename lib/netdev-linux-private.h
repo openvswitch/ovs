@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "dp-packet.h"
 #include "netdev-afxdp.h"
 #include "netdev-afxdp-pool.h"
 #include "netdev-provider.h"
@@ -37,10 +38,13 @@
 
 struct netdev;
 
+#define LINUX_RXQ_TSO_MAX_LEN 65536
+
 struct netdev_rxq_linux {
     struct netdev_rxq up;
     bool is_tap;
     int fd;
+    char *aux_bufs[NETDEV_MAX_BURST]; /* Batch of preallocated TSO buffers. */
 };
 
 int netdev_linux_construct(struct netdev *);
@@ -92,6 +96,7 @@ struct netdev_linux {
     int tap_fd;
     bool present;               /* If the device is present in the namespace */
     uint64_t tx_dropped;        /* tap device can drop if the iface is down */
+    uint64_t rx_dropped;        /* Packets dropped while recv from kernel. */
 
     /* LAG information. */
     bool is_lag_master;         /* True if the netdev is a LAG master. */
