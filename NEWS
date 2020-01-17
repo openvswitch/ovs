@@ -26,6 +26,8 @@ Post-v2.12.0
      * DPDK ring ports (dpdkr) are deprecated and will be removed in next
        releases.
      * Add support for DPDK 19.11.
+     * Add hardware offload support for output, drop, set of MAC, IPv4 and
+       TCP/UDP ports actions (experimental).
    - RSTP:
      * The rstp_statistics column in Port table will only be updated every
        stats-update-interval configured in Open_vSwtich table.
@@ -34,8 +36,6 @@ Post-v2.12.0
        interval is increased to 60 seconds for the connection to the
        replication server. This value is configurable with the unixctl
        command - ovsdb-server/set-active-ovsdb-server-probe-interval.
-     * Add hardware offload support for output, drop, set of MAC, IPv4 and
-       TCP/UDP ports actions (experimental).
      * ovsdb-server: New OVSDB extension to allow clients to specify row UUIDs.
    - 'ovs-appctl dpctl/dump-flows' can now show offloaded=partial for
      partially offloaded flows, dp:dpdk for fully offloaded by dpdk, and
