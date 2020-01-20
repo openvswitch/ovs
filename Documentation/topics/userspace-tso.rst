@@ -96,3 +96,30 @@ datapath must support TSO or packets using that feature will be dropped
 on ports without TSO support.  That also means guests using vhost-user
 in client mode will receive TSO packet regardless of TSO being enabled
 or disabled within the guest.
+
+When the NIC performing the segmentation is using the i40e DPDK PMD, a fix
+must be included in the DPDK build, otherwise TSO will not work. The fix can
+be found on `DPDK patchwork`__.
+
+__ https://patches.dpdk.org/patch/64136/
+
+This fix is expected to be included in the 19.11.1 release. When OVS migrates
+to this DPDK release, this limitation can be removed.
+
+~~~~~~~~~~~~~~~~~~
+Performance Tuning
+~~~~~~~~~~~~~~~~~~
+
+iperf is often used to test TSO performance. Care needs to be taken when
+configuring the environment in which the iperf server process is being run.
+Since the iperf server uses the NIC's kernel driver, IRQs will be generated.
+By default with some NICs eg. i40e, the IRQs will land on the same core as that
+which is being used by the server process, provided the number of NIC queues is
+greater or equal to that lcoreid. This causes contention between the iperf
+server process and the IRQs. For optimal performance, it is suggested to pin
+the IRQs to their own core. To change the affinity associated with a given IRQ
+number, you can 'echo' the desired coremask to the file
+/proc/irq/<number>/smp_affinity
+For more on SMP affinity, refer to the `Linux kernel documentation`__.
+
+__ https://www.kernel.org/doc/Documentation/IRQ-affinity.txt
