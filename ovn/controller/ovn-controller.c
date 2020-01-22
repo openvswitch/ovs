@@ -1904,9 +1904,6 @@ main(int argc, char *argv[])
     exiting = false;
     restart = false;
     while (!exiting) {
-        update_sb_db(ovs_idl_loop.idl, ovnsb_idl_loop.idl);
-        update_ssl_config(ovsrec_ssl_table_get(ovs_idl_loop.idl));
-        ofctrl_set_probe_interval(get_ofctrl_probe_interval(ovs_idl_loop.idl));
         old_engine_run_id = engine_run_id;
 
         struct ovsdb_idl_txn *ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop);
@@ -1919,6 +1916,10 @@ main(int argc, char *argv[])
             }
             ovs_cond_seqno = new_ovs_cond_seqno;
         }
+
+        update_sb_db(ovs_idl_loop.idl, ovnsb_idl_loop.idl);
+        update_ssl_config(ovsrec_ssl_table_get(ovs_idl_loop.idl));
+        ofctrl_set_probe_interval(get_ofctrl_probe_interval(ovs_idl_loop.idl));
 
         struct ovsdb_idl_txn *ovnsb_idl_txn
             = ovsdb_idl_loop_run(&ovnsb_idl_loop);
