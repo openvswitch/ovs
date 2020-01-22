@@ -422,7 +422,8 @@ punix:<file>
     named <file>.
 
     On Windows, listens on a local named pipe, creating a named pipe
-    <file> to mimic the behavior of a Unix domain socket.
+    <file> to mimic the behavior of a Unix domain socket. The ACLs of the named
+    pipe include LocalSystem, Administrators, and Creator Owner.
 
 All IP-based connection methods accept IPv4 and IPv6 addresses.  To specify an
 IPv6 address, wrap it in square brackets, e.g.  ``ssl:[::1]:6640``.  Passive
