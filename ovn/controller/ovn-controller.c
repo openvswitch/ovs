@@ -430,12 +430,12 @@ static void
 update_sb_db(struct ovsdb_idl *ovs_idl, struct ovsdb_idl *ovnsb_idl)
 {
     const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    if (!cfg) {
+        return;
+    }
 
     /* Set remote based on user configuration. */
-    const char *remote = NULL;
-    if (cfg) {
-        remote = smap_get(&cfg->external_ids, "ovn-remote");
-    }
+    const char *remote = smap_get(&cfg->external_ids, "ovn-remote");
     ovsdb_idl_set_remote(ovnsb_idl, remote, true);
 
     /* Set probe interval, based on user configuration and the remote. */
