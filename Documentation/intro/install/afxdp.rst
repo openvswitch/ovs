@@ -108,6 +108,14 @@ vSwitch with AF_XDP will require the following:
 
   * CONFIG_XDP_SOCKETS_DIAG=y (Debugging)
 
+- If you're building your own kernel, be sure that you're installing kernel
+  headers too.  For example, with the following command::
+
+    make headers_install INSTALL_HDR_PATH=/usr
+
+- If you're using kernel from the distribution, be sure that corresponding
+  kernel headers package installed.
+
 - Once your AF_XDP-enabled kernel is ready, if possible, run
   **./xdpsock -r -N -z -i <your device>** under linux/samples/bpf.
   This is an OVS independent benchmark tools for AF_XDP.
