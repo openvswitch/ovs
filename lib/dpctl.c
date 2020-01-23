@@ -832,7 +832,6 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
     if (dpctl_p->verbosity && f->attrs.dp_extra_info) {
         ds_put_format(ds, ", dp-extra-info:%s", f->attrs.dp_extra_info);
     }
-    free(f->attrs.dp_extra_info);
 }
 
 struct dump_types {

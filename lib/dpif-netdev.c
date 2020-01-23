@@ -551,6 +551,7 @@ struct dp_netdev_flow {
     struct packet_batch_per_flow *batch;
 
     /* Packet classification. */
+    char *dp_extra_info;         /* String to return in a flow dump/get. */
     struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
     /* 'cr' must be the last member. */
 };
@@ -2096,6 +2097,7 @@ static void
 dp_netdev_flow_free(struct dp_netdev_flow *flow)
 {
     dp_netdev_actions_free(dp_netdev_flow_get_actions(flow));
+    free(flow->dp_extra_info);
     free(flow);
 }
 
@@ -3158,21 +3160,7 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev *dp,
     flow->pmd_id = netdev_flow->pmd_id;
 
     get_dpif_flow_status(dp, netdev_flow, &flow->stats, &flow->attrs);
-
-    struct ds extra_info = DS_EMPTY_INITIALIZER;
-    size_t unit;
-
-    ds_put_cstr(&extra_info, "miniflow_bits(");
-    FLOWMAP_FOR_EACH_UNIT (unit) {
-        if (unit) {
-            ds_put_char(&extra_info, ',');
-        }
-        ds_put_format(&extra_info, "%d",
-                      count_1bits(netdev_flow->cr.mask->mf.map.bits[unit]));
-    }
-    ds_put_char(&extra_info, ')');
-    flow->attrs.dp_extra_info = ds_steal_cstr(&extra_info);
-    ds_destroy(&extra_info);
+    flow->attrs.dp_extra_info = netdev_flow->dp_extra_info;
 }
 
 static int
@@ -3312,9 +3300,11 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                    const struct nlattr *actions, size_t actions_len)
     OVS_REQUIRES(pmd->flow_mutex)
 {
+    struct ds extra_info = DS_EMPTY_INITIALIZER;
     struct dp_netdev_flow *flow;
     struct netdev_flow_key mask;
     struct dpcls *cls;
+    size_t unit;
 
     /* Make sure in_port is exact matched before we read it. */
     ovs_assert(match->wc.masks.in_port.odp_port == ODPP_NONE);
@@ -3354,6 +3344,18 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     /* Select dpcls for in_port. Relies on in_port to be exact match. */
     cls = dp_netdev_pmd_find_dpcls(pmd, in_port);
     dpcls_insert(cls, &flow->cr, &mask);
+
+    ds_put_cstr(&extra_info, "miniflow_bits(");
+    FLOWMAP_FOR_EACH_UNIT (unit) {
+        if (unit) {
+            ds_put_char(&extra_info, ',');
+        }
+        ds_put_format(&extra_info, "%d",
+                      count_1bits(flow->cr.mask->mf.map.bits[unit]));
+    }
+    ds_put_char(&extra_info, ')');
+    flow->dp_extra_info = ds_steal_cstr(&extra_info);
+    ds_destroy(&extra_info);
 
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
