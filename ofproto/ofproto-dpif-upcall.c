@@ -2646,9 +2646,6 @@ revalidate(struct revalidator *revalidator)
             bool already_dumped;
             int error;
 
-            /* We don't need an extra information. */
-            free(f->attrs.dp_extra_info);
-
             if (ukey_acquire(udpif, f, &ukey, &error)) {
                 if (error == EBUSY) {
                     /* Another thread is processing this flow, so don't bother

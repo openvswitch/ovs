@@ -966,7 +966,6 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
                       && ovs_u128_equals(*ufid, flow.ufid)))) {
         enable_feature = true;
     }
-    free(flow.attrs.dp_extra_info);
 
     error = dpif_flow_del(dpif, key->data, key->size, ufid,
                           NON_PMD_CORE_ID, NULL);

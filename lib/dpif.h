@@ -511,9 +511,9 @@ struct dpif_flow_detailed_stats {
 };
 
 struct dpif_flow_attrs {
-    bool offloaded;         /* True if flow is offloaded to HW. */
-    const char *dp_layer;   /* DP layer the flow is handled in. */
-    char *dp_extra_info;    /* Extra information provided by DP. */
+    bool offloaded;            /* True if flow is offloaded to HW. */
+    const char *dp_layer;      /* DP layer the flow is handled in. */
+    const char *dp_extra_info; /* Extra information provided by DP. */
 };
 
 struct dpif_flow_dump_types {
@@ -745,8 +745,7 @@ struct dpif_execute {
  * for the datapath flow corresponding to 'key'. The mask and actions may point
  * within '*buffer', or may point at RCU-protected data. Therefore, callers
  * that wish to hold these over quiescent periods must make a copy of these
- * fields before quiescing.  'attrs.dp_extra_info' is a dynamically allocated
- * string that should be freed if provided by the datapath.
+ * fields before quiescing.
  *
  * Callers should always provide 'key' to improve dpif logging in the event of
  * errors or unexpected behaviour.

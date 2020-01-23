@@ -6282,9 +6282,6 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
         struct flow flow;
 
-        /* No need for extra info. */
-        free(f.attrs.dp_extra_info);
-
         if ((odp_flow_key_to_flow(f.key, f.key_len, &flow, NULL)
              == ODP_FIT_ERROR)
             || (xlate_lookup_ofproto(ofproto->backer, &flow, NULL, NULL)
