@@ -64,8 +64,10 @@ void time_wall_timespec(struct timespec *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, HANDLE *handles,
               long long int timeout_when, int *elapsed);
+#ifdef __linux__
 int time_epoll_wait(int epoll_fd, struct epoll_event *events, int max,
           long long int timeout_when, int *elapsed);
+#endif
 
 long long int timespec_to_msec(const struct timespec *);
 long long int timespec_to_usec(const struct timespec *);
