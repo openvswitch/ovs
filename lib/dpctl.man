@@ -124,8 +124,10 @@ This option supported only for \fBovs\-appctl dpctl/dump\-flows\fR.
 .
    \fBovs\fR - displays flows handled in the ovs dp
    \fBtc\fR - displays flows handled in the tc dp
+   \fBdpdk\fR - displays flows fully offloaded by dpdk
    \fBoffloaded\fR - displays flows offloaded to the HW
    \fBnon-offloaded\fR - displays flows not offloaded to the HW
+   \fBpartially-offloaded\fR - displays flows where only part of their proccessing is done in HW
    \fBall\fR - displays all the types of flows
 .IP
 By default all the types of flows are displayed.

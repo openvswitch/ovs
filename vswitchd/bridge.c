@@ -65,6 +65,7 @@
 #include "system-stats.h"
 #include "timeval.h"
 #include "tnl-ports.h"
+#include "userspace-tso.h"
 #include "util.h"
 #include "unixctl.h"
 #include "lib/vswitch-idl.h"
@@ -3287,6 +3288,7 @@ bridge_run(void)
     if (cfg) {
         netdev_set_flow_api_enabled(&cfg->other_config);
         dpdk_init(&cfg->other_config);
+        userspace_tso_init(&cfg->other_config);
     }
 
     /* Initialize the ofproto library.  This only needs to run once, but

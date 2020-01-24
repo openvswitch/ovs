@@ -37,6 +37,12 @@ extern "C" {
 struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
+enum netdev_ol_flags {
+    NETDEV_TX_OFFLOAD_IPV4_CKSUM = 1 << 0,
+    NETDEV_TX_OFFLOAD_TCP_CKSUM = 1 << 1,
+    NETDEV_TX_OFFLOAD_TCP_TSO = 1 << 2,
+};
+
 /* A network device (e.g. an Ethernet device).
  *
  * Network device implementations may read these members but should not modify
@@ -50,6 +56,9 @@ struct netdev {
     /* If this is 'true' the user did not specify a netdev_class when
      * opening this device, and therefore got assigned to the "system" class */
     bool auto_classified;
+
+    /* This bitmask of the offloading features enabled by the netdev. */
+    uint64_t ol_flags;
 
     /* If this is 'true', the user explicitly specified an MTU for this
      * netdev.  Otherwise, Open vSwitch is allowed to override it. */

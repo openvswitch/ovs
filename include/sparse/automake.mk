@@ -5,6 +5,7 @@ noinst_HEADERS += \
         include/sparse/bits/floatn.h \
         include/sparse/assert.h \
         include/sparse/math.h \
+        include/sparse/numa.h \
         include/sparse/netinet/in.h \
         include/sparse/netinet/ip6.h \
         include/sparse/netpacket/packet.h \

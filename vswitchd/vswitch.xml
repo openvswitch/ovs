@@ -690,6 +690,26 @@
          once in few hours or a day or a week.
         </p>
       </column>
+      <column name="other_config" key="userspace-tso-enable"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to enable userspace support for
+          TCP Segmentation Offloading (TSO). When it is enabled, the interfaces
+          can provide an oversized TCP segment to the datapath and the datapath
+          will offload the TCP segmentation and checksum calculation to the
+          interfaces when necessary.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon.
+        </p>
+        <p>
+          The feature only works if Open vSwitch is built with DPDK support.
+        </p>
+        <p>
+          The feature is considered experimental.
+        </p>
+      </column>
     </group>
     <group title="Status">
       <column name="next_cfg">
@@ -4453,6 +4473,19 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           in performance will be noticed in terms of overall aggregate traffic
           throughput.
         </dd>
+        <dt><code>trtcm-policer</code></dt>
+        <dd>
+          A DPDK egress policer algorithm using RFC 4115's Two-Rate,
+          Three-Color marker. It's a two-level hierarchical policer
+          which first does a color-blind marking of the traffic at the queue
+          level, followed by a color-aware marking at the port level. At the
+          end traffic marked as Green or Yellow is forwarded, Red is dropped.
+          For details on how traffic is marked, see RFC 4115.
+
+          If the ``default queue'', 0, is not configured it's automatically
+          created with the same <code>other_config</code> values as the
+          physical port.
+        </dd>
       </dl>
     </column>
 
@@ -4519,6 +4552,27 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         be transmitted then the cbs will be decremented by the number of
         bytes/tokens of the packet. If there are not enough tokens in the cbs
         bucket the packet will be dropped.
+      </column>
+      <column name="other_config" key="eir" type='{"type": "integer"}'>
+        The Excess Information Rate (EIR) is measured in bytes of IP
+        packets per second, i.e. it includes the IP header, but not link
+        specific (e.g. Ethernet) headers. This represents the bytes per second
+        rate at which the token bucket will be updated. The eir value is
+        calculated by (pps x packet data size).  For example assuming a user
+        wishes to limit a stream consisting of 64 byte packets to 1 million
+        packets per second the EIR would be set to to to 46000000. This value
+        can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
+        rate for the number of packets per second and 46 represents the size
+        of the packet data for a 64 byte ip packet.
+      </column>
+      <column name="other_config" key="ebs" type='{"type": "integer"}'>
+        The Excess Burst Size (EBS) is measured in bytes and represents a
+        token bucket. At a minimum this value should be be set to the expected
+        largest size packet in the traffic stream. In practice larger values
+        may be used to increase the size of the token bucket. If a packet can
+        be transmitted then the ebs will be decremented by the number of
+        bytes/tokens of the packet. If there are not enough tokens in the cbs
+        bucket the packet might be dropped.
       </column>
     </group>
 

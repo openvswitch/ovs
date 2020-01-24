@@ -1,4 +1,8 @@
-Post-v2.12.0
+Post-v2.13.0
+---------------------
+
+
+v2.13.0 - xx xxx xxxx
 ---------------------
    - OVN:
      * OVN has been removed from this repository. It now exists as a
@@ -8,6 +12,8 @@ Post-v2.12.0
      * Add option to enable, disable and query TCP sequence checking in
        conntrack.
      * Add support for conntrack zone limits.
+     * Command "ovs-appctl dpctl/dump-flows" refactored to show subtable
+       miniflow bits for userspace datapath.
    - AF_XDP:
      * New option 'use-need-wakeup' for netdev-afxdp to control enabling
        of corresponding 'need_wakeup' flag in AF_XDP rings.  Enabled by default
@@ -26,14 +32,21 @@ Post-v2.12.0
      * DPDK ring ports (dpdkr) are deprecated and will be removed in next
        releases.
      * Add support for DPDK 19.11.
+     * Add hardware offload support for output, drop, set of MAC, IPv4 and
+       TCP/UDP ports actions (experimental).
+     * Add experimental support for TSO.
    - RSTP:
      * The rstp_statistics column in Port table will only be updated every
-       stats-update-interval configured in Open_vSwtich table.
+       stats-update-interval configured in Open_vSwitch table.
    - OVSDB:
      * When ovsdb-server is running in backup mode, the default value of probe
        interval is increased to 60 seconds for the connection to the
        replication server. This value is configurable with the unixctl
        command - ovsdb-server/set-active-ovsdb-server-probe-interval.
+     * ovsdb-server: New OVSDB extension to allow clients to specify row UUIDs.
+   - 'ovs-appctl dpctl/dump-flows' can now show offloaded=partial for
+     partially offloaded flows, dp:dpdk for fully offloaded by dpdk, and
+     type filter supports new filters: "dpdk" and "partially-offloaded".
    - OpenFlow:
      * The OpenFlow ofp_desc/serial_num may now be configured by setting the
        value of other-config:dp-sn in the Bridge table.

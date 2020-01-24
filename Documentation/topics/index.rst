@@ -50,5 +50,6 @@ OVS
    language-bindings
    testing
    tracing
+   userspace-tso
    idl-compound-indexes
    ovs-extensions

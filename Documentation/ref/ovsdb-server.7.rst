@@ -546,6 +546,15 @@ condition can be either a 3-element JSON array as described in the RFC or a
 boolean value. In case of an empty array an implicit true boolean value will be
 considered.
 
+5.2.1 Insert
+------------
+
+As an extension, Open vSwitch 2.13 and later allow an optional ``uuid`` member
+to specify the UUID for the new row.  The specified UUID must be unique within
+the table when it is inserted and not the UUID of a row previously deleted
+within the transaction.  If the UUID violates these rules, then the operation
+fails with a ``duplicate uuid`` error.
+
 5.2.6 Wait, 5.2.7 Commit, 5.2.9 Comment
 ---------------------------------------
 
