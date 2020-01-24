@@ -808,7 +808,7 @@ netdev_linux_wait(const struct netdev_class *netdev_class OVS_UNUSED)
     }
     sock = netdev_linux_notify_sock();
     if (sock) {
-        nl_sock_wait(sock, POLLIN);
+        nl_sock_wait(sock, OVS_POLLIN);
     }
 }
 
@@ -1465,7 +1465,7 @@ static void
 netdev_linux_rxq_wait(struct netdev_rxq *rxq_)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
-    poll_fd_wait(rx->fd, POLLIN);
+    poll_fd_wait(rx->fd, OVS_POLLIN);
 }
 
 static int

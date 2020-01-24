@@ -259,7 +259,7 @@ check_connection_completion(int fd)
     int retval;
 
     pfd.fd = fd;
-    pfd.events = POLLOUT;
+    pfd.events = OVS_POLLOUT;
 
 #ifndef _WIN32
     do {
@@ -280,17 +280,17 @@ check_connection_completion(int fd)
             pfd.revents |= pfd.events;
         }
         if (FD_ISSET(fd, &exset)) {
-            pfd.revents |= POLLERR;
+            pfd.revents |= OVS_POLLERR;
         }
     }
 #endif
     if (retval == 1) {
-        if (pfd.revents & (POLLERR | POLLHUP)) {
+        if (pfd.revents & (OVS_POLLERR | OVS_POLLHUP)) {
             ssize_t n = send(fd, "", 1, 0);
             if (n < 0) {
                 return sock_errno();
             } else {
-                VLOG_ERR_RL(&rl, "poll return POLLERR but send succeeded");
+                VLOG_ERR_RL(&rl, "poll return OVS_POLLERR but send succeeded");
                 return EPROTO;
             }
         }

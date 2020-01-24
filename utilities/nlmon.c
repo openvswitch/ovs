@@ -141,7 +141,7 @@ main(int argc OVS_UNUSED, char *argv[])
             }
         }
 
-        nl_sock_wait(sock, POLLIN);
+        nl_sock_wait(sock, OVS_POLLIN);
         poll_block();
     }
 }

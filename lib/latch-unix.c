@@ -67,12 +67,12 @@ latch_is_set(const struct latch *latch)
     int retval;
 
     pfd.fd = latch->fds[0];
-    pfd.events = POLLIN;
+    pfd.events = OVS_POLLIN;
     do {
         retval = poll(&pfd, 1, 0);
     } while (retval < 0 && errno == EINTR);
 
-    return pfd.revents & POLLIN;
+    return pfd.revents & OVS_POLLIN;
 }
 
 /* Causes the next poll_block() to wake up when 'latch' is set.
@@ -83,5 +83,5 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(latch->fds[0], POLLIN, where);
+    poll_fd_wait_at(latch->fds[0], OVS_POLLIN, where);
 }

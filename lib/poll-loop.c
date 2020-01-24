@@ -80,7 +80,7 @@ find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
 /* On Unix based systems:
  *
  *     Registers 'fd' as waiting for the specified 'events' (which should be
- *     POLLIN or POLLOUT or POLLIN | POLLOUT).  The following call to
+ *     OVS_POLLIN or OVS_POLLOUT or OVS_POLLIN | OVS_POLLOUT).  The following call to
  *     poll_block() will wake up when 'fd' becomes ready for one or more of the
  *     requested events. The 'fd's are given to poll() function later.
  *
@@ -130,8 +130,8 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
     }
 }
 
-/* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
- * or POLLOUT or POLLIN | POLLOUT).  The following call to poll_block() will
+/* Registers 'fd' as waiting for the specified 'events' (which should be OVS_POLLIN
+ * or OVS_POLLOUT or OVS_POLLIN | OVS_POLLOUT).  The following call to poll_block() will
  * wake up when 'fd' becomes ready for one or more of the requested events.
  *
  * On Windows, 'fd' must be a socket.
@@ -265,20 +265,20 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     ds_put_cstr(&s, "wakeup due to ");
     if (pollfd) {
         char *description = describe_fd(pollfd->fd);
-        if (pollfd->revents & POLLIN) {
-            ds_put_cstr(&s, "[POLLIN]");
+        if (pollfd->revents & OVS_POLLIN) {
+            ds_put_cstr(&s, "[OVS_POLLIN]");
         }
-        if (pollfd->revents & POLLOUT) {
-            ds_put_cstr(&s, "[POLLOUT]");
+        if (pollfd->revents & OVS_POLLOUT) {
+            ds_put_cstr(&s, "[OVS_POLLOUT]");
         }
-        if (pollfd->revents & POLLERR) {
-            ds_put_cstr(&s, "[POLLERR]");
+        if (pollfd->revents & OVS_POLLERR) {
+            ds_put_cstr(&s, "[OVS_POLLERR]");
         }
-        if (pollfd->revents & POLLHUP) {
-            ds_put_cstr(&s, "[POLLHUP]");
+        if (pollfd->revents & OVS_POLLHUP) {
+            ds_put_cstr(&s, "[OVS_POLLHUP]");
         }
-        if (pollfd->revents & POLLNVAL) {
-            ds_put_cstr(&s, "[POLLNVAL]");
+        if (pollfd->revents & OVS_POLLNVAL) {
+            ds_put_cstr(&s, "[OVS_POLLNVAL]");
         }
         ds_put_format(&s, " on fd %d (%s)", pollfd->fd, description);
         free(description);
@@ -349,10 +349,10 @@ poll_block(void)
         wevents[i] = node->wevent;
         if (node->pollfd.fd && node->wevent) {
             short int wsa_events = 0;
-            if (node->pollfd.events & POLLIN) {
+            if (node->pollfd.events & OVS_POLLIN) {
                 wsa_events |= FD_READ | FD_ACCEPT | FD_CLOSE;
             }
-            if (node->pollfd.events & POLLOUT) {
+            if (node->pollfd.events & OVS_POLLOUT) {
                 wsa_events |= FD_WRITE | FD_CONNECT | FD_CLOSE;
             }
             WSAEventSelect(node->pollfd.fd, node->wevent, wsa_events);

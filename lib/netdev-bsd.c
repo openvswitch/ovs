@@ -659,7 +659,7 @@ netdev_bsd_rxq_wait(struct netdev_rxq *rxq_)
 {
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
 
-    poll_fd_wait(rxq->fd, POLLIN);
+    poll_fd_wait(rxq->fd, OVS_POLLIN);
 }
 
 /* Discards all packets waiting to be received from 'rxq'. */
@@ -752,7 +752,7 @@ netdev_bsd_send_wait(struct netdev *netdev_, int qid OVS_UNUSED)
         /* TAP device always accepts packets. */
         poll_immediate_wake();
     } else if (dev->pcap) {
-        poll_fd_wait(dev->fd, POLLOUT);
+        poll_fd_wait(dev->fd, OVS_POLLOUT);
     } else {
         /* We haven't even tried to send a packet yet. */
         poll_immediate_wake();

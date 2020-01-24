@@ -592,7 +592,7 @@ process_wait(struct process *p)
     if (p->exited) {
         poll_immediate_wake();
     } else {
-        poll_fd_wait(fds[0], POLLIN);
+        poll_fd_wait(fds[0], OVS_POLLIN);
     }
 #else
     OVS_NOT_REACHED();

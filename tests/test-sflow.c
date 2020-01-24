@@ -739,7 +739,7 @@ test_sflow_main(int argc, char *argv[])
             break;
         }
 
-        poll_fd_wait(sock, POLLIN);
+        poll_fd_wait(sock, OVS_POLLIN);
         unixctl_server_wait(server);
         poll_block();
     }

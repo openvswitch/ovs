@@ -271,7 +271,7 @@ fatal_signal_wait(void)
 #ifdef _WIN32
     poll_wevent_wait(wevent);
 #else
-    poll_fd_wait(signal_fds[0], POLLIN);
+    poll_fd_wait(signal_fds[0], OVS_POLLIN);
 #endif
 }
 
