@@ -156,8 +156,8 @@ static struct poll_node
 void
 poll_fd_wait_at(int fd, short int events, const char *where)
 {
-    struct poll_node *node = poll_create_node(fd, 0, events, where);
 #ifdef __linux__
+    struct poll_node *node = poll_create_node(fd, 0, events, where);
     struct poll_loop *loop = poll_loop();
     struct epoll_event event;
 
@@ -167,6 +167,8 @@ poll_fd_wait_at(int fd, short int events, const char *where)
     if ((epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) && (errno == EEXIST)) {
         epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, fd, &event);
     }
+#else
+    poll_create_node(fd, 0, events, where);
 #endif
 }
 
@@ -348,7 +350,7 @@ poll_block(void)
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
     struct pollfd *pollfds;
-#ifndef __linux_
+#ifndef __linux__
     HANDLE *wevents = NULL;
 #endif
     int elapsed;
