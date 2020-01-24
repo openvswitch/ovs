@@ -159,7 +159,7 @@ rtbsd_notifier_wait(void)
 {
     ovs_mutex_lock(&rtbsd_mutex);
     if (notify_sock >= 0) {
-        poll_fd_wait(notify_sock, POLLIN);
+        poll_fd_wait(notify_sock, OVS_POLLIN);
     }
     ovs_mutex_unlock(&rtbsd_mutex);
 }

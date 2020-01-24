@@ -210,10 +210,10 @@ want_to_poll_events(int want)
         OVS_NOT_REACHED();
 
     case SSL_READING:
-        return POLLIN;
+        return OVS_POLLIN;
 
     case SSL_WRITING:
-        return POLLOUT;
+        return OVS_POLLOUT;
 
     default:
         OVS_NOT_REACHED();
@@ -811,7 +811,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
         } else {
             switch (sslv->state) {
             case STATE_TCP_CONNECTING:
-                poll_fd_wait(sslv->fd, POLLOUT);
+                poll_fd_wait(sslv->fd, OVS_POLLOUT);
                 break;
 
             case STATE_SSL_CONNECTING:
@@ -965,7 +965,7 @@ static void
 pssl_wait(struct pstream *pstream)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
-    poll_fd_wait(pssl->fd, POLLIN);
+    poll_fd_wait(pssl->fd, OVS_POLLIN);
 }
 
 const struct pstream_class pssl_pstream_class = {

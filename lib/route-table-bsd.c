@@ -113,7 +113,7 @@ retry:
 
         memset(&pfd, 0, sizeof(pfd));
         pfd.fd = rtsock;
-        pfd.events = POLLIN;
+        pfd.events = OVS_POLLIN;
         /*
          * The timeout value below is somehow arbitrary.
          * It's to detect the lost of routing messages due to

@@ -150,11 +150,11 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
     switch (wait) {
     case STREAM_CONNECT:
     case STREAM_SEND:
-        poll_fd_wait(s->fd, POLLOUT);
+        poll_fd_wait(s->fd, OVS_POLLOUT);
         break;
 
     case STREAM_RECV:
-        poll_fd_wait(s->fd, POLLIN);
+        poll_fd_wait(s->fd, OVS_POLLIN);
         break;
 
     default:
@@ -271,7 +271,7 @@ static void
 pfd_wait(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
-    poll_fd_wait(ps->fd, POLLIN);
+    poll_fd_wait(ps->fd, OVS_POLLIN);
 }
 
 static const struct pstream_class fd_pstream_class = {

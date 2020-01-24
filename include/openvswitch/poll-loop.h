@@ -41,6 +41,12 @@
 #include <windows.h>
 #endif
 
+#define OVS_POLLIN POLLIN
+#define OVS_POLLOUT POLLOUT
+#define OVS_POLLERR POLLERR
+#define OVS_POLLNVAL POLLNVAL
+#define OVS_POLLHUP POLLHUP
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

@@ -67,7 +67,7 @@ latch_is_set(const struct latch *latch)
     int retval;
 
     pfd.fd = latch->fds[0];
-    pfd.events = POLLIN;
+    pfd.events = POLLIN; /* This is POLL specific, it should use POLL only macro */
     do {
         retval = poll(&pfd, 1, 0);
     } while (retval < 0 && errno == EINTR);
@@ -83,5 +83,5 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(latch->fds[0], POLLIN, where);
+    poll_fd_wait_at(latch->fds[0], OVS_POLLIN, where);
 }
