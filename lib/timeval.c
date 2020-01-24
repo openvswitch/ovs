@@ -369,6 +369,8 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
     return retval;
 }
 
+#ifdef __linux__
+
 /* Like epoll_wait(), except:
  *
  *      - The timeout is specified as an absolute time, as defined by
@@ -447,6 +449,8 @@ time_epoll_wait(int epoll_fd, struct epoll_event *events, int max,
     *elapsed = *last_wakeup - start;
     return retval;
 }
+#endif
+
 long long int
 timespec_to_msec(const struct timespec *ts)
 {
