@@ -369,6 +369,84 @@ time_poll(struct pollfd *pollfds, int n_pollfds, HANDLE *handles OVS_UNUSED,
     return retval;
 }
 
+/* Like epoll_wait(), except:
+ *
+ *      - The timeout is specified as an absolute time, as defined by
+ *        time_msec(), instead of a duration.
+ *
+ *      - On error, returns a negative error code (instead of setting errno).
+ *
+ *      - If interrupted by a signal, retries automatically until the original
+ *        timeout is reached.  (Because of this property, this function will
+ *        never return -EINTR.)
+ *
+ * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
+int
+time_epoll_wait(int epoll_fd, struct epoll_event *events, int max,
+          long long int timeout_when, int *elapsed)
+{
+    long long int *last_wakeup = last_wakeup_get();
+    long long int start;
+    bool quiescent;
+    int retval = 0;
+
+    time_init();
+    coverage_clear();
+    coverage_run();
+    if (*last_wakeup && !thread_is_pmd()) {
+        log_poll_interval(*last_wakeup);
+    }
+    start = time_msec();
+
+    timeout_when = MIN(timeout_when, deadline);
+    quiescent = ovsrcu_is_quiescent();
+
+    for (;;) {
+        long long int now = time_msec();
+        int time_left;
+
+        if (now >= timeout_when) {
+            time_left = 0;
+        } else if ((unsigned long long int) timeout_when - now > INT_MAX) {
+            time_left = INT_MAX;
+        } else {
+            time_left = timeout_when - now;
+        }
+
+        if (!quiescent) {
+            if (!time_left) {
+                ovsrcu_quiesce();
+            } else {
+                ovsrcu_quiesce_start();
+            }
+        }
+
+        retval = epoll_wait(epoll_fd, events, max, time_left);
+        if (retval < 0) {
+            retval = -errno;
+        }
+
+        if (!quiescent && time_left) {
+            ovsrcu_quiesce_end();
+        }
+
+        if (deadline <= time_msec()) {
+            fatal_signal_handler(SIGALRM);
+            if (retval < 0) {
+                retval = 0;
+            }
+            break;
+        }
+
+        if (retval != -EINTR) {
+            break;
+        }
+    }
+    *last_wakeup = time_msec();
+    refresh_rusage();
+    *elapsed = *last_wakeup - start;
+    return retval;
+}
 long long int
 timespec_to_msec(const struct timespec *ts)
 {

@@ -41,11 +41,23 @@
 #include <windows.h>
 #endif
 
+#ifdef __linux__
+#include <sys/epoll.h>
+
+#define OVS_POLLIN EPOLLIN
+#define OVS_POLLOUT EPOLLOUT
+#define OVS_POLLERR EPOLLERR
+#define OVS_POLLHUP EPOLLHUP
+
+#else
+
 #define OVS_POLLIN POLLIN
 #define OVS_POLLOUT POLLOUT
 #define OVS_POLLERR POLLERR
 #define OVS_POLLNVAL POLLNVAL
 #define OVS_POLLHUP POLLHUP
+
+#endif 
 
 #ifdef  __cplusplus
 extern "C" {
