@@ -467,7 +467,9 @@ poll_loop(void)
         loop->timeout_when = LLONG_MAX;
         hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
+#ifdef __linux__
         loop->epoll_fd = epoll_create(MAX_EPOLL_EVENTS);
+#endif
     }
     return loop;
 }
