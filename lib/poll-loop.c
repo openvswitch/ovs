@@ -18,6 +18,9 @@
 #include "openvswitch/poll-loop.h"
 #include <errno.h>
 #include <inttypes.h>
+#ifdef __linux__
+#include <sys/epoll.h>
+#endif
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +48,8 @@ struct poll_node {
     const char *where;          /* Where poll_node was created. */
 };
 
+#define MAX_EPOLL_EVENTS 64
+
 struct poll_loop {
     /* All active poll waiters. */
     struct hmap poll_nodes;
@@ -53,6 +58,10 @@ struct poll_loop {
      * wake up immediately, or LLONG_MAX to wait forever. */
     long long int timeout_when; /* In msecs as returned by time_msec(). */
     const char *timeout_where;  /* Where 'timeout_when' was set. */
+#ifdef __linux__
+    int epoll_fd;
+    struct epoll_event epoll_events[MAX_EPOLL_EVENTS];
+#endif
 };
 
 static struct poll_loop *poll_loop(void);
@@ -99,8 +108,8 @@ find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
  * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
  * automatically provide the caller's source file and line number for
  * 'where'.) */
-static void
-poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
+static struct poll_node
+*poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
 {
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
@@ -128,6 +137,7 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
         node->wevent = wevent;
         node->where = where;
     }
+    return node;
 }
 
 /* Registers 'fd' as waiting for the specified 'events' (which should be OVS_POLLIN
@@ -146,7 +156,18 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
 void
 poll_fd_wait_at(int fd, short int events, const char *where)
 {
-    poll_create_node(fd, 0, events, where);
+    struct poll_node *node = poll_create_node(fd, 0, events, where);
+#ifdef __linux__
+    struct poll_loop *loop = poll_loop();
+    struct epoll_event event;
+
+    event.events = node->pollfd.events;
+    event.data.ptr = node;
+
+    if ((epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) && (errno == EEXIST)) {
+        epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, fd, &event);
+    }
+#endif
 }
 
 #ifdef _WIN32
@@ -277,9 +298,12 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
         if (pollfd->revents & OVS_POLLHUP) {
             ds_put_cstr(&s, "[OVS_POLLHUP]");
         }
+#ifndef __linux__
+        /* epoll does not have NVAL */
         if (pollfd->revents & OVS_POLLNVAL) {
             ds_put_cstr(&s, "[OVS_POLLNVAL]");
         }
+#endif
         ds_put_format(&s, " on fd %d (%s)", pollfd->fd, description);
         free(description);
     } else {
@@ -301,6 +325,9 @@ free_poll_nodes(struct poll_loop *loop)
     struct poll_node *node, *next;
 
     HMAP_FOR_EACH_SAFE (node, next, hmap_node, &loop->poll_nodes) {
+#ifdef __linux__
+        epoll_ctl(loop->epoll_fd, EPOLL_CTL_DEL, node->pollfd.fd, NULL);
+#endif
         hmap_remove(&loop->poll_nodes, &node->hmap_node);
 #ifdef _WIN32
         if (node->wevent && node->pollfd.fd) {
@@ -321,7 +348,9 @@ poll_block(void)
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
     struct pollfd *pollfds;
+#ifndef __linux_
     HANDLE *wevents = NULL;
+#endif
     int elapsed;
     int retval;
     int i;
@@ -340,6 +369,25 @@ poll_block(void)
 #ifdef _WIN32
     wevents = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *wevents);
 #endif
+
+#ifdef __linux__
+    retval = time_epoll_wait(loop->epoll_fd,
+        (struct epoll_event *) &loop->epoll_events, MAX_EPOLL_EVENTS, loop->timeout_when, &elapsed);
+    if (retval < 0) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "epoll: %s", ovs_strerror(retval));
+    } else if (!retval) {
+        log_wakeup(loop->timeout_where, NULL, elapsed);
+    } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
+        for (i = 0; i < retval; i++) {
+            node = (struct poll_node *) loop->epoll_events[i].data.ptr;
+            if (loop->epoll_events[i].events) 
+                log_wakeup(node->where, &pollfds[i], 0);
+        }
+    }
+    loop->timeout_when = LLONG_MAX;
+    loop->timeout_where = NULL;
+#else
 
     /* Populate with all the fds and events. */
     i = 0;
@@ -383,6 +431,7 @@ poll_block(void)
     loop->timeout_where = NULL;
     free(pollfds);
     free(wevents);
+#endif
 
     /* Handle any pending signals before doing anything else. */
     fatal_signal_run();
@@ -418,6 +467,7 @@ poll_loop(void)
         loop->timeout_when = LLONG_MAX;
         hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
+        loop->epoll_fd = epoll_create(MAX_EPOLL_EVENTS);
     }
     return loop;
 }
