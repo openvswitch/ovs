@@ -113,6 +113,9 @@ static struct poll_node
 {
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
+#ifdef __linux__
+    struct epoll_event event;
+#endif
 
     COVERAGE_INC(poll_create_node);
 
@@ -122,7 +125,15 @@ static struct poll_node
     /* Check for duplicate.  If found, "or" the events. */
     node = find_poll_node(loop, fd, wevent);
     if (node) {
+#ifdef __linux__
+        int old_event_mask = node->pollfd.events;
         node->pollfd.events |= events;
+        if (old_event_mask != node->pollfd.events) {
+            event.events = node->pollfd.events;
+            event.data.ptr = node;
+            epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, fd, &event);
+        }
+#endif
     } else {
         node = xzalloc(sizeof *node);
         hmap_insert(&loop->poll_nodes, &node->hmap_node,
@@ -136,6 +147,11 @@ static struct poll_node
 #endif
         node->wevent = wevent;
         node->where = where;
+#ifdef __linux__
+        event.events = node->pollfd.events;
+        event.data.ptr = node;
+        epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, fd, &event);
+#endif
     }
     return node;
 }
@@ -156,20 +172,7 @@ static struct poll_node
 void
 poll_fd_wait_at(int fd, short int events, const char *where)
 {
-#ifdef __linux__
-    struct poll_node *node = poll_create_node(fd, 0, events, where);
-    struct poll_loop *loop = poll_loop();
-    struct epoll_event event;
-
-    event.events = node->pollfd.events;
-    event.data.ptr = node;
-
-    if ((epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) && (errno == EEXIST)) {
-        epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, fd, &event);
-    }
-#else
     poll_create_node(fd, 0, events, where);
-#endif
 }
 
 #ifdef _WIN32
@@ -382,9 +385,19 @@ poll_block(void)
         log_wakeup(loop->timeout_where, NULL, elapsed);
     } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
         for (i = 0; i < retval; i++) {
+            struct epoll_event event;
             node = (struct poll_node *) loop->epoll_events[i].data.ptr;
-            if (loop->epoll_events[i].events) 
-                log_wakeup(node->where, &pollfds[i], 0);
+            if (loop->epoll_events[i].events | OVS_POLLOUT) {
+                /* treat a POLLOUT as a ONESHOT, reads and err persist */
+                node->pollfd.events &= ~OVS_POLLOUT;
+                event.events = node->pollfd.events;
+                event.data.ptr = node;
+                epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, node->pollfd.fd, &event);
+            }
+            if (loop->epoll_events[i].events) {
+                node->pollfd.revents = loop->epoll_events[i].events;
+                log_wakeup(node->where, &node->pollfd, 0);
+            }
         }
     }
     loop->timeout_when = LLONG_MAX;
