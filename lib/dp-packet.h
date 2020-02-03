@@ -152,6 +152,8 @@ struct dp_packet *dp_packet_clone_with_headroom(const struct dp_packet *,
 struct dp_packet *dp_packet_clone_data(const void *, size_t);
 struct dp_packet *dp_packet_clone_data_with_headroom(const void *, size_t,
                                                      size_t headroom);
+void dp_packet_resize(struct dp_packet *b, size_t new_headroom,
+                      size_t new_tailroom);
 static inline void dp_packet_delete(struct dp_packet *);
 
 static inline void *dp_packet_at(const struct dp_packet *, size_t offset,

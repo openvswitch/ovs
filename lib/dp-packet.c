@@ -243,8 +243,8 @@ dp_packet_copy__(struct dp_packet *b, uint8_t *new_base,
 
 /* Reallocates 'b' so that it has exactly 'new_headroom' and 'new_tailroom'
  * bytes of headroom and tailroom, respectively. */
-static void
-dp_packet_resize__(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
+void
+dp_packet_resize(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
 {
     void *new_base, *new_data;
     size_t new_allocated;
@@ -297,7 +297,7 @@ void
 dp_packet_prealloc_tailroom(struct dp_packet *b, size_t size)
 {
     if (size > dp_packet_tailroom(b)) {
-        dp_packet_resize__(b, dp_packet_headroom(b), MAX(size, 64));
+        dp_packet_resize(b, dp_packet_headroom(b), MAX(size, 64));
     }
 }
 
@@ -308,7 +308,7 @@ void
 dp_packet_prealloc_headroom(struct dp_packet *b, size_t size)
 {
     if (size > dp_packet_headroom(b)) {
-        dp_packet_resize__(b, MAX(size, 64), dp_packet_tailroom(b));
+        dp_packet_resize(b, MAX(size, 64), dp_packet_tailroom(b));
     }
 }
 
