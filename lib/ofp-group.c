@@ -660,7 +660,8 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
         } else if (!strcasecmp(key, "watch_port")) {
             if (!ofputil_port_from_string(value, port_map, &bucket->watch_port)
                 || (ofp_to_u16(bucket->watch_port) >= ofp_to_u16(OFPP_MAX)
-                    && bucket->watch_port != OFPP_ANY)) {
+                    && bucket->watch_port != OFPP_ANY
+                    && bucket->watch_port != OFPP_CONTROLLER)) {
                 error = xasprintf("%s: invalid watch_port", value);
             }
         } else if (!strcasecmp(key, "watch_group")) {

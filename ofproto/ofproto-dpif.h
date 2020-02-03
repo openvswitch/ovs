@@ -342,6 +342,9 @@ struct ofproto_dpif {
     struct guarded_list ams;      /* Contains "struct ofproto_async_msgs"s. */
     struct seq *ams_seq;          /* For notifying 'ams' reception. */
     uint64_t ams_seqno;
+
+    bool is_controller_connected; /* True if any controller admitted this
+                                   * switch connection. */
 };
 
 struct ofproto_dpif *ofproto_dpif_lookup_by_name(const char *name);
