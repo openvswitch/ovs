@@ -38,7 +38,8 @@
 
 struct netdev;
 
-#define LINUX_RXQ_TSO_MAX_LEN 65536
+/* The maximum packet length is 16 bits */
+#define LINUX_RXQ_TSO_MAX_LEN 65535
 
 struct netdev_rxq_linux {
     struct netdev_rxq up;
