@@ -45,7 +45,8 @@ struct netdev_rxq_linux {
     struct netdev_rxq up;
     bool is_tap;
     int fd;
-    char *aux_bufs[NETDEV_MAX_BURST]; /* Batch of preallocated TSO buffers. */
+    struct dp_packet *aux_bufs[NETDEV_MAX_BURST]; /* Preallocated TSO
+                                                     packets. */
 };
 
 int netdev_linux_construct(struct netdev *);

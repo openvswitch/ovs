@@ -1052,15 +1052,6 @@ static struct netdev_rxq *
 netdev_linux_rxq_alloc(void)
 {
     struct netdev_rxq_linux *rx = xzalloc(sizeof *rx);
-    if (userspace_tso_enabled()) {
-        int i;
-
-        /* Allocate auxiliay buffers to receive TSO packets. */
-        for (i = 0; i < NETDEV_MAX_BURST; i++) {
-            rx->aux_bufs[i] = xmalloc(LINUX_RXQ_TSO_MAX_LEN);
-        }
-    }
-
     return &rx->up;
 }
 
@@ -1172,7 +1163,7 @@ netdev_linux_rxq_destruct(struct netdev_rxq *rxq_)
     }
 
     for (i = 0; i < NETDEV_MAX_BURST; i++) {
-        free(rx->aux_bufs[i]);
+        dp_packet_delete(rx->aux_bufs[i]);
     }
 }
 
@@ -1238,13 +1229,18 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
         virtio_net_hdr_size = 0;
     }
 
-    std_len = VLAN_ETH_HEADER_LEN + mtu + virtio_net_hdr_size;
+    /* The length here needs to be accounted in the same way when the
+     * aux_buf is allocated so that it can be prepended to TSO buffer. */
+    std_len = virtio_net_hdr_size + VLAN_ETH_HEADER_LEN + mtu;
     for (i = 0; i < NETDEV_MAX_BURST; i++) {
          buffers[i] = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
          iovs[i][IOV_PACKET].iov_base = dp_packet_data(buffers[i]);
          iovs[i][IOV_PACKET].iov_len = std_len;
-         iovs[i][IOV_AUXBUF].iov_base = rx->aux_bufs[i];
-         iovs[i][IOV_AUXBUF].iov_len = LINUX_RXQ_TSO_MAX_LEN;
+         if (iovlen == IOV_TSO_SIZE) {
+             iovs[i][IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
+             iovs[i][IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
+         }
+
          mmsgs[i].msg_hdr.msg_name = NULL;
          mmsgs[i].msg_hdr.msg_namelen = 0;
          mmsgs[i].msg_hdr.msg_iov = iovs[i];
@@ -1268,6 +1264,8 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
     }
 
     for (i = 0; i < retval; i++) {
+        struct dp_packet *pkt;
+
         if (mmsgs[i].msg_len < ETH_HEADER_LEN) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -1280,29 +1278,29 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
         }
 
         if (mmsgs[i].msg_len > std_len) {
-            /* Build a single linear TSO packet by expanding the current packet
-             * to append the data received in the aux_buf. */
-            size_t extra_len = mmsgs[i].msg_len - std_len;
+            /* Build a single linear TSO packet by prepending the data from
+             * std_len buffer to the aux_buf. */
+            pkt = rx->aux_bufs[i];
+            dp_packet_set_size(pkt, mmsgs[i].msg_len - std_len);
+            dp_packet_push(pkt, dp_packet_data(buffers[i]), std_len);
+            /* The headroom should be the same in buffers[i], pkt and
+             * DP_NETDEV_HEADROOM. */
+            dp_packet_resize(pkt, DP_NETDEV_HEADROOM, 0);
+            dp_packet_delete(buffers[i]);
+            rx->aux_bufs[i] = NULL;
+         } else {
+            dp_packet_set_size(buffers[i], mmsgs[i].msg_len);
+            pkt = buffers[i];
+         }
 
-            dp_packet_set_size(buffers[i], dp_packet_size(buffers[i])
-                               + std_len);
-            dp_packet_prealloc_tailroom(buffers[i], extra_len);
-            memcpy(dp_packet_tail(buffers[i]), rx->aux_bufs[i], extra_len);
-            dp_packet_set_size(buffers[i], dp_packet_size(buffers[i])
-                               + extra_len);
-        } else {
-            dp_packet_set_size(buffers[i], dp_packet_size(buffers[i])
-                               + mmsgs[i].msg_len);
-        }
-
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(buffers[i])) {
+        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
             /* Unexpected error situation: the virtio header is not present
              * or corrupted. Drop the packet but continue in case next ones
              * are correct. */
-            dp_packet_delete(buffers[i]);
+            dp_packet_delete(pkt);
             netdev->rx_dropped += 1;
             VLOG_WARN_RL(&rl, "%s: Dropped packet: Invalid virtio net header",
                          netdev_get_name(netdev_));
@@ -1325,16 +1323,16 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
                 struct eth_header *eth;
                 bool double_tagged;
 
-                eth = dp_packet_data(buffers[i]);
+                eth = dp_packet_data(pkt);
                 double_tagged = eth->eth_type == htons(ETH_TYPE_VLAN_8021Q);
 
-                eth_push_vlan(buffers[i],
+                eth_push_vlan(pkt,
                               auxdata_to_vlan_tpid(aux, double_tagged),
                               htons(aux->tp_vlan_tci));
                 break;
             }
         }
-        dp_packet_batch_add(batch, buffers[i]);
+        dp_packet_batch_add(batch, pkt);
     }
 
     /* Delete unused buffers. */
@@ -1354,7 +1352,6 @@ static int
 netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
                                 struct dp_packet_batch *batch)
 {
-    struct dp_packet *buffer;
     int virtio_net_hdr_size;
     ssize_t retval;
     size_t std_len;
@@ -1372,16 +1369,22 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
         virtio_net_hdr_size = 0;
     }
 
-    std_len = VLAN_ETH_HEADER_LEN + mtu + virtio_net_hdr_size;
+    /* The length here needs to be accounted in the same way when the
+     * aux_buf is allocated so that it can be prepended to TSO buffer. */
+    std_len = virtio_net_hdr_size + VLAN_ETH_HEADER_LEN + mtu;
     for (i = 0; i < NETDEV_MAX_BURST; i++) {
+        struct dp_packet *buffer;
+        struct dp_packet *pkt;
         struct iovec iov[IOV_TSO_SIZE];
 
         /* Assume Ethernet port. No need to set packet_type. */
         buffer = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
         iov[IOV_PACKET].iov_base = dp_packet_data(buffer);
         iov[IOV_PACKET].iov_len = std_len;
-        iov[IOV_AUXBUF].iov_base = rx->aux_bufs[i];
-        iov[IOV_AUXBUF].iov_len = LINUX_RXQ_TSO_MAX_LEN;
+        if (iovlen == IOV_TSO_SIZE) {
+            iov[IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
+            iov[IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
+        }
 
         do {
             retval = readv(rx->fd, iov, iovlen);
@@ -1393,33 +1396,36 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
         }
 
         if (retval > std_len) {
-            /* Build a single linear TSO packet by expanding the current packet
-             * to append the data received in the aux_buf. */
-            size_t extra_len = retval - std_len;
-
-            dp_packet_set_size(buffer, dp_packet_size(buffer) + std_len);
-            dp_packet_prealloc_tailroom(buffer, extra_len);
-            memcpy(dp_packet_tail(buffer), rx->aux_bufs[i], extra_len);
-            dp_packet_set_size(buffer, dp_packet_size(buffer) + extra_len);
+            /* Build a single linear TSO packet by prepending the data from
+             * std_len buffer to the aux_buf. */
+            pkt = rx->aux_bufs[i];
+            dp_packet_set_size(pkt, retval - std_len);
+            dp_packet_push(pkt, dp_packet_data(buffer), std_len);
+            /* The headroom should be the same in buffers[i], pkt and
+             * DP_NETDEV_HEADROOM. */
+            dp_packet_resize(pkt, DP_NETDEV_HEADROOM, 0);
+            dp_packet_delete(buffer);
+            rx->aux_bufs[i] = NULL;
         } else {
             dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
+            pkt = buffer;
         }
 
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(buffer)) {
+        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
             /* Unexpected error situation: the virtio header is not present
              * or corrupted. Drop the packet but continue in case next ones
              * are correct. */
-            dp_packet_delete(buffer);
+            dp_packet_delete(pkt);
             netdev->rx_dropped += 1;
             VLOG_WARN_RL(&rl, "%s: Dropped packet: Invalid virtio net header",
                          netdev_get_name(netdev_));
             continue;
         }
 
-        dp_packet_batch_add(batch, buffer);
+        dp_packet_batch_add(batch, pkt);
     }
 
     if ((i == 0) && (retval < 0)) {
@@ -1440,6 +1446,23 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
 
     if (netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu)) {
         mtu = ETH_PAYLOAD_MAX;
+    }
+
+    if (userspace_tso_enabled()) {
+        /* Allocate TSO packets. The packet has enough headroom to store
+         * a full non-TSO packet. When a TSO packet is received, the data
+         * from non-TSO buffer (std_len) is prepended to the TSO packet
+         * (aux_buf). */
+        size_t std_len = sizeof(struct virtio_net_hdr) + VLAN_ETH_HEADER_LEN
+                         + DP_NETDEV_HEADROOM + mtu;
+        size_t data_len = LINUX_RXQ_TSO_MAX_LEN - std_len;
+        for (int i = 0; i < NETDEV_MAX_BURST; i++) {
+            if (rx->aux_bufs[i]) {
+                continue;
+            }
+
+            rx->aux_bufs[i] = dp_packet_new_with_headroom(data_len, std_len);
+        }
     }
 
     dp_packet_batch_init(batch);
