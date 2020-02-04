@@ -1815,10 +1815,12 @@ OvsOutputUserspaceAction(OvsForwardingContext *ovsFwdCtx,
 {
     NTSTATUS status = NDIS_STATUS_SUCCESS;
     PNL_ATTR userdataAttr;
-    PNL_ATTR queueAttr;
+    PNL_ATTR egrTunAttr = NULL;
     POVS_PACKET_QUEUE_ELEM elem;
     POVS_PACKET_HDR_INFO layers = &ovsFwdCtx->layers;
     BOOLEAN isRecv = FALSE;
+    OVS_FWD_INFO fwdInfo;
+    OvsIPv4TunnelKey tunKey;
 
     POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(ovsFwdCtx->switchContext,
                                                   ovsFwdCtx->srcVportNo);
@@ -1830,13 +1832,29 @@ OvsOutputUserspaceAction(OvsForwardingContext *ovsFwdCtx,
         }
     }
 
-    queueAttr = NlAttrFindNested(attr, OVS_USERSPACE_ATTR_PID);
     userdataAttr = NlAttrFindNested(attr, OVS_USERSPACE_ATTR_USERDATA);
+    /* Indicate the packet is from egress-tunnel direction */
+    egrTunAttr = NlAttrFindNested(attr, OVS_USERSPACE_ATTR_EGRESS_TUN_PORT);
+
+    /* Fill tunnel key to export to usersspace to calculate the template id */
+    if (egrTunAttr) {
+        RtlZeroMemory(&tunKey,  sizeof tunKey);
+        RtlCopyMemory(&tunKey, &ovsFwdCtx->tunKey, sizeof tunKey);
+        if (!tunKey.src) {
+            status = OvsLookupIPFwdInfo(tunKey.src, tunKey.dst, &fwdInfo);
+            if (status == NDIS_STATUS_SUCCESS && tunKey.dst == fwdInfo.dstIpAddr) {
+                tunKey.src = fwdInfo.srcIpAddr;
+            }
+        }
+        tunKey.flow_hash = tunKey.flow_hash ? tunKey.flow_hash : MAXINT16;
+    }
 
     elem = OvsCreateQueueNlPacket(NlAttrData(userdataAttr),
                                   NlAttrGetSize(userdataAttr),
                                   OVS_PACKET_CMD_ACTION,
-                                  vport, key, ovsFwdCtx->curNbl,
+                                  vport, key,
+                                  egrTunAttr ? &(tunKey) : NULL,
+                                  ovsFwdCtx->curNbl,
                                   NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl),
                                   isRecv,
                                   layers);
