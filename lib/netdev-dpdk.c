@@ -1132,7 +1132,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dev->hw_ol_features &= ~NETDEV_RX_HW_SCATTER;
     }
 
-    if (info.tx_offload_capa & tx_tso_offload_capa) {
+    if ((info.tx_offload_capa & tx_tso_offload_capa) == tx_tso_offload_capa) {
         dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
     } else {
         dev->hw_ol_features &= ~NETDEV_TX_TSO_OFFLOAD;
