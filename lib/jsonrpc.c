@@ -266,7 +266,7 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
                      rpc->output_count, rpc->backlog);
     }
 
-    if (rpc->backlog == length) {
+    if (rpc->backlog >= length) {
         jsonrpc_run(rpc);
     }
     return rpc->status;
