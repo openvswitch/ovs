@@ -1132,12 +1132,15 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dev->hw_ol_features &= ~NETDEV_RX_HW_SCATTER;
     }
 
-    if ((info.tx_offload_capa & tx_tso_offload_capa) == tx_tso_offload_capa) {
-        dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
-    } else {
-        dev->hw_ol_features &= ~NETDEV_TX_TSO_OFFLOAD;
-        VLOG_WARN("Tx TSO offload is not supported on %s port "
-                  DPDK_PORT_ID_FMT, netdev_get_name(&dev->up), dev->port_id);
+    dev->hw_ol_features &= ~NETDEV_TX_TSO_OFFLOAD;
+    if (userspace_tso_enabled()) {
+        if ((info.tx_offload_capa & tx_tso_offload_capa)
+            == tx_tso_offload_capa) {
+            dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
+        } else {
+            VLOG_WARN("%s: Tx TSO offload is not supported.",
+                      netdev_get_name(&dev->up));
+        }
     }
 
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
