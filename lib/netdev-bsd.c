@@ -365,6 +365,8 @@ netdev_bsd_construct_tap(struct netdev *netdev_)
     }
 
     netdev->kernel_name = kernel_name;
+    /* BSD does not implement this yet so this is a noop at this point */
+    poll_fd_register(netdev->tap_fd, OVS_POLLIN, NULL);
 
     return 0;
 
@@ -384,9 +386,11 @@ netdev_bsd_destruct(struct netdev *netdev_)
     cache_notifier_unref();
 
     if (netdev->tap_fd >= 0) {
+        poll_fd_deregister(netdev->tap_fd);
         destroy_tap(netdev->tap_fd, netdev_get_kernel_name(netdev_));
     }
     if (netdev->pcap) {
+        poll_fd_deregister(pcap_get_selectable_fd(pcap));
         pcap_close(netdev->pcap);
     }
     free(netdev->kernel_name);
@@ -459,6 +463,7 @@ netdev_bsd_open_pcap(const char *name, pcap_t **pcapp, int *fdp)
 
     *pcapp = pcap;
     *fdp = fd;
+    poll_fd_register(fd, OVS_POLLIN, NULL);
     return 0;
 
 error:

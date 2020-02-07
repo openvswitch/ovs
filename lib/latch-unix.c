@@ -28,12 +28,14 @@ void
 latch_init(struct latch *latch)
 {
     xpipe_nonblocking(latch->fds);
+    poll_fd_register(latch->fds[0], OVS_POLLIN | OVS_ONESHOT, NULL); /* register, but not set any events */
 }
 
 /* Destroys 'latch'. */
 void
 latch_destroy(struct latch *latch)
 {
+    poll_fd_deregister(latch->fds[0]);
     close(latch->fds[0]);
     close(latch->fds[1]);
 }
@@ -83,5 +85,6 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(latch->fds[0], OVS_POLLIN, where);
+    /* Ask for wait and make it one-shot if persistence is in play */
+    poll_fd_wait_at(latch->fds[0], OVS_POLLIN | OVS_ONESHOT, where);
 }

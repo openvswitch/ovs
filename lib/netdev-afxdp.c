@@ -184,7 +184,7 @@ xsk_rx_wakeup_if_needed(struct xsk_umem_info *umem,
 
     if (xsk_ring_prod__needs_wakeup(&umem->fq)) {
         pfd.fd = fd;
-        pfd.events = OVS_POLLIN;
+        pfd.events = POLLIN;
 
         ret = poll(&pfd, 1, 0);
         if (OVS_UNLIKELY(ret < 0)) {

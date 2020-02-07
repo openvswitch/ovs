@@ -1149,6 +1149,10 @@ netdev_linux_rxq_construct(struct netdev_rxq *rxq_)
             goto error;
         }
     }
+    /* Register with persistent event frameworks if available - this
+     * should be able to grab both raw and tap cases
+     */
+    poll_fd_register(rx->fd, OVS_POLLIN, NULL);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -1166,6 +1170,8 @@ netdev_linux_rxq_destruct(struct netdev_rxq *rxq_)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     int i;
+
+    poll_fd_deregister(rx->fd);
 
     if (!rx->is_tap) {
         close(rx->fd);

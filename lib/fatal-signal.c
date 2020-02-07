@@ -96,6 +96,7 @@ fatal_signal_init(void)
         ovs_mutex_init_recursive(&mutex);
 #ifndef _WIN32
         xpipe_nonblocking(signal_fds);
+        poll_fd_register(signal_fds[0], OVS_POLLIN, NULL);
 #else
         wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
         if (!wevent) {
@@ -236,8 +237,11 @@ void
 fatal_signal_run(void)
 {
     sig_atomic_t sig_nr;
+    char sigbuffer[_POSIX_PIPE_BUF];
 
     fatal_signal_init();
+
+    read(signal_fds[0], sigbuffer, sizeof(sigbuffer));
 
     sig_nr = stored_sig_nr;
     if (sig_nr != SIG_ATOMIC_MAX) {

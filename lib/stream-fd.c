@@ -40,6 +40,8 @@ struct stream_fd
     struct stream stream;
     int fd;
     int fd_type;
+    bool rx_ready, tx_ready;
+    struct pollfd *hint;
 };
 
 static const struct stream_class stream_fd_class;
@@ -67,7 +69,12 @@ new_fd_stream(char *name, int fd, int connect_status, int fd_type,
     stream_init(&s->stream, &stream_fd_class, connect_status, name);
     s->fd = fd;
     s->fd_type = fd_type;
+    s->rx_ready = true;
+    s->tx_ready = true;
+    s->hint = NULL;
     *streamp = &s->stream;
+    /* Persistent registration on OSes which support it */
+    poll_fd_register(s->fd, OVS_POLLIN, &s->hint);
     return 0;
 }
 
@@ -82,6 +89,8 @@ static void
 fd_close(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
+    /* Deregister the FD from any persistent registrations if supported */
+    poll_fd_deregister(s->fd);
     closesocket(s->fd);
     free(s);
 }
@@ -104,6 +113,19 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
     ssize_t retval;
     int error;
 
+    if (s->hint) {
+        /* poll-loop is providing us with hints for IO */
+        if (!s->rx_ready) {
+            if (!(s->hint->revents & OVS_POLLIN)) {
+                return -EAGAIN;
+            } else {
+                /* POLLIN event from poll loop, mark us as ready */
+                s->rx_ready = true;
+                s->hint->revents &= ~OVS_POLLIN;
+            }
+        }
+    }
+
     retval = recv(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
@@ -114,6 +136,8 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
 #endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
+        } else {
+            s->rx_ready = false;
         }
         return -error;
     }
@@ -127,9 +151,29 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
     ssize_t retval;
     int error;
 
+    if (s->hint) {
+        /* poll-loop is providing us with hints for IO */
+        if (!s->tx_ready) {
+            if (!(s->hint->revents & OVS_POLLOUT)) {
+                return -EAGAIN;
+            } else {
+                /* POLLOUT event from poll loop, mark us as ready */
+                s->tx_ready = true;
+                s->hint->revents &= ~OVS_POLLOUT;
+            }
+        }
+    }
     retval = send(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
+#ifdef __linux__
+        /* Linux will sometimes return ENOBUFS on sockets instead of EAGAIN. Usually seen
+         *  on unix domain sockets 
+         */
+        if (error == ENOBUFS) {
+           error = EAGAIN;
+        }
+#endif
 #ifdef _WIN32
         if (error == WSAEWOULDBLOCK) {
            error = EAGAIN;
@@ -137,6 +181,8 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
 #endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "send: %s", sock_strerror(error));
+        } else {
+            s->tx_ready = false;
         }
         return -error;
     }
@@ -223,6 +269,8 @@ new_fd_pstream(char *name, int fd,
     ps->accept_cb = accept_cb;
     ps->unlink_path = unlink_path;
     *pstreamp = &ps->pstream;
+    /* Register fd with any long term persistence frameworks if available */
+    poll_fd_register(ps->fd, OVS_POLLIN, NULL);
     return 0;
 }
 
@@ -230,6 +278,7 @@ static void
 pfd_close(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
+    poll_fd_deregister(ps->fd);
     closesocket(ps->fd);
     maybe_unlink_and_free(ps->unlink_path);
     free(ps);

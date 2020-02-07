@@ -34,6 +34,7 @@
 #include "ovs-router.h"
 #include "packets.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/poll-loop.h"
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(route_table_bsd);

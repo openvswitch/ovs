@@ -592,6 +592,8 @@ process_wait(struct process *p)
     if (p->exited) {
         poll_immediate_wake();
     } else {
+        /* Register fd persistently where supported */
+        poll_fd_register(fds[0], OVS_POLLIN, NULL);
         poll_fd_wait(fds[0], OVS_POLLIN);
     }
 #else

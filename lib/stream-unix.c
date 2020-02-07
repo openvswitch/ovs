@@ -47,6 +47,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
     char *connect_path;
     int fd;
 
+
     connect_path = abs_file_name(ovs_rundir(), suffix);
     fd = make_unix_socket(SOCK_STREAM, true, NULL, connect_path);
 

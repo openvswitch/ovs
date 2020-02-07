@@ -41,11 +41,29 @@
 #include <windows.h>
 #endif
 
+#ifdef __linux__
+#define OVS_USE_EPOLL
+#endif
+
+#ifdef OVS_USE_EPOLL
+#include <sys/epoll.h>
+
+#define OVS_POLLIN EPOLLIN
+#define OVS_POLLOUT EPOLLOUT
+#define OVS_POLLERR EPOLLERR
+#define OVS_POLLHUP EPOLLHUP
+#define OVS_ONESHOT EPOLLONESHOT
+
+#else
+
 #define OVS_POLLIN POLLIN
 #define OVS_POLLOUT POLLOUT
 #define OVS_POLLERR POLLERR
 #define OVS_POLLNVAL POLLNVAL
 #define OVS_POLLHUP POLLHUP
+#define OVS_ONESHOT (1U << 30)
+
+#endif 
 
 #ifdef  __cplusplus
 extern "C" {
@@ -61,7 +79,13 @@ extern "C" {
  * caller to supply a location explicitly, which is useful if the caller's own
  * caller would be more useful in log output.  See timer_wait_at() for an
  * example. */
-void poll_fd_wait_at(int fd, short int events, const char *where);
+void poll_fd_register_at(int fd, int events, struct pollfd **hint, const char *where);
+#define poll_fd_register(fd, events, hint) poll_fd_register_at(fd, events, hint, OVS_SOURCE_LOCATOR)
+
+void poll_fd_deregister_at(int fd, const char *where);
+#define poll_fd_deregister(fd) poll_fd_deregister_at(fd, OVS_SOURCE_LOCATOR)
+
+void poll_fd_wait_at(int fd, int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
 
 #ifdef _WIN32
