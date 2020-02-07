@@ -189,7 +189,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
         } else if (src->state <= CT_DPIF_TCPS_SYN_SENT) {
             src->state = CT_DPIF_TCPS_SYN_SENT;
             conn_update_expiration(ct, &conn->up, CT_TM_TCP_FIRST_PACKET, now);
-            return CT_UPDATE_NEW;
+            return CT_UPDATE_VALID_NEW;
         }
     }
 
