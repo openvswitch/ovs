@@ -1088,10 +1088,19 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 {
     bool log_to_console = module->levels[VLF_CONSOLE] >= level;
     bool log_to_syslog = module->levels[VLF_SYSLOG] >= level;
-    bool log_to_file;
+    bool log_to_file = module->levels[VLF_FILE] >= level;
+
+    /* Quickly exit without contending the log mutex if the module log 
+     * levels do not request any logging to start off with.
+     */
+
+    if (!(log_to_console || log_to_syslog || log_to_file)) {
+        return;
+    }
 
     ovs_mutex_lock(&log_file_mutex);
-    log_to_file = module->levels[VLF_FILE] >= level && log_fd >= 0;
+    /* check only log_fd under mutex */
+    log_to_file &= (log_fd >= 0);
     ovs_mutex_unlock(&log_file_mutex);
     if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;
