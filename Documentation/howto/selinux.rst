@@ -117,7 +117,7 @@ see in Open vSwitch log files "Permission Denied" errors::
 
 However, not all "Permission denied" errors are caused by SELinux.  So, before
 blaming too strict SELinux policy, make sure that indeed SELinux was the one
-that denied OVS access to certain resources, for example, run:
+that denied OVS access to certain resources, for example, run::
 
     $ grep "openvswitch_t" /var/log/audit/audit.log | tail
     type=AVC msg=audit(1453235431.640:114671): avc:  denied  { getopt } for  pid=4583 comm="ovs-vswitchd" scontext=system_u:system_r:openvswitch_t:s0 tcontext=system_u:system_r:openvswitch_t:s0 tclass=netlink_generic_socket permissive=0

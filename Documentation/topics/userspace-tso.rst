@@ -53,7 +53,7 @@ Enabling TSO
 
 The TSO support may be enabled via a global config value
 ``userspace-tso-enable``.  Setting this to ``true`` enables TSO support for
-all ports.
+all ports.::
 
     $ ovs-vsctl set Open_vSwitch . other_config:userspace-tso-enable=true
 
