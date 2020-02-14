@@ -40,7 +40,8 @@ struct netdev_tnl_build_header_params;
 enum netdev_ol_flags {
     NETDEV_TX_OFFLOAD_IPV4_CKSUM = 1 << 0,
     NETDEV_TX_OFFLOAD_TCP_CKSUM = 1 << 1,
-    NETDEV_TX_OFFLOAD_TCP_TSO = 1 << 2,
+    NETDEV_TX_OFFLOAD_UDP_CKSUM = 1 << 2,
+    NETDEV_TX_OFFLOAD_TCP_TSO = 1 << 3,
 };
 
 /* A network device (e.g. an Ethernet device).

@@ -791,6 +791,8 @@ static bool
 netdev_send_prepare_packet(const uint64_t netdev_flags,
                            struct dp_packet *packet, char **errormsg)
 {
+    uint64_t l4_mask;
+
     if (dp_packet_hwol_is_tso(packet)
         && !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             /* Fall back to GSO in software. */
@@ -798,11 +800,25 @@ netdev_send_prepare_packet(const uint64_t netdev_flags,
             return false;
     }
 
-    if (dp_packet_hwol_l4_mask(packet)
-        && !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-            /* Fall back to L4 csum in software. */
-            VLOG_ERR_BUF(errormsg, "No L4 checksum support");
+    l4_mask = dp_packet_hwol_l4_mask(packet);
+    if (l4_mask) {
+        if (dp_packet_hwol_l4_is_tcp(packet)) {
+            if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
+                /* Fall back to TCP csum in software. */
+                VLOG_ERR_BUF(errormsg, "No TCP checksum support");
+                return false;
+            }
+        } else if (dp_packet_hwol_l4_is_udp(packet)) {
+            if (!(netdev_flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
+                /* Fall back to UDP csum in software. */
+                VLOG_ERR_BUF(errormsg, "No UDP checksum support");
+                return false;
+            }
+        } else {
+            VLOG_ERR_BUF(errormsg, "No L4 checksum support: mask: %"PRIu64,
+                         l4_mask);
             return false;
+        }
     }
 
     return true;
