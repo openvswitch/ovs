@@ -5,10 +5,10 @@ openvswitch (2.13.90-1) unstable; urgency=low
  -- Open vSwitch team <dev@openvswitch.org>  Tue, 21 Jan 2020 12:44:30 -0700
 
 openvswitch (2.13.0-1) unstable; urgency=low
-
+   [ Open vSwitch team]
    * New upstream version
 
- -- Open vSwitch team <dev@openvswitch.org>  Tue, 21 Jan 2020 12:24:09 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 14 Feb 2020 12:00:00 -0700
 
 openvswitch (2.12.0-1) unstable; urgency=low
    [ Open vSwitch team ]

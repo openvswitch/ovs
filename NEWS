@@ -6,7 +6,7 @@ Post-v2.13.0
        value of other-config:dp-sn in the Bridge table.
 
 
-v2.13.0 - xx xxx xxxx
+v2.13.0 - 14 Feb 2020
 ---------------------
    - OVN:
      * OVN has been removed from this repository. It now exists as a
