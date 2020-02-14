@@ -25,6 +25,10 @@
 
 VLOG_DEFINE_THIS_MODULE(extend_table);
 
+static void
+ovn_extend_table_delete_desired(struct ovn_extend_table *table,
+                                struct ovn_extend_table_lflow_to_desired *l);
+
 void
 ovn_extend_table_init(struct ovn_extend_table *table)
 {
@@ -173,8 +177,7 @@ ovn_extend_table_clear(struct ovn_extend_table *table, bool existing)
     if (!existing) {
         struct ovn_extend_table_lflow_to_desired *l, *l_next;
         HMAP_FOR_EACH_SAFE (l, l_next, hmap_node, &table->lflow_to_desired) {
-            hmap_remove(&table->lflow_to_desired, &l->hmap_node);
-            free(l);
+            ovn_extend_table_delete_desired(table, l);
         }
     }
 
@@ -214,6 +217,28 @@ ovn_extend_table_remove_existing(struct ovn_extend_table *table,
     ovn_extend_table_info_destroy(existing);
 }
 
+static void
+ovn_extend_table_delete_desired(struct ovn_extend_table *table,
+                                struct ovn_extend_table_lflow_to_desired *l)
+{
+    hmap_remove(&table->lflow_to_desired, &l->hmap_node);
+    struct ovn_extend_table_lflow_ref *r, *next_r;
+    LIST_FOR_EACH_SAFE (r, next_r, list_node, &l->desired) {
+        struct ovn_extend_table_info *e = r->desired;
+        ovn_extend_info_del_lflow_ref(r);
+        if (hmap_is_empty(&e->references)) {
+            VLOG_DBG("%s: %s, "UUID_FMT, __func__,
+                     e->name, UUID_ARGS(&l->lflow_uuid));
+            hmap_remove(&table->desired, &e->hmap_node);
+            if (e->new_table_id) {
+                bitmap_set0(table->table_ids, e->table_id);
+            }
+            ovn_extend_table_info_destroy(e);
+        }
+    }
+    free(l);
+}
+
 /* Remove entries in desired table that are created by the lflow_uuid */
 void
 ovn_extend_table_remove_desired(struct ovn_extend_table *table,
@@ -226,22 +251,7 @@ ovn_extend_table_remove_desired(struct ovn_extend_table *table,
         return;
     }
 
-    hmap_remove(&table->lflow_to_desired, &l->hmap_node);
-    struct ovn_extend_table_lflow_ref *r, *next_r;
-    LIST_FOR_EACH_SAFE (r, next_r, list_node, &l->desired) {
-        struct ovn_extend_table_info *e = r->desired;
-        ovn_extend_info_del_lflow_ref(r);
-        if (hmap_is_empty(&e->references)) {
-            VLOG_DBG("%s: %s, "UUID_FMT, __func__,
-                     e->name, UUID_ARGS(lflow_uuid));
-            hmap_remove(&table->desired, &e->hmap_node);
-            if (e->new_table_id) {
-                bitmap_set0(table->table_ids, e->table_id);
-            }
-            ovn_extend_table_info_destroy(e);
-        }
-    }
-    free(l);
+    ovn_extend_table_delete_desired(table, l);
 }
 
 static struct ovn_extend_table_info*
