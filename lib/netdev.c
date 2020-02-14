@@ -814,6 +814,12 @@ netdev_send_prepare_packet(const uint64_t netdev_flags,
                 VLOG_ERR_BUF(errormsg, "No UDP checksum support");
                 return false;
             }
+        } else if (dp_packet_hwol_l4_is_sctp(packet)) {
+            if (!(netdev_flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)) {
+                /* Fall back to SCTP csum in software. */
+                VLOG_ERR_BUF(errormsg, "No SCTP checksum support");
+                return false;
+            }
         } else {
             VLOG_ERR_BUF(errormsg, "No L4 checksum support: mask: %"PRIu64,
                          l4_mask);
