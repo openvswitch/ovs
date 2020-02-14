@@ -147,6 +147,7 @@ struct ssl_stream
     /* A few bytes of header data in case SSL negotiation fails. */
     uint8_t head[2];
     short int n_head;
+    struct pollfd *hint;
 };
 
 /* SSL context created by ssl_init(). */
@@ -310,6 +311,8 @@ new_ssl_stream(char *name, char *server_name, int fd, enum session_type type,
         SSL_set_msg_callback_arg(ssl, sslv);
     }
 
+
+    poll_fd_register(sslv->fd, OVS_POLLIN, &sslv->hint);
     *streamp = &sslv->stream;
     free(server_name);
     return 0;
@@ -604,6 +607,7 @@ ssl_close(struct stream *stream)
     ERR_clear_error();
 
     SSL_free(sslv->ssl);
+    poll_fd_deregister(sslv->fd);
     closesocket(sslv->fd);
     free(sslv);
 }
@@ -697,6 +701,27 @@ ssl_recv(struct stream *stream, void *buffer, size_t n)
     /* Behavior of zero-byte SSL_read is poorly defined. */
     ovs_assert(n > 0);
 
+     if (sslv->hint) {
+        /* poll-loop is providing us with hints for IO. If we got a HUP/NVAL we skip straight
+         * to the read which should return 0 if the HUP is a real one, if not we clear it
+         * for all other cases we belive what (e)poll has fed us.
+         */
+        if ((!(sslv->hint->revents & (OVS_POLLHUP|OVS_POLLNVAL))) && (sslv->rx_want == SSL_READING)) {
+            if (!(sslv->hint->revents & OVS_POLLIN)) {
+                return -EAGAIN;
+            } else {
+                /* POLLIN event from poll loop, mark us as ready 
+                 * rx_want is cleared further down by reading ssl fsm
+                 */
+                sslv->hint->revents &= ~OVS_POLLIN;
+            }
+        } else {
+            sslv->hint->revents &= ~(OVS_POLLHUP|OVS_POLLNVAL);
+        }
+    }
+
+
+
     old_state = SSL_get_state(sslv->ssl);
     ret = SSL_read(sslv->ssl, buffer, n);
     if (old_state != SSL_get_state(sslv->ssl)) {
@@ -729,6 +754,19 @@ ssl_do_tx(struct stream *stream)
 {
     struct ssl_stream *sslv = ssl_stream_cast(stream);
 
+     if (sslv->hint) {
+        /* poll-loop is providing us with hints for IO */
+        if (sslv->tx_want == SSL_WRITING) {
+            if (!(sslv->hint->revents & OVS_POLLOUT)) {
+                return EAGAIN;
+            } else {
+                /* POLLIN event from poll loop, mark us as ready 
+                 * rx_want is cleared further down by reading ssl fsm
+                 */
+                sslv->hint->revents &= ~OVS_POLLOUT;
+            }
+        }
+    }
     for (;;) {
         int old_state = SSL_get_state(sslv->ssl);
         int ret = SSL_write(sslv->ssl, sslv->txbuf->data, sslv->txbuf->size);
@@ -771,6 +809,8 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
             ssl_clear_txbuf(sslv);
             return n;
         case EAGAIN:
+            /* we want to know when this fd will become available again */
+            stream_send_wait(stream);
             return n;
         default:
             ssl_clear_txbuf(sslv);
@@ -795,7 +835,7 @@ ssl_run_wait(struct stream *stream)
     struct ssl_stream *sslv = ssl_stream_cast(stream);
 
     if (sslv->tx_want != SSL_NOTHING) {
-        poll_fd_wait(sslv->fd, want_to_poll_events(sslv->tx_want));
+        private_poll_fd_wait(sslv->fd, want_to_poll_events(sslv->tx_want));
     }
 }
 
@@ -811,13 +851,13 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
         } else {
             switch (sslv->state) {
             case STATE_TCP_CONNECTING:
-                poll_fd_wait(sslv->fd, OVS_POLLOUT);
+                private_poll_fd_wait(sslv->fd, OVS_POLLOUT);
                 break;
 
             case STATE_SSL_CONNECTING:
                 /* ssl_connect() called SSL_accept() or SSL_connect(), which
                  * set up the status that we test here. */
-                poll_fd_wait(sslv->fd,
+                private_poll_fd_wait(sslv->fd,
                                want_to_poll_events(SSL_want(sslv->ssl)));
                 break;
 
@@ -829,7 +869,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
 
     case STREAM_RECV:
         if (sslv->rx_want != SSL_NOTHING) {
-            poll_fd_wait(sslv->fd, want_to_poll_events(sslv->rx_want));
+            private_poll_fd_wait(sslv->fd, want_to_poll_events(sslv->rx_want));
         } else {
             poll_immediate_wake();
         }
@@ -911,6 +951,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
                  ds_steal_cstr(&bound_name));
     pstream_set_bound_port(&pssl->pstream, htons(port));
     pssl->fd = fd;
+    poll_fd_register(fd, OVS_POLLIN, NULL);
     *pstreamp = &pssl->pstream;
 
     return 0;
@@ -920,6 +961,7 @@ static void
 pssl_close(struct pstream *pstream)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
+    poll_fd_deregister(pssl->fd);
     closesocket(pssl->fd);
     free(pssl);
 }

@@ -40,6 +40,8 @@ struct stream_fd
     struct stream stream;
     int fd;
     int fd_type;
+    bool rx_ready, tx_ready;
+    struct pollfd *hint;
 };
 
 static const struct stream_class stream_fd_class;
@@ -67,7 +69,14 @@ new_fd_stream(char *name, int fd, int connect_status, int fd_type,
     stream_init(&s->stream, &stream_fd_class, connect_status, name);
     s->fd = fd;
     s->fd_type = fd_type;
+    s->rx_ready = true;
+    s->tx_ready = true;
+    s->hint = NULL;
     *streamp = &s->stream;
+    /* Persistent registration - we always get POLLINs from now on,
+     * POLLOUTs when we ask for them
+     */
+    poll_fd_register(s->fd, OVS_POLLIN, &s->hint);
     return 0;
 }
 
@@ -82,6 +91,8 @@ static void
 fd_close(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
+    /* Deregister the FD from any persistent registrations if supported */
+    poll_fd_deregister(s->fd);
     closesocket(s->fd);
     free(s);
 }
@@ -104,6 +115,24 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
     ssize_t retval;
     int error;
 
+    if (s->hint) {
+        /* poll-loop is providing us with hints for IO. If we got a HUP/NVAL we skip straight
+         * to the read which should return 0 if the HUP is a real one, if not we clear it
+         * for all other cases we belive what (e)poll has fed us.
+         */
+        if ((!(s->hint->revents & (OVS_POLLHUP|OVS_POLLNVAL))) && (!s->rx_ready)) {
+            if (!(s->hint->revents & OVS_POLLIN)) {
+                return -EAGAIN;
+            } else {
+                /* POLLIN event from poll loop, mark us as ready */
+                s->rx_ready = true;
+                s->hint->revents &= ~OVS_POLLIN;
+            }
+        } else {
+            s->hint->revents &= ~(OVS_POLLHUP|OVS_POLLNVAL);
+        }
+    }
+
     retval = recv(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
@@ -114,6 +143,8 @@ fd_recv(struct stream *stream, void *buffer, size_t n)
 #endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "recv: %s", sock_strerror(error));
+        } else {
+            s->rx_ready = false;
         }
         return -error;
     }
@@ -127,9 +158,29 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
     ssize_t retval;
     int error;
 
+    if (s->hint) {
+        /* poll-loop is providing us with hints for IO */
+        if (!s->tx_ready) {
+            if (!(s->hint->revents & OVS_POLLOUT)) {
+                return -EAGAIN;
+            } else {
+                /* POLLOUT event from poll loop, mark us as ready */
+                s->tx_ready = true;
+                s->hint->revents &= ~OVS_POLLOUT;
+            }
+        }
+    }
     retval = send(s->fd, buffer, n, 0);
     if (retval < 0) {
         error = sock_errno();
+#ifdef __linux__
+        /* Linux will sometimes return ENOBUFS on sockets instead of EAGAIN. Usually seen
+         *  on unix domain sockets 
+         */
+        if (error == ENOBUFS) {
+           error = EAGAIN;
+        }
+#endif
 #ifdef _WIN32
         if (error == WSAEWOULDBLOCK) {
            error = EAGAIN;
@@ -137,6 +188,8 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
 #endif
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "send: %s", sock_strerror(error));
+        } else {
+            s->tx_ready = false;
         }
         return -error;
     }
@@ -150,11 +203,11 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
     switch (wait) {
     case STREAM_CONNECT:
     case STREAM_SEND:
-        poll_fd_wait(s->fd, OVS_POLLOUT);
+        private_poll_fd_wait(s->fd, OVS_POLLOUT);
         break;
 
     case STREAM_RECV:
-        poll_fd_wait(s->fd, OVS_POLLIN);
+        private_poll_fd_wait(s->fd, OVS_POLLIN);
         break;
 
     default:
@@ -223,6 +276,8 @@ new_fd_pstream(char *name, int fd,
     ps->accept_cb = accept_cb;
     ps->unlink_path = unlink_path;
     *pstreamp = &ps->pstream;
+    /* persistent registration */
+    poll_fd_register(ps->fd, OVS_POLLIN, NULL);
     return 0;
 }
 
@@ -230,6 +285,7 @@ static void
 pfd_close(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
+    poll_fd_deregister(ps->fd);
     closesocket(ps->fd);
     maybe_unlink_and_free(ps->unlink_path);
     free(ps);
@@ -271,7 +327,7 @@ static void
 pfd_wait(struct pstream *pstream)
 {
     struct fd_pstream *ps = fd_pstream_cast(pstream);
-    poll_fd_wait(ps->fd, OVS_POLLIN);
+    private_poll_fd_wait(ps->fd, OVS_POLLIN);
 }
 
 static const struct pstream_class fd_pstream_class = {

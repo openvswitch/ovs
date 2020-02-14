@@ -83,5 +83,6 @@ latch_is_set(const struct latch *latch)
 void
 latch_wait_at(const struct latch *latch, const char *where)
 {
-    poll_fd_wait_at(latch->fds[0], OVS_POLLIN, where);
+    /* Ask for wait and make it one-shot if persistence is in play */
+    poll_fd_wait_at(latch->fds[0], OVS_POLLIN | OVS_ONESHOT, where);
 }

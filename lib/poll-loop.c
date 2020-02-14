@@ -18,6 +18,12 @@
 #include "openvswitch/poll-loop.h"
 #include <errno.h>
 #include <inttypes.h>
+#ifdef OVS_USE_EPOLL
+#include <sys/epoll.h>
+#endif
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +37,9 @@
 #include "timeval.h"
 #include "openvswitch/vlog.h"
 #include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 #include "hash.h"
+#include "ovs-atomic.h"
 
 VLOG_DEFINE_THIS_MODULE(poll_loop);
 
@@ -43,21 +51,32 @@ struct poll_node {
     struct pollfd pollfd;       /* Events to pass to time_poll(). */
     HANDLE wevent;              /* Events for WaitForMultipleObjects(). */
     const char *where;          /* Where poll_node was created. */
+    bool valid;                 /* Can it be used? */
+    bool private;               /* Can we assume that it is only in this thread poll loop? */
 };
 
+#define MAX_EPOLL_EVENTS 64
+
 struct poll_loop {
-    /* All active poll waiters. */
+    /* List of all poll loops in the system */
+    struct ovs_mutex loop_mutex;
+    /* All poll waiters for this poll loop */
     struct hmap poll_nodes;
 
     /* Time at which to wake up the next call to poll_block(), LLONG_MIN to
      * wake up immediately, or LLONG_MAX to wait forever. */
     long long int timeout_when; /* In msecs as returned by time_msec(). */
     const char *timeout_where;  /* Where 'timeout_when' was set. */
+#ifdef OVS_USE_EPOLL
+    int epoll_fd;
+    struct epoll_event epoll_events[MAX_EPOLL_EVENTS];
+#endif
 };
+
 
 static struct poll_loop *poll_loop(void);
 
-/* Look up the node with same fd or wevent. */
+/* Look up the node with same fd or wevent - should be accessed under &loop->mutex. */
 static struct poll_node *
 find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
 {
@@ -76,78 +95,141 @@ find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
     }
     return NULL;
 }
-
-/* On Unix based systems:
- *
- *     Registers 'fd' as waiting for the specified 'events' (which should be
- *     OVS_POLLIN or OVS_POLLOUT or OVS_POLLIN | OVS_POLLOUT).  The following call to
- *     poll_block() will wake up when 'fd' becomes ready for one or more of the
- *     requested events. The 'fd's are given to poll() function later.
- *
- * On Windows system:
- *
- *     If 'fd' is specified, create a new 'wevent'. Association of 'fd' and
- *     'wevent' for 'events' happens in poll_block(). If 'wevent' is specified,
- *     it is assumed that it is unrelated to any sockets and poll_block()
- *     will wake up on any event on that 'wevent'. It is an error to pass
- *     both 'wevent' and 'fd'.
- *
- * The event registration is one-shot: only the following call to
- * poll_block() is affected.  The event will need to be re-registered after
- * poll_block() is called if it is to persist.
- *
- * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
- * automatically provide the caller's source file and line number for
- * 'where'.) */
-static void
-poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
-{
-    struct poll_loop *loop = poll_loop();
-    struct poll_node *node;
-
-    COVERAGE_INC(poll_create_node);
-
-    /* Both 'fd' and 'wevent' cannot be set. */
-    ovs_assert(!fd != !wevent);
-
-    /* Check for duplicate.  If found, "or" the events. */
-    node = find_poll_node(loop, fd, wevent);
-    if (node) {
-        node->pollfd.events |= events;
-    } else {
-        node = xzalloc(sizeof *node);
-        hmap_insert(&loop->poll_nodes, &node->hmap_node,
-                    hash_2words(fd, (uint32_t)wevent));
-        node->pollfd.fd = fd;
-        node->pollfd.events = events;
-#ifdef _WIN32
-        if (!wevent) {
-            wevent = CreateEvent(NULL, FALSE, FALSE, NULL);
-        }
-#endif
-        node->wevent = wevent;
-        node->where = where;
-    }
-}
-
 /* Registers 'fd' as waiting for the specified 'events' (which should be OVS_POLLIN
  * or OVS_POLLOUT or OVS_POLLIN | OVS_POLLOUT).  The following call to poll_block() will
  * wake up when 'fd' becomes ready for one or more of the requested events.
  *
- * On Windows, 'fd' must be a socket.
+ * The event registration is PERSISTENT. This is intended for OSes which have a persistent
+ * event framework. For now it is implemented only for epoll and Linux, other
+ * implementations such as BSD kqueue and Solaris /dev/poll may follow.
  *
- * The event registration is one-shot: only the following call to poll_block()
- * is affected.  The event will need to be re-registered after poll_block() is
- * called if it is to persist.
+ * If the OS has no persistent even framework does nothing
  *
  * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
  * automatically provide the caller's source file and line number for
  * 'where'.) */
-void
-poll_fd_wait_at(int fd, short int events, const char *where)
+
+static void
+poll_fd_subscribe_at(int fd, HANDLE wevent, int events, struct pollfd **hint, const char *where, bool private)
 {
-    poll_create_node(fd, 0, events, where);
+    struct poll_loop *loop = poll_loop();
+    struct poll_node *node;
+#ifdef OVS_USE_EPOLL
+    struct epoll_event event;
+#endif
+
+    ovs_assert(!fd != !wevent);
+
+    /* This is mostly uncontended, so the thread should grab it straight away.
+     * We will reuse it later to introduce threading for IO and SSL
+     */
+    ovs_mutex_lock(&loop->loop_mutex);
+
+    /* Check for duplicate.  If found, "or" the events. */
+    node = find_poll_node(loop, fd, wevent);
+
+    if (node && node->valid) {
+#ifdef OVS_USE_EPOLL
+        int old_event_mask = node->pollfd.events;
+#endif
+        /* If there is an existing event mask we do not need to inc - this will be waited upon */
+        node->pollfd.events |= (events & 0x0000FFFF); /* or without epoll specific bits */
+
+#ifdef OVS_USE_EPOLL
+        /* modify existing epoll entry if there is an epoll specific ask or if the
+         * mask has changed
+         */
+        if ((events & 0xFFFF0000) || (old_event_mask != node->pollfd.events)) {
+            event.events = node->pollfd.events | events | EPOLLHUP | EPOLLRDHUP;
+            event.data.ptr = node;
+            epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, fd, &event);
+        }
+#endif
+    } else {
+        if (!node) {
+            node = xzalloc(sizeof *node);
+            hmap_insert(&loop->poll_nodes, &node->hmap_node,
+                        hash_2words(fd, 0));
+        } else {
+            /* node marked for reaping, OS has reused the fd number, valid is set to false */
+#ifdef OVS_USE_EPOLl
+            epoll_ctl(loop->epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+#endif
+        }
+        node->pollfd.fd = fd;
+        node->pollfd.events = (events & 0x0000FFFF);
+        node->wevent = wevent;
+        node->where = where;
+        node->valid = true;
+        node->private = private;
+#ifdef OVS_USE_EPOLL
+        event.events = node->pollfd.events | EPOLLHUP | EPOLLRDHUP; /* we always listen for fd close */
+        event.data.ptr = node;
+        epoll_ctl(loop->epoll_fd, EPOLL_CTL_ADD, fd, &event);
+#endif
+    }
+    if (hint) {
+        *hint = &node->pollfd;
+    }
+    ovs_mutex_unlock(&loop->loop_mutex);
 }
+
+void
+poll_fd_register_at(int fd, int events, struct pollfd **hint, const char *where) {
+    poll_fd_subscribe_at(fd, 0, events, hint, where , true);
+}
+
+/* Deregisters a fd. Note - this looks like a memory leak (deallocating only private fds)
+ * but it is not.
+ * In order to be compatible with existing calling conventions while using fd persistence
+ * where supported we have to keep "legacy" fds around for the duration of the life of
+ * the thread because we have no idea if they have been reaped properly or not.
+ * The reason for this is that for some of them the close() is in a thread different from the
+ * poll loop.
+ * Thus, the only thing we can do in this case is mark them "invalid". Once the OS reuses the
+ * same fd number, we will reuse the existing has entry.
+ */
+
+void
+poll_fd_deregister_at(int fd, const char *where) {
+    struct poll_loop *loop = poll_loop();
+
+    VLOG(VLL_DBG, "Deregister %d from %s", fd, where);
+    struct poll_node *node;
+
+    ovs_mutex_lock(&loop->loop_mutex);
+    node = find_poll_node(loop, fd, 0);
+    if (node) {
+        if (node->private) {
+#ifdef OVN_USE_EPOLL
+            epoll_ctl(loop->epoll_fd, EPOLL_CTL_DEL, node->pollfd.fd, NULL);
+#endif
+            hmap_remove(&loop->poll_nodes, &node->hmap_node);
+        } else {
+            VLOG(VLL_WARN, "Trying to deregister a non-private %d from %s", fd, where);
+            node->valid = false;
+        }
+    }
+    ovs_mutex_unlock(&loop->loop_mutex);
+}
+
+void
+poll_fd_wait_at(int fd, int events, const char *where)
+{
+    poll_fd_subscribe_at(fd, 0, events, NULL, where, false);
+}
+
+void
+private_poll_fd_wait_at(int fd, int events, const char *where)
+{
+    /* POLLIN persists on "private" fds - either emulated or at epoll
+     * or other persistence framework level
+     */
+    if (events & (~OVS_POLLIN)) {
+        poll_fd_subscribe_at(fd, 0, events, NULL, where, true);
+    }
+}
+
 
 #ifdef _WIN32
 /* Registers for the next call to poll_block() to wake up when 'wevent' is
@@ -163,7 +245,7 @@ poll_fd_wait_at(int fd, short int events, const char *where)
 void
 poll_wevent_wait_at(HANDLE wevent, const char *where)
 {
-    poll_create_node(0, wevent, 0, where);
+    poll_fd_subscribe_at(0, wevent, 0, NULL, where);
 }
 #endif /* _WIN32 */
 
@@ -277,9 +359,12 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
         if (pollfd->revents & OVS_POLLHUP) {
             ds_put_cstr(&s, "[OVS_POLLHUP]");
         }
+#ifndef OVS_USE_EPOLL
+        /* epoll does not have NVAL - it uses RDHUP and HUP which we cannot actually get to here*/
         if (pollfd->revents & OVS_POLLNVAL) {
             ds_put_cstr(&s, "[OVS_POLLNVAL]");
         }
+#endif
         ds_put_format(&s, " on fd %d (%s)", pollfd->fd, description);
         free(description);
     } else {
@@ -295,12 +380,17 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     ds_destroy(&s);
 }
 
+
 static void
 free_poll_nodes(struct poll_loop *loop)
 {
     struct poll_node *node, *next;
 
+    ovs_mutex_lock(&loop->loop_mutex);
     HMAP_FOR_EACH_SAFE (node, next, hmap_node, &loop->poll_nodes) {
+#ifdef OVS_USE_EPOLL
+        epoll_ctl(loop->epoll_fd, EPOLL_CTL_DEL, node->pollfd.fd, NULL);
+#endif
         hmap_remove(&loop->poll_nodes, &node->hmap_node);
 #ifdef _WIN32
         if (node->wevent && node->pollfd.fd) {
@@ -310,6 +400,7 @@ free_poll_nodes(struct poll_loop *loop)
 #endif
         free(node);
     }
+    ovs_mutex_unlock(&loop->loop_mutex);
 }
 
 /* Blocks until one or more of the events registered with poll_fd_wait()
@@ -320,8 +411,13 @@ poll_block(void)
 {
     struct poll_loop *loop = poll_loop();
     struct poll_node *node;
+#ifndef OVS_USE_EPOLL
     struct pollfd *pollfds;
+#endif
+#ifndef OVS_USE_EPOLL
     HANDLE *wevents = NULL;
+    int counter;
+#endif
     int elapsed;
     int retval;
     int i;
@@ -335,54 +431,126 @@ poll_block(void)
     }
 
     timewarp_run();
-    pollfds = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *pollfds);
 
+#ifdef OVS_USE_EPOLL
+    retval = time_epoll_wait(loop->epoll_fd,
+        (struct epoll_event *) &loop->epoll_events, MAX_EPOLL_EVENTS, loop->timeout_when, &elapsed);
+    if (retval < 0) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "epoll: %s", ovs_strerror(retval));
+    } else if (!retval) {
+        log_wakeup(loop->timeout_where, NULL, elapsed);
+    } else {
+        ovs_mutex_lock(&loop->loop_mutex);
+        if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
+            for (i = 0; i < retval; i++) {
+                node = (struct poll_node *) loop->epoll_events[i].data.ptr;
+                if (loop->epoll_events[i].events) {
+                    node->pollfd.revents = loop->epoll_events[i].events;
+                    log_wakeup(node->where, &node->pollfd, 0);
+                }
+            }
+        }
+        for (i = 0; i < retval; i++) {
+            node = (struct poll_node *) loop->epoll_events[i].data.ptr;
+            if (loop->epoll_events[i].events & EPOLLHUP) {
+                /* File descriptor closed already elsewhere
+                 * We have to make the assumption that whoever closed it has
+                 * ensured that anything which refers to IO event hints will not run
+                 * on this fd after we free it.
+                 */
+                node->valid = false;
+            }
+            if (loop->epoll_events[i].events) {
+                node->pollfd.revents |= (loop->epoll_events[i].events & 0x0000FFFF);
+            }
+            if (loop->epoll_events[i].events & OVS_POLLOUT) {
+                struct epoll_event event;
+                node->pollfd.events = OVS_POLLIN; /* reset back to defaults - write needs one shot */
+                event.events = node->pollfd.events;
+                event.data.ptr = node;
+                epoll_ctl(loop->epoll_fd, EPOLL_CTL_MOD, node->pollfd.fd, &event);
+            }
+        }
+        ovs_mutex_unlock(&loop->loop_mutex);
+    }
+#else
+    pollfds = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *pollfds);
 #ifdef _WIN32
     wevents = xmalloc(hmap_count(&loop->poll_nodes) * sizeof *wevents);
 #endif
 
+
     /* Populate with all the fds and events. */
-    i = 0;
+    counter = 0;
     HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
-        pollfds[i] = node->pollfd;
+        if ((node->valid) && (node->pollfd.events)) {
+            pollfds[counter] = node->pollfd;
 #ifdef _WIN32
-        wevents[i] = node->wevent;
-        if (node->pollfd.fd && node->wevent) {
-            short int wsa_events = 0;
-            if (node->pollfd.events & OVS_POLLIN) {
-                wsa_events |= FD_READ | FD_ACCEPT | FD_CLOSE;
+            wevents[counter] = node->wevent;
+            if (node->pollfd.fd && node->wevent) {
+                short int wsa_events = 0;
+                if (node->pollfd.events & OVS_POLLIN) {
+                    wsa_events |= FD_READ | FD_ACCEPT | FD_CLOSE;
+                }
+                if (node->pollfd.events & OVS_POLLOUT) {
+                    wsa_events |= FD_WRITE | FD_CONNECT | FD_CLOSE;
+                }
+                WSAEventSelect(node->pollfd.fd, node->wevent, wsa_events);
             }
-            if (node->pollfd.events & OVS_POLLOUT) {
-                wsa_events |= FD_WRITE | FD_CONNECT | FD_CLOSE;
-            }
-            WSAEventSelect(node->pollfd.fd, node->wevent, wsa_events);
-        }
 #endif
-        i++;
+            counter++;
+        }
     }
 
-    retval = time_poll(pollfds, hmap_count(&loop->poll_nodes), wevents,
+    retval = time_poll(pollfds, counter, wevents,
                        loop->timeout_when, &elapsed);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(-retval));
-    } else if (!retval) {
+    } else if (retval == 0) {
         log_wakeup(loop->timeout_where, NULL, elapsed);
-    } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
-        i = 0;
-        HMAP_FOR_EACH (node, hmap_node, &loop->poll_nodes) {
+    } else {
+        for (i = 0; i < counter; i++) {
             if (pollfds[i].revents) {
-                log_wakeup(node->where, &pollfds[i], 0);
+
+                node = find_poll_node(loop, pollfds[i].fd, 0);
+
+                if (!node) {
+                    VLOG_FATAL("poll: persistence state corrupted, no hash entry for %d", pollfds[i].fd);
+                }
+                if (pollfds[i].revents & (OVS_POLLHUP | OVS_POLLNVAL)) {
+                    node->valid = false;
+                }
+
+                if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
+                    log_wakeup(node->where, &pollfds[i], 0);
+                }
+                /* update "requested" events. 
+                 * Note - "private" fds always want POLLIN - that emulates EPOLL, /dev/poll, etc
+                 * behaviour which they should be using in real life instead of using poll()
+                 */
+                if (node->private) {
+                    node->pollfd.events &= ~(pollfds[i].revents & (~OVS_POLLIN));
+                } else {
+                    node->pollfd.events &= ~pollfds[i].revents;
+                }
+                /* update "occured" events for use by streams and handlers. In case there
+                 * is an existing (but not consumed yet) event, we OR the events in the
+                 * stored record with the new ones - it is the job of the stream to clear
+                 * that.
+                 */
+                node->pollfd.revents |= pollfds[i].revents;
             }
-            i++;
         }
     }
 
-    free_poll_nodes(loop);
+    free(pollfds);
+    if (wevents)
+        free(wevents);
+#endif
     loop->timeout_when = LLONG_MAX;
     loop->timeout_where = NULL;
-    free(pollfds);
-    free(wevents);
 
     /* Handle any pending signals before doing anything else. */
     fatal_signal_run();
@@ -416,8 +584,12 @@ poll_loop(void)
     if (!loop) {
         loop = xzalloc(sizeof *loop);
         loop->timeout_when = LLONG_MAX;
+        ovs_mutex_init(&loop->loop_mutex);
         hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
+#ifdef OVS_USE_EPOLL
+        loop->epoll_fd = epoll_create(MAX_EPOLL_EVENTS);
+#endif
     }
     return loop;
 }

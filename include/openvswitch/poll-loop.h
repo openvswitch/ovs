@@ -41,11 +41,30 @@
 #include <windows.h>
 #endif
 
+#ifdef __linux__
+#define OVS_USE_EPOLL
+#endif
+
+#ifdef OVS_USE_EPOLL
+#include <sys/epoll.h>
+
+#define OVS_POLLIN EPOLLIN
+#define OVS_POLLOUT EPOLLOUT
+#define OVS_POLLERR EPOLLERR
+#define OVS_POLLHUP EPOLLHUP
+#define OVS_ONESHOT EPOLLONESHOT
+#define OVS_POLLNVAL 0
+
+#else
+
 #define OVS_POLLIN POLLIN
 #define OVS_POLLOUT POLLOUT
 #define OVS_POLLERR POLLERR
 #define OVS_POLLNVAL POLLNVAL
 #define OVS_POLLHUP POLLHUP
+#define OVS_ONESHOT (1U << 30)
+
+#endif 
 
 #ifdef  __cplusplus
 extern "C" {
@@ -60,9 +79,42 @@ extern "C" {
  * the source code location of the caller.  The function version allows the
  * caller to supply a location explicitly, which is useful if the caller's own
  * caller would be more useful in log output.  See timer_wait_at() for an
- * example. */
-void poll_fd_wait_at(int fd, short int events, const char *where);
+ * example.
+ * Note - using on fds registered using poll_fd_register() will generate a
+ * warning as this is not an intended use.
+ */
+void poll_fd_wait_at(int fd, int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
+
+/* Register a fd with a persistence framework if available so it can be served
+ * "faster" and the caller can be provided with "hints" on what caused the IO
+ * event.
+ * If the "hint" argument is supplied it set to point to the pollfd structure
+ * containing the events passed by the OS in .revents. 
+ * Note - as the frameworks are OS dependent, the events are limited to what
+ * can be passed in a .revents which is a short int.
+ * Limitations - MUST BE registered from the same thread as the one where 
+ * it will be waited upon.
+ */
+
+void poll_fd_register_at(int fd, int events, struct pollfd **hint, const char *where);
+#define poll_fd_register(fd, events, hint) poll_fd_register_at(fd, events, hint, OVS_SOURCE_LOCATOR)
+
+/* De-register a fd which was registered as "private" with the persistence
+ * framework
+ */
+
+void poll_fd_deregister_at(int fd, const char *where);
+#define poll_fd_deregister(fd) poll_fd_deregister_at(fd, OVS_SOURCE_LOCATOR)
+
+/* Schedule events to wake up the following poll_block() - "private fds"
+ * Same as poll_fd_wait, but for fds which have been registered and are
+ * expected to persist. If a "fast" OS fd notification framework is used
+ * this version of wait may be a NOOP (f.e. for (E)POLLIN events.
+ */
+void private_poll_fd_wait_at(int fd, int events, const char *where);
+#define private_poll_fd_wait(fd, events) private_poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
+
 
 #ifdef _WIN32
 void poll_wevent_wait_at(HANDLE wevent, const char *where);
