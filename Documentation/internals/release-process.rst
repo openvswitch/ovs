@@ -122,6 +122,63 @@ approximate:
 | T + 5.5       | Aug 15, Feb 15 | Release version x.y.0                |
 +---------------+----------------+--------------------------------------+
 
+How to Branch
+-------------
+
+To branch "master" for the eventual release of OVS version x.y.0,
+prepare two patches against master:
+
+1. "Prepare for x.y.0." following the model of commit 836d1973c56e
+   ("Prepare for 2.11.0.").
+
+2. "Prepare for post-x.y.0 (x.y.90)." following the model of commit
+   fe2870c574db ("Prepare for post-2.11.0 (2.11.90).")
+
+Post both patches to ovs-dev.  Get them reviewed in the usual way.
+
+Apply both patches to master, and create branch-x.y by pushing only
+the first patch.  The following command illustrates how to do both of
+these at once assuming the local repository HEAD points to the
+"Prepare for post-x.y.0" commit:
+
+	git push origin HEAD:master HEAD^:refs/heads/branch-x.y
+
+Branching should be announced on ovs-dev.
+
+How to Release
+--------------
+
+Follow these steps to release version x.y.z of OVS from branch-x.y.
+
+1. Prepare two patches against branch-x.y:
+
+   a. "Set release date for x.y.z".  For z = 0, follow the model of
+      commit d11f4cbbfe05 ("Set release date for 2.12.0."); for z > 0,
+      follow the model of commit 53d5c18118b0 ("Set release date for
+      2.11.3.").
+
+   b. "Prepare for x.y.(z+1)." following the model of commit
+      db02dd23e48a ("Prepare for 2.11.1.").
+
+3. Post the patches to ovs-dev.  Get them reviewed in the usual way.
+
+4. Apply the patches to branch-x.y.
+
+5. If z = 0, apply the first patch (only) to master.
+
+6. Sign a tag vx.y.z "Open vSwitch version x.y.z" and push it to the
+   repo.
+
+7. Update http://www.openvswitch.org/download/.  See commit
+   31eaa72cafac ("Add 2.12.0 and older release announcements.") in the
+   website repo (https://github.com/openvswitch/openvswitch.github.io)
+   for an example.
+
+8. Consider updating the Wikipedia page for Open vSwitch at
+   https://en.wikipedia.org/wiki/Open_vSwitch
+
+9. Tweet.
+
 Contact
 -------
 
