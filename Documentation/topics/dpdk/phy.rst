@@ -385,6 +385,8 @@ Jumbo Frames
 DPDK physical ports can be configured to use Jumbo Frames. For more
 information, refer to :doc:`jumbo-frames`.
 
+.. _lsc-detection:
+
 Link State Change (LSC) detection configuration
 -----------------------------------------------
 

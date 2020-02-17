@@ -717,6 +717,15 @@ Limitations
   around is temporary and is expected to be removed once a method is provided
   by DPDK to query the upper bound MTU value for a given device.
 
+- Flow Control: When using i40e devices (Intel(R) 700 Series) it is recommended
+  to set Link State Change detection to interrupt mode. Otherwise it has been
+  observed that using the default polling mode, flow control changes may not be
+  applied, and flow control states will not be reflected correctly.
+  The issue is under investigation, this is a temporary work around.
+
+  For information about setting Link State Change detection, refer to
+  :ref:`lsc-detection`.
+
 Reporting Bugs
 --------------
 
