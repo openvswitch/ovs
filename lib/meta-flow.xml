@@ -2566,8 +2566,8 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
         <dt><code>est</code> (0x02)</dt>
         <dd>
-          Part of an existing connection.  Set to 1 if this is a committed
-          connection.
+          Part of an existing connection.  Set to 1 if packets of a committed
+          connection have been seen by conntrack from both directions.
         </dd>
 
         <dt><code>rel</code> (0x04)</dt>
