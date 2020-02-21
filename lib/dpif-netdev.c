@@ -2415,6 +2415,7 @@ dp_netdev_flow_offload_main(void *data OVS_UNUSED)
         VLOG_DBG("%s to %s netdev flow\n",
                  ret == 0 ? "succeed" : "failed", op);
         dp_netdev_free_flow_offload(offload);
+        ovsrcu_quiesce();
     }
 
     return NULL;
