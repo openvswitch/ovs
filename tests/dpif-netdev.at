@@ -363,7 +363,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
   [AT_SETUP([dpif-netdev - partial hw offload - $1])
    OVS_VSWITCHD_START(
      [add-port br0 p1 -- \
-      set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock options:ifindex=1 -- \
+      set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock options:ifindex=1100 -- \
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
@@ -426,7 +426,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
   [AT_SETUP([dpif-netdev - partial hw offload with packet modifications - $1])
    OVS_VSWITCHD_START(
      [add-port br0 p1 -- \
-      set interface p1 type=$1 ofport_request=1 options:pcap=p1.pcap options:ifindex=1 -- \
+      set interface p1 type=$1 ofport_request=1 options:pcap=p1.pcap options:ifindex=1101 -- \
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
