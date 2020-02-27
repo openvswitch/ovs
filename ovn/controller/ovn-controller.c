@@ -1712,7 +1712,7 @@ main(int argc, char *argv[])
     char *ovs_remote = parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemonize_start(false);
+    daemonize_start(true);
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
