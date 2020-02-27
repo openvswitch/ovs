@@ -33,7 +33,7 @@ pvector_impl_alloc(size_t size)
     struct pvector_impl *impl;
 
     impl = xmalloc(sizeof *impl + size * sizeof impl->vector[0]);
-    impl->size = 0;
+    atomic_init(&impl->size, 0);
     impl->allocated = size;
 
     return impl;
@@ -117,18 +117,22 @@ pvector_insert(struct pvector *pvec, void *ptr, int priority)
 {
     struct pvector_impl *temp = pvec->temp;
     struct pvector_impl *old = pvector_impl_get(pvec);
+    size_t size;
 
     ovs_assert(ptr != NULL);
 
+    /* There is no possible concurrent writer. Insertions must be protected
+     * by mutex or be always excuted from the same thread. */
+    atomic_read_relaxed(&old->size, &size);
+
     /* Check if can add to the end without reallocation. */
-    if (!temp && old->allocated > old->size &&
-        (!old->size || priority <= old->vector[old->size - 1].priority)) {
-        old->vector[old->size].ptr = ptr;
-        old->vector[old->size].priority = priority;
+    if (!temp && old->allocated > size &&
+        (!size || priority <= old->vector[size - 1].priority)) {
+        old->vector[size].ptr = ptr;
+        old->vector[size].priority = priority;
         /* Size increment must not be visible to the readers before the new
          * entry is stored. */
-        atomic_thread_fence(memory_order_release);
-        ++old->size;
+        atomic_store_explicit(&old->size, size + 1, memory_order_release);
     } else {
         if (!temp) {
             temp = pvector_impl_dup(old);
