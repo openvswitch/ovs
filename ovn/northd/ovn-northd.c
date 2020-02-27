@@ -5329,6 +5329,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         struct mcast_info *mcast_info = &igmp_group->datapath->mcast_info;
 
+        /* RFC 4541, section 2.1.2, item 2: Skip groups in the 224.0.0.X
+         * range.
+         */
+        ovs_be32 group_address =
+            in6_addr_get_mapped_ipv4(&igmp_group->address);
+        if (ip_is_local_multicast(group_address)) {
+            continue;
+        }
+
         if (mcast_info->active_flows >= mcast_info->table_size) {
             continue;
         }
