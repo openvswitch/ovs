@@ -59,7 +59,7 @@ case "$TYPE" in
         OVSPatchPort|OVSTunnel)
                 ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
                 ;;
-        OVSDPDKPort|OVSDPDKRPort|OVSDPDKVhostUserPort|OVSDPDKBond)
+        OVSDPDKPort|OVSDPDKVhostUserPort|OVSDPDKBond)
                 ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
                 ;;
         *)

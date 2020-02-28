@@ -36,7 +36,6 @@
 #include <rte_config.h>
 #include <rte_cycles.h>
 #include <rte_errno.h>
-#include <rte_eth_ring.h>
 #include <rte_ethdev.h>
 #include <rte_flow.h>
 #include <rte_malloc.h>
@@ -216,10 +215,6 @@ struct netdev_dpdk_sw_stats {
     uint64_t tx_invalid_hwol_drops;
 };
 
-enum { DPDK_RING_SIZE = 256 };
-BUILD_ASSERT_DECL(IS_POW2(DPDK_RING_SIZE));
-enum { DRAIN_TSC = 200000ULL };
-
 enum dpdk_dev_type {
     DPDK_DEV_ETH = 0,
     DPDK_DEV_VHOST = 1,
@@ -395,22 +390,6 @@ struct dpdk_tx_queue {
         /* Mapping of configured vhost-user queue to enabled by guest. */
         int map;
     );
-};
-
-/* dpdk has no way to remove dpdk ring ethernet devices
-   so we have to keep them around once they've been created
-*/
-
-static struct ovs_list dpdk_ring_list OVS_GUARDED_BY(dpdk_mutex)
-    = OVS_LIST_INITIALIZER(&dpdk_ring_list);
-
-struct dpdk_ring {
-    /* For the client rings */
-    struct rte_ring *cring_tx;
-    struct rte_ring *cring_rx;
-    unsigned int user_port_id; /* User given port no, parsed from port name */
-    dpdk_port_t eth_port_id; /* ethernet device port id */
-    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
 
 struct ingress_policer {
@@ -1299,27 +1278,6 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
     return 0;
 }
 
-/* dev_name must be the prefix followed by a positive decimal number.
- * (no leading + or - signs are allowed) */
-static int
-dpdk_dev_parse_name(const char dev_name[], const char prefix[],
-                    unsigned int *port_no)
-{
-    const char *cport;
-
-    if (strncmp(dev_name, prefix, strlen(prefix))) {
-        return ENODEV;
-    }
-
-    cport = dev_name + strlen(prefix);
-
-    if (str_to_uint(cport, 10, port_no)) {
-        return 0;
-    } else {
-        return ENODEV;
-    }
-}
-
 /* Get the number of OVS interfaces which have the same DPDK
  * rte device (e.g. same pci bus address).
  * FIXME: avoid direct access to DPDK internal array rte_eth_devices.
@@ -2057,19 +2015,6 @@ out:
     ovs_mutex_unlock(&dpdk_mutex);
 
     return err;
-}
-
-static int
-netdev_dpdk_ring_set_config(struct netdev *netdev, const struct smap *args,
-                            char **errp OVS_UNUSED)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-
-    ovs_mutex_lock(&dev->mutex);
-    dpdk_set_rxq_config(dev, args);
-    ovs_mutex_unlock(&dev->mutex);
-
-    return 0;
 }
 
 static int
@@ -4257,131 +4202,6 @@ netdev_dpdk_class_init(void)
     return 0;
 }
 
-/* Client Rings */
-
-static int
-dpdk_ring_create(const char dev_name[], unsigned int port_no,
-                 dpdk_port_t *eth_port_id)
-{
-    struct dpdk_ring *ring_pair;
-    char *ring_name;
-    int port_id;
-
-    ring_pair = dpdk_rte_mzalloc(sizeof *ring_pair);
-    if (!ring_pair) {
-        return ENOMEM;
-    }
-
-    /* XXX: Add support for multiquque ring. */
-    ring_name = xasprintf("%s_tx", dev_name);
-
-    /* Create single producer tx ring, netdev does explicit locking. */
-    ring_pair->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
-                                        RING_F_SP_ENQ);
-    free(ring_name);
-    if (ring_pair->cring_tx == NULL) {
-        rte_free(ring_pair);
-        return ENOMEM;
-    }
-
-    ring_name = xasprintf("%s_rx", dev_name);
-
-    /* Create single consumer rx ring, netdev does explicit locking. */
-    ring_pair->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
-                                        RING_F_SC_DEQ);
-    free(ring_name);
-    if (ring_pair->cring_rx == NULL) {
-        rte_free(ring_pair);
-        return ENOMEM;
-    }
-
-    port_id = rte_eth_from_rings(dev_name, &ring_pair->cring_rx, 1,
-                                 &ring_pair->cring_tx, 1, SOCKET0);
-
-    if (port_id < 0) {
-        rte_free(ring_pair);
-        return ENODEV;
-    }
-
-    ring_pair->user_port_id = port_no;
-    ring_pair->eth_port_id = port_id;
-    *eth_port_id = port_id;
-
-    ovs_list_push_back(&dpdk_ring_list, &ring_pair->list_node);
-
-    return 0;
-}
-
-static int
-dpdk_ring_open(const char dev_name[], dpdk_port_t *eth_port_id)
-    OVS_REQUIRES(dpdk_mutex)
-{
-    struct dpdk_ring *ring_pair;
-    unsigned int port_no;
-    int err = 0;
-
-    /* Names always start with "dpdkr" */
-    err = dpdk_dev_parse_name(dev_name, "dpdkr", &port_no);
-    if (err) {
-        return err;
-    }
-
-    /* Look through our list to find the device */
-    LIST_FOR_EACH (ring_pair, list_node, &dpdk_ring_list) {
-         if (ring_pair->user_port_id == port_no) {
-            VLOG_INFO("Found dpdk ring device %s:", dev_name);
-            /* Really all that is needed */
-            *eth_port_id = ring_pair->eth_port_id;
-            return 0;
-         }
-    }
-    /* Need to create the device rings */
-    return dpdk_ring_create(dev_name, port_no, eth_port_id);
-}
-
-static int
-netdev_dpdk_ring_send(struct netdev *netdev, int qid,
-                      struct dp_packet_batch *batch, bool concurrent_txq)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct dp_packet *packet;
-
-    /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that
-     * the offload fields are clear. This is because the same mbuf may be
-     * modified by the consumer of the ring and return into the datapath
-     * without recalculating the RSS hash or revalidating the checksums. */
-    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-        dp_packet_reset_offload(packet);
-    }
-
-    netdev_dpdk_send__(dev, qid, batch, concurrent_txq);
-    return 0;
-}
-
-static int
-netdev_dpdk_ring_construct(struct netdev *netdev)
-{
-    dpdk_port_t port_no = 0;
-    int err = 0;
-
-    VLOG_WARN_ONCE("dpdkr a.k.a. ring ports are considered deprecated.  "
-                   "Please migrate to virtio-based interfaces, e.g. "
-                   "dpdkvhostuserclient ports, net_virtio_user DPDK vdev.");
-
-    ovs_mutex_lock(&dpdk_mutex);
-
-    err = dpdk_ring_open(netdev->name, &port_no);
-    if (err) {
-        goto unlock_dpdk;
-    }
-
-    err = common_construct(netdev, port_no, DPDK_DEV_ETH,
-                           rte_eth_dev_socket_id(port_no));
-unlock_dpdk:
-    ovs_mutex_unlock(&dpdk_mutex);
-    return err;
-}
-
 /* QoS Functions */
 
 /*
@@ -5459,14 +5279,6 @@ static const struct netdev_class dpdk_class = {
     .send = netdev_dpdk_eth_send,
 };
 
-static const struct netdev_class dpdk_ring_class = {
-    .type = "dpdkr",
-    NETDEV_DPDK_CLASS_BASE,
-    .construct = netdev_dpdk_ring_construct,
-    .set_config = netdev_dpdk_ring_set_config,
-    .send = netdev_dpdk_ring_send,
-};
-
 static const struct netdev_class dpdk_vhost_class = {
     .type = "dpdkvhostuser",
     NETDEV_DPDK_CLASS_COMMON,
@@ -5502,7 +5314,6 @@ void
 netdev_dpdk_register(void)
 {
     netdev_register_provider(&dpdk_class);
-    netdev_register_provider(&dpdk_ring_class);
     netdev_register_provider(&dpdk_vhost_class);
     netdev_register_provider(&dpdk_vhost_client_class);
 }

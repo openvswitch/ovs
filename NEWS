@@ -6,6 +6,7 @@ Post-v2.13.0
        value of other-config:dp-sn in the Bridge table.
    - DPDK:
      * Deprecated DPDK pdump packet capture support removed.
+     * Deprecated DPDK ring ports (dpdkr) are no longer supported.
 
 
 v2.13.0 - 14 Feb 2020

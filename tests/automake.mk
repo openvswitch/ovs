@@ -414,13 +414,6 @@ tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
 
 tests/idltest.c: tests/idltest.h
 
-if DPDK_NETDEV
-noinst_PROGRAMS += tests/test-dpdkr
-tests_test_dpdkr_SOURCES = \
-	tests/dpdk/ring_client.c
-tests_test_dpdkr_LDADD = lib/libopenvswitch.la $(LIBS)
-endif
-
 noinst_PROGRAMS += tests/ovstest
 tests_ovstest_SOURCES = \
 	tests/ovstest.c \

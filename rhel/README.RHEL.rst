@@ -36,9 +36,6 @@ TYPE
   * ``OVSDPDKPort``, if ``<name>`` is a physical DPDK NIC port (name must start
     with ``dpdk`` and end with portid, eg ``dpdk0``)
 
-  * ``OVSDPDKRPort``, if ``<name>`` is a DPDK ring port (name must start with
-    ``dpdkr`` and end with portid, e.g. ``dpdkr0``)
-
   * ``OVSDPDKVhostUserPort`` if ``<name>`` is a DPDK vhost-user port
 
   * ``OVSDPDKBond`` if ``<name>`` is an OVS DPDK bond.
