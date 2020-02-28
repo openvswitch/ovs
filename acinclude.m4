@@ -359,25 +359,6 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
     ], [], [[#include <rte_config.h>]])
 
-   AC_MSG_CHECKING([whether DPDK pdump support is enabled])
-   AC_ARG_ENABLE(
-     [dpdk-pdump],
-     [AC_HELP_STRING([--enable-dpdk-pdump],
-                     [Enable DPDK pdump packet capture support])],
-     [AC_MSG_RESULT([yes])
-      AC_MSG_WARN([DPDK pdump is deprecated, consider using ovs-tcpdump instead])
-      AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
-        OVS_FIND_DEPENDENCY([pcap_dump], [pcap], [libpcap])
-        AC_CHECK_DECL([RTE_LIBRTE_PDUMP], [
-          AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])
-        ], [
-          AC_MSG_ERROR([RTE_LIBRTE_PDUMP is not defined in rte_config.h])
-        ], [[#include <rte_config.h>]])
-      ], [
-        AC_MSG_ERROR([RTE_LIBRTE_PMD_PCAP is not defined in rte_config.h])
-      ], [[#include <rte_config.h>]])],
-      [AC_MSG_RESULT([no])])
-
     AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
       OVS_FIND_DEPENDENCY([mnl_attr_put], [mnl], [libmnl])
       AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
