@@ -141,7 +141,7 @@ ovsdb_trigger_run(struct ovsdb *db, long long int now)
     struct ovsdb_trigger *t, *next;
 
     bool run_triggers = db->run_triggers;
-    db->run_triggers = false;
+    db->run_triggers_now = db->run_triggers = false;
 
     bool disconnect_all = false;
 
@@ -160,7 +160,7 @@ ovsdb_trigger_run(struct ovsdb *db, long long int now)
 void
 ovsdb_trigger_wait(struct ovsdb *db, long long int now)
 {
-    if (db->run_triggers) {
+    if (db->run_triggers_now) {
         poll_immediate_wake();
     } else {
         long long int deadline = LLONG_MAX;
@@ -319,9 +319,16 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
             if (!strcmp(ovsdb_error_get_tag(error), "cluster error")) {
                 /* Temporary error.  Transition back to "initialized" state to
                  * try again. */
+                char *err_s = ovsdb_error_to_string(error);
+                VLOG_DBG("cluster error %s", err_s);
+
                 jsonrpc_msg_destroy(t->reply);
                 t->reply = NULL;
                 t->db->run_triggers = true;
+                if (!strstr(err_s, "not leader")) {
+                    t->db->run_triggers_now = true;
+                }
+                free(err_s);
                 ovsdb_error_destroy(error);
             } else {
                 /* Permanent error.  Transition to "completed" state to report

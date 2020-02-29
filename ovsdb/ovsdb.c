@@ -414,7 +414,7 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
     db->storage = storage;
     ovs_list_init(&db->monitors);
     ovs_list_init(&db->triggers);
-    db->run_triggers = false;
+    db->run_triggers_now = db->run_triggers = false;
 
     shash_init(&db->tables);
     if (schema) {
