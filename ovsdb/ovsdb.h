@@ -83,6 +83,7 @@ struct ovsdb {
     /* Triggers. */
     struct ovs_list triggers;   /* Contains "struct ovsdb_trigger"s. */
     bool run_triggers;
+    bool run_triggers_now;
 
     struct ovsdb_table *rbac_role;
 
