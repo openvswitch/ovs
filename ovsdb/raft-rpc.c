@@ -544,8 +544,8 @@ raft_format_install_snapshot_request(
     ds_put_format(s, " last_index=%"PRIu64, rq->last_index);
     ds_put_format(s, " last_term=%"PRIu64, rq->last_term);
     ds_put_format(s, " last_eid="UUID_FMT, UUID_ARGS(&rq->last_eid));
-    ds_put_cstr(s, " last_servers=");
     ds_put_format(s, " election_timer=%"PRIu64, rq->election_timer);
+    ds_put_cstr(s, " last_servers=");
 
     struct hmap servers;
     struct ovsdb_error *error =
