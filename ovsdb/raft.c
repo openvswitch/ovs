@@ -3998,8 +3998,9 @@ raft_handle_install_snapshot_reply(
     VLOG_INFO_RL(&rl, "cluster "CID_FMT": installed snapshot on server %s "
                  " up to %"PRIu64":%"PRIu64, CID_ARGS(&raft->cid),
                  s->nickname, rpy->last_term, rpy->last_index);
-    s->next_index = raft->log_end;
-    raft_send_append_request(raft, s, 0, "snapshot installed");
+    s->next_index = raft->log_start;
+    raft_send_append_request(raft, s, raft->log_end - s->next_index,
+                             "snapshot installed");
 }
 
 /* Returns true if 'raft' has grown enough since the last snapshot that
