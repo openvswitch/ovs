@@ -967,7 +967,7 @@ ovsdb_txn_complete(struct ovsdb_txn *txn)
 {
     if (!ovsdb_txn_is_empty(txn)) {
 
-        txn->db->run_triggers = true;
+        txn->db->run_triggers_now = txn->db->run_triggers = true;
         ovsdb_monitors_commit(txn->db, txn);
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
