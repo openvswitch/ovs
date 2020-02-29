@@ -2553,7 +2553,6 @@ raft_become_leader(struct raft *raft)
     raft->election_timer_new = 0;
 
     raft_update_our_match_index(raft, raft->log_end - 1);
-    raft_send_heartbeats(raft);
 
     /* Write the fact that we are leader to the log.  This is not used by the
      * algorithm (although it could be, for quick restart), but it is used for
