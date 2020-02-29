@@ -298,6 +298,11 @@ struct raft {
     bool had_leader;            /* There has been leader elected since last
                                    election initiated. This is to help setting
                                    candidate_retrying. */
+
+    /* For all. */
+    bool ever_had_leader;       /* There has been leader elected since the raft
+                                   is initialized, meaning it is ever
+                                   connected. */
 };
 
 /* All Raft structures. */
@@ -1024,7 +1029,8 @@ raft_is_connected(const struct raft *raft)
             && !raft->joining
             && !raft->leaving
             && !raft->left
-            && !raft->failed);
+            && !raft->failed
+            && raft->ever_had_leader);
     VLOG_DBG("raft_is_connected: %s\n", ret? "true": "false");
     return ret;
 }
@@ -2519,7 +2525,7 @@ static void
 raft_set_leader(struct raft *raft, const struct uuid *sid)
 {
     raft->leader_sid = *sid;
-    raft->had_leader = true;
+    raft->ever_had_leader = raft->had_leader = true;
     raft->candidate_retrying = false;
 }
 
