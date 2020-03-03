@@ -963,7 +963,7 @@ union ovs_16aligned_in6_addr {
     ovs_16aligned_be32 be32[4];
 };
 
-/* Like struct in6_hdr, but whereas that struct requires 32-bit alignment, this
+/* Like struct ip6_hdr, but whereas that struct requires 32-bit alignment, this
  * one only requires 16-bit alignment. */
 struct ovs_16aligned_ip6_hdr {
     union {
