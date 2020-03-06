@@ -528,6 +528,61 @@ ovsdb_cluster_failure_test 2 2 3 crash-after-receiving-append-request-update
 AT_CLEANUP
 
 
+AT_SETUP([OVSDB cluster - competing candidates])
+AT_KEYWORDS([ovsdb server negative unix cluster competing-candidates])
+
+n=3
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=`ovsdb-tool db-cid s1.db`
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+for i in `seq 2 $n`; do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill `cat *.pid`'
+for i in `seq $n`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in `seq $n`; do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+# We need to simulate the situation when 2 candidates starts election with same
+# term.
+#
+# Before triggering leader election, tell follower s2 don't send vote request (simulating
+# vote-request lost or not handled in time), and tell follower s3 to delay
+# election timer to make sure s3 doesn't send vote-request before s2 enters
+# term 2.
+AT_CHECK([ovs-appctl -t "`pwd`"/s2 cluster/failure-test dont-send-vote-request], [0], [ignore])
+AT_CHECK([ovs-appctl -t "`pwd`"/s3 cluster/failure-test delay-election], [0], [ignore])
+
+# Restart leader, which will become follower, and both old followers will start
+# election as candidate. The new follower (old leader) will vote one of them,
+# and the other candidate should step back as follower as again.
+kill -9 `cat s1.pid`
+AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s1.log --pidfile=s1.pid --unixctl=s1 --remote=punix:s1.ovsdb s1.db])
+
+# Tell s1 to delay election timer so that it won't start election before s3
+# becomes candidate.
+AT_CHECK([ovs-appctl -t "`pwd`"/s1 cluster/failure-test delay-election], [0], [ignore])
+
+OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s1 cluster/status $schema_name | grep "Term: 2"])
+
+for i in `seq $n`; do
+    OVS_WAIT_WHILE([ovs-appctl -t "`pwd`"/s$i cluster/status $schema_name | grep "candidate"])
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+for i in `seq $n`; do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+
+AT_CLEANUP
+
+
 AT_BANNER([OVSDB - cluster tests])
 
 # Torture test.

@@ -73,7 +73,8 @@ enum raft_failure_test {
     FT_CRASH_BEFORE_SEND_EXEC_REQ,
     FT_CRASH_AFTER_SEND_EXEC_REQ,
     FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE,
-    FT_DELAY_ELECTION
+    FT_DELAY_ELECTION,
+    FT_DONT_SEND_VOTE_REQUEST
 };
 static enum raft_failure_test failure_test;
 
@@ -1647,6 +1648,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
     }
 
     ovs_assert(raft->role != RAFT_LEADER);
+
     raft->role = RAFT_CANDIDATE;
     /* If there was no leader elected since last election, we know we are
      * retrying now. */
@@ -1690,7 +1692,9 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
                 .leadership_transfer = leadership_transfer,
             },
         };
-        raft_send(raft, &rq);
+        if (failure_test != FT_DONT_SEND_VOTE_REQUEST) {
+            raft_send(raft, &rq);
+        }
     }
 
     /* Vote for ourselves. */
@@ -2965,6 +2969,15 @@ raft_update_leader(struct raft *raft, const struct uuid *sid)
             .sid = *sid,
         };
         ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+    }
+    if (raft->role == RAFT_CANDIDATE) {
+        /* Section 3.4: While waiting for votes, a candidate may
+         * receive an AppendEntries RPC from another server claiming to
+         * be leader. If the leader’s term (included in its RPC) is at
+         * least as large as the candidate’s current term, then the
+         * candidate recognizes the leader as legitimate and returns to
+         * follower state. */
+        raft->role = RAFT_FOLLOWER;
     }
     return true;
 }
@@ -4674,6 +4687,8 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
                 raft_reset_election_timer(raft);
             }
         }
+    } else if (!strcmp(test, "dont-send-vote-request")) {
+        failure_test = FT_DONT_SEND_VOTE_REQUEST;
     } else if (!strcmp(test, "clear")) {
         failure_test = FT_NO_TEST;
         unixctl_command_reply(conn, "test dismissed");
