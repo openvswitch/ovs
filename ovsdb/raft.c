@@ -1649,6 +1649,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
 
     ovs_assert(raft->role != RAFT_LEADER);
 
+    raft->leader_sid = UUID_ZERO;
     raft->role = RAFT_CANDIDATE;
     /* If there was no leader elected since last election, we know we are
      * retrying now. */
