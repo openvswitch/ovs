@@ -1053,6 +1053,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h], [genl_ops],
                         [policy],
                         [OVS_DEFINE([HAVE_GENL_OPS_POLICY])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h],
+                  [nla_parse_deprecated_strict],
+                  [OVS_DEFINE([HAVE_NLA_PARSE_DEPRECATED_STRICT])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
