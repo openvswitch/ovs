@@ -1050,6 +1050,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_DST_OPS_CONFIRM_NEIGH])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [fqdir],
                   [OVS_DEFINE([HAVE_INET_FRAG_FQDIR])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h], [genl_ops],
+                        [policy],
+                        [OVS_DEFINE([HAVE_GENL_OPS_POLICY])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

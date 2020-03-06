@@ -2312,7 +2312,9 @@ static struct genl_ops ct_limit_genl_ops[] = {
 #endif
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   * privilege. */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = ct_limit_policy,
+#endif
 		.doit = ovs_ct_limit_cmd_set,
 	},
 	{ .cmd = OVS_CT_LIMIT_CMD_DEL,
@@ -2321,7 +2323,9 @@ static struct genl_ops ct_limit_genl_ops[] = {
 #endif
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   * privilege. */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = ct_limit_policy,
+#endif
 		.doit = ovs_ct_limit_cmd_del,
 	},
 	{ .cmd = OVS_CT_LIMIT_CMD_GET,
@@ -2329,7 +2333,9 @@ static struct genl_ops ct_limit_genl_ops[] = {
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
 #endif
 		.flags = 0,		  /* OK for unprivileged users. */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = ct_limit_policy,
+#endif
 		.doit = ovs_ct_limit_cmd_get,
 	},
 };
@@ -2343,6 +2349,9 @@ struct genl_family dp_ct_limit_genl_family __ro_after_init = {
 	.name = OVS_CT_LIMIT_FAMILY,
 	.version = OVS_CT_LIMIT_VERSION,
 	.maxattr = OVS_CT_LIMIT_ATTR_MAX,
+#ifndef HAVE_GENL_OPS_POLICY
+	.policy = ct_limit_policy,
+#endif
 	.netnsok = true,
 	.parallel_ops = true,
 	.ops = ct_limit_genl_ops,
