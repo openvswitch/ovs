@@ -8,6 +8,8 @@ Post-v2.13.0
    - DPDK:
      * Deprecated DPDK pdump packet capture support removed.
      * Deprecated DPDK ring ports (dpdkr) are no longer supported.
+   - Linux datapath:
+     * Support for kernel versions up to 5.5.x.
 
 
 v2.13.0 - 14 Feb 2020

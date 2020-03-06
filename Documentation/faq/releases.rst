@@ -70,6 +70,7 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.10.x       3.10 to 4.17
     2.11.x       3.10 to 4.18
     2.12.x       3.10 to 5.0
+    2.14.x       3.10 to 5.5
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built

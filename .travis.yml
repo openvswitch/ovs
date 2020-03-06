@@ -38,7 +38,7 @@ env:
   - TESTSUITE=1 OPTS="--enable-shared"
   - TESTSUITE=1 DPDK=1
   - TESTSUITE=1 LIBS=-ljemalloc
-  - KERNEL_LIST="5.0  4.20 4.19 4.18 4.17 4.16"
+  - KERNEL_LIST="5.5  4.20 4.19 4.18 4.17 4.16"
   - KERNEL_LIST="4.15 4.14 4.9  4.4  3.19 3.16"
   - AFXDP=1 KERNEL=5.3
   - M32=1 OPTS="--disable-ssl"
