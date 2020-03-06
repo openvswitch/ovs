@@ -141,7 +141,7 @@ the first patch.  The following command illustrates how to do both of
 these at once assuming the local repository HEAD points to the
 "Prepare for post-x.y.0" commit:
 
-	git push origin HEAD:master HEAD^:refs/heads/branch-x.y
+        git push origin HEAD:master HEAD^:refs/heads/branch-x.y
 
 Branching should be announced on ovs-dev.
 
