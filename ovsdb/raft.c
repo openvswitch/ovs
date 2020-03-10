@@ -2606,7 +2606,9 @@ raft_receive_term__(struct raft *raft, const struct raft_rpc_common *common,
             /* Failed to update the term to 'term'. */
             return false;
         }
-        raft_become_follower(raft);
+        if (raft->role != RAFT_LEADER) {
+            raft_become_follower(raft);
+        }    
     } else if (term < raft->term) {
         char buf[SID_LEN + 1];
         VLOG_INFO("rejecting term %"PRIu64" < current term %"PRIu64" received "
