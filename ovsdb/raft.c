@@ -1634,7 +1634,20 @@ raft_accept_vote(struct raft *raft, struct raft_server *s,
 static void
 raft_start_election(struct raft *raft, bool leadership_transfer)
 {
+    struct raft_conn *conn = NULL;
+    int count = 0;
+
     if (raft->leaving) {
+        return;
+    }
+    LIST_FOR_EACH (conn, list_node, &raft->conns) {
+        bool connected = jsonrpc_session_is_connected(conn->js);
+        if (connected && !conn->incoming) {
+            count++;
+        }
+    }
+    if (count < hmap_count(&raft->servers) / 2) {
+        VLOG_INFO("ignore start election due to too few conns");
         return;
     }
 
