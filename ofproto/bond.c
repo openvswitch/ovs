@@ -1744,10 +1744,6 @@ bond_link_status_update(struct bond_slave *slave)
 {
     struct bond *bond = slave->bond;
     bool up;
-    
-    if (!slave->enabled) {
-        return;
-    }
 
     up = netdev_get_carrier(slave->netdev) && slave->may_enable;
     if ((up == slave->enabled) != (slave->delay_expires == LLONG_MAX)) {
