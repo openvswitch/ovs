@@ -104,6 +104,12 @@ on ports without TSO support.  That also means guests using vhost-user
 in client mode will receive TSO packet regardless of TSO being enabled
 or disabled within the guest.
 
+All kernel devices that use the raw socket interface (veth, for example)
+require the kernel commit 9d2f67e43b73 ("net/packet: fix packet drop as of
+virtio gso") in order to work properly. This commit was merged in upstream
+kernel 4.19-rc7, so make sure your kernel is either newer or contains the
+backport.
+
 ~~~~~~~~~~~~~~~~~~
 Performance Tuning
 ~~~~~~~~~~~~~~~~~~
