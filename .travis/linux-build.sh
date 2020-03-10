@@ -124,10 +124,6 @@ function install_dpdk()
     sed -i '/CONFIG_RTE_EAL_IGB_UIO=y/s/=y/=n/' build/.config
     sed -i '/CONFIG_RTE_KNI_KMOD=y/s/=y/=n/' build/.config
 
-    # Enable pdump support in DPDK.
-    sed -i '/CONFIG_RTE_LIBRTE_PMD_PCAP=n/s/=n/=y/' build/.config
-    sed -i '/CONFIG_RTE_LIBRTE_PDUMP=n/s/=n/=y/' build/.config
-
     make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
@@ -168,8 +164,6 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         DPDK_VER="19.11"
     fi
     install_dpdk $DPDK_VER
-    # Enable pdump support in OVS.
-    EXTRA_OPTS="${EXTRA_OPTS} --enable-dpdk-pdump"
     if [ "$CC" = "clang" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-cast-align"

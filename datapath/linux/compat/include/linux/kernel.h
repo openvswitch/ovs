@@ -32,4 +32,8 @@
 #define U32_MAX		((u32)~0U)
 #endif
 
+#ifndef sizeof_field
+#define sizeof_field(t, f) (sizeof(((t*)0)->f))
+#endif
+
 #endif /* linux/kernel.h */

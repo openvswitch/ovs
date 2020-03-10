@@ -139,8 +139,8 @@ struct tnl_ptk_info {
 /* Used to memset ipv4 address padding. */
 #define IP_TUNNEL_KEY_IPV4_PAD	offsetofend(struct ip_tunnel_key, u.ipv4.dst)
 #define IP_TUNNEL_KEY_IPV4_PAD_LEN				\
-	(FIELD_SIZEOF(struct ip_tunnel_key, u) -		\
-	 FIELD_SIZEOF(struct ip_tunnel_key, u.ipv4))
+	(sizeof_field(struct ip_tunnel_key, u) -		\
+	 sizeof_field(struct ip_tunnel_key, u.ipv4))
 
 struct ip_tunnel_key {
 	__be64			tun_id;

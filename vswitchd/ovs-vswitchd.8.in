@@ -107,7 +107,7 @@ how to configure Open vSwitch.
 .SS "GENERAL COMMANDS"
 .IP "\fBexit\fR \fI--cleanup\fR"
 Causes \fBovs\-vswitchd\fR to gracefully terminate. If \fI--cleanup\fR
-is specified, deletes flows from datpaths and releases other datapath
+is specified, deletes flows from datapaths and releases other datapath
 resources configured by \fBovs\-vswitchd\fR.  Otherwise, datapath
 flows and other resources remains undeleted.  Resources of datapaths
 that are integrated into \fBovs\-vswitchd\fR (e.g.  the \fBnetdev\fR

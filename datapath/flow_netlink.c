@@ -2859,8 +2859,8 @@ static int validate_userspace(const struct nlattr *attr)
 	struct nlattr *a[OVS_USERSPACE_ATTR_MAX + 1];
 	int error;
 
-	error = nla_parse_nested(a, OVS_USERSPACE_ATTR_MAX, attr,
-				 userspace_policy, NULL);
+	error = nla_parse_nested_deprecated(a, OVS_USERSPACE_ATTR_MAX, attr,
+					    userspace_policy, NULL);
 	if (error)
 		return error;
 
@@ -2891,8 +2891,9 @@ static int validate_and_copy_check_pkt_len(struct net *net,
 	int nested_acts_start;
 	int start, err;
 
-	err = nla_parse_nested(a, OVS_CHECK_PKT_LEN_ATTR_MAX, attr,
-			       cpl_policy, NULL);
+	err = nla_parse_deprecated_strict(a, OVS_CHECK_PKT_LEN_ATTR_MAX,
+					  nla_data(attr), nla_len(attr),
+					  cpl_policy, NULL);
 	if (err)
 		return err;
 

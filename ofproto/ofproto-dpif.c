@@ -698,8 +698,10 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
 
     udpif_destroy(backer->udpif);
 
-    SIMAP_FOR_EACH (node, &backer->tnl_backers) {
-        dpif_port_del(backer->dpif, u32_to_odp(node->data), false);
+    if (del) {
+        SIMAP_FOR_EACH (node, &backer->tnl_backers) {
+            dpif_port_del(backer->dpif, u32_to_odp(node->data), false);
+        }
     }
     simap_destroy(&backer->tnl_backers);
     ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
@@ -1798,6 +1800,7 @@ run(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     uint64_t new_seq, new_dump_seq;
+    bool is_connected;
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
@@ -1864,6 +1867,15 @@ run(struct ofproto *ofproto_)
 
     if (mcast_snooping_run(ofproto->ms)) {
         ofproto->backer->need_revalidate = REV_MCAST_SNOOPING;
+    }
+
+    /* Check if controller connection is toggled. */
+    is_connected = ofproto_is_alive(&ofproto->up);
+    if (ofproto->is_controller_connected != is_connected) {
+        ofproto->is_controller_connected = is_connected;
+        /* Trigger revalidation as fast failover group monitoring
+         * controller port may need to check liveness again. */
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
 
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));

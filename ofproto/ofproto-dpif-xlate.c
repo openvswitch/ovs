@@ -1888,9 +1888,12 @@ bucket_is_alive(const struct xlate_ctx *ctx,
 
     return (!ofputil_bucket_has_liveness(bucket)
             || (bucket->watch_port != OFPP_ANY
+               && bucket->watch_port != OFPP_CONTROLLER
                && odp_port_is_alive(ctx, bucket->watch_port))
             || (bucket->watch_group != OFPG_ANY
-               && group_is_alive(ctx, bucket->watch_group, depth + 1)));
+               && group_is_alive(ctx, bucket->watch_group, depth + 1))
+            || (bucket->watch_port == OFPP_CONTROLLER
+               && ofproto_is_alive(&ctx->xbridge->ofproto->up)));
 }
 
 static void

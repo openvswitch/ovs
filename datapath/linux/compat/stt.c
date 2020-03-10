@@ -13,7 +13,6 @@
 #include <asm/unaligned.h>
 
 #include <linux/delay.h>
-#include <linux/flex_array.h>
 #include <linux/if.h>
 #include <linux/if_vlan.h>
 #include <linux/ip.h>
@@ -136,7 +135,7 @@ struct pkt_frag {
 };
 
 struct stt_percpu {
-	struct flex_array *frag_hash;
+	struct pkt_frag *frag_hash;
 	struct list_head frag_lru;
 	unsigned int frag_mem_used;
 
@@ -1079,8 +1078,7 @@ static struct pkt_frag *lookup_frag(struct net *net,
 	int i;
 
 	for (i = 0; i < FRAG_HASH_SEGS; i++) {
-		frag = flex_array_get(stt_percpu->frag_hash,
-				      hash & (FRAG_HASH_ENTRIES - 1));
+		frag = &stt_percpu->frag_hash[hash & (FRAG_HASH_ENTRIES - 1)];
 
 		if (frag->skbs &&
 		    time_before(jiffies, frag->timestamp + FRAG_EXP_TIME) &&
@@ -1533,7 +1531,7 @@ static void clean_percpu(struct work_struct *work)
 		for (j = 0; j < FRAG_HASH_ENTRIES; j++) {
 			struct pkt_frag *frag;
 
-			frag = flex_array_get(stt_percpu->frag_hash, j);
+			frag = &stt_percpu->frag_hash[j];
 			if (!frag->skbs ||
 			    time_before(jiffies, frag->timestamp + FRAG_EXP_TIME))
 				continue;
@@ -1631,26 +1629,20 @@ static int stt_start(struct net *net)
 
 	for_each_possible_cpu(i) {
 		struct stt_percpu *stt_percpu = per_cpu_ptr(stt_percpu_data, i);
-		struct flex_array *frag_hash;
+		struct pkt_frag *frag_hash;
 
 		spin_lock_init(&stt_percpu->lock);
 		INIT_LIST_HEAD(&stt_percpu->frag_lru);
 		get_random_bytes(&per_cpu(pkt_seq_counter, i), sizeof(u32));
 
-		frag_hash = flex_array_alloc(sizeof(struct pkt_frag),
-					     FRAG_HASH_ENTRIES,
-					     GFP_KERNEL | __GFP_ZERO);
+		frag_hash = kvmalloc_array(sizeof(struct pkt_frag),
+					   FRAG_HASH_ENTRIES,
+					   GFP_KERNEL | __GFP_ZERO);
 		if (!frag_hash) {
 			err = -ENOMEM;
 			goto free_percpu;
 		}
 		stt_percpu->frag_hash = frag_hash;
-
-		err = flex_array_prealloc(stt_percpu->frag_hash, 0,
-					  FRAG_HASH_ENTRIES,
-					  GFP_KERNEL | __GFP_ZERO);
-		if (err)
-			goto free_percpu;
 	}
 	schedule_clean_percpu();
 	n_tunnels++;
@@ -1691,7 +1683,7 @@ free_percpu:
 		struct stt_percpu *stt_percpu = per_cpu_ptr(stt_percpu_data, i);
 
 		if (stt_percpu->frag_hash)
-			flex_array_free(stt_percpu->frag_hash);
+			kvfree(stt_percpu->frag_hash);
 	}
 
 	free_percpu(stt_percpu_data);
@@ -1718,11 +1710,11 @@ static void stt_cleanup(struct net *net)
 		for (j = 0; j < FRAG_HASH_ENTRIES; j++) {
 			struct pkt_frag *frag;
 
-			frag = flex_array_get(stt_percpu->frag_hash, j);
+			frag = &stt_percpu->frag_hash[j];
 			kfree_skb_list(frag->skbs);
 		}
 
-		flex_array_free(stt_percpu->frag_hash);
+		kvfree(stt_percpu->frag_hash);
 	}
 
 	free_percpu(stt_percpu_data);

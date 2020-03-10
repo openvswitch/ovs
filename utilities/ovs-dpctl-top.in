@@ -592,7 +592,7 @@ def flows_read(ihdl, flow_db):
 
         try:
             flow_db.flow_line_add(line)
-        except ValueError, arg:
+        except ValueError as arg:
             logging.error(arg)
 
     return flow_db
@@ -958,6 +958,9 @@ class FlowDB:
         change order of fields of the same flow.
         """
 
+        if not isinstance(line, str):
+           line = str(line)
+
         line = line.rstrip("\n")
         (fields, stats, _) = flow_line_split(line)
 
@@ -988,7 +991,7 @@ class FlowDB:
 
             self.flow_event(fields_dict, stats_old_dict, stats_dict)
 
-        except ValueError, arg:
+        except ValueError as arg:
             logging.error(arg)
             self._error_count += 1
             raise
@@ -1192,7 +1195,7 @@ def flows_top(args):
                         flows_read(ihdl, flow_db)
                     finally:
                         ihdl.close()
-                except OSError, arg:
+                except OSError as arg:
                     logging.critical(arg)
                     break
 
@@ -1220,7 +1223,7 @@ def flows_top(args):
 
     # repeat output
     for (count, line) in lines:
-        print line
+        print(line)
 
 
 def flows_script(args):
@@ -1249,7 +1252,7 @@ def flows_script(args):
     render = Render(console_width, Render.FIELD_SELECT_SCRIPT)
 
     for line in render.format(flow_db):
-        print line
+        print(line)
 
 
 def main():

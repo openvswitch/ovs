@@ -26,9 +26,6 @@
 #include <rte_log.h>
 #include <rte_memzone.h>
 #include <rte_version.h>
-#ifdef DPDK_PDUMP
-#include <rte_pdump.h>
-#endif
 
 #include "dirs.h"
 #include "fatal-signal.h"
@@ -430,15 +427,6 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
-
-#ifdef DPDK_PDUMP
-    VLOG_WARN("DPDK pdump support is deprecated and "
-              "will be removed in next OVS releases.");
-    err = rte_pdump_init();
-    if (err) {
-        VLOG_INFO("Error initialising DPDK pdump");
-    }
-#endif
 
     /* Finally, register the dpdk classes */
     netdev_dpdk_register();

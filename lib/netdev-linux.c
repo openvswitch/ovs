@@ -923,6 +923,8 @@ netdev_linux_common_construct(struct netdev *netdev_)
     if (userspace_tso_enabled()) {
         netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
         netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
         netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
     }
 
@@ -1008,6 +1010,23 @@ netdev_linux_construct_tap(struct netdev *netdev_)
                   ovs_strerror(errno));
         error = errno;
         goto error_close;
+    }
+
+    if (userspace_tso_enabled()) {
+        /* Old kernels don't support TUNSETOFFLOAD. If TUNSETOFFLOAD is
+         * available, it will return EINVAL when a flag is unknown.
+         * Therefore, try enabling offload with no flags to check
+         * if TUNSETOFFLOAD support is available or not. */
+        if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, 0) == 0 || errno != EINVAL) {
+            unsigned long oflags = TUN_F_CSUM | TUN_F_TSO4 | TUN_F_TSO6;
+
+            if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, oflags) == -1) {
+                VLOG_WARN("%s: enabling tap offloading failed: %s", name,
+                          ovs_strerror(errno));
+                error = errno;
+                goto error_close;
+            }
+        }
     }
 
     netdev->present = true;

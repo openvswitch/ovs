@@ -151,10 +151,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 5; then
-       if test "$version" = 5 && test "$patchlevel" -le 0; then
+       if test "$version" = 5 && test "$patchlevel" -le 5; then
           : # Linux 5.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 5.0.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 5.5.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 4; then
        : # Linux 4.x
@@ -358,25 +358,6 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     AC_CHECK_DECL([RTE_LIBRTE_VHOST_NUMA], [
       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
     ], [], [[#include <rte_config.h>]])
-
-   AC_MSG_CHECKING([whether DPDK pdump support is enabled])
-   AC_ARG_ENABLE(
-     [dpdk-pdump],
-     [AC_HELP_STRING([--enable-dpdk-pdump],
-                     [Enable DPDK pdump packet capture support])],
-     [AC_MSG_RESULT([yes])
-      AC_MSG_WARN([DPDK pdump is deprecated, consider using ovs-tcpdump instead])
-      AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
-        OVS_FIND_DEPENDENCY([pcap_dump], [pcap], [libpcap])
-        AC_CHECK_DECL([RTE_LIBRTE_PDUMP], [
-          AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])
-        ], [
-          AC_MSG_ERROR([RTE_LIBRTE_PDUMP is not defined in rte_config.h])
-        ], [[#include <rte_config.h>]])
-      ], [
-        AC_MSG_ERROR([RTE_LIBRTE_PMD_PCAP is not defined in rte_config.h])
-      ], [[#include <rte_config.h>]])],
-      [AC_MSG_RESULT([no])])
 
     AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
       OVS_FIND_DEPENDENCY([mnl_attr_put], [mnl], [libmnl])
@@ -1067,6 +1048,14 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_RBTREE_RB_LINK_NODE_RCU])])
   OVS_GREP_IFELSE([$KSRC/include/net/dst_ops.h], [bool confirm_neigh],
                   [OVS_DEFINE([HAVE_DST_OPS_CONFIRM_NEIGH])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [fqdir],
+                  [OVS_DEFINE([HAVE_INET_FRAG_FQDIR])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h], [genl_ops],
+                        [policy],
+                        [OVS_DEFINE([HAVE_GENL_OPS_POLICY])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h],
+                  [nla_parse_deprecated_strict],
+                  [OVS_DEFINE([HAVE_NLA_PARSE_DEPRECATED_STRICT])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

@@ -543,7 +543,8 @@ parse_txn(struct server_config *config, struct db *db,
           struct ovsdb_schema *schema, const struct json *txn_json,
           const struct uuid *txnid)
 {
-    if (schema) {
+    if (schema && (!db->db->schema || strcmp(schema->version,
+                                             db->db->schema->version))) {
         /* We're replacing the schema (and the data).  Destroy the database
          * (first grabbing its storage), then replace it with the new schema.
          * The transaction must also include the replacement data.

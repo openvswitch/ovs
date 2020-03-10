@@ -1906,7 +1906,8 @@ ofproto_wait(struct ofproto *p)
 bool
 ofproto_is_alive(const struct ofproto *p)
 {
-    return connmgr_has_controllers(p->connmgr);
+    return (connmgr_has_controllers(p->connmgr)
+            && connmgr_is_any_controller_admitted(p->connmgr));
 }
 
 /* Adds some memory usage statistics for 'ofproto' into 'usage', for use with

@@ -239,9 +239,11 @@ static struct dp_meter *dp_meter_create(struct nlattr **a)
 		struct nlattr *attr[OVS_BAND_ATTR_MAX + 1];
 		u32 band_max_delta_t;
 
-		err = nla_parse((struct nlattr **)&attr, OVS_BAND_ATTR_MAX,
-				nla_data(nla), nla_len(nla), band_policy,
-				NULL);
+		err = nla_parse_deprecated_strict((struct nlattr **)&attr,
+						  OVS_BAND_ATTR_MAX,
+						  nla_data(nla),
+						  nla_len(nla),
+						  band_policy, NULL);
 		if (err)
 			goto exit_free_meter;
 
@@ -542,7 +544,9 @@ static struct genl_ops dp_meter_genl_ops[] = {
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
 #endif
 		.flags = 0,		  /* OK for unprivileged users. */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = meter_policy,
+#endif
 		.doit = ovs_meter_cmd_features
 	},
 	{ .cmd = OVS_METER_CMD_SET,
@@ -552,7 +556,9 @@ static struct genl_ops dp_meter_genl_ops[] = {
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   *  privilege.
 					   */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = meter_policy,
+#endif
 		.doit = ovs_meter_cmd_set,
 	},
 	{ .cmd = OVS_METER_CMD_GET,
@@ -560,7 +566,9 @@ static struct genl_ops dp_meter_genl_ops[] = {
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
 #endif
 		.flags = 0,		  /* OK for unprivileged users. */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = meter_policy,
+#endif
 		.doit = ovs_meter_cmd_get,
 	},
 	{ .cmd = OVS_METER_CMD_DEL,
@@ -570,7 +578,9 @@ static struct genl_ops dp_meter_genl_ops[] = {
 		.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN
 					   *  privilege.
 					   */
+#ifdef HAVE_GENL_OPS_POLICY
 		.policy = meter_policy,
+#endif
 		.doit = ovs_meter_cmd_del
 	},
 };
@@ -584,6 +594,9 @@ struct genl_family dp_meter_genl_family __ro_after_init = {
 	.name = OVS_METER_FAMILY,
 	.version = OVS_METER_VERSION,
 	.maxattr = OVS_METER_ATTR_MAX,
+#ifndef HAVE_GENL_OPS_POLICY
+	.policy = meter_policy,
+#endif
 	.netnsok = true,
 	.parallel_ops = true,
 	.ops = dp_meter_genl_ops,

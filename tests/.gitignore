@@ -7,7 +7,6 @@
 /idltest.h
 /idltest.ovsidl
 /ovstest
-/test-dpdkr
 /ovs-pki.log
 /ovsdb-cluster-testsuite
 /ovsdb-cluster-testsuite.dir/
