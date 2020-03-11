@@ -381,6 +381,17 @@ The results of the testsuite are in ``tests/system-kmod-testsuite.dir``.
 All the features documented under `Unit Tests`_ are available for the kernel
 datapath testsuite.
 
+.. note::
+  Many of the kernel tests are dependent on the utilities present in the
+  iproute2 package, especially the 'ip' command.  If there are many
+  otherwise unexplained errors it may be necessary to update the iproute2
+  package utilities on the system.  It is beyond the scope of this
+  documentation to explain all that is necessary to build and install
+  an updated iproute2 utilities package.  The package is available from
+  the Linux kernel organization open source git repositories.
+
+  https://git.kernel.org/pub/scm/linux/kernel/git/shemminger/iproute2.git
+
 .. _testing-static-analysis:
 
 Static Code Analysis
