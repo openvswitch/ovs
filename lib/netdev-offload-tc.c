@@ -1727,7 +1727,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     if (get_ufid_tc_mapping(ufid, &id) == 0) {
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d",
                     id.handle, id.prio);
-        del_filter_and_ufid_mapping(&id, ufid);
+        info->tc_modify_flow_deleted = !del_filter_and_ufid_mapping(&id, ufid);
     }
 
     prio = get_prio_for_tc_flower(&flower);
