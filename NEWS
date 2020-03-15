@@ -16,6 +16,9 @@ Post-v2.13.0
      * New netdev class 'afxdp-nonpmd' for netdev-afxdp to save CPU cycles
        by enabling interrupt mode.
    - Userspace datapath:
+     * Removed artificial datapath flow limit that was 65536.
+       Now number of datapath flows is fully controlled by revalidators and the
+       'other_config:flow-limit' knob.
      * Add support for conntrack zone-based timeout policy.
      * New configuration knob 'other_config:lb-output-action' for bond ports
        that enables new datapath action 'lb_output' to avoid recirculation
