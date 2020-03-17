@@ -1370,6 +1370,7 @@ cls_cursor_start(const struct classifier *cls, const struct cls_rule *target,
     struct cls_cursor cursor;
     struct cls_subtable *subtable;
 
+    memset(&cursor, 0x0, sizeof cursor);
     cursor.cls = cls;
     cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
     cursor.version = version;
