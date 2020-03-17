@@ -6657,6 +6657,7 @@ parse_CT(char *arg, const struct ofpact_parse_params *pp)
     }
 
     if (ofpbuf_oversized(pp->ofpacts)) {
+        free(error);
         return xasprintf("input too big");
     }
 
