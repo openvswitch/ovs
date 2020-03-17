@@ -1121,7 +1121,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             if (!conn) {
                 pkt->md.ct_state |= CS_TRACKED | CS_INVALID;
                 char *log_msg = xasprintf("Missing master conn %p", rev_conn);
-                ct_print_conn_info(conn, log_msg, VLL_INFO, true, true);
+                ct_print_conn_info(rev_conn, log_msg, VLL_INFO, true, true);
                 free(log_msg);
                 return;
             }
