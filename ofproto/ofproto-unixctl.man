@@ -9,7 +9,7 @@ that may be used on \fBofproto/trace\fR.
 .IP "\fBofproto/trace\fR [\fIoptions\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIpacket\fR]
 .IQ "\fBofproto/trace\fR [\fIoptions\fR] \fIbridge\fR \fIbr_flow\fR [\fIpacket\fR]]
 .IQ "\fBofproto/trace\-packet\-out\fR [\fIoptions\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIpacket\fR] \fIactions\fR"
-.IQ "\fBofproto/trace\-packet\-out\fR [\fIoptions\fR \fIbridge\fR \fIbr_flow\fR  [\fIpacket\fR] \fIactions\fR"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fIoptions\fR] \fIbridge\fR \fIbr_flow\fR [\fIpacket\fR] \fIactions\fR"
 Traces the path of an imaginary packet through \fIswitch\fR and
 reports the path that it took.  The initial treatment of the packet
 varies based on the command:
