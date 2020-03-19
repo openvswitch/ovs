@@ -1086,6 +1086,11 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     conn_key_lookup(&ct->buckets[bucket], ctx, now);
     conn = ctx->conn;
 
+    /* Reset ct_state whenever entering a new zone. */
+    if (pkt->md.ct_state && pkt->md.ct_zone != zone) {
+        pkt->md.ct_state = 0;
+    }
+
     /* Delete found entry if in wrong direction. 'force' implies commit. */
     if (conn && force && ctx->reply) {
         conn_clean(ct, conn, &ct->buckets[bucket]);
@@ -1114,7 +1119,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
                 /* It is a race condition where conn has timed out and removed
                  * between unlock of the rev_conn and lock of the forward conn;
                  * nothing to do. */
-                pkt->md.ct_state |= CS_TRACKED | CS_INVALID;
+                pkt->md.ct_state |= CS_INVALID;
+                write_ct_md(pkt, zone, NULL, NULL, NULL);
                 ct_lock_unlock(&ct->buckets[bucket].lock);
                 return;
             }
