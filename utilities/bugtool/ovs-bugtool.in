@@ -33,8 +33,7 @@
 # or func_output().
 #
 
-import StringIO
-import commands
+from io import BytesIO
 import fcntl
 import getopt
 import hashlib
@@ -48,7 +47,7 @@ import warnings
 import zipfile
 from select import select
 from signal import SIGTERM
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, check_output
 
 from xml.dom.minidom import getDOMImplementation, parse
 
@@ -348,7 +347,7 @@ def collect_data():
             cap = v['cap']
             if 'cmd_args' in v:
                 if 'output' not in v.keys():
-                    v['output'] = StringIOmtime()
+                    v['output'] = BytesIOmtime()
                 if v['repeat_count'] > 0:
                     if cap not in process_lists:
                         process_lists[cap] = []
@@ -373,20 +372,23 @@ def collect_data():
         if 'filename' in v and v['filename'].startswith('/proc/'):
             # proc files must be read into memory
             try:
-                f = open(v['filename'], 'r')
+                f = open(v['filename'], 'rb')
                 s = f.read()
                 f.close()
                 if check_space(cap, v['filename'], len(s)):
-                    v['output'] = StringIOmtime(s)
+                    v['output'] = BytesIOmtime(s)
             except:
                 pass
         elif 'func' in v:
             try:
                 s = v['func'](cap)
             except Exception as e:
-                s = str(e)
+                s = str(e).encode()
             if check_space(cap, k, len(s)):
-                v['output'] = StringIOmtime(s)
+                if isinstance(s, str):
+                    v['output'] = BytesIOmtime(s.encode())
+                else:
+                    v['output'] = BytesIOmtime(s)
 
 
 def main(argv=None):
@@ -704,7 +706,7 @@ exclude those logs from the archive.
 
     # permit the user to filter out data
     # We cannot use iteritems, since we modify 'data' as we pass through
-    for (k, v) in sorted(data.items()):
+    for (k, v) in data.items():
         cap = v['cap']
         if 'filename' in v:
             key = k[0]
@@ -721,7 +723,7 @@ exclude those logs from the archive.
 
     # include inventory
     data['inventory.xml'] = {'cap': None,
-                        'output': StringIOmtime(make_inventory(data, subdir))}
+                        'output': BytesIOmtime(make_inventory(data, subdir))}
 
     # create archive
     if output_fd == -1:
@@ -782,7 +784,7 @@ def dump_scsi_hosts(cap):
 
 
 def module_info(cap):
-    output = StringIO.StringIO()
+    output = BytesIO()
     modules = open(PROC_MODULES, 'r')
     procs = []
 
@@ -806,7 +808,7 @@ def multipathd_topology(cap):
 
 
 def dp_list():
-    output = StringIO.StringIO()
+    output = BytesIO()
     procs = [ProcOutput([OVS_DPCTL, 'dump-dps'],
              caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
 
@@ -828,7 +830,7 @@ def collect_ovsdb():
             if os.path.isfile(OPENVSWITCH_COMPACT_DB):
                 os.unlink(OPENVSWITCH_COMPACT_DB)
 
-            output = StringIO.StringIO()
+            output = BytesIO()
             max_time = 5
             procs = [ProcOutput(['ovsdb-tool', 'compact',
                                 OPENVSWITCH_CONF_DB, OPENVSWITCH_COMPACT_DB],
@@ -871,7 +873,7 @@ def fd_usage(cap):
 
 
 def dump_rdac_groups(cap):
-    output = StringIO.StringIO()
+    output = BytesIO()
     procs = [ProcOutput([MPPUTIL, '-a'], caps[cap][MAX_TIME], output)]
 
     run_procs([procs])
@@ -896,7 +898,7 @@ def load_plugins(just_capabilities=False, filter=None):
         for node in nodelist:
             if node.nodeType == node.TEXT_NODE:
                 rc += node.data
-        return rc.encode()
+        return rc
 
     def getBoolAttr(el, attr, default=False):
         ret = default
@@ -1037,7 +1039,7 @@ def make_tar(subdir, suffix, output_fd, output_file):
                     s = os.stat(v['filename'])
                     ti.mtime = s.st_mtime
                     ti.size = s.st_size
-                    tf.addfile(ti, open(v['filename']))
+                    tf.addfile(ti, open(v['filename'], 'rb'))
             except:
                 pass
     finally:
@@ -1095,12 +1097,12 @@ def make_inventory(inventory, subdir):
     s.setAttribute('date', time.strftime('%c'))
     s.setAttribute('hostname', platform.node())
     s.setAttribute('uname', ' '.join(platform.uname()))
-    s.setAttribute('uptime', commands.getoutput(UPTIME))
+    s.setAttribute('uptime', check_output(UPTIME).decode())
     document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(s)
 
     map(lambda k_v: inventory_entry(document, subdir, k_v[0], k_v[1]),
         inventory.items())
-    return document.toprettyxml()
+    return document.toprettyxml().encode()
 
 
 def inventory_entry(document, subdir, k, v):
@@ -1301,7 +1303,7 @@ class ProcOutput(object):
             line = self.proc.stdout.readline()
         else:
             line = self.proc.stdout.read(self.bufsize)
-        if line == '':
+        if line == b'':
             # process exited
             self.proc.stdout.close()
             self.status = self.proc.wait()
@@ -1391,13 +1393,13 @@ def get_free_disk_space(path):
     return s.f_frsize * s.f_bfree
 
 
-class StringIOmtime(StringIO.StringIO):
-    def __init__(self, buf=''):
-        StringIO.StringIO.__init__(self, buf)
+class BytesIOmtime(BytesIO):
+    def __init__(self, buf=b''):
+        BytesIO.__init__(self, buf)
         self.mtime = time.time()
 
     def write(self, s):
-        StringIO.StringIO.write(self, s)
+        BytesIO.write(self, s)
         self.mtime = time.time()
 
 
