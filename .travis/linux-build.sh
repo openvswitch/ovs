@@ -33,7 +33,9 @@ function install_kernel()
 
     url="${base_url}/linux-${version}.tar.xz"
     # Download kernel sources. Try direct link on CDN failure.
-    wget ${url} || wget ${url} || wget ${url/cdn/www}
+    wget ${url} ||
+    (rm -f linux-${version}.tar.xz && wget ${url}) ||
+    (rm -f linux-${version}.tar.xz && wget ${url/cdn/www})
 
     tar xvf linux-${version}.tar.xz > /dev/null
     cd linux-${version}
