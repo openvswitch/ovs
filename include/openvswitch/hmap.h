@@ -136,12 +136,14 @@ struct hmap_node *hmap_random_node(const struct hmap *);
  */
 #define HMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HMAP)               \
     for (INIT_CONTAINER(NODE, hmap_first_with_hash(HMAP, HASH), MEMBER); \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
+         || ((NODE = NULL), false);                                     \
          ASSIGN_CONTAINER(NODE, hmap_next_with_hash(&(NODE)->MEMBER),   \
                           MEMBER))
 #define HMAP_FOR_EACH_IN_BUCKET(NODE, MEMBER, HASH, HMAP)               \
     for (INIT_CONTAINER(NODE, hmap_first_in_bucket(HMAP, HASH), MEMBER); \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
+         || ((NODE = NULL), false);                                     \
          ASSIGN_CONTAINER(NODE, hmap_next_in_bucket(&(NODE)->MEMBER), MEMBER))
 
 static inline struct hmap_node *hmap_first_with_hash(const struct hmap *,
@@ -170,7 +172,8 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
     HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, (void) 0)
 #define HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, ...)                     \
     for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
+         || ((NODE = NULL), false);                                     \
          ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
@@ -179,7 +182,8 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
     HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, (void) 0)
 #define HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, ...)          \
     for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
-         ((NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL) \
+         ((NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))               \
+          || ((NODE = NULL), false)                                     \
           ? INIT_CONTAINER(NEXT, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 \
           : 0);                                                         \
          (NODE) = (NEXT))
@@ -190,7 +194,8 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
 #define HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, ...)            \
     for (ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), \
          __VA_ARGS__;                                                   \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
+         || ((NODE = NULL), false);                                     \
          ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
 
 static inline struct hmap_node *
@@ -211,7 +216,8 @@ hmap_pop_helper__(struct hmap *hmap, size_t *bucket) {
 #define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                               \
     for (size_t bucket__ = 0;                                               \
          INIT_CONTAINER(NODE, hmap_pop_helper__(HMAP, &bucket__), MEMBER),  \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL);)
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                    \
+         || ((NODE = NULL), false);)
 
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,
