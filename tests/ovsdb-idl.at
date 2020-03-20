@@ -1029,6 +1029,7 @@ AT_CHECK([sort stdout | uuidfilt], [0],
 AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
 test-ovsdb|ovsdb_idl|idltest database lacks indexed table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks link2 table (database needs upgrade?)
+test-ovsdb|ovsdb_idl|idltest database lacks simple5 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks singleton table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
 ])
@@ -1378,6 +1379,18 @@ OVSDB_CHECK_IDL_PY([partial-map idl],
 008: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
 008: name=String2New smap=[(key1 newList1) (key2 newList2)] imap=[]
 009: done
+]])
+
+OVSDB_CHECK_IDL_PY([partial-map update set refmap idl],
+[['["idltest", {"op":"insert", "table":"simple3", "row":{"name":"myString1"}},
+               {"op":"insert", "table":"simple5", "row":{"name":"myString2"}}]']],
+['partialmapmutateirefmap'],
+[[000: name=myString1 uset=[]
+000: name=myString2 irefmap=[]
+001: commit, status=success
+002: name=myString1 uset=[]
+002: name=myString2 irefmap=[(1 <0>)]
+003: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],

@@ -1563,10 +1563,9 @@ class Transaction(object):
                     for col, val in six.iteritems(row._mutations['_inserts']):
                         column = row._table.columns[col]
                         if column.type.is_map():
-                            opdat = ["map"]
                             datum = data.Datum.from_python(column.type, val,
                                                            _row_to_uuid)
-                            opdat.append(datum.as_list())
+                            opdat = self._substitute_uuids(datum.to_json())
                         else:
                             opdat = ["set"]
                             inner_opdat = []
