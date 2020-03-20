@@ -171,6 +171,21 @@
       },
       "isRoot" : false
     },
+    "simple5": {
+      "columns" : {
+        "name": {"type": "string"},
+        "irefmap": {
+          "type": {
+            "key": {"type": "integer"},
+            "value": {"type": "uuid",
+                      "refTable": "simple3"},
+            "min": 0,
+            "max": "unlimited"
+          }
+        }
+      },
+      "isRoot": true
+    },
     "singleton" : {
       "columns" : {
         "name" : {

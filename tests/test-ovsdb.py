@@ -28,6 +28,7 @@ import ovs.util
 import ovs.vlog
 from ovs.db import data
 from ovs.db import error
+from ovs.db.idl import _row_to_uuid as row_to_uuid
 from ovs.fatal_signal import signal_alarm
 
 vlog = ovs.vlog.Vlog("test-ovsdb")
@@ -159,7 +160,8 @@ def get_simple_printable_row_string(row, columns):
                                          is ovs.db.data.Atom):
             value = getattr(row, column)
             if isinstance(value, dict):
-                value = sorted(value.items())
+                value = sorted((row_to_uuid(k), row_to_uuid(v))
+                               for k, v in value.items())
             s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
@@ -209,6 +211,14 @@ def print_idl(idl, step):
         for row in simple3.values():
             s = "%03d: " % step
             s += get_simple3_table_printable_row(row)
+            print(s)
+            n += 1
+
+    if "simple5" in idl.tables:
+        simple5 = idl.tables["simple5"].rows
+        for row in simple5.values():
+            s = "%03d: " % step
+            s += get_simple_printable_row_string(row, ["name", "irefmap"])
             print(s)
             n += 1
 
@@ -301,6 +311,11 @@ def idltest_find_simple2(idl, i):
 
 def idltest_find_simple3(idl, i):
     return next(idl.index_equal("simple3", "simple3_by_name", i), None)
+
+
+def idltest_find(idl, table, col, match):
+    return next((r for r in idl.tables[table].rows.values() if
+                getattr(r, col) == match), None)
 
 
 def idl_set(idl, commands, step):
@@ -524,6 +539,12 @@ def idl_set(idl, commands, step):
             setattr(new_row3, 'name', 'String3')
             new_row3.addvalue('uset', new_row41.uuid)
             assert len(getattr(new_row3, 'uset', [])) == 1
+        elif name == 'partialmapmutateirefmap':
+            row3 = idltest_find_simple3(idl, "myString1")
+            row5 = idltest_find(idl, "simple5", "name", "myString2")
+            row5.setkey('irefmap', 1, row3.uuid)
+            maplen = len(row5.irefmap)
+            assert maplen == 1, "expected 1, got %d" % maplen
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)
