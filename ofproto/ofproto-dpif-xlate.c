@@ -1520,14 +1520,31 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
             return NULL;
         }
 
-        /* If recirculation was initiated due to bond (in_port = OFPP_NONE)
-         * then frozen state is static and xport_uuid is not defined, so xport
-         * cannot be restored from frozen state. */
-        if (recirc_id_node->state.metadata.in_port != OFPP_NONE) {
+        ofp_port_t in_port = recirc_id_node->state.metadata.in_port;
+        if (in_port != OFPP_NONE && in_port != OFPP_CONTROLLER) {
             struct uuid xport_uuid = recirc_id_node->state.xport_uuid;
             xport = xport_lookup_by_uuid(xcfg, &xport_uuid);
             if (xport && xport->xbridge && xport->xbridge->ofproto) {
                 goto out;
+            }
+        } else {
+            /* OFPP_NONE and OFPP_CONTROLLER are not real ports.  They indicate
+             * that the packet originated from the controller via an OpenFlow
+             * "packet-out".  The right thing to do is to find just the
+             * ofproto.  There is no xport, which is OK.
+             *
+             * OFPP_NONE can also indicate that a bond caused recirculation. */
+            struct uuid uuid = recirc_id_node->state.ofproto_uuid;
+            const struct xbridge *bridge = xbridge_lookup_by_uuid(xcfg, &uuid);
+            if (bridge && bridge->ofproto) {
+                if (errorp) {
+                    *errorp = NULL;
+                }
+                *xportp = NULL;
+                if (ofp_in_port) {
+                    *ofp_in_port = in_port;
+                }
+                return bridge->ofproto;
             }
         }
     }
