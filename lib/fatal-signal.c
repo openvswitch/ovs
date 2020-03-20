@@ -184,7 +184,7 @@ send_backtrace_to_monitor(void) {
         unw_get_reg(&cursor, UNW_REG_IP, &unw_bt[dep].ip);
         unw_get_proc_name(&cursor, unw_bt[dep].func, UNW_MAX_FUNCN,
                           &unw_bt[dep].offset);
-       dep++;
+        dep++;
     }
 
     ignore(write(daemonize_fd, unw_bt, dep * sizeof(struct unw_backtrace)));
