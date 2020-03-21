@@ -2039,6 +2039,7 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     info.dpif_class = dpif_class;
     info.tp_dst_port = dst_port;
     info.tunnel_csum_on = csum_on;
+    info.tc_modify_flow_deleted = false;
     err = netdev_flow_put(dev, &match,
                           CONST_CAST(struct nlattr *, put->actions),
                           put->actions_len,
@@ -2089,7 +2090,11 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
 out:
     if (err && err != EEXIST && (put->flags & DPIF_FP_MODIFY)) {
         /* Modified rule can't be offloaded, try and delete from HW */
-        int del_err = netdev_flow_del(dev, put->ufid, put->stats);
+        int del_err = 0;
+
+        if (!info.tc_modify_flow_deleted) {
+            del_err = netdev_flow_del(dev, put->ufid, put->stats);
+        }
 
         if (!del_err) {
             /* Delete from hw success, so old flow was offloaded.

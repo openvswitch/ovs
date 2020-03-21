@@ -1369,9 +1369,12 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     block_id = get_block_id_from_netdev(netdev);
     handle = get_ufid_tc_mapping(ufid, &prio, NULL);
     if (handle && prio) {
+        bool flow_deleted;
+
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
-        del_filter_and_ufid_mapping(ifindex, prio, handle, block_id, ufid,
-                                    hook);
+        flow_deleted = !del_filter_and_ufid_mapping(ifindex, prio, handle,
+                                                    block_id, ufid, hook);
+        info->tc_modify_flow_deleted = flow_deleted;
     }
 
     if (!prio) {
