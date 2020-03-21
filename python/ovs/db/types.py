@@ -591,7 +591,16 @@ class Type(object):
             if self.value:
                 return "map of %s%s-%s pairs" % (quantity, keyName, valueName)
             else:
-                if keyName.endswith('s'):
+                # Extract the last word from 'keyName' so we can make it
+                # plural.  For linguistic analysis, turn it into English
+                # without formatting so that we don't consider any prefix or
+                # suffix added by escapeLiteral.
+                plainKeyName = (self.key.toEnglish(returnUnchanged)
+                                .rpartition(' ')[2].lower())
+
+                if plainKeyName == 'chassis':
+                    plural = keyName
+                elif plainKeyName.endswith('s'):
                     plural = keyName + "es"
                 else:
                     plural = keyName + "s"
