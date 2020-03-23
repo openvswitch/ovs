@@ -434,8 +434,8 @@ monitor_daemon(pid_t daemon_pid)
 /* If daemonization is configured, then starts daemonization, by forking and
  * returning in the child process.  The parent process hangs around until the
  * child lets it know either that it completed startup successfully (by calling
- * daemon_complete()) or that it failed to start up (by exiting with a nonzero
- * exit code). */
+ * daemonize_complete()) or that it failed to start up (by exiting with a
+ * nonzero exit code). */
 void
 daemonize_start(bool access_datapath)
 {
