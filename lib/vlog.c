@@ -612,6 +612,12 @@ vlog_set_syslog_target(const char *target)
     ovs_rwlock_unlock(&pattern_rwlock);
 }
 
+int
+vlog_get_fd(void)
+{
+    return log_fd;
+}
+
 /* Returns 'false' if 'facility' is not a valid string. If 'facility'
  * is a valid string, sets 'value' with the integer value of 'facility'
  * and returns 'true'. */

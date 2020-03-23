@@ -80,7 +80,7 @@ int daemonize_fd = -1;
 
 /* --monitor: Should a supervisory process monitor the daemon and restart it if
  * it dies due to an error signal? */
-static bool monitor;
+bool monitor;
 
 /* --user: Only root can use this option. Switch to new uid:gid after
  * initially running as root.  */

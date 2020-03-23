@@ -143,6 +143,9 @@ void vlog_set_syslog_method(const char *method);
 /* Configure syslog target. */
 void vlog_set_syslog_target(const char *target);
 
+/* Return the log_fd. */
+int vlog_get_fd(void);
+
 /* Initialization. */
 void vlog_init(void);
 void vlog_enable_async(void);

@@ -20,6 +20,7 @@
 extern bool detach;
 extern char *pidfile;
 extern int daemonize_fd;
+extern bool monitor;
 
 char *make_pidfile_name(const char *name);
 
