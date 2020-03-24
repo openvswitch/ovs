@@ -192,10 +192,8 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
             sizeof(struct dp_packet) -
             offsetof(struct dp_packet, l2_pad_size));
 
-#ifdef DPDK_NETDEV
-    new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
-    new_buffer->mbuf.ol_flags &= ~DPDK_MBUF_NON_OFFLOADING_FLAGS;
-#endif
+    *dp_packet_ol_flags_ptr(new_buffer) = *dp_packet_ol_flags_ptr(buffer);
+    *dp_packet_ol_flags_ptr(new_buffer) &= DP_PACKET_OL_SUPPORTED_MASK;
 
     if (dp_packet_rss_valid(buffer)) {
         dp_packet_set_rss_hash(new_buffer, dp_packet_get_rss_hash(buffer));
