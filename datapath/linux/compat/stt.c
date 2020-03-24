@@ -1559,7 +1559,7 @@ static void clean_percpu(struct work_struct *work)
 #endif
 
 #ifdef HAVE_NF_HOOK_STATE
-#if RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,0)
+#if RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,0) && RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
 /* RHEL nfhook hacks. */
 #ifndef __GENKSYMS__
 #define LAST_PARAM const struct net_device *in, const struct net_device *out, \
