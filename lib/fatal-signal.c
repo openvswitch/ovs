@@ -197,11 +197,7 @@ send_backtrace_to_monitor(void) {
          */
         char str[] = "SIGSEGV detected, backtrace:\n";
 
-        if (vlog_get_fd() < 0) {
-            return;
-        }
-
-        ignore(write(vlog_get_fd(), str, strlen(str)));
+        vlog_direct_write_to_log_file_unsafe(str);
 
         for (int i = 0; i < dep; i++) {
             char line[64];
@@ -210,7 +206,7 @@ send_backtrace_to_monitor(void) {
                      unw_bt[i].ip,
                      unw_bt[i].func,
                      unw_bt[i].offset);
-            ignore(write(vlog_get_fd(), line, strlen(line)));
+            vlog_direct_write_to_log_file_unsafe(line);
         }
     }
 }
