@@ -158,6 +158,7 @@ SYSTEM_USERSPACE_TESTSUITE_AT = \
 
 SYSTEM_TSO_TESTSUITE_AT = \
 	tests/system-tso-testsuite.at \
+	tests/system-tap.at \
 	tests/system-tso-macros.at
 
 SYSTEM_AFXDP_TESTSUITE_AT = \
