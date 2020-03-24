@@ -51,6 +51,21 @@ matrix:
     - os: osx
       compiler: clang
       env: OPTS="--disable-ssl"
+    - arch: arm64
+      compiler: gcc
+      env: OPTS="--disable-ssl"
+    - arch: arm64
+      compiler: gcc
+      env: KERNEL_LIST="5.5 4.19"
+    - arch: arm64
+      compiler: gcc
+      env: KERNEL_LIST="4.9 3.16"
+    - arch: arm64
+      compiler: gcc
+      env: DPDK=1 OPTS="--enable-shared"
+    - arch: arm64
+      compiler: gcc
+      env: DPDK_SHARED=1
 
 script: ./.travis/${TRAVIS_OS_NAME}-build.sh $OPTS
 

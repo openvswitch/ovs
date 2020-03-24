@@ -6,7 +6,6 @@ set -x
 CFLAGS_FOR_OVS="-g -O2"
 SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
-TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
 {
@@ -86,6 +85,16 @@ function install_dpdk()
 {
     local DPDK_VER=$1
     local VERSION_FILE="dpdk-dir/travis-dpdk-cache-version"
+
+    if [ -z "$TRAVIS_ARCH" ] ||
+       [ "$TRAVIS_ARCH" == "amd64" ]; then
+        TARGET="x86_64-native-linuxapp-gcc"
+    elif [ "$TRAVIS_ARCH" == "aarch64" ]; then
+        TARGET="arm64-armv8a-linuxapp-gcc"
+    else
+        echo "Target is unknown"
+        exit 1
+    fi
 
     if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
         # Avoid using cache for git tree build.
@@ -177,7 +186,7 @@ elif [ "$M32" ]; then
     # Adding m32 flag directly to CC to avoid any posiible issues with API/ABI
     # difference on 'configure' and 'make' stages.
     export CC="$CC -m32"
-else
+elif [ "$TRAVIS_ARCH" != "aarch64" ]; then
     OPTS="--enable-sparse"
     if [ "$AFXDP" ]; then
         # netdev-afxdp uses memset for 64M for umem initialization.
