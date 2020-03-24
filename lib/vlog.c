@@ -257,7 +257,7 @@ vlog_get_level(const struct vlog_module *module,
 }
 
 static void
-update_min_level(struct vlog_module *module) OVS_REQUIRES(&log_file_mutex)
+update_min_level(struct vlog_module *module) OVS_REQUIRES(log_file_mutex)
 {
     enum vlog_destination destination;
 
