@@ -69,6 +69,10 @@ repositories to help yum-builddep, e.g.::
     $ subscription-manager repos --enable=rhel-7-server-extras-rpms
     $ subscription-manager repos --enable=rhel-7-server-optional-rpms
 
+or for RHEL 8::
+    $ subscription-manager repos \
+      --enable=codeready-builder-for-rhel-8-x86_64-rpms
+
 DNF::
 
     $ dnf builddep /tmp/ovs.spec
