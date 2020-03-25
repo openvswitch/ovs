@@ -577,7 +577,6 @@ ovsdb_idl_db_clear(struct ovsdb_idl_db *db)
         struct ovsdb_idl_table *table = &db->tables[i];
         struct ovsdb_idl_row *row, *next_row;
 
-        table->cond_changed = false;
         if (hmap_is_empty(&table->rows)) {
             continue;
         }
@@ -600,7 +599,6 @@ ovsdb_idl_db_clear(struct ovsdb_idl_db *db)
         }
     }
 
-    db->cond_changed = false;
     db->cond_seqno = 0;
     ovsdb_idl_db_track_clear(db);
 
