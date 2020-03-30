@@ -111,6 +111,16 @@ if test "$IS_WIN32" = yes; then
     export PYTHONLEGACYWINDOWSSTDIO
 fi
 
+# Check for CPU architecture
+case `uname -m` in
+aarch64)
+    IS_ARM64="yes"
+    ;;
+*)
+    IS_ARM64="no"
+    ;;
+esac
+
 # Check whether to run IPv6 tests.
 $PYTHON3 -c '
 import errno
