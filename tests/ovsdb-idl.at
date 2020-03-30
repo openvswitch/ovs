@@ -1809,6 +1809,7 @@ m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
 # with multiple remotes to assert the idl connects to the leader of the Raft cluster
 m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
   [AT_SETUP([$1 - Python3 (leader only)])
+   AT_SKIP_IF([test "$IS_ARM64" = "yes"])
    AT_KEYWORDS([ovsdb server idl Python leader_only with tcp socket])
    m4_define([LPBK],[127.0.0.1])
    AT_CHECK([ovsdb_cluster_start_idltest $2 "ptcp:0:"LPBK])

@@ -266,6 +266,7 @@ AT_CLEANUP
 
 # Tests below are for bfd decay features.
 AT_SETUP([bfd - bfd decay])
+AT_SKIP_IF([test "$IS_ARM64" = "yes"])
 OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy -- \
                     add-port br1 p1 -- set Interface p1 type=patch \
                     options:peer=p0 ofport_request=2 -- \
