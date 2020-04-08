@@ -1,5 +1,7 @@
 v2.14.1 - xx xxx xxxx
 ---------------------
+   - IPsec:
+     * Fixed support of strongswan 5.7+ in ovs-ipsec-monitor.
    - DPDK:
      * Fixed support of 'net_virtio' devices.
 
