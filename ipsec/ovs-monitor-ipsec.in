@@ -145,10 +145,18 @@ class StrongSwanHelper(object):
     """This class does StrongSwan specific configurations."""
 
     STRONGSWAN_CONF = """%s
-charon.plugins.kernel-netlink.set_proto_port_transport_sa = yes
-charon.plugins.kernel-netlink.xfrm_ack_expires = 10
-charon.load_modular = yes
-charon.plugins.gcm.load = yes
+charon {
+  plugins {
+    kernel-netlink {
+      set_proto_port_transport_sa = yes
+      xfrm_ack_expires = 10
+    }
+    gcm {
+      load = yes
+    }
+  }
+  load_modular = yes
+}
 """ % (FILE_HEADER)
 
     CONF_HEADER = """%s
