@@ -611,6 +611,16 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+dnl Test OVS handles TLV map modifictions properly when restores frozen state.
+NS_CHECK_EXEC([at_ns0], [ping 10.1.1.100 > /dev/null &])
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0x88,len=4}->tun_metadata1"])
+sleep 1
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0x99,len=4}->tun_metadata2"])
+sleep 1
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0xaa,len=4}->tun_metadata3"])
+sleep 1
+
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
