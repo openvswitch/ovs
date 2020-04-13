@@ -5966,6 +5966,7 @@ parse_CLONE(char *arg, const struct ofpact_parse_params *pp)
     clone = pp->ofpacts->header;
 
     if (ofpbuf_oversized(pp->ofpacts)) {
+        free(error);
         return xasprintf("input too big");
     }
 
