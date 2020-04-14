@@ -158,6 +158,23 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
 }
 
 #ifdef HAVE_UNWIND
+/* Convert unsigned long long to string.  This is needed because
+ * using snprintf() is not async signal safe. */
+static inline int
+llong_to_hex_str(unsigned long long value, char *str)
+{
+    int i = 0, res;
+
+    if (value / 16 > 0) {
+        i = llong_to_hex_str(value / 16, str);
+    }
+
+    res = value % 16;
+    str[i] = "0123456789abcdef"[res];
+
+    return i + 1;
+}
+
 /* Send the backtrace buffer to monitor thread.
  *
  * Note that this runs in the signal handling context, any system
@@ -192,20 +209,32 @@ send_backtrace_to_monitor(void) {
                      dep * sizeof(struct unw_backtrace)));
     } else {
         /* Since there is no monitor daemon running, write backtrace
-         * in current process.  This is not asyn-signal-safe due to
-         * use of snprintf().
+         * in current process.
          */
         char str[] = "SIGSEGV detected, backtrace:\n";
+        char ip_str[16], offset_str[6];
+        char line[64], fn_name[UNW_MAX_FUNCN];
 
         vlog_direct_write_to_log_file_unsafe(str);
 
         for (int i = 0; i < dep; i++) {
-            char line[64];
+            memset(line, 0, sizeof line);
+            memset(fn_name, 0, sizeof fn_name);
+            memset(offset_str, 0, sizeof offset_str);
+            memset(ip_str, ' ', sizeof ip_str);
+            ip_str[sizeof(ip_str) - 1] = 0;
 
-            snprintf(line, 64, "0x%016"PRIxPTR" <%s+0x%"PRIxPTR">\n",
-                     unw_bt[i].ip,
-                     unw_bt[i].func,
-                     unw_bt[i].offset);
+            llong_to_hex_str(unw_bt[i].ip, ip_str);
+            llong_to_hex_str(unw_bt[i].offset, offset_str);
+
+            strcat(line, "0x");
+            strcat(line, ip_str);
+            strcat(line, "<");
+            memcpy(fn_name, unw_bt[i].func, UNW_MAX_FUNCN - 1);
+            strcat(line, fn_name);
+            strcat(line, "+0x");
+            strcat(line, offset_str);
+            strcat(line, ">\n");
             vlog_direct_write_to_log_file_unsafe(line);
         }
     }
