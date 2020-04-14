@@ -1708,7 +1708,7 @@ static const struct nla_policy vxlan_policy[IFLA_VXLAN_MAX + 1] = {
 	[IFLA_VXLAN_REMCSUM_NOPARTIAL]	= { .type = NLA_FLAG },
 };
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int vxlan_validate(struct nlattr *tb[], struct nlattr *data[],
 			  struct netlink_ext_ack *extack)
 #else

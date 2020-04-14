@@ -520,6 +520,37 @@ AC_DEFUN([OVS_FIND_PARAM_IFELSE], [
   fi
 ])
 
+dnl OVS_FIND_OP_PARAM_IFELSE(FILE, OP, REGEX, [IF-MATCH], [IF-NO-MATCH])
+dnl
+dnl Looks for OP in FILE. If it is found, greps for REGEX within the
+dnl OP definition. If this is successful, runs IF-MATCH, otherwise
+dnl IF_NO_MATCH. If IF-MATCH is empty then it defines to
+dnl OVS_DEFINE(HAVE_<OP>_WITH_<REGEX>), with <OP> and <REGEX>
+dnl translated to uppercase.
+AC_DEFUN([OVS_FIND_OP_PARAM_IFELSE], [
+  AC_MSG_CHECKING([whether $2 has member $3 in $1])
+  if test -f $1; then
+    awk '/$2[[ \t\n]]*\)\(/,/;/' $1 2>/dev/null | grep '$3' >/dev/null
+    status=$?
+    case $status in
+      0)
+        AC_MSG_RESULT([yes])
+        m4_if([$4], [], [OVS_DEFINE([HAVE_]m4_toupper([$2])[_WITH_]m4_toupper([$3]))], [$4])
+        ;;
+      1)
+        AC_MSG_RESULT([no])
+        $5
+        ;;
+      *)
+        AC_MSG_ERROR([grep exited with status $status])
+        ;;
+    esac
+  else
+    AC_MSG_RESULT([file not found])
+    $5
+  fi
+])
+
 dnl OVS_DEFINE(NAME)
 dnl
 dnl Defines NAME to 1 in kcompat.h.
@@ -1056,6 +1087,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h],
                   [nla_parse_deprecated_strict],
                   [OVS_DEFINE([HAVE_NLA_PARSE_DEPRECATED_STRICT])])
+  OVS_FIND_OP_PARAM_IFELSE([$KSRC/include/net/rtnetlink.h],
+                           [validate], [extack],
+                           [OVS_DEFINE([HAVE_RTNLOP_VALIDATE_WITH_EXTACK])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

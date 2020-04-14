@@ -1687,7 +1687,7 @@ static struct pernet_operations ip6gre_net_ops = {
 	.id   = &ip6gre_net_id,
 	.size = sizeof(struct ip6gre_net),
 };
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int rpl_ip6gre_tunnel_validate(struct nlattr *tb[],
 				      struct nlattr *data[],
 				      struct netlink_ext_ack *extack)
@@ -1713,7 +1713,7 @@ static int rpl_ip6gre_tunnel_validate(struct nlattr *tb[],
 }
 #define ip6gre_tunnel_validate rpl_ip6gre_tunnel_validate
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int rpl_ip6gre_tap_validate(struct nlattr *tb[], struct nlattr *data[],
 				   struct netlink_ext_ack *extack)
 #else
@@ -1739,7 +1739,7 @@ static int rpl_ip6gre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
 	}
 
 out:
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	return ip6gre_tunnel_validate(tb, data, extack);
 #else
 	return ip6gre_tunnel_validate(tb, data);
@@ -1747,7 +1747,7 @@ out:
 }
 #define ip6gre_tap_validate rpl_ip6gre_tap_validate
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int rpl_ip6erspan_tap_validate(struct nlattr *tb[],
 				      struct nlattr *data[],
 				      struct netlink_ext_ack *extack)
@@ -1762,7 +1762,7 @@ static int rpl_ip6erspan_tap_validate(struct nlattr *tb[],
 	if (!data)
 		return 0;
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	ret = ip6gre_tap_validate(tb, data, extack);
 #else
 	ret = ip6gre_tap_validate(tb, data);

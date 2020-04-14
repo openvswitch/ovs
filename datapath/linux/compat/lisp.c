@@ -612,7 +612,7 @@ static const struct nla_policy lisp_policy[IFLA_LISP_MAX + 1] = {
 	[IFLA_LISP_PORT]              = { .type = NLA_U16 },
 };
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int lisp_validate(struct nlattr *tb[], struct nlattr *data[],
 			 struct netlink_ext_ack __always_unused *extack)
 #else

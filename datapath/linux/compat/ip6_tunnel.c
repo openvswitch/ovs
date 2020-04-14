@@ -1754,7 +1754,7 @@ static int __net_init ip6_fb_tnl_dev_init(struct net_device *dev)
 	return 0;
 }
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int rpl_ip6_tnl_validate(struct nlattr *tb[], struct nlattr *data[],
 				struct netlink_ext_ack *extack)
 #else

@@ -623,7 +623,7 @@ static const struct gre_protocol ipgre_protocol = {
 	.err_handler = __gre_err,
 };
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[],
 				 struct netlink_ext_ack *extack)
 #else
@@ -646,7 +646,7 @@ static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[])
 	return 0;
 }
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[],
 			      struct netlink_ext_ack *extack)
 #else
@@ -672,7 +672,7 @@ static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
 	}
 
 out:
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	return ipgre_tunnel_validate(tb, data, NULL);
 #else
 	return ipgre_tunnel_validate(tb, data);
@@ -707,7 +707,7 @@ enum {
 
 #define RPL_IFLA_GRE_MAX (IFLA_GRE_ERSPAN_HWID + 1)
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int erspan_validate(struct nlattr *tb[], struct nlattr *data[],
 			   struct netlink_ext_ack *extack)
 #else
@@ -720,7 +720,7 @@ static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
 	if (!data)
 		return 0;
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	ret = ipgre_tap_validate(tb, data, NULL);
 #else
 	ret = ipgre_tap_validate(tb, data);

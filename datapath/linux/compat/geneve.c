@@ -1419,7 +1419,7 @@ static const struct nla_policy geneve_policy[IFLA_GENEVE_MAX + 1] = {
 	[IFLA_GENEVE_UDP_ZERO_CSUM6_RX]	= { .type = NLA_U8 },
 };
 
-#ifdef  HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef  HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int geneve_validate(struct nlattr *tb[], struct nlattr *data[],
 			   struct netlink_ext_ack *extack)
 #else
