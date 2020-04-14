@@ -154,6 +154,7 @@ netdev_initialize(void)
         netdev_register_flow_api_provider(&netdev_offload_tc);
 #ifdef HAVE_AF_XDP
         netdev_register_provider(&netdev_afxdp_class);
+        netdev_register_provider(&netdev_afxdp_nonpmd_class);
 #endif
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)

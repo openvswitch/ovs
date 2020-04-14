@@ -10,6 +10,9 @@ Post-v2.13.0
      * Deprecated DPDK ring ports (dpdkr) are no longer supported.
    - Linux datapath:
      * Support for kernel versions up to 5.5.x.
+   - AF_XDP:
+     * New netdev class 'afxdp-nonpmd' for netdev-afxdp to save CPU cycles
+       by enabling interrupt mode.
 
 
 v2.13.0 - 14 Feb 2020

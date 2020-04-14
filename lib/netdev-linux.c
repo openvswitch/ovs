@@ -3599,24 +3599,33 @@ const struct netdev_class netdev_internal_class = {
 };
 
 #ifdef HAVE_AF_XDP
+#define NETDEV_AFXDP_CLASS_COMMON                               \
+    .construct = netdev_afxdp_construct,                        \
+    .destruct = netdev_afxdp_destruct,                          \
+    .get_stats = netdev_afxdp_get_stats,                        \
+    .get_custom_stats = netdev_afxdp_get_custom_stats,          \
+    .get_status = netdev_linux_get_status,                      \
+    .set_config = netdev_afxdp_set_config,                      \
+    .get_config = netdev_afxdp_get_config,                      \
+    .reconfigure = netdev_afxdp_reconfigure,                    \
+    .get_numa_id = netdev_linux_get_numa_id,                    \
+    .send = netdev_afxdp_batch_send,                            \
+    .rxq_construct = netdev_afxdp_rxq_construct,                \
+    .rxq_destruct = netdev_afxdp_rxq_destruct,                  \
+    .rxq_recv = netdev_afxdp_rxq_recv
+
 const struct netdev_class netdev_afxdp_class = {
     NETDEV_LINUX_CLASS_COMMON,
+    NETDEV_AFXDP_CLASS_COMMON,
     .type = "afxdp",
     .is_pmd = true,
-    .init = netdev_afxdp_init,
-    .construct = netdev_afxdp_construct,
-    .destruct = netdev_afxdp_destruct,
-    .get_stats = netdev_afxdp_get_stats,
-    .get_custom_stats = netdev_afxdp_get_custom_stats,
-    .get_status = netdev_linux_get_status,
-    .set_config = netdev_afxdp_set_config,
-    .get_config = netdev_afxdp_get_config,
-    .reconfigure = netdev_afxdp_reconfigure,
-    .get_numa_id = netdev_linux_get_numa_id,
-    .send = netdev_afxdp_batch_send,
-    .rxq_construct = netdev_afxdp_rxq_construct,
-    .rxq_destruct = netdev_afxdp_rxq_destruct,
-    .rxq_recv = netdev_afxdp_rxq_recv,
+};
+
+const struct netdev_class netdev_afxdp_nonpmd_class = {
+    NETDEV_LINUX_CLASS_COMMON,
+    NETDEV_AFXDP_CLASS_COMMON,
+    .type = "afxdp-nonpmd",
+    .is_pmd = false,
 };
 #endif
 
