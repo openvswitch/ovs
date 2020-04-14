@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2010-2017, 2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1992,6 +1992,24 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
         /* Attempted to pop from an empty stack. */
         return false;
     }
+}
+
+/* Parses a field from '*s' into '*field'.  If successful, stores the
+ * reference to the field in '*field', and returns NULL.  On failure,
+ * returns a malloc()'ed error message.
+ */
+char * OVS_WARN_UNUSED_RESULT
+mf_parse_field(const struct mf_field **field, const char *s)
+{
+    const struct nxm_field *f;
+    int s_len = strlen(s);
+
+    f = nxm_field_by_name(s, s_len);
+    (*field) = f ? mf_from_id(f->id) : mf_from_name_len(s, s_len);
+    if (!*field) {
+        return xasprintf("unknown field `%s'", s);
+    }
+    return NULL;
 }
 
 /* Formats 'sf' into 's' in a format normally acceptable to

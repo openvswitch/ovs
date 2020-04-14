@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
+ * Copyright (c) 2012-2017, 2019-2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,7 @@ struct vl_mff_map;
     OFPACT(PUSH_MPLS,       ofpact_push_mpls,   ofpact, "push_mpls")    \
     OFPACT(POP_MPLS,        ofpact_pop_mpls,    ofpact, "pop_mpls")     \
     OFPACT(DEC_NSH_TTL,     ofpact_null,        ofpact, "dec_nsh_ttl")  \
+    OFPACT(DELETE_FIELD,    ofpact_delete_field, ofpact, "delete_field") \
                                                                         \
     /* Generic encap & decap */                                         \
     OFPACT(ENCAP,           ofpact_encap,       props, "encap")         \
@@ -573,6 +574,16 @@ struct ofpact_pop_mpls {
     OFPACT_PADDED_MEMBERS(
         struct ofpact ofpact;
         ovs_be16 ethertype;
+    );
+};
+
+/* OFPACT_DELETE_FIELD.
+ *
+ * Used for NXAST_DELETE_FIELD. */
+struct ofpact_delete_field {
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        const struct mf_field *field;
     );
 };
 

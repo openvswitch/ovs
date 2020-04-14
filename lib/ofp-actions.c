@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017, 2019 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019-2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,6 +361,9 @@ enum ofp_raw_action_type {
     /* NX1.0+(49): struct nx_action_check_pkt_larger, ... VLMFF */
     NXAST_RAW_CHECK_PKT_LARGER,
 
+    /* NX1.0+(50): struct nx_action_delete_field. VLMFF */
+    NXAST_RAW_DELETE_FIELD,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -500,6 +503,7 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
         return ofpact_next(ofpact);
 
     case OFPACT_CLONE:
@@ -4137,6 +4141,87 @@ static enum ofperr
 check_SET_TUNNEL(const struct ofpact_tunnel *a OVS_UNUSED,
                  const struct ofpact_check_params *cp OVS_UNUSED)
 {
+    return 0;
+}
+
+/* Delete field action. */
+
+/* Action structure for DELETE_FIELD */
+struct nx_action_delete_field {
+    ovs_be16 type;          /* OFPAT_VENDOR */
+    ovs_be16 len;           /* Length is 24. */
+    ovs_be32 vendor;        /* NX_VENDOR_ID. */
+    ovs_be16 subtype;       /* NXAST_DELETE_FIELD. */
+    /* Followed by:
+     * - OXM/NXM header for field to delete (4 or 8 bytes).
+     * - Enough 0-bytes to pad out the action to 24 bytes. */
+    uint8_t pad[14];
+};
+OFP_ASSERT(sizeof(struct nx_action_delete_field ) == 24);
+
+static enum ofperr
+decode_NXAST_RAW_DELETE_FIELD(const struct nx_action_delete_field *nadf,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              const struct vl_mff_map *vl_mff_map,
+                              uint64_t *tlv_bitmap, struct ofpbuf *out)
+{
+    struct ofpact_delete_field *delete_field;
+    enum ofperr err;
+
+    delete_field = ofpact_put_DELETE_FIELD(out);
+    delete_field->ofpact.raw = NXAST_RAW_DELETE_FIELD;
+
+    struct ofpbuf b = ofpbuf_const_initializer(nadf, ntohs(nadf->len));
+    ofpbuf_pull(&b, OBJECT_OFFSETOF(nadf, pad));
+
+    err = mf_vl_mff_nx_pull_header(&b, vl_mff_map, &delete_field->field,
+                                   NULL, tlv_bitmap);
+    if (err) {
+        return err;
+    }
+
+    return 0;
+}
+
+static void
+encode_DELETE_FIELD(const struct ofpact_delete_field *delete_field,
+                    enum ofp_version ofp_version OVS_UNUSED,
+                    struct ofpbuf *out)
+{
+    struct nx_action_delete_field *nadf = put_NXAST_DELETE_FIELD(out);
+    size_t size = out->size;
+
+    out->size = size - sizeof nadf->pad;
+    nx_put_mff_header(out, delete_field->field, 0, false);
+    out->size = size;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DELETE_FIELD(char *arg, const struct ofpact_parse_params *pp)
+{
+    struct ofpact_delete_field *delete_field;
+
+    delete_field = ofpact_put_DELETE_FIELD(pp->ofpacts);
+    return mf_parse_field(&delete_field->field, arg);
+}
+
+static void
+format_DELETE_FIELD(const struct ofpact_delete_field *odf,
+                          const struct ofpact_format_params *fp)
+{
+    ds_put_format(fp->s, "%sdelete_field:%s", colors.param,
+                  colors.end);
+    ds_put_format(fp->s, "%s", odf->field->name);
+}
+
+static enum ofperr
+check_DELETE_FIELD(const struct ofpact_delete_field *odf,
+                         struct ofpact_check_params *cp OVS_UNUSED)
+{
+    if (odf->field->id < MFF_TUN_METADATA0 ||
+        odf->field->id > MFF_TUN_METADATA63) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
     return 0;
 }
 
@@ -7870,6 +7955,7 @@ action_set_classify(const struct ofpact *a)
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_DEBUG_SLOW:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
         return ACTION_SLOT_INVALID;
 
     default:
@@ -8073,6 +8159,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type,
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -8984,6 +9071,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
     default:
         return false;
     }

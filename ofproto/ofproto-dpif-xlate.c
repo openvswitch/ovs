@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
+/* Copyright (c) 2009-2017, 2019-2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5159,6 +5159,21 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
     return true;
 }
 
+static void
+xlate_delete_field(struct xlate_ctx *ctx,
+                   struct flow *flow,
+                   const struct ofpact_delete_field *odf)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+
+    /* Currently, only tun_metadata is allowed for delete_field action. */
+    tun_metadata_delete(&flow->tunnel, odf->field);
+
+    ds_put_format(&s, "delete %s", odf->field->name);
+    xlate_report(ctx, OFT_DETAIL, "%s", ds_cstr(&s));
+    ds_destroy(&s);
+}
+
 /* Emits an action that outputs to 'port', within 'ctx'.
  *
  * 'controller_len' affects only packets sent to an OpenFlow controller.  It
@@ -5684,6 +5699,7 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_WRITE_ACTIONS:
         case OFPACT_WRITE_METADATA:
         case OFPACT_CHECK_PKT_LARGER:
+        case OFPACT_DELETE_FIELD:
             break;
 
         case OFPACT_CT:
@@ -5993,6 +6009,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_CT_CLEAR:
         case OFPACT_NAT:
         case OFPACT_CHECK_PKT_LARGER:
+        case OFPACT_DELETE_FIELD:
             /* These may not generate PACKET INs. */
             break;
 
@@ -6653,6 +6670,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
     default:
         break;
     }
@@ -7028,6 +7046,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_FIN_TIMEOUT:
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
+            break;
+
+        case OFPACT_DELETE_FIELD:
+            xlate_delete_field(ctx, flow, ofpact_get_DELETE_FIELD(a));
             break;
 
         case OFPACT_CLEAR_ACTIONS:

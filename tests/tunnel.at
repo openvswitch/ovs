@@ -890,6 +890,43 @@ Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel - Delete Geneve option])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=4}->tun_metadata1,{class=0xffff,type=2,len=4}->tun_metadata3"])
+
+AT_DATA([flows.txt], [dnl
+table=0,tun_metadata0=0x11112222,actions=set_field:0x55556666->tun_metadata1,resubmit(,1)
+table=0,tun_metadata0=0x33334444,actions=delete_field:tun_metadata0,set_field:0x77778888->tun_metadata1,resubmit(,1)
+table=0,tun_metadata0=0x88889999,actions=delete_field:tun_metadata3,resubmit(,1)
+table=1,actions=IN_PORT
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0x11112222}),flags(df|key)),in_port(6081),skb_mark(0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_flags=+df-csum+key,tun_metadata0=0x11112222,tun_metadata1=NP,in_port=1,nw_ecn=0,nw_frag=no
+Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff,type=0,len=4,0x11112222}{class=0xffff,type=0x1,len=4,0x55556666}),flags(df))),6081
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0x33334444}),flags(df|key)),in_port(6081),skb_mark(0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_flags=+df-csum+key,tun_metadata0=0x33334444,tun_metadata1=NP,in_port=1,nw_ecn=0,nw_frag=no
+Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff,type=0x1,len=4,0x77778888}),flags(df))),6081
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0x88889999}),flags(df|key)),in_port(6081),skb_mark(0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_flags=+df-csum+key,tun_metadata0=0x88889999,in_port=1,nw_ecn=0,nw_frag=no
+Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff,type=0,len=4,0x88889999}),flags(df))),6081
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - concomitant IPv6 and IPv4 tunnels])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
                     options:remote_ip=1.1.1.1 ofport_request=1 \

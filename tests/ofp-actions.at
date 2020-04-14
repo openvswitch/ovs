@@ -316,6 +316,9 @@ ffff 0018 00002320 0031 05dc 000000010004000000000000
 # actions=check_pkt_larger(1000)->NXM_NX_XXREG1[4]
 ffff 0018 00002320 0031 03e8 00040001e010000000000000
 
+# actions=delete_field:tun_metadata10
+ffff 0018 00002320 0032 00 01 64 7c 00 00 00 00 000000000000
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout

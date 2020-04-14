@@ -5,6 +5,7 @@ Post-v2.13.0
      * The OpenFlow ofp_desc/serial_num may now be configured by setting the
        value of other-config:dp-sn in the Bridge table.
      * Added support to watch CONTROLLER port status in fast failover group.
+     * New action "delete_field".
    - DPDK:
      * Deprecated DPDK pdump packet capture support removed.
      * Deprecated DPDK ring ports (dpdkr) are no longer supported.

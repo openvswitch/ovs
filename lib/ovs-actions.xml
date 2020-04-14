@@ -1552,6 +1552,22 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
         This action was added in Open vSwitch 2.11.90.
       </p>
     </action>
+
+    <action name="DELETE_FIELD">
+      <h2>The <code>delete_field</code> action</h2>
+      <syntax><code>delete_field:</code><var>field</var></syntax>
+
+      <p>
+        The <code>delete_field</code> action deletes a field in the syntax
+        described under ``Field Specifications'' above.  Currently, only
+        the tun_metadta fields are supported.
+      </p>
+
+      <p>
+        This action was added in Open vSwitch 2.13.90.
+      </p>
+    </action>
+
   </group>
 
   <group title="Metadata Actions">
