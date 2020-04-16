@@ -44,6 +44,7 @@ VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
 COVERAGE_DEFINE(conntrack_long_cleanup);
+COVERAGE_DEFINE(conntrack_l4csum_err);
 
 struct conn_lookup_ctx {
     struct conn_key key;
@@ -1661,6 +1662,7 @@ checksum_valid(const struct conn_key *key, const void *data, size_t size,
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)) {
         return packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0;
     } else {
+        COVERAGE_INC(conntrack_l4csum_err);
         return false;
     }
 }
@@ -1704,7 +1706,12 @@ check_l4_udp(const struct conn_key *key, const void *data, size_t size,
 static inline bool
 check_l4_icmp(const void *data, size_t size, bool validate_checksum)
 {
-    return validate_checksum ? csum(data, size) == 0 : true;
+    if (validate_checksum && csum(data, size) != 0) {
+        COVERAGE_INC(conntrack_l4csum_err);
+        return false;
+    } else {
+        return true;
+    }
 }
 
 static inline bool
