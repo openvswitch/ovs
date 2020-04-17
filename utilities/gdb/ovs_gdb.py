@@ -415,6 +415,39 @@ class ForEachLIST():
 
 
 #
+# Class that will provide an iterator over an OFPACTS.
+#
+class ForEachOFPACTS():
+    def __init__(self, ofpacts, ofpacts_len):
+        self.ofpact = ofpacts.cast(gdb.lookup_type('struct ofpact').pointer())
+        self.length = int(ofpacts_len)
+
+    def __round_up(self, val, round_to):
+        return int(val) + (round_to - int(val)) % round_to
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.ofpact is None or self.length <= 0:
+            raise StopIteration
+
+        ofpact = self.ofpact
+        length = self.__round_up(ofpact['len'], 8)
+
+        self.length -= length
+        self.ofpact = self.ofpact.cast(
+            gdb.lookup_type('void').pointer()) + length
+        self.ofpact = self.ofpact.cast(
+            gdb.lookup_type('struct ofpact').pointer())
+
+        return ofpact
+
+    def next(self):
+        return self.__next__()
+
+
+#
 # Implements the GDB "ovs_dump_bridges" command
 #
 class CmdDumpBridge(gdb.Command):
@@ -1235,6 +1268,46 @@ class CmdShowUpcall(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_ofpacts" command
+#
+class CmdDumpOfpacts(gdb.Command):
+    """Dump all actions in an ofpacts set
+    Usage: ovs_dump_ofpacts <struct ofpact *> <ofpacts_len>
+
+       <struct ofpact *> : Pointer to set of ofpact structures.
+       <ofpacts_len>     : Total length of the set.
+
+    Example dumping all actions when in the clone_xlate_actions() function:
+
+    (gdb) ovs_dump_ofpacts actions actions_len
+    (struct ofpact *) 0x561c7be487c8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x561c7be487e0: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x561c7be487f8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x561c7be48810: {type = OFPACT_SET_FIELD, raw = 255 '', len = 32}
+    (struct ofpact *) 0x561c7be48830: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x561c7be48848: {type = OFPACT_RESUBMIT, raw = 38 '&', len = 16}
+    """
+    def __init__(self):
+        super(CmdDumpOfpacts, self).__init__("ovs_dump_ofpacts",
+                                             gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+
+        if len(arg_list) != 2:
+            print("usage: ovs_dump_ofpacts <struct ofpact *> <ofpacts_len>")
+            return
+
+        ofpacts = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct ofpact').pointer())
+
+        length = gdb.parse_and_eval(arg_list[1])
+
+        for node in ForEachOFPACTS(ofpacts, length):
+            print("(struct ofpact *) {}: {}".format(node, node.dereference()))
+
+
+#
 # Initialize all GDB commands
 #
 CmdDumpBridge()
@@ -1245,6 +1318,7 @@ CmdDumpDpNetdevPorts()
 CmdDumpDpProvider()
 CmdDumpNetdev()
 CmdDumpNetdevProvider()
+CmdDumpOfpacts()
 CmdDumpOvsList()
 CmdDumpSimap()
 CmdDumpSmap()
