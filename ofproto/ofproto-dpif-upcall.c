@@ -56,6 +56,7 @@ COVERAGE_DEFINE(handler_duplicate_upcall);
 COVERAGE_DEFINE(upcall_ukey_contention);
 COVERAGE_DEFINE(upcall_ukey_replace);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
+COVERAGE_DEFINE(upcall_flow_limit_hit);
 
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
  * and possibly sets up a kernel flow as a cache. */
@@ -1281,6 +1282,7 @@ should_install_flow(struct udpif *udpif, struct upcall *upcall)
 
     atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
     if (udpif_get_n_flows(udpif) >= flow_limit) {
+        COVERAGE_INC(upcall_flow_limit_hit);
         VLOG_WARN_RL(&rl, "upcall: datapath flow limit reached");
         return false;
     }
@@ -2642,6 +2644,10 @@ revalidate(struct revalidator *revalidator)
          *       datapath flows, so we will recover before all the flows are
          *       gone.) */
         n_dp_flows = udpif_get_n_flows(udpif);
+        if (n_dp_flows >= flow_limit) {
+            COVERAGE_INC(upcall_flow_limit_hit);
+        }
+
         kill_them_all = n_dp_flows > flow_limit * 2;
         max_idle = n_dp_flows > flow_limit ? 100 : ofproto_max_idle;
 
