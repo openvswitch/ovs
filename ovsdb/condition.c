@@ -29,33 +29,6 @@
 #include "table.h"
 #include "util.h"
 
-struct ovsdb_error *
-ovsdb_function_from_string(const char *name, enum ovsdb_function *function)
-{
-#define OVSDB_FUNCTION(ENUM, NAME)              \
-    if (!strcmp(name, NAME)) {                  \
-        *function = ENUM;                       \
-        return NULL;                            \
-    }
-    OVSDB_FUNCTIONS;
-#undef OVSDB_FUNCTION
-
-    return ovsdb_syntax_error(NULL, "unknown function",
-                              "No function named %s.", name);
-}
-
-const char *
-ovsdb_function_to_string(enum ovsdb_function function)
-{
-    switch (function) {
-#define OVSDB_FUNCTION(ENUM, NAME) case ENUM: return NAME;
-        OVSDB_FUNCTIONS;
-#undef OVSDB_FUNCTION
-    }
-
-    return NULL;
-}
-
 static struct ovsdb_error *
 ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
                        const struct json *json,
