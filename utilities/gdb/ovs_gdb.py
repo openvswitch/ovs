@@ -55,6 +55,7 @@
 #    ...
 #    ...
 #
+from __future__ import print_function
 import gdb
 import sys
 import uuid
