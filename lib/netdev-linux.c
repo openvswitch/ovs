@@ -2208,18 +2208,6 @@ netdev_linux_get_stats(const struct netdev *netdev_,
         /* stats not available from OVS then use netdev stats. */
         *stats = dev_stats;
     } else {
-        /* Use kernel netdev's packet and byte counts since vport's counters
-         * do not reflect packet counts on the wire when GSO, TSO or GRO are
-         * enabled. */
-        stats->rx_packets = dev_stats.rx_packets;
-        stats->rx_bytes = dev_stats.rx_bytes;
-        stats->tx_packets = dev_stats.tx_packets;
-        stats->tx_bytes = dev_stats.tx_bytes;
-
-        stats->rx_errors           += dev_stats.rx_errors;
-        stats->tx_errors           += dev_stats.tx_errors;
-        stats->rx_dropped          += dev_stats.rx_dropped;
-        stats->tx_dropped          += dev_stats.tx_dropped;
         stats->multicast           += dev_stats.multicast;
         stats->collisions          += dev_stats.collisions;
         stats->rx_length_errors    += dev_stats.rx_length_errors;
