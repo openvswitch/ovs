@@ -50,9 +50,12 @@ icmp_conn_update(struct conntrack *ct, struct conn *conn_,
                  struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_icmp *conn = conn_icmp_cast(conn_);
-    conn->state = reply ? ICMPS_REPLY : ICMPS_FIRST;
-    conn_update_expiration(ct, &conn->up, icmp_timeouts[conn->state], now);
 
+    if (reply && conn->state == ICMPS_FIRST) {
+       conn->state = ICMPS_REPLY;
+    }
+
+    conn_update_expiration(ct, &conn->up, icmp_timeouts[conn->state], now);
     return CT_UPDATE_VALID;
 }
 
