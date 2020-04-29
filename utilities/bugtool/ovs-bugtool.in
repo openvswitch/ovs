@@ -628,6 +628,7 @@ exclude those logs from the archive.
                     cmd_output(CAP_NETWORK_INFO, [ETHTOOL, '-k', p])
                     cmd_output(CAP_NETWORK_INFO, [ETHTOOL, '-i', p])
                     cmd_output(CAP_NETWORK_INFO, [ETHTOOL, '-c', p])
+                    cmd_output(CAP_NETWORK_INFO, [ETHTOOL, '-l', p])
             if int(t) == 1:
                 cmd_output(CAP_NETWORK_INFO,
                            [TC, '-s', '-d', 'class', 'show', 'dev', p])
