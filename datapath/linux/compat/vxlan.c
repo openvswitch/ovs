@@ -990,17 +990,19 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	fl6.fl6_dport = dport;
 	fl6.fl6_sport = sport;
 
-#ifdef HAVE_IPV6_DST_LOOKUP_NET
-	err = ipv6_stub->ipv6_dst_lookup(vxlan->net,
-					 sock6->sock->sk,
+#if defined(HAVE_IPV6_DST_LOOKUP_FLOW_NET)
+	err = ipv6_stub->ipv6_dst_lookup_flow(vxlan->net, sock6->sock->sk,
+					      &ndst, &fl6);
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+	err = ipv6_stub->ipv6_dst_lookup_flow(sock6->sock->sk, &ndst, &fl6);
+#elif defined(HAVE_IPV6_DST_LOOKUP_NET)
+	err = ipv6_stub->ipv6_dst_lookup(vxlan->net, sock6->sock->sk,
 					 &ndst, &fl6);
-#else
-#ifdef HAVE_IPV6_STUB
+#elif defined(HAVE_IPV6_STUB)
 	err = ipv6_stub->ipv6_dst_lookup(vxlan->vn6_sock->sock->sk,
 					 &ndst, &fl6);
 #else
 	err = ip6_dst_lookup(vxlan->vn6_sock->sock->sk, &ndst, &fl6);
-#endif
 #endif
 	if (err < 0)
 		return ERR_PTR(err);

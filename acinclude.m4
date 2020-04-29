@@ -589,7 +589,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup.*net],
                   [OVS_DEFINE([HAVE_IPV6_DST_LOOKUP_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup_flow.*net],
+                  [OVS_DEFINE([HAVE_IPV6_DST_LOOKUP_FLOW_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_stub])
+  OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup_flow])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/err.h], [ERR_CAST])
   OVS_GREP_IFELSE([$KSRC/include/linux/err.h], [IS_ERR_OR_NULL])
