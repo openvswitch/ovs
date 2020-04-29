@@ -39,6 +39,7 @@
     <command label="ovs-ofctl-dump-ports" filters="ovs" repeat="2">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "dump-ports"</command>
     <command label="ovs-ofctl-dump-groups" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "dump-groups"</command>
     <command label="ovs-ofctl-dump-group-stats" filters="ovs" repeat="2">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "dump-group-stats"</command>
+    <command label="ovs-ofctl-dump-tlv-map" filters="ovs" repeat="2">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "dump-tlv-map"</command>
     <command label="get_dpdk_nic_numa" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-get-dpdk-nic-numa</command>
     <command label="get_device_stats" filters="ovs">ip -s -s link show</command>
     <command label="get_port_stats" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-get-port-stats</command>
