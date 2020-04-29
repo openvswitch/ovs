@@ -118,7 +118,7 @@ Q: Are all features available with all datapaths?
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            2.5          2.6      YES
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
-    Conntrack Timeout Policies      5.2            2.12         NO       NO
+    Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
     Tunnel - LISP                   NO             2.11         NO       NO

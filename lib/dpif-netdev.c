@@ -36,6 +36,7 @@
 #include "bitmap.h"
 #include "cmap.h"
 #include "conntrack.h"
+#include "conntrack-tp.h"
 #include "coverage.h"
 #include "ct-dpif.h"
 #include "csum.h"
@@ -7342,6 +7343,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         bool commit = false;
         unsigned int left;
         uint16_t zone = 0;
+        uint32_t tp_id = 0;
         const char *helper = NULL;
         const uint32_t *setmark = NULL;
         const struct ovs_key_ct_labels *setlabel = NULL;
@@ -7377,8 +7379,11 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                  * netlink events. */
                 break;
             case OVS_CT_ATTR_TIMEOUT:
-                /* Userspace datapath does not support customized timeout
-                 * policy yet. */
+                if (!str_to_uint(nl_attr_get_string(b), 10, &tp_id)) {
+                    VLOG_WARN("Invalid Timeout Policy ID: %s.",
+                              nl_attr_get_string(b));
+                    tp_id = DEFAULT_TP_ID;
+                }
                 break;
             case OVS_CT_ATTR_NAT: {
                 const struct nlattr *b_nest;
@@ -7464,7 +7469,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         conntrack_execute(dp->conntrack, packets_, aux->flow->dl_type, force,
                           commit, zone, setmark, setlabel, aux->flow->tp_src,
                           aux->flow->tp_dst, helper, nat_action_info_ref,
-                          pmd->ctx.now / 1000);
+                          pmd->ctx.now / 1000, tp_id);
         break;
     }
 
@@ -7698,6 +7703,62 @@ dpif_netdev_ct_del_limits(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
+dpif_netdev_ct_set_timeout_policy(struct dpif *dpif,
+                                  const struct ct_dpif_timeout_policy *dpif_tp)
+{
+    struct timeout_policy tp;
+    struct dp_netdev *dp;
+
+    dp = get_dp_netdev(dpif);
+    memcpy(&tp.policy, dpif_tp, sizeof tp.policy);
+    return timeout_policy_update(dp->conntrack, &tp);
+}
+
+static int
+dpif_netdev_ct_get_timeout_policy(struct dpif *dpif, uint32_t tp_id,
+                                  struct ct_dpif_timeout_policy *dpif_tp)
+{
+    struct timeout_policy *tp;
+    struct dp_netdev *dp;
+    int err = 0;
+
+    dp = get_dp_netdev(dpif);
+    tp = timeout_policy_get(dp->conntrack, tp_id);
+    if (!tp) {
+        return ENOENT;
+    }
+    memcpy(dpif_tp, &tp->policy, sizeof tp->policy);
+    return err;
+}
+
+static int
+dpif_netdev_ct_del_timeout_policy(struct dpif *dpif,
+                                  uint32_t tp_id)
+{
+    struct dp_netdev *dp;
+    int err = 0;
+
+    dp = get_dp_netdev(dpif);
+    err = timeout_policy_delete(dp->conntrack, tp_id);
+    return err;
+}
+
+static int
+dpif_netdev_ct_get_timeout_policy_name(struct dpif *dpif OVS_UNUSED,
+                                       uint32_t tp_id,
+                                       uint16_t dl_type OVS_UNUSED,
+                                       uint8_t nw_proto OVS_UNUSED,
+                                       char **tp_name, bool *is_generic)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    ds_put_format(&ds, "%"PRIu32, tp_id);
+    *tp_name = ds_steal_cstr(&ds);
+    *is_generic = true;
+    return 0;
+}
+
+static int
 dpif_netdev_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -7807,13 +7868,13 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_set_limits,
     dpif_netdev_ct_get_limits,
     dpif_netdev_ct_del_limits,
-    NULL,                       /* ct_set_timeout_policy */
-    NULL,                       /* ct_get_timeout_policy */
-    NULL,                       /* ct_del_timeout_policy */
+    dpif_netdev_ct_set_timeout_policy,
+    dpif_netdev_ct_get_timeout_policy,
+    dpif_netdev_ct_del_timeout_policy,
     NULL,                       /* ct_timeout_policy_dump_start */
     NULL,                       /* ct_timeout_policy_dump_next */
     NULL,                       /* ct_timeout_policy_dump_done */
-    NULL,                       /* ct_get_timeout_policy_name */
+    dpif_netdev_ct_get_timeout_policy_name,
     dpif_netdev_ipf_set_enabled,
     dpif_netdev_ipf_set_min_frag,
     dpif_netdev_ipf_set_max_nfrags,

@@ -5426,7 +5426,8 @@ clear_existing_ct_timeout_policies(struct dpif_backer *backer)
 static void
 ct_zone_config_init(struct dpif_backer *backer)
 {
-    backer->tp_ids = id_pool_create(0, MAX_TIMEOUT_POLICY_ID);
+    backer->tp_ids = id_pool_create(DEFAULT_TP_ID + 1,
+                                    MAX_TIMEOUT_POLICY_ID - 1);
     cmap_init(&backer->ct_zones);
     hmap_init(&backer->ct_tps);
     ovs_list_init(&backer->ct_tp_kill_list);

@@ -3311,8 +3311,15 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Shorten the udp_single and icmp_first timeout in zone 5
+dnl Userspace datapath uses udp_first and icmp_reply, and
+dnl kernel datapath uses udp_single and icmp_first
 VSCTL_ADD_DATAPATH_TABLE()
-AT_CHECK([ovs-vsctl add-zone-tp $DP_TYPE zone=5 udp_single=3 icmp_first=3])
+
+dnl Creating more timeout policies
+for i in `seq 1 255`; do
+ovs-vsctl --may-exist add-zone-tp $DP_TYPE zone=$i udp_first=$i udp_single=$i icmp_first=$i icmp_reply=$i;
+done
+AT_CHECK([ovs-vsctl --may-exist add-zone-tp $DP_TYPE zone=5 udp_first=1 udp_single=1 icmp_first=1 icmp_reply=1])
 
 dnl Send ICMP and UDP traffic
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -3327,7 +3334,7 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl Wait until the timeout expire.
 dnl We intend to wait a bit longer, because conntrack does not recycle the entry right after it is expired.
-sleep 4
+sleep 6
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 ])
@@ -3345,9 +3352,25 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl Wait until the timeout expire.
 dnl We intend to wait a bit longer, because conntrack does not recycle the entry right after it is expired.
-sleep 4
+sleep 6
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+])
+
+dnl Set the timeout policy to default again.
+AT_CHECK([ovs-vsctl del-zone-tp $DP_TYPE zone=5])
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+sleep 1
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP

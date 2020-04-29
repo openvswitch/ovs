@@ -14,6 +14,8 @@ Post-v2.13.0
    - AF_XDP:
      * New netdev class 'afxdp-nonpmd' for netdev-afxdp to save CPU cycles
        by enabling interrupt mode.
+   - Userspace datapath:
+     * Add support for conntrack zone-based timeout policy.
 
 
 v2.13.0 - 14 Feb 2020

@@ -20,6 +20,7 @@
 #include <stdbool.h>
 
 #include "cmap.h"
+#include "ct-dpif.h"
 #include "latch.h"
 #include "odp-netlink.h"
 #include "openvswitch/hmap.h"
@@ -93,7 +94,7 @@ int conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                       const struct ovs_key_ct_labels *setlabel,
                       ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
                       const struct nat_action_info_t *nat_action_info,
-                      long long now);
+                      long long now, uint32_t tp_id);
 void conntrack_clear(struct dp_packet *packet);
 
 struct conntrack_dump {
@@ -109,6 +110,11 @@ struct conntrack_zone_limit {
     uint32_t limit;
     uint32_t count;
     uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+};
+
+struct timeout_policy {
+    struct hmap_node node;
+    struct ct_dpif_timeout_policy policy;
 };
 
 enum {

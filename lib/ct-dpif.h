@@ -59,6 +59,8 @@ struct ct_dpif_timestamp {
     uint64_t stop;
 };
 
+#define DEFAULT_TP_ID 0
+
 #define CT_DPIF_TCP_STATES \
     CT_DPIF_TCP_STATE(CLOSED) \
     CT_DPIF_TCP_STATE(LISTEN) \

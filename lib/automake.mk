@@ -53,6 +53,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/conntrack-icmp.c \
 	lib/conntrack-private.h \
 	lib/conntrack-tcp.c \
+	lib/conntrack-tp.c \
+	lib/conntrack-tp.h \
 	lib/conntrack-other.c \
 	lib/conntrack.c \
 	lib/conntrack.h \
