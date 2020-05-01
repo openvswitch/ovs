@@ -553,6 +553,16 @@ ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *idl, bool shuffle)
     idl->shuffle_remotes = shuffle;
 }
 
+/* Reset min_index to 0. This prevents a situation where the client
+ * thinks all databases have stale data, when they actually have all
+ * been destroyed and rebuilt from scratch.
+ */
+void
+ovsdb_idl_reset_min_index(struct ovsdb_idl *idl)
+{
+    idl->min_index = 0;
+}
+
 static void
 ovsdb_idl_db_destroy(struct ovsdb_idl_db *db)
 {

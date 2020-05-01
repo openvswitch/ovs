@@ -64,6 +64,7 @@ struct ovsdb_idl *ovsdb_idl_create_unconnected(
     const struct ovsdb_idl_class *, bool monitor_everything_by_default);
 void ovsdb_idl_set_remote(struct ovsdb_idl *, const char *, bool);
 void ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *, bool);
+void ovsdb_idl_reset_min_index(struct ovsdb_idl *);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
 void ovsdb_idl_set_leader_only(struct ovsdb_idl *, bool leader_only);
