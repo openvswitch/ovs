@@ -1306,6 +1306,7 @@ struct %(s)s *
                           &%(s)s_columns[%(S)s_COL_%(C)s],
                           datum,
                           &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+    free(datum);
 }
 """ % {'t': tableName,
        'p': prefix,
