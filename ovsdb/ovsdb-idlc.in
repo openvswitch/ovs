@@ -1351,9 +1351,10 @@ struct %(s)s *
                     print("    datum.values = NULL;")
                 txn_write_func = "ovsdb_idl_index_write"
             elif type.is_optional_pointer():
-                print("    union ovsdb_atom *key = xmalloc(sizeof (union ovsdb_atom));")
+                print("    union ovsdb_atom *key;")
                 print()
                 print("    if (%s) {" % keyVar)
+                print("        key = xmalloc(sizeof (union ovsdb_atom));")
                 print("        datum.n = 1;")
                 print("        datum.keys = key;")
                 print("        " + type.key.assign_c_value_casting_away_const("key->%s" % type.key.type.to_string(), keyVar))
@@ -1364,9 +1365,10 @@ struct %(s)s *
                 print("    datum.values = NULL;")
                 txn_write_func = "ovsdb_idl_index_write"
             elif type.n_max == 1:
-                print("    union ovsdb_atom *key = xmalloc(sizeof(union ovsdb_atom));")
+                print("    union ovsdb_atom *key;")
                 print()
                 print("    if (%s) {" % nVar)
+                print("        key = xmalloc(sizeof(union ovsdb_atom));")
                 print("        datum.n = 1;")
                 print("        datum.keys = key;")
                 print("        " + type.key.assign_c_value_casting_away_const("key->%s" % type.key.type.to_string(), "*" + keyVar))
