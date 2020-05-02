@@ -1017,6 +1017,10 @@ static void
 free_data(enum ovsdb_atomic_type type,
           union ovsdb_atom *atoms, size_t n_atoms)
 {
+    if (!atoms) {
+        return;
+    }
+
     if (ovsdb_atom_needs_destruction(type)) {
         unsigned int i;
         for (i = 0; i < n_atoms; i++) {
