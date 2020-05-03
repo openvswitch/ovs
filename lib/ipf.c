@@ -811,7 +811,7 @@ ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
              * recommend not setting the mempool number of buffers too low
              * and also clamp the number of fragments. */
             struct ipf_frag *frag = &ipf_list->frag_list[last_inuse_idx + 1];
-            frag->pkt = pkt;
+            frag->pkt = dnsteal ? dp_packet_clone(pkt) : pkt;
             frag->start_data_byte = start_data_byte;
             frag->end_data_byte = end_data_byte;
             frag->dnsteal = dnsteal;
@@ -1337,9 +1337,7 @@ ipf_destroy(struct ipf *ipf)
         while (ipf_list->last_sent_idx < ipf_list->last_inuse_idx) {
             struct dp_packet *pkt
                 = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
-            if (!ipf_list->frag_list[ipf_list->last_sent_idx + 1].dnsteal) {
-                dp_packet_delete(pkt);
-            }
+            dp_packet_delete(pkt);
             atomic_count_dec(&ipf->nfrag);
             ipf_list->last_sent_idx++;
         }
