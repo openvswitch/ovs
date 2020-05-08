@@ -347,6 +347,11 @@ until the server has left the cluster.
 .IP
 Once a server leaves a cluster, it may never rejoin it.  Instead,
 create a new server and join it to the cluster.
+.IP
+Note that removing the server from the cluster alters the total size
+of the cluster. For example, if you remove two servers from a three
+server cluster, then the "cluster" becomes a single functioning server.
+This does not result in a three server cluster that lacks quorum.
 .
 .IP "\fBcluster/kick \fIdb server\fR"
 Start graceful removal of \fIserver\fR from \fIdb\fR's cluster, like
