@@ -206,8 +206,9 @@ test_minimask_combine(struct flow *flow)
         struct minimask minicombined;
         uint64_t storage[FLOW_U64S];
     } m;
-    struct flow flow2 = {0};
+    struct flow flow2;
 
+    memset(&flow2, 0, sizeof flow2);
     mask.masks = *flow;
     minimask = minimask_create(&mask);
 
