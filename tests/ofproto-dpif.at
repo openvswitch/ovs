@@ -10570,6 +10570,62 @@ udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - conntrack - match masked ct fields])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+table=0,arp,action=normal
+table=0,ip,in_port=1,udp,nw_src=10.1.2.1/24,action=ct(commit)
+table=0,ip,in_port=1,udp6,ipv6_dst=2001:db8::1/64,action=ct(commit)
+table=0,ip,in_port=1,udp,tp_src=3/0x1,action=ct(commit)
+table=0,ip,in_port=2,actions=ct(table=1)
+table=0,ip6,in_port=2,actions=ct(table=1)
+table=1,priority=10,udp,ct_state=+trk+rpl,ct_nw_src=10.1.2.1/24,actions=controller
+table=1,priority=10,udp6,ct_state=+trk+rpl,ct_ipv6_dst=2001:db8::1/64,actions=controller
+table=1,priority=10,udp,ct_state=+trk+rpl,ct_tp_src=3/0x1,actions=controller
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Match ct_nw_src=10.1.2.1/24
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.2.100,dst=10.1.2.200,proto=17,tos=0,ttl=64,frag=no),udp(src=6,dst=6)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.2.200,dst=10.1.2.100,proto=17,tos=0,ttl=64,frag=no),udp(src=6,dst=6)'])
+
+dnl Match ct_ipv6_dst=2001:db8::1/64
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=2001:db8::2,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x86dd),ipv6(src=2001:db8::2,dst=2001:db8::1,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=2,dst=1)'])
+
+dnl Match ct_tp_src=3/0x1
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 ct_state=est|rpl|trk,ct_nw_src=10.1.2.100,ct_nw_dst=10.1.2.200,ct_nw_proto=17,ct_tp_src=6,ct_tp_dst=6,ip,in_port=2 (via action) data_len=106 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.2.200,nw_dst=10.1.2.100,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=6,tp_dst=6 udp_csum:221
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=126 ct_state=est|rpl|trk,ct_ipv6_src=2001:db8::1,ct_ipv6_dst=2001:db8::2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ipv6,in_port=2 (via action) data_len=126 (unbuffered)
+udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,ipv6_src=2001:db8::2,ipv6_dst=2001:db8::1,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=2,tp_dst=1 udp_csum:bfe2
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=106 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:553
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - conntrack - ofproto/trace])
 OVS_VSWITCHD_START
 

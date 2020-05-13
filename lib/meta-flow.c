@@ -2328,12 +2328,6 @@ mf_set(const struct mf_field *mf,
     switch (mf->id) {
     case MFF_CT_ZONE:
     case MFF_CT_NW_PROTO:
-    case MFF_CT_NW_SRC:
-    case MFF_CT_NW_DST:
-    case MFF_CT_IPV6_SRC:
-    case MFF_CT_IPV6_DST:
-    case MFF_CT_TP_SRC:
-    case MFF_CT_TP_DST:
     case MFF_RECIRC_ID:
     case MFF_PACKET_TYPE:
     case MFF_CONJ_ID:
@@ -2455,6 +2449,30 @@ mf_set(const struct mf_field *mf,
     case MFF_CT_LABEL:
         match_set_ct_label_masked(match, ntoh128(value->be128),
                                   ntoh128(mask->be128));
+        break;
+
+    case MFF_CT_NW_SRC:
+        match_set_ct_nw_src_masked(match, value->be32, mask->be32);
+        break;
+
+    case MFF_CT_NW_DST:
+        match_set_ct_nw_dst_masked(match, value->be32, mask->be32);
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        match_set_ct_ipv6_src_masked(match, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_CT_IPV6_DST:
+        match_set_ct_ipv6_dst_masked(match, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_CT_TP_SRC:
+        match_set_ct_tp_src_masked(match, value->be16, mask->be16);
+        break;
+
+    case MFF_CT_TP_DST:
+        match_set_ct_tp_dst_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_ETH_DST:
