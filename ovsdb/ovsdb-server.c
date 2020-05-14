@@ -540,7 +540,7 @@ close_db(struct server_config *config, struct db *db, char *comment)
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 parse_txn(struct server_config *config, struct db *db,
-          struct ovsdb_schema *schema, const struct json *txn_json,
+          const struct ovsdb_schema *schema, const struct json *txn_json,
           const struct uuid *txnid)
 {
     if (schema && (!db->db->schema || strcmp(schema->version,
@@ -565,7 +565,7 @@ parse_txn(struct server_config *config, struct db *db,
              ? xasprintf("database %s schema changed", db->db->name)
              : xasprintf("database %s connected to storage", db->db->name)));
 
-        ovsdb_replace(db->db, ovsdb_create(schema, NULL));
+        ovsdb_replace(db->db, ovsdb_create(ovsdb_schema_clone(schema), NULL));
 
         /* Force update to schema in _Server database. */
         db->row_uuid = UUID_ZERO;
@@ -614,6 +614,7 @@ read_db(struct server_config *config, struct db *db)
         } else {
             error = parse_txn(config, db, schema, txn_json, &txnid);
             json_destroy(txn_json);
+            ovsdb_schema_destroy(schema);
             if (error) {
                 break;
             }
