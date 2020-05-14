@@ -6085,8 +6085,8 @@ ofproto_rule_send_removed(struct rule *rule)
     fr.hard_timeout = rule->hard_timeout;
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &stats, &used);
-    fr.packet_count += stats.n_packets;
-    fr.byte_count += stats.n_bytes;
+    fr.packet_count = stats.n_packets;
+    fr.byte_count = stats.n_bytes;
     connmgr_send_flow_removed(connmgr, &fr);
     ovs_mutex_unlock(&ofproto_mutex);
 }
