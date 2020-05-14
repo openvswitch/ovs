@@ -32,6 +32,7 @@
     <command label="ovs-appctl-dpif" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-appctl-dpif</command>
     <command label="ovs-appctl-list-dbs" filters="ovs">ovs-appctl -t ovsdb-server ovsdb-server/list-dbs</command>
     <command label="ovs-appctl-dpctl-dump-flows-netdev" filters="ovs" repeat="2">ovs-appctl dpctl/dump-flows netdev@ovs-netdev</command>
+    <command label="ovs-appctl-dpctl-dump-flows-netdev-m" filters="ovs" repeat="2">ovs-appctl dpctl/dump-flows -m netdev@ovs-netdev</command>
     <command label="ovs-appctl-dpctl-dump-flows-system" filters="ovs" repeat="2">ovs-appctl dpctl/dump-flows system@ovs-system</command>
     <command label="ovs-appctl-dpctl-show-s" filters="ovs" repeat="2">ovs-appctl dpctl/show -s</command>
     <command label="ovs-ofctl-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "show"</command>
