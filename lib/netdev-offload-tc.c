@@ -1931,6 +1931,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     if (ovsthread_once_start(&block_once)) {
         probe_tc_block_support(ifindex);
+        /* Need to re-fetch block id as it depends on feature availability. */
+        block_id = get_block_id_from_netdev(netdev);
         ovsthread_once_done(&block_once);
     }
 
