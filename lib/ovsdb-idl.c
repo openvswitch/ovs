@@ -5521,6 +5521,9 @@ ovsdb_idl_loop_run(struct ovsdb_idl_loop *loop)
                       || ovsdb_idl_get_seqno(loop->idl) == loop->skip_seqno
                       ? NULL
                       : ovsdb_idl_txn_create(loop->idl));
+    if (loop->open_txn) {
+        ovsdb_idl_txn_add_comment(loop->open_txn, "%s", program_name);
+    }
     return loop->open_txn;
 }
 
