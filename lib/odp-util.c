@@ -6244,6 +6244,10 @@ odp_key_from_dp_packet(struct ofpbuf *buf, const struct dp_packet *packet)
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, md->skb_priority);
 
+    if (md->dp_hash) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, md->dp_hash);
+    }
+
     if (flow_tnl_dst_is_set(&md->tunnel)) {
         tun_key_to_attr(buf, &md->tunnel, &md->tunnel, NULL, NULL);
     }
