@@ -655,10 +655,6 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
 {
     struct linux_lag_slave *lag;
 
-    if (!rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)) {
-        return;
-    }
-
     if (change->slave && netdev_linux_kind_is_lag(change->slave)) {
         lag = shash_find_data(&lag_shash, change->ifname);
 
@@ -756,8 +752,11 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
                     netdev_linux_update(netdev, nsid, &change);
                     ovs_mutex_unlock(&netdev->mutex);
                 }
-                else if (!netdev_ && change.ifname) {
-                    /* Netdev is not present in OvS but its master could be. */
+
+                if (change.ifname &&
+                    rtnetlink_type_is_rtnlgrp_link(change.nlmsg_type)) {
+
+                    /* Need to try updating the LAG information. */
                     ovs_mutex_lock(&lag_mutex);
                     netdev_linux_update_lag(&change);
                     ovs_mutex_unlock(&lag_mutex);
