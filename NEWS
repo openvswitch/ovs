@@ -1,5 +1,7 @@
 v2.13.2 - xx xxx xxxx
 ---------------------
+   - DPDK:
+     * Fixed support of 'net_virtio' devices.
 
 v2.13.1 - 30 Jul 2020
 ---------------------
