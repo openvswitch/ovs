@@ -67,10 +67,10 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.7.x        3.10 to 4.9
     2.8.x        3.10 to 4.12
     2.9.x        3.10 to 4.13
-    2.10.x       3.10 to 4.17
-    2.11.x       3.10 to 4.18
-    2.12.x       3.10 to 5.0
-    2.14.x       3.10 to 5.5
+    2.10.x       3.16 to 4.17
+    2.11.x       3.16 to 4.18
+    2.12.x       3.16 to 5.0
+    2.14.x       3.16 to 5.5
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built
@@ -78,6 +78,10 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
 
     Open vSwitch userspace is not sensitive to the Linux kernel version.  It
     should build against almost any kernel, certainly against 2.6.32 and later.
+
+    Open vSwitch branches 2.10 through 2.14 will still compile against the
+    RHEL and CentOS 7 3.10 based kernels since they have diverged from the
+    Linux kernel.org 3.10 kernels.
 
 Q: Are all features available with all datapaths?
 
