@@ -163,7 +163,6 @@ typedef uint16_t dpdk_port_t;
 
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
-        .mq_mode = ETH_MQ_RX_RSS,
         .split_hdr_size = 0,
         .offloads = 0,
     },
@@ -964,6 +963,14 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     uint16_t conf_mtu;
 
     rte_eth_dev_info_get(dev->port_id, &info);
+
+    /* As of DPDK 19.11, it is not allowed to set a mq_mode for
+     * virtio PMD driver. */
+    if (!strcmp(info.driver_name, "net_virtio")) {
+        conf.rxmode.mq_mode = ETH_MQ_RX_NONE;
+    } else {
+        conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
+    }
 
     /* As of DPDK 17.11.1 a few PMDs require to explicitly enable
      * scatter to support jumbo RX.
