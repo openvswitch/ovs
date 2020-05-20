@@ -88,6 +88,7 @@ DOC_SOURCE = \
 	Documentation/faq/terminology.rst \
 	Documentation/faq/vlan.rst \
 	Documentation/faq/vxlan.rst \
+	Documentation/faq/bareudp.rst \
 	Documentation/internals/index.rst \
 	Documentation/internals/authors.rst \
 	Documentation/internals/bugs.rst \

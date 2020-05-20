@@ -152,3 +152,50 @@ AT_CHECK([tail -1 stdout], [0],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([layer3 - ping over MPLS Bareudp])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "36:b1:ee:7c:01:01")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24", "36:b1:ee:7c:01:02")
+
+ADD_OVS_TUNNEL([bareudp], [br0], [at_bareudp0], [8.1.1.3], [8.1.1.2/24],
+               [ options:local_ip=8.1.1.2 options:packet_type="legacy_l3" options:payload_type=mpls options:dst_port=6635])
+
+ADD_OVS_TUNNEL([bareudp], [br1], [at_bareudp1], [8.1.1.2], [8.1.1.3/24],
+               [options:local_ip=8.1.1.3 options:packet_type="legacy_l3" options:payload_type=mpls options:dst_port=6635])
+
+AT_DATA([flows0.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:3,output:at_bareudp0
+table=0,priority=100,dl_type=0x8847 in_port=at_bareudp0 actions=pop_mpls:0x0800,set_field:36:b1:ee:7c:01:01->dl_dst,set_field:36:b1:ee:7c:01:02->dl_src,output:ovs-p0
+table=0,priority=10 actions=normal
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:3,output:at_bareudp1
+table=0,priority=100,dl_type=0x8847 in_port=at_bareudp1 actions=pop_mpls:0x0800,set_field:36:b1:ee:7c:01:02->dl_dst,set_field:36:b1:ee:7c:01:01->dl_src,output:ovs-p1
+table=0,priority=10 actions=normal
+])
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0])
+AT_CHECK([ovs-vsctl add-port br1 patch1])
+
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows0.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
