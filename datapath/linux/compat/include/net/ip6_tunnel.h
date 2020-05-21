@@ -188,6 +188,15 @@ int rpl_ip6_tnl_get_iflink(const struct net_device *dev);
 #define ip6_tnl_get_iflink rpl_ip6_tnl_get_iflink
 int rpl_ip6_tnl_change_mtu(struct net_device *dev, int new_mtu);
 #define ip6_tnl_change_mtu rpl_ip6_tnl_change_mtu
+struct dst_entry *rpl_ip6_dst_lookup_tunnel(struct sk_buff *skb,
+					    struct net_device *dev,
+					    struct net *net,
+					    struct socket *sock,
+					    struct in6_addr *saddr,
+					    const struct ip_tunnel_info *info,
+					    u8 protocol,
+					    bool use_cache);
+#define ip6_dst_lookup_tunnel rpl_ip6_dst_lookup_tunnel
 
 static inline void ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 				  struct net_device *dev)

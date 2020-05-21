@@ -175,6 +175,66 @@ static struct net_device_stats *ip6_get_stats(struct net_device *dev)
 	return &dev->stats;
 }
 
+struct dst_entry *rpl_ip6_dst_lookup_tunnel(struct sk_buff *skb,
+					    struct net_device *dev,
+					    struct net *net,
+					    struct socket *sock,
+					    struct in6_addr *saddr,
+					    const struct ip_tunnel_info *info,
+					    u8 protocol,
+					    bool use_cache)
+{
+	struct dst_entry *dst = NULL;
+#ifdef CONFIG_DST_CACHE
+	struct dst_cache *dst_cache;
+#endif
+	struct flowi6 fl6;
+	__u8 prio;
+
+#ifdef CONFIG_DST_CACHE
+	dst_cache = (struct dst_cache *)&info->dst_cache;
+	if (use_cache) {
+		dst = dst_cache_get_ip6(dst_cache, saddr);
+		if (dst)
+			return dst;
+	}
+#endif
+	memset(&fl6, 0, sizeof(fl6));
+	fl6.flowi6_mark = skb->mark;
+	fl6.flowi6_proto = protocol;
+	fl6.daddr = info->key.u.ipv6.dst;
+	fl6.saddr = info->key.u.ipv6.src;
+	prio = info->key.tos;
+	fl6.flowlabel = ip6_make_flowinfo(RT_TOS(prio),
+			info->key.label);
+
+#ifdef HAVE_IPV6_DST_LOOKUP_NET
+	if (ipv6_stub->ipv6_dst_lookup(net, sock->sk, &dst, &fl6)) {
+#else
+#ifdef HAVE_IPV6_STUB
+	if (ipv6_stub->ipv6_dst_lookup(sock->sk, &dst, &fl6)) {
+#else
+	if (ip6_dst_lookup(sock->sk, &dst, &fl6)) {
+#endif
+#endif
+		netdev_dbg(dev, "no route to %pI6\n", &fl6.daddr);
+		return ERR_PTR(-ENETUNREACH);
+	}
+
+	if (dst->dev == dev) { /* is this necessary? */
+		netdev_dbg(dev, "circular route to %pI6\n", &fl6.daddr);
+		dst_release(dst);
+		return ERR_PTR(-ELOOP);
+	}
+#ifdef CONFIG_DST_CACHE
+	if (use_cache)
+		dst_cache_set_ip6(dst_cache, dst, &fl6.saddr);
+#endif
+	*saddr = fl6.saddr;
+	return dst;
+}
+EXPORT_SYMBOL_GPL(rpl_ip6_dst_lookup_tunnel);
+
 /**
  * ip6_tnl_lookup - fetch tunnel matching the end-point addresses
  *   @remote: the address of the tunnel exit-point

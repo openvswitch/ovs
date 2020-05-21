@@ -35,6 +35,7 @@
 #include <net/geneve.h>
 #include <net/stt.h>
 #include <net/vxlan.h>
+#include <net/bareudp.h>
 
 #include "datapath.h"
 #include "gso.h"
@@ -77,7 +78,7 @@ int ovs_vport_init(void)
 		}
 
 		err = ipgre_init();
-		if (err && err != -EEXIST) 
+		if (err && err != -EEXIST)
 			goto err_ipgre;
 		compat_gre_loaded = true;
 	}
@@ -108,7 +109,14 @@ skip_ip6_tunnel_init:
 	if (err)
 		goto err_stt;
 
+	err = bareudp_init_module();
+	if (err)
+		goto err_bareudp;
+
 	return 0;
+	bareudp_cleanup_module();
+
+err_bareudp:
 	ovs_stt_cleanup_module();
 err_stt:
 	vxlan_cleanup_module();
@@ -140,6 +148,7 @@ void ovs_vport_exit(void)
 		gre_exit();
 		ipgre_fini();
 	}
+        bareudp_cleanup_module();
 	ovs_stt_cleanup_module();
 	vxlan_cleanup_module();
 	geneve_cleanup_module();

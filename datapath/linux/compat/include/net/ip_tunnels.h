@@ -490,6 +490,13 @@ struct ip_tunnel *rpl_ip_tunnel_lookup(struct ip_tunnel_net *itn,
 				       __be32 remote, __be32 local,
 				       __be32 key);
 
+#define ip_route_output_tunnel rpl_ip_route_output_tunnel
+struct rtable *rpl_ip_route_output_tunnel(struct sk_buff *skb,
+					  struct net_device *dev,
+					  struct net *net, __be32 *saddr,
+					  const struct ip_tunnel_info *info,
+					  u8 protocol, bool use_cache);
+
 static inline int iptunnel_pull_offloads(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb)) {

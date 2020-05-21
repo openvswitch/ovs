@@ -1,4 +1,5 @@
 openvswitch_sources += \
+	linux/compat/bareudp.c \
 	linux/compat/dev-openvswitch.c \
 	linux/compat/dst_cache.c \
 	linux/compat/exthdrs_core.c \
@@ -77,6 +78,7 @@ openvswitch_headers += \
 	linux/compat/include/net/dst_metadata.h \
 	linux/compat/include/net/genetlink.h \
 	linux/compat/include/net/geneve.h \
+	linux/compat/include/net/bareudp.h \
 	linux/compat/include/net/gre.h \
 	linux/compat/include/net/inet_ecn.h \
 	linux/compat/include/net/inet_frag.h \
