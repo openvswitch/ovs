@@ -529,6 +529,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/ip6_fib.h], [rt6_get_cookie],
                   [OVS_DEFINE([HAVE_RT6_GET_COOKIE])])
 
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_stub],
+                        [dst_entry])
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup.*net],
                   [OVS_DEFINE([HAVE_IPV6_DST_LOOKUP_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup_flow.*net],

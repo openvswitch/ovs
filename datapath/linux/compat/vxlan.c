@@ -967,7 +967,10 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	bool use_cache = (dst_cache && ip_tunnel_dst_cache_usable(skb, info));
 	struct dst_entry *ndst;
 	struct flowi6 fl6;
+#if !defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) || \
+    !defined(HAVE_IPV6_DST_LOOKUP_FLOW)
 	int err;
+#endif
 
 	if (!sock6)
 		return ERR_PTR(-EIO);
@@ -990,7 +993,15 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	fl6.fl6_dport = dport;
 	fl6.fl6_sport = sport;
 
-#if defined(HAVE_IPV6_DST_LOOKUP_FLOW_NET)
+#if defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+#ifdef HAVE_IPV6_DST_LOOKUP_FLOW_NET
+	ndst = ipv6_stub->ipv6_dst_lookup_flow(vxlan->net, sock6->sock->sk,
+					       &fl6, NULL);
+#else
+	ndst = ipv6_stub->ipv6_dst_lookup_flow(sock6->sock->sk, &fl6, NULL);
+#endif
+	if (unlikely(IS_ERR(ndst))) {
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW_NET)
 	err = ipv6_stub->ipv6_dst_lookup_flow(vxlan->net, sock6->sock->sk,
 					      &ndst, &fl6);
 #elif defined(HAVE_IPV6_DST_LOOKUP_FLOW)
@@ -1004,8 +1015,13 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 #else
 	err = ip6_dst_lookup(vxlan->vn6_sock->sock->sk, &ndst, &fl6);
 #endif
+#if defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+		return ERR_PTR(-ENETUNREACH);
+	}
+#else
 	if (err < 0)
 		return ERR_PTR(err);
+#endif
 
 	*saddr = fl6.saddr;
 	if (use_cache)
