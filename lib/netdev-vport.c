@@ -754,7 +754,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
     const char *full_type = (strcmp(type, "vxlan") ? type
                              : (tnl_cfg.exts & (1 << OVS_VXLAN_EXT_GPE)
-                                ? "VXLAN-GPE" : "VXLAN (without GPE"));
+                                ? "VXLAN-GPE" : "VXLAN (without GPE)"));
     const char *packet_type = smap_get(args, "packet_type");
     if (!packet_type) {
         tnl_cfg.pt_mode = default_pt_mode(layers);
