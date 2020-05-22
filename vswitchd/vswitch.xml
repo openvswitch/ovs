@@ -1994,6 +1994,15 @@
         <code>active-backup</code>.
       </column>
 
+      <column name="other_config" key="lb-output-action"
+              type='{"type": "boolean"}'>
+        Enable/disable usage of optimized <code>lb_output</code> action for
+        balancing flows among output slaves in load balanced bonds in
+        <code>balance-tcp</code>. When enabled, it uses optimized path for
+        balance-tcp mode by using rss hash and avoids recirculation.
+        This knob does not affect other balancing modes.
+      </column>
+
       <group title="Link Failure Detection">
         <p>
           An important part of link bonding is detecting that links are down so
@@ -5811,6 +5820,19 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         specifically OVS_KEY_ATTR_RECIRC_ID.  Recirculation enables
         higher performance for MPLS and active-active load balancing
         bonding modes.
+      </column>
+      <column name="capabilities" key="lb_output_action"
+              type='{"type": "boolean"}'>
+        If this is true, then the datapath supports optimized balance-tcp
+        bond mode. This capability replaces existing <code>hash</code> and
+        <code>recirc</code> actions with new action <code>lb_output</code>
+        and avoids recirculation of packet in datapath. It is supported
+        only for balance-tcp bond mode in netdev datapath. The new action
+        gives higer performance by using bond buckets instead of post
+        recirculation flows for selection of slave port from bond. By default
+        this new action is disabled, however it can be enabled by setting
+        <ref column="other-config" key="lb-output-action"/> in
+        <ref table="Port"/> table.
       </column>
       <group title="Connection-Tracking Capabilities">
         <p>

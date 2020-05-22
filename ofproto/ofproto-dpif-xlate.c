@@ -4207,7 +4207,17 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         /* Commit accumulated flow updates before output. */
         xlate_commit_actions(ctx);
 
-        if (xr) {
+        if (xr && bond_use_lb_output_action(xport->xbundle->bond)) {
+            /*
+             * If bond mode is balance-tcp and optimize balance tcp is enabled
+             * then use the hash directly for slave selection and avoid
+             * recirculation.
+             *
+             * Currently support for netdev datapath only.
+             */
+            nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_LB_OUTPUT,
+                           xr->recirc_id);
+        } else if (xr) {
             /* Recirculate the packet. */
             struct ovs_action_hash *act_hash;
 
@@ -7310,7 +7320,8 @@ count_output_actions(const struct ofpbuf *odp_actions)
     int n = 0;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, odp_actions->data, odp_actions->size) {
-        if (a->nla_type == OVS_ACTION_ATTR_OUTPUT) {
+        if ((a->nla_type == OVS_ACTION_ATTR_OUTPUT) ||
+            (a->nla_type == OVS_ACTION_ATTR_LB_OUTPUT)) {
             n++;
         }
     }

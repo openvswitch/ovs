@@ -121,6 +121,7 @@ AT_CHECK([ovs-appctl bond/show], [0], [dnl
 bond_mode: active-backup
 bond may use recirculation: no, Recirc-ID : -1
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -286,6 +287,7 @@ slave: p3: current attached
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -301,6 +303,7 @@ slave p1: enabled
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -423,6 +426,7 @@ slave: p3: current attached
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -440,6 +444,7 @@ slave p1: enabled
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -555,6 +560,7 @@ slave: p3: current attached
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -572,6 +578,7 @@ slave p1: enabled
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -692,6 +699,7 @@ slave: p3: current attached
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
@@ -709,6 +717,7 @@ slave p1: enabled
 bond_mode: balance-tcp
 bond may use recirculation: yes, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated

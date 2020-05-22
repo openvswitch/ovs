@@ -891,6 +891,18 @@ int dpif_meter_get(const struct dpif *, ofproto_meter_id meter_id,
                    struct ofputil_meter_stats *, uint16_t n_bands);
 int dpif_meter_del(struct dpif *, ofproto_meter_id meter_id,
                    struct ofputil_meter_stats *, uint16_t n_bands);
+
+/* Bonding. */
+
+/* Bit-mask for hashing a flow down to a bucket. */
+#define BOND_MASK 0xff
+#define BOND_BUCKETS (BOND_MASK + 1)
+
+int dpif_bond_add(struct dpif *, uint32_t bond_id, odp_port_t *slave_map);
+int dpif_bond_del(struct dpif *, uint32_t bond_id);
+int dpif_bond_stats_get(struct dpif *, uint32_t bond_id, uint64_t *n_bytes);
+bool dpif_supports_lb_output_action(const struct dpif *);
+
 
 /* Miscellaneous. */
 

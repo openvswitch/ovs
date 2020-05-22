@@ -1170,6 +1170,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 
     case OVS_ACTION_ATTR_CT:
     case OVS_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_LB_OUTPUT:
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
     case OVS_ACTION_ATTR_TUNNEL_POP:
     case OVS_ACTION_ATTR_USERSPACE:
@@ -1220,6 +1221,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         struct dp_packet *clone = NULL;
         uint32_t cutlen = dp_packet_get_cutlen(packet);
         if (cutlen && (type == OVS_ACTION_ATTR_OUTPUT
+                        || type == OVS_ACTION_ATTR_LB_OUTPUT
                         || type == OVS_ACTION_ATTR_TUNNEL_PUSH
                         || type == OVS_ACTION_ATTR_TUNNEL_POP
                         || type == OVS_ACTION_ATTR_USERSPACE)) {
@@ -1879,6 +1881,16 @@ dpif_supports_explicit_drop_action(const struct dpif *dpif)
     return dpif_is_netdev(dpif);
 }
 
+bool
+dpif_supports_lb_output_action(const struct dpif *dpif)
+{
+    /*
+     * Balance-tcp optimization is currently supported in netdev
+     * datapath only.
+     */
+    return dpif_is_netdev(dpif);
+}
+
 /* Meters */
 void
 dpif_meter_get_features(const struct dpif *dpif,
@@ -1975,4 +1987,31 @@ dpif_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
         }
     }
     return error;
+}
+
+int
+dpif_bond_add(struct dpif *dpif, uint32_t bond_id, odp_port_t *slave_map)
+{
+    return dpif->dpif_class->bond_del
+           ? dpif->dpif_class->bond_add(dpif, bond_id, slave_map)
+           : EOPNOTSUPP;
+}
+
+int
+dpif_bond_del(struct dpif *dpif, uint32_t bond_id)
+{
+    return dpif->dpif_class->bond_del
+           ? dpif->dpif_class->bond_del(dpif, bond_id)
+           : EOPNOTSUPP;
+}
+
+int
+dpif_bond_stats_get(struct dpif *dpif, uint32_t bond_id,
+                    uint64_t *n_bytes)
+{
+    memset(n_bytes, 0, BOND_BUCKETS * sizeof *n_bytes);
+
+    return dpif->dpif_class->bond_stats_get
+           ? dpif->dpif_class->bond_stats_get(dpif, bond_id, n_bytes)
+           : EOPNOTSUPP;
 }

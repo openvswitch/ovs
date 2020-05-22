@@ -2979,6 +2979,7 @@ dpif_ipfix_read_actions(const struct flow *flow,
         enum ovs_action_attr type = nl_attr_type(a);
         switch (type) {
         case OVS_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_LB_OUTPUT:
             ipfix_actions->output_action = true;
             break;
         case OVS_ACTION_ATTR_SAMPLE:

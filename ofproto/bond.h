@@ -58,6 +58,8 @@ struct bond_settings {
                                 /* The MAC address of the interface
                                    that was active during the last
                                    ovs run. */
+    bool use_lb_output_action;  /* Use lb_output action. Only applicable for
+                                   bond mode BALANCE TCP. */
 };
 
 /* Program startup. */
@@ -122,4 +124,7 @@ void bond_rebalance(struct bond *);
 */
 void bond_update_post_recirc_rules(struct bond *, uint32_t *recirc_id,
                                    uint32_t *hash_basis);
+
+bool bond_use_lb_output_action(const struct bond *bond);
+
 #endif /* bond.h */
