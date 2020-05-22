@@ -502,6 +502,10 @@ ovsdb_get_memory_usage(const struct ovsdb *db, struct simap *usage)
     }
 
     simap_increase(usage, "cells", cells);
+
+    if (db->storage) {
+        ovsdb_storage_get_memory_usage(db->storage, usage);
+    }
 }
 
 struct ovsdb_table *
