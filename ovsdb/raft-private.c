@@ -137,6 +137,7 @@ raft_server_destroy(struct raft_server *s)
     if (s) {
         free(s->address);
         free(s->nickname);
+        free(s->last_install_snapshot_request);
         free(s);
     }
 }
