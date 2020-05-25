@@ -152,6 +152,8 @@ ovs-appctl time/stop
 ovs-appctl time/warp 100
 ovs-appctl lacp/show > lacp.txt
 ovs-appctl bond/show > bond.txt
+# Check that lb_output is not enabled by default.
+AT_CHECK([grep -q '^lb_output action: disabled' bond.txt])
 (
 for i in `seq 0 255` ;
     do
@@ -164,9 +166,32 @@ AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
 # Make sure there is resonable distribution to all three ports.
 # We don't want to make this check precise, in case hash function changes.
-AT_CHECK([test `grep in_port.4 br1_flows.txt |wc -l` -gt 24])
-AT_CHECK([test `grep in_port.5 br1_flows.txt |wc -l` -gt 24])
-AT_CHECK([test `grep in_port.6 br1_flows.txt |wc -l` -gt 24])
+AT_CHECK([test $(grep -c in_port.4 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.5 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.6 br1_flows.txt) -gt 24])
+# Check that bonding is doing dp_hash.
+AT_CHECK([grep -q dp_hash br0_flows.txt])
+# Enabling lb_output.
+AT_CHECK([ovs-vsctl set Port bond0 other_config:lb-output-action=true])
+OVS_WAIT_UNTIL([ovs-appctl bond/show | grep -q '^lb_output action: enabled'])
+ovs-appctl time/warp 10000 500
+ovs-appctl revalidator/wait
+OVS_WAIT_WHILE([ovs-appctl dpif/dump-flows br1 | grep -q tcp])
+(
+for i in $(seq 256) ;
+    do
+    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
+    done
+)
+ovs-appctl time/warp 300 100
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | grep tcp > br0_flows.txt])
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | grep tcp > br1_flows.txt])
+# Make sure there is resonable distribution to all three ports, again.
+AT_CHECK([test $(grep -c in_port.4 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.5 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.6 br1_flows.txt) -gt 24])
+AT_CHECK([grep -q lb_output br0_flows.txt])
 
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
