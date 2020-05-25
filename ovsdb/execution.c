@@ -712,7 +712,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     long long int timeout_msec = 0;
     size_t i;
 
-    timeout = ovsdb_parser_member(parser, "timeout", OP_NUMBER | OP_OPTIONAL);
+    timeout = ovsdb_parser_member(parser, "timeout", OP_INTEGER | OP_OPTIONAL);
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
     columns_json = ovsdb_parser_member(parser, "columns",
                                        OP_ARRAY | OP_OPTIONAL);
@@ -730,7 +730,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     }
     if (!error) {
         if (timeout) {
-            timeout_msec = MIN(LLONG_MAX, json_real(timeout));
+            timeout_msec = json_integer(timeout);
             if (timeout_msec < 0) {
                 error = ovsdb_syntax_error(timeout, NULL,
                                            "timeout must be nonnegative");
