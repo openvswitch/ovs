@@ -43,7 +43,8 @@ set_hostname () {
     else
         hn="$(uname -n)"
     fi
-    ovs_vsctl set Open_vSwitch . external-ids:hostname="$hn"
+    # Set the hostname if it wasn't set before
+    ovs_vsctl add Open_vSwitch . external-ids hostname="$hn"
 }
 
 set_system_ids () {
