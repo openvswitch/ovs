@@ -1103,6 +1103,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_OP_PARAM_IFELSE([$KSRC/include/net/rtnetlink.h],
                            [validate], [extack],
                            [OVS_DEFINE([HAVE_RTNLOP_VALIDATE_WITH_EXTACK])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [__skb_set_hash])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [sw_hash])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_get_hash_raw])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

@@ -456,4 +456,35 @@ static inline void skb_set_inner_ipproto(struct sk_buff *skb,
 #define nf_reset_ct nf_reset
 #endif
 
+#ifndef HAVE___SKB_SET_HASH
+static inline void
+__skb_set_hash(struct sk_buff *skb, __u32 hash, bool is_sw, bool is_l4)
+{
+#ifdef HAVE_RXHASH
+	skb->rxhash = hash;
+#else
+	skb->hash = hash;
+#endif
+#if defined(HAVE_L4_RXHASH)
+	skb->l4_rxhash = is_l4;
+#else
+	skb->l4_hash = is_l4;
+#endif
+#ifdef HAVE_SW_HASH
+	skb->sw_hash = is_sw;
+#endif
+}
+#endif
+
+#ifndef HAVE_SKB_GET_HASH_RAW
+static inline __u32 skb_get_hash_raw(const struct sk_buff *skb)
+{
+#ifdef HAVE_RXHASH
+	return skb->rxhash;
+#else
+	return skb->hash;
+#endif
+}
+#endif
+
 #endif
