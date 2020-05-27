@@ -512,8 +512,9 @@ verify_tries(struct classifier *cls)
     int i;
 
     for (i = 0; i < cls->n_tries; i++) {
-        n_rules += trie_verify(&cls->tries[i].root, 0,
-                               cls->tries[i].field->n_bits);
+        const struct mf_field * cls_field
+            = ovsrcu_get(struct mf_field *, &cls->tries[i].field);
+        n_rules += trie_verify(&cls->tries[i].root, 0, cls_field->n_bits);
     }
     assert(n_rules <= cls->n_rules);
 }

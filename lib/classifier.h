@@ -314,13 +314,15 @@ extern "C" {
 struct cls_subtable;
 struct cls_match;
 
+struct mf_field;
+typedef OVSRCU_TYPE(struct mf_field *) rcu_field_ptr;
 struct trie_node;
 typedef OVSRCU_TYPE(struct trie_node *) rcu_trie_ptr;
 
 /* Prefix trie for a 'field' */
 struct cls_trie {
-    const struct mf_field *field; /* Trie field, or NULL. */
-    rcu_trie_ptr root;            /* NULL if none. */
+    rcu_field_ptr field;   /* Trie field, or NULL. */
+    rcu_trie_ptr root;     /* NULL if none. */
 };
 
 enum {
