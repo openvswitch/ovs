@@ -393,7 +393,9 @@ classifier_set_prefix_fields(struct classifier *cls,
         bitmap_set1(fields.bm, trie_fields[i]);
 
         new_fields[n_tries] = NULL;
-        if (n_tries >= cls->n_tries || field != cls->tries[n_tries].field) {
+        const struct mf_field *cls_field
+            = ovsrcu_get(struct mf_field *, &cls->tries[n_tries].field);
+        if (n_tries >= cls->n_tries || field != cls_field) {
             new_fields[n_tries] = field;
             changed = true;
         }
@@ -454,7 +456,7 @@ trie_init(struct classifier *cls, int trie_idx, const struct mf_field *field)
     } else {
         ovsrcu_set_hidden(&trie->root, NULL);
     }
-    trie->field = field;
+    ovsrcu_set_hidden(&trie->field, CONST_CAST(struct mf_field *, field));
 
     /* Add existing rules to the new trie. */
     CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
@@ -839,7 +841,6 @@ classifier_remove_assert(struct classifier *cls,
 struct trie_ctx {
     const struct cls_trie *trie;
     bool lookup_done;        /* Status of the lookup. */
-    uint8_t be32ofs;         /* U32 offset of the field in question. */
     unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
     union trie_prefix match_plens;  /* Bitmask of prefix lengths with possible
                                      * matches. */
@@ -849,7 +850,6 @@ static void
 trie_ctx_init(struct trie_ctx *ctx, const struct cls_trie *trie)
 {
     ctx->trie = trie;
-    ctx->be32ofs = trie->field->flow_be32ofs;
     ctx->lookup_done = false;
 }
 
@@ -1531,8 +1531,10 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     *CONST_CAST(uint8_t *, &subtable->n_indices) = index;
 
     for (i = 0; i < cls->n_tries; i++) {
-        subtable->trie_plen[i] = minimask_get_prefix_len(mask,
-                                                         cls->tries[i].field);
+        const struct mf_field *field
+            = ovsrcu_get(struct mf_field *, &cls->tries[i].field);
+        subtable->trie_plen[i]
+            = field ? minimask_get_prefix_len(mask, field) : 0;
     }
 
     /* Ports trie. */
@@ -1575,11 +1577,17 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
      * fields using the prefix tries.  The trie checks are done only as
      * needed to avoid folding in additional bits to the wildcards mask. */
     for (j = 0; j < n_tries; j++) {
-        /* Is the trie field relevant for this subtable, and
-           is the trie field within the current range of fields? */
-        if (field_plen[j] &&
-            flowmap_is_set(&range_map, trie_ctx[j].be32ofs / 2)) {
+        /* Is the trie field relevant for this subtable? */
+        if (field_plen[j]) {
             struct trie_ctx *ctx = &trie_ctx[j];
+            const struct mf_field *ctx_field
+                = ovsrcu_get(struct mf_field *, &ctx->trie->field);
+
+            /* Is the trie field within the current range of fields? */
+            if (!ctx_field
+                || !flowmap_is_set(&range_map, ctx_field->flow_be32ofs / 2)) {
+                continue;
+            }
 
             /* On-demand trie lookup. */
             if (!ctx->lookup_done) {
@@ -1601,14 +1609,16 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
                  * than this subtable would otherwise. */
                 if (ctx->maskbits <= field_plen[j]) {
                     /* Unwildcard the bits and skip the rest. */
-                    mask_set_prefix_bits(wc, ctx->be32ofs, ctx->maskbits);
+                    mask_set_prefix_bits(wc, ctx_field->flow_be32ofs,
+                                         ctx->maskbits);
                     /* Note: Prerequisite already unwildcarded, as the only
                      * prerequisite of the supported trie lookup fields is
                      * the ethertype, which is always unwildcarded. */
                     return true;
                 }
                 /* Can skip if the field is already unwildcarded. */
-                if (mask_prefix_bits_set(wc, ctx->be32ofs, ctx->maskbits)) {
+                if (mask_prefix_bits_set(wc, ctx_field->flow_be32ofs,
+                                         ctx->maskbits)) {
                     return true;
                 }
             }
@@ -2001,12 +2011,12 @@ static unsigned int
 trie_lookup(const struct cls_trie *trie, const struct flow *flow,
             union trie_prefix *plens)
 {
-    const struct mf_field *mf = trie->field;
+    const struct mf_field *mf = ovsrcu_get(struct mf_field *, &trie->field);
 
     /* Check that current flow matches the prerequisites for the trie
      * field.  Some match fields are used for multiple purposes, so we
      * must check that the trie is relevant for this flow. */
-    if (mf_are_prereqs_ok(mf, flow, NULL)) {
+    if (mf && mf_are_prereqs_ok(mf, flow, NULL)) {
         return trie_lookup_value(&trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
                                  &plens->be32, mf->n_bits);
@@ -2053,8 +2063,9 @@ minimask_get_prefix_len(const struct minimask *minimask,
  * happened to be zeros.
  */
 static const ovs_be32 *
-minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
+minimatch_get_prefix(const struct minimatch *match, rcu_field_ptr *field)
 {
+    struct mf_field *mf = ovsrcu_get_protected(struct mf_field *, field);
     size_t u64_ofs = mf->flow_be32ofs / 2;
 
     return (OVS_FORCE const ovs_be32 *)miniflow_get__(match->flow, u64_ofs)
@@ -2068,7 +2079,7 @@ static void
 trie_insert(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
     trie_insert_prefix(&trie->root,
-                       minimatch_get_prefix(&rule->match, trie->field), mlen);
+                       minimatch_get_prefix(&rule->match, &trie->field), mlen);
 }
 
 static void
@@ -2123,7 +2134,7 @@ static void
 trie_remove(struct cls_trie *trie, const struct cls_rule *rule, int mlen)
 {
     trie_remove_prefix(&trie->root,
-                       minimatch_get_prefix(&rule->match, trie->field), mlen);
+                       minimatch_get_prefix(&rule->match, &trie->field), mlen);
 }
 
 /* 'mlen' must be the (non-zero) CIDR prefix length of the 'trie->field' mask
