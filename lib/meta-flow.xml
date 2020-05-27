@@ -1240,6 +1240,8 @@ tcp,tp_src=0x07c0/0xfff0
         priority, that is, any given packet must be able to match at most one
         conjunctive flow at a given priority.  Overlapping conjunctive flows
         yield unpredictable results.
+        (The flows that constitute a conjunctive flow may overlap with those
+        that constitute the same or another conjunctive flow.)
       </li>
       <li>
         Following a conjunctive flow match, the search for the flow with
