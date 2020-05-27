@@ -26,10 +26,12 @@
 /* Concurrent Priority Vector
  * ==========================
  *
- * Concurrent priority vector holds non-NULL pointers to objects in an
- * increasing priority order and allows readers to traverse the vector without
- * being concerned about writers modifying the vector as they are traversing
- * it.
+ * Concurrent priority vector holds non-NULL pointers to objects in a
+ * nondecreasing priority order and allows readers to traverse the vector
+ * without being concerned about writers modifying the vector as they are
+ * traversing it.
+ *
+ * Multiple elements of a given priority are allowed.
  *
  * The priority order is maintained as a linear vector of elements to allow
  * for efficient memory prefetching.
