@@ -240,6 +240,10 @@ static void ovsdb_idl_send_monitor_request(struct ovsdb_idl *,
                                            struct ovsdb_idl_db *,
                                            enum ovsdb_idl_monitor_method);
 static void ovsdb_idl_db_clear(struct ovsdb_idl_db *db);
+static void ovsdb_idl_db_ack_condition(struct ovsdb_idl_db *db);
+static void ovsdb_idl_db_sync_condition(struct ovsdb_idl_db *db);
+static void ovsdb_idl_condition_move(struct ovsdb_idl_condition **dst,
+                                     struct ovsdb_idl_condition **src);
 
 struct ovsdb_idl {
     struct ovsdb_idl_db server;
@@ -422,9 +426,11 @@ ovsdb_idl_db_init(struct ovsdb_idl_db *db, const struct ovsdb_idl_class *class,
             = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->db = db;
-        ovsdb_idl_condition_init(&table->condition);
-        ovsdb_idl_condition_add_clause_true(&table->condition);
-        table->cond_changed = false;
+        table->ack_cond = NULL;
+        table->req_cond = NULL;
+        table->new_cond = xmalloc(sizeof *table->new_cond);
+        ovsdb_idl_condition_init(table->new_cond);
+        ovsdb_idl_condition_add_clause_true(table->new_cond);
     }
     db->monitor_id = json_array_create_2(json_string_create("monid"),
                                          json_string_create(class->database));
@@ -566,12 +572,15 @@ ovsdb_idl_reset_min_index(struct ovsdb_idl *idl)
 static void
 ovsdb_idl_db_destroy(struct ovsdb_idl_db *db)
 {
+    struct ovsdb_idl_condition *null_cond = NULL;
     ovs_assert(!db->txn);
     ovsdb_idl_db_txn_abort_all(db);
     ovsdb_idl_db_clear(db);
     for (size_t i = 0; i < db->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &db->tables[i];
-        ovsdb_idl_condition_destroy(&table->condition);
+        ovsdb_idl_condition_move(&table->ack_cond, &null_cond);
+        ovsdb_idl_condition_move(&table->req_cond, &null_cond);
+        ovsdb_idl_condition_move(&table->new_cond, &null_cond);
         ovsdb_idl_destroy_indexes(table);
         shash_destroy(&table->columns);
         hmap_destroy(&table->rows);
@@ -700,6 +709,12 @@ ovsdb_idl_send_request(struct ovsdb_idl *idl, struct jsonrpc_msg *request)
 static void
 ovsdb_idl_restart_fsm(struct ovsdb_idl *idl)
 {
+    /* Resync data DB table conditions to avoid missing updates due to
+     * conditions that were in flight or changed locally while the connection
+     * was down.
+     */
+    ovsdb_idl_db_sync_condition(&idl->data);
+
     ovsdb_idl_send_schema_request(idl, &idl->server);
     ovsdb_idl_transition(idl, IDL_S_SERVER_SCHEMA_REQUESTED);
     idl->data.monitoring = OVSDB_IDL_NOT_MONITORING;
@@ -807,7 +822,9 @@ ovsdb_idl_process_response(struct ovsdb_idl *idl, struct jsonrpc_msg *msg)
          * do, it's a "monitor_cond_change", which means that the conditional
          * monitor clauses were updated.
          *
-         * If further condition changes were pending, send them now. */
+         * Mark the last requested conditions as acked and if further
+         * condition changes were pending, send them now. */
+        ovsdb_idl_db_ack_condition(&idl->data);
         ovsdb_idl_send_cond_change(idl);
         idl->data.cond_seqno++;
         break;
@@ -1503,17 +1520,34 @@ ovsdb_idl_condition_equals(const struct ovsdb_idl_condition *a,
 }
 
 static void
-ovsdb_idl_condition_clone(struct ovsdb_idl_condition *dst,
+ovsdb_idl_condition_clone(struct ovsdb_idl_condition **dst,
                           const struct ovsdb_idl_condition *src)
 {
-    ovsdb_idl_condition_init(dst);
+    if (*dst) {
+        ovsdb_idl_condition_destroy(*dst);
+    } else {
+        *dst = xmalloc(sizeof **dst);
+    }
+    ovsdb_idl_condition_init(*dst);
 
-    dst->is_true = src->is_true;
+    (*dst)->is_true = src->is_true;
 
     const struct ovsdb_idl_clause *clause;
     HMAP_FOR_EACH (clause, hmap_node, &src->clauses) {
-        ovsdb_idl_condition_add_clause__(dst, clause, clause->hmap_node.hash);
+        ovsdb_idl_condition_add_clause__(*dst, clause, clause->hmap_node.hash);
     }
+}
+
+static void
+ovsdb_idl_condition_move(struct ovsdb_idl_condition **dst,
+                         struct ovsdb_idl_condition **src)
+{
+    if (*dst) {
+        ovsdb_idl_condition_destroy(*dst);
+        free(*dst);
+    }
+    *dst = *src;
+    *src = NULL;
 }
 
 static unsigned int
@@ -1521,12 +1555,25 @@ ovsdb_idl_db_set_condition(struct ovsdb_idl_db *db,
                            const struct ovsdb_idl_table_class *tc,
                            const struct ovsdb_idl_condition *condition)
 {
+    struct ovsdb_idl_condition *table_cond;
     struct ovsdb_idl_table *table = ovsdb_idl_db_table_from_class(db, tc);
     unsigned int seqno = db->cond_seqno;
-    if (!ovsdb_idl_condition_equals(condition, &table->condition)) {
-        ovsdb_idl_condition_destroy(&table->condition);
-        ovsdb_idl_condition_clone(&table->condition, condition);
-        db->cond_changed = table->cond_changed = true;
+
+    /* Compare the new condition to the last known condition which can be
+     * either "new" (not sent yet), "requested" or "acked", in this order.
+     */
+    if (table->new_cond) {
+        table_cond = table->new_cond;
+    } else if (table->req_cond) {
+        table_cond = table->req_cond;
+    } else {
+        table_cond = table->ack_cond;
+    }
+    ovs_assert(table_cond);
+
+    if (!ovsdb_idl_condition_equals(condition, table_cond)) {
+        ovsdb_idl_condition_clone(&table->new_cond, condition);
+        db->cond_changed = true;
         poll_immediate_wake();
         return seqno + 1;
     }
@@ -1571,9 +1618,8 @@ ovsdb_idl_condition_to_json(const struct ovsdb_idl_condition *cnd)
 }
 
 static struct json *
-ovsdb_idl_create_cond_change_req(struct ovsdb_idl_table *table)
+ovsdb_idl_create_cond_change_req(const struct ovsdb_idl_condition *cond)
 {
-    const struct ovsdb_idl_condition *cond = &table->condition;
     struct json *monitor_cond_change_request = json_object_create();
     struct json *cond_json = ovsdb_idl_condition_to_json(cond);
 
@@ -1593,8 +1639,12 @@ ovsdb_idl_db_compose_cond_change(struct ovsdb_idl_db *db)
     for (size_t i = 0; i < db->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &db->tables[i];
 
-        if (table->cond_changed) {
-            struct json *req = ovsdb_idl_create_cond_change_req(table);
+        /* Always use the most recent conditions set by the IDL client when
+         * requesting monitor_cond_change, i.e., table->new_cond.
+         */
+        if (table->new_cond) {
+            struct json *req =
+                ovsdb_idl_create_cond_change_req(table->new_cond);
             if (req) {
                 if (!monitor_cond_change_requests) {
                     monitor_cond_change_requests = json_object_create();
@@ -1603,7 +1653,11 @@ ovsdb_idl_db_compose_cond_change(struct ovsdb_idl_db *db)
                              table->class_->name,
                              json_array_create_1(req));
             }
-            table->cond_changed = false;
+            /* Mark the new condition as requested by moving it to req_cond.
+             * If there's already requested condition that's a bug.
+             */
+            ovs_assert(table->req_cond == NULL);
+            ovsdb_idl_condition_move(&table->req_cond, &table->new_cond);
         }
     }
 
@@ -1616,6 +1670,73 @@ ovsdb_idl_db_compose_cond_change(struct ovsdb_idl_db *db)
                                               json_clone(db->monitor_id),
                                               monitor_cond_change_requests);
     return jsonrpc_create_request("monitor_cond_change", params, NULL);
+}
+
+/* Marks all requested table conditions in 'db' as acked by the server.
+ * It should be called when the server replies to monitor_cond_change
+ * requests.
+ */
+static void
+ovsdb_idl_db_ack_condition(struct ovsdb_idl_db *db)
+{
+    for (size_t i = 0; i < db->class_->n_tables; i++) {
+        struct ovsdb_idl_table *table = &db->tables[i];
+
+        if (table->req_cond) {
+            ovsdb_idl_condition_move(&table->ack_cond, &table->req_cond);
+        }
+    }
+}
+
+/* Should be called when the IDL fsm is restarted and resyncs table conditions
+ * based on the state the DB is in:
+ * - if a non-zero last_id is available for the DB then upon reconnect
+ *   the IDL should first request acked conditions to avoid missing updates
+ *   about records that were added before the transaction with
+ *   txn-id == last_id. If there were requested condition changes in flight
+ *   (i.e., req_cond not NULL) and the IDL client didn't set new conditions
+ *   (i.e., new_cond is NULL) then move req_cond to new_cond to trigger a
+ *   follow up monitor_cond_change request.
+ * - if there's no last_id available for the DB then it's safe to use the
+ *   latest conditions set by the IDL client even if they weren't acked yet.
+ */
+static void
+ovsdb_idl_db_sync_condition(struct ovsdb_idl_db *db)
+{
+    bool ack_all = uuid_is_zero(&db->last_id);
+
+    db->cond_changed = false;
+    for (size_t i = 0; i < db->class_->n_tables; i++) {
+        struct ovsdb_idl_table *table = &db->tables[i];
+
+        /* When monitor_cond_since requests will be issued, the
+         * table->ack_cond condition will be added to the "where" clause".
+         * Follow up monitor_cond_change requests will use table->new_cond.
+         */
+        if (ack_all) {
+            if (table->new_cond) {
+                ovsdb_idl_condition_move(&table->req_cond, &table->new_cond);
+            }
+
+            if (table->req_cond) {
+                ovsdb_idl_condition_move(&table->ack_cond, &table->req_cond);
+            }
+        } else {
+            /* If there was no "unsent" condition but instead a
+             * monitor_cond_change request was in flight, move table->req_cond
+             * to table->new_cond and set db->cond_changed to trigger a new
+             * monitor_cond_change request.
+             *
+             * However, if a new condition has been set by the IDL client,
+             * monitor_cond_change will be sent anyway and will use the most
+             * recent table->new_cond so there's no need to update it here.
+             */
+            if (table->req_cond && !table->new_cond) {
+                ovsdb_idl_condition_move(&table->new_cond, &table->req_cond);
+                db->cond_changed = true;
+            }
+        }
+    }
 }
 
 static void
@@ -2072,21 +2193,21 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl, struct ovsdb_idl_db *db,
             monitor_request = json_object_create();
             json_object_put(monitor_request, "columns", columns);
 
-            const struct ovsdb_idl_condition *cond = &table->condition;
+            /* Always use acked conditions when requesting
+             * monitor_cond/monitor_cond_since.
+             */
+            const struct ovsdb_idl_condition *cond = table->ack_cond;
             if ((monitor_method == OVSDB_IDL_MM_MONITOR_COND ||
                  monitor_method == OVSDB_IDL_MM_MONITOR_COND_SINCE) &&
-                !ovsdb_idl_condition_is_true(cond)) {
+                cond && !ovsdb_idl_condition_is_true(cond)) {
                 json_object_put(monitor_request, "where",
                                 ovsdb_idl_condition_to_json(cond));
-                table->cond_changed = false;
             }
             json_object_put(monitor_requests, tc->name,
                             json_array_create_1(monitor_request));
         }
     }
     free_schema(schema);
-
-    db->cond_changed = false;
 
     struct json *params = json_array_create_3(
                               json_string_create(db->class_->database),
