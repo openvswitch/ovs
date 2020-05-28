@@ -1922,3 +1922,59 @@ m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
 
 OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL connects to leader], 3, ['remote'])
 OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL reconnects to leader], 3, ['remote' '+remotestop' 'remote'])
+
+# same as OVSDB_CHECK_IDL but uses C IDL implementation with tcp
+# with multiple remotes.
+m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
+  [AT_SETUP([$1 - C - tcp])
+   AT_KEYWORDS([ovsdb server idl positive tcp socket $5])
+   m4_define([LPBK],[127.0.0.1])
+   AT_CHECK([ovsdb_cluster_start_idltest $2 "ptcp:0:"LPBK])
+   PARSE_LISTENING_PORT([s1.log], [TCP_PORT_1])
+   PARSE_LISTENING_PORT([s2.log], [TCP_PORT_2])
+   PARSE_LISTENING_PORT([s3.log], [TCP_PORT_3])
+   remotes=tcp:LPBK:$TCP_PORT_1,tcp:LPBK:$TCP_PORT_2,tcp:LPBK:$TCP_PORT_3
+
+   m4_if([$3], [], [],
+     [AT_CHECK([ovsdb-client transact $remotes $3], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl tcp:LPBK:$TCP_PORT_1 $4],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
+            [0], [$5])
+   AT_CLEANUP])
+
+# Checks that monitor_cond_since works fine when disconnects happen
+# with cond_change requests in flight (i.e., IDL is properly updated).
+OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
+  3,
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 1.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 1.0,
+               "b": true}}]']],
+  [['condition simple []' \
+    'condition simple [["i","==",2]]' \
+    'condition simple [["i","==",1]]' \
+    '+reconnect' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "==", 1]],
+       "row": {"r": 2.0 }}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: reconnect
+006: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+007: {"error":null,"result":[{"count":1}]}
+008: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+009: done
+]])

@@ -122,8 +122,12 @@ struct ovsdb_idl_table {
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list indexes;    /* Contains "struct ovsdb_idl_index"s */
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
-    struct ovsdb_idl_condition condition;
-    bool cond_changed;
+    struct ovsdb_idl_condition *ack_cond; /* Last condition acked by the
+                                           * server. */
+    struct ovsdb_idl_condition *req_cond; /* Last condition requested to the
+                                           * server. */
+    struct ovsdb_idl_condition *new_cond; /* Latest condition set by the IDL
+                                           * client. */
 };
 
 struct ovsdb_idl_class {
