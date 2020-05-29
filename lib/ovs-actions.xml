@@ -1529,7 +1529,7 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
       </p>
 
       <p>
-        The packet length to check againt the argument <var>pkt_len</var>
+        The packet length to check against the argument <var>pkt_len</var>
         includes the L2 header and L2 payload of the packet, but not the VLAN
         tag (if present).
       </p>
