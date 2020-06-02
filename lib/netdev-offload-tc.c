@@ -633,14 +633,16 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tun_id(match, flower->key.tunnel.id);
             match->flow.tunnel.flags |= FLOW_TNL_F_KEY;
         }
-        if (flower->mask.tunnel.ipv4.ipv4_dst) {
+        if (flower->mask.tunnel.ipv4.ipv4_dst ||
+            flower->mask.tunnel.ipv4.ipv4_src) {
             match_set_tun_dst_masked(match,
                                      flower->key.tunnel.ipv4.ipv4_dst,
                                      flower->mask.tunnel.ipv4.ipv4_dst);
             match_set_tun_src_masked(match,
                                      flower->key.tunnel.ipv4.ipv4_src,
                                      flower->mask.tunnel.ipv4.ipv4_src);
-        } else if (ipv6_addr_is_set(&flower->mask.tunnel.ipv6.ipv6_dst)) {
+        } else if (ipv6_addr_is_set(&flower->mask.tunnel.ipv6.ipv6_dst) ||
+                   ipv6_addr_is_set(&flower->mask.tunnel.ipv6.ipv6_src)) {
             match_set_tun_ipv6_dst_masked(match,
                                           &flower->key.tunnel.ipv6.ipv6_dst,
                                           &flower->mask.tunnel.ipv6.ipv6_dst);
@@ -1400,7 +1402,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     chain = key->recirc_id;
     mask->recirc_id = 0;
 
-    if (flow_tnl_dst_is_set(&key->tunnel)) {
+    if (flow_tnl_dst_is_set(&key->tunnel) ||
+        flow_tnl_src_is_set(&key->tunnel)) {
         VLOG_DBG_RL(&rl,
                     "tunnel: id %#" PRIx64 " src " IP_FMT
                     " dst " IP_FMT " tp_src %d tp_dst %d",

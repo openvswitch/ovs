@@ -52,6 +52,12 @@ flow_tnl_dst_is_set(const struct flow_tnl *tnl)
     return tnl->ip_dst || ipv6_addr_is_set(&tnl->ipv6_dst);
 }
 
+static inline bool
+flow_tnl_src_is_set(const struct flow_tnl *tnl)
+{
+    return tnl->ip_src || ipv6_addr_is_set(&tnl->ipv6_src);
+}
+
 struct in6_addr flow_tnl_dst(const struct flow_tnl *tnl);
 struct in6_addr flow_tnl_src(const struct flow_tnl *tnl);
 

@@ -6125,7 +6125,8 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
-    if (flow_tnl_dst_is_set(&flow->tunnel) || export_mask) {
+    if (flow_tnl_dst_is_set(&flow->tunnel) ||
+        flow_tnl_src_is_set(&flow->tunnel) || export_mask) {
         tun_key_to_attr(buf, &data->tunnel, &parms->flow->tunnel,
                         parms->key_buf, NULL);
     }
