@@ -2038,7 +2038,7 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, bool id_present,
         if (ipv4_dst) {
             nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_SRC, ipv4_src);
             nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_DST, ipv4_dst);
-        } else if (!is_all_zeros(ipv6_dst, sizeof *ipv6_dst)) {
+        } else if (ipv6_addr_is_set(ipv6_dst)) {
             nl_msg_put_in6_addr(request, TCA_TUNNEL_KEY_ENC_IPV6_DST,
                                 ipv6_dst);
             nl_msg_put_in6_addr(request, TCA_TUNNEL_KEY_ENC_IPV6_SRC,
@@ -2135,12 +2135,10 @@ nl_msg_put_act_ct(struct ofpbuf *request, struct tc_action *action)
                                     action->ct.range.ipv4.max);
                     }
                 } else if (action->ct.range.ip_family == AF_INET6) {
-                    size_t ipv6_sz = sizeof(action->ct.range.ipv6.max);
 
                     nl_msg_put_in6_addr(request, TCA_CT_NAT_IPV6_MIN,
                                         &action->ct.range.ipv6.min);
-                    if (!is_all_zeros(&action->ct.range.ipv6.max,
-                                      ipv6_sz)) {
+                    if (ipv6_addr_is_set(&action->ct.range.ipv6.max)) {
                         nl_msg_put_in6_addr(request, TCA_CT_NAT_IPV6_MAX,
                                             &action->ct.range.ipv6.max);
                     }

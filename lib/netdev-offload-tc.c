@@ -734,13 +734,11 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                     nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_DST,
                                     action->encap.ipv4.ipv4_dst);
                 }
-                if (!is_all_zeros(&action->encap.ipv6.ipv6_src,
-                                  sizeof action->encap.ipv6.ipv6_src)) {
+                if (ipv6_addr_is_set(&action->encap.ipv6.ipv6_src)) {
                     nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_SRC,
                                         &action->encap.ipv6.ipv6_src);
                 }
-                if (!is_all_zeros(&action->encap.ipv6.ipv6_dst,
-                                  sizeof action->encap.ipv6.ipv6_dst)) {
+                if (ipv6_addr_is_set(&action->encap.ipv6.ipv6_dst)) {
                     nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_DST,
                                         &action->encap.ipv6.ipv6_dst);
                 }
