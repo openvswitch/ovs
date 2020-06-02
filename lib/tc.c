@@ -372,6 +372,12 @@ static const struct nl_policy tca_flower_policy[] = {
                                            .optional = true, },
     [TCA_FLOWER_KEY_ENC_UDP_DST_PORT] = { .type = NL_A_U16,
                                           .optional = true, },
+    [TCA_FLOWER_KEY_ENC_UDP_SRC_PORT] = { .type = NL_A_U16,
+                                          .optional = true, },
+    [TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK] = { .type = NL_A_U16,
+                                               .optional = true, },
+    [TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK] = { .type = NL_A_U16,
+                                               .optional = true, },
     [TCA_FLOWER_KEY_FLAGS] = { .type = NL_A_BE32, .optional = true, },
     [TCA_FLOWER_KEY_FLAGS_MASK] = { .type = NL_A_BE32, .optional = true, },
     [TCA_FLOWER_KEY_IP_TTL] = { .type = NL_A_U8,
@@ -650,22 +656,38 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
         flower->mask.tunnel.id = OVS_BE64_MAX;
     }
     if (attrs[TCA_FLOWER_KEY_ENC_IPV4_SRC_MASK]) {
+        flower->mask.tunnel.ipv4.ipv4_src =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_IPV4_SRC_MASK]);
         flower->key.tunnel.ipv4.ipv4_src =
             nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_IPV4_SRC]);
     }
     if (attrs[TCA_FLOWER_KEY_ENC_IPV4_DST_MASK]) {
+        flower->mask.tunnel.ipv4.ipv4_dst =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_IPV4_DST_MASK]);
         flower->key.tunnel.ipv4.ipv4_dst =
             nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ENC_IPV4_DST]);
     }
     if (attrs[TCA_FLOWER_KEY_ENC_IPV6_SRC_MASK]) {
+        flower->mask.tunnel.ipv6.ipv6_src =
+            nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_SRC_MASK]);
         flower->key.tunnel.ipv6.ipv6_src =
             nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_SRC]);
     }
     if (attrs[TCA_FLOWER_KEY_ENC_IPV6_DST_MASK]) {
+        flower->mask.tunnel.ipv6.ipv6_dst =
+            nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_DST_MASK]);
         flower->key.tunnel.ipv6.ipv6_dst =
             nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_DST]);
     }
-    if (attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT]) {
+    if (attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK]) {
+        flower->mask.tunnel.tp_src =
+            nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK]);
+        flower->key.tunnel.tp_src =
+            nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT]);
+    }
+    if (attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK]) {
+        flower->mask.tunnel.tp_dst =
+            nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK]);
         flower->key.tunnel.tp_dst =
             nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT]);
     }
@@ -2592,11 +2614,18 @@ nl_msg_put_flower_tunnel_opts(struct ofpbuf *request, uint16_t type,
 static void
 nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
 {
+    ovs_be32 ipv4_src_mask = flower->mask.tunnel.ipv4.ipv4_src;
+    ovs_be32 ipv4_dst_mask = flower->mask.tunnel.ipv4.ipv4_dst;
     ovs_be32 ipv4_src = flower->key.tunnel.ipv4.ipv4_src;
     ovs_be32 ipv4_dst = flower->key.tunnel.ipv4.ipv4_dst;
+    struct in6_addr *ipv6_src_mask = &flower->mask.tunnel.ipv6.ipv6_src;
+    struct in6_addr *ipv6_dst_mask = &flower->mask.tunnel.ipv6.ipv6_dst;
     struct in6_addr *ipv6_src = &flower->key.tunnel.ipv6.ipv6_src;
     struct in6_addr *ipv6_dst = &flower->key.tunnel.ipv6.ipv6_dst;
+    ovs_be16 tp_dst_mask = flower->mask.tunnel.tp_dst;
+    ovs_be16 tp_src_mask = flower->mask.tunnel.tp_src;
     ovs_be16 tp_dst = flower->key.tunnel.tp_dst;
+    ovs_be16 tp_src = flower->key.tunnel.tp_src;
     ovs_be32 id = be64_to_be32(flower->key.tunnel.id);
     uint8_t tos = flower->key.tunnel.tos;
     uint8_t ttl = flower->key.tunnel.ttl;
@@ -2604,12 +2633,21 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     uint8_t ttl_mask = flower->mask.tunnel.ttl;
     ovs_be64 id_mask = flower->mask.tunnel.id;
 
-    if (ipv4_dst) {
-        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_SRC, ipv4_src);
+    if (ipv4_dst_mask || ipv4_src_mask) {
+        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_DST_MASK,
+                        ipv4_dst_mask);
+        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_SRC_MASK,
+                        ipv4_src_mask);
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_DST, ipv4_dst);
-    } else if (!is_all_zeros(ipv6_dst, sizeof *ipv6_dst)) {
-        nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_SRC, ipv6_src);
+        nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_SRC, ipv4_src);
+    } else if (ipv6_addr_is_set(ipv6_dst_mask) ||
+               ipv6_addr_is_set(ipv6_src_mask)) {
+        nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_DST_MASK,
+                            ipv6_dst_mask);
+        nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_SRC_MASK,
+                            ipv6_src_mask);
         nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_DST, ipv6_dst);
+        nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_SRC, ipv6_src);
     }
     if (tos_mask) {
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TOS, tos);
@@ -2619,8 +2657,15 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL, ttl);
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL_MASK, ttl_mask);
     }
-    if (tp_dst) {
+    if (tp_dst_mask) {
+        nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK,
+                        tp_dst_mask);
         nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT, tp_dst);
+    }
+    if (tp_src_mask) {
+        nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK,
+                        tp_src_mask);
+        nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_SRC_PORT, tp_src);
     }
     if (id_mask) {
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_KEY_ID, id);

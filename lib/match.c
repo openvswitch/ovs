@@ -294,6 +294,19 @@ match_set_tun_tp_dst_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
 }
 
 void
+match_set_tun_tp_src(struct match *match, ovs_be16 tp_src)
+{
+    match_set_tun_tp_src_masked(match, tp_src, OVS_BE16_MAX);
+}
+
+void
+match_set_tun_tp_src_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
+{
+    match->wc.masks.tunnel.tp_src = mask;
+    match->flow.tunnel.tp_src = port & mask;
+}
+
+void
 match_set_tun_gbp_id_masked(struct match *match, ovs_be16 gbp_id, ovs_be16 mask)
 {
     match->wc.masks.tunnel.gbp_id = mask;

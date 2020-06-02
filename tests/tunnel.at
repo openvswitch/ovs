@@ -110,6 +110,28 @@ Datapath actions: drop
 OVS_VSWITCHD_STOP(["/dropping tunnel packet marked ECN CE but is not ECN capable/d"])
 AT_CLEANUP
 
+AT_SETUP([tunnel - input with matching tunnel mask])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 \
+                    ofport_request=1	\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1)
+    p2 2/2: (dummy)
+])
+
+AT_CHECK([ovs-appctl dpctl/add-flow "tunnel(dst=1.1.1.1,src=3.3.3.200/255.255.255.0,tp_dst=123,tp_src=1/0xf,ttl=64),recirc_id(0),in_port(1),eth(),eth_type(0x0800),ipv4()" "2"])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | tail -1], [0], [dnl
+tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1/0xf,tp_dst=123),recirc_id(0),in_port(1),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - output])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \

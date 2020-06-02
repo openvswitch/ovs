@@ -633,13 +633,20 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tun_id(match, flower->key.tunnel.id);
             match->flow.tunnel.flags |= FLOW_TNL_F_KEY;
         }
-        if (flower->key.tunnel.ipv4.ipv4_dst) {
-            match_set_tun_src(match, flower->key.tunnel.ipv4.ipv4_src);
-            match_set_tun_dst(match, flower->key.tunnel.ipv4.ipv4_dst);
-        } else if (!is_all_zeros(&flower->key.tunnel.ipv6.ipv6_dst,
-                   sizeof flower->key.tunnel.ipv6.ipv6_dst)) {
-            match_set_tun_ipv6_src(match, &flower->key.tunnel.ipv6.ipv6_src);
-            match_set_tun_ipv6_dst(match, &flower->key.tunnel.ipv6.ipv6_dst);
+        if (flower->mask.tunnel.ipv4.ipv4_dst) {
+            match_set_tun_dst_masked(match,
+                                     flower->key.tunnel.ipv4.ipv4_dst,
+                                     flower->mask.tunnel.ipv4.ipv4_dst);
+            match_set_tun_src_masked(match,
+                                     flower->key.tunnel.ipv4.ipv4_src,
+                                     flower->mask.tunnel.ipv4.ipv4_src);
+        } else if (ipv6_addr_is_set(&flower->mask.tunnel.ipv6.ipv6_dst)) {
+            match_set_tun_ipv6_dst_masked(match,
+                                          &flower->key.tunnel.ipv6.ipv6_dst,
+                                          &flower->mask.tunnel.ipv6.ipv6_dst);
+            match_set_tun_ipv6_src_masked(match,
+                                          &flower->key.tunnel.ipv6.ipv6_src,
+                                          &flower->mask.tunnel.ipv6.ipv6_src);
         }
         if (flower->key.tunnel.tos) {
             match_set_tun_tos_masked(match, flower->key.tunnel.tos,
@@ -649,8 +656,15 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tun_ttl_masked(match, flower->key.tunnel.ttl,
                                      flower->mask.tunnel.ttl);
         }
-        if (flower->key.tunnel.tp_dst) {
-            match_set_tun_tp_dst(match, flower->key.tunnel.tp_dst);
+        if (flower->mask.tunnel.tp_dst) {
+            match_set_tun_tp_dst_masked(match,
+                                        flower->key.tunnel.tp_dst,
+                                        flower->mask.tunnel.tp_dst);
+        }
+        if (flower->mask.tunnel.tp_src) {
+            match_set_tun_tp_src_masked(match,
+                                        flower->key.tunnel.tp_src,
+                                        flower->mask.tunnel.tp_src);
         }
         if (flower->key.tunnel.metadata.present.len) {
             flower_tun_opt_to_match(match, flower);
@@ -1402,8 +1416,14 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.ttl = tnl->ip_ttl;
         flower.key.tunnel.tp_src = tnl->tp_src;
         flower.key.tunnel.tp_dst = tnl->tp_dst;
+        flower.mask.tunnel.ipv4.ipv4_src = tnl_mask->ip_src;
+        flower.mask.tunnel.ipv4.ipv4_dst = tnl_mask->ip_dst;
+        flower.mask.tunnel.ipv6.ipv6_src = tnl_mask->ipv6_src;
+        flower.mask.tunnel.ipv6.ipv6_dst = tnl_mask->ipv6_dst;
         flower.mask.tunnel.tos = tnl_mask->ip_tos;
         flower.mask.tunnel.ttl = tnl_mask->ip_ttl;
+        flower.mask.tunnel.tp_src = tnl_mask->tp_src;
+        flower.mask.tunnel.tp_dst = tnl_mask->tp_dst;
         flower.mask.tunnel.id = (tnl->flags & FLOW_TNL_F_KEY) ? tnl_mask->tun_id : 0;
         flower_match_to_tun_opt(&flower, tnl, tnl_mask);
         flower.tunnel = true;
