@@ -442,6 +442,7 @@ Krishna Miriyala                krishna@nicira.com
 Krishna Mohan Elluru            elluru.kri.mohan@hpe.com
 László Sürü                     laszlo.suru@ericsson.com
 Len Gao                         leng@vmware.com
+Linhaifeng                      haifeng.lin@huawei.com
 Logan Rosen                     logatronico@gmail.com
 Luca Falavigna                  dktrkranz@debian.org
 Luiz Henrique Ozaki             luiz.ozaki@gmail.com
