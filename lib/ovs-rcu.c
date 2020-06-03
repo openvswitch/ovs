@@ -30,6 +30,8 @@
 
 VLOG_DEFINE_THIS_MODULE(ovs_rcu);
 
+#define MIN_CBS 16
+
 struct ovsrcu_cb {
     void (*function)(void *aux);
     void *aux;
@@ -37,7 +39,8 @@ struct ovsrcu_cb {
 
 struct ovsrcu_cbset {
     struct ovs_list list_node;
-    struct ovsrcu_cb cbs[16];
+    struct ovsrcu_cb *cbs;
+    size_t n_allocated;
     int n_cbs;
 };
 
@@ -310,16 +313,19 @@ ovsrcu_postpone__(void (*function)(void *aux), void *aux)
     cbset = perthread->cbset;
     if (!cbset) {
         cbset = perthread->cbset = xmalloc(sizeof *perthread->cbset);
+        cbset->cbs = xmalloc(MIN_CBS * sizeof *cbset->cbs);
+        cbset->n_allocated = MIN_CBS;
         cbset->n_cbs = 0;
+    }
+
+    if (cbset->n_cbs == cbset->n_allocated) {
+        cbset->cbs = x2nrealloc(cbset->cbs, &cbset->n_allocated,
+                                sizeof *cbset->cbs);
     }
 
     cb = &cbset->cbs[cbset->n_cbs++];
     cb->function = function;
     cb->aux = aux;
-
-    if (cbset->n_cbs >= ARRAY_SIZE(cbset->cbs)) {
-        ovsrcu_flush_cbset(perthread);
-    }
 }
 
 static bool
@@ -341,6 +347,7 @@ ovsrcu_call_postponed(void)
         for (cb = cbset->cbs; cb < &cbset->cbs[cbset->n_cbs]; cb++) {
             cb->function(cb->aux);
         }
+        free(cbset->cbs);
         free(cbset);
     }
 
