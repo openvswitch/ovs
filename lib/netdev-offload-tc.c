@@ -390,7 +390,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     dump->terse = terse;
 
     id = tc_make_tcf_id(ifindex, block_id, prio, hook);
-    tc_dump_flower_start(&id, dump->nl_dump);
+    tc_dump_flower_start(&id, dump->nl_dump, terse);
 
     *dump_out = dump;
 
@@ -951,7 +951,7 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
     while (nl_dump_next(dump->nl_dump, &nl_flow, rbuffer)) {
         struct tc_flower flower;
 
-        if (parse_netlink_to_tc_flower(&nl_flow, &id, &flower)) {
+        if (parse_netlink_to_tc_flower(&nl_flow, &id, &flower, dump->terse)) {
             continue;
         }
 

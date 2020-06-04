@@ -341,10 +341,11 @@ BUILD_ASSERT_DECL(offsetof(struct tc_flower, rewrite)
 int tc_replace_flower(struct tcf_id *id, struct tc_flower *flower);
 int tc_del_filter(struct tcf_id *id);
 int tc_get_flower(struct tcf_id *id, struct tc_flower *flower);
-int tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump);
+int tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump, bool terse);
 int parse_netlink_to_tc_flower(struct ofpbuf *reply,
                                struct tcf_id *id,
-                               struct tc_flower *flower);
+                               struct tc_flower *flower,
+                               bool terse);
 void tc_set_policy(const char *policy);
 
 #endif /* tc.h */
