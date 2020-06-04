@@ -80,7 +80,8 @@ struct offload_info {
 };
 
 int netdev_flow_flush(struct netdev *);
-int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump);
+int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump,
+                            bool terse);
 int netdev_flow_dump_destroy(struct netdev_flow_dump *);
 bool netdev_flow_dump_next(struct netdev_flow_dump *, struct match *,
                           struct nlattr **actions, struct dpif_flow_stats *,
@@ -114,7 +115,8 @@ odp_port_t netdev_ifindex_to_odp_port(int ifindex);
 
 struct netdev_flow_dump **netdev_ports_flow_dump_create(
                                         const struct dpif_class *,
-                                        int *ports);
+                                        int *ports,
+                                        bool terse);
 void netdev_ports_flow_flush(const struct dpif_class *);
 int netdev_ports_flow_del(const struct dpif_class *, const ovs_u128 *ufid,
                           struct dpif_flow_stats *stats);

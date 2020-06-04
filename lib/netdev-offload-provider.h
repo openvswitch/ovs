@@ -42,7 +42,8 @@ struct netdev_flow_api {
      *
      * On success returns 0 and allocates data, on failure returns
      * positive errno. */
-    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump);
+    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump,
+                            bool terse);
     int (*flow_dump_destroy)(struct netdev_flow_dump *);
 
     /* Returns true if there are more flows to dump.

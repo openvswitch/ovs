@@ -1445,7 +1445,8 @@ start_netdev_dump(const struct dpif *dpif_,
     dump->netdev_current_dump = 0;
     dump->netdev_dumps
         = netdev_ports_flow_dump_create(dpif_->dpif_class,
-                                        &dump->netdev_dumps_num);
+                                        &dump->netdev_dumps_num,
+                                        dump->up.terse);
     ovs_mutex_unlock(&dump->netdev_lock);
 }
 
@@ -1640,41 +1641,42 @@ dpif_netlink_netdev_match_to_dpif_flow(struct match *match,
                                        struct dpif_flow_attrs *attrs,
                                        ovs_u128 *ufid,
                                        struct dpif_flow *flow,
-                                       bool terse OVS_UNUSED)
+                                       bool terse)
 {
-
-    struct odp_flow_key_parms odp_parms = {
-        .flow = &match->flow,
-        .mask = &match->wc.masks,
-        .support = {
-            .max_vlan_headers = 2,
-            .recirc = true,
-            .ct_state = true,
-            .ct_zone = true,
-            .ct_mark = true,
-            .ct_label = true,
-        },
-    };
-    size_t offset;
-
     memset(flow, 0, sizeof *flow);
 
-    /* Key */
-    offset = key_buf->size;
-    flow->key = ofpbuf_tail(key_buf);
-    odp_flow_key_from_flow(&odp_parms, key_buf);
-    flow->key_len = key_buf->size - offset;
+    if (!terse) {
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &match->flow,
+            .mask = &match->wc.masks,
+            .support = {
+                .max_vlan_headers = 2,
+                .recirc = true,
+                .ct_state = true,
+                .ct_zone = true,
+                .ct_mark = true,
+                .ct_label = true,
+            },
+        };
+        size_t offset;
 
-    /* Mask */
-    offset = mask_buf->size;
-    flow->mask = ofpbuf_tail(mask_buf);
-    odp_parms.key_buf = key_buf;
-    odp_flow_key_from_mask(&odp_parms, mask_buf);
-    flow->mask_len = mask_buf->size - offset;
+        /* Key */
+        offset = key_buf->size;
+        flow->key = ofpbuf_tail(key_buf);
+        odp_flow_key_from_flow(&odp_parms, key_buf);
+        flow->key_len = key_buf->size - offset;
 
-    /* Actions */
-    flow->actions = nl_attr_get(actions);
-    flow->actions_len = nl_attr_get_size(actions);
+        /* Mask */
+        offset = mask_buf->size;
+        flow->mask = ofpbuf_tail(mask_buf);
+        odp_parms.key_buf = key_buf;
+        odp_flow_key_from_mask(&odp_parms, mask_buf);
+        flow->mask_len = mask_buf->size - offset;
+
+        /* Actions */
+        flow->actions = nl_attr_get(actions);
+        flow->actions_len = nl_attr_get_size(actions);
+    }
 
     /* Stats */
     memcpy(&flow->stats, stats, sizeof *stats);

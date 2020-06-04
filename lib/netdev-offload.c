@@ -201,13 +201,14 @@ netdev_flow_flush(struct netdev *netdev)
 }
 
 int
-netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump)
+netdev_flow_dump_create(struct netdev *netdev, struct netdev_flow_dump **dump,
+                        bool terse)
 {
     const struct netdev_flow_api *flow_api =
         ovsrcu_get(const struct netdev_flow_api *, &netdev->flow_api);
 
     return (flow_api && flow_api->flow_dump_create)
-           ? flow_api->flow_dump_create(netdev, dump)
+           ? flow_api->flow_dump_create(netdev, dump, terse)
            : EOPNOTSUPP;
 }
 
@@ -436,7 +437,8 @@ netdev_ports_flow_flush(const struct dpif_class *dpif_class)
 }
 
 struct netdev_flow_dump **
-netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports)
+netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports,
+                              bool terse)
 {
     struct port_to_netdev_data *data;
     struct netdev_flow_dump **dumps;
@@ -454,7 +456,7 @@ netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports)
 
     HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class) {
-            if (netdev_flow_dump_create(data->netdev, &dumps[i])) {
+            if (netdev_flow_dump_create(data->netdev, &dumps[i], terse)) {
                 continue;
             }
 
