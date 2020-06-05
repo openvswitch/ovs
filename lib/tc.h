@@ -122,6 +122,14 @@ struct tc_flower_key {
     ovs_u128 ct_label;
 
     struct {
+        ovs_be32 spa;
+        ovs_be32 tpa;
+        struct eth_addr sha;
+        struct eth_addr tha;
+        uint8_t opcode;
+    } arp;
+
+    struct {
         ovs_be32 ipv4_src;
         ovs_be32 ipv4_dst;
         uint8_t rewrite_ttl;

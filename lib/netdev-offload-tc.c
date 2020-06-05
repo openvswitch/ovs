@@ -589,6 +589,14 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         match->flow.mpls_lse[0] = key->mpls_lse & mask->mpls_lse;
         match->wc.masks.mpls_lse[0] = mask->mpls_lse;
         match_set_dl_type(match, key->encap_eth_type[0]);
+    } else if (key->eth_type == htons(ETH_TYPE_ARP)) {
+        match_set_arp_sha_masked(match, key->arp.sha, mask->arp.sha);
+        match_set_arp_tha_masked(match, key->arp.tha, mask->arp.tha);
+        match_set_arp_spa_masked(match, key->arp.spa, mask->arp.spa);
+        match_set_arp_tpa_masked(match, key->arp.tpa, mask->arp.tpa);
+        match_set_arp_opcode_masked(match, key->arp.opcode,
+                                    mask->arp.opcode);
+        match_set_dl_type(match, key->eth_type);
     } else {
         match_set_dl_type(match, key->eth_type);
     }
@@ -1557,6 +1565,25 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     memset(&mask->dl_src, 0, sizeof mask->dl_src);
     mask->dl_type = 0;
     mask->in_port.odp_port = 0;
+
+    if (key->dl_type == htons(ETH_P_ARP)) {
+            flower.key.arp.spa = key->nw_src;
+            flower.key.arp.tpa = key->nw_dst;
+            flower.key.arp.sha = key->arp_sha;
+            flower.key.arp.tha = key->arp_tha;
+            flower.key.arp.opcode = key->nw_proto;
+            flower.mask.arp.spa = mask->nw_src;
+            flower.mask.arp.tpa = mask->nw_dst;
+            flower.mask.arp.sha = mask->arp_sha;
+            flower.mask.arp.tha = mask->arp_tha;
+            flower.mask.arp.opcode = mask->nw_proto;
+
+            mask->nw_src = 0;
+            mask->nw_dst = 0;
+            mask->nw_proto = 0;
+            memset(&mask->arp_sha, 0, sizeof mask->arp_sha);
+            memset(&mask->arp_tha, 0, sizeof mask->arp_tha);
+    }
 
     if (is_ip_any(key)) {
         flower.key.ip_proto = key->nw_proto;

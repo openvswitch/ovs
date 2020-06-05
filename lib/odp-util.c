@@ -7993,7 +7993,8 @@ get_arp_key(const struct flow *flow, struct ovs_key_arp *arp)
 
     arp->arp_sip = flow->nw_src;
     arp->arp_tip = flow->nw_dst;
-    arp->arp_op = htons(flow->nw_proto);
+    arp->arp_op = flow->nw_proto == UINT8_MAX ?
+                  OVS_BE16_MAX : htons(flow->nw_proto);
     arp->arp_sha = flow->arp_sha;
     arp->arp_tha = flow->arp_tha;
 }

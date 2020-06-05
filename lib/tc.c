@@ -318,6 +318,24 @@ static const struct nl_policy tca_flower_policy[] = {
                                       .min_len = ETH_ALEN,
                                       .optional = true, },
     [TCA_FLOWER_KEY_ETH_TYPE] = { .type = NL_A_U16, .optional = false, },
+    [TCA_FLOWER_KEY_ARP_SIP] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_ARP_TIP] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_ARP_SHA] = { .type = NL_A_UNSPEC,
+                                 .min_len = ETH_ALEN,
+                                 .optional = true, },
+    [TCA_FLOWER_KEY_ARP_THA] = { .type = NL_A_UNSPEC,
+                                 .min_len = ETH_ALEN,
+                                 .optional = true, },
+    [TCA_FLOWER_KEY_ARP_OP] = { .type = NL_A_U8, .optional = true, },
+    [TCA_FLOWER_KEY_ARP_SIP_MASK] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_ARP_TIP_MASK] = { .type = NL_A_U32, .optional = true, },
+    [TCA_FLOWER_KEY_ARP_SHA_MASK] = { .type = NL_A_UNSPEC,
+                                      .min_len = ETH_ALEN,
+                                      .optional = true, },
+    [TCA_FLOWER_KEY_ARP_THA_MASK] = { .type = NL_A_UNSPEC,
+                                      .min_len = ETH_ALEN,
+                                      .optional = true, },
+    [TCA_FLOWER_KEY_ARP_OP_MASK] = { .type = NL_A_U8, .optional = true, },
     [TCA_FLOWER_FLAGS] = { .type = NL_A_U32, .optional = false, },
     [TCA_FLOWER_ACT] = { .type = NL_A_NESTED, .optional = false, },
     [TCA_FLOWER_KEY_IP_PROTO] = { .type = NL_A_U8, .optional = true, },
@@ -426,6 +444,45 @@ static const struct nl_policy tca_flower_terse_policy[] = {
     [TCA_FLOWER_FLAGS] = { .type = NL_A_U32, .optional = false, },
     [TCA_FLOWER_ACT] = { .type = NL_A_NESTED, .optional = false, },
 };
+
+static void
+nl_parse_flower_arp(struct nlattr **attrs, struct tc_flower *flower)
+{
+    const struct eth_addr *eth;
+
+    if (attrs[TCA_FLOWER_KEY_ARP_SIP_MASK]) {
+        flower->key.arp.spa =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ARP_SIP]);
+        flower->mask.arp.spa =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ARP_SIP_MASK]);
+    }
+    if (attrs[TCA_FLOWER_KEY_ARP_TIP_MASK]) {
+        flower->key.arp.tpa =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ARP_TIP]);
+        flower->mask.arp.tpa =
+            nl_attr_get_be32(attrs[TCA_FLOWER_KEY_ARP_TIP_MASK]);
+    }
+    if (attrs[TCA_FLOWER_KEY_ARP_SHA_MASK]) {
+        eth = nl_attr_get_unspec(attrs[TCA_FLOWER_KEY_ARP_SHA], ETH_ALEN);
+        memcpy(&flower->key.arp.sha, eth, sizeof flower->key.arp.sha);
+
+        eth = nl_attr_get_unspec(attrs[TCA_FLOWER_KEY_ARP_SHA_MASK], ETH_ALEN);
+        memcpy(&flower->mask.arp.sha, eth, sizeof flower->mask.arp.sha);
+    }
+    if (attrs[TCA_FLOWER_KEY_ARP_THA_MASK]) {
+        eth = nl_attr_get_unspec(attrs[TCA_FLOWER_KEY_ARP_THA], ETH_ALEN);
+        memcpy(&flower->key.arp.tha, eth, sizeof flower->key.arp.tha);
+
+        eth = nl_attr_get_unspec(attrs[TCA_FLOWER_KEY_ARP_THA_MASK], ETH_ALEN);
+        memcpy(&flower->mask.arp.tha, eth, sizeof flower->mask.arp.tha);
+    }
+    if (attrs[TCA_FLOWER_KEY_ARP_OP_MASK]) {
+        flower->key.arp.opcode =
+            nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ARP_OP]);
+        flower->mask.arp.opcode =
+            nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ARP_OP_MASK]);
+    }
+}
 
 static void
 nl_parse_flower_eth(struct nlattr **attrs, struct tc_flower *flower)
@@ -1760,6 +1817,7 @@ nl_parse_flower_options(struct nlattr *nl_options, struct tc_flower *flower,
     }
 
     nl_parse_flower_eth(attrs, flower);
+    nl_parse_flower_arp(attrs, flower);
     nl_parse_flower_mpls(attrs, flower);
     nl_parse_flower_vlan(attrs, flower);
     nl_parse_flower_ip(attrs, flower);
@@ -2744,6 +2802,14 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
     FLOWER_PUT_MASKED_VALUE(dst_mac, TCA_FLOWER_KEY_ETH_DST);
     FLOWER_PUT_MASKED_VALUE(src_mac, TCA_FLOWER_KEY_ETH_SRC);
+
+    if (host_eth_type == ETH_P_ARP) {
+        FLOWER_PUT_MASKED_VALUE(arp.spa, TCA_FLOWER_KEY_ARP_SIP);
+        FLOWER_PUT_MASKED_VALUE(arp.tpa, TCA_FLOWER_KEY_ARP_TIP);
+        FLOWER_PUT_MASKED_VALUE(arp.sha, TCA_FLOWER_KEY_ARP_SHA);
+        FLOWER_PUT_MASKED_VALUE(arp.tha, TCA_FLOWER_KEY_ARP_THA);
+        FLOWER_PUT_MASKED_VALUE(arp.opcode, TCA_FLOWER_KEY_ARP_OP);
+    }
 
     if (host_eth_type == ETH_P_IP || host_eth_type == ETH_P_IPV6) {
         FLOWER_PUT_MASKED_VALUE(ip_ttl, TCA_FLOWER_KEY_IP_TTL);
