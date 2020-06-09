@@ -146,10 +146,19 @@ Make sure the libbpf.so is installed correctly::
   ldconfig
   ldconfig -p | grep libbpf
 
+.. note::
+   Check /etc/ld.so.conf if libbpf is installed but can not be found by
+   ldconfig.
+
 Third, ensure the standard OVS requirements are installed and
 bootstrap/configure the package::
 
   ./boot.sh && ./configure --enable-afxdp
+
+.. note::
+   If you encounter "WARNING: bpf/libbpf.h: present but cannot be compiled",
+   check the Linux headers are in line with libbpf. For example, in Ubuntu,
+   check the installed linux-headers* and linux-libc-dev* dpkg.
 
 Finally, build and install OVS::
 
