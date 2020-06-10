@@ -113,6 +113,8 @@
  *    OVS_REQUIRES         OVS_REQ_RDLOCK       OVS_REQ_WRLOCK
  *    OVS_EXCLUDED         OVS_EXCLUDED         OVS_EXCLUDED
  */
+
+/* Please keep OVS_CTAGS_IDENTIFIERS up-to-date in acinclude.m4. */
 #define OVS_LOCKABLE __attribute__((lockable))
 #define OVS_REQ_RDLOCK(...) __attribute__((shared_locks_required(__VA_ARGS__)))
 #define OVS_ACQ_RDLOCK(...) __attribute__((shared_lock_function(__VA_ARGS__)))
