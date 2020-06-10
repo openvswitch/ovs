@@ -1332,11 +1332,11 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
 
 dnl OVS_CTAGS_IDENTIFIERS
 dnl
-dnl ctags ignores symbols with extras identifiers. This builds a list of
-dnl specially handled identifiers to be ignored.
+dnl ctags ignores symbols with extras identifiers. This is a list of
+dnl specially handled identifiers to be ignored. [ctags(1) -I <list>].
 AC_DEFUN([OVS_CTAGS_IDENTIFIERS],
     AC_SUBST([OVS_CTAGS_IDENTIFIERS_LIST],
-           [`printf %s '-I "'; sed -n 's/^#define \(OVS_[A-Z_]\+\)(\.\.\.)$/\1+/p' ${srcdir}/include/openvswitch/compiler.h  | tr \\\n ' ' ; printf '"'`] ))
+           ["OVS_LOCKABLE OVS_NO_THREAD_SAFETY_ANALYSIS OVS_REQ_RDLOCK+ OVS_ACQ_RDLOCK+ OVS_REQ_WRLOCK+ OVS_ACQ_WRLOCK+ OVS_REQUIRES+ OVS_ACQUIRES+ OVS_TRY_WRLOCK+ OVS_TRY_RDLOCK+ OVS_TRY_LOCK+ OVS_GUARDED_BY+ OVS_EXCLUDED+ OVS_RELEASES+ OVS_ACQ_BEFORE+ OVS_ACQ_AFTER+"]))
 
 dnl OVS_PTHREAD_SET_NAME
 dnl
