@@ -761,10 +761,11 @@ odp_execute_check_pkt_len(void *dp, struct dp_packet *packet, bool steal,
 
     const struct nlattr *a;
     struct dp_packet_batch pb;
+    uint32_t size = dp_packet_get_send_len(packet)
+                    - dp_packet_l2_pad_size(packet);
 
     a = attrs[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN];
-    bool is_greater = dp_packet_size(packet) > nl_attr_get_u16(a);
-    if (is_greater) {
+    if (size > nl_attr_get_u16(a)) {
         a = attrs[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
     } else {
         a = attrs[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL];
