@@ -691,6 +691,7 @@ dpif_netlink_set_features(struct dpif *dpif_, uint32_t new_features)
 
     dpif_netlink_dp_init(&request);
     request.cmd = OVS_DP_CMD_SET;
+    request.name = dpif_->base_name;
     request.dp_ifindex = dpif->dp_ifindex;
     request.user_features = dpif->user_features | new_features;
 
