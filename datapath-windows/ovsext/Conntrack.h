@@ -56,6 +56,7 @@ typedef enum CT_UPDATE_RES {
     CT_UPDATE_INVALID,
     CT_UPDATE_VALID,
     CT_UPDATE_NEW,
+    CT_UPDATE_VALID_NEW,
 } CT_UPDATE_RES;
 
 /* Metadata mark for masked write to conntrack mark */
