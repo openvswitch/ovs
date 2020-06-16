@@ -105,9 +105,6 @@ void match_set_tun_flags(struct match *match, uint16_t flags);
 void match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask);
 void match_set_tun_tp_dst(struct match *match, ovs_be16 tp_dst);
 void match_set_tun_tp_dst_masked(struct match *match, ovs_be16 port, ovs_be16 mask);
-void match_set_tun_tp_src(struct match *match, ovs_be16 tp_src);
-void match_set_tun_tp_src_masked(struct match *match,
-                                 ovs_be16 port, ovs_be16 mask);
 void match_set_tun_gbp_id_masked(struct match *match, ovs_be16 gbp_id, ovs_be16 mask);
 void match_set_tun_gbp_id(struct match *match, ovs_be16 gbp_id);
 void match_set_tun_gbp_flags_masked(struct match *match, uint8_t flags, uint8_t mask);
