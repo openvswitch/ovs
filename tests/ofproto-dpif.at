@@ -9771,7 +9771,7 @@ dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
 dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
 dnl get the ACL lookup using the conntrack tuple and the inverted direction.
 dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
-dnl of the master connection, as storted in ct_mark.
+dnl of the parent connection, as storted in ct_mark.
 dnl
 dnl Incoming non-related packet in the original direction (ACL IN)
 table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
@@ -9782,7 +9782,7 @@ table=1 reg3=2, ip, ct_state=-rel-rpl+trk-inv action=set_field:2->reg0,resubmit(
 dnl Outgoing non-related reply packet (CT ACL IN)
 table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
 dnl
-dnl Related packet (CT ACL in the direction of the master connection.)
+dnl Related packet (CT ACL in the direction of the parent connection.)
 table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_MARK[[]]->NXM_NX_REG0[[]],resubmit(,3,ct),goto_table:4
 dnl Drop everything else.
 table=1 priority=0, action=drop
@@ -9815,7 +9815,7 @@ table=5 reg2=0 priority=1000 action=drop
 dnl Commit new non-related IP connections.
 table=5 priority=10 reg2=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit new related connections in either direction, which inherit the mark
-dnl (the direction of the original direction master tuple) from the master
+dnl (the direction of the original direction parent tuple) from the parent
 dnl connection.
 table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Forward everything else, including stateless accepts.

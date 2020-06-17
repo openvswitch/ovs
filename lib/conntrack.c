@@ -144,7 +144,7 @@ detect_ftp_ctl_type(const struct conn_lookup_ctx *ctx,
                     struct dp_packet *pkt);
 
 static void
-expectation_clean(struct conntrack *ct, const struct conn_key *master_key);
+expectation_clean(struct conntrack *ct, const struct conn_key *parent_key);
 
 static struct ct_l4_proto *l4_protos[] = {
     [IPPROTO_TCP] = &ct_proto_tcp,
@@ -585,14 +585,14 @@ write_ct_md(struct dp_packet *pkt, uint16_t zone, const struct conn *conn,
     /* Use the original direction tuple if we have it. */
     if (conn) {
         if (conn->alg_related) {
-            key = &conn->master_key;
+            key = &conn->parent_key;
         } else {
             key = &conn->key;
         }
     } else if (alg_exp) {
-        pkt->md.ct_mark = alg_exp->master_mark;
-        pkt->md.ct_label = alg_exp->master_label;
-        key = &alg_exp->master_key;
+        pkt->md.ct_mark = alg_exp->parent_mark;
+        pkt->md.ct_label = alg_exp->parent_label;
+        key = &alg_exp->parent_key;
     }
 
     pkt->md.ct_orig_tuple_ipv6 = false;
@@ -1002,9 +1002,9 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
 
         if (alg_exp) {
             nc->alg_related = true;
-            nc->mark = alg_exp->master_mark;
-            nc->label = alg_exp->master_label;
-            nc->master_key = alg_exp->master_key;
+            nc->mark = alg_exp->parent_mark;
+            nc->label = alg_exp->parent_label;
+            nc->parent_key = alg_exp->parent_key;
         }
 
         if (nat_action_info) {
@@ -1312,7 +1312,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             if (!conn) {
                 pkt->md.ct_state |= CS_INVALID;
                 write_ct_md(pkt, zone, NULL, NULL, NULL);
-                char *log_msg = xasprintf("Missing master conn %p", rev_conn);
+                char *log_msg = xasprintf("Missing parent conn %p", rev_conn);
                 ct_print_conn_info(rev_conn, log_msg, VLL_INFO, true, true);
                 free(log_msg);
                 return;
@@ -2677,16 +2677,16 @@ expectation_remove(struct hmap *alg_expectations,
 /* This function must be called with the ct->resources read lock taken. */
 static struct alg_exp_node *
 expectation_ref_lookup_unique(const struct hindex *alg_expectation_refs,
-                              const struct conn_key *master_key,
+                              const struct conn_key *parent_key,
                               const struct conn_key *alg_exp_key,
                               uint32_t basis)
 {
     struct alg_exp_node *alg_exp_node;
 
     HINDEX_FOR_EACH_WITH_HASH (alg_exp_node, node_ref,
-                               conn_key_hash(master_key, basis),
+                               conn_key_hash(parent_key, basis),
                                alg_expectation_refs) {
-        if (!conn_key_cmp(&alg_exp_node->master_key, master_key) &&
+        if (!conn_key_cmp(&alg_exp_node->parent_key, parent_key) &&
             !conn_key_cmp(&alg_exp_node->key, alg_exp_key)) {
             return alg_exp_node;
         }
@@ -2701,23 +2701,23 @@ expectation_ref_create(struct hindex *alg_expectation_refs,
                        uint32_t basis)
 {
     if (!expectation_ref_lookup_unique(alg_expectation_refs,
-                                       &alg_exp_node->master_key,
+                                       &alg_exp_node->parent_key,
                                        &alg_exp_node->key, basis)) {
         hindex_insert(alg_expectation_refs, &alg_exp_node->node_ref,
-                      conn_key_hash(&alg_exp_node->master_key, basis));
+                      conn_key_hash(&alg_exp_node->parent_key, basis));
     }
 }
 
 static void
-expectation_clean(struct conntrack *ct, const struct conn_key *master_key)
+expectation_clean(struct conntrack *ct, const struct conn_key *parent_key)
 {
     ovs_rwlock_wrlock(&ct->resources_lock);
 
     struct alg_exp_node *node, *next;
     HINDEX_FOR_EACH_WITH_HASH_SAFE (node, next, node_ref,
-                                    conn_key_hash(master_key, ct->hash_basis),
+                                    conn_key_hash(parent_key, ct->hash_basis),
                                     &ct->alg_expectation_refs) {
-        if (!conn_key_cmp(&node->master_key, master_key)) {
+        if (!conn_key_cmp(&node->parent_key, parent_key)) {
             expectation_remove(&ct->alg_expectations, &node->key,
                                ct->hash_basis);
             hindex_remove(&ct->alg_expectation_refs, &node->node_ref);
@@ -2730,7 +2730,7 @@ expectation_clean(struct conntrack *ct, const struct conn_key *master_key)
 
 static void
 expectation_create(struct conntrack *ct, ovs_be16 dst_port,
-                   const struct conn *master_conn, bool reply, bool src_ip_wc,
+                   const struct conn *parent_conn, bool reply, bool src_ip_wc,
                    bool skip_nat)
 {
     union ct_addr src_addr;
@@ -2739,47 +2739,47 @@ expectation_create(struct conntrack *ct, ovs_be16 dst_port,
     struct alg_exp_node *alg_exp_node = xzalloc(sizeof *alg_exp_node);
 
     if (reply) {
-        src_addr = master_conn->key.src.addr;
-        dst_addr = master_conn->key.dst.addr;
+        src_addr = parent_conn->key.src.addr;
+        dst_addr = parent_conn->key.dst.addr;
         alg_exp_node->nat_rpl_dst = true;
         if (skip_nat) {
             alg_nat_repl_addr = dst_addr;
-        } else if (master_conn->nat_info &&
-                   master_conn->nat_info->nat_action & NAT_ACTION_DST) {
-            alg_nat_repl_addr = master_conn->rev_key.src.addr;
+        } else if (parent_conn->nat_info &&
+                   parent_conn->nat_info->nat_action & NAT_ACTION_DST) {
+            alg_nat_repl_addr = parent_conn->rev_key.src.addr;
             alg_exp_node->nat_rpl_dst = false;
         } else {
-            alg_nat_repl_addr = master_conn->rev_key.dst.addr;
+            alg_nat_repl_addr = parent_conn->rev_key.dst.addr;
         }
     } else {
-        src_addr = master_conn->rev_key.src.addr;
-        dst_addr = master_conn->rev_key.dst.addr;
+        src_addr = parent_conn->rev_key.src.addr;
+        dst_addr = parent_conn->rev_key.dst.addr;
         alg_exp_node->nat_rpl_dst = false;
         if (skip_nat) {
             alg_nat_repl_addr = src_addr;
-        } else if (master_conn->nat_info &&
-                   master_conn->nat_info->nat_action & NAT_ACTION_DST) {
-            alg_nat_repl_addr = master_conn->key.dst.addr;
+        } else if (parent_conn->nat_info &&
+                   parent_conn->nat_info->nat_action & NAT_ACTION_DST) {
+            alg_nat_repl_addr = parent_conn->key.dst.addr;
             alg_exp_node->nat_rpl_dst = true;
         } else {
-            alg_nat_repl_addr = master_conn->key.src.addr;
+            alg_nat_repl_addr = parent_conn->key.src.addr;
         }
     }
     if (src_ip_wc) {
         memset(&src_addr, 0, sizeof src_addr);
     }
 
-    alg_exp_node->key.dl_type = master_conn->key.dl_type;
-    alg_exp_node->key.nw_proto = master_conn->key.nw_proto;
-    alg_exp_node->key.zone = master_conn->key.zone;
+    alg_exp_node->key.dl_type = parent_conn->key.dl_type;
+    alg_exp_node->key.nw_proto = parent_conn->key.nw_proto;
+    alg_exp_node->key.zone = parent_conn->key.zone;
     alg_exp_node->key.src.addr = src_addr;
     alg_exp_node->key.dst.addr = dst_addr;
     alg_exp_node->key.src.port = ALG_WC_SRC_PORT;
     alg_exp_node->key.dst.port = dst_port;
-    alg_exp_node->master_mark = master_conn->mark;
-    alg_exp_node->master_label = master_conn->label;
-    memcpy(&alg_exp_node->master_key, &master_conn->key,
-           sizeof alg_exp_node->master_key);
+    alg_exp_node->parent_mark = parent_conn->mark;
+    alg_exp_node->parent_label = parent_conn->label;
+    memcpy(&alg_exp_node->parent_key, &parent_conn->key,
+           sizeof alg_exp_node->parent_key);
     /* Take the write lock here because it is almost 100%
      * likely that the lookup will fail and
      * expectation_create() will be called below. */

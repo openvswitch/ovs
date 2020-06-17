@@ -237,7 +237,7 @@ nl_ct_flush(void)
     ofpbuf_uninit(&buf);
 
     /* Expectations are flushed automatically, because they do not
-     * have a master connection anymore */
+     * have a parent connection anymore */
 
     return err;
 }
@@ -344,7 +344,7 @@ nl_ct_flush_zone(uint16_t flush_zone)
     ofpbuf_uninit(&buf);
 
     /* Expectations are flushed automatically, because they do not
-     * have a master connection anymore */
+     * have a parent connection anymore */
     return 0;
 }
 #endif
@@ -1263,7 +1263,7 @@ nl_ct_attrs_to_ct_dpif_entry(struct ct_dpif_entry *entry,
         return false;
     }
     if (attrs[CTA_TUPLE_MASTER] &&
-        !nl_ct_parse_tuple(attrs[CTA_TUPLE_MASTER], &entry->tuple_master,
+        !nl_ct_parse_tuple(attrs[CTA_TUPLE_MASTER], &entry->tuple_parent,
                            nfgen_family)) {
         return false;
     }

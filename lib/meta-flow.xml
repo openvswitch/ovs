@@ -2794,7 +2794,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       connection), or be of different protocol (i.e., when an ICMP response
       is sent to an UDP packet).  In case of related connections, e.g., an
       FTP data connection, the original direction tuple contains the
-      original direction headers from the master connection, e.g., an FTP
+      original direction headers from the parent connection, e.g., an FTP
       control connection.
     </p>
 

@@ -177,7 +177,7 @@ struct ct_dpif_entry {
     /* Const members. */
     struct ct_dpif_tuple tuple_orig;
     struct ct_dpif_tuple tuple_reply;
-    struct ct_dpif_tuple tuple_master;
+    struct ct_dpif_tuple tuple_parent;
     struct ct_dpif_helper helper;
     uint32_t id;
     uint16_t zone;

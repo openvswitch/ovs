@@ -71,13 +71,13 @@ struct alg_exp_node {
     /* Key of data connection to be created. */
     struct conn_key key;
     /* Corresponding key of the control connection. */
-    struct conn_key master_key;
+    struct conn_key parent_key;
     /* The NAT replacement address to be used by the data connection. */
     union ct_addr alg_nat_repl_addr;
-    /* The data connection inherits the master control
+    /* The data connection inherits the parent control
      * connection label and mark. */
-    ovs_u128 master_label;
-    uint32_t master_mark;
+    ovs_u128 parent_label;
+    uint32_t parent_mark;
     /* True if for NAT application, the alg replaces the dest address;
      * otherwise, the source address is replaced.  */
     bool nat_rpl_dst;
@@ -92,7 +92,7 @@ struct conn {
     /* Immutable data. */
     struct conn_key key;
     struct conn_key rev_key;
-    struct conn_key master_key; /* Only used for orig_tuple support. */
+    struct conn_key parent_key; /* Only used for orig_tuple support. */
     struct ovs_list exp_node;
     struct cmap_node cm_node;
     struct nat_action_info_t *nat_info;
