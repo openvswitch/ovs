@@ -1391,7 +1391,7 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
 {
     struct server_config *config = config_;
 
-    char *err = set_blacklist_tables(argv[1], true);
+    char *err = set_excluded_tables(argv[1], true);
     if (!err) {
         free(*config->sync_exclude);
         *config->sync_exclude = xstrdup(argv[1]);
@@ -1403,7 +1403,7 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
                                    config->all_dbs, server_uuid,
                                    *config->replication_probe_interval);
         }
-        err = set_blacklist_tables(argv[1], false);
+        err = set_excluded_tables(argv[1], false);
     }
     unixctl_command_reply(conn, err);
     free(err);
@@ -1415,7 +1415,7 @@ ovsdb_server_get_sync_exclude_tables(struct unixctl_conn *conn,
                                      const char *argv[] OVS_UNUSED,
                                      void *arg_ OVS_UNUSED)
 {
-    char *reply = get_blacklist_tables();
+    char *reply = get_excluded_tables();
     unixctl_command_reply(conn, reply);
     free(reply);
 }
@@ -1853,7 +1853,7 @@ parse_options(int argc, char *argv[],
             break;
 
         case OPT_SYNC_EXCLUDE: {
-            char *err = set_blacklist_tables(optarg, false);
+            char *err = set_excluded_tables(optarg, false);
             if (err) {
                 ovs_fatal(0, "%s", err);
             }

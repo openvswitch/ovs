@@ -79,9 +79,9 @@ struct registered_dpif_class {
     int refcount;
 };
 static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
-static struct sset dpif_blacklist = SSET_INITIALIZER(&dpif_blacklist);
+static struct sset dpif_disallowed = SSET_INITIALIZER(&dpif_disallowed);
 
-/* Protects 'dpif_classes', including the refcount, and 'dpif_blacklist'. */
+/* Protects 'dpif_classes', including the refcount, and 'dpif_disallowed'. */
 static struct ovs_mutex dpif_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Rate limit for individual messages going to or from the datapath, output at
@@ -134,8 +134,8 @@ dp_register_provider__(const struct dpif_class *new_class)
     struct registered_dpif_class *registered_class;
     int error;
 
-    if (sset_contains(&dpif_blacklist, new_class->type)) {
-        VLOG_DBG("attempted to register blacklisted provider: %s",
+    if (sset_contains(&dpif_disallowed, new_class->type)) {
+        VLOG_DBG("attempted to register disallowed provider: %s",
                  new_class->type);
         return EINVAL;
     }
@@ -219,13 +219,13 @@ dp_unregister_provider(const char *type)
     return error;
 }
 
-/* Blacklists a provider.  Causes future calls of dp_register_provider() with
+/* Disallows a provider.  Causes future calls of dp_register_provider() with
  * a dpif_class which implements 'type' to fail. */
 void
-dp_blacklist_provider(const char *type)
+dp_disallow_provider(const char *type)
 {
     ovs_mutex_lock(&dpif_mutex);
-    sset_add(&dpif_blacklist, type);
+    sset_add(&dpif_disallowed, type);
     ovs_mutex_unlock(&dpif_mutex);
 }
 

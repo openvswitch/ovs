@@ -120,4 +120,4 @@ openvswitch_headers += \
 	linux/compat/include/linux/netfilter.h \
 	linux/compat/include/linux/overflow.h \
 	linux/compat/include/linux/rbtree.h
-EXTRA_DIST += linux/compat/build-aux/export-check-whitelist
+EXTRA_DIST += linux/compat/build-aux/export-check-allow-list

@@ -68,11 +68,11 @@ static struct ovsdb_error *execute_update(struct ovsdb_txn *txn,
                                           struct json *new);
 
 /* Maps from db name to sset of table names. */
-static struct shash blacklist_tables = SHASH_INITIALIZER(&blacklist_tables);
+static struct shash excluded_tables = SHASH_INITIALIZER(&excluded_tables);
 
-static void blacklist_tables_clear(void);
-static void blacklist_tables_add(const char *database, const char *table);
-static bool blacklist_tables_find(const char *database, const char* table);
+static void excluded_tables_clear(void);
+static void excluded_tables_add(const char *database, const char *table);
+static bool excluded_tables_find(const char *database, const char *table);
 
 
 /* Keep track of request IDs of all outstanding OVSDB requests. */
@@ -131,7 +131,7 @@ replication_init(const char *sync_from_, const char *exclude_tables,
     sync_from = xstrdup(sync_from_);
     /* Caller should have verified that the 'exclude_tables' is
      * parseable. An error here is unexpected. */
-    ovs_assert(!set_blacklist_tables(exclude_tables, false));
+    ovs_assert(!set_excluded_tables(exclude_tables, false));
 
     replication_dbs_destroy();
 
@@ -407,38 +407,38 @@ replication_wait(void)
     }
 }
 
-/* Parse 'blacklist' to rebuild 'blacklist_tables'.  If 'dryrun' is false, the
- * current black list tables will be wiped out, regardless of whether
- * 'blacklist' can be parsed.  If 'dryrun' is true, only parses 'blacklist' and
- * reports any errors, without modifying the blacklist.
+/* Parse 'excluded' to rebuild 'excluded_tables'.  If 'dryrun' is false, the
+ * current set of excluded tables will be wiped out, regardless of whether
+ * 'excluded' can be parsed.  If 'dryrun' is true, only parses 'excluded' and
+ * reports any errors, without modifying the list of exclusions.
  *
  * On error, returns the error string, which the caller is
  * responsible for freeing. Returns NULL otherwise. */
 char * OVS_WARN_UNUSED_RESULT
-set_blacklist_tables(const char *blacklist, bool dryrun)
+set_excluded_tables(const char *excluded, bool dryrun)
 {
     struct sset set = SSET_INITIALIZER(&set);
     char *err = NULL;
 
-    if (blacklist) {
+    if (excluded) {
         const char *longname;
 
         if (!dryrun) {
             /* Can only add to an empty shash. */
-            blacklist_tables_clear();
+            excluded_tables_clear();
         }
 
-        sset_from_delimited_string(&set, blacklist, " ,");
+        sset_from_delimited_string(&set, excluded, " ,");
         SSET_FOR_EACH (longname, &set) {
             char *database = xstrdup(longname), *table = NULL;
             strtok_r(database, ":", &table);
             if (table && !dryrun) {
-                blacklist_tables_add(database, table);
+                excluded_tables_add(database, table);
             }
 
             free(database);
             if (!table) {
-                err = xasprintf("Can't parse black list table: %s", longname);
+                err = xasprintf("Can't parse excluded table: %s", longname);
                 goto done;
             }
         }
@@ -447,19 +447,19 @@ set_blacklist_tables(const char *blacklist, bool dryrun)
 done:
     sset_destroy(&set);
     if (err && !dryrun) {
-        /* On error, destroy the partially built 'blacklist_tables'. */
-        blacklist_tables_clear();
+        /* On error, destroy the partially built 'excluded_tables'. */
+        excluded_tables_clear();
     }
     return err;
 }
 
 char * OVS_WARN_UNUSED_RESULT
-get_blacklist_tables(void)
+get_excluded_tables(void)
 {
     struct shash_node *node;
     struct sset set = SSET_INITIALIZER(&set);
 
-    SHASH_FOR_EACH (node, &blacklist_tables) {
+    SHASH_FOR_EACH (node, &excluded_tables) {
         const char *database = node->name;
         const char *table;
         struct sset *tables = node->data;
@@ -489,35 +489,35 @@ get_blacklist_tables(void)
 }
 
 static void
-blacklist_tables_clear(void)
+excluded_tables_clear(void)
 {
     struct shash_node *node;
-    SHASH_FOR_EACH (node, &blacklist_tables) {
+    SHASH_FOR_EACH (node, &excluded_tables) {
         struct sset *tables = node->data;
         sset_destroy(tables);
     }
 
-    shash_clear_free_data(&blacklist_tables);
+    shash_clear_free_data(&excluded_tables);
 }
 
 static void
-blacklist_tables_add(const char *database, const char *table)
+excluded_tables_add(const char *database, const char *table)
 {
-    struct sset *tables = shash_find_data(&blacklist_tables, database);
+    struct sset *tables = shash_find_data(&excluded_tables, database);
 
     if (!tables) {
         tables = xmalloc(sizeof *tables);
         sset_init(tables);
-        shash_add(&blacklist_tables, database, tables);
+        shash_add(&excluded_tables, database, tables);
     }
 
     sset_add(tables, table);
 }
 
 static bool
-blacklist_tables_find(const char *database, const char *table)
+excluded_tables_find(const char *database, const char *table)
 {
-    struct sset *tables = shash_find_data(&blacklist_tables, database);
+    struct sset *tables = shash_find_data(&excluded_tables, database);
     return tables && sset_contains(tables, table);
 }
 
@@ -531,8 +531,8 @@ disconnect_active_server(void)
 void
 replication_destroy(void)
 {
-    blacklist_tables_clear();
-    shash_destroy(&blacklist_tables);
+    excluded_tables_clear();
+    shash_destroy(&excluded_tables);
 
     if (sync_from) {
         free(sync_from);
@@ -558,8 +558,8 @@ reset_database(struct ovsdb *db)
     struct shash_node *table_node;
 
     SHASH_FOR_EACH (table_node, &db->tables) {
-        /* Delete all rows if the table is not blacklisted. */
-        if (!blacklist_tables_find(db->schema->name, table_node->name)) {
+        /* Delete all rows if the table is not excluded. */
+        if (!excluded_tables_find(db->schema->name, table_node->name)) {
             struct ovsdb_table *table = table_node->data;
             struct ovsdb_row *row, *next;
             HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
@@ -572,7 +572,7 @@ reset_database(struct ovsdb *db)
 }
 
 /* Create a monitor request for 'db'. The monitor request will include
- * any tables from 'blacklisted_tables'
+ * any tables from 'excluded_tables'
  *
  * Caller is responsible for disposing 'request'.
  */
@@ -590,8 +590,8 @@ create_monitor_request(struct ovsdb_schema *schema)
     for (int j = 0; j < n; j++) {
         struct ovsdb_table_schema *table = nodes[j]->data;
 
-        /* Monitor all tables not blacklisted. */
-        if (!blacklist_tables_find(db_name, table->name)) {
+        /* Monitor all tables not excluded. */
+        if (!excluded_tables_find(db_name, table->name)) {
             add_monitored_table(table, monitor_request);
         }
     }
@@ -914,10 +914,10 @@ replication_status(void)
             }
             ds_chomp(&ds, ',');
 
-            if (!shash_is_empty(&blacklist_tables)) {
+            if (!shash_is_empty(&excluded_tables)) {
                 ds_put_char(&ds, '\n');
                 ds_put_cstr(&ds, "exclude: ");
-                ds_put_and_free_cstr(&ds, get_blacklist_tables());
+                ds_put_and_free_cstr(&ds, get_excluded_tables());
             }
             break;
         }

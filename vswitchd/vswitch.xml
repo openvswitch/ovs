@@ -1072,7 +1072,7 @@
               Drop all unencrypted tunneled packets in which the
               least-significant bit of <code>skb_mark</code> is 0.  This would
               be a useful policy if no unencrypted tunneled traffic should exit
-              the system without being specially whitelisted by setting
+              the system without being specially permitted by setting
               <code>skb_mark</code> to 1.
             </dd>
 

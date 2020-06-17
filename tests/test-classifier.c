@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-/* "White box" tests for classifier.
+/* Tests for classifier, written with knowledge of and to advantage of the
+ * classifier's internal structure.
  *
  * With very few exceptions, these tests obtain complete coverage of every
  * basic block and every branch in the classifier implementation, e.g. a clean

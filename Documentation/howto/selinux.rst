@@ -67,8 +67,8 @@ differently than SELinux.
 SELinux and Open vSwitch are moving targets.  What this means is that, if you
 solely rely on your Linux distribution's SELinux policy, then this policy might
 not have correctly anticipated that a newer Open vSwitch version needs extra
-white list rules.  However, if you solely rely on SELinux policy that ships
-with Open vSwitch, then Open vSwitch developers might not have correctly
+rules to allow behavior.  However, if you solely rely on SELinux policy that
+ships with Open vSwitch, then Open vSwitch developers might not have correctly
 anticipated the feature set that your SELinux implementation supports.
 
 Installation
@@ -136,8 +136,8 @@ Then verify that this module was indeed loaded::
     openvswitch          1.1.1
 
 If you still see Permission denied errors, then take a look into
-``selinux/openvswitch.te.in`` file in the OVS source tree and try to add white
-list rules.  This is really simple, just run SELinux audit2allow tool::
+``selinux/openvswitch.te.in`` file in the OVS source tree and try to add allow
+rules.  This is really simple, just run SELinux audit2allow tool::
 
     $ grep "openvswitch_t" /var/log/audit/audit.log | audit2allow -M ovslocal
 

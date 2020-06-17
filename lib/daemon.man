@@ -58,7 +58,7 @@ This option has no effect when \fB\-\-detach\fR is not specified.
 .TP
 \fB\-\-no\-self\-confinement\fR
 By default daemon will try to self-confine itself to work with
-files under well-know, at build-time whitelisted directories.  It
+files under well-known directories determined during build.  It
 is better to stick with this default behavior and not to use this
 flag unless some other Access Control is used to confine daemon.
 Note that in contrast to other access control implementations that

@@ -91,7 +91,7 @@ When sending a monitor request the standby server is doing the following:
 4. For each database with the same schema in both the active and standby
    servers: construct and send a monitor request message specifying the tables
    that will be monitored (i.e all the tables on the database except the ones
-   blacklisted [*]).
+   explicitly excluded [*]).
 
 5. Set the standby database to the current state of the active database.
 
@@ -100,10 +100,9 @@ receive notifications of changes occurring to the tables specified in the
 request. The process of handling this notifications is detailed in the next
 section.
 
-[*] A set of tables that will be excluded from replication can be configure as
-a blacklist of tables via the command line option
-``--sync-exclude-tables=db:table[,db:table]...``, where db corresponds to the
-database where the table resides.
+[*] A set of tables that will be excluded from replication can be configured
+via the command line option ``--sync-exclude-tables=db:table[,db:table]...``,
+where db corresponds to the database where the table resides.
 
 Replication Process
 -------------------

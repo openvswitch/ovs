@@ -100,12 +100,12 @@ const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
  * The client may choose any subset of the columns and tables to replicate,
  * specifying it one of two ways:
  *
- *   - As a blacklist (adding the columns or tables to replicate).  To do so,
+ *   - As a deny list (adding the columns or tables to replicate).  To do so,
  *     the client passes false as 'monitor_everything_by_default' to
  *     ovsdb_idl_create() and then calls ovsdb_idl_add_column() and
  *     ovsdb_idl_add_table() for the desired columns and, if necessary, tables.
  *
- *   - As a whitelist (replicating all columns and tables except those
+ *   - As an allow list (replicating all columns and tables except those
  *     explicitly removed).  To do so, the client passes true as
  *     'monitor_everything_by_default' to ovsdb_idl_create() and then calls
  *     ovsdb_idl_omit() to remove columns.

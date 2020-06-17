@@ -82,7 +82,7 @@
   <dt><code>--no-self-confinement</code></dt>
   <dd>
     By default this daemon will try to self-confine itself to work with files
-    under well-known directories whitelisted at build time.  It is better to
+    under well-known directories determined at build time.  It is better to
     stick with this default behavior and not to use this flag unless some other
     Access Control is used to confine daemon.  Note that in contrast to other
     access control implementations that are typically enforced from

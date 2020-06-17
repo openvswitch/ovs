@@ -29,16 +29,16 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 
-# OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])
+# OVS_TRAFFIC_VSWITCHD_STOP([ALLOWLIST], [extra_cmds])
 #
 # Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
 # for messages with severity WARN or higher and signaling an error if any
-# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# is present.  The optional ALLOWLIST may contain shell-quoted "sed"
 # commands to delete any warnings that are actually expected, e.g.:
 #
 #   OVS_TRAFFIC_VSWITCHD_STOP(["/expected error/d"])
 #
-# 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
+# 'extra_cmds' are shell commands to be executed after OVS_VSWITCHD_STOP() is
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
 m4_define([OVS_TRAFFIC_VSWITCHD_STOP],

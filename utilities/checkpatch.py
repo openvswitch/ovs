@@ -190,13 +190,13 @@ skip_signoff_check = False
 # name, as they may have legitimate reasons to have longer lines.
 #
 # Python isn't checked as flake8 performs these checks during build.
-line_length_blacklist = re.compile(
+line_length_ignore_list = re.compile(
     r'\.(am|at|etc|in|m4|mk|patch|py)$|debian/rules')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
 # of files need lines with leading tabs.
-leading_whitespace_blacklist = re.compile(r'\.(mk|am|at)$|debian/rules')
+leading_whitespace_ignore_list = re.compile(r'\.(mk|am|at)$|debian/rules')
 
 
 def is_subtracted_line(line):
@@ -523,11 +523,11 @@ file_checks = [
 
 checks = [
     {'regex': None,
-     'match_name': lambda x: not line_length_blacklist.search(x),
+     'match_name': lambda x: not line_length_ignore_list.search(x),
      'check': lambda x: line_length_check(x)},
 
     {'regex': None,
-     'match_name': lambda x: not leading_whitespace_blacklist.search(x),
+     'match_name': lambda x: not leading_whitespace_ignore_list.search(x),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
