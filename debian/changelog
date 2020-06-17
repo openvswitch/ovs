@@ -388,7 +388,7 @@ openvswitch (2.4.0-1) unstable; urgency=low
      The implementation has been tested successfully against the Ixia Automated
      Network Validation Library (ANVL).
    - Stats are no longer updated on fake bond interface.
-   - Keep active bond slave selection across OVS restart.
+   - Keep active bond member selection across OVS restart.
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
      containers. If and when there is a native integration of Open vSwitch
      with Docker, the wrapper script will be retired.

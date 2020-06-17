@@ -41,8 +41,8 @@ struct rule;
  *
  * Recirculation is the use of freezing to allow a frame to re-enter the
  * datapath packet processing path to achieve more flexible packet processing,
- * such as modifying header fields after MPLS POP action and selecting a slave
- * port for bond ports.
+ * such as modifying header fields after MPLS POP action and selecting a
+ * member interface for bond ports.
  *
  *
  * Data path and user space interface

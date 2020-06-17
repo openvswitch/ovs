@@ -1949,15 +1949,16 @@
       <dl>
         <dt><code>balance-slb</code></dt>
         <dd>
-          Balances flows among slaves based on source MAC address and output
-          VLAN, with periodic rebalancing as traffic patterns change.
+          Balances flows among members based on source MAC address and
+          output VLAN, with periodic rebalancing as traffic patterns change.
         </dd>
 
         <dt><code>active-backup</code></dt>
         <dd>
-          Assigns all flows to one slave, failing over to a backup slave when
-          the active slave is disabled.  This is the only bonding mode in which
-          interfaces may be plugged into different upstream switches.
+          Assigns all flows to one member, failing over to a backup
+          member when the active member is disabled.  This is the
+          only bonding mode in which interfaces may be plugged into different
+          upstream switches.
         </dd>
       </dl>
 
@@ -1971,8 +1972,8 @@
       <dl>
         <dt><code>balance-tcp</code></dt>
         <dd>
-          Balances flows among slaves based on L3 and L4 protocol information
-          such as IP addresses and TCP/UDP ports.
+          Balances flows among members based on L3 and L4 protocol
+          information such as IP addresses and TCP/UDP ports.
         </dd>
       </dl>
 
@@ -1987,20 +1988,20 @@
 
       <column name="other_config" key="bond-hash-basis"
               type='{"type": "integer"}'>
-        An integer hashed along with flows when choosing output slaves in load
-        balanced bonds.  When changed, all flows will be assigned different
-        hash values possibly causing slave selection decisions to change.  Does
-        not affect bonding modes which do not employ load balancing such as
-        <code>active-backup</code>.
+        An integer hashed along with flows when choosing output members
+        in load balanced bonds.  When changed, all flows will be assigned
+        different hash values possibly causing member selection
+        decisions to change.  Does not affect bonding modes which do not employ
+        load balancing such as <code>active-backup</code>.
       </column>
 
       <column name="other_config" key="lb-output-action"
               type='{"type": "boolean"}'>
         Enable/disable usage of optimized <code>lb_output</code> action for
-        balancing flows among output slaves in load balanced bonds in
+        balancing flows among output members in load balanced bonds in
         <code>balance-tcp</code>. When enabled, it uses optimized path for
-        balance-tcp mode by using rss hash and avoids recirculation.
-        This knob does not affect other balancing modes.
+        balance-tcp mode by using rss hash and avoids recirculation.  This knob
+        does not affect other balancing modes.
       </column>
 
       <column name="other_config" key="bond-primary"
@@ -2390,7 +2391,8 @@
     </group>
 
     <column name="bond_active_slave">
-      For a bonded port, record the mac address of the current active slave.
+      For a bonded port, record the MAC address of the current active
+      member.
     </column>
 
     <group title="Port Statistics">
@@ -2480,7 +2482,8 @@
           <li>For the local interface, the default is the lowest-numbered MAC
           address among the other bridge ports, either the value of the
           <ref table="Port" column="mac"/> in its <ref table="Port"/> record,
-          if set, or its actual MAC (for bonded ports, the MAC of its slave
+          if set, or its actual MAC (for bonded ports, the MAC of its
+          member
           whose name is first in alphabetical order).  Internal ports and
           bridge ports that are used as port mirroring destinations (see the
           <ref table="Mirror"/> table) are ignored.</li>

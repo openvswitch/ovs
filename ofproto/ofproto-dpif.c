@@ -2199,7 +2199,7 @@ port_modified(struct ofport *port_)
     struct netdev *netdev = port->up.netdev;
 
     if (port->bundle && port->bundle->bond) {
-        bond_slave_set_netdev(port->bundle->bond, port, netdev);
+        bond_member_set_netdev(port->bundle->bond, port, netdev);
     }
 
     if (port->cfm) {
@@ -3140,10 +3140,10 @@ bundle_del_port(struct ofport_dpif *port)
     port->bundle = NULL;
 
     if (bundle->lacp) {
-        lacp_slave_unregister(bundle->lacp, port);
+        lacp_member_unregister(bundle->lacp, port);
     }
     if (bundle->bond) {
-        bond_slave_unregister(bundle->bond, port);
+        bond_member_unregister(bundle->bond, port);
     }
 
     bundle_update(bundle);
@@ -3151,7 +3151,7 @@ bundle_del_port(struct ofport_dpif *port)
 
 static bool
 bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
-                struct lacp_slave_settings *lacp)
+                struct lacp_member_settings *lacp)
 {
     struct ofport_dpif *port;
 
@@ -3177,7 +3177,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
     }
     if (lacp) {
         bundle->ofproto->backer->need_revalidate = REV_RECONFIGURE;
-        lacp_slave_register(bundle->lacp, port, lacp);
+        lacp_member_register(bundle->lacp, port, lacp);
     }
 
     return true;
@@ -3236,8 +3236,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         return 0;
     }
 
-    ovs_assert(s->n_slaves == 1 || s->bond != NULL);
-    ovs_assert((s->lacp != NULL) == (s->lacp_slaves != NULL));
+    ovs_assert(s->n_members == 1 || s->bond != NULL);
+    ovs_assert((s->lacp != NULL) == (s->lacp_members != NULL));
 
     if (!bundle) {
         bundle = xmalloc(sizeof *bundle);
@@ -3283,18 +3283,18 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 
     /* Update set of ports. */
     ok = true;
-    for (i = 0; i < s->n_slaves; i++) {
-        if (!bundle_add_port(bundle, s->slaves[i],
-                             s->lacp ? &s->lacp_slaves[i] : NULL)) {
+    for (i = 0; i < s->n_members; i++) {
+        if (!bundle_add_port(bundle, s->members[i],
+                             s->lacp ? &s->lacp_members[i] : NULL)) {
             ok = false;
         }
     }
-    if (!ok || ovs_list_size(&bundle->ports) != s->n_slaves) {
+    if (!ok || ovs_list_size(&bundle->ports) != s->n_members) {
         struct ofport_dpif *next_port;
 
         LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
-            for (i = 0; i < s->n_slaves; i++) {
-                if (s->slaves[i] == port->up.ofp_port) {
+            for (i = 0; i < s->n_members; i++) {
+                if (s->members[i] == port->up.ofp_port) {
                     goto found;
                 }
             }
@@ -3303,7 +3303,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         found: ;
         }
     }
-    ovs_assert(ovs_list_size(&bundle->ports) <= s->n_slaves);
+    ovs_assert(ovs_list_size(&bundle->ports) <= s->n_members);
 
     if (ovs_list_is_empty(&bundle->ports)) {
         bundle_destroy(bundle);
@@ -3408,8 +3408,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-            bond_slave_register(bundle->bond, port,
-                                port->up.ofp_port, port->up.netdev);
+            bond_member_register(bundle->bond, port,
+                                 port->up.ofp_port, port->up.netdev);
         }
     } else {
         bond_unref(bundle->bond);
@@ -3562,7 +3562,7 @@ bundle_run(struct ofbundle *bundle)
         struct ofport_dpif *port;
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-            bond_slave_set_may_enable(bundle->bond, port, port->up.may_enable);
+            bond_member_set_may_enable(bundle->bond, port, port->up.may_enable);
         }
 
         if (bond_run(bundle->bond, lacp_status(bundle->lacp))) {
@@ -3808,7 +3808,7 @@ may_enable_port(struct ofport_dpif *ofport)
 
     /* If LACP is enabled, it must report that the link is enabled. */
     if (ofport->bundle
-        && !lacp_slave_may_enable(ofport->bundle->lacp, ofport)) {
+        && !lacp_member_may_enable(ofport->bundle->lacp, ofport)) {
         return false;
     }
 
@@ -3824,7 +3824,7 @@ port_run(struct ofport_dpif *ofport)
 
     ofport->carrier_seq = carrier_seq;
     if (carrier_changed && ofport->bundle) {
-        lacp_slave_carrier_changed(ofport->bundle->lacp, ofport, enable);
+        lacp_member_carrier_changed(ofport->bundle->lacp, ofport, enable);
     }
 
     if (enable) {
@@ -3936,7 +3936,7 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
             /* The caller is going to close ofport->up.netdev.  If this is a
              * bonded port, then the bond is using that netdev, so remove it
              * from the bond.  The client will need to reconfigure everything
-             * after deleting ports, so then the slave will get re-added. */
+             * after deleting ports, so then the member will get re-added. */
             bundle_remove(&ofport->up);
         }
     }
@@ -4020,11 +4020,12 @@ vport_get_status(const struct ofport *ofport_, char **errp)
 }
 
 static int
-port_get_lacp_stats(const struct ofport *ofport_, struct lacp_slave_stats *stats)
+port_get_lacp_stats(const struct ofport *ofport_,
+                    struct lacp_member_stats *stats)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     if (ofport->bundle && ofport->bundle->lacp) {
-        if (lacp_get_slave_stats(ofport->bundle->lacp, ofport, stats)) {
+        if (lacp_get_member_stats(ofport->bundle->lacp, ofport, stats)) {
             return 0;
         }
     }
@@ -4125,7 +4126,7 @@ port_is_lacp_current(const struct ofport *ofport_)
 {
     const struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     return (ofport->bundle && ofport->bundle->lacp
-            ? lacp_slave_is_current(ofport->bundle->lacp, ofport)
+            ? lacp_member_is_current(ofport->bundle->lacp, ofport)
             : -1);
 }
 

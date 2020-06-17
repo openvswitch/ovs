@@ -77,7 +77,9 @@ unixctl_list_commands(struct unixctl_conn *conn, int argc OVS_UNUSED,
         const struct shash_node *node = nodes[i];
         const struct unixctl_command *command = node->data;
 
-        ds_put_format(&ds, "  %-23s %s\n", node->name, command->usage);
+        if (command->usage) {
+            ds_put_format(&ds, "  %-23s %s\n", node->name, command->usage);
+        }
     }
     free(nodes);
 
@@ -94,7 +96,7 @@ unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 /* Registers a unixctl command with the given 'name'.  'usage' describes the
  * arguments to the command; it is used only for presentation to the user in
- * "list-commands" output.
+ * "list-commands" output.  (If 'usage' is NULL, then the command is hidden.)
  *
  * 'cb' is called when the command is received.  It is passed an array
  * containing the command name and arguments, plus a copy of 'aux'.  Normally

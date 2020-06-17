@@ -1334,39 +1334,39 @@ check_OUTPUT_REG(const struct ofpact_output_reg *a,
 
 /* Action structure for NXAST_BUNDLE and NXAST_BUNDLE_LOAD.
  *
- * The bundle actions choose a slave from a supplied list of options.
+ * The bundle actions choose a member from a supplied list of options.
  * NXAST_BUNDLE outputs to its selection.  NXAST_BUNDLE_LOAD writes its
  * selection to a register.
  *
- * The list of possible slaves follows the nx_action_bundle structure. The size
- * of each slave is governed by its type as indicated by the 'slave_type'
- * parameter. The list of slaves should be padded at its end with zeros to make
- * the total length of the action a multiple of 8.
+ * The list of possible members follows the nx_action_bundle structure. The
+ * size of each member is governed by its type as indicated by the
+ * 'member_type' parameter. The list of members should be padded at its end
+ * with zeros to make the total length of the action a multiple of 8.
  *
- * Switches infer from the 'slave_type' parameter the size of each slave.  All
- * implementations must support the NXM_OF_IN_PORT 'slave_type' which indicates
- * that the slaves are OpenFlow port numbers with NXM_LENGTH(NXM_OF_IN_PORT) ==
- * 2 byte width.  Switches should reject actions which indicate unknown or
- * unsupported slave types.
+ * Switches infer from the 'member_type' parameter the size of each member.
+ * All implementations must support the NXM_OF_IN_PORT 'member_type' which
+ * indicates that the members are OpenFlow port numbers with
+ * NXM_LENGTH(NXM_OF_IN_PORT) == 2 byte width.  Switches should reject actions
+ * which indicate unknown or unsupported member types.
  *
  * Switches use a strategy dictated by the 'algorithm' parameter to choose a
- * slave.  If the switch does not support the specified 'algorithm' parameter,
+ * member.  If the switch does not support the specified 'algorithm' parameter,
  * it should reject the action.
  *
- * Several algorithms take into account liveness when selecting slaves.  The
- * liveness of a slave is implementation defined (with one exception), but will
- * generally take into account things like its carrier status and the results
- * of any link monitoring protocols which happen to be running on it.  In order
- * to give controllers a place-holder value, the OFPP_NONE port is always
- * considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the output
- * register if no slave is live.
+ * Several algorithms take into account liveness when selecting members.  The
+ * liveness of a member is implementation defined (with one exception), but
+ * will generally take into account things like its carrier status and the
+ * results of any link monitoring protocols which happen to be running on it.
+ * In order to give controllers a place-holder value, the OFPP_NONE port is
+ * always considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the
+ * output register if no member is live.
  *
- * Some slave selection strategies require the use of a hash function, in which
- * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
- * parameter (one of NX_HASH_FIELDS_*) designates which parts of the flow to
- * hash.  Refer to the definition of "enum nx_hash_fields" for details.  The
- * 'basis' parameter is used as a universal hash parameter.  Different values
- * of 'basis' yield different hash results.
+ * Some member selection strategies require the use of a hash function, in
+ * which case the 'fields' and 'basis' parameters should be populated.  The
+ * 'fields' parameter (one of NX_HASH_FIELDS_*) designates which parts of the
+ * flow to hash.  Refer to the definition of "enum nx_hash_fields" for details.
+ * The 'basis' parameter is used as a universal hash parameter.  Different
+ * values of 'basis' yield different hash results.
  *
  * The 'zero' parameter at the end of the action structure is reserved for
  * future use.  Switches are required to reject actions which have nonzero
@@ -1375,24 +1375,24 @@ check_OUTPUT_REG(const struct ofpact_output_reg *a,
  * NXAST_BUNDLE actions should have 'ofs_nbits' and 'dst' zeroed.  Switches
  * should reject actions which have nonzero bytes in either of these fields.
  *
- * NXAST_BUNDLE_LOAD stores the OpenFlow port number of the selected slave in
+ * NXAST_BUNDLE_LOAD stores the OpenFlow port number of the selected member in
  * dst[ofs:ofs+n_bits].  The format and semantics of 'dst' and 'ofs_nbits' are
  * similar to those for the NXAST_REG_LOAD action. */
 struct nx_action_bundle {
     ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length including slaves. */
+    ovs_be16 len;               /* Length including members. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be16 subtype;           /* NXAST_BUNDLE or NXAST_BUNDLE_LOAD. */
 
-    /* Slave choice algorithm to apply to hash value. */
+    /* Member choice algorithm to apply to hash value. */
     ovs_be16 algorithm;         /* One of NX_BD_ALG_*. */
 
     /* What fields to hash and how. */
     ovs_be16 fields;            /* One of NX_HASH_FIELDS_*. */
     ovs_be16 basis;             /* Universal hash parameter. */
 
-    ovs_be32 slave_type;        /* NXM_OF_IN_PORT. */
-    ovs_be16 n_slaves;          /* Number of slaves. */
+    ovs_be32 member_type;       /* NXM_OF_IN_PORT. */
+    ovs_be16 n_members;         /* Number of members. */
 
     ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
     ovs_be32 dst;               /* Destination. */
@@ -1408,29 +1408,29 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
 {
     static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
     struct ofpact_bundle *bundle;
-    uint32_t slave_type;
-    size_t slaves_size, i;
+    uint32_t member_type;
+    size_t members_size, i;
     enum ofperr error;
 
     bundle = ofpact_put_BUNDLE(ofpacts);
 
-    bundle->n_slaves = ntohs(nab->n_slaves);
+    bundle->n_members = ntohs(nab->n_members);
     bundle->basis = ntohs(nab->basis);
     bundle->fields = ntohs(nab->fields);
     bundle->algorithm = ntohs(nab->algorithm);
-    slave_type = ntohl(nab->slave_type);
-    slaves_size = ntohs(nab->len) - sizeof *nab;
+    member_type = ntohl(nab->member_type);
+    members_size = ntohs(nab->len) - sizeof *nab;
 
     error = OFPERR_OFPBAC_BAD_ARGUMENT;
     if (!flow_hash_fields_valid(bundle->fields)) {
         VLOG_WARN_RL(&rll, "unsupported fields %d", (int) bundle->fields);
-    } else if (bundle->n_slaves > BUNDLE_MAX_SLAVES) {
-        VLOG_WARN_RL(&rll, "too many slaves");
+    } else if (bundle->n_members > BUNDLE_MAX_MEMBERS) {
+        VLOG_WARN_RL(&rll, "too many members");
     } else if (bundle->algorithm != NX_BD_ALG_HRW
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rll, "unsupported algorithm %d", (int) bundle->algorithm);
-    } else if (slave_type != mf_nxm_header(MFF_IN_PORT)) {
-        VLOG_WARN_RL(&rll, "unsupported slave type %"PRIu32, slave_type);
+    } else if (member_type != mf_nxm_header(MFF_IN_PORT)) {
+        VLOG_WARN_RL(&rll, "unsupported member type %"PRIu32, member_type);
     } else {
         error = 0;
     }
@@ -1461,15 +1461,15 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         }
     }
 
-    if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
+    if (members_size < bundle->n_members * sizeof(ovs_be16)) {
         VLOG_WARN_RL(&rll, "Nicira action %s only has %"PRIuSIZE" bytes "
-                     "allocated for slaves.  %"PRIuSIZE" bytes are required "
-                     "for %u slaves.",
-                     load ? "bundle_load" : "bundle", slaves_size,
-                     bundle->n_slaves * sizeof(ovs_be16), bundle->n_slaves);
+                     "allocated for members.  %"PRIuSIZE" bytes are "
+                     "required for %u members.",
+                     load ? "bundle_load" : "bundle", members_size,
+                     bundle->n_members * sizeof(ovs_be16), bundle->n_members);
         error = OFPERR_OFPBAC_BAD_LEN;
     } else {
-        for (i = 0; i < bundle->n_slaves; i++) {
+        for (i = 0; i < bundle->n_members; i++) {
             ofp_port_t ofp_port
                 = u16_to_ofp(ntohs(((ovs_be16 *)(nab + 1))[i]));
             ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
@@ -1506,29 +1506,29 @@ encode_BUNDLE(const struct ofpact_bundle *bundle,
               enum ofp_version ofp_version OVS_UNUSED,
               struct ofpbuf *out)
 {
-    int slaves_len = ROUND_UP(2 * bundle->n_slaves, OFP_ACTION_ALIGN);
+    int members_len = ROUND_UP(2 * bundle->n_members, OFP_ACTION_ALIGN);
     struct nx_action_bundle *nab;
-    ovs_be16 *slaves;
+    ovs_be16 *members;
     size_t i;
 
     nab = (bundle->dst.field
            ? put_NXAST_BUNDLE_LOAD(out)
            : put_NXAST_BUNDLE(out));
-    nab->len = htons(ntohs(nab->len) + slaves_len);
+    nab->len = htons(ntohs(nab->len) + members_len);
     nab->algorithm = htons(bundle->algorithm);
     nab->fields = htons(bundle->fields);
     nab->basis = htons(bundle->basis);
-    nab->slave_type = htonl(mf_nxm_header(MFF_IN_PORT));
-    nab->n_slaves = htons(bundle->n_slaves);
+    nab->member_type = htonl(mf_nxm_header(MFF_IN_PORT));
+    nab->n_members = htons(bundle->n_members);
     if (bundle->dst.field) {
         nab->ofs_nbits = nxm_encode_ofs_nbits(bundle->dst.ofs,
                                               bundle->dst.n_bits);
         nab->dst = htonl(nxm_header_from_mff(bundle->dst.field));
     }
 
-    slaves = ofpbuf_put_zeros(out, slaves_len);
-    for (i = 0; i < bundle->n_slaves; i++) {
-        slaves[i] = htons(ofp_to_u16(bundle->slaves[i]));
+    members = ofpbuf_put_zeros(out, members_len);
+    for (i = 0; i < bundle->n_members; i++) {
+        members[i] = htons(ofp_to_u16(bundle->members[i]));
     }
 }
 
@@ -3585,7 +3585,7 @@ check_STACK_POP(const struct ofpact_stack *a,
  */
 struct nx_action_cnt_ids {
     ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length including slaves. */
+    ovs_be16 len;               /* Length including cnt_ids. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be16 subtype;           /* NXAST_DEC_TTL_CNT_IDS. */
 

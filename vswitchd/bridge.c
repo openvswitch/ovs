@@ -330,7 +330,8 @@ static void mirror_destroy(struct mirror *);
 static bool mirror_configure(struct mirror *);
 static void mirror_refresh_stats(struct mirror *);
 
-static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
+static void iface_configure_lacp(struct iface *,
+                                 struct lacp_member_settings *);
 static bool iface_create(struct bridge *, const struct ovsrec_interface *,
                          const struct ovsrec_port *);
 static bool iface_is_internal(const struct ovsrec_interface *iface,
@@ -1197,11 +1198,11 @@ port_configure(struct port *port)
     /* Get name. */
     s.name = port->name;
 
-    /* Get slaves. */
-    s.n_slaves = 0;
-    s.slaves = xmalloc(ovs_list_size(&port->ifaces) * sizeof *s.slaves);
+    /* Get members. */
+    s.n_members = 0;
+    s.members = xmalloc(ovs_list_size(&port->ifaces) * sizeof *s.members);
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        s.slaves[s.n_slaves++] = iface->ofp_port;
+        s.members[s.n_members++] = iface->ofp_port;
     }
 
     /* Get VLAN tag. */
@@ -1270,16 +1271,16 @@ port_configure(struct port *port)
     if (s.lacp) {
         size_t i = 0;
 
-        s.lacp_slaves = xmalloc(s.n_slaves * sizeof *s.lacp_slaves);
+        s.lacp_members = xmalloc(s.n_members * sizeof *s.lacp_members);
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface_configure_lacp(iface, &s.lacp_slaves[i++]);
+            iface_configure_lacp(iface, &s.lacp_members[i++]);
         }
     } else {
-        s.lacp_slaves = NULL;
+        s.lacp_members = NULL;
     }
 
     /* Get bond settings. */
-    if (s.n_slaves > 1) {
+    if (s.n_members > 1) {
         s.bond = &bond_settings;
         port_configure_bond(port, &bond_settings);
     } else {
@@ -1297,9 +1298,9 @@ port_configure(struct port *port)
 
     /* Clean up. */
     free(s.cvlans);
-    free(s.slaves);
+    free(s.members);
     free(s.trunks);
-    free(s.lacp_slaves);
+    free(s.lacp_members);
 }
 
 /* Pick local port hardware address and datapath ID for 'br'. */
@@ -2277,8 +2278,8 @@ find_local_hw_addr(const struct bridge *br, struct eth_addr *ea,
         } else {
             /* Choose the interface whose MAC address will represent the port.
              * The Linux kernel bonding code always chooses the MAC address of
-             * the first slave added to a bond, and the Fedora networking
-             * scripts always add slaves to a bond in alphabetical order, so
+             * the first member added to a bond, and the Fedora networking
+             * scripts always add members to a bond in alphabetical order, so
              * for compatibility we choose the interface with the name that is
              * first in alphabetical order. */
             LIST_FOR_EACH (candidate, port_elem, &port->ifaces) {
@@ -2961,7 +2962,7 @@ port_refresh_bond_status(struct port *port, bool force_update)
         return;
     }
 
-    if (bond_get_changed_active_slave(port->name, &mac, force_update)) {
+    if (bond_get_changed_active_member(port->name, &mac, force_update)) {
         struct ds mac_s;
 
         ds_init(&mac_s);
@@ -4505,7 +4506,7 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 }
 
 static void
-iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
+iface_configure_lacp(struct iface *iface, struct lacp_member_settings *s)
 {
     int priority, portid, key;
 
@@ -4601,9 +4602,9 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     mac_s = port->cfg->bond_active_slave;
     if (!mac_s || !ovs_scan(mac_s, ETH_ADDR_SCAN_FMT,
-                            ETH_ADDR_SCAN_ARGS(s->active_slave_mac))) {
+                            ETH_ADDR_SCAN_ARGS(s->active_member_mac))) {
         /* OVSDB did not store the last active interface */
-        s->active_slave_mac = eth_addr_zero;
+        s->active_member_mac = eth_addr_zero;
     }
 
     /* lb_output action is disabled by default. */

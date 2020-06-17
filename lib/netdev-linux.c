@@ -257,15 +257,15 @@ enum {
     IOV_AUXBUF = 1,
 };
 
-struct linux_lag_slave {
+struct linux_lag_member {
    uint32_t block_id;
    struct shash_node *node;
 };
 
-/* Protects 'lag_shash' and the mutable members of struct linux_lag_slave. */
+/* Protects 'lag_shash' and the mutable members of struct linux_lag_member. */
 static struct ovs_mutex lag_mutex = OVS_MUTEX_INITIALIZER;
 
-/* All slaves whose LAG masters are network devices in OvS. */
+/* All members whose LAG primary interfaces are OVS network devices. */
 static struct shash lag_shash OVS_GUARDED_BY(lag_mutex)
     = SHASH_INITIALIZER(&lag_shash);
 
@@ -661,9 +661,9 @@ static void
 netdev_linux_update_lag(struct rtnetlink_change *change)
     OVS_REQUIRES(lag_mutex)
 {
-    struct linux_lag_slave *lag;
+    struct linux_lag_member *lag;
 
-    if (change->slave && netdev_linux_kind_is_lag(change->slave)) {
+    if (change->sub && netdev_linux_kind_is_lag(change->sub)) {
         lag = shash_find_data(&lag_shash, change->ifname);
 
         if (!lag) {
@@ -691,12 +691,12 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
 
                 /* delete ingress block in case it exists */
                 tc_add_del_qdisc(change->if_index, false, 0, TC_INGRESS);
-                /* LAG master is linux netdev so add slave to same block. */
+                /* LAG master is linux netdev so add member to same block. */
                 error = tc_add_del_qdisc(change->if_index, true, block_id,
                                          TC_INGRESS);
                 if (error) {
-                    VLOG_WARN("failed to bind LAG slave %s to master's block",
-                              change->ifname);
+                    VLOG_WARN("failed to bind LAG member %s to "
+                              "primary's block", change->ifname);
                     shash_delete(&lag_shash, lag->node);
                     free(lag);
                 }
@@ -705,7 +705,7 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
             netdev_close(master_netdev);
         }
     } else if (change->master_ifindex == 0) {
-        /* Check if this was a lag slave that has been freed. */
+        /* Check if this was a lag member that has been removed. */
         lag = shash_find_data(&lag_shash, change->ifname);
 
         if (lag) {
@@ -860,7 +860,7 @@ netdev_linux_update__(struct netdev_linux *dev,
                 rtnetlink_report_link();
             }
 
-            if (change->master && netdev_linux_kind_is_lag(change->master)) {
+            if (change->primary && netdev_linux_kind_is_lag(change->primary)) {
                 dev->is_lag_master = true;
             }
 
@@ -6376,7 +6376,7 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
             netdev->get_ifindex_error = 0;
             changed = true;
         }
-        if (change->master && netdev_linux_kind_is_lag(change->master)) {
+        if (change->primary && netdev_linux_kind_is_lag(change->primary)) {
             netdev->is_lag_master = true;
         }
         if (changed) {

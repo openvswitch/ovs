@@ -385,7 +385,7 @@ int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
 int ofproto_dpif_add_lb_output_buckets(struct ofproto_dpif *, uint32_t bond_id,
-                                       const ofp_port_t *slave_map);
+                                       const ofp_port_t *member_map);
 int ofproto_dpif_delete_lb_output_buckets(struct ofproto_dpif *,
                                           uint32_t bond_id);
 bool ovs_lb_output_action_supported(struct ofproto_dpif *);

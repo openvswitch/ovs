@@ -1391,7 +1391,8 @@ ofproto_port_is_lacp_current(struct ofproto *ofproto, ofp_port_t ofp_port)
 }
 
 int
-ofproto_port_get_lacp_stats(const struct ofport *port, struct lacp_slave_stats *stats)
+ofproto_port_get_lacp_stats(const struct ofport *port,
+                            struct lacp_member_stats *stats)
 {
     struct ofproto *ofproto = port->ofproto;
     int error;
@@ -1409,8 +1410,8 @@ ofproto_port_get_lacp_stats(const struct ofport *port, struct lacp_slave_stats *
 
 /* Registers a "bundle" associated with client data pointer 'aux' in 'ofproto'.
  * A bundle is the same concept as a Port in OVSDB, that is, it consists of one
- * or more "slave" devices (Interfaces, in OVSDB) along with a VLAN
- * configuration plus, if there is more than one slave, a bonding
+ * or more "member" devices (Interfaces, in OVSDB) along with a VLAN
+ * configuration plus, if there is more than one member, a bonding
  * configuration.
  *
  * If 'aux' is already registered then this function updates its configuration

@@ -198,46 +198,46 @@ These commands manage bonded ports on an Open vSwitch's bridges.  To
 understand some of these commands, it is important to understand a
 detail of the bonding implementation called ``source load balancing''
 (SLB).  Instead of directly assigning Ethernet source addresses to
-slaves, the bonding implementation computes a function that maps an
+members, the bonding implementation computes a function that maps an
 48-bit Ethernet source addresses into an 8-bit value (a ``MAC hash''
 value).  All of the Ethernet addresses that map to a single 8-bit
-value are then assigned to a single slave.
+value are then assigned to a single member.
 .IP "\fBbond/list\fR"
-Lists all of the bonds, and their slaves, on each bridge.
+Lists all of the bonds, and their members, on each bridge.
 .
 .IP "\fBbond/show\fR [\fIport\fR]"
 Lists all of the bond-specific information (updelay, downdelay, time
 until the next rebalance) about the given bonded \fIport\fR, or all
 bonded ports if no \fIport\fR is given.  Also lists information about
-each slave: whether it is enabled or disabled, the time to completion
+each members: whether it is enabled or disabled, the time to completion
 of an updelay or downdelay if one is in progress, whether it is the
-active slave, the hashes assigned to the slave.  Any LACP information
+active member, the hashes assigned to the member.  Any LACP information
 related to this bond may be found using the \fBlacp/show\fR command.
 .
-.IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
-Only valid for SLB bonds.  Assigns a given MAC hash to a new slave.
+.IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fImember\fR"
+Only valid for SLB bonds.  Assigns a given MAC hash to a new member.
 \fIport\fR specifies the bond port, \fIhash\fR the MAC hash to be
-migrated (as a decimal number between 0 and 255), and \fIslave\fR the
-new slave to be assigned.
+migrated (as a decimal number between 0 and 255), and \fImember\fR the
+new member to be assigned.
 .IP
 The reassignment is not permanent: rebalancing or fail-over will
-cause the MAC hash to be shifted to a new slave in the usual
+cause the MAC hash to be shifted to a new member in the usual
 manner.
 .IP
-A MAC hash cannot be migrated to a disabled slave.
-.IP "\fBbond/set\-active\-slave\fR \fIport\fR \fIslave\fR"
-Sets \fIslave\fR as the active slave on \fIport\fR.  \fIslave\fR must
+A MAC hash cannot be migrated to a disabled member.
+.IP "\fBbond/set\-active\-member\fR \fIport\fR \fImember\fR"
+Sets \fImember\fR as the active member on \fIport\fR.  \fImember\fR must
 currently be enabled.
 .IP
-The setting is not permanent: a new active slave will be selected
-if \fIslave\fR becomes disabled.
-.IP "\fBbond/enable\-slave\fR \fIport\fR \fIslave\fR"
-.IQ "\fBbond/disable\-slave\fR \fIport\fR \fIslave\fR"
-Enables (or disables) \fIslave\fR on the given bond \fIport\fR, skipping any
+The setting is not permanent: a new active member will be selected
+if \fImember\fR becomes disabled.
+.IP "\fBbond/enable\-member\fR \fIport\fR \fImember\fR"
+.IQ "\fBbond/disable\-member\fR \fIport\fR \fImember\fR"
+Enables (or disables) \fImember\fR on the given bond \fIport\fR, skipping any
 updelay (or downdelay).
 .IP
 This setting is not permanent: it persists only until the carrier
-status of \fIslave\fR changes.
+status of \fImember\fR changes.
 .IP "\fBbond/hash\fR \fImac\fR [\fIvlan\fR] [\fIbasis\fR]"
 Returns the hash value which would be used for \fImac\fR with \fIvlan\fR
 and \fIbasis\fR if specified.
@@ -245,7 +245,7 @@ and \fIbasis\fR if specified.
 .IP "\fBlacp/show\fR [\fIport\fR]"
 Lists all of the LACP related information about the given \fIport\fR:
 active or passive, aggregation key, system id, and system priority.  Also
-lists information about each slave: whether it is enabled or disabled,
+lists information about each member: whether it is enabled or disabled,
 whether it is attached or detached, port id and priority, actor
 information, and partner information.  If \fIport\fR is not specified,
 then displays detailed information about all interfaces with CFM
@@ -253,7 +253,7 @@ enabled.
 .
 .IP "\fBlacp/stats-show\fR [\fIport\fR]"
 Lists various stats about LACP PDUs (number of RX/TX PDUs, bad PDUs received)
-and slave state (number of time slave's state expired/defaulted and carrier
+and member state (number of times its state expired/defaulted and carrier
 status changed) for the given \fIport\fR.  If \fIport\fR is not specified,
 then displays stats of all interfaces with LACP enabled.
 .SS "DPCTL DATAPATH DEBUGGING COMMANDS"

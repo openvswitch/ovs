@@ -617,9 +617,9 @@ struct dpif_class {
     int (*meter_del)(struct dpif *, ofproto_meter_id meter_id,
                      struct ofputil_meter_stats *, uint16_t n_bands);
 
-    /* Adds a bond with 'bond_id' and the slave-map to 'dpif'. */
+    /* Adds a bond with 'bond_id' and the member-map to 'dpif'. */
     int (*bond_add)(struct dpif *dpif, uint32_t bond_id,
-                    odp_port_t *slave_map);
+                    odp_port_t *member_map);
 
     /* Removes bond identified by 'bond_id' from 'dpif'. */
     int (*bond_del)(struct dpif *dpif, uint32_t bond_id);

@@ -65,9 +65,9 @@ if [ "${MODE}" = "start" ]; then
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
                 ip link set "${IFACE}" up
-                for slave in ${IF_OVS_BONDS}
+                for member in ${IF_OVS_BONDS}
                 do
-                    ip link set "${slave}" up
+                    ip link set "${member}" up
                 done
                 ;;
         OVSPatchPort)

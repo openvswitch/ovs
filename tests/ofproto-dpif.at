@@ -31,8 +31,8 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - active-backup bonding (with primary)])
 
-dnl Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and
-dnl    p2 (p1 as primary) and br1 with interfaces p3, p4 and p8.
+dnl Create br0 with members p1, p2 and p7, creating bond0 with p1 and
+dnl    p2 (p1 as primary) and br1 with members p3, p4 and p8.
 dnl toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
 dnl With p1 down and p2 up/active, bring p1 back up.  Since p1 is the primary,
 dnl it should become active.
@@ -81,7 +81,7 @@ recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:
 
 ovs-appctl netdev-dummy/set-admin-state p1 up
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC], [0], [dnl
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
@@ -91,13 +91,13 @@ downdelay: 0 ms
 lacp_status: off
 lacp_fallback_ab: false
 active-backup primary: p1
-<active slave mac del>
+<active member mac del>
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
 ])
@@ -118,18 +118,18 @@ OVS_VSWITCHD_START(
    add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy --])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
-dnl Make sure the initial primary interface is set
+dnl Make sure the initial primary member is set
 OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | grep 'active-backup primary: p1'`"])
 
-dnl Down the primary interface and verify that we switched.  Then
+dnl Down the primary member and verify that we switched.  Then
 dnl bring the primary back and verify that we switched back to the
 dnl primary.
 ovs-appctl netdev-dummy/set-admin-state p1 down
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'slave p1: disabled'`"])
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'member p1: disabled'`"])
 ovs-appctl netdev-dummy/set-admin-state p1 up
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC], [0], [dnl
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
@@ -139,39 +139,39 @@ downdelay: 0 ms
 lacp_status: off
 lacp_fallback_ab: false
 active-backup primary: p1
-<active slave mac del>
+<active member mac del>
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
+member p3: enabled
   may_enable: true
 
 ])
 
 dnl Now delete the primary and verify that the output shows that the
-dnl primary is no longer enslaved
+dnl primary is no longer an member
 ovs-vsctl --id=@p1 get Interface p1 -- remove Port bond0 interfaces @p1
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'active-backup primary: p1 (no such slave)'`"])
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'active-backup primary: p1 (no such member)'`"])
 
 dnl Now re-add the primary and verify that the output shows that the
 dnl primary is available again.
 dnl
-dnl First, get the UUIDs of the interfaces that exist on bond0.
+dnl First, get the UUIDs of the members that exist on bond0.
 dnl Strip the trailing ] so that we can add a new UUID to the end.
 uuids=`ovs-vsctl get Port bond0 interfaces | sed -e 's/]//'`
-dnl Create a new port "p1" and add its UUID to the set of interfaces
+dnl Create a new port "p1" and add its UUID to the set of members
 dnl on bond0.
 ovs-vsctl \
    --id=@p1 create Interface name=p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
    set Port bond0 interfaces="$uuids, @p1]"
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC], [0], [dnl
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
@@ -181,16 +181,16 @@ downdelay: 0 ms
 lacp_status: off
 lacp_fallback_ab: false
 active-backup primary: p1
-<active slave mac del>
+<active member mac del>
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
+member p3: enabled
   may_enable: true
 
 ])
@@ -198,7 +198,7 @@ slave p3: enabled
 dnl Switch to another primary
 ovs-vsctl set port bond0 other_config:bond-primary=p2
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC], [0], [dnl
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
@@ -208,16 +208,16 @@ downdelay: 0 ms
 lacp_status: off
 lacp_fallback_ab: false
 active-backup primary: p2
-<active slave mac del>
+<active member mac del>
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
+member p3: enabled
   may_enable: true
 
 ])
@@ -225,7 +225,7 @@ slave p3: enabled
 dnl Remove the "bond-primary" config directive from the bond.
 AT_CHECK([ovs-vsctl remove Port bond0 other_config bond-primary])
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC], [0], [dnl
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
@@ -235,16 +235,16 @@ downdelay: 0 ms
 lacp_status: off
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
+member p3: enabled
   may_enable: true
 
 ])
@@ -253,8 +253,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - active-backup bonding (without primary)])
-dnl Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and p2
-dnl    and br1 with interfaces p3, p4 and p8.
+dnl Create br0 with members p1, p2 and p7, creating bond0 with p1 and p2
+dnl    and br1 with members p3, p4 and p8.
 dnl toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
 OVS_VSWITCHD_START(
   [add-bond br0 bond0 p1 p2 bond_mode=active-backup --\
@@ -300,8 +300,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - balance-slb bonding])
-# Create br0 with interfaces bond0(p1, p2, p3) and p7,
-#    and br1 with interfaces p4, p5, p6 and p8.
+# Create br0 with members bond0(p1, p2, p3) and p7,
+#    and br1 with members p4, p5, p6 and p8.
 #    p1 <-> p4, p2 <-> p5, p3 <-> p6
 # Send some traffic, make sure the traffic are spread based on source mac.
 OVS_VSWITCHD_START(
@@ -343,8 +343,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - balance-tcp bonding])
-# Create br0 with interfaces bond0(p1, p2, p3) and p7,
-#    and br1 with interfaces bond1(p4, p5, p6) and p8.
+# Create br0 with members bond0(p1, p2, p3) and p7,
+#    and br1 with members bond1(p4, p5, p6) and p8.
 #    bond0 <-> bond1
 # Send some traffic, make sure the traffic are spread based on L4 headers.
 OVS_VSWITCHD_START(
@@ -2185,7 +2185,7 @@ cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->OXM_
 cookie=0xd dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:OXM_OF_IPV4_DST[[]]->OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:OXM_OF_IPV4_DST[[]],pop:OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,OXM_OF_IPV4_SRC[[0..7]]),controller
-cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],slaves:1,2),controller
+cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],members:1,2),controller
 cookie=0xd dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,OXM_OF_IPV4_SRC[[]]=OXM_OF_IPV4_DST[[]]),controller
 
 cookie=0xd dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
@@ -3183,7 +3183,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:NXM_OF_IP_DST[[]],pop:NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,NXM_OF_IP_SRC[[0..7]]),CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],slaves:1,2),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],members:1,2),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,NXM_OF_IP_SRC[[]]=NXM_OF_IP_DST[[]]),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:09 actions=resubmit(,2),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:0a actions=pop_mpls:0x0800,mod_nw_dst:10.0.0.1,CONTROLLER:65535
@@ -8634,8 +8634,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - normal, balance-tcp bonding])
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 OVS_VSWITCHD_START(
   [add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
@@ -9023,7 +9023,7 @@ AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
   Local Session State: up
   Remote Session State: up
 ])
-# bond/show should show 'may-enable: true' for all slaves.
+# bond/show should show 'may-enable: true' for all members.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
   may_enable: true
   may_enable: true
@@ -11027,7 +11027,7 @@ AT_CHECK([ovs-vsctl add-port br0 p2 -- set int p2 type=dummy mtu_request=1600])
 AT_CHECK([ovs-vsctl wait-until Interface p2 mtu=1600])
 AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1600])
 
-# Explicitly set mtu_request on the internal interface.  This should prevent
+# Explicitly set mtu_request on the internal member.  This should prevent
 # the MTU from being overriden.
 AT_CHECK([ovs-vsctl set int br0 mtu_request=1700])
 AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1700])

@@ -5,9 +5,9 @@ m4_define([STRIP_RECIRC_ID], [[sed '
     s/Recirc-ID.*$/<del>/
 ' ]])
 
-# Strips out active slave mac address since it may change over time.
-m4_define([STRIP_ACTIVE_SLAVE_MAC], [[sed '
-    s/active slave mac.*$/<active slave mac del>/
+# Strips out active member mac address since it may change over time.
+m4_define([STRIP_ACTIVE_MEMBER_MAC], [[sed '
+    s/active member mac.*$/<active member mac del>/
 ' ]])
 
 AT_SETUP([lacp - config])
@@ -27,7 +27,7 @@ AT_CHECK([ovs-appctl lacp/show], [0], [dnl
   aggregation key: 1
   lacp_time: slow
 
-slave: p1: expired attached
+member: p1: expired attached
   port_id: 1
   port_priority: 65535
   may_enable: false
@@ -78,7 +78,7 @@ AT_CHECK([sed -e 's/aggregation key:.*/aggregation key: <omitted>/' < stdout], [
   aggregation key: <omitted>
   lacp_time: fast
 
-slave: p1: expired attached
+member: p1: expired attached
   port_id: 11
   port_priority: 111
   may_enable: false
@@ -97,7 +97,7 @@ slave: p1: expired attached
   partner key: 0
   partner state: timeout
 
-slave: p2: expired attached
+member: p2: expired attached
   port_id: 22
   port_priority: 222
   may_enable: false
@@ -127,12 +127,12 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-active slave mac: 00:00:00:00:00:00(none)
+active member mac: 00:00:00:00:00:00(none)
 
-slave p1: disabled
+member p1: disabled
   may_enable: false
 
-slave p2: disabled
+member p2: disabled
   may_enable: false
 
 ])
@@ -140,8 +140,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([lacp - negotiation])
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 OVS_VSWITCHD_START(
   [add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
@@ -193,9 +193,9 @@ done
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC
-ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [stdout])
-AT_CHECK([sed '/active slave/d' stdout], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC ], [0], [stdout])
+AT_CHECK([sed '/active member/d' stdout], [0], [dnl
 ---- bond0 ----
   status: active negotiated
   sys_id: aa:55:aa:55:00:00
@@ -203,7 +203,7 @@ AT_CHECK([sed '/active slave/d' stdout], [0], [dnl
   aggregation key: 2
   lacp_time: fast
 
-slave: p0: current attached
+member: p0: current attached
   port_id: 1
   port_priority: 65535
   may_enable: true
@@ -222,7 +222,7 @@ slave: p0: current attached
   partner key: 4
   partner state: activity timeout aggregation synchronized collecting distributing
 
-slave: p1: current attached
+member: p1: current attached
   port_id: 2
   port_priority: 65535
   may_enable: true
@@ -247,7 +247,7 @@ slave: p1: current attached
   aggregation key: 4
   lacp_time: fast
 
-slave: p2: current attached
+member: p2: current attached
   port_id: 3
   port_priority: 65535
   may_enable: true
@@ -266,7 +266,7 @@ slave: p2: current attached
   partner key: 2
   partner state: activity timeout aggregation synchronized collecting distributing
 
-slave: p3: current attached
+member: p3: current attached
   port_id: 4
   port_priority: 65535
   may_enable: true
@@ -295,10 +295,10 @@ lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
 
-slave p0: enabled
+member p0: enabled
   may_enable: true
 
-slave p1: enabled
+member p1: enabled
   may_enable: true
 
 ---- bond1 ----
@@ -312,16 +312,16 @@ lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
+member p3: enabled
   may_enable: true
 
 ])
-AT_CHECK([grep 'active slave$' stdout], [0], [dnl
-  active slave
-  active slave
+AT_CHECK([grep 'active member$' stdout], [0], [dnl
+  active member
+  active member
 ])
 
 # Redirect the patch link between p0 and p2 so that no packets get
@@ -335,8 +335,8 @@ ovs-appctl time/warp 4100 100
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC
-ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC ], [0], [dnl
 ---- bond0 ----
   status: active negotiated
   sys_id: aa:55:aa:55:00:00
@@ -344,7 +344,7 @@ ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [d
   aggregation key: 2
   lacp_time: fast
 
-slave: p0: expired attached
+member: p0: expired attached
   port_id: 1
   port_priority: 65535
   may_enable: false
@@ -363,7 +363,7 @@ slave: p0: expired attached
   partner key: 4
   partner state: activity timeout aggregation collecting distributing
 
-slave: p1: current attached
+member: p1: current attached
   port_id: 2
   port_priority: 65535
   may_enable: true
@@ -388,7 +388,7 @@ slave: p1: current attached
   aggregation key: 4
   lacp_time: fast
 
-slave: p2: expired attached
+member: p2: expired attached
   port_id: 3
   port_priority: 65535
   may_enable: false
@@ -407,7 +407,7 @@ slave: p2: expired attached
   partner key: 2
   partner state: activity timeout aggregation collecting distributing
 
-slave: p3: current attached
+member: p3: current attached
   port_id: 4
   port_priority: 65535
   may_enable: true
@@ -435,13 +435,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p0: disabled
+member p0: disabled
   may_enable: false
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
 ---- bond1 ----
@@ -454,13 +454,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p2: disabled
+member p2: disabled
   may_enable: false
 
-slave p3: enabled
-  active slave
+member p3: enabled
+  active member
   may_enable: true
 
 ])
@@ -471,8 +471,8 @@ ovs-appctl time/warp 4100 100
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC
-ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC ], [0], [dnl
 ---- bond0 ----
   status: active negotiated
   sys_id: aa:55:aa:55:00:00
@@ -480,7 +480,7 @@ ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [d
   aggregation key: 2
   lacp_time: fast
 
-slave: p0: defaulted detached
+member: p0: defaulted detached
   port_id: 1
   port_priority: 65535
   may_enable: false
@@ -499,7 +499,7 @@ slave: p0: defaulted detached
   partner key: 0
   partner state:
 
-slave: p1: current attached
+member: p1: current attached
   port_id: 2
   port_priority: 65535
   may_enable: true
@@ -524,7 +524,7 @@ slave: p1: current attached
   aggregation key: 4
   lacp_time: fast
 
-slave: p2: defaulted detached
+member: p2: defaulted detached
   port_id: 3
   port_priority: 65535
   may_enable: false
@@ -543,7 +543,7 @@ slave: p2: defaulted detached
   partner key: 0
   partner state:
 
-slave: p3: current attached
+member: p3: current attached
   port_id: 4
   port_priority: 65535
   may_enable: true
@@ -571,13 +571,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p0: disabled
+member p0: disabled
   may_enable: false
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
 ---- bond1 ----
@@ -590,13 +590,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p2: disabled
+member p2: disabled
   may_enable: false
 
-slave p3: enabled
-  active slave
+member p3: enabled
+  active member
   may_enable: true
 
 ])
@@ -612,8 +612,8 @@ ovs-appctl time/warp 30100 100
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
-ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC
-ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [dnl
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC ], [0], [dnl
 ---- bond0 ----
   status: active negotiated
   sys_id: aa:55:aa:55:00:00
@@ -621,7 +621,7 @@ ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [d
   aggregation key: 2
   lacp_time: fast
 
-slave: p0: current attached
+member: p0: current attached
   port_id: 1
   port_priority: 65535
   may_enable: true
@@ -640,7 +640,7 @@ slave: p0: current attached
   partner key: 4
   partner state: activity timeout aggregation synchronized collecting distributing
 
-slave: p1: current attached
+member: p1: current attached
   port_id: 2
   port_priority: 65535
   may_enable: true
@@ -665,7 +665,7 @@ slave: p1: current attached
   aggregation key: 4
   lacp_time: fast
 
-slave: p2: current attached
+member: p2: current attached
   port_id: 3
   port_priority: 65535
   may_enable: true
@@ -684,7 +684,7 @@ slave: p2: current attached
   partner key: 2
   partner state: activity timeout aggregation synchronized collecting distributing
 
-slave: p3: current attached
+member: p3: current attached
   port_id: 4
   port_priority: 65535
   may_enable: true
@@ -712,13 +712,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p0: enabled
+member p0: enabled
   may_enable: true
 
-slave p1: enabled
-  active slave
+member p1: enabled
+  active member
   may_enable: true
 
 ---- bond1 ----
@@ -731,13 +731,13 @@ downdelay: 0 ms
 lacp_status: negotiated
 lacp_fallback_ab: false
 active-backup primary: <none>
-<active slave mac del>
+<active member mac del>
 
-slave p2: enabled
+member p2: enabled
   may_enable: true
 
-slave p3: enabled
-  active slave
+member p3: enabled
+  active member
   may_enable: true
 
 ])
@@ -771,8 +771,8 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 # Set miss_send_len to 128, enabling port_status messages to our service connection.
 ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
 
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
                             other-config:lacp-time=fast \
@@ -866,8 +866,8 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 # Set miss_send_len to 128, enabling port_status messages to our service connection.
 ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
 
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
                             other-config:lacp-time=fast \
@@ -961,8 +961,8 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 # Set miss_send_len to 128, enabling port_status messages to our service connection.
 ovs-appctl -t ovs-ofctl ofctl/send 0609000c0123456700000080
 
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
                             other-config:lacp-time=fast \

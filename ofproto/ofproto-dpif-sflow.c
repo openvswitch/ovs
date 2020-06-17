@@ -305,7 +305,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     SFLEthernet_counters* eth_counters;
     struct netdev_stats stats;
     enum netdev_flags flags;
-    struct lacp_slave_stats lacp_stats;
+    struct lacp_member_stats lacp_stats;
     const char *ifName;
 
     dsp = dpif_sflow_find_port(ds, u32_to_odp(poller->bridgePort));

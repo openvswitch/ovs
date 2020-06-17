@@ -68,12 +68,12 @@ rtnetlink_parse_link_info(const struct nlattr *nla,
                              ARRAY_SIZE(linkinfo_policy));
 
     if (parsed) {
-        change->master = (linkinfo[IFLA_INFO_KIND]
-                          ? nl_attr_get_string(linkinfo[IFLA_INFO_KIND])
-                          : NULL);
-        change->slave = (linkinfo[IFLA_INFO_SLAVE_KIND]
-                         ? nl_attr_get_string(linkinfo[IFLA_INFO_SLAVE_KIND])
-                         : NULL);
+        change->primary = (linkinfo[IFLA_INFO_KIND]
+                           ? nl_attr_get_string(linkinfo[IFLA_INFO_KIND])
+                           : NULL);
+        change->sub = (linkinfo[IFLA_INFO_SLAVE_KIND]
+                       ? nl_attr_get_string(linkinfo[IFLA_INFO_SLAVE_KIND])
+                       : NULL);
     }
 
     return parsed;
@@ -134,8 +134,8 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
                 parsed = rtnetlink_parse_link_info(attrs[IFLA_LINKINFO],
                                                    change);
             } else {
-                change->master = NULL;
-                change->slave = NULL;
+                change->primary = NULL;
+                change->sub = NULL;
             }
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(nlmsg->nlmsg_type)) {

@@ -6322,12 +6322,12 @@ AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: OFPBAC_BAD_SET_LEN
 ])
 
-AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata1[[0..31]], slaves:4,8)"], [1], [], [stderr])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata1[[0..31]], members:4,8)"], [1], [], [stderr])
 AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: NXFMFC_INVALID_TLV_FIELD
 ])
 
-AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata0[[32..63]], slaves:4,8)"], [1], [], [stderr])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata0[[32..63]], members:4,8)"], [1], [], [stderr])
 AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: OFPBAC_BAD_SET_LEN
 ])

@@ -12,6 +12,8 @@ Post-v2.14.0
    - Terminology:
      * The terms "master" and "slave" have been replaced by "primary" and
        "secondary", respectively, for OpenFlow connection roles.
+     * The term "slave" has been replaced by "member", for bonds, LACP, and
+       OpenFlow bundle actions.
 
 
 v2.14.0 - 17 Aug 2020
@@ -833,7 +835,7 @@ v2.4.0 - 20 Aug 2015
      The implementation has been tested successfully against the Ixia Automated
      Network Validation Library (ANVL).
    - Stats are no longer updated on fake bond interface.
-   - Keep active bond slave selection across OVS restart.
+   - Keep active bond interface selection across OVS restart.
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
      containers. If and when there is a native integration of Open vSwitch
      with Docker, the wrapper script will be retired.

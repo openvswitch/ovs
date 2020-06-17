@@ -9,7 +9,7 @@ AT_BANNER([bundle link selection])
 
 AT_SETUP([hrw bundle link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],members:1,2,3,4,5']],
   [0], [ignore])
 # 100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 # 110000: disruption=0.50 (perfect=0.50) 0.50 0.50 0.00 0.00 0.00 0.00
@@ -80,7 +80,7 @@ AT_CLEANUP
 
 AT_SETUP([active_backup bundle link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,active_backup,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5,6']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,active_backup,ofport,NXM_NX_REG0[],members:1,2,3,4,5,6']],
   [0],
 [100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 110000: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
@@ -152,7 +152,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle single link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],members:1']],
   [0], [ignore])
 # 1: disruption=1.00 (perfect=1.00) 1.00
 # 0: disruption=1.00 (perfect=1.00) 0.00
@@ -161,7 +161,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle no link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],slaves:']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l4,60,hrw,ofport,NXM_NX_REG0[],members:']],
   [0], [ignore])
 AT_CLEANUP
 #: disruption=0.00 (perfect=0.00)
@@ -176,29 +176,29 @@ AT_CLEANUP
 
 AT_SETUP([bundle action bad fields])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(xyzzy,60,hrw,ofport,slaves:1,2))'], [1], [],
-  [ovs-ofctl: xyzzy,60,hrw,ofport,slaves:1,2: unknown fields `xyzzy'
+AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(xyzzy,60,hrw,ofport,members:1,2))'], [1], [],
+  [ovs-ofctl: xyzzy,60,hrw,ofport,members:1,2: unknown fields `xyzzy'
 ])
 AT_CLEANUP
 
 AT_SETUP([bundle action bad algorithm])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,fubar,ofport,slaves:1,2))'], [1], [],
-  [ovs-ofctl: symmetric_l4,60,fubar,ofport,slaves:1,2: unknown algorithm `fubar'
+AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,fubar,ofport,members:1,2))'], [1], [],
+  [ovs-ofctl: symmetric_l4,60,fubar,ofport,members:1,2: unknown algorithm `fubar'
 ])
 AT_CLEANUP
 
-AT_SETUP([bundle action bad slave type])
+AT_SETUP([bundle action bad member type])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,hrw,robot,slaves:1,2))'], [1], [],
-  [ovs-ofctl: symmetric_l4,60,hrw,robot,slaves:1,2: unknown slave_type `robot'
+AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,hrw,robot,members:1,2))'], [1], [],
+  [ovs-ofctl: symmetric_l4,60,hrw,robot,members:1,2: unknown member_type `robot'
 ])
 AT_CLEANUP
 
-AT_SETUP([bundle action bad slave delimiter])
+AT_SETUP([bundle action bad member delimiter])
 AT_KEYWORDS([bundle_action])
 AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,hrw,ofport,robot:1,2))'], [1], [],
-  [ovs-ofctl: symmetric_l4,60,hrw,ofport,robot:1,2: missing slave delimiter, expected `slaves' got `robot'
+  [ovs-ofctl: symmetric_l4,60,hrw,ofport,robot:1,2: missing member delimiter, expected `members', got `robot'
 ])
 AT_CLEANUP
 
@@ -211,9 +211,9 @@ dnl Valgrind warnings for use-after-free bugs.
 AT_SETUP([bundle action with many ports])
 AT_KEYWORDS([bundle_action])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,bundle(symmetric_l4,0,hrw,ofport,slaves:[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]])'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,bundle(symmetric_l4,0,hrw,ofport,members:[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]])'])
 AT_CHECK([ovs-ofctl dump-flows br0 --no-stats], [0], [dnl
- actions=load:0x1->OXM_OF_METADATA[[]],load:0x2->OXM_OF_METADATA[[]],load:0x3->OXM_OF_METADATA[[]],load:0x4->OXM_OF_METADATA[[]],bundle(symmetric_l4,0,hrw,ofport,slaves:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40)
+ actions=load:0x1->OXM_OF_METADATA[[]],load:0x2->OXM_OF_METADATA[[]],load:0x3->OXM_OF_METADATA[[]],load:0x4->OXM_OF_METADATA[[]],bundle(symmetric_l4,0,hrw,ofport,members:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -226,7 +226,7 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p2 -- set Interface p2 type=dummy -- \
     set Interface p2 ofport_request=2
 ])
-AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle(eth_src,50,active_backup,ofport,slaves:1,2)'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle(eth_src,50,active_backup,ofport,members:1,2)'])
 AT_CHECK([ovs-ofctl mod-port br0 p1 up])
 AT_CHECK([ovs-ofctl mod-port br0 p2 up])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=LOCAL,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06'], [0], [stdout])
@@ -264,7 +264,7 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p2 -- set Interface p2 type=dummy -- \
     set Interface p2 ofport_request=2
 ])
-AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle_load(eth_src,50,hrw,ofport,OXM_OF_ETH_SRC[[0..15]],slaves:1,2)'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle_load(eth_src,50,hrw,ofport,OXM_OF_ETH_SRC[[0..15]],members:1,2)'])
 AT_CHECK([ovs-ofctl mod-port br0 p1 down])
 AT_CHECK([ovs-ofctl mod-port br0 p2 down])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=LOCAL,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06'], [0], [stdout])
@@ -276,7 +276,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle symmetric_l3 link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],members:1,2,3,4,5']],
   [0], [ignore])
 # 100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 # 110000: disruption=0.50 (perfect=0.50) 0.50 0.50 0.00 0.00 0.00 0.00
@@ -347,7 +347,7 @@ AT_CLEANUP
 
 AT_SETUP([active_backup bundle symmetric_l3 link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,active_backup,ofport,NXM_NX_REG0[],slaves:1,2,3,4,5,6']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,active_backup,ofport,NXM_NX_REG0[],members:1,2,3,4,5,6']],
   [0],
 [100000: disruption=1.00 (perfect=1.00) 1.00 0.00 0.00 0.00 0.00 0.00
 110000: disruption=0.00 (perfect=0.00) 1.00 0.00 0.00 0.00 0.00 0.00
@@ -419,7 +419,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle symmetric_l3 single link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],members:1']],
   [0], [ignore])
 # 1: disruption=1.00 (perfect=1.00) 1.00
 # 0: disruption=1.00 (perfect=1.00) 0.00
@@ -428,7 +428,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle symmetric_l3 single link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],slaves:1']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],members:1']],
   [0], [ignore])
 # 1: disruption=1.00 (perfect=1.00) 1.00
 # 0: disruption=1.00 (perfect=1.00) 0.00
@@ -437,7 +437,7 @@ AT_CLEANUP
 
 AT_SETUP([hrw bundle symmetric_l3 no link selection])
 AT_KEYWORDS([bundle_action])
-AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],slaves:']],
+AT_CHECK([[ovstest test-bundle 'symmetric_l3,60,hrw,ofport,NXM_NX_REG0[],members:']],
   [0], [ignore])
 AT_CLEANUP
 #: disruption=0.00 (perfect=0.00)
@@ -446,9 +446,9 @@ AT_CLEANUP
 AT_SETUP([bundle symmetric_l3 action with many ports])
 AT_KEYWORDS([bundle_action])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,bundle(symmetric_l3,0,hrw,ofport,slaves:[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]])'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,bundle(symmetric_l3,0,hrw,ofport,members:[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]])'])
 AT_CHECK([ovs-ofctl dump-flows br0 --no-stats], [0], [dnl
- actions=load:0x1->OXM_OF_METADATA[[]],load:0x2->OXM_OF_METADATA[[]],load:0x3->OXM_OF_METADATA[[]],load:0x4->OXM_OF_METADATA[[]],bundle(symmetric_l3,0,hrw,ofport,slaves:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40)
+ actions=load:0x1->OXM_OF_METADATA[[]],load:0x2->OXM_OF_METADATA[[]],load:0x3->OXM_OF_METADATA[[]],load:0x4->OXM_OF_METADATA[[]],bundle(symmetric_l3,0,hrw,ofport,members:1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

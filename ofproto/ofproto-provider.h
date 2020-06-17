@@ -1225,7 +1225,7 @@ struct ofproto_class {
      * not support LACP.
      */
     int (*port_get_lacp_stats)(const struct ofport *port,
-                               struct lacp_slave_stats *stats);
+                               struct lacp_member_stats *stats);
 
 /* ## ----------------------- ## */
 /* ## OpenFlow Rule Functions ## */
@@ -1707,11 +1707,11 @@ struct ofproto_class {
 
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as
-     * a Port in OVSDB, that is, it consists of one or more "slave" devices
-     * (Interfaces, in OVSDB) along with VLAN and LACP configuration and, if
-     * there is more than one slave, a bonding configuration.  If 'aux' is
-     * already registered then this function updates its configuration to 's'.
-     * Otherwise, this function registers a new bundle.
+     * a Port in OVSDB, that is, it consists of one or more "member"
+     * devices (Interfaces, in OVSDB) along with VLAN and LACP configuration
+     * and, if there is more than one member, a bonding configuration.  If 'aux'
+     * is already registered then this function updates its configuration to
+     * 's'.  Otherwise, this function registers a new bundle.
      *
      * If 's' is NULL, this function unregisters the bundle registered on
      * 'ofproto' associated with client data pointer 'aux'.  If no such bundle
