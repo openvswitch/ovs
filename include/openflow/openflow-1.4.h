@@ -274,7 +274,7 @@ struct ofp14_role_status {
     ovs_be32 role;              /* One of OFPCR_ROLE_*. */
     uint8_t  reason;            /* One of OFPCRR_*. */
     uint8_t  pad[3];            /* Align to 64 bits. */
-    ovs_be64 generation_id;     /* Master Election Generation Id */
+    ovs_be64 generation_id;     /* Primary Election Generation Id */
 
     /* Followed by a list of struct ofp14_role_prop_header */
 };
@@ -282,9 +282,9 @@ OFP_ASSERT(sizeof(struct ofp14_role_status) == 16);
 
 /* What changed about the controller role */
 enum ofp14_controller_role_reason {
-    OFPCRR_MASTER_REQUEST = 0,  /* Another controller asked to be master. */
-    OFPCRR_CONFIG         = 1,  /* Configuration changed on the switch. */
-    OFPCRR_EXPERIMENTER   = 2,  /* Experimenter data changed. */
+    OFPCRR_PRIMARY_REQUEST = 0, /* Another controller asked to be primary. */
+    OFPCRR_CONFIG          = 1, /* Configuration changed on the switch. */
+    OFPCRR_EXPERIMENTER    = 2, /* Experimenter data changed. */
     OFPCRR_N_REASONS            /* Denotes number of reasons. */
 };
 

@@ -3157,7 +3157,7 @@ check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700040080
 check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
-# Become slave, which should disable everything except port status.
+# Become secondary, which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000002
 check_async 4 OFPPR_ADD OFPPR_DELETE
 
@@ -3172,7 +3172,7 @@ check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 010400180000000300002320000000140000000000000000
 
-# Become master.
+# Become primary.
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
 check_async 7 OFPR_ACTION OFPPR_ADD
 
@@ -3264,7 +3264,7 @@ check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700040080
 check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
-# Become slave (OF 1.2), which should disable everything except port status.
+# Become secondary (OF 1.2), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000200000003000000000000000000000001
 check_async 4 OFPPR_ADD OFPPR_DELETE
 
@@ -3279,7 +3279,7 @@ check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 030400180000000300002320000000140000000000000000
 
-# Become master (OF 1.2).
+# Become primary (OF 1.2).
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
 check_async 7 OFPR_ACTION OFPPR_ADD
 
@@ -3383,7 +3383,7 @@ check_async 1
 ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
 check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
-# Become slave (OF 1.3), which should disable everything except port status.
+# Become secondary (OF 1.3), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_DELETE
 
@@ -3398,7 +3398,7 @@ check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 040400180000000300002320000000140000000000000000
 
-# Become master (OF 1.3).
+# Become primary (OF 1.3).
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000400000002000000000000000000000002
 check_async 6 OFPR_ACTION OFPPR_ADD
 
@@ -3615,7 +3615,7 @@ check_async 1
 ovs_appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
 check_async 2 OFPR_PACKET_OUT OFPR_ACTION_SET OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
-# Become slave (OF 1.4), which should disable everything except port status.
+# Become secondary (OF 1.4), which should disable everything except port status.
 ovs_appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
@@ -3630,7 +3630,7 @@ check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 # Restore controller ID 0.
 ovs_appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000000
 
-# Become master (OF 1.4).
+# Become primary (OF 1.4).
 ovs_appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
 check_async 6 OFPR_PACKET_OUT OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
 
@@ -3740,27 +3740,27 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.2): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 031800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.2): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.2): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.2): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=master generation_id=1"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=primary generation_id=1"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -3779,8 +3779,8 @@ AT_CLEANUP
 
 dnl This test checks that the role request/response messaging works,
 dnl that generation_id is handled properly, and that role status update
-dnl messages are sent when a controller's role gets changed from master
-dnl to slave.
+dnl messages are sent when a controller's role gets changed from primary
+dnl to secondary.
 AT_SETUP([ofproto - controller role (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 on_exit 'kill `cat c1.pid c2.pid`'
@@ -3805,28 +3805,28 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.4): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 051800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.4): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.4): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.4): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=master generation_id=1"
-echo >>expout2 "OFPT_ROLE_STATUS (OF1.4): role=slave generation_id=1 reason=master_request"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=primary generation_id=1"
+echo >>expout2 "OFPT_ROLE_STATUS (OF1.4): role=secondary generation_id=1 reason=primary_request"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -3845,8 +3845,8 @@ AT_CLEANUP
 
 dnl This test checks that the role request/response messaging works,
 dnl that generation_id is handled properly, and that role status update
-dnl messages are sent when a controller's role gets changed from master
-dnl to slave.
+dnl messages are sent when a controller's role gets changed from primary
+dnl to secondary.
 AT_SETUP([ofproto - controller role (OpenFlow 1.3)])
 OVS_VSWITCHD_START
 on_exit 'kill `cat c1.pid c2.pid`'
@@ -3871,28 +3871,28 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.3): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 041800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.3): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.3): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.3): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=master generation_id=1"
-echo >>expout2 "ONFT_ROLE_STATUS (OF1.3): role=slave generation_id=1 reason=master_request"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=primary generation_id=1"
+echo >>expout2 "ONFT_ROLE_STATUS (OF1.3): role=secondary generation_id=1 reason=primary_request"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -3978,13 +3978,13 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
+# controller 1: Become secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 061800180000000300000003000000008000000000000002
 
-# controller 2: Become master
+# controller 2: Become primary
 ovs-appctl -t `pwd`/c2 ofctl/send 051800180000000300000002000000008000000000000003
 
-# controller 1: Become slave
+# controller 1: Become secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 051800180000000300000003000000008000000000000004
 
 # controller 1: Enabled requestforward using set Asynchronous message
@@ -4074,16 +4074,16 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
-# NXT_ROLE_REQUEST (xid=0x3): role=slave
+# controller 1: Become secondary
+# NXT_ROLE_REQUEST (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 0104001400000003000023200000000a00000002
 
-# controller 2: Become master
-# NXT_ROLE_REQUEST (xid=0x3): role=master
+# controller 2: Become primary
+# NXT_ROLE_REQUEST (xid=0x3): role=primary
 ovs-appctl -t `pwd`/c2 ofctl/send 0104001400000003000023200000000a00000001
 
-# controller 1: Become slave
-# NXT_ROLE_REQUEST (xid=0x3): role=slave
+# controller 1: Become secondary
+# NXT_ROLE_REQUEST (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 0104001400000003000023200000000a00000002
 
 # controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2
@@ -4172,16 +4172,16 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+# controller 1: Become secondary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000300000003000000008000000000000002
 
-# controller 2: Become master
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=master
+# controller 2: Become primary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=primary
 ovs-appctl -t `pwd`/c2 ofctl/send 041800180000000300000002000000008000000000000003
 
-# controller 1: Become slave
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+# controller 1: Become secondary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 041800180000000300000003000000008000000000000004
 
 # controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2 (necessary for OF1.3)
@@ -4951,7 +4951,7 @@ EOF
 AT_CHECK([ofctl_strip < monitor.log], [], [dnl
 send: OFPT_GET_ASYNC_REQUEST (OF1.3):
 OFPT_GET_ASYNC_REPLY (OF1.3):
- master:
+ primary:
        PACKET_IN: no_match action
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard delete group_delete
@@ -4959,7 +4959,7 @@ OFPT_GET_ASYNC_REPLY (OF1.3):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: (off)
      PORT_STATUS: add delete modify
     FLOW_REMOVED: (off)

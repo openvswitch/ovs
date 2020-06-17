@@ -562,12 +562,12 @@ between a switch and its controller.
 .IP
 When a switch has more than one controller configured, only the
 traffic to and from a single controller is output.  If none of the
-controllers is configured as a master or a slave (using a Nicira
+controllers is configured as a primary or a secondary (using a Nicira
 extension to OpenFlow 1.0 or 1.1, or a standard request in OpenFlow
 1.2 or later), then a controller is chosen arbitrarily among
-them.  If there is a master controller, it is chosen; otherwise, if
-there are any controllers that are not masters or slaves, one is
-chosen arbitrarily; otherwise, a slave controller is chosen
+them.  If there is a primary controller, it is chosen; otherwise, if
+there are any controllers that are not primaries or secondaries, one is
+chosen arbitrarily; otherwise, a secondary controller is chosen
 arbitrarily.  This choice is made once at connection time and does not
 change as controllers reconfigure their roles.
 .IP

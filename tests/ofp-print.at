@@ -2816,7 +2816,8 @@ AT_CLEANUP
 
 AT_SETUP([OFPT_SET_ASYNC - OF1.3])
 AT_KEYWORDS([ofp-print])
-dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl This message has bit 12 set for the PACKET_IN messages (primary and
+dnl secondary).
 dnl Those aren't supported bits so they get silently ignored on decoding.
 dnl That seems reasonable because OF1.3 doesn't define any error codes for
 dnl OFPT_SET_ASYNC.
@@ -2825,7 +2826,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 03 00 00 00 07 00 00 00 00 00 00 00 03 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.3) (xid=0x0):
- master:
+ primary:
        PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
@@ -2833,7 +2834,7 @@ OFPT_SET_ASYNC (OF1.3) (xid=0x0):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
@@ -2849,7 +2850,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 18 00 18 00 00 00 02 00 00 00 02 00 00 00 00 \
 00 00 00 00 00 00 00 03 \
 "], [0], [dnl
-OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=master generation_id=3
+OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=primary generation_id=3
 ])
 AT_CLEANUP
 
@@ -2869,7 +2870,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 14 00 00 00 02 00 00 23 20 00 00 00 0a \
 00 00 00 01 \
 "], [0], [dnl
-NXT_ROLE_REQUEST (xid=0x2): role=master
+NXT_ROLE_REQUEST (xid=0x2): role=primary
 ])
 AT_CLEANUP
 
@@ -2879,7 +2880,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 19 00 18 00 00 00 02 00 00 00 03 00 00 00 00 \
 12 34 56 78 ab cd ef 90 \
 "], [0], [dnl
-OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=slave generation_id=1311768467750121360
+OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=secondary generation_id=1311768467750121360
 ])
 AT_CLEANUP
 
@@ -2889,67 +2890,67 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 14 00 00 00 02 00 00 23 20 00 00 00 0b \
 00 00 00 02 \
 "], [0], [dnl
-NXT_ROLE_REPLY (xid=0x2): role=slave
+NXT_ROLE_REPLY (xid=0x2): role=secondary
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, experimenter - OF1.3])
+AT_SETUP([OFP_ROLE_STATUS - primary, experimenter - OF1.3])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 04 04 00 20 00 00 00 0a 4f 4e 46 00 00 00 07 77 \
 00 00 00 02 02 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=master reason=experimenter_data_changed
+ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=primary reason=experimenter_data_changed
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, config - OF1.3])
+AT_SETUP([OFP_ROLE_STATUS - primary, config - OF1.3])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 04 04 00 20 00 00 00 0a 4f 4e 46 00 00 00 07 77 \
 00 00 00 02 01 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=master reason=configuration_changed
+ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=primary reason=configuration_changed
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, config,generation - OF1.3])
+AT_SETUP([OFP_ROLE_STATUS - primary, config,generation - OF1.3])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 04 04 00 20 00 00 00 0a 4f 4e 46 00 00 00 07 77 \
 00 00 00 02 01 00 00 00 00 00 00 00 00 00 00 10 \
 "], [0], [dnl
-ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=master generation_id=16 reason=configuration_changed
+ONFT_ROLE_STATUS (OF1.3) (xid=0xa): role=primary generation_id=16 reason=configuration_changed
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, experimenter - OF1.4])
+AT_SETUP([OFP_ROLE_STATUS - primary, experimenter - OF1.4])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 02 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master reason=experimenter_data_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=primary reason=experimenter_data_changed
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, config - OF1.4])
+AT_SETUP([OFP_ROLE_STATUS - primary, config - OF1.4])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 01 00 00 00 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master reason=configuration_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=primary reason=configuration_changed
 ])
 AT_CLEANUP
 
-AT_SETUP([OFP_ROLE_STATUS - master, config,generation - OF1.4])
+AT_SETUP([OFP_ROLE_STATUS - primary, config,generation - OF1.4])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 1e 00 18 00 00 00 0a \
 00 00 00 02 01 00 00 00 00 00 00 00 00 00 00 10 \
 "], [0], [dnl
-OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master generation_id=16 reason=configuration_changed
+OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=primary generation_id=16 reason=configuration_changed
 ])
 AT_CLEANUP
 
@@ -3156,7 +3157,7 @@ AT_CLEANUP
 
 AT_SETUP([NXT_SET_ASYNC_CONFIG])
 AT_KEYWORDS([ofp-print])
-dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl This message has bit 12 set for the PACKET_IN messages (primary and secondary).
 dnl Those aren't supported bits so they get silently ignored on decoding.
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 28 00 00 00 00 00 00 23 20 00 00 00 13 \
@@ -3164,7 +3165,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 03 \
 "], [0], [dnl
 NXT_SET_ASYNC_CONFIG (xid=0x0):
- master:
+ primary:
        PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
@@ -3172,7 +3173,7 @@ NXT_SET_ASYNC_CONFIG (xid=0x0):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
@@ -3191,7 +3192,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 05 00 08 00 00 00 05 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.4) (xid=0x2):
- master:
+ primary:
        PACKET_IN: action
      PORT_STATUS: add modify
     FLOW_REMOVED: idle delete
@@ -3199,7 +3200,7 @@ OFPT_SET_ASYNC (OF1.4) (xid=0x2):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: no_match invalid_ttl
      PORT_STATUS: delete
     FLOW_REMOVED: delete group_delete meter_delete

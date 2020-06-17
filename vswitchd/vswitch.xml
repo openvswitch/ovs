@@ -5264,16 +5264,21 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           <dt><code>other</code></dt>
           <dd>Allows the controller access to all OpenFlow features.</dd>
           <dt><code>master</code></dt>
-          <dd>Equivalent to <code>other</code>, except that there may be at
-          most one master controller at a time.  When a controller configures
-          itself as <code>master</code>, any existing master is demoted to
-          the <code>slave</code> role.</dd>
+          <dd>
+            Equivalent to <code>other</code>, except that there may be at
+            most one such controller at a time.  If a given controller
+            promotes itself to this role, <code>ovs-vswitchd</code>
+            demotes any existing controller with the role to <code>slave</code>.
+          </dd>
+
           <dt><code>slave</code></dt>
-          <dd>Allows the controller read-only access to OpenFlow features.
-          Attempts to modify the flow table will be rejected with an
-          error.  Slave controllers do not receive OFPT_PACKET_IN or
-          OFPT_FLOW_REMOVED messages, but they do receive OFPT_PORT_STATUS
-          messages.</dd>
+          <dd>
+            Allows the controller read-only access to OpenFlow features.
+            Attempts to modify the flow table will be rejected with an
+            error.  Such controllers do not receive OFPT_PACKET_IN or
+            OFPT_FLOW_REMOVED messages, but they do receive OFPT_PORT_STATUS
+            messages.
+          </dd>
         </dl>
       </column>
 

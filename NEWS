@@ -52,6 +52,9 @@ v2.14.0 - 17 Aug 2020
    - Tunnels: TC Flower offload
      * Tunnel Local endpoint address masked match are supported.
      * Tunnel Romte endpoint address masked match are supported.
+   - Terminology:
+     * The terms "master" and "slave" have been replaced by "primary" and
+       "secondary", respectively, for OpenFlow connection roles.
 
 
 v2.13.0 - 14 Feb 2020

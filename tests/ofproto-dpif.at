@@ -3401,13 +3401,13 @@ AT_CHECK([ovs-ofctl --protocols=OpenFlow13 add-flow br0 'priority=0 actions=outp
 dnl Singleton controller action.
 AT_CHECK([ovs-ofctl monitor -P standard --protocols=OpenFlow13 br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-# Become slave (OF 1.3), which should disable everything except port status.
+# Become secondary (OF 1.3), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000200000003000000000000000000000001
 
 # Ensure that ovs-vswitchd gets a chance to reply before sending another command.
 ovs-appctl time/warp 500 100
 
-# Use OF 1.3 OFPT_SET_ASYNC to enable OFPR_NO_MATCH for slave only.
+# Use OF 1.3 OFPT_SET_ASYNC to enable OFPR_NO_MATCH for secondary only.
 ovs-appctl -t ovs-ofctl ofctl/send 041c002000000002000000000000000100000000000000000000000000000000
 
 ovs-appctl time/warp 500 100
@@ -3419,11 +3419,11 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-send: OFPT_ROLE_REQUEST (OF1.3) (xid=0x2): role=slave generation_id=1
-OFPT_ROLE_REPLY (OF1.3) (xid=0x2): role=slave generation_id=1
+send: OFPT_ROLE_REQUEST (OF1.3) (xid=0x2): role=secondary generation_id=1
+OFPT_ROLE_REPLY (OF1.3) (xid=0x2): role=secondary generation_id=1
 dnl
 send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
- master:
+ primary:
        PACKET_IN: (off)
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)
@@ -3431,7 +3431,7 @@ send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: no_match
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)

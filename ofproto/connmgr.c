@@ -212,9 +212,9 @@ struct connmgr {
      * traversals from other threads can be made safe by holding the
      * ofproto_mutex.*/
     struct ovs_list conns;       /* All ofconns. */
-    uint64_t master_election_id; /* monotonically increasing sequence number
-                                  * for master election */
-    bool master_election_id_defined;
+    uint64_t primary_election_id; /* monotonically increasing sequence number
+                                   * for primary election */
+    bool primary_election_id_defined;
 
     /* OpenFlow connection establishment. */
     struct hmap services;       /* Contains "struct ofservice"s. */
@@ -253,8 +253,8 @@ connmgr_create(struct ofproto *ofproto,
     mgr->local_port_name = xstrdup(local_port_name);
 
     ovs_list_init(&mgr->conns);
-    mgr->master_election_id = 0;
-    mgr->master_election_id_defined = false;
+    mgr->primary_election_id = 0;
+    mgr->primary_election_id_defined = false;
 
     hmap_init(&mgr->services);
     mgr->snoops = NULL;
@@ -773,11 +773,11 @@ snoop_preference(const struct ofservice *ofservice)
     }
 
     switch (ofconn->role) {
-    case OFPCR12_ROLE_MASTER:
+    case OFPCR12_ROLE_PRIMARY:
         return 3;
     case OFPCR12_ROLE_EQUAL:
         return 2;
-    case OFPCR12_ROLE_SLAVE:
+    case OFPCR12_ROLE_SECONDARY:
         return 1;
     case OFPCR12_ROLE_NOCHANGE:
     default:
@@ -818,33 +818,33 @@ ofconn_get_type(const struct ofconn *ofconn)
     return ofconn->type;
 }
 
-/* If a master election id is defined, stores it into '*idp' and returns
+/* If a primary election id is defined, stores it into '*idp' and returns
  * true.  Otherwise, stores UINT64_MAX into '*idp' and returns false. */
 bool
-ofconn_get_master_election_id(const struct ofconn *ofconn, uint64_t *idp)
+ofconn_get_primary_election_id(const struct ofconn *ofconn, uint64_t *idp)
 {
-    *idp = (ofconn->connmgr->master_election_id_defined
-            ? ofconn->connmgr->master_election_id
+    *idp = (ofconn->connmgr->primary_election_id_defined
+            ? ofconn->connmgr->primary_election_id
             : UINT64_MAX);
-    return ofconn->connmgr->master_election_id_defined;
+    return ofconn->connmgr->primary_election_id_defined;
 }
 
-/* Sets the master election id.
+/* Sets the primary election id.
  *
  * Returns true if successful, false if the id is stale
  */
 bool
-ofconn_set_master_election_id(struct ofconn *ofconn, uint64_t id)
+ofconn_set_primary_election_id(struct ofconn *ofconn, uint64_t id)
 {
-    if (ofconn->connmgr->master_election_id_defined
+    if (ofconn->connmgr->primary_election_id_defined
         &&
         /* Unsigned difference interpreted as a two's complement signed
          * value */
-        (int64_t)(id - ofconn->connmgr->master_election_id) < 0) {
+        (int64_t)(id - ofconn->connmgr->primary_election_id) < 0) {
         return false;
     }
-    ofconn->connmgr->master_election_id = id;
-    ofconn->connmgr->master_election_id_defined = true;
+    ofconn->connmgr->primary_election_id = id;
+    ofconn->connmgr->primary_election_id_defined = true;
 
     return true;
 }
@@ -864,7 +864,7 @@ ofconn_send_role_status(struct ofconn *ofconn, uint32_t role, uint8_t reason)
     struct ofputil_role_status status;
     status.reason = reason;
     status.role = role;
-    ofconn_get_master_election_id(ofconn, &status.generation_id);
+    ofconn_get_primary_election_id(ofconn, &status.generation_id);
 
     struct ofpbuf *buf
         = ofputil_encode_role_status(&status, ofconn_get_protocol(ofconn));
@@ -873,19 +873,19 @@ ofconn_send_role_status(struct ofconn *ofconn, uint32_t role, uint8_t reason)
     }
 }
 
-/* Changes 'ofconn''s role to 'role'.  If 'role' is OFPCR12_ROLE_MASTER then
- * any existing master is demoted to a slave. */
+/* Changes 'ofconn''s role to 'role'.  If 'role' is OFPCR12_ROLE_PRIMARY then
+ * any existing primary is demoted to a secondary. */
 void
 ofconn_set_role(struct ofconn *ofconn, enum ofp12_controller_role role)
 {
-    if (role != ofconn->role && role == OFPCR12_ROLE_MASTER) {
+    if (role != ofconn->role && role == OFPCR12_ROLE_PRIMARY) {
         struct ofconn *other;
 
         LIST_FOR_EACH (other, connmgr_node, &ofconn->connmgr->conns) {
-            if (other->role == OFPCR12_ROLE_MASTER) {
-                other->role = OFPCR12_ROLE_SLAVE;
-                ofconn_send_role_status(other, OFPCR12_ROLE_SLAVE,
-                                        OFPCRR_MASTER_REQUEST);
+            if (other->role == OFPCR12_ROLE_PRIMARY) {
+                other->role = OFPCR12_ROLE_SECONDARY;
+                ofconn_send_role_status(other, OFPCR12_ROLE_SECONDARY,
+                                        OFPCRR_PRIMARY_REQUEST);
             }
         }
     }
@@ -898,9 +898,9 @@ ofconn_set_invalid_ttl_to_controller(struct ofconn *ofconn, bool enable)
     struct ofputil_async_cfg ac = ofconn_get_async_config(ofconn);
     uint32_t bit = 1u << OFPR_INVALID_TTL;
     if (enable) {
-        ac.master[OAM_PACKET_IN] |= bit;
+        ac.primary[OAM_PACKET_IN] |= bit;
     } else {
-        ac.master[OAM_PACKET_IN] &= ~bit;
+        ac.primary[OAM_PACKET_IN] &= ~bit;
     }
     ofconn_set_async_config(ofconn, &ac);
 }
@@ -910,7 +910,7 @@ ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
 {
     struct ofputil_async_cfg ac = ofconn_get_async_config(ofconn);
     uint32_t bit = 1u << OFPR_INVALID_TTL;
-    return (ac.master[OAM_PACKET_IN] & bit) != 0;
+    return (ac.primary[OAM_PACKET_IN] & bit) != 0;
 }
 
 /* Returns the currently configured protocol for 'ofconn', one of OFPUTIL_P_*.
@@ -1002,11 +1002,11 @@ ofconn_set_async_config(struct ofconn *ofconn,
 
     if (ofputil_protocol_to_ofp_version(ofconn_get_protocol(ofconn))
         < OFP14_VERSION) {
-        if (ofconn->async_cfg->master[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
-            ofconn->async_cfg->master[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
+        if (ofconn->async_cfg->primary[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
+            ofconn->async_cfg->primary[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
         }
-        if (ofconn->async_cfg->slave[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
-            ofconn->async_cfg->slave[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
+        if (ofconn->async_cfg->secondary[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
+            ofconn->async_cfg->secondary[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
         }
     }
 }
@@ -1441,9 +1441,9 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     }
 
     struct ofputil_async_cfg ac = ofconn_get_async_config(ofconn);
-    uint32_t *masks = (ofconn->role == OFPCR12_ROLE_SLAVE
-                       ? ac.slave
-                       : ac.master);
+    uint32_t *masks = (ofconn->role == OFPCR12_ROLE_SECONDARY
+                       ? ac.secondary
+                       : ac.primary);
     return (masks[type] & (1u << reason)) != 0;
 }
 
