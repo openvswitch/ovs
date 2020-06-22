@@ -43,10 +43,6 @@ OVSDB Clustering To-do List
 
   * ACID (and CAP?) explanation.
 
-  * Upgrading OVN to a clustered database
-
-  * Installing OVN with a clustered database
-
   * Overall diagram explaining the cluster and ovsdb protocol pieces
 
 * Future work:
