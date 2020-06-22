@@ -113,7 +113,6 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
         comp_ver=10
         ver_offset=4
         installed_ver="$minor_rev"
-    fi
     elif [ "$major_rev" = "1127" ]; then
 #        echo "rhel78"
         comp_ver=10
