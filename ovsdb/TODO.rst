@@ -27,11 +27,7 @@ OVSDB Clustering To-do List
 
 * Ephemeral columns.
 
-* Unit test snapshotting.
-
 * Locks.
-
-* Investigate 100% CPU for long-running triggers
 
 * Tons of unit tests.
 
