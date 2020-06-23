@@ -753,6 +753,9 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
                 return NULL;
             }
             break;
+        case CT_UPDATE_VALID_NEW:
+            state |= OVS_CS_F_NEW;
+            break;
         }
     }
     if (entry) {
