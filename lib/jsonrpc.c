@@ -825,8 +825,10 @@ jsonrpc_session_open_multiple(const struct svec *remotes, bool retry)
     s = xmalloc(sizeof *s);
 
     /* Set 'n' remotes from 'names'. */
-    ovs_assert(remotes->n > 0);
     svec_clone(&s->remotes, remotes);
+    if (!s->remotes.n) {
+        svec_add(&s->remotes, "invalid:");
+    }
     s->next_remote = 0;
 
     s->reconnect = reconnect_create(time_msec());
