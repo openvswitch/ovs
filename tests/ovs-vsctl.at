@@ -966,6 +966,14 @@ AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-tp netdev zone=1])])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
 
+AT_CHECK(
+  [RUN_OVS_VSCTL_TOGETHER([--id=@n create CT_Zone external_ids:"test"="123"],
+                          [--id=@m create Datapath datapath_version=0 ct_zones:"10"=@n],
+                          [set Open_vSwitch . datapaths:"netdev"=@m])],
+  [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:10, Timeout Policies: system default
+])
+
 AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
 AT_CHECK([RUN_OVS_VSCTL([list-dp-cap system])], [0], [recirc=true
 ])

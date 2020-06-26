@@ -1344,9 +1344,13 @@ cmd_list_zone_tp(struct ctl_context *ctx)
 
         struct ovsrec_ct_timeout_policy *tp = zone->timeout_policy;
 
-        for (int j = 0; j < tp->n_timeouts; j++) {
-            ds_put_format(&ctx->output, "%s=%"PRIu64" ",
-                          tp->key_timeouts[j], tp->value_timeouts[j]);
+        if (tp) {
+            for (int j = 0; j < tp->n_timeouts; j++) {
+                ds_put_format(&ctx->output, "%s=%"PRIu64" ",
+                        tp->key_timeouts[j], tp->value_timeouts[j]);
+            }
+        } else {
+            ds_put_cstr(&ctx->output, "system default");
         }
         ds_chomp(&ctx->output, ' ');
         ds_put_char(&ctx->output, '\n');
