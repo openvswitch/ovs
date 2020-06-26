@@ -193,6 +193,10 @@ AT_CHECK([test $(grep -c in_port.5 br1_flows.txt) -gt 24])
 AT_CHECK([test $(grep -c in_port.6 br1_flows.txt) -gt 24])
 AT_CHECK([grep -q lb_output br0_flows.txt])
 
+AT_CHECK([test $(ovs-appctl dpif-netdev/bond-show | grep -c bucket) -eq 256])
+AT_CHECK([ovs-vsctl set Port bond0 other_config:lb-output-action=false])
+OVS_WAIT_UNTIL([test -z "$(ovs-appctl dpif-netdev/bond-show)"])
+
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 

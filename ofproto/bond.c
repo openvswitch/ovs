@@ -490,6 +490,9 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
                       "disabled.", bond->name);
         } else {
             bond->use_lb_output_action = s->use_lb_output_action;
+            if (!bond->use_lb_output_action) {
+                bond_del_lb_output_buckets(bond);
+            }
             revalidate = true;
         }
     }
