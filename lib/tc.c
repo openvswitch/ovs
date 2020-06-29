@@ -1647,8 +1647,10 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     }
 
     bs = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof *bs);
-    put_32aligned_u64(&stats->n_packets, bs->packets);
-    put_32aligned_u64(&stats->n_bytes, bs->bytes);
+    if (bs->packets) {
+        put_32aligned_u64(&stats->n_packets, bs->packets);
+        put_32aligned_u64(&stats->n_bytes, bs->bytes);
+    }
 
     return 0;
 }
