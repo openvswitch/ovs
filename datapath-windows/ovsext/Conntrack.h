@@ -109,6 +109,7 @@ typedef struct OVS_CT_ENTRY {
     struct ovs_key_ct_labels labels;
     NAT_ACTION_INFO natInfo;
     PVOID       parent; /* Points to main connection */
+    PCHAR       helper_name;
 } OVS_CT_ENTRY, *POVS_CT_ENTRY;
 
 typedef struct OVS_CT_REL_ENTRY {
