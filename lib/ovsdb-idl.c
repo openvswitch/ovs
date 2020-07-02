@@ -321,14 +321,19 @@ static bool ovsdb_idl_handle_monitor_canceled(struct ovsdb_idl *,
 static void ovsdb_idl_db_parse_update(struct ovsdb_idl_db *,
                                       const struct json *table_updates,
                                       enum ovsdb_idl_monitor_method method);
-static bool ovsdb_idl_process_update(struct ovsdb_idl_table *,
-                                     const struct uuid *,
-                                     const struct json *old,
-                                     const struct json *new);
-static bool ovsdb_idl_process_update2(struct ovsdb_idl_table *,
-                                      const struct uuid *,
-                                      const char *operation,
-                                      const struct json *row);
+enum update_result {
+    OVSDB_IDL_UPDATE_DB_CHANGED,
+    OVSDB_IDL_UPDATE_NO_CHANGES,
+    OVSDB_IDL_UPDATE_INCONSISTENT,
+};
+static enum update_result ovsdb_idl_process_update(struct ovsdb_idl_table *,
+                                                   const struct uuid *,
+                                                   const struct json *old,
+                                                   const struct json *new);
+static enum update_result ovsdb_idl_process_update2(struct ovsdb_idl_table *,
+                                                    const struct uuid *,
+                                                    const char *operation,
+                                                    const struct json *row);
 static void ovsdb_idl_insert_row(struct ovsdb_idl_row *, const struct json *);
 static void ovsdb_idl_delete_row(struct ovsdb_idl_row *);
 static bool ovsdb_idl_modify_row(struct ovsdb_idl_row *, const struct json *);
@@ -2418,6 +2423,7 @@ ovsdb_idl_db_parse_update__(struct ovsdb_idl_db *db,
                                       version_suffix, table->class_->name);
         }
         SHASH_FOR_EACH (table_node, json_object(table_update)) {
+            enum update_result result = OVSDB_IDL_UPDATE_NO_CHANGES;
             const struct json *row_update = table_node->data;
             struct uuid uuid;
 
@@ -2450,13 +2456,13 @@ ovsdb_idl_db_parse_update__(struct ovsdb_idl_db *db,
                     operation = ops[i];
                     row = shash_find_data(json_object(row_update), operation);
 
-                    if (row)  {
-                        if (ovsdb_idl_process_update2(table, &uuid, operation,
-                                                      row)) {
-                            db->change_seqno++;
-                        }
-                        break;
+                    if (!row) {
+                        continue;
                     }
+
+                    result = ovsdb_idl_process_update2(table, &uuid,
+                                                       operation, row);
+                    break;
                 }
 
                 /* row_update2 should contain one of the objects */
@@ -2487,10 +2493,24 @@ ovsdb_idl_db_parse_update__(struct ovsdb_idl_db *db,
                                               "and \"new\" members");
                 }
 
-                if (ovsdb_idl_process_update(table, &uuid, old_json,
-                                             new_json)) {
-                    db->change_seqno++;
-                }
+                result = ovsdb_idl_process_update(table, &uuid, old_json,
+                                                  new_json);
+            }
+
+            switch (result) {
+            case OVSDB_IDL_UPDATE_DB_CHANGED:
+                db->change_seqno++;
+                break;
+            case OVSDB_IDL_UPDATE_NO_CHANGES:
+                break;
+            case OVSDB_IDL_UPDATE_INCONSISTENT:
+                memset(&db->last_id, 0, sizeof db->last_id);
+                ovsdb_idl_retry(db->idl);
+                return ovsdb_error(NULL,
+                                   "<row_update%s> received for inconsistent "
+                                   "IDL: reconnecting IDL and resync all "
+                                   "data",
+                                   version_suffix);
             }
         }
     }
@@ -2523,9 +2543,22 @@ ovsdb_idl_get_row(struct ovsdb_idl_table *table, const struct uuid *uuid)
     return NULL;
 }
 
-/* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
- * otherwise. */
-static bool
+/* Returns OVSDB_IDL_UPDATE_DB_CHANGED if a column with mode
+ * OVSDB_IDL_MODE_RW changed.
+ *
+ * Some IDL inconsistencies can be detected when processing updates:
+ * - trying to insert an already existing row
+ * - trying to update a missing row
+ * - trying to delete a non existent row
+ *
+ * In such cases OVSDB_IDL_UPDATE_INCONSISTENT is returned.
+ * Even though the IDL client could recover, it's best to report the
+ * inconsistent state because the state the server is in is unknown so the
+ * safest thing to do is to retry (potentially connecting to a new server).
+ *
+ * Returns OVSDB_IDL_UPDATE_NO_CHANGES otherwise.
+ */
+static enum update_result
 ovsdb_idl_process_update(struct ovsdb_idl_table *table,
                          const struct uuid *uuid, const struct json *old,
                          const struct json *new)
@@ -2539,10 +2572,10 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
             /* XXX perhaps we should check the 'old' values? */
             ovsdb_idl_delete_row(row);
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
-                         "from table %s",
-                         UUID_ARGS(uuid), table->class_->name);
-            return false;
+            VLOG_ERR_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
+                        "from table %s",
+                        UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     } else if (!old) {
         /* Insert row. */
@@ -2551,35 +2584,50 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
         } else if (ovsdb_idl_row_is_orphan(row)) {
             ovsdb_idl_insert_row(row, new);
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
-                         "table %s", UUID_ARGS(uuid), table->class_->name);
-            return ovsdb_idl_modify_row(row, new);
+            VLOG_ERR_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
+                        "table %s", UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     } else {
         /* Modify row. */
         if (row) {
             /* XXX perhaps we should check the 'old' values? */
             if (!ovsdb_idl_row_is_orphan(row)) {
-                return ovsdb_idl_modify_row(row, new);
+                return ovsdb_idl_modify_row(row, new)
+                       ? OVSDB_IDL_UPDATE_DB_CHANGED
+                       : OVSDB_IDL_UPDATE_NO_CHANGES;
             } else {
-                VLOG_WARN_RL(&semantic_rl, "cannot modify missing but "
-                             "referenced row "UUID_FMT" in table %s",
-                             UUID_ARGS(uuid), table->class_->name);
-                ovsdb_idl_insert_row(row, new);
+                VLOG_ERR_RL(&semantic_rl, "cannot modify missing but "
+                            "referenced row "UUID_FMT" in table %s",
+                            UUID_ARGS(uuid), table->class_->name);
+                return OVSDB_IDL_UPDATE_INCONSISTENT;
             }
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
-                         "in table %s", UUID_ARGS(uuid), table->class_->name);
-            ovsdb_idl_insert_row(ovsdb_idl_row_create(table, uuid), new);
+            VLOG_ERR_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
+                        "in table %s", UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     }
 
-    return true;
+    return OVSDB_IDL_UPDATE_DB_CHANGED;
 }
 
-/* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
- * otherwise. */
-static bool
+/* Returns OVSDB_IDL_UPDATE_DB_CHANGED if a column with mode
+ * OVSDB_IDL_MODE_RW changed.
+ *
+ * Some IDL inconsistencies can be detected when processing updates:
+ * - trying to insert an already existing row
+ * - trying to update a missing row
+ * - trying to delete a non existent row
+ *
+ * In such cases OVSDB_IDL_UPDATE_INCONSISTENT is returned.
+ * Even though the IDL client could recover, it's best to report the
+ * inconsistent state because the state the server is in is unknown so the
+ * safest thing to do is to retry (potentially connecting to a new server).
+ *
+ * Otherwise OVSDB_IDL_UPDATE_NO_CHANGES is returned.
+ */
+static enum update_result
 ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
                           const struct uuid *uuid,
                           const char *operation,
@@ -2593,10 +2641,10 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
         if (row && !ovsdb_idl_row_is_orphan(row)) {
             ovsdb_idl_delete_row(row);
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
-                         "from table %s",
-                         UUID_ARGS(uuid), table->class_->name);
-            return false;
+            VLOG_ERR_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
+                        "from table %s",
+                        UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     } else if (!strcmp(operation, "insert") || !strcmp(operation, "initial")) {
         /* Insert row. */
@@ -2605,34 +2653,35 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
         } else if (ovsdb_idl_row_is_orphan(row)) {
             ovsdb_idl_insert_row(row, json_row);
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
-                         "table %s", UUID_ARGS(uuid), table->class_->name);
-            ovsdb_idl_delete_row(row);
-            ovsdb_idl_insert_row(row, json_row);
+            VLOG_ERR_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
+                        "table %s", UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     } else if (!strcmp(operation, "modify")) {
         /* Modify row. */
         if (row) {
             if (!ovsdb_idl_row_is_orphan(row)) {
-                return ovsdb_idl_modify_row_by_diff(row, json_row);
+                return ovsdb_idl_modify_row_by_diff(row, json_row)
+                       ? OVSDB_IDL_UPDATE_DB_CHANGED
+                       : OVSDB_IDL_UPDATE_NO_CHANGES;
             } else {
-                VLOG_WARN_RL(&semantic_rl, "cannot modify missing but "
-                             "referenced row "UUID_FMT" in table %s",
-                             UUID_ARGS(uuid), table->class_->name);
-                return false;
+                VLOG_ERR_RL(&semantic_rl, "cannot modify missing but "
+                            "referenced row "UUID_FMT" in table %s",
+                            UUID_ARGS(uuid), table->class_->name);
+                return OVSDB_IDL_UPDATE_INCONSISTENT;
             }
         } else {
-            VLOG_WARN_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
-                         "in table %s", UUID_ARGS(uuid), table->class_->name);
-            return false;
+            VLOG_ERR_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
+                        "in table %s", UUID_ARGS(uuid), table->class_->name);
+            return OVSDB_IDL_UPDATE_INCONSISTENT;
         }
     } else {
-        VLOG_WARN_RL(&semantic_rl, "unknown operation %s to "
-                     "table %s", operation, table->class_->name);
-        return false;
+        VLOG_ERR_RL(&semantic_rl, "unknown operation %s to "
+                    "table %s", operation, table->class_->name);
+        return OVSDB_IDL_UPDATE_NO_CHANGES;
     }
 
-    return true;
+    return OVSDB_IDL_UPDATE_DB_CHANGED;
 }
 
 /* Recursively add rows to tracked change lists for current row
