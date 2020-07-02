@@ -13,6 +13,9 @@ Post-v2.13.0
      * Add hardware offload support for matching IPv6 protocol (experimental).
      * Add hardware offload support for set of IPv6 src/dst/ttl
        and tunnel push-output actions (experimental).
+     * OVS validated with DPDK 19.11.2, due to the inclusion of fixes for
+       CVE-2020-10722, CVE-2020-10723, CVE-2020-10724, CVE-2020-10725 and
+       CVE-2020-10726, this DPDK version is strongly recommended to be used.
    - Linux datapath:
      * Support for kernel versions up to 5.5.x.
    - AF_XDP:

@@ -170,7 +170,7 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="19.11"
+        DPDK_VER="19.11.2"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
