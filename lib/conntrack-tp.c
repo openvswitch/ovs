@@ -260,15 +260,20 @@ conn_update_expiration(struct conntrack *ct, struct conn *conn,
     struct timeout_policy *tp;
     uint32_t val;
 
+    ovs_mutex_unlock(&conn->lock);
+
     ovs_mutex_lock(&ct->ct_lock);
+    ovs_mutex_lock(&conn->lock);
     tp = timeout_policy_lookup(ct, conn->tp_id);
     if (tp) {
         val = tp->policy.attrs[tm_to_ct_dpif_tp(tm)];
     } else {
         val = ct_dpif_netdev_tp_def[tm_to_ct_dpif_tp(tm)];
     }
+    ovs_mutex_unlock(&conn->lock);
     ovs_mutex_unlock(&ct->ct_lock);
 
+    ovs_mutex_lock(&conn->lock);
     VLOG_DBG_RL(&rl, "Update timeout %s zone=%u with policy id=%d "
                 "val=%u sec.",
                 ct_timeout_str[tm], conn->key.zone, conn->tp_id, val);
