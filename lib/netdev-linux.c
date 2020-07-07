@@ -231,6 +231,14 @@ struct rtnl_link_stats64 {
     uint64_t tx_compressed;
 };
 
+/* Linux 3.19 introduced virtio_types.h.  It might be missing
+ * if we are using old kernel. */
+#ifndef HAVE_VIRTIO_TYPES
+typedef __u16 __bitwise__ __virtio16;
+typedef __u32 __bitwise__ __virtio32;
+typedef __u64 __bitwise__ __virtio64;
+#endif
+
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
