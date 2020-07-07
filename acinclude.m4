@@ -250,6 +250,18 @@ AC_DEFUN([OVS_CHECK_LINUX_SCTP_CT], [
                [Define to 1 if SCTP_CONNTRACK_HEARTBEAT_SENT is available.])])
 ])
 
+dnl OVS_CHECK_LINUX_VIRTIO_TYPES
+dnl
+dnl Checks for kernels that need virtio_types definition.
+AC_DEFUN([OVS_CHECK_LINUX_VIRTIO_TYPES], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/virtio_types.h>], [
+        __virtio16 x =  0;
+    ])],
+    [AC_DEFINE([HAVE_VIRTIO_TYPES], [1],
+    [Define to 1 if __virtio16 is available.])])
+])
+
 dnl OVS_FIND_DEPENDENCY(FUNCTION, SEARCH_LIBS, NAME_TO_PRINT)
 dnl
 dnl Check for a function in a library list.
