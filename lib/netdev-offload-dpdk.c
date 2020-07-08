@@ -545,10 +545,21 @@ free_flow_actions(struct flow_actions *actions)
 
 static int
 parse_flow_match(struct flow_patterns *patterns,
-                 const struct match *match)
+                 struct match *match)
 {
     uint8_t *next_proto_mask = NULL;
+    struct flow *consumed_masks;
     uint8_t proto = 0;
+
+    consumed_masks = &match->wc.masks;
+
+    memset(&consumed_masks->in_port, 0, sizeof consumed_masks->in_port);
+    /* recirc id must be zero. */
+    if (match->wc.masks.recirc_id & match->flow.recirc_id) {
+        return -1;
+    }
+    consumed_masks->recirc_id = 0;
+    consumed_masks->packet_type = 0;
 
     /* Eth */
     if (match->wc.masks.dl_type ||
@@ -566,6 +577,10 @@ parse_flow_match(struct flow_patterns *patterns,
         memcpy(&mask->dst, &match->wc.masks.dl_dst, sizeof mask->dst);
         memcpy(&mask->src, &match->wc.masks.dl_src, sizeof mask->src);
         mask->type = match->wc.masks.dl_type;
+
+        memset(&consumed_masks->dl_dst, 0, sizeof consumed_masks->dl_dst);
+        memset(&consumed_masks->dl_src, 0, sizeof consumed_masks->dl_src);
+        consumed_masks->dl_type = 0;
 
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_ETH, spec, mask);
     }
@@ -585,6 +600,11 @@ parse_flow_match(struct flow_patterns *patterns,
 
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_VLAN, spec, mask);
     }
+    /* For untagged matching match->wc.masks.vlans[0].tci is 0xFFFF and
+     * match->flow.vlans[0].tci is 0. Consuming is needed outside of the if
+     * scope to handle that.
+     */
+    memset(&consumed_masks->vlans[0], 0, sizeof consumed_masks->vlans[0]);
 
     /* IP v4 */
     if (match->flow.dl_type == htons(ETH_TYPE_IP)) {
@@ -605,6 +625,12 @@ parse_flow_match(struct flow_patterns *patterns,
         mask->hdr.src_addr        = match->wc.masks.nw_src;
         mask->hdr.dst_addr        = match->wc.masks.nw_dst;
 
+        consumed_masks->nw_tos = 0;
+        consumed_masks->nw_ttl = 0;
+        consumed_masks->nw_proto = 0;
+        consumed_masks->nw_src = 0;
+        consumed_masks->nw_dst = 0;
+
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_IPV4, spec, mask);
 
         /* Save proto for L4 protocol setup. */
@@ -612,6 +638,11 @@ parse_flow_match(struct flow_patterns *patterns,
                 mask->hdr.next_proto_id;
         next_proto_mask = &mask->hdr.next_proto_id;
     }
+    /* If fragmented, then don't HW accelerate - for now. */
+    if (match->wc.masks.nw_frag & match->flow.nw_frag) {
+        return -1;
+    }
+    consumed_masks->nw_frag = 0;
 
     if (proto != IPPROTO_ICMP && proto != IPPROTO_UDP  &&
         proto != IPPROTO_SCTP && proto != IPPROTO_TCP  &&
@@ -638,6 +669,10 @@ parse_flow_match(struct flow_patterns *patterns,
         mask->hdr.data_off  = ntohs(match->wc.masks.tcp_flags) >> 8;
         mask->hdr.tcp_flags = ntohs(match->wc.masks.tcp_flags) & 0xff;
 
+        consumed_masks->tp_src = 0;
+        consumed_masks->tp_dst = 0;
+        consumed_masks->tcp_flags = 0;
+
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_TCP, spec, mask);
 
         /* proto == TCP and ITEM_TYPE_TCP, thus no need for proto match. */
@@ -655,6 +690,9 @@ parse_flow_match(struct flow_patterns *patterns,
 
         mask->hdr.src_port = match->wc.masks.tp_src;
         mask->hdr.dst_port = match->wc.masks.tp_dst;
+
+        consumed_masks->tp_src = 0;
+        consumed_masks->tp_dst = 0;
 
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_UDP, spec, mask);
 
@@ -674,6 +712,9 @@ parse_flow_match(struct flow_patterns *patterns,
         mask->hdr.src_port = match->wc.masks.tp_src;
         mask->hdr.dst_port = match->wc.masks.tp_dst;
 
+        consumed_masks->tp_src = 0;
+        consumed_masks->tp_dst = 0;
+
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_SCTP, spec, mask);
 
         /* proto == SCTP and ITEM_TYPE_SCTP, thus no need for proto match. */
@@ -692,6 +733,9 @@ parse_flow_match(struct flow_patterns *patterns,
         mask->hdr.icmp_type = (uint8_t) ntohs(match->wc.masks.tp_src);
         mask->hdr.icmp_code = (uint8_t) ntohs(match->wc.masks.tp_dst);
 
+        consumed_masks->tp_src = 0;
+        consumed_masks->tp_dst = 0;
+
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_ICMP, spec, mask);
 
         /* proto == ICMP and ITEM_TYPE_ICMP, thus no need for proto match. */
@@ -702,6 +746,9 @@ parse_flow_match(struct flow_patterns *patterns,
 
     add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL);
 
+    if (!is_all_zeros(consumed_masks, sizeof *consumed_masks)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -1044,7 +1091,7 @@ out:
 
 static int
 netdev_offload_dpdk_add_flow(struct netdev *netdev,
-                             const struct match *match,
+                             struct match *match,
                              struct nlattr *nl_actions,
                              size_t actions_len,
                              const ovs_u128 *ufid,
@@ -1057,6 +1104,8 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
 
     ret = parse_flow_match(&patterns, match);
     if (ret) {
+        VLOG_DBG_RL(&rl, "%s: matches of ufid "UUID_FMT" are not supported",
+                    netdev_get_name(netdev), UUID_ARGS((struct uuid *) ufid));
         goto out;
     }
 
@@ -1082,78 +1131,6 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
 out:
     free_flow_patterns(&patterns);
     return ret;
-}
-
-/*
- * Check if any unsupported flow patterns are specified.
- */
-static int
-netdev_offload_dpdk_validate_flow(const struct match *match)
-{
-    struct match match_zero_wc;
-    const struct flow *masks = &match->wc.masks;
-
-    /* Create a wc-zeroed version of flow. */
-    match_init(&match_zero_wc, &match->flow, &match->wc);
-
-    if (!is_all_zeros(&match_zero_wc.flow.tunnel,
-                      sizeof match_zero_wc.flow.tunnel)) {
-        goto err;
-    }
-
-    if (masks->metadata || masks->skb_priority ||
-        masks->pkt_mark || masks->dp_hash) {
-        goto err;
-    }
-
-    /* recirc id must be zero. */
-    if (match_zero_wc.flow.recirc_id) {
-        goto err;
-    }
-
-    if (masks->ct_state || masks->ct_nw_proto ||
-        masks->ct_zone  || masks->ct_mark     ||
-        !ovs_u128_is_zero(masks->ct_label)) {
-        goto err;
-    }
-
-    if (masks->conj_id || masks->actset_output) {
-        goto err;
-    }
-
-    /* Unsupported L2. */
-    if (!is_all_zeros(masks->mpls_lse, sizeof masks->mpls_lse)) {
-        goto err;
-    }
-
-    /* Unsupported L3. */
-    if (masks->ipv6_label || masks->ct_nw_src || masks->ct_nw_dst     ||
-        !is_all_zeros(&masks->ipv6_src,    sizeof masks->ipv6_src)    ||
-        !is_all_zeros(&masks->ipv6_dst,    sizeof masks->ipv6_dst)    ||
-        !is_all_zeros(&masks->ct_ipv6_src, sizeof masks->ct_ipv6_src) ||
-        !is_all_zeros(&masks->ct_ipv6_dst, sizeof masks->ct_ipv6_dst) ||
-        !is_all_zeros(&masks->nd_target,   sizeof masks->nd_target)   ||
-        !is_all_zeros(&masks->nsh,         sizeof masks->nsh)         ||
-        !is_all_zeros(&masks->arp_sha,     sizeof masks->arp_sha)     ||
-        !is_all_zeros(&masks->arp_tha,     sizeof masks->arp_tha)) {
-        goto err;
-    }
-
-    /* If fragmented, then don't HW accelerate - for now. */
-    if (match_zero_wc.flow.nw_frag) {
-        goto err;
-    }
-
-    /* Unsupported L4. */
-    if (masks->igmp_group_ip4 || masks->ct_tp_src || masks->ct_tp_dst) {
-        goto err;
-    }
-
-    return 0;
-
-err:
-    VLOG_ERR("cannot HW accelerate this flow due to unsupported protocols");
-    return -1;
 }
 
 static int
@@ -1200,11 +1177,6 @@ netdev_offload_dpdk_flow_put(struct netdev *netdev, struct match *match,
         if (ret < 0) {
             return ret;
         }
-    }
-
-    ret = netdev_offload_dpdk_validate_flow(match);
-    if (ret < 0) {
-        return ret;
     }
 
     if (stats) {
