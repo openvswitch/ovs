@@ -4600,7 +4600,8 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     struct rte_flow_item_eth eth_mask;
     memset(&eth_spec, 0, sizeof(eth_spec));
     memset(&eth_mask, 0, sizeof(eth_mask));
-    if (!eth_addr_is_zero(match->wc.masks.dl_src) ||
+    if (match->wc.masks.dl_type ||
+        !eth_addr_is_zero(match->wc.masks.dl_src) ||
         !eth_addr_is_zero(match->wc.masks.dl_dst)) {
         rte_memcpy(&eth_spec.dst, &match->flow.dl_dst, sizeof(eth_spec.dst));
         rte_memcpy(&eth_spec.src, &match->flow.dl_src, sizeof(eth_spec.src));
@@ -4614,15 +4615,6 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ETH,
                          &eth_spec, &eth_mask);
-    } else {
-        /*
-         * If user specifies a flow (like UDP flow) without L2 patterns,
-         * OVS will at least set the dl_type. Normally, it's enough to
-         * create an eth pattern just with it. Unluckily, some Intel's
-         * NIC (such as XL710) doesn't support that. Below is a workaround,
-         * which simply matches any L2 pkts.
-         */
-        add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ETH, NULL, NULL);
     }
 
     /* VLAN */
