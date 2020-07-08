@@ -1497,6 +1497,27 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
         }
     }
 
+    /* Check for db consistency:
+     * The serverid must be in the servers list
+     */
+
+    for (struct server *s = c.servers; s < &c.servers[c.n_servers]; s++) {
+        struct shash *servers_obj = json_object(s->snap->servers);
+        char *server_id = xasprintf(SID_FMT, SID_ARGS(&s->header.sid));
+        bool found = false;
+        const struct shash_node *node;
+        SHASH_FOR_EACH (node, servers_obj) {
+            if (!strncmp(server_id, node->name, SID_LEN)) {
+                found = true;
+            }
+        }
+        if (!found) {
+            ovs_fatal(0, "%s: server %s not found in server list",
+                          s->filename, server_id);
+        }
+        free(server_id);
+    }
+
     /* Clean up. */
 
     for (size_t i = 0; i < c.n_servers; i++) {
