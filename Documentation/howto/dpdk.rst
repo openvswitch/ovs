@@ -385,7 +385,7 @@ The validated NICs are:
 Supported protocols for hardware offload matches are:
 
 - L2: Ethernet, VLAN
-- L3: IPv4
+- L3: IPv4, IPv6
 - L4: TCP, UDP, SCTP, ICMP
 
 Supported actions for hardware offload are:
