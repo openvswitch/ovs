@@ -347,6 +347,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
     error = registered_class->dpif_class->open(registered_class->dpif_class,
                                                name, create, &dpif);
     if (!error) {
+        const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
         struct dpif_port_dump port_dump;
         struct dpif_port dpif_port;
 
@@ -363,7 +364,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
             err = netdev_open(dpif_port.name, dpif_port.type, &netdev);
 
             if (!err) {
-                netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+                netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open netdev %s type %s: %s",
@@ -427,14 +428,15 @@ dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
 
 static void
 dpif_remove_netdev_ports(struct dpif *dpif) {
-        struct dpif_port_dump port_dump;
-        struct dpif_port dpif_port;
+    const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
+    struct dpif_port_dump port_dump;
+    struct dpif_port dpif_port;
 
-        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-            if (!dpif_is_tap_port(dpif_port.type)) {
-                netdev_ports_remove(dpif_port.port_no, dpif->dpif_class);
-            }
+    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+        if (!dpif_is_tap_port(dpif_port.type)) {
+            netdev_ports_remove(dpif_port.port_no, dpif_type_str);
         }
+    }
 }
 
 /* Closes and frees the connection to 'dpif'.  Does not destroy the datapath
@@ -597,12 +599,13 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
 
         if (!dpif_is_tap_port(netdev_get_type(netdev))) {
 
+            const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
             struct dpif_port dpif_port;
 
             dpif_port.type = CONST_CAST(char *, netdev_get_type(netdev));
             dpif_port.name = CONST_CAST(char *, netdev_name);
             dpif_port.port_no = port_no;
-            netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+            netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
         }
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
@@ -634,7 +637,7 @@ dpif_port_del(struct dpif *dpif, odp_port_t port_no, bool local_delete)
         }
     }
 
-    netdev_ports_remove(port_no, dpif->dpif_class);
+    netdev_ports_remove(port_no, dpif_normalize_type(dpif_type(dpif)));
     return error;
 }
 

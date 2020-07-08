@@ -2501,8 +2501,7 @@ ukey_netdev_unref(struct udpif_key *ukey)
 static void
 ukey_to_flow_netdev(struct udpif *udpif, struct udpif_key *ukey)
 {
-    const struct dpif *dpif = udpif->dpif;
-    const struct dpif_class *dpif_class = dpif->dpif_class;
+    const char *dpif_type_str = dpif_normalize_type(dpif_type(udpif->dpif));
     const struct nlattr *k;
     unsigned int left;
 
@@ -2515,7 +2514,7 @@ ukey_to_flow_netdev(struct udpif *udpif, struct udpif_key *ukey)
 
         if (type == OVS_KEY_ATTR_IN_PORT) {
             ukey->in_netdev = netdev_ports_get(nl_attr_get_odp_port(k),
-                                               dpif_class);
+                                               dpif_type_str);
         } else if (type == OVS_KEY_ATTR_TUNNEL) {
             struct flow_tnl tnl;
             enum odp_key_fitness res;

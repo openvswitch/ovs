@@ -934,15 +934,14 @@ add_port_id_action(struct flow_actions *actions,
 static int
 add_output_action(struct netdev *netdev,
                   struct flow_actions *actions,
-                  const struct nlattr *nla,
-                  struct offload_info *info)
+                  const struct nlattr *nla)
 {
     struct netdev *outdev;
     odp_port_t port;
     int ret = 0;
 
     port = nl_attr_get_odp_port(nla);
-    outdev = netdev_ports_get(port, info->dpif_class);
+    outdev = netdev_ports_get(port, netdev->dpif_type);
     if (outdev == NULL) {
         VLOG_DBG_RL(&rl, "Cannot find netdev for odp port %"PRIu32, port);
         return -1;
@@ -1125,8 +1124,7 @@ static int
 parse_flow_actions(struct netdev *netdev,
                    struct flow_actions *actions,
                    struct nlattr *nl_actions,
-                   size_t nl_actions_len,
-                   struct offload_info *info)
+                   size_t nl_actions_len)
 {
     struct nlattr *nla;
     size_t left;
@@ -1134,7 +1132,7 @@ parse_flow_actions(struct netdev *netdev,
     add_count_action(actions);
     NL_ATTR_FOR_EACH_UNSAFE (nla, left, nl_actions, nl_actions_len) {
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
-            if (add_output_action(netdev, actions, nla, info)) {
+            if (add_output_action(netdev, actions, nla)) {
                 return -1;
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_DROP) {
@@ -1176,8 +1174,7 @@ static struct rte_flow *
 netdev_offload_dpdk_actions(struct netdev *netdev,
                             struct flow_patterns *patterns,
                             struct nlattr *nl_actions,
-                            size_t actions_len,
-                            struct offload_info *info)
+                            size_t actions_len)
 {
     const struct rte_flow_attr flow_attr = { .ingress = 1, .transfer = 1 };
     struct flow_actions actions = { .actions = NULL, .cnt = 0 };
@@ -1185,7 +1182,7 @@ netdev_offload_dpdk_actions(struct netdev *netdev,
     struct rte_flow_error error;
     int ret;
 
-    ret = parse_flow_actions(netdev, &actions, nl_actions, actions_len, info);
+    ret = parse_flow_actions(netdev, &actions, nl_actions, actions_len);
     if (ret) {
         goto out;
     }
@@ -1217,7 +1214,7 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
     }
 
     flow = netdev_offload_dpdk_actions(netdev, &patterns, nl_actions,
-                                       actions_len, info);
+                                       actions_len);
     if (!flow) {
         /* If we failed to offload the rule actions fallback to MARK+RSS
          * actions.

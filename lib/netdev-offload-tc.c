@@ -1714,7 +1714,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         action = &flower.actions[flower.action_count];
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
             odp_port_t port = nl_attr_get_odp_port(nla);
-            struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
+            struct netdev *outdev = netdev_ports_get(
+                                        port, netdev_get_dpif_type(netdev));
 
             if (!outdev) {
                 VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
