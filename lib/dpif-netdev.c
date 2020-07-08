@@ -2149,7 +2149,11 @@ dp_netdev_pmd_find_dpcls(struct dp_netdev_pmd_thread *pmd,
 }
 
 #define MAX_FLOW_MARK       (UINT32_MAX - 1)
-#define INVALID_FLOW_MARK   (UINT32_MAX)
+#define INVALID_FLOW_MARK   0
+/* Zero flow mark is used to indicate the HW to remove the mark. A packet
+ * marked with zero mark is received in SW without a mark at all, so it
+ * cannot be used as a valid mark.
+ */
 
 struct megaflow_to_mark_data {
     const struct cmap_node node;
@@ -2175,7 +2179,7 @@ flow_mark_alloc(void)
 
     if (!flow_mark.pool) {
         /* Haven't initiated yet, do it here */
-        flow_mark.pool = id_pool_create(0, MAX_FLOW_MARK);
+        flow_mark.pool = id_pool_create(1, MAX_FLOW_MARK);
     }
 
     if (id_pool_alloc_id(flow_mark.pool, &mark)) {
