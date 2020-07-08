@@ -1984,6 +1984,22 @@ netdev_get_class(const struct netdev *netdev)
     return netdev->netdev_class;
 }
 
+/* Set the type of 'dpif' this 'netdev' belongs to. */
+void
+netdev_set_dpif_type(struct netdev *netdev, const char *type)
+{
+    netdev->dpif_type = type;
+}
+
+/* Returns the type of 'dpif' this 'netdev' belongs to.
+ *
+ * The caller must not free the returned value. */
+const char *
+netdev_get_dpif_type(const struct netdev *netdev)
+{
+    return netdev->dpif_type;
+}
+
 /* Returns the netdev with 'name' or NULL if there is none.
  *
  * The caller must free the returned netdev with netdev_close(). */
