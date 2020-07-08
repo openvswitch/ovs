@@ -337,7 +337,8 @@ dump_flow_pattern(struct ds *s, const struct rte_flow_item *item)
 }
 
 static void
-dump_flow_action(struct ds *s, const struct rte_flow_action *actions)
+dump_flow_action(struct ds *s, struct ds *s_extra,
+                 const struct rte_flow_action *actions)
 {
     if (actions->type == RTE_FLOW_ACTION_TYPE_MARK) {
         const struct rte_flow_action_mark *mark = actions->conf;
@@ -451,13 +452,25 @@ dump_flow_action(struct ds *s, const struct rte_flow_action *actions)
             ds_put_cstr(s, " ");
         }
         ds_put_cstr(s, "/ ");
+    } else if (actions->type == RTE_FLOW_ACTION_TYPE_RAW_ENCAP) {
+        const struct rte_flow_action_raw_encap *raw_encap = actions->conf;
+
+        ds_put_cstr(s, "raw_encap index 0 / ");
+        if (raw_encap) {
+            ds_put_format(s_extra, "Raw-encap size=%ld set raw_encap 0 raw "
+                          "pattern is ", raw_encap->size);
+            for (int i = 0; i < raw_encap->size; i++) {
+                ds_put_format(s_extra, "%02x", raw_encap->data[i]);
+            }
+            ds_put_cstr(s_extra, " / end_set;");
+        }
     } else {
         ds_put_format(s, "unknown rte flow action (%d)\n", actions->type);
     }
 }
 
 static struct ds *
-dump_flow(struct ds *s,
+dump_flow(struct ds *s, struct ds *s_extra,
           const struct rte_flow_attr *attr,
           const struct rte_flow_item *items,
           const struct rte_flow_action *actions)
@@ -471,7 +484,7 @@ dump_flow(struct ds *s,
     }
     ds_put_cstr(s, "end actions ");
     while (actions && actions->type != RTE_FLOW_ACTION_TYPE_END) {
-        dump_flow_action(s, actions++);
+        dump_flow_action(s, s_extra, actions++);
     }
     ds_put_cstr(s, "end");
     return s;
@@ -484,18 +497,19 @@ netdev_offload_dpdk_flow_create(struct netdev *netdev,
                                 const struct rte_flow_action *actions,
                                 struct rte_flow_error *error)
 {
+    struct ds s_extra = DS_EMPTY_INITIALIZER;
+    struct ds s = DS_EMPTY_INITIALIZER;
     struct rte_flow *flow;
-    struct ds s;
+    char *extra_str;
 
     flow = netdev_dpdk_rte_flow_create(netdev, attr, items, actions, error);
     if (flow) {
         if (!VLOG_DROP_DBG(&rl)) {
-            ds_init(&s);
-            dump_flow(&s, attr, items, actions);
-            VLOG_DBG_RL(&rl, "%s: rte_flow 0x%"PRIxPTR" flow create %d %s",
-                        netdev_get_name(netdev), (intptr_t) flow,
+            dump_flow(&s, &s_extra, attr, items, actions);
+            extra_str = ds_cstr(&s_extra);
+            VLOG_DBG_RL(&rl, "%s: rte_flow 0x%"PRIxPTR" %s  flow create %d %s",
+                        netdev_get_name(netdev), (intptr_t) flow, extra_str,
                         netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
-            ds_destroy(&s);
         }
     } else {
         enum vlog_level level = VLL_WARN;
@@ -506,14 +520,15 @@ netdev_offload_dpdk_flow_create(struct netdev *netdev,
         VLOG_RL(&rl, level, "%s: rte_flow creation failed: %d (%s).",
                 netdev_get_name(netdev), error->type, error->message);
         if (!vlog_should_drop(&this_module, level, &rl)) {
-            ds_init(&s);
-            dump_flow(&s, attr, items, actions);
-            VLOG_RL(&rl, level, "Failed flow: %s: flow create %d %s",
-                    netdev_get_name(netdev),
+            dump_flow(&s, &s_extra, attr, items, actions);
+            extra_str = ds_cstr(&s_extra);
+            VLOG_RL(&rl, level, "%s: Failed flow: %s  flow create %d %s",
+                    netdev_get_name(netdev), extra_str,
                     netdev_dpdk_get_port_id(netdev), ds_cstr(&s));
-            ds_destroy(&s);
         }
     }
+    ds_destroy(&s);
+    ds_destroy(&s_extra);
     return flow;
 }
 
@@ -1121,6 +1136,43 @@ parse_vlan_push_action(struct flow_actions *actions,
 }
 
 static int
+parse_clone_actions(struct netdev *netdev,
+                    struct flow_actions *actions,
+                    const struct nlattr *clone_actions,
+                    const size_t clone_actions_len)
+{
+    const struct nlattr *ca;
+    unsigned int cleft;
+
+    NL_ATTR_FOR_EACH_UNSAFE (ca, cleft, clone_actions, clone_actions_len) {
+        int clone_type = nl_attr_type(ca);
+
+        if (clone_type == OVS_ACTION_ATTR_TUNNEL_PUSH) {
+            const struct ovs_action_push_tnl *tnl_push = nl_attr_get(ca);
+            struct rte_flow_action_raw_encap *raw_encap =
+                xzalloc(sizeof *raw_encap);
+
+            raw_encap->data = (uint8_t *) tnl_push->header;
+            raw_encap->preserve = NULL;
+            raw_encap->size = tnl_push->header_len;
+
+            add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RAW_ENCAP,
+                            raw_encap);
+        } else if (clone_type == OVS_ACTION_ATTR_OUTPUT) {
+            if (add_output_action(netdev, actions, ca)) {
+                return -1;
+            }
+        } else {
+            VLOG_DBG_RL(&rl,
+                        "Unsupported nested action inside clone(), "
+                        "action type: %d", clone_type);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int
 parse_flow_actions(struct netdev *netdev,
                    struct flow_actions *actions,
                    struct nlattr *nl_actions,
@@ -1155,6 +1207,15 @@ parse_flow_actions(struct netdev *netdev,
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
             add_flow_action(actions, RTE_FLOW_ACTION_TYPE_OF_POP_VLAN, NULL);
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CLONE &&
+                   left <= NLA_ALIGN(nla->nla_len)) {
+            const struct nlattr *clone_actions = nl_attr_get(nla);
+            size_t clone_actions_len = nl_attr_get_size(nla);
+
+            if (parse_clone_actions(netdev, actions, clone_actions,
+                                    clone_actions_len)) {
+                return -1;
+            }
         } else {
             VLOG_DBG_RL(&rl, "Unsupported action type %d", nl_attr_type(nla));
             return -1;
