@@ -789,60 +789,83 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
 static __inline VOID
 OvsConntrackSetMark(OvsFlowKey *key,
                     POVS_CT_ENTRY entry,
-                    UINT32 value,
-                    UINT32 mask,
+                    MD_MARK *mark,
                     BOOLEAN *markChanged)
 {
-    UINT32 newMark;
-    newMark = value | (entry->mark & ~(mask));
-    if (entry->mark != newMark) {
+    POVS_CT_ENTRY parent = entry->parent;
+    BOOLEAN changed = FALSE;
+    UINT32 newMark = 0;
+
+    if (parent && parent->mark) {
+        newMark = parent->mark;
+        changed = TRUE;
+    } else if (mark) {
+        newMark = mark->value | (entry->mark & ~(mark->mask));
+        changed = TRUE;
+    }
+
+    if (changed && entry->mark != newMark) {
         entry->mark = newMark;
         key->ct.mark = newMark;
         *markChanged = TRUE;
     }
 }
 
+static __inline BOOLEAN
+OvsConntrackIsLabelsNonZero(const struct ovs_key_ct_labels *labels)
+{
+    UINT8 i;
+
+    for (i = 0; i < OVS_CT_LABELS_LEN_32; i++) {
+        if (labels->ct_labels_32[i])
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
 static __inline void
 OvsConntrackSetLabels(OvsFlowKey *key,
                       POVS_CT_ENTRY entry,
-                      struct ovs_key_ct_labels *val,
-                      struct ovs_key_ct_labels *mask,
+                      MD_LABELS *labels,
                       BOOLEAN *labelChanged)
 {
-    ovs_u128 v, m, pktMdLabel = {0};
-    memcpy(&v, val, sizeof v);
-    memcpy(&m, mask, sizeof m);
-    memcpy(&pktMdLabel, &entry->labels, sizeof(struct ovs_key_ct_labels));
+    POVS_CT_ENTRY parent = entry->parent;
 
-    pktMdLabel.u64.lo = v.u64.lo | (pktMdLabel.u64.lo & ~(m.u64.lo));
-    pktMdLabel.u64.hi = v.u64.hi | (pktMdLabel.u64.hi & ~(m.u64.hi));
-
-    if (!NdisEqualMemory(&entry->labels, &pktMdLabel,
-                         sizeof(struct ovs_key_ct_labels))) {
+    /* Inherit master's labels at labels initialization, if any. */
+    if (!OvsConntrackIsLabelsNonZero(&entry->labels) &&
+        parent && OvsConntrackIsLabelsNonZero(&parent->labels)) {
+        memcpy(&entry->labels, &parent->labels, OVS_CT_LABELS_LEN);
         *labelChanged = TRUE;
     }
-    NdisMoveMemory(&entry->labels, &pktMdLabel,
-                   sizeof(struct ovs_key_ct_labels));
-    NdisMoveMemory(&key->ct.labels, &pktMdLabel,
-                   sizeof(struct ovs_key_ct_labels));
+
+    /* Use the same computing method with Linux kernel datapath.
+     * It is more clean and easy understanding.
+     */
+    if (labels && OvsConntrackIsLabelsNonZero(&labels->mask)) {
+        UINT8 i;
+        UINT32 * dst = entry->labels.ct_labels_32;
+        for (i = 0; i < OVS_CT_LABELS_LEN_32; i++) {
+            dst[i] = (dst[i] & ~(labels->mask.ct_labels_32[i])) |
+                     (labels->value.ct_labels_32[i] & labels->mask.ct_labels_32[i]);
+        }
+
+        *labelChanged = TRUE;
+    }
+
+    /* Update flow key's ct labels */
+    NdisMoveMemory(&key->ct.labels, &entry->labels, OVS_CT_LABELS_LEN);
 }
 
 static void
 OvsCtSetMarkLabel(OvsFlowKey *key,
-                       POVS_CT_ENTRY entry,
-                       MD_MARK *mark,
-                       MD_LABELS *labels,
-                       BOOLEAN *triggerUpdateEvent)
+                  POVS_CT_ENTRY entry,
+                  MD_MARK *mark,
+                  MD_LABELS *labels,
+                  BOOLEAN *triggerUpdateEvent)
 {
-    if (mark) {
-        OvsConntrackSetMark(key, entry, mark->value, mark->mask,
-                            triggerUpdateEvent);
-    }
-
-    if (labels) {
-        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask,
-                              triggerUpdateEvent);
-    }
+    OvsConntrackSetMark(key, entry, mark, triggerUpdateEvent);
+    OvsConntrackSetLabels(key, entry, labels, triggerUpdateEvent);
 }
 
 /*
