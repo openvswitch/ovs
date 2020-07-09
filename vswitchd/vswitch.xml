@@ -2003,6 +2003,14 @@
         This knob does not affect other balancing modes.
       </column>
 
+      <column name="other_config" key="bond-primary"
+              type='{"type": "string"}'>
+        If a slave interface with this name exists in the bond and
+        is up, it will be made active.  Relevant only when <ref
+        column="other_config" key="bond_mode"/> is
+        <code>active-backup</code>.
+      </column>
+
       <group title="Link Failure Detection">
         <p>
           An important part of link bonding is detecting that links are down so

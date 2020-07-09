@@ -32,6 +32,8 @@ Post-v2.13.0
      * Add runtime CPU ISA detection to allow optimized ISA functions
      * Add support for dynamically changing DPCLS subtable lookup functions
      * Add ISA optimized DPCLS lookup function using AVX512
+   - New configuration knob 'other_config:bond-primary' for AB bonds
+     that specifies interface will be the preferred port if it is active.
    - Tunnels: TC Flower offload
      * Tunnel Local endpoint address masked match are supported.
      * Tunnel Romte endpoint address masked match are supported.

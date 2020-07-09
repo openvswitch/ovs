@@ -48,6 +48,8 @@ struct bond_settings {
     int rebalance_interval;     /* Milliseconds between rebalances.
                                    Zero to disable rebalancing. */
 
+    const char *primary;        /* For AB mode, primary interface name. */
+
     /* Link status detection. */
     int up_delay;               /* ms before enabling an up slave. */
     int down_delay;             /* ms before disabling a down slave. */
