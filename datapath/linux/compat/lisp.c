@@ -38,7 +38,6 @@
 #include "datapath.h"
 #include "gso.h"
 #include "vport.h"
-#include "gso.h"
 #include "vport-netdev.h"
 
 #define LISP_UDP_PORT		4341
