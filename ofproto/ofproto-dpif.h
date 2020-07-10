@@ -54,7 +54,6 @@
 #include "ovs-thread.h"
 #include "ofproto-provider.h"
 #include "util.h"
-#include "ovs-thread.h"
 
 struct dpif_flow_stats;
 struct ofproto_async_msg;

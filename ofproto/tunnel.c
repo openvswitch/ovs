@@ -13,8 +13,6 @@
  * limitations under the License. */
 
 #include <config.h>
-#include "tunnel.h"
-
 #include <errno.h>
 
 #include "byte-order.h"
