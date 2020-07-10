@@ -29,7 +29,6 @@
 #include <netinet/ip6.h>
 #include <sys/ioctl.h>
 
-#include <errno.h>
 #include <stdlib.h>
 #include <sys/time.h>
 

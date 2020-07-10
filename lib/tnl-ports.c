@@ -30,7 +30,6 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
-#include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
 
