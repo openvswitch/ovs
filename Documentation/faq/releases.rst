@@ -154,9 +154,9 @@ Q: What DPDK version does each Open vSwitch release work with?
     A: The following table lists the DPDK version against which the given
     versions of Open vSwitch will successfully build.
 
-    ============ =======
+    ============ ========
     Open vSwitch DPDK
-    ============ =======
+    ============ ========
     2.2.x        1.6
     2.3.x        1.6
     2.4.x        2.0
@@ -164,8 +164,8 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.6.x        16.07.2
     2.7.x        16.11.8
     2.8.x        17.05.2
-    2.9.x        17.11.6
-    ============ =======
+    2.9.x        17.11.10
+    ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
 
