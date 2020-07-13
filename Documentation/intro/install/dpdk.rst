@@ -136,6 +136,16 @@ has to be configured to build against the DPDK library (``--with-dpdk``).
      While ``--with-dpdk`` is required, you can pass any other configuration
      option described in :ref:`general-configuring`.
 
+   It is strongly recommended to build OVS with at least ``-msse4.2`` and
+   ``-mpopcnt`` optimization flags. If these flags are not enabled, the AVX512
+   optimized DPCLS implementation is not available in the resulting binary.
+   For technical details see the subtable registration code in the
+   ``lib/dpif-netdev-lookup.c`` file.
+
+   An example that enables the AVX512 optimizations is::
+
+       $ ./configure --with-dpdk=$DPDK_BUILD CFLAGS="-Ofast -msse4.2 -mpopcnt"
+
 #. Build and install OVS, as described in :ref:`general-building`
 
 Additional information can be found in :doc:`general`.
@@ -146,6 +156,26 @@ Additional information can be found in :doc:`general`.
   working IOMMU.  Visit the `RHEL README`__ for additional information.
 
 __ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
+
+
+Possible issues when enabling AVX512
+++++++++++++++++++++++++++++++++++++
+
+The enabling of ISA optimized builds requires build-system support.
+Certain versions of the assembler provided by binutils is known to have
+AVX512 assembling issues. The binutils versions affected are 2.30 and 2.31.
+As many distros backport fixes to previous versions of a package, checking
+the version output of ``as -v`` can err on the side of disabling AVX512. To
+remedy this, the OVS build system uses a build-time check to see if ``as``
+will correctly assemble the AVX512 code. The output of a good version when
+running the ``./configure`` step of the build process is as follows::
+
+   $ checking binutils avx512 assembler checks passing... yes
+
+If a bug is detected in the binutils assembler, it would indicate ``no``.
+Build an updated binutils, or request a backport of this binutils
+fix commit ``2069ccaf8dc28ea699bd901fdd35d90613e4402a`` to fix the issue.
+
 
 Setup
 -----
