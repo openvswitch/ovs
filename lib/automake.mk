@@ -543,6 +543,7 @@ MAN_FRAGMENTS += \
 	lib/daemon-syn.man \
 	lib/db-ctl-base.man \
 	lib/dpctl.man \
+	lib/dpdk-unixctl.man \
 	lib/memory-unixctl.man \
 	lib/netdev-dpdk-unixctl.man \
 	lib/dpif-netdev-unixctl.man \
