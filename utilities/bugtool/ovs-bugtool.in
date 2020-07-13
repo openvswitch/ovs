@@ -643,7 +643,8 @@ exclude those logs from the archive.
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
-            cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', '-m', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', '-m',
+                                            d.decode()])
 
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo',
                'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'],
@@ -1351,7 +1352,7 @@ def run_procs(procs):
             if p.running and now > p.timeout:
                 output_ts("'%s' timed out" % p.cmdAsStr())
                 if p.inst:
-                    p.inst.write("\n** timeout **\n")
+                    p.inst.write("\n** timeout **\n".encode())
                 p.timed_out = True
                 p.terminate()
 
