@@ -42,6 +42,7 @@
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
+#include "dpif-netdev-lookup.h"
 #include "dpif-netdev-perf.h"
 #include "dpif-provider.h"
 #include "dummy.h"
@@ -8428,13 +8429,11 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     subtable->mf_masks = xmalloc(sizeof(uint64_t) * (unit0 + unit1));
     netdev_flow_key_gen_masks(mask, subtable->mf_masks, unit0, unit1);
 
-    /* Probe for a specialized generic lookup function. */
-    subtable->lookup_func = dpcls_subtable_generic_probe(unit0, unit1);
-
-    /* If not set, assign generic lookup. Generic works for any miniflow. */
-    if (!subtable->lookup_func) {
-        subtable->lookup_func = dpcls_subtable_lookup_generic;
-    }
+    /* Get the preferred subtable search function for this (u0,u1) subtable.
+     * The function is guaranteed to always return a valid implementation, and
+     * possibly an ISA optimized, and/or specialized implementation.
+     */
+    subtable->lookup_func = dpcls_subtable_get_best_impl(unit0, unit1);
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */

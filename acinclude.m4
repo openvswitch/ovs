@@ -14,6 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl Set OVS DPCLS Autovalidator as default subtable search at compile time?
+dnl This enables automatically running all unit tests with all DPCLS
+dnl implementations.
+AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
+  AC_ARG_ENABLE([autovalidator],
+                [AC_HELP_STRING([--enable-autovalidator], [Enable DPCLS autovalidator as default subtable search implementation.])],
+                [autovalidator=yes],[autovalidator=no])
+  AC_MSG_CHECKING([whether DPCLS Autovalidator is default implementation])
+  if test "$autovalidator" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    OVS_CFLAGS="$OVS_CFLAGS -DDPCLS_AUTOVALIDATOR_DEFAULT"
+    AC_MSG_RESULT([yes])
+  fi
+])
+
 dnl OVS_ENABLE_WERROR
 AC_DEFUN([OVS_ENABLE_WERROR],
   [AC_ARG_ENABLE(
