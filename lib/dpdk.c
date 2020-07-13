@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
+#include <rte_cpuflags.h>
 #include <rte_errno.h>
 #include <rte_log.h>
 #include <rte_memzone.h>
@@ -511,6 +512,35 @@ void
 print_dpdk_version(void)
 {
     puts(rte_version());
+}
+
+#define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
+    do {                                                                \
+        if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
+            int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);        \
+            VLOG_DBG("CPU flag %s, available %s\n", name_str,           \
+                      has_isa ? "yes" : "no");                          \
+            return true;                                                \
+        }                                                               \
+    } while (0)
+
+bool
+dpdk_get_cpu_has_isa(const char *arch, const char *feature)
+{
+    /* Ensure Arch is x86_64. */
+    if (strncmp(arch, "x86_64", 6) != 0) {
+        return false;
+    }
+
+#if __x86_64__
+    /* CPU flags only defined for the architecture that support it. */
+    CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
+    CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
+#endif
+
+    VLOG_WARN("Unknown CPU arch,feature: %s,%s. Returning not supported.\n",
+              arch, feature);
+    return false;
 }
 
 void
