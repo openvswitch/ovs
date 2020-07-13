@@ -42,6 +42,26 @@ static struct dpcls_subtable_lookup_info_t subtable_lookups[] = {
     { .prio = 1,
       .probe = dpcls_subtable_generic_probe,
       .name = "generic", },
+
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+    /* Only available on x86_64 bit builds with SSE 4.2 used for OVS core. */
+    { .prio = 0,
+      .probe = dpcls_subtable_avx512_gather_probe,
+      .name = "avx512_gather", },
+#else
+    /* Disabling AVX512 at compile time, as compile time requirements not met.
+     * This could be due to a number of reasons:
+     *  1) core OVS is not compiled with SSE4.2 instruction set.
+     *     The SSE42 instructions are required to use CRC32 ISA for high-
+     *     performance hashing. Consider ./configure of OVS with -msse42 (or
+     *     newer) to enable CRC32 hashing and higher performance.
+     *  2) The assembler in binutils versions 2.30 and 2.31 has bugs in AVX512
+     *     assembly. Compile time probes check for this assembler issue, and
+     *     disable the HAVE_LD_AVX512_GOOD check if an issue is detected.
+     *     Please upgrade binutils, or backport this binutils fix commit:
+     *     2069ccaf8dc28ea699bd901fdd35d90613e4402a
+     */
+#endif
 };
 
 int32_t

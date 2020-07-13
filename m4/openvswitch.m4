@@ -404,6 +404,36 @@ AC_DEFUN([OVS_CHECK_SPHINX],
    AC_ARG_VAR([SPHINXBUILD])
    AM_CONDITIONAL([HAVE_SPHINX], [test "$SPHINXBUILD" != none])])
 
+dnl Checks for binutils/assembler known issue with AVX512.
+dnl Due to backports, we probe assembling a reproducer instead of checking
+dnl binutils version string. More details, including ASM dumps and debug here:
+dnl   GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90028
+dnl The checking of binutils funcationality instead of LD version is similar
+dnl to as how DPDK proposes to solve this issue:
+dnl   http://patches.dpdk.org/patch/71723/
+AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
+  [AC_CACHE_CHECK(
+    [binutils avx512 assembler checks passing],
+    [ovs_cv_binutils_avx512_good],
+    [dnl Assemble a short snippet to test for issue in "build-aux" dir:
+     mkdir -p build-aux
+     OBJFILE=build-aux/binutils_avx512_check.o
+     GATHER_PARAMS='0x8(,%ymm1,1),%ymm0{%k2}'
+     echo "vpgatherqq $GATHER_PARAMS" | as --64 -o $OBJFILE -
+     if ($CC -dumpmachine | grep x86_64) >/dev/null 2>&1; then
+       if (objdump -d  --no-show-raw-insn $OBJFILE | grep -q $GATHER_PARAMS) >/dev/null 2>&1; then
+         ovs_cv_binutils_avx512_good=yes
+         CFLAGS="$CFLAGS -DHAVE_LD_AVX512_GOOD"
+       else
+         ovs_cv_binutils_avx512_good=no
+       fi
+     else
+       ovs_cv_binutils_avx512_good=no
+     fi])
+     rm $OBJFILE
+   AM_CONDITIONAL([HAVE_LD_AVX512_GOOD],
+                  [test "$ovs_cv_binutils_avx512_good" = yes])])
+
 dnl Checks for dot.
 AC_DEFUN([OVS_CHECK_DOT],
   [AC_CACHE_CHECK(
