@@ -182,6 +182,7 @@ __regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
+skip_gerrit_change_id_check = False
 skip_block_whitespace_check = False
 skip_signoff_check = False
 
@@ -814,7 +815,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
             elif is_co_author.match(line):
                 m = is_co_author.match(line)
                 co_authors.append(m.group(2))
-            elif is_gerrit_change_id.match(line):
+            elif (is_gerrit_change_id.match(line) and
+                  not skip_gerrit_change_id_check):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
                 print("%d: %s\n" % (lineno, line))
@@ -885,7 +887,8 @@ Check options:
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
 -S|--spellcheck                Check C comments and commit-message for possible
                                spelling mistakes
--t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
+-t|--skip-trailing-whitespace  Skips the trailing whitespace test
+   --skip-gerrit-change-id     Skips the gerrit change id test"""
           % sys.argv[0])
 
 
@@ -942,6 +945,7 @@ if __name__ == '__main__':
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
                                        "skip-trailing-whitespace",
+                                       "skip-gerrit-change-id",
                                        "spellcheck",
                                        "quiet"])
     except:
@@ -960,6 +964,8 @@ if __name__ == '__main__':
             skip_signoff_check = True
         elif o in ("-t", "--skip-trailing-whitespace"):
             skip_trailing_whitespace_check = True
+        elif o in ("--skip-gerrit-change-id"):
+            skip_gerrit_change_id_check = True
         elif o in ("-f", "--check-file"):
             checking_file = True
         elif o in ("-S", "--spellcheck"):
