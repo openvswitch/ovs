@@ -1006,7 +1006,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     memset(&dump_types, 0, sizeof dump_types);
     error = populate_dump_types(types_list, &dump_types, dpctl_p);
     if (error) {
-        goto out_free;
+        goto out_dpifclose;
     }
     determine_dpif_flow_dump_types(&dump_types, &dpif_dump_types);
 
