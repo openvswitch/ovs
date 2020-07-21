@@ -1,0 +1,28 @@
+AT_BANNER([system-route])
+
+dnl Add an interface, add/del ip address, check that OVS catches route updates.
+AT_SETUP([ovs-route - add/remove system route])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create tap port.
+AT_CHECK([ip tuntap add name p1-route mode tap])
+AT_CHECK([ip link set p1-route up])
+on_exit 'ip link del p1-route'
+
+dnl Add ip address.
+AT_CHECK([ip addr add 10.0.0.17/24 dev p1-route], [0], [stdout])
+
+dnl Check that OVS catches route updates.
+OVS_WAIT_UNTIL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [0], [dnl
+Cached: 10.0.0.17/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local
+])
+
+dnl Delete ip address.
+AT_CHECK([ip addr del 10.0.0.17/24 dev p1-route], [0], [stdout])
+dnl Check that routes was removed from OVS.
+OVS_WAIT_UNTIL([test `ovs-appctl ovs/route/show | grep -c 'p1-route'` -eq 0 ])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
