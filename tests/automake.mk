@@ -116,7 +116,8 @@ SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-testsuite.at \
 	tests/system-ovn.at \
 	tests/system-userspace-macros.at \
-	tests/system-userspace-packet-type-aware.at
+	tests/system-userspace-packet-type-aware.at \
+	tests/system-route.at
 
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
