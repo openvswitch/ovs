@@ -154,7 +154,8 @@ SYSTEM_KMOD_TESTSUITE_AT = \
 SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-testsuite.at \
 	tests/system-userspace-macros.at \
-	tests/system-userspace-packet-type-aware.at
+	tests/system-userspace-packet-type-aware.at \
+	tests/system-route.at
 
 SYSTEM_TSO_TESTSUITE_AT = \
 	tests/system-tso-testsuite.at \
