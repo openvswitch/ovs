@@ -188,7 +188,7 @@ Description: Python bindings for Open vSwitch
 Package: openvswitch-test
 Architecture: all
 Depends: python3,
-         python3-twisted-web,
+         python3-twisted,
          ${misc:Depends},
          ${python3:Depends}
 Description: Open vSwitch test package
