@@ -333,3 +333,10 @@ m4_ifndef([AT_FAIL_IF],
   [m4_define([AT_FAIL_IF],
     [AT_CHECK([($1) \
     && exit 99 || exit 0], [0], [ignore], [ignore])])])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from bridges such as br-underlay.
+dnl Add a rule to always accept the traffic.
+m4_define([IPTABLES_ACCEPT],
+  [AT_CHECK([iptables -I INPUT 1 -i $1 -j ACCEPT])
+   on_exit 'iptables -D INPUT 1 -i $1'])
