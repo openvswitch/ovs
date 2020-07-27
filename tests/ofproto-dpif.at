@@ -8632,6 +8632,29 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=50:54:00:00:00:0c),eth_ty
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif megaflow - set dl_dst with match on dl_src])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+add_of_ports br0 1 2
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,dl_src=50:54:00:00:00:09 actions=mod_dl_dst(50:54:00:00:00:0a),output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.5,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+sleep 1
+dnl The first packet is essentially a no-op, as the new destination MAC is the
+dnl same as the original.  The second entry actually updates the destination
+dnl MAC.  The last one must be dropped as it doesn't match with dl_src.
+AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions:set(eth(dst=50:54:00:00:00:0a)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions:drop
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 m4_define([OFPROTO_DPIF_MEGAFLOW_DISABLED],
   [AT_SETUP([ofproto-dpif megaflow - disabled$1])
    OVS_VSWITCHD_START([], [], [], [m4_if([$1], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])])
