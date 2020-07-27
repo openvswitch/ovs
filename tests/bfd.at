@@ -1101,3 +1101,35 @@ BFD_CHECK_MULT([p1], [3], [3])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([bfd - overlay])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=2.2.2.2 ofport_request=1 -- \
+                    set interface p1 bfd:enable=true bfd:bfd_src_ip=2.2.2.1 -- \
+                    set bridge br0 fail-mode=standalone])
+
+# Userspace slow path handles normal BFD packets.
+AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x0,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags()),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:55,dst=00:23:20:00:00:01),eth_type(0x0800),ipv4(src=2.2.2.2/0.0.0.0,dst=2.2.2.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
+# check that the packet should be handled as BFD packet.
+AT_CHECK([tail -2 stdout], [0], [dnl
+This flow is handled by the userspace slow path because it:
+  - Consists of BFD packets.
+], [])
+
+# Userspace slow path won't handle overlay BFD packets. Instead, other OVS flows, if configured, will handle them.
+AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x0,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags()),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:66,dst=00:23:20:00:00:77),eth_type(0x0800),ipv4(src=192.168.2.2/0.0.0.0,dst=192.168.2.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
+AT_CHECK([tail -10 stdout], [0], [dnl
+bridge("br0")
+-------------
+ 0. priority 0
+    NORMAL
+     -> learned that 00:11:22:33:44:66 is on port p1 in VLAN 0
+     -> no learned MAC for destination, flooding
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,tun_id=0,tun_src=2.2.2.2,tun_dst=2.2.2.1,tun_tos=0,tun_flags=-df-csum+key,in_port=1,dl_src=00:11:22:33:44:66,dl_dst=00:23:20:00:00:77,nw_frag=no,tp_dst=3784
+Datapath actions: 100
+], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

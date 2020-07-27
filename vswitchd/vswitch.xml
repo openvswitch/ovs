@@ -3670,6 +3670,13 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         optional Authentication or ``Echo Mode'' features.
       </p>
 
+      <p>
+        OVS 2.13 and earlier intercepted and processed all BFD packets.
+        OVS 2.14 and later only intercept and process BFD packets destined
+        to a configured BFD instance, and other BFD packets are made available
+        to the OVS flow table for forwarding.
+      </p>
+
       <group title="BFD Configuration">
         <p>
           A controller sets up key-value pairs in the <ref column="bfd"/>
