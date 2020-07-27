@@ -149,6 +149,9 @@ BUILD_ASSERT_DECL(BFD_PACKET_LEN == sizeof(struct msg));
 #define FLAGS_MASK 0x3f
 #define DEFAULT_MULT 3
 
+#define BFD_DEFAULT_SRC_IP 0xA9FE0101 /* 169.254.1.1 */
+#define BFD_DEFAULT_DST_IP 0xA9FE0100 /* 169.254.1.0 */
+
 struct bfd {
     struct hmap_node node;        /* In 'all_bfds'. */
     uint32_t disc;                /* bfd.LocalDiscr. Key in 'all_bfds' hmap. */
@@ -457,9 +460,9 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
                          &bfd->rmt_eth_dst);
 
     bfd_lookup_ip(smap_get_def(cfg, "bfd_src_ip", ""),
-                  htonl(0xA9FE0101) /* 169.254.1.1 */, &bfd->ip_src);
+                  htonl(BFD_DEFAULT_SRC_IP), &bfd->ip_src);
     bfd_lookup_ip(smap_get_def(cfg, "bfd_dst_ip", ""),
-                  htonl(0xA9FE0100) /* 169.254.1.0 */, &bfd->ip_dst);
+                  htonl(BFD_DEFAULT_DST_IP), &bfd->ip_dst);
 
     forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
     if (bfd->forwarding_if_rx != forwarding_if_rx) {
@@ -674,7 +677,14 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         if (flow->nw_proto == IPPROTO_UDP
             && !(flow->nw_frag & FLOW_NW_FRAG_LATER)
-            && tp_dst_equals(flow, BFD_DEST_PORT, wc)) {
+            && tp_dst_equals(flow, BFD_DEST_PORT, wc)
+            && (bfd->ip_src == htonl(BFD_DEFAULT_SRC_IP)
+                || bfd->ip_src == flow->nw_dst)) {
+
+            if (bfd->ip_src == flow->nw_dst) {
+                memset(&wc->masks.nw_dst, 0xffffffff, sizeof wc->masks.nw_dst);
+            }
+
             bool check_tnl_key;
 
             atomic_read_relaxed(&bfd->check_tnl_key, &check_tnl_key);
