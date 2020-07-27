@@ -1395,6 +1395,19 @@ is_all_ones(const void *p, size_t n)
     return is_all_byte(p, n, 0xff);
 }
 
+/* *dst |= *src for 'n' bytes. */
+void
+or_bytes(void *dst_, const void *src_, size_t n)
+{
+    const uint8_t *src = src_;
+    uint8_t *dst = dst_;
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        *dst++ |= *src++;
+    }
+}
+
 /* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'
  * starting from bit 'dst_ofs' in 'dst'.  'src' is 'src_len' bytes long and
  * 'dst' is 'dst_len' bytes long.
