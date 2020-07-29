@@ -34,6 +34,7 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512bw \
 	-mavx512dq \
 	-mbmi2 \
+	-fPIC \
 	$(AM_CFLAGS)
 lib_libopenvswitchavx512_la_SOURCES = \
 	lib/dpif-netdev-lookup-avx512-gather.c
