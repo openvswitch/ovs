@@ -22,6 +22,7 @@ lib_libopenvswitch_la_LDFLAGS = \
         $(AM_LDFLAGS)
 
 if HAVE_AVX512F
+if HAVE_LD_AVX512_GOOD
 # Build library of avx512 code with CPU ISA CFLAGS enabled. This allows the
 # compiler to use the ISA features required for the ISA optimized code-paths.
 # Use LDFLAGS to compile only static library of this code, as it should be
@@ -38,6 +39,7 @@ lib_libopenvswitchavx512_la_SOURCES = \
 	lib/dpif-netdev-lookup-avx512-gather.c
 lib_libopenvswitchavx512_la_LDFLAGS = \
 	-static
+endif
 endif
 
 # Build core vswitch libraries as before
