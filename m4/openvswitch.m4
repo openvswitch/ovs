@@ -426,8 +426,12 @@ AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
          CFLAGS="$CFLAGS -DHAVE_LD_AVX512_GOOD"
        else
          ovs_cv_binutils_avx512_good=no
+         dnl Explicitly disallow avx512f to stop compiler auto-vectorizing
+         dnl and causing zmm usage with buggy binutils versions.
+         CFLAGS="$CFLAGS -mno-avx512f"
        fi
      else
+       dnl non x86_64 architectures don't have avx512, so not affected
        ovs_cv_binutils_avx512_good=no
      fi])
      rm $OBJFILE
