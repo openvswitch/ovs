@@ -115,14 +115,17 @@ PUINT8 OvsGetHeaderBySize(OvsForwardingContext *ovsFwdCtx,
 
 NDIS_STATUS
 OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
+                  OvsFlowKey *key,
                   const struct ovs_key_udp *udpAttr);
 
 NDIS_STATUS
 OvsUpdateTcpPorts(OvsForwardingContext *ovsFwdCtx,
+                  OvsFlowKey *key,
                   const struct ovs_key_tcp *tcpAttr);
 
 NDIS_STATUS
 OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
+                    OvsFlowKey *key,
                     const struct ovs_key_ipv4 *ipAttr);
 
 NDIS_STATUS
