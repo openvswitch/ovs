@@ -1,5 +1,6 @@
-v2.10.5 - xx xxx xxxx
+v2.10.5 - 30 Jul 2020
 ---------------------
+   - Bug fixes
    - DPDK
     * OVS validated with DPDK 17.11.10 which is recommended to be used.
 
