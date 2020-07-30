@@ -682,6 +682,10 @@ parse_flow_match(struct flow_patterns *patterns,
 
     consumed_masks = &match->wc.masks;
 
+    if (!flow_tnl_dst_is_set(&match->flow.tunnel)) {
+        memset(&consumed_masks->tunnel, 0, sizeof consumed_masks->tunnel);
+    }
+
     memset(&consumed_masks->in_port, 0, sizeof consumed_masks->in_port);
     /* recirc id must be zero. */
     if (match->wc.masks.recirc_id & match->flow.recirc_id) {
