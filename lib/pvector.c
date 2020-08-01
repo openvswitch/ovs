@@ -187,9 +187,9 @@ pvector_change_priority(struct pvector *pvec, void *ptr, int priority)
     /* Now at the index of the entry to be updated. */
 
     /* Check if can not update in place. */
-    if ((priority > old->vector[index].priority && index > 0
+    if ((index > 0 && priority > old->vector[index].priority
          && priority > old->vector[index - 1].priority)
-        || (priority < old->vector[index].priority && index < old->size - 1
+        || (index < old->size - 1 && priority < old->vector[index].priority
             && priority < old->vector[index + 1].priority)) {
         /* Have to use a temp. */
         if (!pvec->temp) {
