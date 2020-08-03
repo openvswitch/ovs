@@ -198,6 +198,16 @@ ovsdb_storage_get_memory_usage(const struct ovsdb_storage *storage,
     }
 }
 
+char *
+ovsdb_storage_get_error(const struct ovsdb_storage *storage)
+{
+    if (storage->error) {
+        return ovsdb_error_to_string(storage->error);
+    }
+
+    return NULL;
+}
+
 void
 ovsdb_storage_run(struct ovsdb_storage *storage)
 {

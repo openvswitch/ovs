@@ -1,5 +1,8 @@
 Post-v2.14.0
 ---------------------
+   - OVSDB:
+     * New unixctl command 'ovsdb-server/get-db-storage-status' to show the
+       status of the storage that's backing a database.
 
 
 v2.14.0 - 17 Aug 2020
