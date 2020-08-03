@@ -143,7 +143,7 @@ Q: Are all features available with all datapaths?
     Set action                      YES            1.0          1.0    PARTIAL
     NIC Bonding                     YES            1.0          1.0      YES
     Multiple VTEPs                  YES            1.10         1.10     YES
-    Meter action                    4.15           2.10         2.7      NO
+    Meter action                    4.18           2.10         2.7      NO
     check_pkt_len action            5.2            2.12         2.12     NO
     ========================== ============== ============== ========= =======
 
