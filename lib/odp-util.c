@@ -6225,7 +6225,9 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
                     struct ovs_key_nd_extensions *nd_ext_key;
 
                     if (data->igmp_group_ip4 != 0 || data->tcp_flags != 0) {
-                        nd_ext_key = nl_msg_put_unspec_uninit(buf,
+                        /* 'struct ovs_key_nd_extensions' has padding,
+                         * clear it. */
+                        nd_ext_key = nl_msg_put_unspec_zero(buf,
                                             OVS_KEY_ATTR_ND_EXTENSIONS,
                                             sizeof *nd_ext_key);
                         nd_ext_key->nd_reserved = data->igmp_group_ip4;
