@@ -332,13 +332,29 @@ for i in `seq $n`; do
     AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
 done
 
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "insert",
+       "table": "indexed",
+       "row": {"i": 0}}]]'], [0], [ignore], [ignore])
+
 # Kill one follower (s2) and write some data to cluster, so that the follower is falling behind
 printf "\ns2: stopping\n"
 OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s2], [s2.pid])
 
+# Delete "i":0 and readd it to get a different UUID for it.
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "delete",
+       "table": "indexed",
+       "where": [["i", "==", 0]]}]]'], [0], [ignore], [ignore])
+
 AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
       {"op": "insert",
-       "table": "simple",
+       "table": "indexed",
+       "row": {"i": 0}}]]'], [0], [ignore], [ignore])
+
+AT_CHECK([ovsdb-client transact unix:s1.ovsdb '[["idltest",
+      {"op": "insert",
+       "table": "indexed",
        "row": {"i": 1}}]]'], [0], [ignore], [ignore])
 
 # Compact leader online to generate snapshot
@@ -355,8 +371,18 @@ AT_CHECK([ovsdb_client_wait unix:s2.ovsdb $schema_name connected])
 # succeed.
 AT_CHECK([ovsdb-client transact unix:s2.ovsdb '[["idltest",
       {"op": "insert",
-       "table": "simple",
-       "row": {"i": 1}}]]'], [0], [ignore], [ignore])
+       "table": "indexed",
+       "row": {"i": 2}}]]'], [0], [ignore], [ignore])
+
+# The snapshot should overwrite the in-memory contents of the DB on S2
+# without generating any constraint violations. All tree records (0, 1, 2)
+# should be in the DB at this point.
+AT_CHECK([ovsdb-client --no-headings dump unix:s2.ovsdb idltest indexed | uuidfilt | sort -k 2], [0], [dnl
+<0> 0
+<1> 1
+<2> 2
+indexed table
+])
 
 for i in `seq $n`; do
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
