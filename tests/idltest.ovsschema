@@ -54,6 +54,15 @@
       },
       "isRoot" : true
     },
+    "indexed": {
+      "columns": {
+        "i": {
+          "type": "integer"
+        }
+      },
+      "indexes": [["i"]],
+      "isRoot" : true
+    },
     "simple": {
       "columns": {
         "b": {
