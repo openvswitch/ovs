@@ -101,7 +101,7 @@ class XFRM(object):
         proc = subprocess.Popen([self.IP, 'xfrm', 'policy'],
                                 stdout=subprocess.PIPE)
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             a = line.split(" ")
@@ -124,7 +124,7 @@ class XFRM(object):
         proc = subprocess.Popen([self.IP, 'xfrm', 'state'],
                                 stdout=subprocess.PIPE)
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             a = line.split(" ")
@@ -246,7 +246,7 @@ conn prevent_unencrypted_vxlan
         proc = subprocess.Popen([self.IPSEC, 'status'], stdout=subprocess.PIPE)
 
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             tunnel_name = line.split(":")
@@ -340,7 +340,7 @@ conn prevent_unencrypted_vxlan
         # about possibility of ovs-monitor-ipsec to block for each tunnel
         # while strongSwan sends IKE messages over Internet.
         conns_dict = self.get_active_conns()
-        for ifname, conns in conns_dict.iteritems():
+        for ifname, conns in conns_dict.items():
             tunnel = monitor.tunnels.get(ifname)
             for conn in conns:
                 # IPsec "connection" names that we choose in strongswan
@@ -536,7 +536,7 @@ conn prevent_unencrypted_vxlan
 
         # Delete old connections
         conns_dict = self.get_active_conns()
-        for ifname, conns in conns_dict.iteritems():
+        for ifname, conns in conns_dict.items():
             tunnel = monitor.tunnels.get(ifname)
 
             for conn in conns:
@@ -608,7 +608,7 @@ conn prevent_unencrypted_vxlan
         proc = subprocess.Popen([self.IPSEC, 'status'], stdout=subprocess.PIPE)
 
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
 
@@ -989,7 +989,7 @@ class IPsecMonitor(object):
         skb_mark = None
         is_valid = False
 
-        for row in data["Open_vSwitch"].rows.itervalues():
+        for row in data["Open_vSwitch"].rows.values():
             pki[0] = row.other_config.get("certificate")
             pki[1] = row.other_config.get("private_key")
             pki[2] = row.other_config.get("ca_cert")
@@ -1016,7 +1016,7 @@ class IPsecMonitor(object):
         table."""
         ifaces = set()
 
-        for row in data["Interface"].rows.itervalues():
+        for row in data["Interface"].rows.values():
             if not self.is_tunneling_type_supported(row.type):
                 continue
             if not self.is_ipsec_required(row.options):
@@ -1047,7 +1047,7 @@ class IPsecMonitor(object):
             return
         s = ""
         conns = self.ike_helper.get_active_conns()
-        for name, tunnel in self.tunnels.iteritems():
+        for name, tunnel in self.tunnels.items():
             s += tunnel.show(policies, securities, conns)
         unix_conn.reply(s)
 
@@ -1064,7 +1064,7 @@ class IPsecMonitor(object):
         if self.ike_helper.config_global(self):
             needs_refresh = True
 
-        for name, tunnel in self.tunnels.iteritems():
+        for name, tunnel in self.tunnels.items():
             if tunnel.last_refreshed_version != tunnel.version:
                 tunnel.last_refreshed_version = tunnel.version
                 needs_refresh = True
@@ -1094,7 +1094,7 @@ class IPsecMonitor(object):
             proc.wait()
             if proc.returncode:
                 raise Exception(proc.stderr.read())
-            m = re.search(r"CN=(.+?),", proc.stdout.readline())
+            m = re.search(r"CN=(.+?),", proc.stdout.readline().decode())
             if not m:
                 raise Exception("No CN in the certificate subject.")
         except Exception as e:
