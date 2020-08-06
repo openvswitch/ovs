@@ -22,6 +22,8 @@ v2.14.0 - xx xxx xxxx
        CVE-2020-10726, this DPDK version is strongly recommended to be used.
      * New 'ovs-appctl dpdk/log-list' and 'ovs-appctl dpdk/log-set' commands
        to list and change log levels in DPDK components.
+     * Vhost-user Dequeue zero-copy support is deprecated and will be removed
+       in the next release.
    - Linux datapath:
      * Support for kernel versions up to 5.5.x.
    - AF_XDP:

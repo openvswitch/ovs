@@ -5085,6 +5085,8 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
                       dev->up.name, dev->vhost_id);
             if (zc_enabled) {
                 VLOG_INFO("Zero copy enabled for vHost port %s", dev->up.name);
+                VLOG_WARN("Zero copy support is deprecated and will be "
+                          "removed in the next OVS release.");
             }
         }
 
