@@ -556,6 +556,11 @@ shown with::
 vhost-user Dequeue Zero Copy (experimental)
 -------------------------------------------
 
+.. warning::
+
+   vhost-user Dequeue Zero Copy is deprecated in OVS and will be removed in
+   the next release.
+
 Normally when dequeuing a packet from a vHost User device, a memcpy operation
 must be used to copy that packet from guest address space to host address
 space. This memcpy can be removed by enabling dequeue zero-copy like so::
