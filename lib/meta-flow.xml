@@ -3835,18 +3835,18 @@ r r c c c.
 
       <ul>
         <li>
-          When <ref field="mpls_bos"/> is 1, there is another MPLS label
+          When <ref field="mpls_bos"/> is 0, there is another MPLS label
           following this one, so the Ethertype passed to <code>pop_mpls</code>
           should be an MPLS Ethertype.  For example: <code>table=0,
-          dl_type=0x8847, mpls_bos=1, actions=pop_mpls:0x8847,
+          dl_type=0x8847, mpls_bos=0, actions=pop_mpls:0x8847,
           goto_table:1</code>
         </li>
 
         <li>
-          When <ref field="mpls_bos"/> is 0, this MPLS label is the last one,
+          When <ref field="mpls_bos"/> is 1, this MPLS label is the last one,
           so the Ethertype passed to <code>pop_mpls</code> should be a non-MPLS
           Ethertype such as IPv4.  For example: <code>table=1, dl_type=0x8847,
-          mpls_bos=0, actions=pop_mpls:0x0800, goto_table:2</code>
+          mpls_bos=1, actions=pop_mpls:0x0800, goto_table:2</code>
         </li>
       </ul>
     </field>
