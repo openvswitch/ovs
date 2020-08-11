@@ -4631,8 +4631,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
      * transaction only does writes of existing values, without making any real
      * changes, we will drop the whole transaction later in
      * ovsdb_idl_txn_commit().) */
-    if (datum->keys && datum->values &&
-        write_only && ovsdb_datum_equals(ovsdb_idl_read(row, column),
+    if (write_only && ovsdb_datum_equals(ovsdb_idl_read(row, column),
                                          datum, &column->type)) {
         goto discard_datum;
     }
