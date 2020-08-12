@@ -189,8 +189,8 @@ struct ofservice {
 
 static void ofservice_run(struct ofservice *);
 static void ofservice_wait(struct ofservice *);
-static void ofservice_reconfigure(struct ofservice *,
-                                  const struct ofproto_controller *)
+static int ofservice_reconfigure(struct ofservice *,
+                                 const struct ofproto_controller *)
     OVS_REQUIRES(ofproto_mutex);
 static void ofservice_create(struct connmgr *mgr, const char *target,
                              const struct ofproto_controller *)
@@ -601,7 +601,15 @@ connmgr_set_controllers(struct connmgr *mgr, struct shash *controllers)
                       target);
             ofservice_destroy(ofservice);
         } else {
-            ofservice_reconfigure(ofservice, c);
+            if (ofservice_reconfigure(ofservice, c)) {
+                char *target_to_restore = xstrdup(target);
+                VLOG_INFO("%s: Changes to controller \"%s\" "
+                          "expects re-initialization: Re-initializing now.",
+                          mgr->name, target);
+                ofservice_destroy(ofservice);
+                ofservice_create(mgr, target_to_restore, c);
+                free(target_to_restore);
+            }
         }
     }
 
@@ -2007,16 +2015,15 @@ ofservice_wait(struct ofservice *ofservice)
     }
 }
 
-static void
+static int
 ofservice_reconfigure(struct ofservice *ofservice,
                       const struct ofproto_controller *settings)
     OVS_REQUIRES(ofproto_mutex)
 {
-    /* If the allowed OpenFlow versions change, close all of the existing
-     * connections to allow them to reconnect and possibly negotiate a new
-     * version. */
+    /* If the allowed OpenFlow versions change, a full cleanup is needed
+     * for the ofservice and connections. */
     if (ofservice->s.allowed_versions != settings->allowed_versions) {
-        ofservice_close_all(ofservice);
+        return -EINVAL;
     }
 
     ofservice->s = *settings;
@@ -2025,6 +2032,8 @@ ofservice_reconfigure(struct ofservice *ofservice,
     LIST_FOR_EACH (ofconn, ofservice_node, &ofservice->conns) {
         ofconn_reconfigure(ofconn, settings);
     }
+
+    return 0;
 }
 
 /* Finds and returns the ofservice within 'mgr' that has the given
