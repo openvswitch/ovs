@@ -636,6 +636,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])
+  OVS_GREP_IFELSE([$KSRC/include/linux/prandom.h],
+                  [prandom_u32[[\(]]],
+                  [OVS_DEFINE([HAVE_PRANDOM_U32])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/prandom.h], [prandom_u32_max])
 
   OVS_GREP_IFELSE([$KSRC/include/net/rtnetlink.h], [get_link_net])
   OVS_GREP_IFELSE([$KSRC/include/net/rtnetlink.h], [name_assign_type])
