@@ -103,3 +103,20 @@ AT_CHECK([ovs-appctl -t ovs-vswitchd version], [0], [ignore])
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
+
+AT_SETUP([bridge - change ofproto versions])
+dnl Start vswitch and add a version test bridge
+OVS_VSWITCHD_START(
+    [add-br vr_test0 -- \
+     set bridge vr_test0 datapath-type=dummy \
+                         protocols=OpenFlow10])
+
+dnl set the version to include, say, OpenFlow14
+AT_CHECK([ovs-vsctl set bridge vr_test0 protocols=OpenFlow10,OpenFlow14])
+
+dnl now try to use bundle action on a flow
+AT_CHECK([ovs-ofctl add-flow vr_test0 --bundle actions=normal])
+
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
