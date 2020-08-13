@@ -634,7 +634,9 @@ netdev_linux_notify_sock(void)
                 }
             }
         }
-        nl_sock_listen_all_nsid(sock, true);
+	if (sock != NULL) {
+            nl_sock_listen_all_nsid(sock, true);
+	}
         ovsthread_once_done(&once);
     }
 
