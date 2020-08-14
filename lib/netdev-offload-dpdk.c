@@ -565,9 +565,18 @@ parse_flow_match(struct flow_patterns *patterns,
     uint8_t proto = 0;
 
     /* Eth */
-    if (match->wc.masks.dl_type ||
-        !eth_addr_is_zero(match->wc.masks.dl_src) ||
-        !eth_addr_is_zero(match->wc.masks.dl_dst)) {
+    if (match->wc.masks.dl_type == OVS_BE16_MAX && is_ip_any(&match->flow)
+        && eth_addr_is_zero(match->wc.masks.dl_dst)
+        && eth_addr_is_zero(match->wc.masks.dl_src)) {
+        /*
+         * This is a temporary work around to fix ethernet pattern for partial
+         * hardware offload for X710 devices. This fix will be reverted once
+         * the issue is fixed within the i40e PMD driver.
+         */
+        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_ETH, NULL, NULL);
+    } else if (match->wc.masks.dl_type ||
+               !eth_addr_is_zero(match->wc.masks.dl_src) ||
+               !eth_addr_is_zero(match->wc.masks.dl_dst)) {
         struct rte_flow_item_eth *spec, *mask;
 
         spec = xzalloc(sizeof *spec);
