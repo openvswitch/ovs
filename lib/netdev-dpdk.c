@@ -4600,9 +4600,18 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     struct rte_flow_item_eth eth_mask;
     memset(&eth_spec, 0, sizeof(eth_spec));
     memset(&eth_mask, 0, sizeof(eth_mask));
-    if (match->wc.masks.dl_type ||
-        !eth_addr_is_zero(match->wc.masks.dl_src) ||
-        !eth_addr_is_zero(match->wc.masks.dl_dst)) {
+    if (match->wc.masks.dl_type == OVS_BE16_MAX && is_ip_any(&match->flow)
+        && eth_addr_is_zero(match->wc.masks.dl_dst)
+        && eth_addr_is_zero(match->wc.masks.dl_src)) {
+        /*
+         * This is a temporary work around to fix ethernet pattern for partial
+         * hardware offload for X710 devices. This fix will be reverted once
+         * the issue is fixed within the i40e PMD driver.
+         */
+        add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ETH, NULL, NULL);
+    } else if (match->wc.masks.dl_type ||
+               !eth_addr_is_zero(match->wc.masks.dl_src) ||
+               !eth_addr_is_zero(match->wc.masks.dl_dst)) {
         rte_memcpy(&eth_spec.dst, &match->flow.dl_dst, sizeof(eth_spec.dst));
         rte_memcpy(&eth_spec.src, &match->flow.dl_src, sizeof(eth_spec.src));
         eth_spec.type = match->flow.dl_type;
