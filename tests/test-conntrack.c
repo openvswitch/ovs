@@ -82,6 +82,7 @@ ct_thread_main(void *aux_)
 {
     struct thread_aux *aux = aux_;
     struct dp_packet_batch *pkt_batch;
+    struct dp_packet *pkt;
     ovs_be16 dl_type;
     size_t i;
     long long now = time_msec();
@@ -91,6 +92,9 @@ ct_thread_main(void *aux_)
     for (i = 0; i < n_pkts; i += batch_size) {
         conntrack_execute(ct, pkt_batch, dl_type, false, true, 0, NULL, NULL,
                           0, 0, NULL, NULL, now, 0);
+        DP_PACKET_BATCH_FOR_EACH (j, pkt, pkt_batch) {
+            pkt_metadata_init_conn(&pkt->md);
+        }
     }
     ovs_barrier_block(&barrier);
     destroy_packets(pkt_batch);
