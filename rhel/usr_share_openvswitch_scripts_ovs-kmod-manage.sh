@@ -142,8 +142,8 @@ elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
 fi
 
 if [ X"$ver_offset" = X ]; then
-    echo "This script is not intended to run on kernel $(uname -r)"
-    exit 1
+#    echo "This script is not intended to run on kernel $(uname -r)"
+    exit 0
 fi
 
 #IFS='.\|-' read -r -a version_nums <<<"${current_kernel}"
