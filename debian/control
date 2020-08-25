@@ -14,8 +14,8 @@ Build-Depends: graphviz,
                openssl,
                procps,
                python3-all,
-               python3-twisted-conch,
-               python3-zopeinterface,
+               python3-twisted,
+               python3-zope.interface,
                libunbound-dev,
                libunwind-dev
 Standards-Version: 3.9.3
