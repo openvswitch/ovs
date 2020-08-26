@@ -66,9 +66,6 @@ matrix:
     - arch: arm64
       compiler: clang
       env: OPTS="--disable-ssl"
-
-matrix:
-  include:
     - env: DEB_PACKAGE=1
       addons:
         apt:
