@@ -51,9 +51,6 @@ matrix:
     - os: osx
       compiler: clang
       env: OPTS="--disable-ssl"
-
-matrix:
-  include:
     - env: DEB_PACKAGE=1
       addons:
         apt:
