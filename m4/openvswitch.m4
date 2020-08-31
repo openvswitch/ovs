@@ -111,7 +111,7 @@ AC_DEFUN([OVS_CHECK_WIN32],
             fi
             PTHREAD_INCLUDES=-I$withval/include
             PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
-            PTHREAD_LIBS="-lpthreadVC2"
+            PTHREAD_LIBS="-lpthreadVC3"
             AC_SUBST([PTHREAD_WIN32_DIR_DLL_WIN_FORM])
             AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
