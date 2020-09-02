@@ -2039,12 +2039,6 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
         if (!nullable_string_is_equal(path, dev->vhost_id)) {
             free(dev->vhost_id);
             dev->vhost_id = nullable_xstrdup(path);
-            /* check zero copy configuration */
-            if (smap_get_bool(args, "dq-zero-copy", false)) {
-                dev->vhost_driver_flags |= RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
-            } else {
-                dev->vhost_driver_flags &= ~RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
-            }
             netdev_request_reconfigure(netdev);
         }
     }
@@ -5035,7 +5029,6 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     int err;
     uint64_t vhost_flags = 0;
     uint64_t vhost_unsup_flags;
-    bool zc_enabled;
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -5061,19 +5054,6 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
             vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
         }
 
-        zc_enabled = dev->vhost_driver_flags
-                     & RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
-        /* Enable zero copy flag, if requested */
-        if (zc_enabled) {
-            vhost_flags |= RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
-            /* DPDK vHost library doesn't allow zero-copy with linear buffers.
-             * Hence disable Linear buffer.
-             */
-            vhost_flags &= ~RTE_VHOST_USER_LINEARBUF_SUPPORT;
-            VLOG_WARN("Zero copy enabled, disabling linear buffer"
-                      " check for vHost port %s", dev->up.name);
-        }
-
         /* Enable External Buffers if TCP Segmentation Offload is enabled. */
         if (userspace_tso_enabled()) {
             vhost_flags |= RTE_VHOST_USER_EXTBUF_SUPPORT;
@@ -5090,11 +5070,6 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
             VLOG_INFO("vHost User device '%s' created in 'client' mode, "
                       "using client socket '%s'",
                       dev->up.name, dev->vhost_id);
-            if (zc_enabled) {
-                VLOG_INFO("Zero copy enabled for vHost port %s", dev->up.name);
-                VLOG_WARN("Zero copy support is deprecated and will be "
-                          "removed in the next OVS release.");
-            }
         }
 
         err = rte_vhost_driver_callback_register(dev->vhost_id,

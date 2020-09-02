@@ -3236,17 +3236,6 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
-      <column name="options" key="dq-zero-copy"
-              type='{"type": "boolean"}'>
-        <p>
-          The value specifies whether or not to enable dequeue zero copy on
-          the given interface.
-          Must be set before vhost-server-path is specified.
-          Only supported by dpdkvhostuserclient interfaces.
-          The feature is considered experimental.
-        </p>
-      </column>
-
       <column name="options" key="tx-retries-max"
               type='{"type": "integer", "minInteger": 0, "maxInteger": 32}'>
         <p>
