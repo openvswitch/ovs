@@ -19,6 +19,7 @@ require {
         type kernel_t;
         type hostname_exec_t;
         type modules_conf_t;
+        type modules_dep_t;
         type modules_object_t;
         type passwd_file_t;
         type plymouth_exec_t;
@@ -121,6 +122,7 @@ allow openvswitch_load_module_t insmod_exec_t:file { execute execute_no_trans ge
 allow openvswitch_load_module_t kernel_t:system module_request;
 allow openvswitch_load_module_t modules_conf_t:dir { getattr open read search };
 allow openvswitch_load_module_t modules_conf_t:file { getattr open read };
+allow openvswitch_load_module_t modules_dep_t:file { getattr map open read };
 allow openvswitch_load_module_t modules_object_t:file { map getattr open read };
 allow openvswitch_load_module_t modules_object_t:dir { getattr open read search };
 allow openvswitch_load_module_t openvswitch_load_module_exec_t:file { entrypoint };
