@@ -1788,33 +1788,25 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-re
 ]])
 
 m4_define([CHECK_STREAM_OPEN_BLOCK],
-  [AT_SETUP([Check Stream open block - C - $1])
-   AT_SKIP_IF([test "$1" = "tcp6" && test "$IS_WIN32" = "yes"])
-   AT_SKIP_IF([test "$1" = "tcp6" && test "$HAVE_IPV6" = "no"])
-   AT_KEYWORDS([Check Stream open block $1])
-   AT_CHECK([ovsdb_start_idltest "ptcp:0:$2"])
+  [AT_SETUP([Check stream open block - $1 - $3])
+   AT_SKIP_IF([test "$3" = "tcp6" && test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([test "$3" = "tcp6" && test "$HAVE_IPV6" = "no"])
+   AT_KEYWORDS([ovsdb server stream open_block $3])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:$4"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
    WRONG_PORT=$(($TCP_PORT + 101))
-   AT_CHECK([test-stream tcp:$2:$TCP_PORT], [0], [ignore])
-   AT_CHECK([test-stream tcp:$2:$WRONG_PORT], [1], [ignore], [ignore])
+   AT_CHECK([$2 tcp:$4:$TCP_PORT], [0], [ignore])
+   AT_CHECK([$2 tcp:$4:$WRONG_PORT], [1], [ignore], [ignore])
    OVSDB_SERVER_SHUTDOWN
-   AT_CHECK([test-stream tcp:$2:$TCP_PORT], [1], [ignore], [ignore])
+   AT_CHECK([$2 tcp:$4:$TCP_PORT], [1], [ignore], [ignore])
    AT_CLEANUP])
 
-CHECK_STREAM_OPEN_BLOCK([tcp], [127.0.0.1])
-CHECK_STREAM_OPEN_BLOCK([tcp6], [[[::1]]])
-
-m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
-  [AT_SETUP([$1 - Python3])
-   AT_KEYWORDS([Check PY Stream open block - $3])
-   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
-   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-   WRONG_PORT=$(($TCP_PORT + 101))
-   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [0], [ignore])
-   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$WRONG_PORT], [1], [ignore])
-   OVSDB_SERVER_SHUTDOWN
-   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [1], [ignore])
-   AT_CLEANUP])
+CHECK_STREAM_OPEN_BLOCK([C], [test-stream], [tcp], [127.0.0.1])
+CHECK_STREAM_OPEN_BLOCK([C], [test-stream], [tcp6], [[[::1]]])
+CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
+                        [tcp], [127.0.0.1])
+CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
+                        [tcp6], [[[::1]]])
 
 # same as OVSDB_CHECK_IDL but uses Python IDL implementation with tcp
 # with multiple remotes to assert the idl connects to the leader of the Raft cluster
