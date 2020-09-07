@@ -255,7 +255,7 @@ Madhu Challa                       challa@noironetworks.com
 Manohar K C                        manukc@gmail.com
 Marcin Mirecki                     mmirecki@redhat.com
 Mario Cabrera                      mario.cabrera@hpe.com
-Mark D. Gray                       mark.d.gray@intel.com
+Mark D. Gray                       mark.d.gray@redhat.com
 Mark Hamilton
 Mark Kavanagh                      mark.b.kavanagh81@gmail.com
 Mark Maglana                       mmaglana@gmail.com
