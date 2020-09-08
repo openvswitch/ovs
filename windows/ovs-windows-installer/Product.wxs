@@ -51,9 +51,13 @@
       <ComponentGroupRef Id="SymbolsComponentGroup" />
       <ComponentRef Id="OpenvSwitchEnvVars" />
 
-      <Feature Id="VC120Redist" Title="Visual C++ 12.0 Runtime" AllowAdvertise="no" Display="hidden" Level="1"
+      <Feature Id="VC140Redistx86" Title="Visual C++ 14 Runtime x86" AllowAdvertise="no" Display="hidden" Level="1"
                Absent="disallow" InstallDefault="followParent" TypicalDefault="install">
-        <MergeRef Id="VC120Redist" />
+        <MergeRef Id="VC140Redistx86" />
+      </Feature>
+      <Feature Id="VC140Redistx64" Title="Visual C++ 14 Runtime x64" AllowAdvertise="no" Display="hidden" Level="1"
+               Absent="disallow" InstallDefault="followParent" TypicalDefault="install">
+        <MergeRef Id="VC140Redistx64" />
       </Feature>
     </Feature>
 
@@ -260,7 +264,8 @@
 
   <Fragment>
     <DirectoryRef Id="TARGETDIR">
-      <Merge Id="VC120Redist" SourceFile="Redist\Microsoft_VC120_CRT_x86.msm" DiskId="1" Language="0" />
+      <Merge Id="VC140Redistx86" SourceFile="Redist\Microsoft_VC140_CRT_x86.msm" DiskId="1" Language="0" />
+      <Merge Id="VC140Redistx64" SourceFile="Redist\Microsoft_VC140_CRT_x64.msm" DiskId="1" Language="0" />
     </DirectoryRef>
   </Fragment>
 
