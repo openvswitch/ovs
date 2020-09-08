@@ -73,6 +73,9 @@ The following explains the steps in some detail.
   binaries.  In addition to that, if you want to compile the kernel module you
   will also need to install Windows Driver Kit (WDK) 8.1 Update.
 
+  We recommend using the latest Visual Studio version together with the latest
+  WDK installed.
+
   It is important to get the Visual Studio related environment variables and to
   have the $PATH inside the bash to point to the proper compiler and linker.
   One easy way to achieve this for VS2013 is to get into the "VS2013 x86 Native
