@@ -135,6 +135,10 @@ class Stream(object):
     DSCP_DEFAULT = IPTOS_PREC_INTERNETCONTROL >> 2
 
     @staticmethod
+    def check_connection_completion(sock):
+        return ovs.socket_util.check_connection_completion(sock)
+
+    @staticmethod
     def open(name, dscp=DSCP_DEFAULT):
         """Attempts to connect a stream to a remote peer.  'name' is a
         connection name in the form "TYPE:ARGS", where TYPE is an active stream
@@ -191,7 +195,7 @@ class Stream(object):
         if error:
             return error, None
         else:
-            err = ovs.socket_util.check_connection_completion(sock)
+            err = cls.check_connection_completion(sock)
             if err == errno.EAGAIN or err == errno.EINPROGRESS:
                 status = errno.EAGAIN
                 err = 0
@@ -263,7 +267,7 @@ class Stream(object):
 
     def __scs_connecting(self):
         if self.socket is not None:
-            retval = ovs.socket_util.check_connection_completion(self.socket)
+            retval = self.check_connection_completion(self.socket)
             assert retval != errno.EINPROGRESS
         elif sys.platform == 'win32':
             if self.retry_connect:
@@ -763,6 +767,13 @@ Stream.register_method("tcp", TCPStream)
 
 
 class SSLStream(Stream):
+    @staticmethod
+    def check_connection_completion(sock):
+        try:
+            return Stream.check_connection_completion(sock)
+        except SSL.SysCallError as e:
+            return ovs.socket_util.get_exception_errno(e)
+
     @staticmethod
     def needs_probes():
         return True
