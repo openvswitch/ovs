@@ -129,6 +129,7 @@ AT_CHECK([
     ip addr add 10.0.0.1/24 dev br-p1
     ip link set br-p1 up
 ], [0], [stdout])
+OVS_WAIT_UNTIL([ovs-appctl ovs/route/show | grep -q br-p1])
 
 AT_CHECK([
     ovs-appctl ovs/route/add 10.0.0.0/24 br-p1
@@ -141,6 +142,7 @@ AT_CHECK([
     ip addr add 20.0.0.2/24 dev br-p2
     ip link set br-p2 up
 ], [0], [stdout])
+OVS_WAIT_UNTIL([ovs-appctl ovs/route/show | grep -q br-p2])
 
 AT_CHECK([
     ovs-appctl ovs/route/add 20.0.0.0/24 br-p2
@@ -153,6 +155,7 @@ AT_CHECK([
     ip addr add 30.0.0.3/24 dev br-p3
     ip link set br-p3 up
 ], [0], [stdout])
+OVS_WAIT_UNTIL([ovs-appctl ovs/route/show | grep -q br-p3])
 
 AT_CHECK([
     ovs-appctl ovs/route/add 30.0.0.0/24 br-p3
