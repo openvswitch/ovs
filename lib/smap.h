@@ -104,6 +104,8 @@ const char *smap_get_def(const struct smap *, const char *key,
 struct smap_node *smap_get_node(const struct smap *, const char *);
 bool smap_get_bool(const struct smap *smap, const char *key, bool def);
 int smap_get_int(const struct smap *smap, const char *key, int def);
+unsigned int smap_get_uint(const struct smap *smap, const char *key,
+                           unsigned int def);
 unsigned long long int smap_get_ullong(const struct smap *, const char *key,
                                        unsigned long long def);
 bool smap_get_uuid(const struct smap *, const char *key, struct uuid *);
