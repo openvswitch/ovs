@@ -255,20 +255,36 @@ stop_daemon () {
             if version_geq "$version" "2.5.90"; then
                 actions="$graceful $actions"
             fi
+            actiontype=""
             for action in $actions; do
                 if pid_exists "$pid" >/dev/null 2>&1; then :; else
-                    return 0
+                    # pid does not exist.
+                    if [ -n "$actiontype" ]; then
+                        return 0
+                    fi
+                    # But, does the file exist? We may have had a daemon
+                    # segfault with `ovs-appctl exit`. Check one more time
+                    # before deciding that the daemon is dead.
+                    [ -e "$rundir/$1.pid" ] && sleep 2 && pid=`cat "$rundir/$1.pid"` 2>/dev/null
+                    if pid_exists "$pid" >/dev/null 2>&1; then :; else
+                        return 0
+                    fi
                 fi
                 case $action in
                     EXIT)
                         action "Exiting $1 ($pid)" \
                             ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit $2
+                        # The above command could have resulted in delayed
+                        # daemon segfault. And if a monitor is running, it
+                        # would restart the daemon giving it a new pid.
                         ;;
                     TERM)
                         action "Killing $1 ($pid)" kill $pid
+                        actiontype="force"
                         ;;
                     KILL)
                         action "Killing $1 ($pid) with SIGKILL" kill -9 $pid
+                        actiontype="force"
                         ;;
                     FAIL)
                         log_failure_msg "Killing $1 ($pid) failed"
