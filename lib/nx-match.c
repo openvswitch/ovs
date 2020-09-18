@@ -1133,6 +1133,11 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                       mpls_lse_to_bos(flow->mpls_lse[0]));
         }
 
+        if (match->wc.masks.mpls_lse[0] & htonl(MPLS_TTL_MASK)) {
+            nxm_put_8(&ctx, MFF_MPLS_TTL, oxm,
+                      mpls_lse_to_ttl(flow->mpls_lse[0]));
+        }
+
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {
             nxm_put_32(&ctx, MFF_MPLS_LABEL, oxm,
                        htonl(mpls_lse_to_label(flow->mpls_lse[0])));
