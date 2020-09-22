@@ -253,9 +253,9 @@ Netlink Message Parser
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The communication between OVS userspace and OVS kernel datapath is in the form
-of Netlink messages [1]_, [8]_. More details about this are provided below.  In the
-kernel, a full fledged netlink message parser has been implemented along the
-lines of the netlink message parser in OVS userspace. In fact, a lot of the
+of Netlink messages [1]_, [8]_. More details about this are provided below.  In
+the kernel, a full fledged netlink message parser has been implemented along
+the lines of the netlink message parser in OVS userspace. In fact, a lot of the
 code is ported code.
 
 On the lines of ``struct ofpbuf`` in OVS userspace, a managed buffer has been
