@@ -482,6 +482,11 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             CHECK_TLV_SIZE(1, "Management address");
             addr_str_length = PEEK_UINT8;
             CHECK_TLV_SIZE(1 + addr_str_length, "Management address");
+            if (addr_str_length >= 32) {
+                VLOG_WARN("too long management address received on %s",
+                          hardware->h_ifname);
+                goto malformed;
+            }
             PEEK_BYTES(addr_str_buffer, addr_str_length);
             addr_length = addr_str_length - 1;
             addr_family = addr_str_buffer[0];
