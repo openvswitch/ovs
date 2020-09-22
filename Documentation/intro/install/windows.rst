@@ -71,7 +71,10 @@ The following explains the steps in some detail.
 
   You will need at least Visual Studio 2013 (update 4) to compile userspace
   binaries.  In addition to that, if you want to compile the kernel module you
-  will also need to install Windows Driver Kit (WDK) 8.1 Update.
+  will also need to install Windows Driver Kit (WDK) 8.1 Update or later.
+  To generate the Windows installer you need
+  `WiX Toolset <https://wixtoolset.org/>`__ and also be able to build the
+  kernel module.
 
   It is important to get the Visual Studio related environment variables and to
   have the $PATH inside the bash to point to the proper compiler and linker.
@@ -318,6 +321,22 @@ An alternative way to do the same is to run the following command:
    If you enabled the extension using the command line, a delay of a few
    seconds has been observed for the change to be reflected in the UI.  This is
    not a bug in Open vSwitch.
+
+Generate the Windows installer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To generate the Windows installler run the following command from the top
+source directory:
+
+::
+
+   $ make windows_installer
+
+.. note::
+
+   This will generate the Windows installer in the following location (relative
+   to the top source directory):
+   windows/ovs-windows-installer/bin/Release/OpenvSwitch.msi
 
 Starting
 --------
@@ -797,5 +816,4 @@ TODO
 
 * Investigate and add the feature to provide QoS.
 
-* Sign the driver & create an MSI for installing the different Open vSwitch
-  components on Windows.
+* Sign the driver.
