@@ -439,10 +439,12 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             PEEK_BYTES(b, tlv_size - 1);
             if (tlv_type == LLDP_TLV_PORT_ID) {
                 port->p_id_subtype = tlv_subtype;
+                free(port->p_id);
                 port->p_id = b;
                 port->p_id_len = tlv_size - 1;
             } else {
                 chassis->c_id_subtype = tlv_subtype;
+                free(chassis->c_id);
                 chassis->c_id = b;
                 chassis->c_id_len = tlv_size - 1;
             }
@@ -464,10 +466,13 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             b = xzalloc(tlv_size + 1);
             PEEK_BYTES(b, tlv_size);
             if (tlv_type == LLDP_TLV_PORT_DESCR) {
+                free(port->p_descr);
                 port->p_descr = b;
             } else if (tlv_type == LLDP_TLV_SYSTEM_NAME) {
+                free(chassis->c_name);
                 chassis->c_name = b;
             } else {
+                free(chassis->c_descr);
                 chassis->c_descr = b;
             }
             break;
