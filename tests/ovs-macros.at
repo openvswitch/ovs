@@ -106,6 +106,7 @@ if test "$IS_WIN32" = "yes"; then
         signal=
         retval=0
         for arg; do
+            arg=$(echo $arg | tr -d '\n\r')
             case $arg in
             -*) signal=$arg ;;
             [1-9][0-9]*)
