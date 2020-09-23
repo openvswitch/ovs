@@ -43,13 +43,13 @@ m4_define([OVSDB_CLUSTER_START_IDLTEST],
      AT_CHECK([ovsdb-tool join-cluster s$i.db \
                           $schema_name unix:s$i.raft unix:s1.raft])
    done
+   on_exit 'kill $(cat s*.pid)'
    for i in $(seq $n); do
      AT_CHECK([ovsdb-server -vraft -vconsole:warn --detach --no-chdir \
                    --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i \
                    --remote=punix:s$i.ovsdb                           \
                    m4_if([$2], [], [], [--remote=$2]) s$i.db])
    done
-   on_exit 'kill $(cat s*.pid)'
 
    for i in $(seq $n); do
        OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s$i cluster/status ${schema_name} \
