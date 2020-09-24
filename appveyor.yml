@@ -1,4 +1,5 @@
 version: 1.0.{build}
+image: Visual Studio 2019
 branches:
   only:
   - master
@@ -7,15 +8,7 @@ init:
 - ps: $env:PATH ="C:\Python37;"+$env:PATH
 - ps: New-Item -Type HardLink -Path "C:\Python37\python3.exe" -Value "C:\Python37\python.exe"
 - ps: >-
-    mkdir C:\pthreads-win32
-
     mkdir C:\ovs-build-downloads
-
-    $source = "ftp://sourceware.org/pub/pthreads-win32/pthreads-w32-2-9-1-release.zip"
-
-    $destination = "C:\pthreads-win32\pthreads-win32.zip"
-
-    Invoke-WebRequest $source -OutFile $destination
 
     $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2t.exe"
 
@@ -35,14 +28,17 @@ init:
 
     cd C:\openvswitch
 
+    git clone https://git.code.sf.net/p/pthreads4w/code c:\pthreads4w-code
+
     python3 -m pip install pypiwin32 --disable-pip-version-check
 
 build_script:
-- '"C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\VsDevCmd"'
+- '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
 - C:\MinGW\msys\1.0\bin\bash -lc "echo \"C:/MinGW /mingw\" > /etc/fstab"
-- C:\MinGW\msys\1.0\bin\bash -lc "cp /c/pthreads-win32/Pre-built.2/dll/x86/*.dll /c/openvswitch/."
 - C:\MinGW\msys\1.0\bin\bash -lc "mv /bin/link.exe /bin/link_copy.exe"
+# Build pthreads
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/pthreads4w-code && nmake all install"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./boot.sh"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=c:/PTHREADS-BUILT/ --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make datapath_windows_analyze"

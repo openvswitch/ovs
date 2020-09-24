@@ -98,13 +98,13 @@ The following explains the steps in some detail.
   Visual studio's linker is used. You should also see a 'which sort' report
   ``/bin/sort.exe``.
 
-- pthreads-win32
+- PThreads4W
 
-  For pthread support, install the library, dll and includes of pthreads-win32
+  For pthread support, install the library, dll and includes of PThreads4W
   project from `sourceware
-  <ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-9-1-release>`__ to a
-  directory (e.g.: ``C:/pthread``). You should add the pthread-win32's dll path
-  (e.g.: ``C:\pthread\dll\x86``) to the Windows' PATH environment variable.
+  <https://sourceforge.net/projects/pthreads4w/>`__ to a directory
+  (e.g.: ``C:/pthread``). You should add the PThreads4W's dll path
+  (e.g.: ``C:\pthread\bin``) to the Windows' PATH environment variable.
 
 - OpenSSL
 

@@ -95,23 +95,12 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([Invalid --with-pthread value])
               ;;
             *)
-            if (cl) 2>&1 | grep 'x64' >/dev/null 2>&1; then
-              cl_cv_x64=yes
-            else
-              cl_cv_x64=no
-            fi
-            if test "$cl_cv_x64" = yes; then
-                PTHREAD_WIN32_DIR=$withval/lib/x64
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x64
-                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x64
-            else
-                PTHREAD_WIN32_DIR=$withval/lib/x86
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x86
-                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x86
-            fi
+            PTHREAD_WIN32_DIR=$withval/lib
+            PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/bin
+            PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/bin
             PTHREAD_INCLUDES=-I$withval/include
             PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
-            PTHREAD_LIBS="-lpthreadVC2"
+            PTHREAD_LIBS="-lpthreadVC3"
             AC_SUBST([PTHREAD_WIN32_DIR_DLL_WIN_FORM])
             AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
