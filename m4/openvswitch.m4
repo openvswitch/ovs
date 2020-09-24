@@ -146,51 +146,51 @@ dnl OVS_CHECK_WINDOWS
 dnl
 dnl Configure Visual Studio solution build
 AC_DEFUN([OVS_CHECK_VISUAL_STUDIO_DDK], [
-AC_ARG_WITH([vstudiotarget],
-         [AS_HELP_STRING([--with-vstudiotarget=target_type],
-            [Target type: Debug/Release])],
-         [
-            case "$withval" in
-            "Release") ;;
-            "Debug") ;;
-            *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
-            esac
+if test "$WIN32" = yes; then
+  AC_ARG_WITH([vstudiotarget],
+          [AS_HELP_STRING([--with-vstudiotarget=target_type],
+              [Target type: Debug/Release])],
+          [
+              case "$withval" in
+              "Release") ;;
+              "Debug") ;;
+              *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
+              esac
 
-            VSTUDIO_CONFIG=$withval
-         ], [
-            VSTUDIO_CONFIG=
-         ]
-      )
+              VSTUDIO_CONFIG=$withval
+          ], [
+              VSTUDIO_CONFIG="Debug"
+          ]
+        )
 
-  AC_SUBST([VSTUDIO_CONFIG])
+    AC_SUBST([VSTUDIO_CONFIG])
 
-AC_ARG_WITH([vstudiotargetver],
-         [AS_HELP_STRING([--with-vstudiotargetver=target_ver1,target_ver2],
-            [Target versions: Win8,Win8.1,Win10])],
-         [
-            targetver=`echo "$withval" | tr -s , ' ' `
-            for ver in $targetver; do
-                case "$ver" in
-                "Win8") VSTUDIO_WIN8=true ;;
-                "Win8.1")  VSTUDIO_WIN8_1=true ;;
-                "Win10") VSTUDIO_WIN10=true ;;
-                *) AC_MSG_ERROR([No valid Visual Studio target version found]) ;;
-                esac
-            done
+  AC_ARG_WITH([vstudiotargetver],
+          [AS_HELP_STRING([--with-vstudiotargetver=target_ver1,target_ver2],
+              [Target versions: Win8,Win8.1,Win10])],
+          [
+              targetver=`echo "$withval" | tr -s , ' ' `
+              for ver in $targetver; do
+                  case "$ver" in
+                  "Win8") VSTUDIO_WIN8=true ;;
+                  "Win8.1")  VSTUDIO_WIN8_1=true ;;
+                  "Win10") VSTUDIO_WIN10=true ;;
+                  *) AC_MSG_ERROR([No valid Visual Studio target version found]) ;;
+                  esac
+              done
 
-         ], [
-            VSTUDIO_WIN8=true
-            VSTUDIO_WIN8_1=true
-            VSTUDIO_WIN10=true
-         ]
-      )
-
-  AM_CONDITIONAL([VSTUDIO_WIN8], [test -n "$VSTUDIO_WIN8"])
-  AM_CONDITIONAL([VSTUDIO_WIN8_1], [test -n "$VSTUDIO_WIN8_1"])
-  AM_CONDITIONAL([VSTUDIO_WIN10], [test -n "$VSTUDIO_WIN10"])
-
-  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
-  AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
+          ], [
+              VSTUDIO_WIN8=true
+              VSTUDIO_WIN8_1=true
+              VSTUDIO_WIN10=true
+          ]
+        )
+    AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
+fi
+AM_CONDITIONAL([VSTUDIO_WIN8], [test -n "$VSTUDIO_WIN8"])
+AM_CONDITIONAL([VSTUDIO_WIN8_1], [test -n "$VSTUDIO_WIN8_1"])
+AM_CONDITIONAL([VSTUDIO_WIN10], [test -n "$VSTUDIO_WIN10"])
+AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
 ])
 
 dnl Checks for Netlink support.
