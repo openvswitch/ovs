@@ -31,10 +31,13 @@ windows_installer: all
 #Forwarding extension files needed for the installer
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win8/ovsext.cat
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win8/ovsext.inf
-	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/OVSExt.sys windows/ovs-windows-installer/Driver/Win8/OVSExt.sys
+	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/OVSExt.sys windows/ovs-windows-installer/Driver/Win8/ovsext.sys
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win8.1/ovsext.cat
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win8.1/ovsext.inf
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.sys windows/ovs-windows-installer/Driver/Win8.1/ovsext.sys
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win10/ovsext.cat
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win10/ovsext.inf
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.sys windows/ovs-windows-installer/Driver/Win10/ovsext.sys
 	MSBuild.exe windows/ovs-windows-installer.sln //nologo //target:Build //p:Configuration="Release" //p:Version="$(PACKAGE_VERSION)" //p:Platform=$(PLATFORM)
 
 EXTRA_DIST += \
