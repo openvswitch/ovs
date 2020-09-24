@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-PTHREAD_TEMP_DIR=`echo "$(PTHREAD_LDFLAGS)" | sed 's|^.\(.*\).$:\1||'`
 windows_installer: all
 #Userspace files needed for the installer
 	cp -f $(top_srcdir)/datapath-windows/misc/OVS.psm1 windows/ovs-windows-installer/Services/OVS.psm1
