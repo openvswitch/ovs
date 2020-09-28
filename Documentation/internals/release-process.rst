@@ -75,10 +75,13 @@ Scheduling`_ for the timing of each stage:
    and so on.  The process is the same for these additional release as for a .0
    release.
 
-At most two release branches are formally maintained at any given time: the
-latest release and the latest release designed as LTS.  An LTS release is one
-that the OVS project has designated as being maintained for a longer period of
-time.  Currently, an LTS release is maintained until the next LTS is chosen.
+At most three release branches are formally maintained at any given time: the
+latest release, the latest release designed as LTS and a previous LTS release
+during the transition period.  An LTS release is one that the OVS project has
+designated as being maintained for a longer period of time.
+Currently, an LTS release is maintained until the next major release after the
+new LTS is chosen.  This one release time frame is a transition period which is
+intended for users to upgrade from old LTS to new one.
 There is not currently a strict guideline on how often a new LTS release is
 chosen, but so far it has been about every 2 years.  That could change based on
 the current state of OVS development.  For example, we do not want to designate
