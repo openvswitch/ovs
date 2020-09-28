@@ -69,7 +69,8 @@ targeted to the `master` branch, using the ``Fixes`` tag described in
 :doc:`submitting-patches`. The maintainer first applies the patch to `master`,
 then backports the patch to each older affected tree, as far back as it goes or
 at least to all currently supported branches. This is usually each branch back
-to the most recent LTS release branch.
+to the oldest maintained LTS release branch or the last 4 release branches if
+the oldest LTS is newer.
 
 If the fix only affects a particular branch and not `master`, contributors
 should submit the change with the target branch listed in the subject line of

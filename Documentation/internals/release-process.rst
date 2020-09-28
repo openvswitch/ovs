@@ -109,6 +109,15 @@ LTS designation schedule example (depends on current state of development):
 | 2.19    | Feb 2023     | 2.19 - new latest stable, 2.13 LTS ⟶ EOL         |
 +---------+--------------+--------------------------------------------------+
 
+While branches other than LTS and the latest release are not formally
+maintained, the OVS project usually provides stable releases for these branches
+for at least 2 years, i.e. stable releases are provided for the last 4
+release branches.  However, these branches may not include all the fixes that
+LTS has in case backporting is not straightforward and developers are not
+willing to spend their time on that (this mostly affects branches that are
+older than the LTS, because backporting to LTS implies backporting to all
+intermediate branches).
+
 Release Numbering
 -----------------
 
