@@ -57,6 +57,7 @@ COVERAGE_DEFINE(upcall_ukey_contention);
 COVERAGE_DEFINE(upcall_ukey_replace);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
 COVERAGE_DEFINE(upcall_flow_limit_hit);
+COVERAGE_DEFINE(upcall_flow_limit_kill);
 
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
  * and possibly sets up a kernel flow as a cache. */
@@ -2607,6 +2608,7 @@ revalidate(struct revalidator *revalidator)
     struct udpif *udpif = revalidator->udpif;
     struct dpif_flow_dump_thread *dump_thread;
     uint64_t dump_seq, reval_seq;
+    bool kill_warn_print = true;
     unsigned int flow_limit;
 
     dump_seq = seq_read(udpif->dump_seq);
@@ -2623,6 +2625,7 @@ revalidate(struct revalidator *revalidator)
 
         long long int max_idle;
         long long int now;
+        size_t kill_all_limit;
         size_t n_dp_flows;
         bool kill_them_all;
 
@@ -2650,7 +2653,23 @@ revalidate(struct revalidator *revalidator)
             COVERAGE_INC(upcall_flow_limit_hit);
         }
 
-        kill_them_all = n_dp_flows > flow_limit * 2;
+        kill_them_all = false;
+        kill_all_limit = flow_limit * 2;
+        if (OVS_UNLIKELY(n_dp_flows > kill_all_limit)) {
+            static struct vlog_rate_limit rlem = VLOG_RATE_LIMIT_INIT(1, 1);
+
+            kill_them_all = true;
+            COVERAGE_INC(upcall_flow_limit_kill);
+            if (kill_warn_print) {
+                kill_warn_print = false;
+                VLOG_WARN_RL(&rlem,
+                    "Number of datapath flows (%"PRIuSIZE") twice as high as "
+                    "current dynamic flow limit (%"PRIuSIZE").  "
+                    "Starting to delete flows unconditionally "
+                    "as an emergency measure.", n_dp_flows, kill_all_limit);
+            }
+        }
+
         max_idle = n_dp_flows > flow_limit ? 100 : ofproto_max_idle;
 
         udpif->dpif->current_ms = time_msec();
