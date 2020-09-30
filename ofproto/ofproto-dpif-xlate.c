@@ -3070,6 +3070,7 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_report(ctx, OFT_DETAIL, "MLD query, flooding");
                 xlate_normal_flood(ctx, in_xbundle, &xvlan);
             }
+            return;
         } else {
             if (is_ip_local_multicast(flow, wc)) {
                 /* RFC4541: section 2.1.2, item 2: Packets with a dst IP
