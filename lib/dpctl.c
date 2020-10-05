@@ -1157,6 +1157,16 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
         goto out_freeactions;
     }
 
+    if (!ufid_present && dpctl_p->is_appctl) {
+        /* Generating UFID for this flow so it could be offloaded to HW.  We're
+         * not doing that if invoked from ovs-dpctl utility because
+         * odp_flow_key_hash() uses randomly generated base for flow hashes
+         * that will be different for each invocation.  And, anyway, offloading
+         * is only available via appctl. */
+        odp_flow_key_hash(key.data, key.size, &ufid);
+        ufid_present = true;
+    }
+
     /* The flow will be added on all pmds currently in the datapath. */
     error = dpif_flow_put(dpif, flags,
                           key.data, key.size,
@@ -1268,6 +1278,7 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct ofpbuf mask; /* To be ignored. */
     struct dpif *dpif;
     ovs_u128 ufid;
+    bool ufid_generated;
     bool ufid_present;
     struct simap port_names;
     int n, error;
@@ -1303,6 +1314,14 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out;
     }
 
+    if (!ufid_present && dpctl_p->is_appctl) {
+        /* While adding flow via appctl we're generating UFID to make HW
+         * offloading possible.  Generating UFID here to be sure that such
+         * flows could be removed the same way they were added. */
+        odp_flow_key_hash(key.data, key.size, &ufid);
+        ufid_present = ufid_generated = true;
+    }
+
     /* The flow will be deleted from all pmds currently in the datapath. */
     error = dpif_flow_del(dpif, key.data, key.size,
                           ufid_present ? &ufid : NULL, PMD_ID_NULL,
@@ -1310,7 +1329,7 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
     if (error) {
         dpctl_error(dpctl_p, error, "deleting flow");
-        if (error == ENOENT && !ufid_present) {
+        if (error == ENOENT && (!ufid_present || ufid_generated)) {
             struct ds s;
 
             ds_init(&s);
