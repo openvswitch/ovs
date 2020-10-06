@@ -5,6 +5,8 @@ Post-v2.14.0
        status of the storage that's backing a database.
    - DPDK:
      * Removed support for vhost-user dequeue zero-copy.
+   - The environment variable OVS_UNBOUND_CONF, if set, is now used
+     as the DNS resolver's (unbound) configuration file.
 
 
 v2.14.0 - 17 Aug 2020

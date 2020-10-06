@@ -97,7 +97,9 @@ need the following software:
   specifying OpenFlow and OVSDB remotes. If unbound library is already
   installed, then Open vSwitch will automatically build with support for it.
   The environment variable OVS_RESOLV_CONF can be used to specify DNS server
-  configuration file (the default file on Linux is /etc/resolv.conf).
+  configuration file (the default file on Linux is /etc/resolv.conf), and
+  environment variable OVS_UNBOUND_CONF can be used to specify the
+  configuration file for unbound.
 
 On Linux, you may choose to compile the kernel module that comes with the Open
 vSwitch distribution or to use the kernel module built into the Linux kernel

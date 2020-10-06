@@ -82,6 +82,18 @@ dns_resolve_init(bool is_daemon)
         return;
     }
 
+    const char *ub_conf_filename = getenv("OVS_UNBOUND_CONF");
+    if (ub_conf_filename != NULL) {
+        int retval = ub_ctx_config(ub_ctx__, ub_conf_filename);
+        if (retval != 0) {
+            VLOG_WARN_RL(&rl, "Failed to set libunbound context config: %s",
+                         ub_strerror(retval));
+            ub_ctx_delete(ub_ctx__);
+            ub_ctx__ = NULL;
+            return;
+        }
+    }
+
     const char *filename = getenv("OVS_RESOLV_CONF");
     if (!filename) {
 #ifdef _WIN32
