@@ -4,7 +4,7 @@ set -o errexit
 set -x
 
 CFLAGS_FOR_OVS="-g -O2"
-SPARSE_FLAGS=""
+SPARSE_FLAGS="-Wno-flexible-array-array"
 EXTRA_OPTS="--enable-Werror"
 
 function install_kernel()
