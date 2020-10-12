@@ -57,6 +57,14 @@ FreeBSD|NetBSD|Darwin)
     ;;
 esac
 
+case $(uname -s) in
+MINGW*|MSYS*)
+    mkdir() {
+        command mkdir -p "${@: -1}"
+    }
+    ;;
+esac
+
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
     # configure script under the following license:
