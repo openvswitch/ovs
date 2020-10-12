@@ -631,6 +631,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_UPSTREAM_STATIC_KEY])])
   OVS_GREP_IFELSE([$KSRC/include/linux/jump_label.h], [DEFINE_STATIC_KEY_FALSE],
                   [OVS_DEFINE([HAVE_DEFINE_STATIC_KEY])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/jump_label.h],
+                  [DECLARE_STATIC_KEY_FALSE],
+                  [OVS_DEFINE([HAVE_DECLARE_STATIC_KEY])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [eth_hw_addr_random])
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [ether_addr_copy])

@@ -251,6 +251,8 @@ extern struct notifier_block ovs_dp_device_notifier;
 extern struct genl_family dp_vport_genl_family;
 extern const struct genl_multicast_group ovs_dp_vport_multicast_group;
 
+DECLARE_STATIC_KEY_FALSE(tc_recirc_sharing_support);
+
 void ovs_dp_process_packet(struct sk_buff *skb, struct sw_flow_key *key);
 void ovs_dp_detach_port(struct vport *);
 int ovs_dp_upcall(struct datapath *, struct sk_buff *,
