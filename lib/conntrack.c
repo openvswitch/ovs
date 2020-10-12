@@ -146,12 +146,7 @@ detect_ftp_ctl_type(const struct conn_lookup_ctx *ctx,
 static void
 expectation_clean(struct conntrack *ct, const struct conn_key *parent_key);
 
-static struct ct_l4_proto *l4_protos[] = {
-    [IPPROTO_TCP] = &ct_proto_tcp,
-    [IPPROTO_UDP] = &ct_proto_other,
-    [IPPROTO_ICMP] = &ct_proto_icmp4,
-    [IPPROTO_ICMPV6] = &ct_proto_icmp6,
-};
+static struct ct_l4_proto *l4_protos[UINT8_MAX + 1];
 
 static void
 handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
@@ -293,6 +288,7 @@ ct_print_conn_info(const struct conn *c, const char *log_msg,
 struct conntrack *
 conntrack_init(void)
 {
+    static struct ovsthread_once setup_l4_once = OVSTHREAD_ONCE_INITIALIZER;
     struct conntrack *ct = xzalloc(sizeof *ct);
 
     ovs_rwlock_init(&ct->resources_lock);
@@ -320,6 +316,18 @@ conntrack_init(void)
     ct->clean_thread = ovs_thread_create("ct_clean", clean_thread_main, ct);
     ct->ipf = ipf_init();
 
+    /* Initialize the l4 protocols. */
+    if (ovsthread_once_start(&setup_l4_once)) {
+        for (int i = 0; i < ARRAY_SIZE(l4_protos); i++) {
+            l4_protos[i] = &ct_proto_other;
+        }
+        /* IPPROTO_UDP uses ct_proto_other, so no need to initialize it. */
+        l4_protos[IPPROTO_TCP] = &ct_proto_tcp;
+        l4_protos[IPPROTO_ICMP] = &ct_proto_icmp4;
+        l4_protos[IPPROTO_ICMPV6] = &ct_proto_icmp6;
+
+        ovsthread_once_done(&setup_l4_once);
+    }
     return ct;
 }
 
@@ -1982,9 +1990,10 @@ extract_l4(struct conn_key *key, const void *data, size_t size, bool *related,
         return (!related || check_l4_icmp6(key, data, size, l3,
                 validate_checksum))
                && extract_l4_icmp6(key, data, size, related);
-    } else {
-        return false;
     }
+
+    /* For all other protocols we do not have L4 keys, so keep them zero. */
+    return true;
 }
 
 static bool
@@ -2267,8 +2276,8 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
               conn->nat_info->nat_action & NAT_ACTION_SRC_PORT
           ? true : false;
     union ct_addr first_addr = ct_addr;
-    bool pat_enabled = conn->key.nw_proto != IPPROTO_ICMP &&
-                       conn->key.nw_proto != IPPROTO_ICMPV6;
+    bool pat_enabled = conn->key.nw_proto == IPPROTO_TCP ||
+                       conn->key.nw_proto == IPPROTO_UDP;
 
     while (true) {
         if (conn->nat_info->nat_action & NAT_ACTION_SRC) {

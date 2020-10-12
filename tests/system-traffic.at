@@ -2333,6 +2333,35 @@ NXST_FLOW reply:
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - generic IP protocol])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+table=0, priority=1,action=drop
+table=0, priority=10,arp,action=normal
+table=0, priority=100,ip,action=ct(table=1)
+table=1, priority=100,in_port=1,ip,ct_state=+trk+new,action=ct(commit)
+table=1, priority=100,in_port=1,ct_state=+trk+est,action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=01005e00001200005e000101080045c0002800000000ff7019cdc0a8001ee0000012210164010001ba52c0a800010000000000000000000000000000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=192\.168\.0\.30,"], [], [dnl
+112,orig=(src=192.168.0.30,dst=224.0.0.18,sport=0,dport=0),reply=(src=224.0.0.18,dst=192.168.0.30,sport=0,dport=0)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ICMP related])
 AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()

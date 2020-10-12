@@ -17,6 +17,9 @@ Post-v2.14.0
        restricts a flow dump to a single PMD thread if set.
      * New 'options:dpdk-vf-mac' field for DPDK interface of VF ports,
        that allows configuring the MAC address of a VF representor.
+     * Add generic IP protocol support to conntrack. With this change, all
+       none UDP, TCP, and ICMP traffic will be treated as general L3
+       traffic, i.e. using 3 tupples.
    - The environment variable OVS_UNBOUND_CONF, if set, is now used
      as the DNS resolver's (unbound) configuration file.
    - Linux datapath:

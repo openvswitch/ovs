@@ -59,6 +59,9 @@ struct conn_key {
     uint8_t nw_proto;
 };
 
+/* Verify that nw_proto stays uint8_t as it's used to index into l4_protos[] */
+BUILD_ASSERT_DECL(MEMBER_SIZEOF(struct conn_key, nw_proto) == sizeof(uint8_t));
+
 /* This is used for alg expectations; an expectation is a
  * context created in preparation for establishing a data
  * connection. The expectation is created by the control
