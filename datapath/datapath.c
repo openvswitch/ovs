@@ -2072,10 +2072,9 @@ static struct vport *lookup_vport(struct net *net,
 
 }
 
-/* Called with ovs_mutex */
-static void update_headroom(struct datapath *dp)
+static unsigned int ovs_get_max_headroom(struct datapath *dp)
 {
-	unsigned dev_headroom, max_headroom = 0;
+	unsigned int dev_headroom, max_headroom = 0;
 	struct net_device *dev;
 	struct vport *vport;
 	int i;
@@ -2089,10 +2088,19 @@ static void update_headroom(struct datapath *dp)
 		}
 	}
 
-	dp->max_headroom = max_headroom;
+	return max_headroom;
+}
+
+/* Called with ovs_mutex */
+static void ovs_update_headroom(struct datapath *dp, unsigned int new_headroom)
+{
+	struct vport *vport;
+	int i;
+
+	dp->max_headroom = new_headroom;
 	for (i = 0; i < DP_VPORT_HASH_BUCKETS; i++)
 		hlist_for_each_entry_rcu(vport, &dp->ports[i], dp_hash_node)
-			netdev_set_rx_headroom(vport->dev, max_headroom);
+			netdev_set_rx_headroom(vport->dev, new_headroom);
 }
 
 static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
@@ -2103,6 +2111,7 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	struct sk_buff *reply;
 	struct vport *vport;
 	struct datapath *dp;
+	unsigned int new_headroom;
 	u32 port_no;
 	int err;
 
@@ -2165,8 +2174,10 @@ restart:
 				      OVS_VPORT_CMD_NEW);
 	BUG_ON(err < 0);
 
-	if (netdev_get_fwd_headroom(vport->dev) > dp->max_headroom)
-		update_headroom(dp);
+	new_headroom = netdev_get_fwd_headroom(vport->dev);
+
+	if (new_headroom > dp->max_headroom)
+		ovs_update_headroom(dp, new_headroom);
 	else
 		netdev_set_rx_headroom(vport->dev, dp->max_headroom);
 
@@ -2235,11 +2246,12 @@ exit_unlock_free:
 
 static int ovs_vport_cmd_del(struct sk_buff *skb, struct genl_info *info)
 {
-	bool must_update_headroom = false;
+	bool update_headroom = false;
 	struct nlattr **a = info->attrs;
 	struct sk_buff *reply;
 	struct datapath *dp;
 	struct vport *vport;
+	unsigned int new_headroom;
 	int err;
 
 	reply = ovs_vport_cmd_alloc_info();
@@ -2265,13 +2277,17 @@ static int ovs_vport_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	/* the vport deletion may trigger dp headroom update */
 	dp = vport->dp;
 	if (netdev_get_fwd_headroom(vport->dev) == dp->max_headroom)
-		must_update_headroom = true;
+		update_headroom = true;
+
 	netdev_reset_rx_headroom(vport->dev);
 	ovs_dp_detach_port(vport);
 
-	if (must_update_headroom)
-		update_headroom(dp);
+	if (update_headroom) {
+		new_headroom = ovs_get_max_headroom(dp);
 
+		if (new_headroom < dp->max_headroom)
+			ovs_update_headroom(dp, new_headroom);
+	}
 	ovs_unlock();
 
 	ovs_notify(&dp_vport_genl_family, &ovs_dp_vport_multicast_group, reply, info);
