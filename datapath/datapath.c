@@ -343,8 +343,7 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 	}
 #endif
 	/* Queue all of the segments. */
-	skb = segs;
-	do {
+	skb_list_walk_safe(segs, skb, nskb) {
 		*OVS_CB(skb) = ovs_cb;
 #ifdef HAVE_SKB_GSO_UDP
 		if (gso_type & SKB_GSO_UDP && skb != segs)
@@ -354,17 +353,15 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 		if (err)
 			break;
 
-	} while ((skb = skb->next));
+	}
 
 	/* Free all of the segments. */
-	skb = segs;
-	do {
-		nskb = skb->next;
+	skb_list_walk_safe(segs, skb, nskb) {
 		if (err)
 			kfree_skb(skb);
 		else
 			consume_skb(skb);
-	} while ((skb = nskb));
+	}
 	return err;
 }
 

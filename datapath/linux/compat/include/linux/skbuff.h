@@ -487,4 +487,11 @@ static inline __u32 skb_get_hash_raw(const struct sk_buff *skb)
 }
 #endif
 
+#ifndef skb_list_walk_safe
+/* Iterate through singly-linked GSO fragments of an skb. */
+#define skb_list_walk_safe(first, skb, next_skb)                               \
+	for ((skb) = (first), (next_skb) = (skb) ? (skb)->next : NULL; (skb);  \
+	     (skb) = (next_skb), (next_skb) = (skb) ? (skb)->next : NULL)
+#endif
+
 #endif
