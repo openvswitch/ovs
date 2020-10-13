@@ -2008,7 +2008,10 @@
         If a slave interface with this name exists in the bond and
         is up, it will be made active.  Relevant only when <ref
         column="other_config" key="bond_mode"/> is
-        <code>active-backup</code>.
+        <code>active-backup</code> or if <code>balance-tcp</code> falls back
+        to <code>active-backup</code> (e.g., LACP negotiation fails and
+        <ref column="other_config" key="lacp-fallback-ab"/> is
+        <code>true</code>).
       </column>
 
       <group title="Link Failure Detection">
