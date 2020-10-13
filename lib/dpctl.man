@@ -198,6 +198,22 @@ ovs-dpctl add-flow myDP \\
 .
 .RE
 .TP
+\*(DX\fBadd\-flows\fR [\fIdp\fR] \fIfile\fR
+.TQ
+\*(DX\fBmod\-flows\fR [\fIdp\fR] \fIfile\fR
+.TQ
+\*(DX\fBdel\-flows\fR [\fIdp\fR] \fIfile\fR
+Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
+\fB\-\fR) and adds, modifies, or deletes each entry to the datapath.
+.
+Each flow specification (e.g., each line in \fIfile\fR) may start with
+\fBadd\fR, \fBmodify\fR, or \fBdelete\fR keyword to specify whether a
+flow is to be added, modified, or deleted. A flow specification without
+one of these keywords is treated based on the used command.  All flow
+modifications are executed as individual transactions in the order
+specified.
+.
+.TP
 .DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdel\-flow\fR" "[\fIdp\fR] \fIflow\fR"
 Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
 If \fB\-s\fR or \fB\-\-statistics\fR is specified, then

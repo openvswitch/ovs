@@ -35,6 +35,9 @@ Post-v2.14.0
      * Bareudp device support is present in linux kernel from version 5.7
      * Kernel bareudp device is not backported to ovs tree.
      * Userspace datapath support is not added
+   - ovs-dpctl and 'ovs-appctl dpctl/':
+     * New commands '{add,mod,del}-flows' where added, which allow adding,
+       deleting, or modifying flows based on information read from a file.
 
 
 v2.14.0 - 17 Aug 2020

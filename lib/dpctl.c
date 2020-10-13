@@ -52,6 +52,12 @@
 #include "openvswitch/ofp-flow.h"
 #include "openvswitch/ofp-port.h"
 
+enum {
+    DPCTL_FLOWS_ADD = 0,
+    DPCTL_FLOWS_DEL,
+    DPCTL_FLOWS_MOD
+};
+
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);
 struct dpctl_command {
@@ -1114,27 +1120,21 @@ out_free:
 }
 
 static int
-dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
-               struct dpctl_params *dpctl_p)
+dpctl_put_flow_dpif(struct dpif *dpif, const char *key_s,
+                    const char *actions_s,
+                    enum dpif_flow_put_flags flags,
+                    struct dpctl_params *dpctl_p)
 {
-    const char *key_s = argv[argc - 2];
-    const char *actions_s = argv[argc - 1];
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct ofpbuf actions;
     struct ofpbuf key;
     struct ofpbuf mask;
-    struct dpif *dpif;
     ovs_u128 ufid;
     bool ufid_present;
     struct simap port_names;
     int n, error;
-
-    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
-    if (error) {
-        return error;
-    }
 
     ufid_present = false;
     n = odp_ufid_from_string(key_s, &ufid);
@@ -1207,6 +1207,24 @@ out_freeactions:
 out_freekeymask:
     ofpbuf_uninit(&mask);
     ofpbuf_uninit(&key);
+    return error;
+}
+
+static int
+dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
+               struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error;
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = dpctl_put_flow_dpif(dpif, argv[argc - 2], argv[argc - 1], flags,
+                                dpctl_p);
+
     dpif_close(dpif);
     return error;
 }
@@ -1280,25 +1298,20 @@ out:
 }
 
 static int
-dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+dpctl_del_flow_dpif(struct dpif *dpif, const char *key_s,
+                    struct dpctl_params *dpctl_p)
 {
-    const char *key_s = argv[argc - 1];
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct ofpbuf key;
     struct ofpbuf mask; /* To be ignored. */
-    struct dpif *dpif;
+
     ovs_u128 ufid;
     bool ufid_generated;
     bool ufid_present;
     struct simap port_names;
     int n, error;
-
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
-    if (error) {
-        return error;
-    }
 
     ufid_present = false;
     n = odp_ufid_from_string(key_s, &ufid);
@@ -1365,16 +1378,156 @@ out:
     ofpbuf_uninit(&mask);
     ofpbuf_uninit(&key);
     simap_destroy(&port_names);
+    return error;
+}
+
+static int
+dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+{
+    const char *key_s = argv[argc - 1];
+    struct dpif *dpif;
+    int error;
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = dpctl_del_flow_dpif(dpif, key_s, dpctl_p);
+
     dpif_close(dpif);
     return error;
+}
+
+static int
+dpctl_parse_flow_line(int command, struct ds *s, char **flow, char **action)
+{
+    const char *line = ds_cstr(s);
+    size_t len;
+
+    /* First figure out the command, or fallback to FLOWS_ADD. */
+    line += strspn(line, " \t\r\n");
+    len = strcspn(line, ", \t\r\n");
+
+    if (!strncmp(line, "add", len)) {
+         command = DPCTL_FLOWS_ADD;
+    } else if (!strncmp(line, "delete", len)) {
+        command = DPCTL_FLOWS_DEL;
+    } else if (!strncmp(line, "modify", len)) {
+        command = DPCTL_FLOWS_MOD;
+    } else {
+        len = 0;
+    }
+    line += len;
+
+    /* Isolate flow and action (for add/modify). */
+    line += strspn(line, " \t\r\n");
+    len = strcspn(line, " \t\r\n");
+
+    if (len == 0) {
+        *flow = NULL;
+        *action = NULL;
+        return command;
+    }
+
+    *flow = strndup(line, len);
+
+    line += len;
+    line += strspn(line, " \t\r\n");
+    if (strlen(line)) {
+        *action = xstrdup(line);
+    } else {
+        *action = NULL;
+    }
+
+    return command;
+}
+
+static int
+dpctl_process_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+{
+    const char *file_name = argv[argc - 1];
+    int line_number = 0;
+    struct dpif *dpif;
+    struct ds line;
+    FILE *stream;
+    int error;
+    int def_cmd = DPCTL_FLOWS_ADD;
+
+    if (strstr(argv[0], "mod-flows")) {
+        def_cmd = DPCTL_FLOWS_MOD;
+    } else if (strstr(argv[0], "del-flows")) {
+        def_cmd = DPCTL_FLOWS_DEL;
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (error) {
+        return error;
+    }
+
+    stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
+    if (!stream) {
+        error = errno;
+        dpctl_error(dpctl_p, error, "Opening file \"%s\" failed", file_name);
+        goto out_close_dpif;
+    }
+
+    ds_init(&line);
+    while (!ds_get_preprocessed_line(&line, stream, &line_number)) {
+        /* We do not process all the lines first and then execute the actions
+         * as we would like to take commands as a continuous stream of
+         * commands from stdin.
+         */
+        char *flow = NULL;
+        char *action = NULL;
+        int cmd = dpctl_parse_flow_line(def_cmd, &line, &flow, &action);
+
+        if ((!flow && !action)
+            || ((cmd == DPCTL_FLOWS_ADD || cmd == DPCTL_FLOWS_MOD) && !action)
+            || (cmd == DPCTL_FLOWS_DEL && action)) {
+            dpctl_error(dpctl_p, 0,
+                        "Failed parsing line number %u, skipped!",
+                        line_number);
+        } else {
+            switch (cmd) {
+            case DPCTL_FLOWS_ADD:
+                dpctl_put_flow_dpif(dpif, flow, action,
+                                    DPIF_FP_CREATE, dpctl_p);
+                break;
+            case DPCTL_FLOWS_MOD:
+                dpctl_put_flow_dpif(dpif, flow, action,
+                                    DPIF_FP_MODIFY, dpctl_p);
+                break;
+            case DPCTL_FLOWS_DEL:
+                dpctl_del_flow_dpif(dpif, flow, dpctl_p);
+                break;
+            }
+        }
+
+        free(flow);
+        free(action);
+    }
+
+    ds_destroy(&line);
+    if (stream != stdin) {
+        fclose(stream);
+    }
+out_close_dpif:
+    dpif_close(dpif);
+    return 0;
 }
 
 static int
 dpctl_del_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
+    int error;
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if ((!dp_arg_exists(argc, argv) && argc == 2) || argc > 2) {
+        return dpctl_process_flows(argc, argv, dpctl_p);
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -2540,7 +2693,9 @@ static const struct dpctl_command all_commands[] = {
     { "mod-flow", "[dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
     { "get-flow", "[dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
     { "del-flow", "[dp] flow", 1, 2, dpctl_del_flow, DP_RW },
-    { "del-flows", "[dp]", 0, 1, dpctl_del_flows, DP_RW },
+    { "add-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
+    { "mod-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
+    { "del-flows", "[dp] [file]", 0, 2, dpctl_del_flows, DP_RW },
     { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
       dpctl_flush_conntrack, DP_RW },
