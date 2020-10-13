@@ -4565,11 +4565,6 @@ port_configure_bond(struct port *port, struct bond_settings *s)
                   port->name);
     }
 
-    s->primary = NULL;
-    if (s->balance == BM_AB || s->lacp_fallback_ab_cfg) {
-        s->primary = smap_get(&port->cfg->other_config, "bond-primary");
-    }
-
     miimon_interval = smap_get_int(&port->cfg->other_config,
                                    "bond-miimon-interval", 0);
     if (miimon_interval <= 0) {
@@ -4596,6 +4591,10 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     s->lacp_fallback_ab_cfg = smap_get_bool(&port->cfg->other_config,
                                        "lacp-fallback-ab", false);
+    s->primary = NULL;
+    if (s->balance == BM_AB || s->lacp_fallback_ab_cfg) {
+        s->primary = smap_get(&port->cfg->other_config, "bond-primary");
+    }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         netdev_set_miimon_interval(iface->netdev, miimon_interval);
