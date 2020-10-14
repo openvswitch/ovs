@@ -198,7 +198,9 @@ del_filter_and_ufid_mapping(struct tcf_id *id, const ovs_u128 *ufid)
     int err;
 
     err = tc_del_filter(id);
-    del_ufid_tc_mapping(ufid);
+    if (!err) {
+        del_ufid_tc_mapping(ufid);
+    }
     return err;
 }
 
