@@ -746,6 +746,17 @@ dnl Check the ONF extension form of "copy_field".
 # actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
 ffff 0020 4f4e4600 0c80 0000 0010 0000 0000 0000 00000002 00000802 00000000
 
+dnl Check NSH encap (experimenter extension).
+# actions=encap(nsh(md_type=1))
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 000000
+
+dnl NSH encap with non-zero padding.
+# actions=encap(nsh(md_type=1))
+# 21: 12 -> 00
+# 22: 34 -> 00
+# 23: 56 -> 00
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 123456
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
