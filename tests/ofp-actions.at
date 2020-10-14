@@ -766,6 +766,17 @@ dnl Check OpenFlow v1.3.4 Conformance Test: 430.510.
 & 00000010  00 00 00 10 00 00 00 01-
 0019 0010 80000807 000102030405 000000000010 00000001
 
+dnl Check NSH encap (experimenter extension).
+# actions=encap(nsh(md_type=1))
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 000000
+
+dnl NSH encap with non-zero padding.
+# actions=encap(nsh(md_type=1))
+# 21: 12 -> 00
+# 22: 34 -> 00
+# 23: 56 -> 00
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 123456
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
