@@ -2660,12 +2660,8 @@ dpdk_pktmbuf_attach_extbuf(struct rte_mbuf *pkt, uint32_t data_len)
     uint16_t buf_len;
     void *buf;
 
-    if (rte_pktmbuf_tailroom(pkt) >= sizeof *shinfo) {
-        shinfo = rte_pktmbuf_mtod(pkt, struct rte_mbuf_ext_shared_info *);
-    } else {
-        total_len += sizeof *shinfo + sizeof(uintptr_t);
-        total_len = RTE_ALIGN_CEIL(total_len, sizeof(uintptr_t));
-    }
+    total_len += sizeof *shinfo + sizeof(uintptr_t);
+    total_len = RTE_ALIGN_CEIL(total_len, sizeof(uintptr_t));
 
     if (OVS_UNLIKELY(total_len > UINT16_MAX)) {
         VLOG_ERR("Can't copy packet: too big %u", total_len);
@@ -2680,20 +2676,14 @@ dpdk_pktmbuf_attach_extbuf(struct rte_mbuf *pkt, uint32_t data_len)
     }
 
     /* Initialize shinfo. */
-    if (shinfo) {
-        shinfo->free_cb = netdev_dpdk_extbuf_free;
-        shinfo->fcb_opaque = buf;
-        rte_mbuf_ext_refcnt_set(shinfo, 1);
-    } else {
-        shinfo = rte_pktmbuf_ext_shinfo_init_helper(buf, &buf_len,
-                                                    netdev_dpdk_extbuf_free,
-                                                    buf);
-        if (OVS_UNLIKELY(shinfo == NULL)) {
-            rte_free(buf);
-            VLOG_ERR("Failed to initialize shared info for mbuf while "
-                     "attempting to attach an external buffer.");
-            return NULL;
-        }
+    shinfo = rte_pktmbuf_ext_shinfo_init_helper(buf, &buf_len,
+                                                netdev_dpdk_extbuf_free,
+                                                buf);
+    if (OVS_UNLIKELY(shinfo == NULL)) {
+        rte_free(buf);
+        VLOG_ERR("Failed to initialize shared info for mbuf while "
+                 "attempting to attach an external buffer.");
+        return NULL;
     }
 
     rte_pktmbuf_attach_extbuf(pkt, buf, rte_malloc_virt2iova(buf), buf_len,
