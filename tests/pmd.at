@@ -707,6 +707,15 @@ recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_typ
 recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
 ])
 
+dnl Check pmd filtering option.
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 pmd=0], [0], [dnl
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 pmd=-1], [0], [dnl
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+
 AT_CHECK([ovs-appctl dpctl/del-flow dummy@dp0 'in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234)'], [0], [dnl
 ])
 

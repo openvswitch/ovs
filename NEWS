@@ -11,6 +11,9 @@ Post-v2.14.0
        Use the 'cluster/set-backlog-threshold' command to change limits.
    - DPDK:
      * Removed support for vhost-user dequeue zero-copy.
+   - Userspace datapath:
+     * Add the 'pmd' option to "ovs-appctl dpctl/dump-flows", which
+       restricts a flow dump to a single PMD thread if set.
    - The environment variable OVS_UNBOUND_CONF, if set, is now used
      as the DNS resolver's (unbound) configuration file.
    - Linux datapath:

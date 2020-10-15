@@ -980,6 +980,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct dpif_flow_dump *flow_dump;
     struct dpif_flow f;
     int pmd_id = PMD_ID_NULL;
+    bool pmd_id_filter = false;
     int lastargc = 0;
     int error;
 
@@ -996,6 +997,16 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
                 goto out_free;
             }
             types_list = xstrdup(argv[--argc] + 5);
+        } else if (!strncmp(argv[argc - 1], "pmd=", 4)) {
+            if (!ovs_scan(argv[--argc], "pmd=%d", &pmd_id)) {
+                error = EINVAL;
+                goto out_free;
+            }
+
+            if (pmd_id == -1) {
+                pmd_id = NON_PMD_CORE_ID;
+            }
+            pmd_id_filter = true;
         }
     }
 
@@ -1070,7 +1081,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         /* If 'pmd_id' is specified, overlapping flows could be dumped from
          * different pmd threads.  So, separates dumps from different pmds
          * by printing a title line. */
-        if (pmd_id != f.pmd_id) {
+        if (!pmd_id_filter && pmd_id != f.pmd_id) {
             if (f.pmd_id == NON_PMD_CORE_ID) {
                 ds_put_format(&ds, "flow-dump from the main thread:\n");
             } else {
@@ -1079,7 +1090,8 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             pmd_id = f.pmd_id;
         }
-        if (flow_passes_type_filter(&f, &dump_types)) {
+        if (pmd_id == f.pmd_id &&
+            flow_passes_type_filter(&f, &dump_types)) {
             format_dpif_flow(&ds, &f, portno_names, dpctl_p);
             dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
         }
@@ -2522,8 +2534,8 @@ static const struct dpctl_command all_commands[] = {
     { "set-if", "dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
     { "dump-dps", "", 0, 0, dpctl_dump_dps, DP_RO },
     { "show", "[dp...]", 0, INT_MAX, dpctl_show, DP_RO },
-    { "dump-flows", "[dp] [filter=..] [type=..]",
-      0, 3, dpctl_dump_flows, DP_RO },
+    { "dump-flows", "[dp] [filter=..] [type=..] [pmd=..]",
+      0, 4, dpctl_dump_flows, DP_RO },
     { "add-flow", "[dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
     { "mod-flow", "[dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
     { "get-flow", "[dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
