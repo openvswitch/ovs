@@ -4898,13 +4898,16 @@ geneve_to_attr(struct ofpbuf *a, const void *data_)
         do {                                               \
             len = 0;
 
-#define SCAN_END_NESTED()                               \
-        SCAN_FINISH();                                  \
-        nl_msg_end_nested(key, key_offset);             \
-        if (mask) {                                     \
-            nl_msg_end_nested(mask, mask_offset);       \
-        }                                               \
-        return s - start;                               \
+#define SCAN_END_NESTED()                                                     \
+        SCAN_FINISH();                                                        \
+        if (nl_attr_oversized(key->size - key_offset - NLA_HDRLEN)) {         \
+            return -E2BIG;                                                    \
+        }                                                                     \
+        nl_msg_end_nested(key, key_offset);                                   \
+        if (mask) {                                                           \
+            nl_msg_end_nested(mask, mask_offset);                             \
+        }                                                                     \
+        return s - start;                                                     \
     }
 
 #define SCAN_FIELD_NESTED__(NAME, TYPE, SCAN_AS, ATTR, FUNC)  \
