@@ -109,6 +109,35 @@ Datapath actions: drop
 OVS_VSWITCHD_STOP(["/dropping tunnel packet marked ECN CE but is not ECN capable/d"])
 AT_CLEANUP
 
+AT_SETUP([tunnel - too long nested attributes])
+OVS_VSWITCHD_START([add-port br0 p1 \
+    -- set Interface p1 type=gre options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1)
+    p2 2/2: (dummy)
+])
+
+dst_single="dst=1.1.1.1"
+dst_rep=${dst_single}
+dnl Size of one OVS_TUNNEL_KEY_ATTR_IPV4_DST is 4 bytes + NLA_HDRLEN (4 bytes).
+dnl One nested message has room for UINT16_MAX - NLA_HDRLEN (4) bytes, i.e.
+dnl (UINT16_MAX - NLA_HDRLEN) / (4 + NLA_HDRLEN) = 8191.375 of dst addresses.
+for i in `seq 1 8192` ; do
+    dst_rep="${dst_rep},${dst_single}"
+done
+
+AT_CHECK([ovs-appctl dpctl/add-flow "tunnel(${dst_rep})" "2" 2>&1 | dnl
+          sed "s/${dst_single},//g"], [], [dnl
+ovs-vswitchd: parsing flow key (syntax error at tunnel(dst=1.1.1.1)) (Argument list too long)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - output])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
