@@ -279,13 +279,21 @@ const struct %(s)s *%(s)s_table_track_get_first(const struct %(s)s_table *);
              (ROW) = %(s)s_track_get_next(ROW))
 
 
-/* Returns true if 'row' was inserted since the last change tracking reset. */
+/* Returns true if 'row' was inserted since the last change tracking reset.
+ *
+ * Note: This can only be used to test rows of tracked changes. This cannot be
+ * used to test if an uncommitted row that has been added locally is new or it
+ * may given unexpected results. */
 static inline bool %(s)s_is_new(const struct %(s)s *row)
 {
-    return %(s)s_row_get_seqno(row, OVSDB_IDL_CHANGE_MODIFY) == 0;
+    return %(s)s_row_get_seqno(row, OVSDB_IDL_CHANGE_INSERT) > 0;
 }
 
-/* Returns true if 'row' was deleted since the last change tracking reset. */
+/* Returns true if 'row' was deleted since the last change tracking reset.
+ *
+ * Note: This can only be used to test rows of tracked changes. This cannot be
+ * used to test if an uncommitted row that has been added locally has been
+ * deleted or it may given unexpected results. */
 static inline bool %(s)s_is_deleted(const struct %(s)s *row)
 {
     return %(s)s_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0;
@@ -333,6 +341,14 @@ struct %(s)s *%(s)s_cursor_data(struct ovsdb_idl_cursor *);
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
+
+/* Returns true if the tracked column referenced by 'enum %(s)s_column_id' of
+ * the row referenced by 'struct %(s)s *' was updated since the last change
+ * tracking reset.
+ *
+ * Note: This can only be used to test rows of tracked changes. This cannot be
+ * used to test if an uncommitted row that has been added locally has been
+ * updated or it may given unexpected results. */
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 ''' % {'s': structName, 'S': structName.upper()})
 

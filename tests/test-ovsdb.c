@@ -2030,7 +2030,7 @@ print_idl(struct ovsdb_idl *idl, int step)
 }
 
 static void
-print_idl_track(struct ovsdb_idl *idl, int step, unsigned int seqno)
+print_idl_track(struct ovsdb_idl *idl, int step)
 {
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
@@ -2038,26 +2038,42 @@ print_idl_track(struct ovsdb_idl *idl, int step, unsigned int seqno)
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
-        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
-            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        if (idltest_simple_is_deleted(s)) {
+            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&s->header_.uuid));
         } else {
             print_idl_row_simple(s, step);
+            if (idltest_simple_is_new(s)) {
+                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
+                       UUID_ARGS(&s->header_.uuid));
+            }
         }
         n++;
     }
     IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
-        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
-            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        if (idltest_link1_is_deleted(l1)) {
+            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&l1->header_.uuid));
         } else {
             print_idl_row_link1(l1, step);
+            if (idltest_link1_is_new(l1)) {
+                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
+                       UUID_ARGS(&l1->header_.uuid));
+            }
         }
         n++;
     }
     IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
-        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
-            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        if (idltest_link2_is_deleted(l2)) {
+            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&l2->header_.uuid));
         } else {
             print_idl_row_link2(l2, step);
+            if (idltest_link2_is_new(l2)) {
+                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
+                       UUID_ARGS(&l2->header_.uuid));
+            }
+
         }
         n++;
     }
@@ -2465,7 +2481,7 @@ do_idl(struct ovs_cmdl_context *ctx)
 
             /* Print update. */
             if (track) {
-                print_idl_track(idl, step++, ovsdb_idl_get_seqno(idl));
+                print_idl_track(idl, step++);
                 ovsdb_idl_track_clear(idl);
             } else {
                 print_idl(idl, step++);
