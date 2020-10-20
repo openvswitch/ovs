@@ -1020,13 +1020,14 @@ void
 raft_get_memory_usage(const struct raft *raft, struct simap *usage)
 {
     struct raft_conn *conn;
+    uint64_t backlog = 0;
     int cnt = 0;
 
     LIST_FOR_EACH (conn, list_node, &raft->conns) {
-        simap_increase(usage, "raft-backlog",
-                       jsonrpc_session_get_backlog(conn->js));
+        backlog += jsonrpc_session_get_backlog(conn->js);
         cnt++;
     }
+    simap_increase(usage, "raft-backlog-kB", backlog / 1000);
     simap_increase(usage, "raft-connections", cnt);
 }
 
