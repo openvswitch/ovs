@@ -1161,6 +1161,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
        "where": [],
        "row": {"b": true}}]']],
   [[000: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
+000: inserted row: uuid=<3>
 000: updated columns: b ba i ia r ra s sa u ua
 001: {"error":null,"result":[{"count":2}]}
 002: i=0 r=0 b=true s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<5>
@@ -1223,6 +1224,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
 002: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
+002: inserted row: uuid=<0>
 002: updated columns: b ba i ia r ra s sa u ua
 003: {"error":null,"result":[{"count":2}]}
 004: i=0 r=0 b=true s= u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
@@ -1234,6 +1236,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 006: updated columns: r
 007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
 008: i=-1 r=125 b=false s= u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: inserted row: uuid=<6>
 008: updated columns: ba i ia r ra
 009: {"error":null,"result":[{"count":2}]}
 010: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
@@ -1241,7 +1244,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 010: updated columns: s
 010: updated columns: s
 011: {"error":null,"result":[{"count":1}]}
-012: ##deleted## uuid=<1>
+012: deleted row: uuid=<1>
 013: reconnect
 014: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
 014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
