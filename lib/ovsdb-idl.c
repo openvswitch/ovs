@@ -1769,6 +1769,11 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
                     free(row->updated);
                     row->updated = NULL;
                 }
+
+                row->change_seqno[OVSDB_IDL_CHANGE_INSERT] =
+                    row->change_seqno[OVSDB_IDL_CHANGE_MODIFY] =
+                    row->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
+
                 ovs_list_remove(&row->track_node);
                 ovs_list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
@@ -2349,22 +2354,25 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
     return true;
 }
 
-/* Recursively add rows to tracked change lists for current row
- * and the rows that reference this row. */
+/* Recursively add rows to tracked change lists for all rows that reference
+   'row'. */
 static void
 add_tracked_change_for_references(struct ovsdb_idl_row *row)
 {
-    if (ovs_list_is_empty(&row->track_node) &&
-            ovsdb_idl_track_is_set(row->table)) {
-        ovs_list_push_back(&row->table->track_list,
-                           &row->track_node);
-        row->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
-            = row->table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
-            = row->table->db->change_seqno + 1;
+    const struct ovsdb_idl_arc *arc;
+    LIST_FOR_EACH (arc, dst_node, &row->dst_arcs) {
+        struct ovsdb_idl_row *ref = arc->src;
 
-        const struct ovsdb_idl_arc *arc;
-        LIST_FOR_EACH (arc, dst_node, &row->dst_arcs) {
-            add_tracked_change_for_references(arc->src);
+        if (ovs_list_is_empty(&ref->track_node) &&
+            ovsdb_idl_track_is_set(ref->table)) {
+                ovs_list_push_back(&ref->table->track_list,
+                                   &ref->track_node);
+
+            ref->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
+                = ref->table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
+                = ref->table->db->change_seqno + 1;
+
+            add_tracked_change_for_references(ref);
         }
     }
 }
@@ -2432,7 +2440,14 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                     row->change_seqno[change]
                         = row->table->change_seqno[change]
                         = row->table->db->change_seqno + 1;
+
                     if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
+                        if (ovs_list_is_empty(&row->track_node) &&
+                            ovsdb_idl_track_is_set(row->table)) {
+                            ovs_list_push_back(&row->table->track_list,
+                                               &row->track_node);
+                        }
+
                         add_tracked_change_for_references(row);
                         if (!row->updated) {
                             row->updated = bitmap_allocate(class->n_columns);
@@ -4494,6 +4509,7 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
     hmap_insert(&row->table->rows, &row->hmap_node, uuid_hash(&row->uuid));
     hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
     ovsdb_idl_add_to_indexes(row);
+
     return row;
 }
 
