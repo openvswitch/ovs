@@ -925,6 +925,9 @@ raft_reset_ping_timer(struct raft *raft)
     raft->ping_timeout = time_msec() + raft->election_timer / 3;
 }
 
+#define RAFT_MAX_BACKLOG_N_MSGS    500
+#define RAFT_MAX_BACKLOG_BYTES     UINT32_MAX
+
 static void
 raft_add_conn(struct raft *raft, struct jsonrpc_session *js,
               const struct uuid *sid, bool incoming)
@@ -940,6 +943,8 @@ raft_add_conn(struct raft *raft, struct jsonrpc_session *js,
     conn->incoming = incoming;
     conn->js_seqno = jsonrpc_session_get_seqno(conn->js);
     jsonrpc_session_set_probe_interval(js, 0);
+    jsonrpc_session_set_backlog_threshold(js, RAFT_MAX_BACKLOG_N_MSGS,
+                                              RAFT_MAX_BACKLOG_BYTES);
 }
 
 /* Starts the local server in an existing Raft cluster, using the local copy of
