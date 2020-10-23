@@ -3987,7 +3987,7 @@ raft_handle_install_snapshot_request__(
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
     if (error) {
-        char *error_s = ovsdb_error_to_string(error);
+        char *error_s = ovsdb_error_to_string_free(error);
         VLOG_WARN("could not save snapshot: %s", error_s);
         free(error_s);
         return false;
