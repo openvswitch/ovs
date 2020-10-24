@@ -76,8 +76,12 @@ static char *ssl_protocols;
 static char *ssl_ciphers;
 static bool bootstrap_ca_cert;
 
+/* Try to reclaim heap memory back to system after DB compaction. */
+static bool trim_memory = false;
+
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
+static unixctl_cb_func ovsdb_server_memory_trim_on_compaction;
 static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
@@ -243,7 +247,7 @@ main_loop(struct server_config *config,
                           xasprintf("removing database %s because storage "
                                     "disconnected permanently", node->name));
             } else if (ovsdb_storage_should_snapshot(db->db->storage)) {
-                log_and_free_error(ovsdb_snapshot(db->db));
+                log_and_free_error(ovsdb_snapshot(db->db, trim_memory));
             }
         }
         if (run_process) {
@@ -410,6 +414,9 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", "", 0, 0, ovsdb_server_exit, &exiting);
     unixctl_command_register("ovsdb-server/compact", "", 0, 1,
                              ovsdb_server_compact, &all_dbs);
+    unixctl_command_register("ovsdb-server/memory-trim-on-compaction",
+                             "on|off", 1, 1,
+                             ovsdb_server_memory_trim_on_compaction, NULL);
     unixctl_command_register("ovsdb-server/reconnect", "", 0, 0,
                              ovsdb_server_reconnect, jsonrpc);
 
@@ -1492,7 +1499,8 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
                 VLOG_INFO("compacting %s database by user request",
                           node->name);
 
-                struct ovsdb_error *error = ovsdb_snapshot(db->db);
+                struct ovsdb_error *error = ovsdb_snapshot(db->db,
+                                                           trim_memory);
                 if (error) {
                     char *s = ovsdb_error_to_string(error);
                     ds_put_format(&reply, "%s\n", s);
@@ -1513,6 +1521,35 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
         unixctl_command_reply(conn, NULL);
     }
     ds_destroy(&reply);
+}
+
+/* "ovsdb-server/memory-trim-on-compaction": controls whether ovsdb-server
+ * tries to reclaim heap memory back to system using malloc_trim() after
+ * compaction.  */
+static void
+ovsdb_server_memory_trim_on_compaction(struct unixctl_conn *conn,
+                                       int argc OVS_UNUSED,
+                                       const char *argv[],
+                                       void *arg OVS_UNUSED)
+{
+    const char *command = argv[1];
+
+#if !HAVE_DECL_MALLOC_TRIM
+    unixctl_command_reply_error(conn, "memory trimming is not supported");
+    return;
+#endif
+
+    if (!strcmp(command, "on")) {
+        trim_memory = true;
+    } else if (!strcmp(command, "off")) {
+        trim_memory = false;
+    } else {
+        unixctl_command_reply_error(conn, "invalid argument");
+        return;
+    }
+    VLOG_INFO("memory trimming after compaction %s.",
+              trim_memory ? "enabled" : "disabled");
+    unixctl_command_reply(conn, NULL);
 }
 
 /* "ovsdb-server/reconnect": makes ovsdb-server drop all of its JSON-RPC
