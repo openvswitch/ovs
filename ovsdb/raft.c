@@ -1029,6 +1029,7 @@ raft_get_memory_usage(const struct raft *raft, struct simap *usage)
     }
     simap_increase(usage, "raft-backlog-kB", backlog / 1000);
     simap_increase(usage, "raft-connections", cnt);
+    simap_increase(usage, "raft-log", raft->log_end - raft->log_start);
 }
 
 /* Returns true if 'raft' has completed joining its cluster, has not left or
