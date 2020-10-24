@@ -112,7 +112,8 @@ struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
 
-struct ovsdb_error *ovsdb_snapshot(struct ovsdb *) OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_snapshot(struct ovsdb *, bool trim_memory)
+    OVS_WARN_UNUSED_RESULT;
 
 void ovsdb_replace(struct ovsdb *dst, struct ovsdb *src);
 

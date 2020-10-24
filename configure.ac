@@ -100,6 +100,7 @@ OVS_CHECK_IF_DL
 OVS_CHECK_STRTOK_R
 OVS_CHECK_LINUX_AF_XDP
 AC_CHECK_DECLS([sys_siglist], [], [], [[#include <signal.h>]])
+AC_CHECK_DECLS([malloc_trim], [], [], [[#include <malloc.h>]])
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
 AC_CHECK_MEMBERS([struct ifreq.ifr_flagshigh], [], [], [[#include <net/if.h>]])
