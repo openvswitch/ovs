@@ -17,6 +17,10 @@
 
 #include "ovsdb.h"
 
+#if HAVE_DECL_MALLOC_TRIM
+#include <malloc.h>
+#endif
+
 #include "column.h"
 #include "file.h"
 #include "monitor.h"
@@ -515,7 +519,7 @@ ovsdb_get_table(const struct ovsdb *db, const char *name)
 }
 
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_snapshot(struct ovsdb *db)
+ovsdb_snapshot(struct ovsdb *db, bool trim_memory OVS_UNUSED)
 {
     if (!db->storage) {
         return NULL;
@@ -527,6 +531,12 @@ ovsdb_snapshot(struct ovsdb *db)
                                                              schema, data);
     json_destroy(schema);
     json_destroy(data);
+
+#if HAVE_DECL_MALLOC_TRIM
+    if (!error && trim_memory) {
+        malloc_trim(0);
+    }
+#endif
     return error;
 }
 
