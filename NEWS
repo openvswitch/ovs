@@ -8,6 +8,7 @@ v2.13.2 - xx xxx xxxx
        after every DB compaction back to OS.  Disabled by default.
      * Maximum backlog on RAFT connections limited to 500 messages or 4GB.
        Once threshold reached, connection is dropped (and re-established).
+       Use the 'cluster/set-backlog-threshold' command to change limits.
    - DPDK:
      * Fixed support of 'net_virtio' devices.
 
