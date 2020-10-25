@@ -381,6 +381,11 @@ This command must be executed on the leader.  It initiates the change to the
 cluster.  To see if the change takes effect (committed), use
 \fBcluster/status\fR to show the current setting.  Once a change is committed,
 it persists at server restarts.
+.IP "\fBcluster/set\-backlog\-threshold \fIdb\fR \fIn_msgs\fR \fIn_bytes\fR"
+Sets the backlog limits for \fIdb\fR's RAFT connections to a maximum of
+\fIn_msgs\fR messages or \fIn_bytes\fR bytes.  If the backlog on one of the
+connections reaches the limit, it will be disconnected (and re-established).
+Values are checked only if the backlog contains more than 50 messages.
 .
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man

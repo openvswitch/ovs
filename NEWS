@@ -8,6 +8,7 @@ Post-v2.14.0
        after every DB compaction back to OS.  Disabled by default.
      * Maximum backlog on RAFT connections limited to 500 messages or 4GB.
        Once threshold reached, connection is dropped (and re-established).
+       Use the 'cluster/set-backlog-threshold' command to change limits.
    - DPDK:
      * Removed support for vhost-user dequeue zero-copy.
    - The environment variable OVS_UNBOUND_CONF, if set, is now used
