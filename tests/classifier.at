@@ -304,3 +304,39 @@ ovs-ofctl: "conjunction" actions may be used along with "note" but not any other
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+# Flow classifier a packet with excess of padding.
+AT_SETUP([flow classifier - packet with extra padding])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+AT_DATA([flows.txt], [dnl
+priority=5,ip,ip_dst=1.1.1.1,actions=1
+priority=5,ip,ip_dst=1.1.1.2,actions=2
+priority=0,actions=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+packet=00020202020000010101010008004500001c00010000401176cc01010101010101020d6a00350008ee3a
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=1 $packet] , [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_dst=1.1.1.2,nw_frag=no
+Datapath actions: 2
+])
+# normal packet plus 255 bytes of padding (8bit padding).
+# 255 * 2 = 510
+padding=$(printf '%*s' 510 | tr ' ' '0')
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=1 ${packet}${padding}] , [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_dst=1.1.1.2,nw_frag=no
+Datapath actions: 2
+])
+# normal packet plus padding up to 65535 bytes of length (16bit limit).
+# 65535 - 43 = 65492
+# 65492 * 2 = 130984
+padding=$(printf '%*s' 130984 | tr ' ' '0')
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=1 ${packet}${padding}], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_dst=1.1.1.2,nw_frag=no
+Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
