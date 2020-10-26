@@ -125,7 +125,7 @@ struct dp_packet {
 
     /* All the following elements of this struct are copied in a single call
      * of memcpy in dp_packet_clone_with_headroom. */
-    uint8_t l2_pad_size;           /* Detected l2 padding size.
+    uint16_t l2_pad_size;          /* Detected l2 padding size.
                                     * Padding is non-pullable. */
     uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
     uint16_t l3_ofs;               /* Network-level header offset,
@@ -162,8 +162,8 @@ void *dp_packet_resize_l2(struct dp_packet *, int increment);
 void *dp_packet_resize_l2_5(struct dp_packet *, int increment);
 static inline void *dp_packet_eth(const struct dp_packet *);
 static inline void dp_packet_reset_offsets(struct dp_packet *);
-static inline uint8_t dp_packet_l2_pad_size(const struct dp_packet *);
-static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint8_t);
+static inline uint16_t dp_packet_l2_pad_size(const struct dp_packet *);
+static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint16_t);
 static inline void *dp_packet_l2_5(const struct dp_packet *);
 static inline void dp_packet_set_l2_5(struct dp_packet *, void *);
 static inline void *dp_packet_l3(const struct dp_packet *);
@@ -371,14 +371,14 @@ dp_packet_reset_offsets(struct dp_packet *b)
     b->l4_ofs = UINT16_MAX;
 }
 
-static inline uint8_t
+static inline uint16_t
 dp_packet_l2_pad_size(const struct dp_packet *b)
 {
     return b->l2_pad_size;
 }
 
 static inline void
-dp_packet_set_l2_pad_size(struct dp_packet *b, uint8_t pad_size)
+dp_packet_set_l2_pad_size(struct dp_packet *b, uint16_t pad_size)
 {
     ovs_assert(pad_size <= dp_packet_size(b));
     b->l2_pad_size = pad_size;
