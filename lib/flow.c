@@ -655,7 +655,7 @@ ipv4_sanity_check(const struct ip_header *nh, size_t size,
 
     tot_len = ntohs(nh->ip_tot_len);
     if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len ||
-                size - tot_len > UINT8_MAX)) {
+                size - tot_len > UINT16_MAX)) {
         return false;
     }
 
@@ -693,8 +693,8 @@ ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)
     if (OVS_UNLIKELY(plen + IPV6_HEADER_LEN > size)) {
         return false;
     }
-    /* Jumbo Payload option not supported yet. */
-    if (OVS_UNLIKELY(size - (plen + IPV6_HEADER_LEN) > UINT8_MAX)) {
+
+    if (OVS_UNLIKELY(size - (plen + IPV6_HEADER_LEN) > UINT16_MAX)) {
         return false;
     }
 
