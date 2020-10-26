@@ -764,7 +764,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len)) {
             goto out;
         }
-        if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
+        if (OVS_UNLIKELY(size - tot_len > UINT16_MAX)) {
             goto out;
         }
         dp_packet_set_l2_pad_size(packet, size - tot_len);
@@ -808,8 +808,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         if (OVS_UNLIKELY(plen > size)) {
             goto out;
         }
-        /* Jumbo Payload option not supported yet. */
-        if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
+        if (OVS_UNLIKELY(size - plen > UINT16_MAX)) {
             goto out;
         }
         dp_packet_set_l2_pad_size(packet, size - plen);
