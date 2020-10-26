@@ -101,6 +101,7 @@ for test_case in \
     'mpls,mpls_label=5                           NXM,OXM,OpenFlow11' \
     'mpls,mpls_tc=1                              NXM,OXM,OpenFlow11' \
     'mpls,mpls_bos=0                             NXM,OXM' \
+    'mpls,mpls_ttl=5                             NXM,OXM' \
     'ip,ip_src=1.2.3.4                           any' \
     'ip,ip_src=192.168.0.0/24                    any' \
     'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
@@ -428,6 +429,7 @@ tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0,actions=drop
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
@@ -478,6 +480,7 @@ NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+NXT_FLOW_MOD: ADD table:255 mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0 actions=drop
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
