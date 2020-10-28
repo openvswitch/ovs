@@ -22,7 +22,11 @@ esac
 for dir in "$sbindir" "$bindir" /sbin /bin /usr/sbin /usr/bin; do
     case :$PATH: in
         *:$dir:*) ;;
-        *) PATH=$PATH:$dir ;;
+        *)
+        case $dir in
+            $sbindir | $bindir) PATH=$dir:$PATH ;;
+            *) PATH=$PATH:$dir ;;
+        esac
     esac
 done
 
