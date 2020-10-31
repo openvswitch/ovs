@@ -1122,7 +1122,6 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
         nl_attr_get_size(a) != expected_len) {
         ds_put_format(ds, "bad length %"PRIuSIZE", expected %d for: ",
                       nl_attr_get_size(a), expected_len);
-        format_generic_odp_action(ds, a);
         return;
     }
 
