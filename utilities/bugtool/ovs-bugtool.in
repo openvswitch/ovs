@@ -684,8 +684,8 @@ exclude those logs from the archive.
         ovs_info_caps = [CAP_NETWORK_STATUS, CAP_SYSTEM_LOGS,
                          CAP_OPENVSWITCH_LOGS, CAP_NETWORK_CONFIG]
         ovs_info_list = ['process-tree']
-        # We cannot use iteritems, since we modify 'data' as we pass through
-        for (k, v) in data.items():
+        # We cannot use items(), since we modify 'data' as we pass through
+        for (k, v) in list(data.items()):
             cap = v['cap']
             if 'filename' in v:
                 info = k[0]
@@ -705,8 +705,8 @@ exclude those logs from the archive.
         pass
 
     # permit the user to filter out data
-    # We cannot use iteritems, since we modify 'data' as we pass through
-    for (k, v) in data.items():
+    # We cannot use items(), since we modify 'data' as we pass through
+    for (k, v) in list(data.items()):
         cap = v['cap']
         if 'filename' in v:
             key = k[0]
