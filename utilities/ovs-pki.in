@@ -219,6 +219,10 @@ if test "$command" = "init"; then
         exit 1
     fi
 
+    if test "$force" = "yes"; then
+       rm -rf "$pkidir"
+    fi
+
     if test ! -d "$pkidir"; then
         mkdir -p "$pkidir"
     fi
