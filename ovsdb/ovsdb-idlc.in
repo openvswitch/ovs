@@ -389,7 +389,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 args = ['%(type)s%(name)s' % member for member in members]
             print('%s);' % ', '.join(args))
 
-            print('void %(s)s_set_condition(struct ovsdb_idl *, struct ovsdb_idl_condition *);' % {'s': structName})
+            print('unsigned int %(s)s_set_condition(struct ovsdb_idl *, struct ovsdb_idl_condition *);' % {'s': structName})
 
         print("")
 
@@ -1416,10 +1416,10 @@ struct %(s)s *
         print("\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
             structName, structName.upper()))
         print("""
-void
+unsigned int
 %(s)s_set_condition(struct ovsdb_idl *idl, struct ovsdb_idl_condition *condition)
 {
-    ovsdb_idl_set_condition(idl, &%(p)stable_%(tl)s, condition);
+    return ovsdb_idl_set_condition(idl, &%(p)stable_%(tl)s, condition);
 }""" % {'p': prefix,
         's': structName,
         'tl': tableName.lower()})
