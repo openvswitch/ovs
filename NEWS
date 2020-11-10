@@ -14,6 +14,8 @@ Post-v2.14.0
    - Userspace datapath:
      * Add the 'pmd' option to "ovs-appctl dpctl/dump-flows", which
        restricts a flow dump to a single PMD thread if set.
+     * New 'options:dpdk-vf-mac' field for DPDK interface of VF ports,
+       that allows configuring the MAC address of a VF representor.
    - The environment variable OVS_UNBOUND_CONF, if set, is now used
      as the DNS resolver's (unbound) configuration file.
    - Linux datapath:

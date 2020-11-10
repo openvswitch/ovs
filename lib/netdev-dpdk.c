@@ -522,6 +522,9 @@ struct netdev_dpdk {
          * otherwise interrupt mode is used. */
         bool requested_lsc_interrupt_mode;
         bool lsc_interrupt_mode;
+
+        /* VF configuration. */
+        struct eth_addr requested_hwaddr;
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1692,6 +1695,16 @@ out:
     return ret;
 }
 
+static bool
+dpdk_port_is_representor(struct netdev_dpdk *dev)
+    OVS_REQUIRES(dev->mutex)
+{
+    struct rte_eth_dev_info dev_info;
+
+    rte_eth_dev_info_get(dev->port_id, &dev_info);
+    return (*dev_info.dev_flags) & RTE_ETH_DEV_REPRESENTOR;
+}
+
 static int
 netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 {
@@ -1726,6 +1739,11 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
         }
         smap_add(args, "lsc_interrupt_mode",
                  dev->lsc_interrupt_mode ? "true" : "false");
+
+        if (dpdk_port_is_representor(dev)) {
+            smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
+                            ETH_ADDR_ARGS(dev->requested_hwaddr));
+        }
     }
     ovs_mutex_unlock(&dev->mutex);
 
@@ -1905,6 +1923,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         {RTE_FC_RX_PAUSE, RTE_FC_FULL    }
     };
     const char *new_devargs;
+    const char *vf_mac;
     int err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
@@ -1973,6 +1992,28 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
 
     if (err) {
         goto out;
+    }
+
+    vf_mac = smap_get(args, "dpdk-vf-mac");
+    if (vf_mac) {
+        struct eth_addr mac;
+
+        if (!dpdk_port_is_representor(dev)) {
+            VLOG_WARN_BUF(errp, "'%s' is trying to set the VF MAC '%s' "
+                          "but 'options:dpdk-vf-mac' is only supported for "
+                          "VF representors.",
+                          netdev_get_name(netdev), vf_mac);
+        } else if (!eth_addr_from_string(vf_mac, &mac)) {
+            VLOG_WARN_BUF(errp, "interface '%s': cannot parse VF MAC '%s'.",
+                          netdev_get_name(netdev), vf_mac);
+        } else if (eth_addr_is_multicast(mac)) {
+            VLOG_WARN_BUF(errp,
+                          "interface '%s': cannot set VF MAC to multicast "
+                          "address '%s'.", netdev_get_name(netdev), vf_mac);
+        } else if (!eth_addr_equals(dev->requested_hwaddr, mac)) {
+            dev->requested_hwaddr = mac;
+            netdev_request_reconfigure(netdev);
+        }
     }
 
     lsc_interrupt_mode = smap_get_bool(args, "dpdk-lsc-interrupt", false);
@@ -3647,6 +3688,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
     uint32_t link_speed;
+    uint32_t dev_flags;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
@@ -3656,6 +3698,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     link_speed = dev->link.link_speed;
+    dev_flags = *dev_info.dev_flags;
     ovs_mutex_unlock(&dev->mutex);
     const struct rte_bus *bus;
     const struct rte_pci_device *pci_dev;
@@ -3702,6 +3745,11 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
      */
     smap_add(args, "link_speed",
              netdev_dpdk_link_speed_to_str__(link_speed));
+
+    if (dev_flags & RTE_ETH_DEV_REPRESENTOR) {
+        smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
+                        ETH_ADDR_ARGS(dev->hwaddr));
+    }
 
     return 0;
 }
@@ -4939,6 +4987,7 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
         && dev->lsc_interrupt_mode == dev->requested_lsc_interrupt_mode
         && dev->rxq_size == dev->requested_rxq_size
         && dev->txq_size == dev->requested_txq_size
+        && eth_addr_equals(dev->hwaddr, dev->requested_hwaddr)
         && dev->socket_id == dev->requested_socket_id
         && dev->started && !dev->reset_needed) {
         /* Reconfiguration is unnecessary */
@@ -4970,6 +5019,14 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     dev->txq_size = dev->requested_txq_size;
 
     rte_free(dev->tx_q);
+
+    if (!eth_addr_equals(dev->hwaddr, dev->requested_hwaddr)) {
+        err = netdev_dpdk_set_etheraddr__(dev, dev->requested_hwaddr);
+        if (err) {
+            goto out;
+        }
+    }
+
     err = dpdk_eth_dev_init(dev);
     if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
         netdev->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
@@ -4980,6 +5037,18 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
             netdev->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
         }
     }
+
+    /* If both requested and actual hwaddr were previously
+     * unset (initialized to 0), then first device init above
+     * will have set actual hwaddr to something new.
+     * This would trigger spurious MAC reconfiguration unless
+     * the requested MAC is kept in sync.
+     *
+     * This is harmless in case requested_hwaddr was
+     * configured by the user, as netdev_dpdk_set_etheraddr__()
+     * will have succeeded to get to this point.
+     */
+    dev->requested_hwaddr = dev->hwaddr;
 
     dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
     if (!dev->tx_q) {

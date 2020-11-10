@@ -379,6 +379,57 @@ an eth device whose mac address is ``00:11:22:33:44:55``::
     $ ovs-vsctl add-port br0 dpdk-mac -- set Interface dpdk-mac type=dpdk \
        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55"
 
+Representor specific configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In some topologies, a VF must be configured before being assigned to a
+guest (VM) machine.  This configuration is done through VF-specific fields
+in the ``options`` column of the ``Interface`` table.
+
+.. important::
+
+   Some DPDK port use `bifurcated drivers <bifurcated-drivers>`__,
+   which means that a kernel netdevice remains when Open vSwitch is stopped.
+
+   In such case, any configuration applied to a VF would remain set on the
+   kernel netdevice, and be inherited from it when Open vSwitch is restarted,
+   even if the options described in this section are unset from Open vSwitch.
+
+.. _bifurcated-drivers: http://doc.dpdk.org/guides/linux_gsg/linux_drivers.html#bifurcated-driver
+
+- Configure the VF MAC address::
+
+    $ ovs-vsctl set Interface dpdk-rep0 options:dpdk-vf-mac=00:11:22:33:44:55
+
+The requested MAC address is assigned to the port and is listed as part of
+its options::
+
+    $ ovs-appctl dpctl/show
+    [...]
+      port 3: dpdk-rep0 (dpdk: configured_rx_queues=1, ..., dpdk-vf-mac=00:11:22:33:44:55, ...)
+
+    $ ovs-vsctl show
+    [...]
+            Port dpdk-rep0
+                Interface dpdk-rep0
+                    type: dpdk
+                    options: {dpdk-devargs="<representor devargs>", dpdk-vf-mac="00:11:22:33:44:55"}
+
+    $ ovs-vsctl get Interface dpdk-rep0 status
+    {dpdk-vf-mac="00:11:22:33:44:55", ...}
+
+    $ ovs-vsctl list Interface dpdk-rep0 | grep 'mac_in_use\|options'
+    mac_in_use          : "00:11:22:33:44:55"
+    options             : {dpdk-devargs="<representor devargs>", dpdk-vf-mac="00:11:22:33:44:55"}
+
+The value listed as ``dpdk-vf-mac`` is only a request from the user and is
+possibly not yet applied.
+
+When the requested configuration is successfully applied to the port,
+this MAC address is then also shown in the column ``mac_in_use`` of
+the ``Interface`` table.  On failure however, ``mac_in_use`` will keep its
+previous value, which will thus differ from ``dpdk-vf-mac``.
+
 Jumbo Frames
 ------------
 
