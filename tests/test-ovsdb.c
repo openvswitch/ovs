@@ -2407,6 +2407,10 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
         if (seqno == next_seqno ) {
             ovs_fatal(0, "condition unchanged");
         }
+        unsigned int new_next_seqno = ovsdb_idl_set_condition(idl, tc, &cond);
+        if (next_seqno != new_next_seqno) {
+            ovs_fatal(0, "condition expected seqno changed");
+        }
         ovsdb_idl_condition_destroy(&cond);
         json_destroy(json);
     }
