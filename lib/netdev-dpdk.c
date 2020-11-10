@@ -2911,18 +2911,44 @@ netdev_dpdk_eth_send(struct netdev *netdev, int qid,
 }
 
 static int
+netdev_dpdk_set_etheraddr__(struct netdev_dpdk *dev, const struct eth_addr mac)
+    OVS_REQUIRES(dev->mutex)
+{
+    int err = 0;
+
+    if (dev->type == DPDK_DEV_ETH) {
+        struct rte_ether_addr ea;
+
+        memcpy(ea.addr_bytes, mac.ea, ETH_ADDR_LEN);
+        err = -rte_eth_dev_default_mac_addr_set(dev->port_id, &ea);
+    }
+    if (!err) {
+        dev->hwaddr = mac;
+    } else {
+        VLOG_WARN("%s: Failed to set requested mac("ETH_ADDR_FMT"): %s",
+                  netdev_get_name(&dev->up), ETH_ADDR_ARGS(mac),
+                  rte_strerror(err));
+    }
+
+    return err;
+}
+
+static int
 netdev_dpdk_set_etheraddr(struct netdev *netdev, const struct eth_addr mac)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err = 0;
 
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
-        dev->hwaddr = mac;
-        netdev_change_seq_changed(netdev);
+        err = netdev_dpdk_set_etheraddr__(dev, mac);
+        if (!err) {
+            netdev_change_seq_changed(netdev);
+        }
     }
     ovs_mutex_unlock(&dev->mutex);
 
-    return 0;
+    return err;
 }
 
 static int
