@@ -1988,8 +1988,7 @@ probe_tc_block_support(int ifindex)
 static int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
-    static struct ovsthread_once multi_mask_once = OVSTHREAD_ONCE_INITIALIZER;
-    static struct ovsthread_once block_once = OVSTHREAD_ONCE_INITIALIZER;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
     uint32_t block_id = 0;
     struct tcf_id id;
@@ -2014,16 +2013,13 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     /* make sure there is no ingress/egress qdisc */
     tc_add_del_qdisc(ifindex, false, 0, hook);
 
-    if (ovsthread_once_start(&block_once)) {
+    if (ovsthread_once_start(&once)) {
         probe_tc_block_support(ifindex);
         /* Need to re-fetch block id as it depends on feature availability. */
         block_id = get_block_id_from_netdev(netdev);
-        ovsthread_once_done(&block_once);
-    }
 
-    if (ovsthread_once_start(&multi_mask_once)) {
         probe_multi_mask_per_prio(ifindex);
-        ovsthread_once_done(&multi_mask_once);
+        ovsthread_once_done(&once);
     }
 
     error = tc_add_del_qdisc(ifindex, true, block_id, hook);
