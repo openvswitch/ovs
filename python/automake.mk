@@ -107,12 +107,13 @@ ALL_LOCAL += $(srcdir)/python/ovs/dirs.py
 $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
 	$(AM_V_GEN)sed \
 		-e '/^##/d' \
-                -e 's,[@]pkgdatadir[@],/usr/local/share/openvswitch,g' \
-                -e 's,[@]RUNDIR[@],/var/run,g' \
-                -e 's,[@]LOGDIR[@],/usr/local/var/log,g' \
-                -e 's,[@]bindir[@],/usr/local/bin,g' \
-                -e 's,[@]sysconfdir[@],/usr/local/etc,g' \
-                -e 's,[@]DBDIR[@],/usr/local/etc/openvswitch,g' \
+                -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
+                -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+                -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+                -e 's,[@]bindir[@],$(bindir),g' \
+                -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+                -e 's,[@]DBDIR[@],$(sysconfdir)/openvswitch,g' \
 		< $? > $@.tmp && \
 	mv $@.tmp $@
 EXTRA_DIST += python/ovs/dirs.py.template
+CLEANFILES += python/ovs/dirs.py
