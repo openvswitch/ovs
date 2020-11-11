@@ -42,7 +42,7 @@ Installing OVS and IPsec Packages
 ---------------------------------
 
 OVS IPsec has .deb and .rpm packages. You should use the right package
-based on your Linux distribution. This tutorial uses Ubuntu 16.04 and Fedora 27
+based on your Linux distribution. This tutorial uses Ubuntu 16.04 and Fedora 32
 as examples.
 
 Ubuntu
@@ -59,8 +59,8 @@ Ubuntu
 
 2. Install the related packages::
 
-       $ apt-get install dkms strongswan
-       $ dpkg -i libopenvswitch_*.deb openvswitch-common_*.deb \
+       # apt-get install dkms strongswan
+       # dpkg -i libopenvswitch_*.deb openvswitch-common_*.deb \
              openvswitch-switch_*.deb openvswitch-datapath-dkms_*.deb \
              python-openvswitch_*.deb openvswitch-pki_*.deb \
              openvswitch-ipsec_*.deb
@@ -71,23 +71,25 @@ Ubuntu
 Fedora
 ~~~~~~
 
-1. Follow :doc:`/intro/install/fedora` to build RPM packages.
+1. Install the related packages. Fedora 32 does not require installation of
+   the out-of-tree kernel module::
 
-2. Install the related packages::
+       # dnf install python3-openvswitch libreswan \
+                     openvswitch openvswitch-ipsec
 
-       $ dnf install python2-openvswitch libreswan \
-                     "kernel-devel-uname-r == $(uname -r)"
-       $ rpm -i openvswitch-*.rpm openvswitch-kmod-*.rpm \
-                openvswitch-openvswitch-ipsec-*.rpm
+2. Install firewall rules to allow ESP and IKE traffic::
 
-3. Install firewall rules to allow ESP and IKE traffic::
+       # systemctl start firewalld
+       # firewall-cmd --add-service ipsec
 
-       $ iptables -A IN_FedoraServer_allow -p esp -j ACCEPT
-       $ iptables -A IN_FedoraServer_allow -p udp --dport 500 -j ACCEPT
+   Or to make permanent::
 
-4. Run the openvswitch-ipsec service::
+       # systemctl enable firewalld
+       # firewall-cmd --permanent --add-service ipsec
 
-       $ systemctl start openvswitch-ipsec.service
+3. Run the openvswitch-ipsec service::
+
+       # systemctl start openvswitch-ipsec.service
 
    .. note::
 
@@ -97,47 +99,47 @@ Fedora
 Configuring IPsec tunnel
 ------------------------
 
-Suppose you want to build IPsec tunnel between two hosts. Assume `host_1`'s
+Suppose you want to build an IPsec tunnel between two hosts. Assume `host_1`'s
 external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
 `host_1` and `host_2` can ping each other via these external IPs.
 
 0. Set up some variables to make life easier.  On both hosts, set ``ip_1`` and
    ``ip_2`` variables, e.g.::
 
-     $ ip_1=1.1.1.1
-     $ ip_2=2.2.2.2
+     # ip_1=1.1.1.1
+     # ip_2=2.2.2.2
 
 1. Set up OVS bridges in both hosts.
 
    In `host_1`::
 
-       $ ovs-vsctl add-br br-ipsec
-       $ ip addr add 192.0.0.1/24 dev br-ipsec
-       $ ip link set br-ipsec up
+       # ovs-vsctl add-br br-ipsec
+       # ip addr add 192.0.0.1/24 dev br-ipsec
+       # ip link set br-ipsec up
 
    In `host_2`::
 
-       $ ovs-vsctl add-br br-ipsec
-       $ ip addr add 192.0.0.2/24 dev br-ipsec
-       $ ip link set br-ipsec up
+       # ovs-vsctl add-br br-ipsec
+       # ip addr add 192.0.0.2/24 dev br-ipsec
+       # ip link set br-ipsec up
 
 2. Set up IPsec tunnel.
 
-   There are three authentication methods. You can choose one to set up your
-   IPsec tunnel.
+   There are three authentication methods.  Choose one method to set up your
+   IPsec tunnel and follow the steps below.
 
    a) Using pre-shared key:
 
       In `host_1`::
 
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                       set interface tun type=gre \
                                     options:remote_ip=$ip_2 \
                                     options:psk=swordfish
 
       In `host_2`::
 
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                       set interface tun type=gre \
                                     options:remote_ip=$ip_1 \
                                     options:psk=swordfish
@@ -156,15 +158,15 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
 
       In `host_1`::
 
-          $ ovs-pki req -u host_1
-          $ ovs-pki self-sign host_1
-          $ scp host_1-cert.pem $ip_2:/etc/keys/host_1-cert.pem
+          # ovs-pki req -u host_1
+          # ovs-pki self-sign host_1
+          # scp host_1-cert.pem $ip_2:/etc/keys/host_1-cert.pem
 
       In `host_2`::
 
-          $ ovs-pki req -u host_2
-          $ ovs-pki self-sign host_2
-          $ scp host_2-cert.pem $ip_1:/etc/keys/host_2-cert.pem
+          # ovs-pki req -u host_2
+          # ovs-pki self-sign host_2
+          # scp host_2-cert.pem $ip_1:/etc/keys/host_2-cert.pem
 
       .. note::
 
@@ -176,20 +178,20 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
 
       In `host_1`::
 
-          $ ovs-vsctl set Open_vSwitch . \
+          # ovs-vsctl set Open_vSwitch . \
                      other_config:certificate=/etc/keys/host_1-cert.pem \
                      other_config:private_key=/etc/keys/host_1-privkey.pem
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                       set interface tun type=gre \
                              options:remote_ip=$ip_2 \
                              options:remote_cert=/etc/keys/host_2-cert.pem
 
       In `host_2`::
 
-          $ ovs-vsctl set Open_vSwitch . \
+          # ovs-vsctl set Open_vSwitch . \
                      other_config:certificate=/etc/keys/host_2-cert.pem \
                      other_config:private_key=/etc/keys/host_2-privkey.pem
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                       set interface tun type=gre \
                              options:remote_ip=$ip_1 \
                              options:remote_cert=/etc/keys/host_1-cert.pem
@@ -207,29 +209,29 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
 
       In `host_1`::
 
-          $ ovs-pki init
+          # ovs-pki init
 
       Generate certificate requests and copy the certificate request of
       `host_2` to `host_1`.
 
       In `host_1`::
 
-          $ ovs-pki req -u host_1
+          # ovs-pki req -u host_1
 
       In `host_2`::
 
-          $ ovs-pki req -u host_2
-          $ scp host_2-req.pem $ip_1:/etc/keys/host_2-req.pem
+          # ovs-pki req -u host_2
+          # scp host_2-req.pem $ip_1:/etc/keys/host_2-req.pem
 
       Sign the certificate requests with the CA key. Copy `host_2`'s signed
       certificate and the CA certificate to `host_2`.
 
       In `host_1`::
 
-          $ ovs-pki sign host_1 switch
-          $ ovs-pki sign host_2 switch
-          $ scp host_2-cert.pem $ip_2:/etc/keys/host_2-cert.pem
-          $ scp /var/lib/openvswitch/pki/switchca/cacert.pem \
+          # ovs-pki sign host_1 switch
+          # ovs-pki sign host_2 switch
+          # scp host_2-cert.pem $ip_2:/etc/keys/host_2-cert.pem
+          # scp /var/lib/openvswitch/pki/switchca/cacert.pem \
                     $ip_2:/etc/keys/cacert.pem
 
       .. note::
@@ -243,22 +245,22 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
 
       In `host_1`::
 
-          $ ovs-vsctl set Open_vSwitch . \
+          # ovs-vsctl set Open_vSwitch . \
                   other_config:certificate=/etc/keys/host_1-cert.pem \
                   other_config:private_key=/etc/keys/host_1-privkey.pem \
                   other_config:ca_cert=/etc/keys/cacert.pem
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                    set interface tun type=gre \
                                  options:remote_ip=$ip_2 \
                                  options:remote_name=host_2
 
       In `host_2`::
 
-          $ ovs-vsctl set Open_vSwitch . \
+          # ovs-vsctl set Open_vSwitch . \
                   other_config:certificate=/etc/keys/host_2-cert.pem \
                   other_config:private_key=/etc/keys/host_2-privkey.pem \
                   other_config:ca_cert=/etc/keys/cacert.pem
-          $ ovs-vsctl add-port br-ipsec tun -- \
+          # ovs-vsctl add-port br-ipsec tun -- \
                    set interface tun type=gre \
                                  options:remote_ip=$ip_1 \
                                  options:remote_name=host_1
@@ -276,8 +278,8 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
    Now you should have an IPsec GRE tunnel running between two hosts. To verify
    it, in `host_1`::
 
-       $ ping 192.0.0.2 &
-       $ tcpdump -ni any net $ip_2
+       # ping 192.0.0.2 &
+       # tcpdump -ni any net $ip_2
 
    You should be able to see that ESP packets are being sent from `host_1` to
    `host_2`.
@@ -289,7 +291,7 @@ The ``ovs-monitor-ipsec`` daemon manages and monitors the IPsec tunnel state.
 Use the following ``ovs-appctl`` command to view ``ovs-monitor-ipsec`` internal
 representation of tunnel configuration::
 
-    $ ovs-appctl -t ovs-monitor-ipsec tunnels/show
+    # ovs-appctl -t ovs-monitor-ipsec tunnels/show
 
 If there is misconfiguration, then ``ovs-appctl`` should indicate why.
 For example::
@@ -324,7 +326,7 @@ For example::
 If you don't see any active connections, try to run the following command to
 refresh the ``ovs-monitor-ipsec`` daemon::
 
-    $ ovs-appctl -t ovs-monitor-ipsec refresh
+    # ovs-appctl -t ovs-monitor-ipsec refresh
 
 You can also check the logs of the ``ovs-monitor-ipsec`` daemon and the IKE
 daemon to locate issues. ``ovs-monitor-ipsec`` outputs log messages to
