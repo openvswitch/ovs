@@ -145,7 +145,27 @@
           selects records in which the <code>flood-vlans</code> column contains both 1
           and 2.
         </dd>
+      </dl>
 
+      <p>
+        The following operators are available only in Open vSwitch 2.16 and
+        later:
+      </p>
+
+      <dl
+        <dt><code>{in}</code></dt>
+        <dd>
+          Selects records in which every element in
+          <var>column</var>[<code>:</code><var>key</var>] is also in
+          <var>value</var>.  (This is the same as <code>{&lt;=}</code>.)
+        </dd>
+
+        <dt><code>{not-in}</code></dt>
+        <dd>
+          Selects records in which every element in
+          <var>column</var>[<code>:</code><var>key</var>] is not in
+          <var>value</var>.
+        </dd>
       </dl>
 
       <p>
@@ -350,14 +370,12 @@
     <dt><code>wait-until</code> <var>table record</var> [<var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>]...</dt>
     <dd>
       <p>
-        Waits until <var>table</var> contains a record named <var>record</var> whose
-        <var>column</var> equals <var>value</var> or, if <var>key</var> is specified, whose
-        <var>column</var> contains a <var>key</var> with the specified <var>value</var>.  Any
-        of the operators <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, or <code>&gt;=</code> may
-        be substituted for <code>=</code> to test for inequality, less than, greater
-        than, less than or equal to, or greater than or equal to,
-        respectively.  (Don't forget to escape <code>&lt;</code> or <code>&gt;</code> from
-        interpretation by the shell.)
+        Waits until <var>table</var> contains a record named <var>record</var>
+        whose <var>column</var> equals <var>value</var> or, if <var>key</var>
+        is specified, whose <var>column</var> contains a <var>key</var> with
+        the specified <var>value</var>.  This command supports the same
+        operators and semantics described for the <code>find</code> command
+        above.
       </p>
       <p>
         If no <var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var> arguments are given,

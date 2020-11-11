@@ -698,7 +698,9 @@ check_mutable(const struct ovsdb_idl_row *row,
     RELOP(RELOP_SET_LT, "{<}")                  \
     RELOP(RELOP_SET_GT, "{>}")                  \
     RELOP(RELOP_SET_LE, "{<=}")                 \
-    RELOP(RELOP_SET_GE, "{>=}")
+    RELOP(RELOP_SET_GE, "{>=}")                 \
+    RELOP(RELOP_SET_IN, "{in}")                 \
+    RELOP(RELOP_SET_NOT_IN, "{not-in}")
 
 enum relop {
 #define RELOP(ENUM, STRING) ENUM,
@@ -711,7 +713,8 @@ is_set_operator(enum relop op)
 {
     return (op == RELOP_SET_EQ || op == RELOP_SET_NE ||
             op == RELOP_SET_LT || op == RELOP_SET_GT ||
-            op == RELOP_SET_LE || op == RELOP_SET_GE);
+            op == RELOP_SET_LE || op == RELOP_SET_GE ||
+            op == RELOP_SET_IN || op == RELOP_SET_NOT_IN);
 }
 
 static bool
@@ -739,9 +742,12 @@ evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
     case RELOP_SET_GT:
         return a->n > b->n && ovsdb_datum_includes_all(b, a, type);
     case RELOP_SET_LE:
+    case RELOP_SET_IN:
         return ovsdb_datum_includes_all(a, b, type);
     case RELOP_SET_GE:
         return ovsdb_datum_includes_all(b, a, type);
+    case RELOP_SET_NOT_IN:
+        return ovsdb_datum_excludes_all(a, b, type);
 
     default:
         OVS_NOT_REACHED();

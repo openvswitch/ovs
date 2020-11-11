@@ -1,5 +1,7 @@
 Post-v2.15.0
 ---------------------
+   - In ovs-vsctl and vtep-ctl, the "find" command now accept new
+     operators {in} and {not-in}.
 
 
 v2.15.0 - xx xxx xxxx
