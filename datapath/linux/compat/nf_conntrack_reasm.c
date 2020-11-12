@@ -54,10 +54,13 @@
 #include <linux/module.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 
-#ifdef OVS_NF_DEFRAG6_BACKPORT
+#if defined(HAVE_INET_FRAGS_WITH_FRAGS_WORK) || !defined(HAVE_INET_FRAGS_RND)
 
 static const char nf_frags_cache_name[] = "ovs-frag6";
 
+#endif
+
+#ifdef OVS_NF_DEFRAG6_BACKPORT
 struct nf_ct_frag6_skb_cb
 {
 	struct inet6_skb_parm	h;
