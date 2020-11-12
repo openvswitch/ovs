@@ -529,11 +529,7 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 		hash |= OVS_PACKET_HASH_SW_BIT;
 #endif
 
-#ifdef HAVE_L4_RXHASH
-	if (skb->l4_rxhash)
-#else
 	if (skb->l4_hash)
-#endif
 		hash |= OVS_PACKET_HASH_L4_BIT;
 
 	if (nla_put(user_skb, OVS_PACKET_ATTR_HASH, sizeof (u64), &hash)) {
