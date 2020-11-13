@@ -530,6 +530,11 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         case LLDP_TLV_MGMT_ADDR:
             CHECK_TLV_SIZE(1, "Management address");
             addr_str_length = PEEK_UINT8;
+            if (addr_str_length > sizeof(addr_str_buffer)) {
+                VLOG_WARN("too large management address on %s",
+                          hardware->h_ifname);
+                goto malformed;
+            }
             CHECK_TLV_SIZE(1 + addr_str_length, "Management address");
             PEEK_BYTES(addr_str_buffer, addr_str_length);
             addr_length = addr_str_length - 1;
@@ -554,7 +559,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             break;
 
         case LLDP_TLV_ORG:
-            CHECK_TLV_SIZE(4, "Organisational");
+            CHECK_TLV_SIZE(1 + sizeof orgid, "Organisational");
             PEEK_BYTES(orgid, sizeof orgid);
             tlv_subtype = PEEK_UINT8;
             if (memcmp(dot1, orgid, sizeof orgid) == 0) {
