@@ -244,6 +244,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
 
     if (s < sizeof(struct eth_header) + 4) {
         /* Too short, just discard it */
+        hw->h_rx_discarded_cnt++;
         return;
     }
 
@@ -284,6 +285,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
                 VLOG_DBG("function for %s protocol did not "
                          "decode this frame",
                          cfg->g_protocols[i].name);
+                hw->h_rx_discarded_cnt++;
                 return;
             }
             chassis->c_protocol = port->p_protocol = cfg->g_protocols[i].mode;
