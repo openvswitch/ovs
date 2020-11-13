@@ -145,6 +145,7 @@ Eric Sesterhenn                    eric.sesterhenn@lsexperts.de
 Ethan J. Jackson                   ejj@eecs.berkeley.edu
 Ethan Rahn                         erahn@arista.com
 Eziz Durdyyev                      ezizdurdy@gmail.com
+Fabrizio D'Angelo                  fdangelo@redhat.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
 Francesco Fusco                    ffusco@redhat.com
