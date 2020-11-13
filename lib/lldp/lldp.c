@@ -341,6 +341,12 @@ lldp_send(struct lldpd *global OVS_UNUSED,
 
     return dp_packet_size(p);
 }
+#define CHECK_TLV_MAX_SIZE(x, name)                                 \
+    do { if (tlv_size > (x)) {                                      \
+            VLOG_WARN(name " TLV too large received on %s",         \
+                      hardware->h_ifname);                          \
+            goto malformed;                                         \
+        } } while (0)
 
 int
 lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
@@ -359,7 +365,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     int length, af;
     bool gotend = false;
     bool ttl_received = false;
-    int tlv_size, tlv_type, tlv_subtype;
+    int tlv_size, tlv_type, tlv_subtype, tlv_count = 0;
     u_int8_t *pos, *tlv;
     void *b;
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
@@ -411,6 +417,31 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                       hardware->h_ifname);
             goto malformed;
         }
+        /* Check order for mandatory TLVs */
+        tlv_count++;
+        switch (tlv_type) {
+        case LLDP_TLV_CHASSIS_ID:
+            if (tlv_count != 1) {
+                VLOG_WARN("first TLV should be a chassis ID on %s, not %d",
+                          hardware->h_ifname, tlv_type);
+                goto malformed;
+            }
+            break;
+        case LLDP_TLV_PORT_ID:
+            if (tlv_count != 2) {
+                VLOG_WARN("second TLV should be a port ID on %s, not %d",
+                          hardware->h_ifname, tlv_type);
+                goto malformed;
+            }
+            break;
+        case LLDP_TLV_TTL:
+            if (tlv_count != 3) {
+                VLOG_WARN("third TLV should be a TTL on %s, not %d",
+                          hardware->h_ifname, tlv_type);
+                goto malformed;
+            }
+            break;
+        }
 
         switch (tlv_type) {
         case LLDP_TLV_END:
@@ -428,7 +459,8 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 
         case LLDP_TLV_CHASSIS_ID:
         case LLDP_TLV_PORT_ID:
-            CHECK_TLV_SIZE(2, "Port Id");
+            CHECK_TLV_SIZE(2, "Port/Chassis Id");
+            CHECK_TLV_MAX_SIZE(256, "Port/Chassis Id");
             tlv_subtype = PEEK_UINT8;
             if (tlv_subtype == 0 || tlv_subtype > 7) {
                 VLOG_WARN("unknown subtype for tlv id received on %s",
@@ -438,10 +470,22 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             b = xzalloc(tlv_size - 1);
             PEEK_BYTES(b, tlv_size - 1);
             if (tlv_type == LLDP_TLV_PORT_ID) {
+                if (port->p_id != NULL) {
+                    VLOG_WARN("Port ID TLV received twice on %s",
+                              hardware->h_ifname);
+                    free(b);
+                    goto malformed;
+                }
                 port->p_id_subtype = tlv_subtype;
                 port->p_id = b;
                 port->p_id_len = tlv_size - 1;
             } else {
+                if (chassis->c_id != NULL) {
+                    VLOG_WARN("Chassis ID TLV received twice on %s",
+                              hardware->h_ifname);
+                    free(b);
+                    goto malformed;
+                }
                 chassis->c_id_subtype = tlv_subtype;
                 chassis->c_id = b;
                 chassis->c_id_len = tlv_size - 1;
@@ -449,6 +493,11 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             break;
 
         case LLDP_TLV_TTL:
+            if (ttl_received) {
+                VLOG_WARN("TTL TLV received twice on %s",
+                          hardware->h_ifname);
+                goto malformed;
+            }
             CHECK_TLV_SIZE(2, "TTL");
             chassis->c_ttl = PEEK_UINT16;
             ttl_received = true;
