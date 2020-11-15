@@ -1,5 +1,7 @@
 v2.5.11 - xx xxx xxxx
 ---------------------
+   - OVSDB:
+     * Fixed SHA-1 hash computation for databases larger than 512 MB.
 
 v2.5.10 - 30 Jul 2020
 ---------------------
