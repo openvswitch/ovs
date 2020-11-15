@@ -1,5 +1,7 @@
 v2.12.2 - xx xxx xxxx
 ---------------------
+   - OVSDB:
+     * Fixed SHA-1 hash computation for databases larger than 512 MB.
    - DPDK:
      * Fixed support of 'net_virtio' devices.
 
