@@ -45,9 +45,9 @@ struct sha1_ctx {
 };
 
 void sha1_init(struct sha1_ctx *);
-void sha1_update(struct sha1_ctx *, const void *, size_t);
+void sha1_update(struct sha1_ctx *, const void *, uint32_t size);
 void sha1_final(struct sha1_ctx *, uint8_t digest[SHA1_DIGEST_SIZE]);
-void sha1_bytes(const void *, size_t, uint8_t digest[SHA1_DIGEST_SIZE]);
+void sha1_bytes(const void *, uint32_t size, uint8_t digest[SHA1_DIGEST_SIZE]);
 
 #define SHA1_FMT \
         "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x" \
