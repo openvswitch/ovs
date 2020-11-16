@@ -138,6 +138,42 @@ test_big_vector(void)
 }
 
 static void
+test_huge_vector(void)
+{
+    enum { SIZE = 1000000000 };
+    struct test_vector vec = {
+        NULL, SIZE,
+        /* Computed by the sha1sum utility for a file with 10^9 symbols 'a'. */
+        { 0xD0, 0xF3, 0xE4, 0xF2, 0xF3, 0x1C, 0x66, 0x5A, 0xBB, 0xD8,
+          0xF5, 0x18, 0xE8, 0x48, 0xD5, 0xCB, 0x80, 0xCA, 0x78, 0xF7 }
+    };
+    int chunk = random_range(SIZE / 10000);
+    uint8_t md[SHA1_DIGEST_SIZE];
+    struct sha1_ctx sha1;
+    size_t i, sz;
+
+    /* It's not user-friendly to allocate 1GB of memory for a unit test,
+     * so we're allocating only a small chunk and re-using it. */
+    vec.data = xmalloc(chunk);
+    for (i = 0; i < chunk; i++) {
+        vec.data[i] = 'a';
+    }
+
+    sha1_init(&sha1);
+    for (sz = 0; sz < SIZE; sz += chunk) {
+        int n = sz + chunk < SIZE ? chunk : SIZE - sz;
+
+        sha1_update(&sha1, vec.data, n);
+    }
+    sha1_final(&sha1, md);
+    ovs_assert(!memcmp(md, vec.output, SHA1_DIGEST_SIZE));
+
+    free(vec.data);
+    putchar('.');
+    fflush(stdout);
+}
+
+static void
 test_shar1_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int i;
@@ -147,6 +183,7 @@ test_shar1_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     }
 
     test_big_vector();
+    test_huge_vector();
 
     putchar('\n');
 }
