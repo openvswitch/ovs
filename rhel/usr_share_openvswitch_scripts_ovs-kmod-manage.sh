@@ -21,6 +21,7 @@
 #   - 3.10.0 major revision 1062 (RHEL 7.7)
 #   - 3.10.0 major revision 1101 (RHEL 7.8 Beta)
 #   - 3.10.0 major revision 1127 (RHEL 7.8 GA)
+#   - 3.10.0 major revision 1160 (RHEL 7.9)
 #   - 4.4.x,  x >= 73           (SLES 12 SP3)
 #   - 4.12.x, x >= 14           (SLES 12 SP4).
 # It is packaged in the openvswitch kmod RPM and run in the post-install
@@ -115,6 +116,11 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
         installed_ver="$minor_rev"
     elif [ "$major_rev" = "1127" ]; then
 #        echo "rhel78"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1160" ]; then
+#        echo "rhel79"
         comp_ver=10
         ver_offset=4
         installed_ver="$minor_rev"
