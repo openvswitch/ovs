@@ -326,3 +326,20 @@ try_checkpatch \
 "
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - whitespace around cast])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     (int) a;
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     (int)a;
+    " \
+    "ERROR: Inappropriate spacing around cast
+    #8 FILE: A.c:1:
+         (int)a;
+"
+
+AT_CLEANUP
