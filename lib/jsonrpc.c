@@ -1153,13 +1153,16 @@ jsonrpc_session_recv(struct jsonrpc_session *s)
 
         received_bytes = jsonrpc_get_received_bytes(s->rpc);
         jsonrpc_recv(s->rpc, &msg);
+
+        long long int now = time_msec();
+        reconnect_receive_attempted(s->reconnect, now);
         if (received_bytes != jsonrpc_get_received_bytes(s->rpc)) {
             /* Data was successfully received.
              *
              * Previously we only counted receiving a full message as activity,
              * but with large messages or a slow connection that policy could
              * time out the session mid-message. */
-            reconnect_activity(s->reconnect, time_msec());
+            reconnect_activity(s->reconnect, now);
         }
 
         if (msg) {
