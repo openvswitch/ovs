@@ -61,6 +61,7 @@ struct reconnect {
     long long int last_activity;
     long long int last_connected;
     long long int last_disconnected;
+    long long int last_receive_attempt;
     unsigned int max_tries;
     unsigned int backoff_free_tries;
 
@@ -109,6 +110,7 @@ reconnect_create(long long int now)
     fsm->last_activity = now;
     fsm->last_connected = LLONG_MAX;
     fsm->last_disconnected = LLONG_MAX;
+    fsm->last_receive_attempt = now;
     fsm->max_tries = UINT_MAX;
     fsm->creation_time = now;
 
@@ -501,6 +503,19 @@ reconnect_activity(struct reconnect *fsm, long long int now)
     fsm->last_activity = now;
 }
 
+/* Tell 'fsm' that some attempt to receive data on the connection was made at
+ * 'now'.  The FSM only allows probe interval timer to expire when some attempt
+ * to receive data on the connection was received after the time when it should
+ * have expired.  This helps in the case where there's a long delay in the poll
+ * loop and then reconnect_run() executes before the code to try to receive
+ * anything from the remote runs.  (To disable this feature, just call
+ * reconnect_receive_attempted(fsm, LLONG_MAX).) */
+void
+reconnect_receive_attempted(struct reconnect *fsm, long long int now)
+{
+    fsm->last_receive_attempt = now;
+}
+
 static void
 reconnect_transition__(struct reconnect *fsm, long long int now,
                        enum state state)
@@ -541,13 +556,19 @@ reconnect_deadline__(const struct reconnect *fsm)
     case S_ACTIVE:
         if (fsm->probe_interval) {
             long long int base = MAX(fsm->last_activity, fsm->state_entered);
-            return base + fsm->probe_interval;
+            long long int expiration = base + fsm->probe_interval;
+            if (fsm->last_receive_attempt >= expiration) {
+                return expiration;
+            }
         }
         return LLONG_MAX;
 
     case S_IDLE:
         if (fsm->probe_interval) {
-            return fsm->state_entered + fsm->probe_interval;
+            long long int expiration = fsm->state_entered + fsm->probe_interval;
+            if (fsm->last_receive_attempt >= expiration) {
+                return expiration;
+            }
         }
         return LLONG_MAX;
 
