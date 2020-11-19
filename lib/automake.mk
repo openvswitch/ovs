@@ -575,7 +575,7 @@ MAN_FRAGMENTS += \
 OVSIDL_BUILT += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
 EXTRA_DIST += lib/vswitch-idl.ann
-lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann python/ovs/dirs.py
+lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann > $@.tmp && mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
