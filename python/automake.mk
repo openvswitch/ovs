@@ -74,12 +74,12 @@ ovs-install-data-local:
 	$(MKDIR_P) python/ovs
 	sed \
 		-e '/^##/d' \
-                -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
-                -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
-                -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
-                -e 's,[@]bindir[@],$(bindir),g' \
-                -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
-                -e 's,[@]DBDIR[@],$(DBDIR),g' \
+		-e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
+		-e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+		-e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+		-e 's,[@]bindir[@],$(bindir),g' \
+		-e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+		-e 's,[@]DBDIR[@],$(DBDIR),g' \
 		< $(srcdir)/python/ovs/dirs.py.template \
 		> python/ovs/dirs.py.tmp
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs
@@ -107,12 +107,12 @@ ALL_LOCAL += $(srcdir)/python/ovs/dirs.py
 $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
 	$(AM_V_GEN)sed \
 		-e '/^##/d' \
-                -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
-                -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
-                -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
-                -e 's,[@]bindir[@],$(bindir),g' \
-                -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
-                -e 's,[@]DBDIR[@],$(sysconfdir)/openvswitch,g' \
+		-e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
+		-e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+		-e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+		-e 's,[@]bindir[@],$(bindir),g' \
+		-e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+		-e 's,[@]DBDIR[@],$(sysconfdir)/openvswitch,g' \
 		< $? > $@.tmp && \
 	mv $@.tmp $@
 EXTRA_DIST += python/ovs/dirs.py.template
