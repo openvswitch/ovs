@@ -819,9 +819,6 @@ ovsdb_idl_process_response(struct ovsdb_idl *idl, struct jsonrpc_msg *msg)
         ovsdb_idl_db_parse_monitor_reply(&idl->data, msg->result,
                                          OVSDB_IDL_MM_MONITOR);
         idl->data.change_seqno++;
-        ovsdb_idl_clear(idl);
-        ovsdb_idl_db_parse_update(&idl->data, msg->result,
-                                  OVSDB_IDL_MM_MONITOR);
         break;
 
     case IDL_S_MONITORING:
