@@ -118,16 +118,10 @@ struct ovsdb_idl_table {
                               * for replication. */
     struct shash columns;    /* Contains "const struct ovsdb_idl_column *"s. */
     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
-    struct ovsdb_idl_db *db; /* Containing db. */
+    struct ovsdb_idl *idl;   /* Containing IDL instance. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list indexes;    /* Contains "struct ovsdb_idl_index"s */
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
-    struct ovsdb_idl_condition *ack_cond; /* Last condition acked by the
-                                           * server. */
-    struct ovsdb_idl_condition *req_cond; /* Last condition requested to the
-                                           * server. */
-    struct ovsdb_idl_condition *new_cond; /* Latest condition set by the IDL
-                                           * client. */
 };
 
 struct ovsdb_idl_class {
