@@ -710,6 +710,8 @@ ovsdb_idl_send_request(struct ovsdb_idl *idl, struct jsonrpc_msg *request)
     idl->request_id = json_clone(request->id);
     if (idl->session) {
         jsonrpc_session_send(idl->session, request);
+    } else {
+        jsonrpc_msg_destroy(request);
     }
 }
 
@@ -4489,8 +4491,10 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     if (!any_updates) {
         txn->status = TXN_UNCHANGED;
         json_destroy(operations);
-    } else if (txn->db->idl->session
-               && !jsonrpc_session_send(
+    } else if (!txn->db->idl->session) {
+        txn->status = TXN_TRY_AGAIN;
+        json_destroy(operations);
+    } else if (!jsonrpc_session_send(
                    txn->db->idl->session,
                    jsonrpc_create_request(
                        "transact", operations, &txn->request_id))) {
@@ -5198,6 +5202,8 @@ ovsdb_idl_set_lock(struct ovsdb_idl *idl, const char *lock_name)
         }
         if (idl->session) {
             jsonrpc_session_send(idl->session, msg);
+        } else {
+            jsonrpc_msg_destroy(msg);
         }
     }
 }
