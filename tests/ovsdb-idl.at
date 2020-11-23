@@ -1030,6 +1030,7 @@ AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
 test-ovsdb|ovsdb_idl|idltest database lacks indexed table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks link2 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks simple5 table (database needs upgrade?)
+test-ovsdb|ovsdb_idl|idltest database lacks simple6 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks singleton table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
 ])
@@ -1249,6 +1250,59 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
 003: done
 ]])
 
+dnl This test creates database with weak references and checks that orphan
+dnl rows created for weak references are not available for iteration via
+dnl list of tracked changes.
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan weak references],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row0_s"},
+       "uuid-name": "weak_row0"},
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row1_s"},
+       "uuid-name": "weak_row1"},
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row2_s"},
+       "uuid-name": "weak_row2"},
+      {"op": "insert",
+       "table": "simple6",
+       "row": {"name": "first_row",
+               "weak_ref": ["set",
+                             [["named-uuid", "weak_row0"],
+                              ["named-uuid", "weak_row1"],
+                              ["named-uuid", "weak_row2"]]
+                           ]}}]']],
+  [['condition simple []' \
+    'condition simple [["s","==","row1_s"]]' \
+    '["idltest",
+      {"op": "update",
+      "table": "simple6",
+      "where": [],
+      "row": {"name": "new_name"}}]' \
+    '["idltest",
+      {"op": "delete",
+      "table": "simple6",
+      "where": []}]']],
+  [[000: change conditions
+001: inserted row: uuid=<0>
+001: name=first_row weak_ref=[] uuid=<0>
+001: updated columns: name weak_ref
+002: change conditions
+003: i=0 r=0 b=false s=row1_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+003: inserted row: uuid=<2>
+003: name=first_row weak_ref=[<2>] uuid=<0>
+003: updated columns: s
+004: {"error":null,"result":[{"count":1}]}
+005: name=new_name weak_ref=[<2>] uuid=<0>
+005: updated columns: name
+006: {"error":null,"result":[{"count":1}]}
+007: i=0 r=0 b=false s=row1_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+008: done
+]])
+
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
   [],
   [['["idltest",
@@ -1324,6 +1378,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 010: updated columns: s
 011: {"error":null,"result":[{"count":1}]}
 012: deleted row: uuid=<1>
+012: i=0 r=123.5 b=true s=newstring u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 013: reconnect
 014: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
 014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
