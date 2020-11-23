@@ -68,11 +68,10 @@ Testing is also important:
   feature.  A bug fix patch should preferably add a test that would
   fail if the bug recurs.
 
-If you are using GitHub, then you may utilize the travis-ci.org CI build system
-by linking your GitHub repository to it. This will run some of the above tests
-automatically when you push changes to your repository.  See the "Continuous
-Integration with Travis-CI" in :doc:`/topics/testing` for details on how to set
-it up.
+If you are using GitHub, then you may utilize the travis-ci.org and the GitHub
+Actions CI build systems.  They will run some of the above tests automatically
+when you push changes to your repository.  See the "Continuous Integration with
+Travis-CI" in :doc:`/topics/testing` for details on how to set it up.
 
 Email Subject
 -------------
