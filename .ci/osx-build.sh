@@ -2,7 +2,7 @@
 
 set -o errexit
 
-CFLAGS="-Werror -Wno-error=format $CFLAGS"
+CFLAGS="-Werror -Wno-error=format -Wno-cast-align $CFLAGS"
 EXTRA_OPTS=""
 
 function configure_ovs()
