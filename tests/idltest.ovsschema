@@ -195,6 +195,21 @@
       },
       "isRoot": true
     },
+    "simple6": {
+      "columns" : {
+        "name": {"type": "string"},
+        "weak_ref": {
+          "type": {
+            "key": {"type": "uuid",
+                    "refTable": "simple",
+                    "refType": "weak"},
+            "min": 0,
+            "max": "unlimited"
+          }
+        }
+      },
+      "isRoot": true
+    },
     "singleton" : {
       "columns" : {
         "name" : {

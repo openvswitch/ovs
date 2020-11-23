@@ -1875,29 +1875,37 @@ ovsdb_idl_track_is_set(struct ovsdb_idl_table *table)
 }
 
 /* Returns the first tracked row in table with class 'table_class'
- * for the specified 'idl'. Returns NULL if there are no tracked rows */
+ * for the specified 'idl'. Returns NULL if there are no tracked rows.
+ * Pure orphan rows, i.e. rows that never had any datum, are skipped. */
 const struct ovsdb_idl_row *
 ovsdb_idl_track_get_first(const struct ovsdb_idl *idl,
                           const struct ovsdb_idl_table_class *table_class)
 {
     struct ovsdb_idl_table *table
         = ovsdb_idl_db_table_from_class(&idl->data, table_class);
+    struct ovsdb_idl_row *row;
 
-    if (!ovs_list_is_empty(&table->track_list)) {
-        return CONTAINER_OF(ovs_list_front(&table->track_list), struct ovsdb_idl_row, track_node);
+    LIST_FOR_EACH (row, track_node, &table->track_list) {
+        if (!ovsdb_idl_row_is_orphan(row) || row->tracked_old_datum) {
+            return row;
+        }
     }
     return NULL;
 }
 
 /* Returns the next tracked row in table after the specified 'row'
- * (in no particular order). Returns NULL if there are no tracked rows */
+ * (in no particular order). Returns NULL if there are no tracked rows.
+ * Pure orphan rows, i.e. rows that never had any datum, are skipped.*/
 const struct ovsdb_idl_row *
 ovsdb_idl_track_get_next(const struct ovsdb_idl_row *row)
 {
-    if (row->track_node.next != &row->table->track_list) {
-        return CONTAINER_OF(row->track_node.next, struct ovsdb_idl_row, track_node);
-    }
+    struct ovsdb_idl_table *table = row->table;
 
+    LIST_FOR_EACH_CONTINUE (row, track_node, &table->track_list) {
+        if (!ovsdb_idl_row_is_orphan(row) || row->tracked_old_datum) {
+            return row;
+        }
+    }
     return NULL;
 }
 
