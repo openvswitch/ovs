@@ -11,7 +11,7 @@ addons:
       - libssl-dev
       - llvm-dev
 
-before_install: ./.travis/prepare.sh
+before_install: ./.ci/prepare.sh
 
 before_script: export PATH=$PATH:$HOME/bin
 
@@ -31,7 +31,7 @@ env:
   - KERNEL=3.4.110
   - KERNEL=3.2.76
 
-script: ./.travis/build.sh $OPTS
+script: ./.ci/build.sh $OPTS
 
 notifications:
   email:

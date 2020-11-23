@@ -97,9 +97,10 @@ docs = \
 EXTRA_DIST = \
 	$(docs) \
 	NOTICE \
+	.ci/build.sh \
+	.ci/prepare.sh \
+	.github/workflows/build-and-test.yml \
 	.travis.yml \
-	.travis/build.sh \
-	.travis/prepare.sh \
 	appveyor.yml \
 	boot.sh \
 	build-aux/cccl \

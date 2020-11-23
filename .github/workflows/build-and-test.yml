@@ -1,0 +1,103 @@
+name: Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    env:
+      dependencies: |
+        automake libtool gcc bc           \
+        libssl-dev llvm-dev  gcc-multilib
+      CC:          ${{ matrix.compiler }}
+      DPDK:        ${{ matrix.dpdk }}
+      KERNEL:      ${{ matrix.kernel }}
+      LIBS:        ${{ matrix.libs }}
+      BUILD_ENV:   ${{ matrix.build_env }}
+      OPTS:        ${{ matrix.opts }}
+      TESTSUITE:   ${{ matrix.testsuite }}
+
+    name: linux ${{ join(matrix.*, ' ') }}
+    runs-on: ubuntu-16.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:    [gcc, clang]
+        kernel:      ['4.3.5', '4.1.17', '3.18.26', '3.14.60',
+                      '3.12.53', '3.10.96', '3.4.110', '3.2.76']
+        opts:        ['']
+        testsuite:   ['']
+        dpdk:        ['']
+        build_env:   ['']
+        include:
+          - compiler:     gcc
+            opts:         --disable-ssl
+          - compiler:     clang
+            opts:         --disable-ssl
+
+          - compiler:     gcc
+            testsuite:    test
+            kernel:       3.18.1
+          - compiler:     clang
+            testsuite:    test
+            kernel:       3.18.1
+
+          - compiler:     gcc
+            testsuite:    test
+            opts:         --enable-shared
+          - compiler:     clang
+            testsuite:    test
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            dpdk:         dpdk
+            kernel:       3.17.7
+          - compiler:     clang
+            dpdk:         dpdk
+            kernel:       3.17.7
+
+          - compiler:     gcc
+            dpdk:         dpdk
+            kernel:       3.17.7
+            opts:         --enable-shared
+          - compiler:     clang
+            dpdk:         dpdk
+            kernel:       3.17.7
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            build_env:    -m32
+            opts:         --disable-ssl
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: install common dependencies
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: prepare
+      run:  ./.ci/prepare.sh
+
+    - name: build
+      run:  PATH="$PATH:$HOME/bin" ./.ci/build.sh ${{ env.OPTS }}
+
+    - name: copy logs on failure
+      if: failure() || cancelled()
+      run: |
+        # upload-artifact@v2 throws exceptions if it tries to upload socket
+        # files and we could have some socket files in testsuite.dir.
+        # Also, upload-artifact@v2 doesn't work well enough with wildcards.
+        # So, we're just archiving everything here to avoid any issues.
+        mkdir logs
+        cp config.log ./logs/
+        cp -r ./*/_build/sub/tests/testsuite.* ./logs/ || true
+        tar -czvf logs.tgz logs/
+
+    - name: upload logs on failure
+      if: failure() || cancelled()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-linux-${{ join(matrix.*, '-') }}
+        path: logs.tgz
