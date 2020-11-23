@@ -1,0 +1,203 @@
+name: Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    env:
+      dependencies: |
+        automake libtool gcc bc libjemalloc1 libjemalloc-dev    \
+        libssl-dev llvm-dev libelf-dev libnuma-dev libpcap-dev  \
+        python3-openssl python3-pip python3-sphinx              \
+        selinux-policy-dev
+      deb_dependencies: |
+        linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
+      AFXDP:       ${{ matrix.afxdp }}
+      CC:          ${{ matrix.compiler }}
+      DEB_PACKAGE: ${{ matrix.deb_package }}
+      DPDK:        ${{ matrix.dpdk }}
+      DPDK_SHARED: ${{ matrix.dpdk_shared }}
+      KERNEL:      ${{ matrix.kernel }}
+      KERNEL_LIST: ${{ matrix.kernel_list }}
+      LIBS:        ${{ matrix.libs }}
+      M32:         ${{ matrix.m32 }}
+      OPTS:        ${{ matrix.opts }}
+      TESTSUITE:   ${{ matrix.testsuite }}
+
+    name: linux ${{ join(matrix.*, ' ') }}
+    runs-on: ubuntu-18.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler:     gcc
+            opts:         --disable-ssl
+          - compiler:     clang
+            opts:         --disable-ssl
+
+          - compiler:     gcc
+            testsuite:    test
+            kernel:       3.16
+          - compiler:     clang
+            testsuite:    test
+            kernel:       3.16
+
+          - compiler:     gcc
+            testsuite:    test
+            opts:         --enable-shared
+          - compiler:     clang
+            testsuite:    test
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            testsuite:    test
+            dpdk:         dpdk
+          - compiler:     clang
+            testsuite:    test
+            dpdk:         dpdk
+
+          - compiler:     gcc
+            testsuite:    test
+            libs:         -ljemalloc
+          - compiler:     clang
+            testsuite:    test
+            libs:         -ljemalloc
+
+          - compiler:     gcc
+            kernel_list:  5.0 4.20 4.19 4.18 4.17 4.16
+          - compiler:     clang
+            kernel_list:  5.0 4.20 4.19 4.18 4.17 4.16
+
+          - compiler:     gcc
+            kernel_list:  4.15 4.14 4.9 4.4 3.16
+          - compiler:     clang
+            kernel_list:  4.15 4.14 4.9 4.4 3.16
+
+          - compiler:     gcc
+            afxdp:        afxdp
+            kernel:       5.3
+          - compiler:     clang
+            afxdp:        afxdp
+            kernel:       5.3
+
+          - compiler:     gcc
+            dpdk:         dpdk
+            opts:         --enable-shared
+          - compiler:     clang
+            dpdk:         dpdk
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            dpdk_shared:  dpdk-shared
+          - compiler:     clang
+            dpdk_shared:  dpdk-shared
+
+          - compiler:     gcc
+            dpdk_shared:  dpdk-shared
+            opts:         --enable-shared
+          - compiler:     clang
+            dpdk_shared:  dpdk-shared
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            m32:          m32
+            opts:         --disable-ssl
+
+          - compiler:     gcc
+            deb_package:  deb
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: create ci signature file for the dpdk cache key
+      if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
+      # This will collect most of DPDK related lines, so hash will be different
+      # if something changed in a way we're building DPDK including DPDK_VER.
+      # This also allows us to use cache from any branch as long as version
+      # and a way we're building DPDK stays the same.
+      run:  |
+        grep -irE 'RTE_|DPDK|meson|ninja' -r .ci/ > dpdk-ci-signature
+        cat dpdk-ci-signature
+
+    - name: cache
+      if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
+      uses: actions/cache@v2
+      env:
+        matrix_key: ${{ matrix.dpdk }}${{ matrix.dpdk_shared }}
+        ci_key:     ${{ hashFiles('dpdk-ci-signature') }}
+      with:
+        path: dpdk-dir
+        key:  ${{ env.matrix_key }}-${{ env.ci_key }}
+
+    - name: install common dependencies
+      if:   matrix.deb_package == ''
+      run:  sudo apt install -y ${{ env.dependencies }}
+    - name: install dependencies for debian packages
+      if:   matrix.deb_package != ''
+      run:  sudo apt install -y ${{ env.deb_dependencies }}
+    - name: install libunbound libunwind
+      if:   matrix.m32 == ''
+      run:  sudo apt install -y libunbound-dev libunwind-dev
+
+    - name: prepare
+      run:  ./.ci/linux-prepare.sh
+
+    - name: build
+      run:  PATH="$PATH:$HOME/bin" ./.ci/linux-build.sh
+
+    - name: upload deb packages
+      if:   matrix.deb_package != ''
+      uses: actions/upload-artifact@v2
+      with:
+        name: deb-packages
+        path: '/home/runner/work/ovs/*.deb'
+
+    - name: copy logs on failure
+      if: failure() || cancelled()
+      run: |
+        # upload-artifact@v2 throws exceptions if it tries to upload socket
+        # files and we could have some socket files in testsuite.dir.
+        # Also, upload-artifact@v2 doesn't work well enough with wildcards.
+        # So, we're just archiving everything here to avoid any issues.
+        mkdir logs
+        cp config.log ./logs/
+        cp -r ./*/_build/sub/tests/testsuite.* ./logs/ || true
+        tar -czvf logs.tgz logs/
+
+    - name: upload logs on failure
+      if: failure() || cancelled()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-linux-${{ join(matrix.*, '-') }}
+        path: logs.tgz
+
+  build-osx:
+    env:
+      CC:    clang
+      OPTS:  --disable-ssl
+
+    name:    osx clang --disable-ssl
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: install dependencies
+      run:  brew install automake libtool
+    - name: prepare
+      run:  ./.ci/osx-prepare.sh
+    - name: build
+      run:  PATH="$PATH:$HOME/bin" ./.ci/osx-build.sh
+    - name: upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-osx-clang---disable-ssl
+        path: config.log
