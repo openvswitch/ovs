@@ -1905,6 +1905,26 @@ print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
+print_idl_row_updated_simple6(const struct idltest_simple6 *s6, int step)
+{
+    size_t i;
+    bool updated = false;
+
+    for (i = 0; i < IDLTEST_SIMPLE6_N_COLUMNS; i++) {
+        if (idltest_simple6_is_updated(s6, i)) {
+            if (!updated) {
+                printf("%03d: updated columns:", step);
+                updated = true;
+            }
+            printf(" %s", idltest_simple6_columns[i].name);
+        }
+    }
+    if (updated) {
+        printf("\n");
+    }
+}
+
+static void
 print_idl_row_updated_singleton(const struct idltest_singleton *sng, int step)
 {
     size_t i;
@@ -1992,6 +2012,22 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
+print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
+{
+    int i;
+
+    printf("%03d: name=%s ", step, s6->name);
+    printf("weak_ref=[");
+    for (i = 0; i < s6->n_weak_ref; i++) {
+        printf("%s"UUID_FMT, i ? " " : "",
+               UUID_ARGS(&s6->weak_ref[i]->header_.uuid));
+    }
+
+    printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s6->header_.uuid));
+    print_idl_row_updated_simple6(s6, step);
+}
+
+static void
 print_idl_row_singleton(const struct idltest_singleton *sng, int step)
 {
     printf("%03d: name=%s", step, sng->name);
@@ -2032,21 +2068,20 @@ print_idl(struct ovsdb_idl *idl, int step)
 static void
 print_idl_track(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple6 *s6;
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
     const struct idltest_link2 *l2;
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
+        print_idl_row_simple(s, step);
         if (idltest_simple_is_deleted(s)) {
             printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
                    UUID_ARGS(&s->header_.uuid));
-        } else {
-            print_idl_row_simple(s, step);
-            if (idltest_simple_is_new(s)) {
-                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
-                       UUID_ARGS(&s->header_.uuid));
-            }
+        } else if (idltest_simple_is_new(s)) {
+            printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&s->header_.uuid));
         }
         n++;
     }
@@ -2077,6 +2112,18 @@ print_idl_track(struct ovsdb_idl *idl, int step)
         }
         n++;
     }
+    IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
+        print_idl_row_simple6(s6, step);
+        if (idltest_simple6_is_deleted(s6)) {
+            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&s6->header_.uuid));
+        } else if (idltest_simple6_is_new(s6)) {
+            printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
+                   UUID_ARGS(&s6->header_.uuid));
+        }
+        n++;
+    }
+
     if (!n) {
         printf("%03d: empty\n", step);
     }
@@ -2298,6 +2345,8 @@ find_table_class(const char *name)
         return &idltest_table_link1;
     } else if (!strcmp(name, "link2")) {
         return &idltest_table_link2;
+    } else if (!strcmp(name, "simple6")) {
+        return &idltest_table_simple6;
     }
     return NULL;
 }
