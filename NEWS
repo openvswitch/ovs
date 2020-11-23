@@ -25,6 +25,8 @@ Post-v2.14.0
        "secondary", respectively, for OpenFlow connection roles.
      * The term "slave" has been replaced by "member", for bonds, LACP, and
        OpenFlow bundle actions.
+   - Support for GitHub Actions based continuous integration builds has been
+     added.
 
 
 v2.14.0 - 17 Aug 2020
