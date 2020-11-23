@@ -6,6 +6,8 @@
 Open vSwitch
 ============
 
+.. image:: https://github.com/openvswitch/ovs/workflows/Build%20and%20Test/badge.svg
+    :target: https://github.com/openvswitch/ovs/actions
 .. image:: https://travis-ci.org/openvswitch/ovs.png
     :target: https://travis-ci.org/openvswitch/ovs
 

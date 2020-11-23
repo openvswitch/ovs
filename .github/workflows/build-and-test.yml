@@ -1,0 +1,138 @@
+name: Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    env:
+      dependencies: |
+        automake libtool gcc bc libjemalloc1 libjemalloc-dev    \
+        libssl-dev llvm-dev python-sphinx gcc-multilib
+      CC:          ${{ matrix.compiler }}
+      DPDK:        ${{ matrix.dpdk }}
+      KERNEL:      ${{ matrix.kernel }}
+      LIBS:        ${{ matrix.libs }}
+      BUILD_ENV:   ${{ matrix.build_env }}
+      OPTS:        ${{ matrix.opts }}
+      TESTSUITE:   ${{ matrix.testsuite }}
+
+    name: linux ${{ join(matrix.*, ' ') }}
+    runs-on: ubuntu-16.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:    [gcc, clang]
+        kernel:      ['4.9.149', '4.8.14', '4.4.38', '4.1.36',
+                      '3.18.45', '3.12.68', '3.10.104']
+        opts:        ['']
+        testsuite:   ['']
+        dpdk:        ['']
+        build_env:   ['']
+        include:
+          - compiler:     gcc
+            opts:         --disable-ssl
+          - compiler:     clang
+            opts:         --disable-ssl
+
+          - compiler:     gcc
+            testsuite:    test
+            kernel:       3.16.46
+          - compiler:     clang
+            testsuite:    test
+            kernel:       3.16.46
+
+          - compiler:     gcc
+            testsuite:    test
+            opts:         --enable-shared
+          - compiler:     clang
+            testsuite:    test
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            testsuite:    test
+            libs:         -ljemalloc
+          - compiler:     clang
+            testsuite:    test
+            libs:         -ljemalloc
+
+          - compiler:     gcc
+            dpdk:         dpdk
+            kernel:       3.16.54
+          - compiler:     clang
+            dpdk:         dpdk
+            kernel:       3.16.54
+
+          - compiler:     gcc
+            dpdk:         dpdk
+            kernel:       3.16.54
+            opts:         --enable-shared
+          - compiler:     clang
+            dpdk:         dpdk
+            kernel:       3.16.54
+            opts:         --enable-shared
+
+          - compiler:     gcc
+            build_env:    -m32
+            opts:         --disable-ssl
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: install common dependencies
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: prepare
+      run:  ./.ci/linux-prepare.sh
+
+    - name: build
+      run:  PATH="$PATH:$HOME/bin" ./.ci/linux-build.sh ${{ env.OPTS }}
+
+    - name: copy logs on failure
+      if: failure() || cancelled()
+      run: |
+        # upload-artifact@v2 throws exceptions if it tries to upload socket
+        # files and we could have some socket files in testsuite.dir.
+        # Also, upload-artifact@v2 doesn't work well enough with wildcards.
+        # So, we're just archiving everything here to avoid any issues.
+        mkdir logs
+        cp config.log ./logs/
+        cp -r ./*/_build/sub/tests/testsuite.* ./logs/ || true
+        tar -czvf logs.tgz logs/
+
+    - name: upload logs on failure
+      if: failure() || cancelled()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-linux-${{ join(matrix.*, '-') }}
+        path: logs.tgz
+
+  build-osx:
+    env:
+      CC:    clang
+      OPTS:  --disable-ssl
+
+    name:    osx clang --disable-ssl
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: install dependencies
+      run:  brew install automake libtool
+    - name: prepare
+      run:  ./.ci/osx-prepare.sh
+    - name: build
+      run:  PATH="$PATH:$HOME/bin" ./.ci/osx-build.sh
+    - name: upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-osx-clang---disable-ssl
+        path: config.log

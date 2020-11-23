@@ -68,11 +68,10 @@ Testing is also important:
 - A patch that modifies xenserver code should be tested on XenServer before
   submission.
 
-If you are using GitHub, then you may utilize the travis-ci.org CI build system
-by linking your GitHub repository to it. This will run some of the above tests
-automatically when you push changes to your repository.  See the "Continuous
-Integration with Travis-CI" in the `install guide` for details on how to set it
-up.
+If you are using GitHub, then you may utilize the travis-ci.org and the GitHub
+Actions CI build systems. They will run some of the above tests automatically
+when you push changes to your repository.  See the "Continuous Integration with
+Travis-CI" in the `install guide` for details on how to set it up.
 
 Email Subject
 -------------
