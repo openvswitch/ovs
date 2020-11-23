@@ -22,7 +22,7 @@ addons:
       - libunbound-dev
       - libunbound-dev:i386
 
-before_install: ./.travis/${TRAVIS_OS_NAME}-prepare.sh
+before_install: ./.ci/${TRAVIS_OS_NAME}-prepare.sh
 
 before_script: export PATH=$PATH:$HOME/bin
 
@@ -46,7 +46,7 @@ matrix:
       compiler: clang
       env: OPTS="--disable-ssl"
 
-script: ./.travis/${TRAVIS_OS_NAME}-build.sh $OPTS
+script: ./.ci/${TRAVIS_OS_NAME}-build.sh $OPTS
 
 notifications:
   email:
