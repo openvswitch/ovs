@@ -1009,6 +1009,7 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
             int flower_off = m->flower_offset;
             int sz = m->size;
             int mf = m->offset;
+            int ef = ROUND_UP(mf, 4);
 
             if (m->htype != type) {
                continue;
@@ -1016,9 +1017,10 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
 
             /* check overlap between current pedit key, which is always
              * 4 bytes (range [off, off + 3]), and a map entry in
-             * flower_pedit_map (range [mf, mf + sz - 1]) */
+             * flower_pedit_map sf = ROUND_DOWN(mf, 4)
+             * (range [sf|mf, (mf + sz - 1)|ef]) */
             if ((keys->off >= mf && keys->off < mf + sz)
-                || (keys->off + 3 >= mf && keys->off + 3 < mf + sz)) {
+                || (keys->off + 3 >= mf && keys->off + 3 < ef)) {
                 int diff = flower_off + (keys->off - mf);
                 ovs_be32 *dst = (void *) (rewrite_key + diff);
                 ovs_be32 *dst_m = (void *) (rewrite_mask + diff);
