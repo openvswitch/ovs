@@ -80,7 +80,6 @@ EXTRA_DIST = \
 	.ci/osx-build.sh \
 	.ci/osx-prepare.sh \
 	.github/workflows/build-and-test.yml \
-	.travis.yml \
 	appveyor.yml \
 	boot.sh \
 	$(MAN_FRAGMENTS) \
