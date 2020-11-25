@@ -341,45 +341,17 @@ that you should invoke to view the results on a browser.
 
 .. _testing-ci:
 
-Continuous Integration with Travis CI
--------------------------------------
+Continuous Integration with GitHub Actions
+------------------------------------------
 
-A .travis.yml file is provided to automatically build Open vSwitch with various
-build configurations and run the testsuite using Travis CI. Builds will be
-performed with gcc, sparse and clang with the -Werror compiler flag included,
-therefore the build will fail if a new warning has been introduced.
+A ``.github/workflows/*.yml`` files provided to automatically build
+Open vSwitch with various build configurations and run the testsuite using
+GitHub Actions. Builds will be performed with gcc, sparse and clang with the
+-Werror compiler flag included, therefore the build will fail if a new warning
+has been introduced.
 
 The CI build is triggered via git push (regardless of the specific branch) or
-pull request against any Open vSwitch GitHub repository that is linked to
-travis-ci.
-
-Instructions to setup travis-ci for your GitHub repository:
-
-1. Go to https://travis-ci.org/ and sign in using your GitHub ID.
-2. Go to the "Repositories" tab and enable the ovs repository. You may disable
-   builds for pushes or pull requests.
-3. In order to avoid forks sending build failures to the upstream mailing list,
-   the notification email recipient is encrypted. If you want to receive email
-   notification for build failures, replace the the encrypted string:
-
-   1. Install the travis-ci CLI (Requires ruby >=2.0): gem install travis
-   2. In your Open vSwitch repository: travis encrypt mylist@mydomain.org
-   3. Add/replace the notifications section in .travis.yml and fill in the
-      secure string as returned by travis encrypt::
-
-          notifications:
-            email:
-              recipients:
-                - secure: "....."
-
-  .. note::
-    You may remove/omit the notifications section to fall back to default
-    notification behaviour which is to send an email directly to the author and
-    committer of the failing commit. Note that the email is only sent if the
-    author/committer have commit rights for the particular GitHub repository.
-
-4. Pushing a commit to the repository which breaks the build or the
-   testsuite will now trigger a email sent to mylist@mydomain.org
+pull request against any Open vSwitch GitHub repository.
 
 .. _testing-vsperf:
 
