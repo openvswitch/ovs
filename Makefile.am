@@ -100,7 +100,6 @@ EXTRA_DIST = \
 	.ci/build.sh \
 	.ci/prepare.sh \
 	.github/workflows/build-and-test.yml \
-	.travis.yml \
 	appveyor.yml \
 	boot.sh \
 	build-aux/cccl \
