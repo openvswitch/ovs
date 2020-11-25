@@ -135,6 +135,10 @@ function install_dpdk()
     sed -i '/CONFIG_RTE_EAL_IGB_UIO=y/s/=y/=n/' build/.config
     sed -i '/CONFIG_RTE_KNI_KMOD=y/s/=y/=n/' build/.config
 
+    # Switching to 'default' machine to make dpdk-dir cache usable on different
+    # CPUs.  We can't be sure that all CI machines are exactly same.
+    sed -i '/CONFIG_RTE_MACHINE="native"/s/="native"/="default"/' build/.config
+
     make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
