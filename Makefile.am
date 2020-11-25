@@ -82,7 +82,6 @@ EXTRA_DIST = \
 	.ci/osx-prepare.sh \
 	.cirrus.yml \
 	.github/workflows/build-and-test.yml \
-	.travis.yml \
 	appveyor.yml \
 	boot.sh \
 	poc/builders/Vagrantfile \
