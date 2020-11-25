@@ -1,7 +1,4 @@
 language: c
-compiler:
-  - gcc
-  - clang
 
 os:
   - linux
@@ -32,25 +29,8 @@ before_install: ./.ci/${TRAVIS_OS_NAME}-prepare.sh
 
 before_script: export PATH=$PATH:$HOME/bin
 
-env:
-  - OPTS="--disable-ssl"
-  - TESTSUITE=1 KERNEL=3.16
-  - TESTSUITE=1 OPTS="--enable-shared"
-  - TESTSUITE=1 DPDK=1
-  - TESTSUITE=1 LIBS=-ljemalloc
-  - KERNEL_LIST="5.5  4.20 4.19 4.18 4.17 4.16"
-  - KERNEL_LIST="4.15 4.14 4.9  4.4  3.19 3.16"
-  - AFXDP=1 KERNEL=5.3
-  - M32=1 OPTS="--disable-ssl"
-  - DPDK=1 OPTS="--enable-shared"
-  - DPDK_SHARED=1
-  - DPDK_SHARED=1 OPTS="--enable-shared"
-
 matrix:
   include:
-    - os: osx
-      compiler: clang
-      env: OPTS="--disable-ssl"
     - arch: arm64
       compiler: gcc
       env: TESTSUITE=1 DPDK=1
@@ -66,15 +46,6 @@ matrix:
     - arch: arm64
       compiler: clang
       env: OPTS="--disable-ssl"
-    - env: DEB_PACKAGE=1
-      addons:
-        apt:
-          packages:
-            - linux-headers-$(uname -r)
-            - build-essential
-            - fakeroot
-            - devscripts
-            - equivs
 
 script: ./.ci/${TRAVIS_OS_NAME}-build.sh $OPTS
 
