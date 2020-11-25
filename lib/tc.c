@@ -533,7 +533,7 @@ nl_parse_flower_mpls(struct nlattr **attrs, struct tc_flower *flower)
     if (attrs[TCA_FLOWER_KEY_MPLS_BOS]) {
         bos = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_MPLS_BOS]);
         set_mpls_lse_bos(&flower->key.mpls_lse, bos);
-        set_mpls_lse_ttl(&flower->mask.mpls_lse, 0xff);
+        set_mpls_lse_bos(&flower->mask.mpls_lse, 0xff);
     }
 
     if (attrs[TCA_FLOWER_KEY_MPLS_TC]) {
