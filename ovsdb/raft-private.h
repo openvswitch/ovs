@@ -90,6 +90,8 @@ struct raft_server {
     /* For use in adding and removing servers: */
     struct uuid requester_sid;  /* Nonzero if requested via RPC. */
     struct unixctl_conn *requester_conn; /* Only if requested via unixctl. */
+
+    long long int last_msg_ts; /* Last received msg timestamp in ms. */
 };
 
 void raft_server_destroy(struct raft_server *);

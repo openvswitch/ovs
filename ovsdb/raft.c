@@ -264,6 +264,12 @@ struct raft {
     long long int election_base;    /* Time of last heartbeat from leader. */
     long long int election_timeout; /* Time at which we start an election. */
 
+    long long int election_start;   /* Start election time. */
+    long long int election_won;     /* Time of election completion. */
+    bool leadership_transfer;       /* Was the leadership transferred? */
+
+    unsigned int n_disconnections;
+
     /* Used for joining a cluster. */
     bool joining;                 /* Attempting to join the cluster? */
     struct sset remote_addresses; /* Addresses to try to find other servers. */
@@ -1708,6 +1714,10 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
 
     raft->n_votes = 0;
 
+    raft->election_start = time_msec();
+    raft->election_won = 0;
+    raft->leadership_transfer = leadership_transfer;
+
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     if (!VLOG_DROP_INFO(&rl)) {
         long long int now = time_msec();
@@ -1857,6 +1867,7 @@ raft_run(struct raft *raft)
     struct raft_conn *next;
     LIST_FOR_EACH_SAFE (conn, next, list_node, &raft->conns) {
         if (!raft_conn_should_stay_open(raft, conn)) {
+            raft->n_disconnections++;
             raft_conn_close(conn);
         }
     }
@@ -2597,6 +2608,7 @@ raft_become_leader(struct raft *raft)
 
     ovs_assert(raft->role != RAFT_LEADER);
     raft->role = RAFT_LEADER;
+    raft->election_won = time_msec();
     raft_set_leader(raft, &raft->sid);
     raft_reset_election_timer(raft);
     raft_reset_ping_timer(raft);
@@ -3714,6 +3726,7 @@ raft_handle_add_server_request(struct raft *raft,
     s->requester_sid = rq->common.sid;
     s->requester_conn = NULL;
     s->phase = RAFT_PHASE_CATCHUP;
+    s->last_msg_ts = time_msec();
 
     /* Start sending the log.  If this is the first time we've tried to add
      * this server, then this will quickly degenerate into an InstallSnapshot
@@ -4273,6 +4286,11 @@ raft_handle_execute_command_reply(
 static void
 raft_handle_rpc(struct raft *raft, const union raft_rpc *rpc)
 {
+    struct raft_server *s = raft_find_server(raft, &rpc->common.sid);
+    if (s) {
+        s->last_msg_ts = time_msec();
+    }
+
     uint64_t term = raft_rpc_get_term(rpc);
     if (term
         && !raft_should_suppress_disruptive_server(raft, rpc)
@@ -4485,6 +4503,17 @@ raft_unixctl_status(struct unixctl_conn *conn,
     raft_put_sid("Vote", &raft->vote, raft, &s);
     ds_put_char(&s, '\n');
 
+    if (raft->election_start) {
+        ds_put_format(&s,
+                      "Last Election started %"PRIu64" ms ago, reason: %s\n",
+                      (uint64_t) (time_msec() - raft->election_start),
+                      raft->leadership_transfer
+                      ? "leadership_transfer" : "timeout");
+    }
+    if (raft->election_won) {
+        ds_put_format(&s, "Last Election won: %"PRIu64" ms ago\n",
+                      (uint64_t) (time_msec() - raft->election_won));
+    }
     ds_put_format(&s, "Election timer: %"PRIu64, raft->election_timer);
     if (raft->role == RAFT_LEADER && raft->election_timer_new) {
         ds_put_format(&s, " (changing to %"PRIu64")",
@@ -4512,6 +4541,8 @@ raft_unixctl_status(struct unixctl_conn *conn,
     }
     ds_put_char(&s, '\n');
 
+    ds_put_format(&s, "Disconnections: %u\n", raft->n_disconnections);
+
     ds_put_cstr(&s, "Servers:\n");
     struct raft_server *server;
     HMAP_FOR_EACH (server, hmap_node, &raft->servers) {
@@ -4535,6 +4566,10 @@ raft_unixctl_status(struct unixctl_conn *conn,
         } else if (raft->role == RAFT_LEADER) {
             ds_put_format(&s, " next_index=%"PRIu64" match_index=%"PRIu64,
                           server->next_index, server->match_index);
+        }
+        if (server->last_msg_ts) {
+            ds_put_format(&s, " last msg %"PRIu64" ms ago",
+                          (uint64_t) (time_msec() - server->last_msg_ts));
         }
         ds_put_char(&s, '\n');
     }
