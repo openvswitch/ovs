@@ -130,6 +130,10 @@ function install_dpdk()
     sed -i '/CONFIG_RTE_LIBRTE_PMD_PCAP=n/s/=n/=y/' build/.config
     sed -i '/CONFIG_RTE_LIBRTE_PDUMP=n/s/=n/=y/' build/.config
 
+    # Switching to 'default' machine to make dpdk-dir cache usable on different
+    # CPUs.  We can't be sure that all CI machines are exactly same.
+    sed -i '/CONFIG_RTE_MACHINE="native"/s/="native"/="default"/' build/.config
+
     make -j4 CC=gcc EXTRA_CFLAGS='-fPIC'
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/build"
     echo "Installed DPDK source in $(pwd)"
