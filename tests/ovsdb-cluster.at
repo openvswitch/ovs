@@ -701,7 +701,7 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
     # Use file instead of var because code inside "while" runs in a subshell.
     echo 0 > phase
     i=0
-    (while :; do echo; sleep 0.1; done) | while read REPLY; do
+    (while :; do echo || exit 0; sleep 0.1; done) | while read REPLY; do
         printf "t=%2d s:" $i
         done=0
         for j in $(seq 0 $(expr $n1 - 1)); do
