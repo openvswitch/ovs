@@ -2263,7 +2263,7 @@ exit:
 static struct tc_police
 tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
 {
-    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 64;
+    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8;
     unsigned int bps = ((uint64_t) kbits_rate * 1000) / 8;
     struct tc_police police;
     struct tc_ratespec rate;
