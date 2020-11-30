@@ -1960,16 +1960,18 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
 
                 ovs_list_remove(&row->track_node);
                 ovs_list_init(&row->track_node);
-                if (ovsdb_idl_row_is_orphan(row) && row->tracked_old_datum) {
+                if (ovsdb_idl_row_is_orphan(row)) {
                     ovsdb_idl_row_unparse(row);
-                    const struct ovsdb_idl_table_class *class =
-                                                        row->table->class_;
-                    for (size_t c = 0; c < class->n_columns; c++) {
-                        ovsdb_datum_destroy(&row->tracked_old_datum[c],
-                                            &class->columns[c].type);
+                    if (row->tracked_old_datum) {
+                        const struct ovsdb_idl_table_class *class =
+                            row->table->class_;
+                        for (size_t c = 0; c < class->n_columns; c++) {
+                            ovsdb_datum_destroy(&row->tracked_old_datum[c],
+                                                &class->columns[c].type);
+                        }
+                        free(row->tracked_old_datum);
+                        row->tracked_old_datum = NULL;
                     }
-                    free(row->tracked_old_datum);
-                    row->tracked_old_datum = NULL;
                     free(row);
                 }
             }
