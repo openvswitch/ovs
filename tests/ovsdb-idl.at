@@ -1225,6 +1225,58 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan weak refer
 008: done
 ]])
 
+dnl This test creates database with weak references and checks that the
+dnl content of orphaned rows created for weak references after monitor
+dnl condition change are not leaked when the row is reinserted and deleted.
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan rows, conditional],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row0_s"},
+       "uuid-name": "weak_row0"},
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row1_s"},
+       "uuid-name": "weak_row1"},
+      {"op": "insert",
+       "table": "simple6",
+       "row": {"name": "first_row",
+               "weak_ref": ["set",
+                             [["named-uuid", "weak_row0"]]
+                           ]}}]']],
+  [['condition simple []' \
+    'condition simple [["s","==","row0_s"]]' \
+    'condition simple [["s","==","row1_s"]]' \
+    'condition simple [["s","==","row0_s"]]' \
+    '["idltest",
+      {"op": "delete",
+      "table": "simple6",
+      "where": []}]']],
+  [[000: change conditions
+001: inserted row: uuid=<0>
+001: name=first_row weak_ref=[] uuid=<0>
+001: updated columns: name weak_ref
+002: change conditions
+003: i=0 r=0 b=false s=row0_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+003: inserted row: uuid=<2>
+003: name=first_row weak_ref=[<2>] uuid=<0>
+003: updated columns: s
+004: change conditions
+005: i=0 r=0 b=false s=row1_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+005: inserted row: uuid=<3>
+005: updated columns: s
+006: change conditions
+007: deleted row: uuid=<3>
+007: i=0 r=0 b=false s=row0_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+007: i=0 r=0 b=false s=row1_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+007: inserted row: uuid=<2>
+007: name=first_row weak_ref=[<2>] uuid=<0>
+007: updated columns: s
+008: {"error":null,"result":[{"count":1}]}
+009: i=0 r=0 b=false s=row0_s u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+010: done
+]])
+
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
   [],
   [['["idltest",
