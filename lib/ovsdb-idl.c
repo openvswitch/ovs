@@ -3166,7 +3166,7 @@ ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
     ovs_assert(row->old_datum == row->new_datum);
     if (!ovsdb_idl_row_is_orphan(row)) {
-        if (ovsdb_idl_track_is_set(row->table)) {
+        if (ovsdb_idl_track_is_set(row->table) && !row->tracked_old_datum) {
             row->tracked_old_datum = row->old_datum;
         } else {
             const struct ovsdb_idl_table_class *class = row->table->class_;
