@@ -221,7 +221,7 @@ struct ovsdb_idl_db {
     struct uuid last_id;
 };
 
-static void ovsdb_idl_db_track_clear(struct ovsdb_idl_db *);
+static void ovsdb_idl_db_track_clear(struct ovsdb_idl_db *, bool flush_all);
 static void ovsdb_idl_db_add_column(struct ovsdb_idl_db *,
                                     const struct ovsdb_idl_column *);
 static void ovsdb_idl_db_omit(struct ovsdb_idl_db *,
@@ -660,7 +660,7 @@ ovsdb_idl_db_clear(struct ovsdb_idl_db *db)
     ovsdb_idl_row_destroy_postprocess(db);
 
     db->cond_seqno = 0;
-    ovsdb_idl_db_track_clear(db);
+    ovsdb_idl_db_track_clear(db, true);
 
     if (changed) {
         db->change_seqno++;
@@ -1955,7 +1955,7 @@ ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
  * loop when it is ready to do ovsdb_idl_run() again.
  */
 static void
-ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
+ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db, bool flush_all)
 {
     size_t i;
 
@@ -1989,7 +1989,20 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
                         free(row->tracked_old_datum);
                         row->tracked_old_datum = NULL;
                     }
-                    free(row);
+
+                    /* Rows that were reused as orphan after being processed
+                     * for deletion are still in the table hmap and will be
+                     * cleaned up when their src arcs are removed.  These rows
+                     * will not be reported anymore as "deleted" to IDL
+                     * clients.
+                     *
+                     * The exception is when 'destroy' is explicitly set to
+                     * 'true' which usually happens when the complete IDL
+                     * contents are being flushed.
+                     */
+                    if (flush_all || ovs_list_is_empty(&row->dst_arcs)) {
+                        free(row);
+                    }
                 }
             }
         }
@@ -2004,7 +2017,7 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
 void
 ovsdb_idl_track_clear(struct ovsdb_idl *idl)
 {
-    ovsdb_idl_db_track_clear(&idl->data);
+    ovsdb_idl_db_track_clear(&idl->data, false);
 }
 
 static void
