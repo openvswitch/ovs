@@ -240,6 +240,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-router.c \
 	lib/ovs-thread.c \
 	lib/ovs-thread.h \
+	lib/ovsdb-cs.c \
+	lib/ovsdb-cs.h \
 	lib/ovsdb-data.c \
 	lib/ovsdb-data.h \
 	lib/ovsdb-error.c \
