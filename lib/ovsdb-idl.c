@@ -617,6 +617,14 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
     }
 }
 
+/* By default, or if 'leader_only' is true, when 'idl' connects to a clustered
+ * database, the IDL will avoid servers other than the cluster leader. This
+ * ensures that any data that it reads and reports is up-to-date.  If
+ * 'leader_only' is false, the IDL will accept any server in the cluster, which
+ * means that for read-only transactions it can report and act on stale data
+ * (transactions that modify the database are always serialized even with false
+ * 'leader_only').  Refer to Understanding Cluster Consistency in ovsdb(7) for
+ * more information. */
 void
 ovsdb_idl_set_leader_only(struct ovsdb_idl *idl, bool leader_only)
 {
