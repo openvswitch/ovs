@@ -1564,6 +1564,7 @@ ovsdb_idl_db_set_condition(struct ovsdb_idl_db *db,
 {
     struct ovsdb_idl_condition *table_cond;
     struct ovsdb_idl_table *table = ovsdb_idl_db_table_from_class(db, tc);
+    unsigned int curr_seqno = db->cond_seqno;
 
     /* Compare the new condition to the last known condition which can be
      * either "new" (not sent yet), "requested" or "acked", in this order.
@@ -1581,14 +1582,11 @@ ovsdb_idl_db_set_condition(struct ovsdb_idl_db *db,
         ovsdb_idl_condition_clone(&table->new_cond, condition);
         db->cond_changed = true;
         poll_immediate_wake();
-        return db->cond_seqno + 1;
-    } else if (table_cond != table->ack_cond) {
-        /* 'condition' was already set but has not been "acked" yet.  The IDL
-         * will be up to date when db->cond_seqno gets incremented. */
-        return db->cond_seqno + 1;
     }
 
-    return db->cond_seqno;
+    /* Conditions will be up to date when we receive replies for already
+     * requested and new conditions, if any. */
+    return curr_seqno + (table->new_cond ? 1 : 0) + (table->req_cond ? 1 : 0);
 }
 
 /* Sets the replication condition for 'tc' in 'idl' to 'condition' and
