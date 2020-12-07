@@ -167,6 +167,7 @@ Finally, build and install OVS::
 To kick start end-to-end autotesting::
 
   uname -a # make sure having 5.0+ kernel
+  ethtool --version # make sure ethtool is installed
   make check-afxdp TESTSUITEFLAGS='1'
 
 .. note::
