@@ -391,6 +391,9 @@ compact_or_convert(const char *src_name_, const char *dst_name_,
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
     }
 
+    /* Resulted DB will contain a single transaction without diff anyway. */
+    ovsdb_file_column_diff_disable();
+
     /* Save a copy. */
     struct ovsdb *ovsdb = (new_schema
                            ? ovsdb_file_read_as_schema(src_name, new_schema)
@@ -648,6 +651,8 @@ static void
 print_db_changes(struct shash *tables, struct smap *names,
                  const struct ovsdb_schema *schema)
 {
+    struct json *is_diff = shash_find_data(tables, "_is_diff");
+    bool diff = (is_diff && is_diff->type == JSON_TRUE);
     struct shash_node *n1;
 
     int i = 0;
@@ -691,7 +696,8 @@ print_db_changes(struct shash *tables, struct smap *names,
                     printf(" insert row %.8s:\n", row_uuid);
                 }
             } else {
-                printf(" row %s (%.8s):\n", old_name, row_uuid);
+                printf(" row %s (%.8s)%s:\n", old_name, row_uuid,
+                                              diff ? " diff" : "");
             }
 
             if (columns->type == JSON_OBJECT) {

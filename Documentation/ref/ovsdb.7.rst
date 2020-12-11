@@ -204,6 +204,14 @@ split-brain.
 
 Open vSwitch 2.6 introduced support for the active-backup service model.
 
+.. important::
+
+   There was a change of a database file format in version 2.15.
+   To upgrade/downgrade the ``ovsdb-server`` processes across this version
+   follow the instructions described under
+   `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
+   `Downgrading from version 2.15 and later to 2.14 and earlier`_.
+
 Clustered Database Service Model
 --------------------------------
 
@@ -270,10 +278,67 @@ vSwitch to another, upgrading them one at a time will keep the cluster healthy
 during the upgrade process.  (This is different from upgrading a database
 schema, which is covered later under `Upgrading or Downgrading a Database`_.)
 
+.. important::
+
+   There was a change of a database file format in version 2.15.
+   To upgrade/downgrade the ``ovsdb-server`` processes across this version
+   follow the instructions described under
+   `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
+   `Downgrading from version 2.15 and later to 2.14 and earlier`_.
+
 Clustered OVSDB does not support the OVSDB "ephemeral columns" feature.
 ``ovsdb-tool`` and ``ovsdb-client`` change ephemeral columns into persistent
 ones when they work with schemas for clustered databases.  Future versions of
 OVSDB might add support for this feature.
+
+Upgrading from version 2.14 and earlier to 2.15 and later
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is a change of a database file format in version 2.15 that doesn't allow
+older versions of ``ovsdb-server`` to read the database file modified by the
+``ovsdb-server`` version 2.15 or later.  This also affects runtime
+communications between servers in **active-backup** and **cluster** service
+models. To upgrade the ``ovsdb-server`` processes from one version of Open
+vSwitch (2.14 or earlier) to another (2.15 or higher) instructions below should
+be followed. (This is different from upgrading a database schema, which is
+covered later under `Upgrading or Downgrading a Database`_.)
+
+In case of **standalone** service model no special handling during upgrade is
+required.
+
+For the **active-backup** service model, administrator needs to update backup
+``ovsdb-server`` first and the active one after that, or shut down both servers
+and upgrade at the same time.
+
+For the **cluster** service model recommended upgrade strategy is following:
+
+1. Upgrade processes one at a time.  Each ``ovsdb-server`` process after
+   upgrade should be started with ``--disable-file-column-diff`` command line
+   argument.
+
+2. When all ``ovsdb-server`` processes upgraded, use ``ovs-appctl`` to invoke
+   ``ovsdb/file/column-diff-enable`` command on each of them or restart all
+   ``ovsdb-server`` processes one at a time without
+   ``--disable-file-column-diff`` command line option.
+
+Downgrading from version 2.15 and later to 2.14 and earlier
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Similar to upgrading covered under `Upgrading from version 2.14 and earlier to
+2.15 and later`_, downgrading from the ``ovsdb-server`` version 2.15 and later
+to 2.14 and earlier requires additional steps. (This is different from
+upgrading a database schema, which is covered later under
+`Upgrading or Downgrading a Database`_.)
+
+For all service models it's required to:
+
+1. Stop all ``ovsdb-server`` processes (single process for **standalone**
+   service model, all involved processes for **active-backup** and **cluster**
+   service models).
+
+2. Compact all database files with ``ovsdb-tool compact`` command.
+
+3. Downgrade and restart ``ovsdb-server`` processes.
 
 Understanding Cluster Consistency
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

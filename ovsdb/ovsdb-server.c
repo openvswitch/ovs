@@ -1793,6 +1793,7 @@ parse_options(int argc, char *argv[],
         OPT_SYNC_EXCLUDE,
         OPT_ACTIVE,
         OPT_NO_DBS,
+        OPT_FILE_COLUMN_DIFF,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
@@ -1815,6 +1816,7 @@ parse_options(int argc, char *argv[],
         {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
         {"active", no_argument, NULL, OPT_ACTIVE},
         {"no-dbs", no_argument, NULL, OPT_NO_DBS},
+        {"disable-file-column-diff", no_argument, NULL, OPT_FILE_COLUMN_DIFF},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -1905,6 +1907,10 @@ parse_options(int argc, char *argv[],
             add_default_db = false;
             break;
 
+        case OPT_FILE_COLUMN_DIFF:
+            ovsdb_file_column_diff_disable();
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -1942,6 +1948,8 @@ usage(void)
     printf("\nOther options:\n"
            "  --run COMMAND           run COMMAND as subprocess then exit\n"
            "  --unixctl=SOCKET        override default control socket name\n"
+           "  --disable-file-column-diff\n"
+           "                          don't use column diff in database file\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);

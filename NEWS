@@ -1,6 +1,14 @@
 Post-v2.14.0
 ---------------------
    - OVSDB:
+     * Changed format in which ovsdb transactions are stored in database files.
+       Now each transaction contains diff of data instead of the whole new
+       value of a column.
+       New ovsdb-server process will be able to read old database format, but
+       old processes will *fail* to read database created by the new one.
+       For cluster and active-backup service models follow upgrade instructions
+       in 'Upgrading from version 2.14 and earlier to 2.15 and later' section
+       of ovsdb(7).
      * New unixctl command 'ovsdb-server/get-db-storage-status' to show the
        status of the storage that's backing a database.
      * New unixctl command 'ovsdb-server/memory-trim-on-compaction on|off'.
