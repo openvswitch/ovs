@@ -1397,10 +1397,8 @@ static void rcv_list(struct net_device *dev, struct sk_buff *skb,
 	do {
 		next = skb->next;
 		skb->next = NULL;
-		if (next) {
+		if (next)
 			ovs_dst_hold((struct dst_entry *)tun_dst);
-			ovs_skb_dst_set(next, (struct dst_entry *)tun_dst);
-		}
 		ovs_ip_tunnel_rcv(dev, skb, tun_dst);
 	} while ((skb = next));
 }
