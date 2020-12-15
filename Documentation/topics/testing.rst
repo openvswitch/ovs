@@ -353,7 +353,7 @@ All tests are skipped if no hugepages are configured. User must look into the DP
 manual to figure out how to `Configure hugepages`_.
 The phy test will skip if no compatible physical device is available.
 
-.. _Configure hugepages: https://doc.dpdk.org/guides-19.11/linux_gsg/sys_reqs.html
+.. _Configure hugepages: https://doc.dpdk.org/guides-20.11/linux_gsg/sys_reqs.html
 
 All the features documented under `Unit Tests`_ are available for the DPDK
 datapath testsuite.

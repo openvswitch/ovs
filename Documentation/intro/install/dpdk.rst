@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 19.11.2
+- DPDK 20.11
 
 - A `DPDK supported NIC`_
 
@@ -59,8 +59,10 @@ vSwitch with DPDK will require the following:
 
 Detailed system requirements can be found at `DPDK requirements`_.
 
-.. _DPDK supported NIC: http://dpdk.org/doc/nics
-.. _DPDK requirements: http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html
+.. _DPDK supported NIC: https://doc.dpdk.org/guides-20.11/nics/index.html
+.. _DPDK requirements: https://doc.dpdk.org/guides-20.11/linux_gsg/sys_reqs.html
+
+.. _dpdk-install:
 
 Installing
 ----------
@@ -71,38 +73,44 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget https://fast.dpdk.org/rel/dpdk-19.11.2.tar.xz
-       $ tar xf dpdk-19.11.2.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-19.11.2
+       $ wget https://fast.dpdk.org/rel/dpdk-20.11.tar.xz
+       $ tar xf dpdk-20.11.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-20.11
        $ cd $DPDK_DIR
 
-#. (Optional) Configure DPDK as a shared library
+#. Configure and install DPDK using Meson
 
-   DPDK can be built as either a static library or a shared library.  By
-   default, it is configured for the former. If you wish to use the latter, set
-   ``CONFIG_RTE_BUILD_SHARED_LIB=y`` in ``$DPDK_DIR/config/common_base``.
+   Build and install the DPDK library::
+
+       $ export DPDK_BUILD=$DPDK_DIR/build
+       $ meson build
+       $ ninja -C build
+       $ sudo ninja -C build install
+       $ sudo ldconfig
+
+   Detailed information can be found at `DPDK documentation`_.
+
+#. (Optional) Configure and export the DPDK shared library location
+
+   Since DPDK is built both as static and shared library by default, no extra
+   configuration is required for the build.
+
+   Exporting the path to library is not necessary if the DPDK libraries are
+   system installed. For libraries installed using a prefix, export the path
+   to this library and also update the $PKG_CONFIG_PATH for use
+   before building OVS::
+
+      $ export LD_LIBRARY_PATH=/path/to/installed/DPDK/libraries
+      $ export PKG_CONFIG_PATH=/path/to/installed/".pc" file/for/DPDK
 
    .. note::
 
       Minor performance loss is expected when using OVS with a shared DPDK
       library compared to a static DPDK library.
 
-#. Configure and install DPDK
-
-   Build and install the DPDK library::
-
-       $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
-       $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
-       $ make install T=$DPDK_TARGET DESTDIR=install
-
-#. (Optional) Export the DPDK shared library location
-
-   If DPDK was built as a shared library, export the path to this library for
-   use when building OVS::
-
-       $ export LD_LIBRARY_PATH=$DPDK_DIR/x86_64-native-linuxapp-gcc/lib
-
 .. _DPDK sources: http://dpdk.org/rel
+.. _DPDK documentation:
+   https://doc.dpdk.org/guides-20.11/linux_gsg/build_dpdk.html
 
 Install OVS
 ~~~~~~~~~~~
@@ -121,16 +129,16 @@ has to be configured to build against the DPDK library (``--with-dpdk``).
 
 #. Bootstrap, if required, as described in :ref:`general-bootstrapping`
 
-#. Configure the package using the ``--with-dpdk`` flag::
+#. Configure the package using the ``--with-dpdk`` flag:
 
-       $ ./configure --with-dpdk=$DPDK_BUILD
+   If OVS must consume DPDK static libraries
+   (also equivalent to ``--with-dpdk=yes`` )::
 
-   where ``DPDK_BUILD`` is the path to the built DPDK library. This can be
-   skipped if DPDK library is installed in its default location.
+       $ ./configure --with-dpdk=static
 
-   If no path is provided to ``--with-dpdk``, but a pkg-config configuration
-   for libdpdk is available the include paths will be generated via an
-   equivalent ``pkg-config --cflags libdpdk``.
+   If OVS must consume DPDK shared libraries::
+
+       $ ./configure --with-dpdk=shared
 
    .. note::
      While ``--with-dpdk`` is required, you can pass any other configuration
@@ -703,7 +711,7 @@ Limitations
   release notes`_.
 
 .. _DPDK release notes:
-   https://doc.dpdk.org/guides-19.11/rel_notes/release_19_11.html
+   https://doc.dpdk.org/guides-20.11/rel_notes/release_20_11.html
 
 - Upper bound MTU: DPDK device drivers differ in how the L2 frame for a
   given MTU value is calculated e.g. i40e driver includes 2 x vlan headers in

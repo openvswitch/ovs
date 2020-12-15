@@ -26,12 +26,6 @@
 #include <sys/socket.h>
 #include <linux/if.h>
 
-/* Include rte_compat.h first to allow experimental API's needed for the
- * rte_meter.h rfc4115 functions. Once they are no longer marked as
- * experimental the #define and rte_compat.h include can be removed.
- */
-#define ALLOW_EXPERIMENTAL_API
-#include <rte_compat.h>
 #include <rte_bus_pci.h>
 #include <rte_config.h>
 #include <rte_cycles.h>
@@ -1312,7 +1306,7 @@ static int
 vhost_common_construct(struct netdev *netdev)
     OVS_REQUIRES(dpdk_mutex)
 {
-    int socket_id = rte_lcore_to_socket_id(rte_get_master_lcore());
+    int socket_id = rte_lcore_to_socket_id(rte_get_main_lcore());
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     dev->vhost_rxq_enabled = dpdk_rte_mzalloc(OVS_VHOST_MAX_QUEUE_NUM *
@@ -1463,7 +1457,6 @@ netdev_dpdk_destruct(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_device *rte_dev;
     struct rte_eth_dev *eth_dev;
-    bool remove_on_close;
 
     ovs_mutex_lock(&dpdk_mutex);
 
@@ -1475,20 +1468,15 @@ netdev_dpdk_destruct(struct netdev *netdev)
          * FIXME: avoid direct access to DPDK internal array rte_eth_devices.
          */
         eth_dev = &rte_eth_devices[dev->port_id];
-        remove_on_close =
-            eth_dev->data &&
-                (eth_dev->data->dev_flags & RTE_ETH_DEV_CLOSE_REMOVE);
         rte_dev = eth_dev->device;
 
         /* Remove the eth device. */
         rte_eth_dev_close(dev->port_id);
 
-        /* Remove this rte device and all its eth devices if flag
-         * RTE_ETH_DEV_CLOSE_REMOVE is not supported (which means representors
-         * are not supported), or if all the eth devices belonging to the rte
-         * device are closed.
+        /* Remove this rte device and all its eth devices if all the eth
+         * devices belonging to the rte device are closed.
          */
-        if (!remove_on_close || !netdev_dpdk_get_num_ports(rte_dev)) {
+        if (!netdev_dpdk_get_num_ports(rte_dev)) {
             int ret = rte_dev_remove(rte_dev);
 
             if (ret < 0) {

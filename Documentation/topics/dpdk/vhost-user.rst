@@ -389,23 +389,7 @@ application in the VM.
 
 To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 :ref:`dpdk-vhost-user-client`. Once started, connect to the VM, download the
-DPDK sources to VM and build DPDK::
-
-    $ cd /root/dpdk/
-    $ wget https://fast.dpdk.org/rel/dpdk-19.11.2.tar.xz
-    $ tar xf dpdk-19.11.2.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-19.11.2
-    $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
-    $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
-    $ cd $DPDK_DIR
-    $ make install T=$DPDK_TARGET DESTDIR=install
-
-Build the test-pmd application::
-
-    $ cd app/test-pmd
-    $ export RTE_SDK=$DPDK_DIR
-    $ export RTE_TARGET=$DPDK_TARGET
-    $ make
+DPDK sources to VM and build DPDK as described in :ref:`dpdk-install`.
 
 Setup huge pages and DPDK devices using UIO::
 
@@ -555,4 +539,4 @@ shown with::
 
 Further information can be found in the
 `DPDK documentation
-<https://doc.dpdk.org/guides-19.11/prog_guide/vhost_lib.html>`__
+<https://doc.dpdk.org/guides-20.11/prog_guide/vhost_lib.html>`__

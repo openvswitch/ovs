@@ -443,7 +443,7 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /**
      * NOTE: This is an unsophisticated mechanism for determining the DPDK
-     * lcore for the DPDK Master.
+     * main core.
      */
     if (auto_determine) {
         const struct ovs_numa_info_core *core;

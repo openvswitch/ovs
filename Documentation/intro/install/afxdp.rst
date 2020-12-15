@@ -396,7 +396,7 @@ PVP using vhostuser device
 --------------------------
 First, build OVS with DPDK and AFXDP::
 
-  ./configure  --enable-afxdp --with-dpdk=<dpdk path>
+  ./configure  --enable-afxdp --with-dpdk=shared|static
   make -j4 && make install
 
 Create a vhost-user port from OVS::

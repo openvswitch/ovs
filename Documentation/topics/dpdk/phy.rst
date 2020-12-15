@@ -117,7 +117,7 @@ tool::
 
 For more information, refer to the `DPDK documentation <dpdk-drivers>`__.
 
-.. _dpdk-drivers: http://dpdk.org/doc/guides/linux_gsg/linux_drivers.html
+.. _dpdk-drivers: https://doc.dpdk.org/guides-20.11/linux_gsg/linux_drivers.html
 
 .. _dpdk-phy-multiqueue:
 
@@ -218,18 +218,24 @@ If the log is not seen then the port can be detached like so::
 Hotplugging with IGB_UIO
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-As of DPDK 19.11, default igb_uio hotplugging behavior changes from
+.. important::
+
+   As of DPDK v20.11 IGB_UIO has been deprecated and is no longer built as
+   part of the default DPDK library. Below is intended for those who wish
+   to use IGB_UIO outside of the standard DPDK build from v20.11 onwards.
+
+As of DPDK v19.11, default igb_uio hotplugging behavior changed from
 previous DPDK versions.
 
-With DPDK 19.11, if no device is bound to igb_uio when OVS is launched then
-the IOVA mode may be set to virtual addressing for DPDK. This is incompatible
-for hotplugging with igb_uio.
+From DPDK v19.11 onwards, if no device is bound to igb_uio when OVS is
+launched then the IOVA mode may be set to virtual addressing for DPDK.
+This is incompatible for hotplugging with igb_uio.
 
 To hotplug a port with igb_uio in this case, DPDK must be configured to use
 physical addressing for IOVA mode. For more information regarding IOVA modes
 in DPDK please refer to the `DPDK IOVA Mode Detection`__.
 
-__ https://doc.dpdk.org/guides-19.11/prog_guide/env_abstraction_layer.html#iova-mode-detection
+__ https://doc.dpdk.org/guides-20.11/prog_guide/env_abstraction_layer.html#iova-mode-detection
 
 To configure OVS DPDK to use physical addressing for IOVA::
 
@@ -261,7 +267,7 @@ Representors are multi devices created on top of one PF.
 
 For more information, refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-19.11/prog_guide/switch_representation.html
+__ https://doc.dpdk.org/guides-20.11/prog_guide/switch_representation.html
 
 Prior to port representors there was a one-to-one relationship between the PF
 and the eth device. With port representors the relationship becomes one PF to
@@ -395,7 +401,7 @@ in the ``options`` column of the ``Interface`` table.
    kernel netdevice, and be inherited from it when Open vSwitch is restarted,
    even if the options described in this section are unset from Open vSwitch.
 
-.. _bifurcated-drivers: http://doc.dpdk.org/guides/linux_gsg/linux_drivers.html#bifurcated-driver
+.. _bifurcated-drivers: https://doc.dpdk.org/guides-20.11/linux_gsg/linux_drivers.html#bifurcated-driver
 
 - Configure the VF MAC address::
 

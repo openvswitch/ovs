@@ -24,6 +24,9 @@ addons:
       - selinux-policy-dev
       - libunbound-dev
       - libunwind-dev
+      - python3-setuptools
+      - python3-wheel
+      - ninja-build
 
 before_install: ./.ci/${TRAVIS_OS_NAME}-prepare.sh
 
