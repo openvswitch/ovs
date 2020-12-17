@@ -723,6 +723,7 @@ print_db_changes(struct shash *tables, struct smap *names,
                                 ds_init(&s);
                                 ovsdb_datum_to_string(&datum, type, &s);
                                 value_string = ds_steal_cstr(&s);
+                                ovsdb_datum_destroy(&datum, type);
                             } else {
                                 ovsdb_error_destroy(error);
                             }
