@@ -42,5 +42,6 @@ main(int argc, char *argv[])
         VLOG_ERR("stream_open_block(%s) failure: %s",
                  argv[1], ovs_strerror(error));
     }
+    stream_close(stream);
     return (error || !stream) ? 1 : 0;
 }
