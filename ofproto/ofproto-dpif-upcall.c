@@ -175,7 +175,6 @@ struct udpif {
 
     /* n_flows_mutex prevents multiple threads updating these concurrently. */
     atomic_uint n_flows;               /* Number of flows in the datapath. */
-    atomic_uint n_offloaded_flows;     /* Number of the offloaded flows. */
     atomic_llong n_flows_timestamp;    /* Last time n_flows was updated. */
     struct ovs_mutex n_flows_mutex;
 
@@ -731,8 +730,6 @@ udpif_get_n_flows(struct udpif *udpif)
         dpif_get_dp_stats(udpif->dpif, &stats);
         flow_count = stats.n_flows;
         atomic_store_relaxed(&udpif->n_flows, flow_count);
-        atomic_store_relaxed(&udpif->n_offloaded_flows,
-                             stats.n_offloaded_flows);
         ovs_mutex_unlock(&udpif->n_flows_mutex);
     } else {
         atomic_read_relaxed(&udpif->n_flows, &flow_count);
@@ -2904,10 +2901,10 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
+    uint64_t n_offloaded_flows;
     struct udpif *udpif;
 
     LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
-        unsigned int n_offloaded_flows;
         unsigned int flow_limit;
         bool ufid_enabled;
         size_t i;
@@ -2919,8 +2916,10 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ds_put_format(&ds, "  flows         : (current %lu)"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
-        atomic_read_relaxed(&udpif->n_offloaded_flows, &n_offloaded_flows);
-        ds_put_format(&ds, "  offloaded flows : %u\n", n_offloaded_flows);
+        if (!dpif_get_n_offloaded_flows(udpif->dpif, &n_offloaded_flows)) {
+            ds_put_format(&ds, "  offloaded flows : %"PRIu64"\n",
+                          n_offloaded_flows);
+        }
         ds_put_format(&ds, "  dump duration : %lldms\n", udpif->dump_duration);
         ds_put_format(&ds, "  ufid enabled : ");
         if (ufid_enabled) {

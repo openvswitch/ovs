@@ -32,6 +32,8 @@ in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:882, used:
 
 AT_CHECK([ovs-appctl dpctl/dump-flows type=offloaded], [0], [])
 
+AT_CHECK([test $(ovs-appctl upcall/show | grep -c "offloaded flows") -eq 0], [0], [ignore])
+
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -63,6 +65,8 @@ AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)
 in_port(2),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
 in_port(3),eth(macs),eth_type(0x0800),ipv4(frag=no), packets:9, bytes:756, used:0.001s, actions:output
 ])
+
+AT_CHECK([ovs-appctl upcall/show | grep -E "offloaded flows : [[1-9]]"], [0], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

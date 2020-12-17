@@ -83,6 +83,10 @@ struct netdev_flow_api {
     int (*flow_del)(struct netdev *, const ovs_u128 *ufid,
                     struct dpif_flow_stats *);
 
+    /* Get the number of flows offloaded to netdev.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_get_n_flows)(struct netdev *, uint64_t *n_flows);
+
     /* Initializies the netdev flow api.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*init_flow_api)(struct netdev *);
