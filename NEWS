@@ -31,6 +31,10 @@ Post-v2.14.0
        OpenFlow bundle actions.
    - Support for GitHub Actions based continuous integration builds has been
      added.
+   - Bareudp Tunnel
+     * Bareudp device support is present in linux kernel from version 5.7
+     * Kernel bareudp device is not backported to ovs tree.
+     * Userspace datapath support is not added
 
 
 v2.14.0 - 17 Aug 2020

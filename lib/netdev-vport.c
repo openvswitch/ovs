@@ -47,6 +47,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/ofp-parse.h"
 #ifdef __linux__
 #include "netdev-linux.h"
 #endif
@@ -112,7 +113,7 @@ netdev_vport_needs_dst_port(const struct netdev *dev)
     return (class->get_config == get_tunnel_config &&
             (!strcmp("geneve", type) || !strcmp("vxlan", type) ||
              !strcmp("lisp", type) || !strcmp("stt", type) ||
-             !strcmp("gtpu", type)));
+             !strcmp("gtpu", type) || !strcmp("bareudp",type)));
 }
 
 const char *
@@ -219,6 +220,8 @@ netdev_vport_construct(struct netdev *netdev_)
         dev->tnl_cfg.dst_port = port ? htons(port) : htons(STT_DST_PORT);
     } else if (!strcmp(type, "gtpu")) {
         dev->tnl_cfg.dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
+    } else if (!strcmp(type, "bareudp")) {
+        dev->tnl_cfg.dst_port = htons(port);
     }
 
     dev->tnl_cfg.dont_fragment = true;
@@ -437,6 +440,8 @@ tunnel_supported_layers(const char *type,
                && tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)) {
         return TNL_L2 | TNL_L3;
     } else if (!strcmp(type, "gtpu")) {
+        return TNL_L3;
+    } else if (!strcmp(type, "bareudp")) {
         return TNL_L3;
     } else {
         return TNL_L2;
@@ -745,6 +750,23 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                     goto out;
                 }
             }
+        } else if (!strcmp(node->key, "payload_type")) {
+            if (!strcmp(node->value, "mpls")) {
+                 tnl_cfg.payload_ethertype = htons(ETH_TYPE_MPLS);
+                 tnl_cfg.exts |= (1 << OVS_BAREUDP_EXT_MULTIPROTO_MODE);
+            } else if (!strcmp(node->value, "ip")) {
+                 tnl_cfg.payload_ethertype = htons(ETH_TYPE_IP);
+                 tnl_cfg.exts |= (1 << OVS_BAREUDP_EXT_MULTIPROTO_MODE);
+            } else {
+                 uint16_t payload_ethertype;
+
+                 if (str_to_u16(node->value, "payload_type",
+                                &payload_ethertype)) {
+                     err = EINVAL;
+                     goto out;
+                 }
+                 tnl_cfg.payload_ethertype = htons(payload_ethertype);
+            }
         } else {
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
                           type, node->key);
@@ -917,7 +939,8 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
             (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
             (!strcmp("lisp", type) && dst_port != LISP_DST_PORT) ||
             (!strcmp("stt", type) && dst_port != STT_DST_PORT) ||
-            (!strcmp("gtpu", type) && dst_port != GTPU_DST_PORT)) {
+            (!strcmp("gtpu", type) && dst_port != GTPU_DST_PORT) ||
+            !strcmp("bareudp", type)) {
             smap_add_format(args, "dst_port", "%d", dst_port);
         }
     }
@@ -1240,6 +1263,14 @@ netdev_vport_tunnel_register(void)
               .build_header = netdev_gtpu_build_header,
               .push_header = netdev_gtpu_push_header,
               .pop_header = netdev_gtpu_pop_header,
+          },
+          {{NULL, NULL, 0, 0}}
+        },
+        { "udp_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "bareudp",
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
           },
           {{NULL, NULL, 0, 0}}
         },

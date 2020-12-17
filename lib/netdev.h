@@ -107,6 +107,7 @@ struct netdev_tunnel_config {
     bool out_key_flow;
     ovs_be64 out_key;
 
+    ovs_be16 payload_ethertype;
     ovs_be16 dst_port;
 
     bool ip_src_flow;

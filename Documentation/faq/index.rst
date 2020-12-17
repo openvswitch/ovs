@@ -30,6 +30,7 @@ Open vSwitch FAQ
 .. toctree::
    :maxdepth: 2
 
+   bareudp
    configuration
    contributing
    design
