@@ -370,7 +370,8 @@ format_odp_encap_nsh_action(struct ds *ds,
         ds_put_hex(ds, encap_nsh->metadata, encap_nsh->mdlen);
         break;
     default:
-        OVS_NOT_REACHED();
+        ds_put_cstr(ds, ",<error: unknown mdtype>");
+        break;
     }
     ds_put_format(ds, ")");
 }
