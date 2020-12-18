@@ -391,7 +391,8 @@ format_odp_push_nsh_action(struct ds *ds,
         break;
     }
     default:
-        OVS_NOT_REACHED();
+        ds_put_cstr(ds, ",<error: unknown mdtype>");
+        break;
     }
     ds_put_format(ds, ")");
 }
