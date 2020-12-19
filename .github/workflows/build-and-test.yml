@@ -133,6 +133,8 @@ jobs:
         path: dpdk-dir
         key:  ${{ env.matrix_key }}-${{ env.ci_key }}
 
+    - name: update APT cache
+      run:  sudo apt update
     - name: install common dependencies
       if:   matrix.deb_package == ''
       run:  sudo apt install -y ${{ env.dependencies }}
