@@ -94,6 +94,8 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
+    - name: update APT cache
+      run:  sudo apt update
     - name: install common dependencies
       run:  sudo apt install -y ${{ env.dependencies }}
     - name: install libunbound
