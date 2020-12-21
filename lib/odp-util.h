@@ -351,11 +351,12 @@ struct user_action_cookie {
 };
 BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 48);
 
-size_t odp_put_userspace_action(uint32_t pid,
-                                const void *userdata, size_t userdata_size,
-                                odp_port_t tunnel_out_port,
-                                bool include_actions,
-                                struct ofpbuf *odp_actions);
+int odp_put_userspace_action(uint32_t pid,
+                             const void *userdata, size_t userdata_size,
+                             odp_port_t tunnel_out_port,
+                             bool include_actions,
+                             struct ofpbuf *odp_actions,
+                             size_t *odp_actions_ofs);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions,
                            const char *tnl_type);
