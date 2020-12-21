@@ -4234,8 +4234,8 @@ set_pmd_auto_lb(struct dp_netdev *dp)
         pmd_alb->is_enabled = enable_alb;
         if (pmd_alb->is_enabled) {
             VLOG_INFO("PMD auto load balance is enabled "
-                      "(with rebalance interval:%"PRIu64" msec)",
-                       pmd_alb->rebalance_intvl);
+                      "interval %"PRIu64" mins",
+                       pmd_alb->rebalance_intvl / MIN_TO_MSEC);
         } else {
             pmd_alb->rebalance_poll_timer = 0;
             VLOG_INFO("PMD auto load balance is disabled");
@@ -4344,6 +4344,8 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
 
     if (pmd_alb->rebalance_intvl != rebalance_intvl) {
         pmd_alb->rebalance_intvl = rebalance_intvl;
+        VLOG_INFO("PMD auto load balance interval set to "
+                  "%"PRIu64" mins\n", rebalance_intvl / MIN_TO_MSEC);
     }
 
     set_pmd_auto_lb(dp);
