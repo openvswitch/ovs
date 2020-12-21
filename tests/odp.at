@@ -371,3 +371,40 @@ AT_CHECK([echo 'encap_nsh@:{@' | ovstest test-odp parse-actions
 odp_actions_from_string: error
 ])
 AT_CLEANUP
+
+AT_SETUP([OVS datapath actions parsing and formatting - userdata overflow])
+dnl Userdata should fit in a single netlink message, i.e. should be less than
+dnl UINT16_MAX - NLA_HDRLEN = 65535 - 4 = 65531 bytes.  OVS should not accept
+dnl larger userdata.  OTOH, userdata is part of a nested netlink message, that
+dnl should not be oversized too.  'pid' takes NLA_HDRLEN + 4 = 8 bytes.
+dnl Plus NLA_HDRLEN for the nested header.  'actions' flag takes NLA_HDRLEN = 4
+dnl and 'tunnel_out_port' takes NLA_HDRLEN + 4 = 8 bytes.
+dnl So, for the variant with 'actions' maximum length of userdata should be:
+dnl UINT16_MAX -  NLA_HDRLEN   - (NLA_HDRLEN + 4) - NLA_HDRLEN - NLA_HDRLEN
+dnl  total max   nested header        pid             actions     userdata
+dnl Result: 65515 bytes for the actual userdata.
+dnl For the case with 'tunnel_out_port': 65511
+dnl Size of userdata will be rounded up to be multiple of 4, so highest
+dnl acceptable sizes are 65512 and 65508.
+
+dnl String with length 65512 * 2 = 131024 is valid, while 131026 is not.
+data_valid=$(  printf '%*s' 131024 | tr ' ' "a")
+data_invalid=$(printf '%*s' 131026 | tr ' ' "a")
+
+echo "userspace(pid=1234567,userdata(${data_valid}),actions)" > actions.txt
+echo "userspace(pid=1234567,userdata(${data_invalid}),actions)" >> actions.txt
+
+dnl String with length 65508 * 2 = 131016 is valid, while 131018 is not.
+data_valid=$(  printf '%*s' 131016 | tr ' ' "a")
+data_invalid=$(printf '%*s' 131018 | tr ' ' "a")
+
+echo "userspace(pid=1234567,userdata(${data_valid}),tunnel_out_port=10)" >> actions.txt
+echo "userspace(pid=1234567,userdata(${data_invalid}),tunnel_out_port=10)" >> actions.txt
+
+AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0], [dnl
+`cat actions.txt | head -1`
+odp_actions_from_string: error
+`cat actions.txt | head -3 | tail -1`
+odp_actions_from_string: error
+])
+AT_CLEANUP

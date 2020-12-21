@@ -3024,11 +3024,11 @@ compose_sample_action(struct xlate_ctx *ctx,
         ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
     uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
                                      flow_hash_5tuple(&ctx->xin->flow, 0));
-    int cookie_offset = odp_put_userspace_action(pid, cookie, sizeof *cookie,
-                                                 tunnel_out_port,
-                                                 include_actions,
-                                                 ctx->odp_actions);
-
+    size_t cookie_offset;
+    int res = odp_put_userspace_action(pid, cookie, sizeof *cookie,
+                                       tunnel_out_port, include_actions,
+                                       ctx->odp_actions, &cookie_offset);
+    ovs_assert(res == 0);
     if (is_sample) {
         nl_msg_end_nested(ctx->odp_actions, actions_offset);
         nl_msg_end_nested(ctx->odp_actions, sample_offset);
@@ -4521,7 +4521,7 @@ put_controller_user_action(struct xlate_ctx *ctx,
     uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
                                      flow_hash_5tuple(&ctx->xin->flow, 0));
     odp_put_userspace_action(pid, &cookie, sizeof cookie, ODPP_NONE,
-                             false, ctx->odp_actions);
+                             false, ctx->odp_actions, NULL);
 }
 
 static void
