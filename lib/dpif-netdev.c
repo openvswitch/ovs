@@ -4201,7 +4201,7 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
 /* Enable or Disable PMD auto load balancing. */
 static void
-set_pmd_auto_lb(struct dp_netdev *dp)
+set_pmd_auto_lb(struct dp_netdev *dp, bool always_log)
 {
     unsigned int cnt = 0;
     struct dp_netdev_pmd_thread *pmd;
@@ -4233,7 +4233,7 @@ set_pmd_auto_lb(struct dp_netdev *dp)
     enable_alb = enable_alb && pmd_rxq_assign_cyc &&
                     pmd_alb->auto_lb_requested;
 
-    if (pmd_alb->is_enabled != enable_alb) {
+    if (pmd_alb->is_enabled != enable_alb || always_log) {
         pmd_alb->is_enabled = enable_alb;
         if (pmd_alb->is_enabled) {
             atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
@@ -4251,7 +4251,6 @@ set_pmd_auto_lb(struct dp_netdev *dp)
             VLOG_INFO("PMD auto load balance is disabled");
         }
     }
-
 }
 
 /* Applies datapath configuration from the database. Some of the changes are
@@ -4271,6 +4270,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint64_t rebalance_intvl;
     uint8_t rebalance_load, cur_rebalance_load;
     uint8_t rebalance_improve;
+    bool log_autolb = false;
 
     tx_flush_interval = smap_get_int(other_config, "tx-flush-interval",
                                      DEFAULT_TX_FLUSH_INTERVAL);
@@ -4358,6 +4358,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
         pmd_alb->rebalance_intvl = rebalance_intvl;
         VLOG_INFO("PMD auto load balance interval set to "
                   "%"PRIu64" mins\n", rebalance_intvl / MIN_TO_MSEC);
+        log_autolb = true;
     }
 
     rebalance_improve = smap_get_int(other_config,
@@ -4370,6 +4371,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
         pmd_alb->rebalance_improve_thresh = rebalance_improve;
         VLOG_INFO("PMD auto load balance improvement threshold set to "
                   "%"PRIu8"%%", rebalance_improve);
+        log_autolb = true;
     }
 
     rebalance_load = smap_get_int(other_config, "pmd-auto-lb-load-threshold",
@@ -4383,8 +4385,9 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
                              rebalance_load);
         VLOG_INFO("PMD auto load balance load threshold set to %"PRIu8"%%",
                   rebalance_load);
+        log_autolb = true;
     }
-    set_pmd_auto_lb(dp);
+    set_pmd_auto_lb(dp, log_autolb);
     return 0;
 }
 
@@ -5468,7 +5471,7 @@ reconfigure_datapath(struct dp_netdev *dp)
     reload_affected_pmds(dp);
 
     /* Check if PMD Auto LB is to be enabled */
-    set_pmd_auto_lb(dp);
+    set_pmd_auto_lb(dp, false);
 }
 
 /* Returns true if one of the netdevs in 'dp' requires a reconfiguration */
