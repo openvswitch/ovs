@@ -20,6 +20,9 @@ Post-v2.14.0
      * Add generic IP protocol support to conntrack. With this change, all
        none UDP, TCP, and ICMP traffic will be treated as general L3
        traffic, i.e. using 3 tupples.
+     * Add parameters 'pmd-auto-lb-load-threshold' and
+       'pmd-auto-lb-improvement-threshold' to configure PMD auto load balance
+       behaviour.
    - The environment variable OVS_UNBOUND_CONF, if set, is now used
      as the DNS resolver's (unbound) configuration file.
    - Linux datapath:

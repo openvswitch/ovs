@@ -85,9 +85,9 @@
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 
 /* Auto Load Balancing Defaults */
-#define ALB_ACCEPTABLE_IMPROVEMENT       25
-#define ALB_PMD_LOAD_THRESHOLD           95
-#define ALB_PMD_REBALANCE_POLL_INTERVAL  1 /* 1 Min */
+#define ALB_IMPROVEMENT_THRESHOLD    25
+#define ALB_LOAD_THRESHOLD           95
+#define ALB_REBALANCE_INTERVAL       1 /* 1 Min */
 #define MIN_TO_MSEC                  60000
 
 #define FLOW_DUMP_MAX_BATCH 50
@@ -300,6 +300,8 @@ struct pmd_auto_lb {
     bool is_enabled;            /* Current status of Auto load balancing. */
     uint64_t rebalance_intvl;
     uint64_t rebalance_poll_timer;
+    uint8_t rebalance_improve_thresh;
+    atomic_uint8_t rebalance_load_thresh;
 };
 
 /* Datapath based on the network device interface from netdev.h.
@@ -4204,6 +4206,7 @@ set_pmd_auto_lb(struct dp_netdev *dp)
     unsigned int cnt = 0;
     struct dp_netdev_pmd_thread *pmd;
     struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
+    uint8_t rebalance_load_thresh;
 
     bool enable_alb = false;
     bool multi_rxq = false;
@@ -4233,9 +4236,16 @@ set_pmd_auto_lb(struct dp_netdev *dp)
     if (pmd_alb->is_enabled != enable_alb) {
         pmd_alb->is_enabled = enable_alb;
         if (pmd_alb->is_enabled) {
+            atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
+                                &rebalance_load_thresh);
             VLOG_INFO("PMD auto load balance is enabled "
-                      "interval %"PRIu64" mins",
-                       pmd_alb->rebalance_intvl / MIN_TO_MSEC);
+                      "interval %"PRIu64" mins, "
+                      "pmd load threshold %"PRIu8"%%, "
+                      "improvement threshold %"PRIu8"%%",
+                       pmd_alb->rebalance_intvl / MIN_TO_MSEC,
+                       rebalance_load_thresh,
+                       pmd_alb->rebalance_improve_thresh);
+
         } else {
             pmd_alb->rebalance_poll_timer = 0;
             VLOG_INFO("PMD auto load balance is disabled");
@@ -4259,6 +4269,8 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint32_t insert_min, cur_min;
     uint32_t tx_flush_interval, cur_tx_flush_interval;
     uint64_t rebalance_intvl;
+    uint8_t rebalance_load, cur_rebalance_load;
+    uint8_t rebalance_improve;
 
     tx_flush_interval = smap_get_int(other_config, "tx-flush-interval",
                                      DEFAULT_TX_FLUSH_INTERVAL);
@@ -4336,7 +4348,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
                               false);
 
     rebalance_intvl = smap_get_int(other_config, "pmd-auto-lb-rebal-interval",
-                              ALB_PMD_REBALANCE_POLL_INTERVAL);
+                                   ALB_REBALANCE_INTERVAL);
 
     /* Input is in min, convert it to msec. */
     rebalance_intvl =
@@ -4348,6 +4360,30 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
                   "%"PRIu64" mins\n", rebalance_intvl / MIN_TO_MSEC);
     }
 
+    rebalance_improve = smap_get_int(other_config,
+                                     "pmd-auto-lb-improvement-threshold",
+                                     ALB_IMPROVEMENT_THRESHOLD);
+    if (rebalance_improve > 100) {
+        rebalance_improve = ALB_IMPROVEMENT_THRESHOLD;
+    }
+    if (rebalance_improve != pmd_alb->rebalance_improve_thresh) {
+        pmd_alb->rebalance_improve_thresh = rebalance_improve;
+        VLOG_INFO("PMD auto load balance improvement threshold set to "
+                  "%"PRIu8"%%", rebalance_improve);
+    }
+
+    rebalance_load = smap_get_int(other_config, "pmd-auto-lb-load-threshold",
+                                  ALB_LOAD_THRESHOLD);
+    if (rebalance_load > 100) {
+        rebalance_load = ALB_LOAD_THRESHOLD;
+    }
+    atomic_read_relaxed(&pmd_alb->rebalance_load_thresh, &cur_rebalance_load);
+    if (rebalance_load != cur_rebalance_load) {
+        atomic_store_relaxed(&pmd_alb->rebalance_load_thresh,
+                             rebalance_load);
+        VLOG_INFO("PMD auto load balance load threshold set to %"PRIu8"%%",
+                  rebalance_load);
+    }
     set_pmd_auto_lb(dp);
     return 0;
 }
@@ -5676,7 +5712,7 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
             improvement =
                 ((curr_variance - new_variance) * 100) / curr_variance;
         }
-        if (improvement < ALB_ACCEPTABLE_IMPROVEMENT) {
+        if (improvement < dp->pmd_alb.rebalance_improve_thresh) {
             ret = false;
         }
     }
@@ -8711,6 +8747,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
 
     if (pmd->ctx.now > pmd->rxq_next_cycle_store) {
         uint64_t curr_tsc;
+        uint8_t rebalance_load_trigger;
         struct pmd_auto_lb *pmd_alb = &pmd->dp->pmd_alb;
         if (pmd_alb->is_enabled && !pmd->isolated
             && (pmd->perf_stats.counters.n[PMD_CYCLES_ITER_IDLE] >=
@@ -8727,7 +8764,9 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                 pmd_load = ((tot_proc * 100) / (tot_idle + tot_proc));
             }
 
-            if (pmd_load >= ALB_PMD_LOAD_THRESHOLD) {
+            atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
+                                &rebalance_load_trigger);
+            if (pmd_load >= rebalance_load_trigger) {
                 atomic_count_inc(&pmd->pmd_overloaded);
             } else {
                 atomic_count_set(&pmd->pmd_overloaded, 0);
