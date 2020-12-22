@@ -570,13 +570,16 @@ class Session(object):
         if self.rpc is not None:
             received_bytes = self.rpc.get_received_bytes()
             error, msg = self.rpc.recv()
+
+            now = ovs.timeval.msec()
+            self.reconnect.receive_attempted(now)
             if received_bytes != self.rpc.get_received_bytes():
                 # Data was successfully received.
                 #
                 # Previously we only counted receiving a full message as
                 # activity, but with large messages or a slow connection that
                 # policy could time out the session mid-message.
-                self.reconnect.activity(ovs.timeval.msec())
+                self.reconnect.activity(now)
 
             if not error:
                 if msg.type == Message.T_REQUEST and msg.method == "echo":

@@ -95,7 +95,10 @@ class Reconnect(object):
         def deadline(fsm):
             if fsm.probe_interval:
                 base = max(fsm.last_activity, fsm.state_entered)
-                return base + fsm.probe_interval
+                expiration = base + fsm.probe_interval
+                if (fsm.last_receive_attempt is None or
+                    fsm.last_receive_attempt >= expiration):
+                    return expiration
             return None
 
         @staticmethod
@@ -113,7 +116,10 @@ class Reconnect(object):
         @staticmethod
         def deadline(fsm):
             if fsm.probe_interval:
-                return fsm.state_entered + fsm.probe_interval
+                expiration = fsm.state_entered + fsm.probe_interval
+                if (fsm.last_receive_attempt is None or
+                    fsm.last_receive_attempt >= expiration):
+                    return expiration
             return None
 
         @staticmethod
@@ -153,6 +159,7 @@ class Reconnect(object):
         self.last_activity = now
         self.last_connected = None
         self.last_disconnected = None
+        self.last_receive_attempt = now
         self.max_tries = None
         self.backoff_free_tries = 0
 
@@ -471,6 +478,16 @@ class Reconnect(object):
         if self.state != Reconnect.Active:
             self._transition(now, Reconnect.Active)
         self.last_activity = now
+
+    def receive_attempted(self, now):
+        """Tell 'fsm' that some attempt to receive data on the connection was
+        made at 'now'.  The FSM only allows probe interval timer to expire when
+        some attempt to receive data on the connection was received after the
+        time when it should have expired.  This helps in the case where there's
+        a long delay in the poll loop and then reconnect_run() executes before
+        the code to try to receive anything from the remote runs.  (To disable
+        this feature, pass None for 'now'.)"""
+        self.last_receive_attempt = now
 
     def _transition(self, now, state):
         if self.state == Reconnect.ConnectInProgress:

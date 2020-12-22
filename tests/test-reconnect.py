@@ -163,6 +163,16 @@ def do_listen_error(arg):
     r.listen_error(now, int(arg))
 
 
+def do_receive_attempted(arg):
+    if arg == "now":
+        r.receive_attempted(now)
+    elif arg == "LLONG_MAX":
+        r.receive_attempted(None)
+    else:
+        sys.stderr.write("receive-attempted: bad argument %s\n" % arg)
+        sys.exit(1)
+
+
 def main():
     commands = {
         "enable": do_enable,
@@ -180,7 +190,8 @@ def main():
         "set-backoff-free-tries": do_set_backoff_free_tries,
         "passive": do_set_passive,
         "listening": do_listening,
-        "listen-error": do_listen_error
+        "listen-error": do_listen_error,
+        "receive-attempted": do_receive_attempted
     }
 
     global now

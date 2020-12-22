@@ -48,7 +48,6 @@ test_reconnect_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     now = 1000;
     reconnect = reconnect_create(now);
-    reconnect_receive_attempted(reconnect, LLONG_MAX);
     reconnect_set_name(reconnect, "remote");
     reconnect_get_stats(reconnect, now, &prev);
     printf("### t=%d ###\n", now);
@@ -278,6 +277,18 @@ do_listen_error(struct ovs_cmdl_context *ctx)
     reconnect_listen_error(reconnect, now, atoi(ctx->argv[1]));
 }
 
+static void
+do_receive_attempted(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    if (!strcmp(ctx->argv[1], "now")) {
+        reconnect_receive_attempted(reconnect, now);
+    } else if (!strcmp(ctx->argv[1], "LLONG_MAX")) {
+        reconnect_receive_attempted(reconnect, LLONG_MAX);
+    } else {
+        ovs_fatal(0, "%s: bad argument %s", ctx->argv[0], ctx->argv[1]);
+    }
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "enable", NULL, 0, 0, do_enable, OVS_RO },
     { "disable", NULL, 0, 0, do_disable, OVS_RO },
@@ -296,6 +307,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "passive", NULL, 0, 0, do_set_passive, OVS_RO },
     { "listening", NULL, 0, 0, do_listening, OVS_RO },
     { "listen-error", NULL, 1, 1, do_listen_error, OVS_RO },
+    { "receive-attempted", NULL, 1, 1, do_receive_attempted, OVS_RO },
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
