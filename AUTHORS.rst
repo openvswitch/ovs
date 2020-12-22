@@ -324,6 +324,7 @@ Ravi Kerur                         Ravi.Kerur@telekom.com
 Raymond Burkholder                 ray@oneunified.net
 Reid Price
 Remko Tronçon                      git@el-tramo.be
+Renat Nurgaliyev                   impleman@gmail.com
 Rich Lane                          rlane@bigswitch.com
 Richard Oliver                     richard@richard-oliver.co.uk
 Rishi Bamba                        rishi.bamba@tcs.com
