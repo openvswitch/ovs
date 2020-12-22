@@ -1150,7 +1150,7 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
         /* Inner batch loop is constant time since batch size is <=
          * NETDEV_MAX_BURST. */
         DP_PACKET_BATCH_REFILL_FOR_EACH (pb_idx, pb_cnt, pkt, pb) {
-            if (pkt == rp->list->reass_execute_ctx) {
+            if (rp && pkt == rp->list->reass_execute_ctx) {
                 for (int i = 0; i <= rp->list->last_inuse_idx; i++) {
                     rp->list->frag_list[i].pkt->md.ct_label = pkt->md.ct_label;
                     rp->list->frag_list[i].pkt->md.ct_mark = pkt->md.ct_mark;
@@ -1198,6 +1198,7 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                 ipf_reassembled_list_remove(rp);
                 dp_packet_delete(rp->pkt);
                 free(rp);
+                rp = NULL;
             } else {
                 dp_packet_batch_refill(pb, pkt, pb_idx);
             }
