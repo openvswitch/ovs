@@ -767,6 +767,14 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                  }
                  tnl_cfg.payload_ethertype = htons(payload_ethertype);
             }
+        } else if (!strcmp(node->key, "remote_cert") ||
+                   !strcmp(node->key, "remote_name") ||
+                   !strcmp(node->key, "psk")) {
+            /* When configuring OVS for IPsec, these keys may be set in the
+               tunnel port's 'options' column. 'ovs-vswitchd' does not directly
+               use them, but they are read by 'ovs-monitor-ipsec'. In order to
+               suppress the "unknown %s argument" warning message below, we
+               handle them here by ignoring them. */
         } else {
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
                           type, node->key);
