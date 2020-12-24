@@ -247,10 +247,13 @@ immediate (esp. if it's already publicly known) to a few weeks. As a basic
 default policy, we expect report date to disclosure date to be 10 to 15
 business days.
 
-Operating system vendors are obvious downstream stakeholders. It may not be
-necessary to be too choosy about who to include: any major Open vSwitch user
-who is interested and can be considered trustworthy enough could be included.
-To become a downstream stakeholder, email the ovs-security mailing list.
+Operating system vendors are obvious downstream stakeholders, however,
+any major Open vSwitch user who is interested and can be considered
+trustworthy enough could be included.  To request being added to the
+Downstream mailing list, email the ovs-security mailing list.  Please
+include a few sentences on how your organization uses Open vSwitch.  If
+possible, please provide a security-related email alias rather than a
+direct end-user address.
 
 If the vulnerability is already public, skip this step.
 
