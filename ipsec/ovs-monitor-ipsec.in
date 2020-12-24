@@ -416,11 +416,11 @@ conn prevent_unencrypted_vxlan
 """
 
     auth_tmpl = {"psk": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     authby=secret"""),
                  "pki_remote": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     leftid=@$local_name
     rightid=@$remote_name
@@ -428,7 +428,7 @@ conn prevent_unencrypted_vxlan
     rightcert="$remote_name"
     leftrsasigkey=%cert"""),
                  "pki_ca": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     leftid=@$local_name
     rightid=@$remote_name
@@ -751,6 +751,7 @@ class IPsecTunnel(object):
 
     unixctl_config_tmpl = Template("""\
   Tunnel Type:    $tunnel_type
+  Local IP:       $local_ip
   Remote IP:      $remote_ip
   SKB mark:       $skb_mark
   Local cert:     $certificate
@@ -791,6 +792,7 @@ class IPsecTunnel(object):
         new_conf = {
             "ifname": self.name,
             "tunnel_type": row.type,
+            "local_ip": options.get("local_ip", "%defaultroute"),
             "remote_ip": options.get("remote_ip"),
             "skb_mark": monitor.conf["skb_mark"],
             "certificate": monitor.conf["pki"]["certificate"],
