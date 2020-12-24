@@ -424,8 +424,8 @@ conn prevent_unencrypted_vxlan
     right=$remote_ip
     leftid=@$local_name
     rightid=@$remote_name
-    leftcert="$local_name"
-    rightcert="$remote_name"
+    leftcert="ovs_certkey_$local_name"
+    rightcert="ovs_cert_$remote_name"
     leftrsasigkey=%cert"""),
                  "pki_ca": Template("""\
     left=$local_ip
@@ -687,7 +687,7 @@ conn prevent_unencrypted_vxlan
             if proc.returncode:
                 raise Exception(proc.stderr.read())
         except Exception as e:
-            vlog.err("Failed to import ceretificate into NSS.\n" + str(e))
+            vlog.err("Failed to import certificate into NSS.\n" + str(e))
 
     def _nss_delete_cert(self, name):
         try:
@@ -699,7 +699,7 @@ conn prevent_unencrypted_vxlan
             if proc.returncode:
                 raise Exception(proc.stderr.read())
         except Exception as e:
-            vlog.err("Failed to delete ceretificate from NSS.\n" + str(e))
+            vlog.err("Failed to delete certificate from NSS.\n" + str(e))
 
     def _nss_import_cert_and_key(self, cert, key, name):
         try:
