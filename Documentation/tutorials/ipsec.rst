@@ -300,6 +300,7 @@ For example::
                                              Otherwise, error message will
                                              be provided
    Tunnel Type:    gre
+   Local IP:       %defaultroute
    Remote IP:      2.2.2.2
    SKB mark:       None
    Local cert:     None
