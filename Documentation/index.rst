@@ -23,103 +23,56 @@
 
       Avoid deeper levels because they do not render well.
 
-==========================
-Open vSwitch Documentation
-==========================
+=======
+Project
+=======
 
-How the Documentation is Organised
-----------------------------------
+Community
+---------
 
-The Open vSwitch documentation is organised into multiple sections:
+    - :doc:`internals/mailing-lists`
+    - :doc:`internals/bugs`
+    - :doc:`internals/patchwork`
+    - :doc:`internals/release-process`
+    - :doc:`internals/security`
+    - :doc:`internals/authors`
 
-- :doc:`Installation guides </intro/install/index>` guide you through
-  installing Open vSwitch (OVS) on a variety of different platforms
-- :doc:`Tutorials </tutorials/index>` take you through a series of steps to
-  configure OVS in sandboxed environments
-- :doc:`Topic guides </topics/index>` provide a high level overview of OVS
-  internals and operation
-- :doc:`How-to guides </howto/index>` are recipes or use-cases for OVS.
-  They are more advanced than the tutorials.
-- :doc:`Frequently Asked Questions </faq/index>` provide general insight into
-  a variety of topics related to configuration and operation of OVS.
 
-First Steps
+Contributing
+------------
+
+    - :doc:`internals/contributing/submitting-patches`
+    - :doc:`internals/contributing/backporting-patches`
+    - :doc:`internals/contributing/coding-style`
+    - :doc:`internals/contributing/coding-style-windows`
+
+Maintaining
 -----------
 
-Getting started with Open vSwitch (OVS)? Start here.
+    - :doc:`internals/charter`
+    - :doc:`internals/maintainers`
+    - :doc:`internals/committer-responsibilities`
+    - :doc:`internals/committer-grant-revocation`
+    - :doc:`internals/committer-emeritus-status`
 
-- **Overview:** :doc:`intro/what-is-ovs` |
-  :doc:`intro/why-ovs`
+Documentation
+-------------
 
-- **Install:** :doc:`intro/install/general` |
-  :doc:`intro/install/userspace` |
-  :doc:`intro/install/netbsd` |
-  :doc:`intro/install/windows` |
-  :doc:`intro/install/xenserver` |
-  :doc:`intro/install/dpdk` |
-  :doc:`intro/install/afxdp` |
-  :doc:`Installation FAQs <faq/releases>`
+    - :doc:`intro/index`
+    - :doc:`tutorials/index`
+    - :doc:`howto/index`
+    - :doc:`topics/index`
+    - :doc:`ref/index`
+    - :doc:`internals/index`
+    - :doc:`intro/install/documentation`
+    - :doc:`faq/index`
+    - Looking for specific information?
 
-- **Tutorials:** :doc:`tutorials/faucet` |
-  :doc:`tutorials/ovs-advanced` |
-  :doc:`tutorials/ovs-conntrack` |
-  :doc:`tutorials/ipsec` |
-
-Deeper Dive
------------
-
-- **Architecture** :doc:`topics/design` |
-  :doc:`topics/openflow` |
-  :doc:`topics/integration` |
-  :doc:`topics/porting` |
-  :doc:`topics/ovs-extensions`
-
-- **DPDK** :doc:`howto/dpdk` |
-  :doc:`topics/dpdk/vhost-user`
-
-- **Windows** :doc:`topics/windows`
-
-- **Integrations:** :doc:`topics/language-bindings`
-
-- **Reference Guides:** :doc:`ref/index`
-
-- **Testing** :doc:`topics/testing` :doc:`topics/fuzzing/index`
-
-- **Packaging:** :doc:`intro/install/debian` |
-  :doc:`intro/install/rhel` |
-  :doc:`intro/install/fedora`
-
-The Open vSwitch Project
-------------------------
-
-Learn more about the Open vSwitch project and about how you can contribute:
-
-- **Community:** :doc:`internals/release-process` |
-  :doc:`internals/authors` |
-  :doc:`internals/mailing-lists` |
-  :doc:`internals/patchwork` |
-  :doc:`internals/bugs` |
-  :doc:`internals/security`
-
-- **Contributing:** :doc:`internals/contributing/submitting-patches` |
-  :doc:`internals/contributing/backporting-patches` |
-  :doc:`internals/contributing/coding-style` |
-  :doc:`internals/contributing/coding-style-windows`
-
-- **Maintaining:** :doc:`internals/charter` |
-  :doc:`internals/maintainers` |
-  :doc:`internals/committer-responsibilities` |
-  :doc:`internals/committer-grant-revocation` |
-  :doc:`internals/committer-emeritus-status`
-
-- **Documentation:** :doc:`internals/contributing/documentation-style` |
-  :doc:`Building Open vSwitch Documentation <intro/install/documentation>` |
-  :doc:`internals/documentation`
+      - :doc:`Full Table of Contents <contents>`
+      - :ref:`Index <genindex>`
 
 Getting Help
 -------------
 
-- Seeing an issue of potential bug? Report problems to bugs@openvswitch.org
+    - Reach out to us :doc:`here <internals/mailing-lists>`.
 
-- Looking for specific information? Try the :ref:`genindex`, :ref:`modindex` or
-  the :doc:`detailed table of contents <contents>`.

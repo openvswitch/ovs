@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-============================
-Open vSwitch Release Process
-============================
+===============
+Release Process
+===============
 
 This document describes the process ordinarily used for Open vSwitch
 development and release.  Exceptions are sometimes necessary, so all of the

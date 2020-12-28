@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-==============================
-Reporting Bugs in Open vSwitch
-==============================
+==============
+Reporting Bugs
+==============
 
 We are eager to hear from users about problems that they have encountered with
 Open vSwitch. This file documents how best to report bugs so as to ensure that

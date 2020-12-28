@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-=========================
-Open vSwitch Coding Style
-=========================
+============
+Coding Style
+============
 
 This file describes the coding style used in most C files in the Open vSwitch
 distribution. However, Linux kernel code datapath directory follows the Linux
