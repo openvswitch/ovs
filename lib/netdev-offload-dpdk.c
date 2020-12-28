@@ -57,6 +57,7 @@ static struct cmap ufid_to_rte_flow = CMAP_INITIALIZER;
 struct ufid_to_rte_flow_data {
     struct cmap_node node;
     ovs_u128 ufid;
+    struct netdev *netdev;
     struct rte_flow *rte_flow;
     bool actions_offloaded;
     struct dpif_flow_stats stats;
@@ -79,7 +80,7 @@ ufid_to_rte_flow_data_find(const ovs_u128 *ufid)
 }
 
 static inline struct ufid_to_rte_flow_data *
-ufid_to_rte_flow_associate(const ovs_u128 *ufid,
+ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
                            struct rte_flow *rte_flow, bool actions_offloaded)
 {
     size_t hash = hash_bytes(ufid, sizeof *ufid, 0);
@@ -98,6 +99,7 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid,
     }
 
     data->ufid = *ufid;
+    data->netdev = netdev_ref(netdev);
     data->rte_flow = rte_flow;
     data->actions_offloaded = actions_offloaded;
 
@@ -116,6 +118,7 @@ ufid_to_rte_flow_disassociate(const ovs_u128 *ufid)
         if (ovs_u128_equals(*ufid, data->ufid)) {
             cmap_remove(&ufid_to_rte_flow,
                         CONST_CAST(struct cmap_node *, &data->node), hash);
+            netdev_close(data->netdev);
             ovsrcu_postpone(free, data);
             return;
         }
@@ -1422,7 +1425,8 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
     if (!flow) {
         goto out;
     }
-    flows_data = ufid_to_rte_flow_associate(ufid, flow, actions_offloaded);
+    flows_data = ufid_to_rte_flow_associate(ufid, netdev, flow,
+                                            actions_offloaded);
     VLOG_DBG("%s: installed flow %p by ufid "UUID_FMT,
              netdev_get_name(netdev), flow, UUID_ARGS((struct uuid *)ufid));
 
