@@ -1572,10 +1572,27 @@ out:
     return ret;
 }
 
+static int
+netdev_offload_dpdk_flow_flush(struct netdev *netdev)
+{
+    struct ufid_to_rte_flow_data *data;
+
+    CMAP_FOR_EACH (data, node, &ufid_to_rte_flow) {
+        if (data->netdev != netdev) {
+            continue;
+        }
+
+        netdev_offload_dpdk_flow_destroy(data);
+    }
+
+    return 0;
+}
+
 const struct netdev_flow_api netdev_offload_dpdk = {
     .type = "dpdk_flow_api",
     .flow_put = netdev_offload_dpdk_flow_put,
     .flow_del = netdev_offload_dpdk_flow_del,
     .init_flow_api = netdev_offload_dpdk_init_flow_api,
     .flow_get = netdev_offload_dpdk_flow_get,
+    .flow_flush = netdev_offload_dpdk_flow_flush,
 };
