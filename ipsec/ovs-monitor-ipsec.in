@@ -625,7 +625,10 @@ conn prevent_unencrypted_vxlan
                 continue
 
             conn = m.group(1)
-            m = re.match(r"(.*)(-in-\d+|-out-\d+|-\d+)", conn)
+            m = re.match(r"(.*)(-in-\d+|-out-\d+)", conn)
+            if not m:
+                # GRE connections have format <iface>-<ver>
+                m = re.match(r"(.*)(-\d+)", conn)
             if not m:
                 continue
 
