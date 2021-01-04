@@ -255,8 +255,7 @@ stop_forwarding () {
 }
 
 stop_ovs_ipsec () {
-    ${bindir}/ovs-appctl -t ovs-monitor-ipsec exit || return 1
-    return 0
+    stop_daemon ovs-monitor-ipsec
 }
 
 ## --------------- ##
