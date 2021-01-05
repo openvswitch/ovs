@@ -38,6 +38,9 @@ Post-v2.14.0
    - ovs-dpctl and 'ovs-appctl dpctl/':
      * New commands '{add,mod,del}-flows' where added, which allow adding,
        deleting, or modifying flows based on information read from a file.
+   - IPsec:
+     * Add option '--no-cleanup' to allow ovs-monitor-ipsec to stop without
+       tearing down IPsec tunnels.
 
 
 v2.14.0 - 17 Aug 2020
