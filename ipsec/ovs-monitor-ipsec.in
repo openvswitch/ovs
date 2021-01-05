@@ -1150,19 +1150,30 @@ def unixctl_refresh(conn, unused_argv, unused_aux):
     conn.reply(None)
 
 
-def unixctl_exit(conn, unused_argv, unused_aux):
+def unixctl_exit(conn, argv, unused_aux):
     global monitor
     global exiting
+    ret = None
     exiting = True
+    cleanup = True
 
-    # Make sure persistent global states are cleared
-    monitor.update_conf([None, None, None, None], None)
-    # Make sure persistent tunnel states are cleared
-    for tunnel in monitor.tunnels.keys():
-        monitor.del_tunnel(tunnel)
-    monitor.run()
+    for arg in argv:
+        if arg == "--no-cleanup":
+            cleanup = False
+        else:
+            cleanup = False
+            exiting = False
+            ret = str("unrecognized parameter: %s" % arg)
 
-    conn.reply(None)
+    if cleanup:
+        # Make sure persistent global states are cleared
+        monitor.update_conf([None, None, None, None], None)
+        # Make sure persistent tunnel states are cleared
+        for tunnel in monitor.tunnels.keys():
+            monitor.del_tunnel(tunnel)
+        monitor.run()
+
+    conn.reply(ret)
 
 
 def main():
@@ -1208,7 +1219,8 @@ def main():
     ovs.unixctl.command_register("tunnels/show", "", 0, 0,
                                  unixctl_show, None)
     ovs.unixctl.command_register("refresh", "", 0, 0, unixctl_refresh, None)
-    ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    ovs.unixctl.command_register("exit", "[--no-cleanup]", 0, 1,
+                                 unixctl_exit, None)
 
     error, unixctl_server = ovs.unixctl.server.UnixctlServer.create(None)
     if error:
