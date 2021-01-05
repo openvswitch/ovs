@@ -925,7 +925,7 @@ class IPsecTunnel(object):
 class IPsecMonitor(object):
     """This class monitors and configures IPsec tunnels"""
 
-    def __init__(self, root_prefix, ike_daemon):
+    def __init__(self, root_prefix, ike_daemon, restart):
         self.IPSEC = root_prefix + "/usr/sbin/ipsec"
         self.tunnels = {}
 
@@ -955,7 +955,9 @@ class IPsecMonitor(object):
                 not os.access(self.IPSEC, os.X_OK):
             vlog.err("IKE daemon is not installed in the system.")
 
-        self.ike_helper.restart_ike_daemon()
+        if restart:
+            vlog.info("Restarting IKE daemon")
+            self.ike_helper.restart_ike_daemon()
 
     def is_tunneling_type_supported(self, tunnel_type):
         """Returns True if we know how to configure IPsec for these
@@ -1186,6 +1188,8 @@ def main():
     parser.add_argument("--ike-daemon", metavar="IKE-DAEMON",
                         help="The IKE daemon used for IPsec tunnels"
                         " (either libreswan or strongswan).")
+    parser.add_argument("--no-restart-ike-daemon", action='store_true',
+                        help="Don't restart the IKE daemon on startup.")
 
     ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
@@ -1198,7 +1202,8 @@ def main():
 
     root_prefix = args.root_prefix if args.root_prefix else ""
     xfrm = XFRM(root_prefix)
-    monitor = IPsecMonitor(root_prefix, args.ike_daemon)
+    monitor = IPsecMonitor(root_prefix, args.ike_daemon,
+                           not args.no_restart_ike_daemon)
 
     remote = args.database
     schema_helper = ovs.db.idl.SchemaHelper()

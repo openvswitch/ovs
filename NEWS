@@ -41,6 +41,8 @@ Post-v2.14.0
    - IPsec:
      * Add option '--no-cleanup' to allow ovs-monitor-ipsec to stop without
        tearing down IPsec tunnels.
+     * Add option '--no-restart-ike-daemon' to allow ovs-monitor-ipsec to start
+       without restarting ipsec daemon.
 
 
 v2.14.0 - 17 Aug 2020
