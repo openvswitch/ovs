@@ -4,6 +4,8 @@ v2.14.1 - xx xxx xxxx
      * Fixed support of strongswan 5.7+ in ovs-monitor-ipsec.
      * Add option '--no-cleanup' to allow ovs-monitor-ipsec to stop without
        tearing down IPsec tunnels.
+     * Add option '--no-restart-ike-daemon' to allow ovs-monitor-ipsec to start
+       without restarting ipsec daemon.
    - OVSDB:
      * New unixctl command 'ovsdb-server/memory-trim-on-compaction on|off'.
        If turned on, ovsdb-server will try to reclaim all the unused memory
