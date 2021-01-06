@@ -1430,7 +1430,8 @@ dpctl_parse_flow_line(int command, struct ds *s, char **flow, char **action)
         return command;
     }
 
-    *flow = strndup(line, len);
+    *flow = xzalloc(len + 1);
+    ovs_strlcpy(*flow, line, len + 1);
 
     line += len;
     line += strspn(line, " \t\r\n");
