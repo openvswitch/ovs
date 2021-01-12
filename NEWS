@@ -54,6 +54,11 @@ Post-v2.14.0
        tearing down IPsec tunnels.
      * Add option '--no-restart-ike-daemon' to allow ovs-monitor-ipsec to start
        without restarting ipsec daemon.
+   - Building the Linux kernel module from the OVS source tree is deprecated
+     * Support for the Linux kernel is capped at version 5.8
+     * Only bug fixes for the Linux OOT kernel module will be accepted.
+     * The Linux kernel module will be fully removed from the OVS source tree
+       in OVS branch 2.18
 
 
 v2.14.0 - 17 Aug 2020
