@@ -39,7 +39,7 @@ BuildRequires: checkpolicy, selinux-policy-devel
 BuildRequires: autoconf, automake, libtool
 BuildRequires: python3-sphinx
 BuildRequires: unbound-devel
-BuildRequires: unwind-devel
+BuildRequires: libunwind-devel
 
 %bcond_without check
 %bcond_with check_datapath_kernel
