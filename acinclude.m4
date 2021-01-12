@@ -77,6 +77,7 @@ AC_DEFUN([OVS_CHECK_LINUX], [
 
   if test X"$with_linux" != X; then
     KBUILD=$with_linux
+    AC_MSG_WARN([--with-linux is deprecated and kernel support is limited to 5.8 and below])
   elif test X"$with_l26" != X; then
     KBUILD=$with_l26
     AC_MSG_WARN([--with-l26 is deprecated, please use --with-linux instead])
