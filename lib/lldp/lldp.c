@@ -513,10 +513,13 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
             b = xzalloc(tlv_size + 1);
             PEEK_BYTES(b, tlv_size);
             if (tlv_type == LLDP_TLV_PORT_DESCR) {
+                free(port->p_descr);
                 port->p_descr = b;
             } else if (tlv_type == LLDP_TLV_SYSTEM_NAME) {
+                free(chassis->c_name);
                 chassis->c_name = b;
             } else {
+                free(chassis->c_descr);
                 chassis->c_descr = b;
             }
             break;
