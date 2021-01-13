@@ -1,5 +1,8 @@
-v2.13.2 - xx xxx xxxx
+v2.13.2 - 13 Jan 2021
 ---------------------
+   - Bug fixes
+   - LLDP:
+     * Security fixes for CVE-2015-8011 and CVE-2020-27827.
    - IPsec:
      * Fixed support of strongswan 5.7+ in ovs-monitor-ipsec.
      * Add option '--no-cleanup' to allow ovs-monitor-ipsec to stop without
