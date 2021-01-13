@@ -1,5 +1,8 @@
-v2.10.6 - xx xxx xxxx
+v2.10.6 - 13 Jan 2021
 ---------------------
+   - Bug fixes
+   - LLDP:
+     * Security fixes for CVE-2015-8011 and CVE-2020-27827.
    - OVSDB:
      * Fixed SHA-1 hash computation for databases larger than 512 MB.
 
