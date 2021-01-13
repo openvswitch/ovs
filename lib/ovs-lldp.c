@@ -203,7 +203,7 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
                    &system_id_null,
                    sizeof port->p_element.system_id)) {
             const char *none_str = "<None>";
-            const char *descr = NULL;
+            char *descr = NULL;
             char *id = NULL;
             char *system;
 
@@ -226,6 +226,7 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
             ds_put_format(ds, "  Auto Attach Primary Server System Id: %s\n",
                           system);
 
+            free(descr);
             free(id);
             free(system);
         }
