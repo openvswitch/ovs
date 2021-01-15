@@ -431,6 +431,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     if test "$DPDK_AUTO_DISCOVER" = "false"; then
       OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
     fi
+    # Stripping out possible instruction set specific configuration that DPDK
+    # forces in pkg-config since this could override user-specified options.
+    # It's enough to have -mssse3 to build with DPDK headers.
+    DPDK_INCLUDE=$(echo "$DPDK_INCLUDE" | sed 's/-march=[[^ ]]*//g')
     OVS_CFLAGS="$OVS_CFLAGS $DPDK_INCLUDE"
     OVS_ENABLE_OPTION([-mssse3])
 
