@@ -3027,8 +3027,8 @@
       <group title="Tunnel Options: IPsec">
         <p>
           Setting any of these options enables IPsec support for a given
-          tunnel.  <code>gre</code>, <code>ip6gre</code>,
-          <code>geneve</code>, <code>vxlan</code> and <code>stt</code>
+          tunnel.  <code>gre</code>, <code>geneve</code>,
+          <code>vxlan</code> and <code>stt</code>
           interfaces support these options.  See the <code>IPsec</code>
           section in the <ref table="Open_vSwitch"/> table for a description
           of each mode.
