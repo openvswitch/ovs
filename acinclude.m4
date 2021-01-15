@@ -435,6 +435,12 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     # forces in pkg-config since this could override user-specified options.
     # It's enough to have -mssse3 to build with DPDK headers.
     DPDK_INCLUDE=$(echo "$DPDK_INCLUDE" | sed 's/-march=[[^ ]]*//g')
+    # Also stripping out '-mno-avx512f'.  Support for AVX512 will be disabled
+    # if OVS will detect that it's broken.  OVS could be built with a
+    # completely different toolchain that correctly supports AVX512, flags
+    # forced by DPDK only breaks our feature detection mechanism and leads to
+    # build failures: https://github.com/openvswitch/ovs-issues/issues/201
+    DPDK_INCLUDE=$(echo "$DPDK_INCLUDE" | sed 's/-mno-avx512f//g')
     OVS_CFLAGS="$OVS_CFLAGS $DPDK_INCLUDE"
     OVS_ENABLE_OPTION([-mssse3])
 
