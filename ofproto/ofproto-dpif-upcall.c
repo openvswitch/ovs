@@ -491,6 +491,11 @@ udpif_destroy(struct udpif *udpif)
     dpif_register_upcall_cb(udpif->dpif, NULL, udpif);
 
     for (int i = 0; i < N_UMAPS; i++) {
+        struct udpif_key *ukey;
+
+        CMAP_FOR_EACH (ukey, cmap_node, &udpif->ukeys[i].cmap) {
+            ukey_delete__(ukey);
+        }
         cmap_destroy(&udpif->ukeys[i].cmap);
         ovs_mutex_destroy(&udpif->ukeys[i].mutex);
     }
