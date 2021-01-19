@@ -85,7 +85,7 @@ dnl Ping vhost-user port
 AT_SETUP([OVS-DPDK - ping vhost-user ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_START()
 
 dnl Find number of sockets
@@ -115,7 +115,7 @@ ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostuser0" \
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
@@ -162,7 +162,7 @@ dnl Ping vhost-user-client port
 AT_SETUP([OVS-DPDK - ping vhost-user-client ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_START()
 
 dnl Find number of sockets
@@ -191,7 +191,7 @@ ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
