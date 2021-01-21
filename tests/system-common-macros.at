@@ -275,6 +275,12 @@ m4_define([OVS_START_L7],
    ]
 )
 
+# OFPROTO_CLEAR_DURATION_IDLE([])
+#
+# Clear the duration from the piped input which would differ from test to test
+#
+m4_define([OFPROTO_CLEAR_DURATION_IDLE], [[sed -e 's/duration=.*s,/duration=<cleared>,/g' -e 's/idle_age=[0-9]*,/idle_age=<cleared>,/g']])
+
 # OVS_CHECK_VXLAN()
 #
 # Do basic check for vxlan functionality, skip the test if it's not there.
