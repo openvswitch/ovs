@@ -5906,6 +5906,50 @@ ovs-appctl dpif/dump-flows br0
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - Multiple ICMP traverse])
+dnl This tracks sending ICMP packets via conntrack multiple times for the
+dnl same packet
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_CT_CLEAR()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+dnl setup ct flows
+AT_DATA([flows.txt], [dnl
+table=0,priority=10  ip,icmp,ct_state=-trk action=ct(zone=1,table=1)
+table=0,priority=0   action=drop
+table=1,priority=10  ct_state=-est+trk+new,ip,ct_zone=1,in_port=1 action=ct(commit,table=2)
+table=1,priority=10  ct_state=+est-new+trk,ct_zone=1,in_port=1 action=resubmit(,2)
+table=1,priority=0   action=drop
+table=2,priority=10  ct_state=+trk+new,in_port=1 action=drop
+table=2,priority=10  ct_state=+trk+est action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+# sending icmp pkts, first and second
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+
+sleep 1
+
+dnl ensure CT picked up the packet
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1)], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep table=2, | OFPROTO_CLEAR_DURATION_IDLE],
+         [0], [dnl
+ cookie=0x0, duration=<cleared>, table=2, n_packets=2, n_bytes=84, idle_age=<cleared>, priority=10,ct_state=+new+trk,in_port=1 actions=drop
+ cookie=0x0, duration=<cleared>, table=2, n_packets=0, n_bytes=0, idle_age=<cleared>, priority=10,ct_state=+est+trk actions=drop
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
