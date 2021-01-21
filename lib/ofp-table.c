@@ -523,9 +523,12 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 
     /* OpenFlow 1.3 and 1.4 always require all of the required properties.
      * OpenFlow 1.5 requires all of them if any property is present. */
-    if ((seen & OFPTFPT13_REQUIRED) != OFPTFPT13_REQUIRED
-        && (tf->any_properties || oh->version < OFP15_VERSION)) {
-        VLOG_WARN_RL(&rl, "table features message missing required property");
+    unsigned int missing = (seen & OFPTFPT13_REQUIRED) ^ OFPTFPT13_REQUIRED;
+    if (missing && (tf->any_properties || oh->version < OFP15_VERSION)) {
+        VLOG_WARN_RL(&rl,
+                     "table features message missing %u required "
+                     "properties, including property %d",
+                     count_1bits(missing), rightmost_1bit_idx(missing));
         return OFPERR_OFPTFFC_BAD_FEATURES;
     }
 
