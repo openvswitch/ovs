@@ -175,7 +175,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
 
     uint16_t win = ntohs(tcp->tcp_winsz);
     uint32_t ack, end, seq, orig_seq;
-    uint32_t p_len = tcp_payload_length(pkt);
+    uint32_t p_len = dp_packet_get_tcp_payload_length(pkt);
 
     if (tcp_invalid_flags(tcp_flags)) {
         COVERAGE_INC(conntrack_invalid_tcp_flags);
@@ -450,7 +450,7 @@ tcp_new_conn(struct conntrack *ct, struct dp_packet *pkt, long long now,
     dst = &newconn->peer[1];
 
     src->seqlo = ntohl(get_16aligned_be32(&tcp->tcp_seq));
-    src->seqhi = src->seqlo + tcp_payload_length(pkt) + 1;
+    src->seqhi = src->seqlo + dp_packet_get_tcp_payload_length(pkt) + 1;
 
     if (tcp_flags & TCP_SYN) {
         src->seqhi++;

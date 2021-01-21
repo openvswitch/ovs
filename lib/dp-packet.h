@@ -466,6 +466,18 @@ dp_packet_get_tcp_payload(const struct dp_packet *b)
     return NULL;
 }
 
+static inline uint32_t
+dp_packet_get_tcp_payload_length(const struct dp_packet *pkt)
+{
+    const char *tcp_payload = dp_packet_get_tcp_payload(pkt);
+    if (tcp_payload) {
+        return ((char *) dp_packet_tail(pkt) - dp_packet_l2_pad_size(pkt)
+                - tcp_payload);
+    } else {
+        return 0;
+    }
+}
+
 static inline const void *
 dp_packet_get_udp_payload(const struct dp_packet *b)
 {

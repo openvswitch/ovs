@@ -411,7 +411,7 @@ tcp_reader_run(struct tcp_reader *r, const struct flow *flow,
     }
     tcp = dp_packet_l4(packet);
     flags = TCP_FLAGS(tcp->tcp_ctl);
-    l7_length = (char *) dp_packet_tail(packet) - l7;
+    l7_length = dp_packet_get_tcp_payload_length(packet);
     seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));
 
     /* Construct key. */

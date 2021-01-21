@@ -2899,7 +2899,7 @@ get_ftp_ctl_msg(struct dp_packet *pkt, char *ftp_msg)
 {
     struct tcp_header *th = dp_packet_l4(pkt);
     char *tcp_hdr = (char *) th;
-    uint32_t tcp_payload_len = tcp_payload_length(pkt);
+    uint32_t tcp_payload_len = dp_packet_get_tcp_payload_length(pkt);
     size_t tcp_payload_of_interest = MIN(tcp_payload_len,
                                          LARGEST_FTP_MSG_OF_INTEREST);
     size_t tcp_hdr_len = TCP_OFFSET(th->tcp_ctl) * 4;
