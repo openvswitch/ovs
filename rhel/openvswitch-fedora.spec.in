@@ -162,7 +162,7 @@ This package provides IPsec tunneling support for OVS tunnels.
         --disable-libcapng \
 %endif
 %if %{with dpdk}
-        --with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
+        --with-dpdk=shared \
 %endif
         --enable-ssl \
         --disable-static \
