@@ -226,6 +226,15 @@ elif [ "$TRAVIS_ARCH" != "aarch64" ]; then
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${SPARSE_FLAGS}"
 fi
 
+if [ "$ASAN" ]; then
+    # This will override default option configured in tests/atlocal.in.
+    export ASAN_OPTIONS='detect_leaks=1'
+    # -O2 generates few false-positive memory leak reports in test-ovsdb
+    # application, so lowering optimizations to -O1 here.
+    CLFAGS_ASAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=address"
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CLFAGS_ASAN}"
+fi
+
 save_OPTS="${OPTS} $*"
 OPTS="${EXTRA_OPTS} ${save_OPTS}"
 

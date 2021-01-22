@@ -14,6 +14,7 @@ jobs:
       deb_dependencies: |
         linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
       AFXDP:       ${{ matrix.afxdp }}
+      ASAN:        ${{ matrix.asan }}
       CC:          ${{ matrix.compiler }}
       DEB_PACKAGE: ${{ matrix.deb_package }}
       DPDK:        ${{ matrix.dpdk }}
@@ -44,6 +45,7 @@ jobs:
           - compiler:     clang
             testsuite:    test
             kernel:       3.16
+            asan:         asan
 
           - compiler:     gcc
             testsuite:    test
