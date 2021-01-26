@@ -55,6 +55,11 @@ struct netlink_field {
     int size;
 };
 
+struct chain_node {
+    struct hmap_node node;
+    uint32_t chain;
+};
+
 static bool
 is_internal_port(const char *type)
 {
@@ -342,6 +347,69 @@ get_block_id_from_netdev(struct netdev *netdev)
     }
 
     return 0;
+}
+
+static int
+get_chains_from_netdev(struct netdev *netdev, struct tcf_id *id,
+                       struct hmap *map)
+{
+    struct netdev_flow_dump *dump;
+    struct chain_node *chain_node;
+    struct ofpbuf rbuffer, reply;
+    uint32_t chain;
+    size_t hash;
+    int err;
+
+    dump = xzalloc(sizeof *dump);
+    dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
+    dump->netdev = netdev_ref(netdev);
+
+    ofpbuf_init(&rbuffer, NL_DUMP_BUFSIZE);
+    tc_dump_tc_chain_start(id, dump->nl_dump);
+
+    while (nl_dump_next(dump->nl_dump, &reply, &rbuffer)) {
+        if (parse_netlink_to_tc_chain(&reply, &chain)) {
+            continue;
+        }
+
+        chain_node = xzalloc(sizeof *chain_node);
+        chain_node->chain = chain;
+        hash = hash_int(chain, 0);
+        hmap_insert(map, &chain_node->node, hash);
+    }
+
+    err = nl_dump_done(dump->nl_dump);
+    ofpbuf_uninit(&rbuffer);
+    netdev_close(netdev);
+    free(dump->nl_dump);
+    free(dump);
+
+    return err;
+}
+
+static int
+delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
+{
+    struct chain_node *chain_node;
+    struct hmap map;
+    int error;
+
+    hmap_init(&map);
+    error = get_chains_from_netdev(netdev, id, &map);
+
+    if (!error) {
+        /* Flush rules explicitly needed when we work with ingress_block,
+         * so we will not fail with reattaching block to bond iface, for ex.
+         */
+        HMAP_FOR_EACH_POP (chain_node, node, &map) {
+            id->chain = chain_node->chain;
+            tc_del_filter(id);
+            free(chain_node);
+        }
+    }
+
+    hmap_destroy(&map);
+    return error;
 }
 
 static int
@@ -1999,6 +2067,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     enum tc_qdisc_hook hook = get_tc_qdisc_hook(netdev);
+    static bool get_chain_supported = true;
     uint32_t block_id = 0;
     struct tcf_id id;
     int ifindex;
@@ -2012,12 +2081,18 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     }
 
     block_id = get_block_id_from_netdev(netdev);
-
-    /* Flush rules explicitly needed when we work with ingress_block,
-     * so we will not fail with reattaching block to bond iface, for ex.
-     */
     id = tc_make_tcf_id(ifindex, block_id, 0, hook);
-    tc_del_filter(&id);
+
+    if (get_chain_supported) {
+        if (delete_chains_from_netdev(netdev, &id)) {
+            get_chain_supported = false;
+        }
+    }
+
+    /* fallback here if delete chains fail */
+    if (!get_chain_supported) {
+        tc_del_filter(&id);
+    }
 
     /* make sure there is no ingress/egress qdisc */
     tc_add_del_qdisc(ifindex, false, 0, hook);
