@@ -350,16 +350,12 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       "shared")
           PKG_CHECK_MODULES([DPDK], [libdpdk], [
               DPDK_INCLUDE="$DPDK_CFLAGS"
-              DPDK_LIB="$DPDK_LIBS"], [
-              DPDK_INCLUDE="-I/usr/local/include/dpdk -I/usr/include/dpdk"
-              DPDK_LIB="-ldpdk"])
+              DPDK_LIB="$DPDK_LIBS"])
               ;;
       "static" | "yes")
           PKG_CHECK_MODULES_STATIC([DPDK], [libdpdk], [
               DPDK_INCLUDE="$DPDK_CFLAGS"
-              DPDK_LIB="$DPDK_LIBS"], [
-              DPDK_INCLUDE="-I/usr/local/include/dpdk -I/usr/include/dpdk"
-              DPDK_LIB="-ldpdk"])
+              DPDK_LIB="$DPDK_LIBS"])
 
           dnl Statically linked private DPDK objects of form
           dnl -l:file.a must be positioned between

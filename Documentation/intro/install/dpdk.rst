@@ -88,6 +88,19 @@ Install DPDK
        $ sudo ninja -C build install
        $ sudo ldconfig
 
+   Check if libdpdk can be found by pkg-config::
+
+       $ pkg-config --modversion libdpdk
+
+   The above command should return the DPDK version installed. If not found,
+   export the path to the installed DPDK libraries::
+
+       $ export PKG_CONFIG_PATH=/path/to/installed/".pc" file/for/DPDK
+
+   For example, On Fedora 32::
+
+       $ export PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig
+
    Detailed information can be found at `DPDK documentation`_.
 
 #. (Optional) Configure and export the DPDK shared library location
@@ -97,11 +110,9 @@ Install DPDK
 
    Exporting the path to library is not necessary if the DPDK libraries are
    system installed. For libraries installed using a prefix, export the path
-   to this library and also update the $PKG_CONFIG_PATH for use
-   before building OVS::
+   to this library::
 
       $ export LD_LIBRARY_PATH=/path/to/installed/DPDK/libraries
-      $ export PKG_CONFIG_PATH=/path/to/installed/".pc" file/for/DPDK
 
    .. note::
 
@@ -152,7 +163,7 @@ has to be configured to build against the DPDK library (``--with-dpdk``).
 
    An example that enables the AVX512 optimizations is::
 
-       $ ./configure --with-dpdk=$DPDK_BUILD CFLAGS="-Ofast -msse4.2 -mpopcnt"
+       $ ./configure --with-dpdk=static CFLAGS="-Ofast -msse4.2 -mpopcnt"
 
 #. Build and install OVS, as described in :ref:`general-building`
 
