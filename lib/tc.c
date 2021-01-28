@@ -426,6 +426,22 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_CT_LABELS] = { .type = NL_A_U128, .optional = true, },
     [TCA_FLOWER_KEY_CT_LABELS_MASK] = { .type = NL_A_U128,
                                         .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV4_CODE] = { .type = NL_A_U8,
+                                     .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV4_CODE_MASK] = { .type = NL_A_U8,
+                                          .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV4_TYPE] = { .type = NL_A_U8,
+                                     .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV4_TYPE_MASK] = { .type = NL_A_U8,
+                                          .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV6_CODE] = { .type = NL_A_U8,
+                                     .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV6_CODE_MASK] = { .type = NL_A_U8,
+                                          .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV6_TYPE] = { .type = NL_A_U8,
+                                     .optional = true, },
+    [TCA_FLOWER_KEY_ICMPV6_TYPE_MASK] = { .type = NL_A_U8,
+                                          .optional = true, },
 };
 
 static const struct nl_policy tca_flower_terse_policy[] = {
@@ -907,6 +923,32 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
             key->sctp_dst = nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_DST]);
             mask->sctp_dst =
                 nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_DST_MASK]);
+        }
+    } else if (ip_proto == IPPROTO_ICMP) {
+        if (attrs[TCA_FLOWER_KEY_ICMPV4_CODE_MASK]) {
+            key->icmp_code =
+               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_CODE]);
+            mask->icmp_code =
+                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_CODE]);
+        }
+        if (attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]) {
+            key->icmp_type =
+               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]);
+            mask->icmp_type =
+                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]);
+        }
+    } else if (ip_proto == IPPROTO_ICMPV6) {
+        if (attrs[TCA_FLOWER_KEY_ICMPV6_CODE_MASK]) {
+            key->icmp_code =
+               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE]);
+            mask->icmp_code =
+                 nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE]);
+        }
+        if (attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]) {
+            key->icmp_type =
+               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]);
+            mask->icmp_type =
+                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]);
         }
     }
 
@@ -2812,6 +2854,12 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         } else if (flower->key.ip_proto == IPPROTO_SCTP) {
             FLOWER_PUT_MASKED_VALUE(sctp_src, TCA_FLOWER_KEY_SCTP_SRC);
             FLOWER_PUT_MASKED_VALUE(sctp_dst, TCA_FLOWER_KEY_SCTP_DST);
+        } else if (flower->key.ip_proto == IPPROTO_ICMP) {
+            FLOWER_PUT_MASKED_VALUE(icmp_code, TCA_FLOWER_KEY_ICMPV4_CODE);
+            FLOWER_PUT_MASKED_VALUE(icmp_type, TCA_FLOWER_KEY_ICMPV4_TYPE);
+        } else if (flower->key.ip_proto == IPPROTO_ICMPV6) {
+            FLOWER_PUT_MASKED_VALUE(icmp_code, TCA_FLOWER_KEY_ICMPV6_CODE);
+            FLOWER_PUT_MASKED_VALUE(icmp_type, TCA_FLOWER_KEY_ICMPV6_TYPE);
         }
 
         FLOWER_PUT_MASKED_VALUE(ct_state, TCA_FLOWER_KEY_CT_STATE);

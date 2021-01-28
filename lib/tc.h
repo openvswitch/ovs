@@ -107,6 +107,9 @@ struct tc_flower_key {
     ovs_be16 sctp_src;
     ovs_be16 sctp_dst;
 
+    uint8_t icmp_code;
+    uint8_t icmp_type;
+
     uint16_t vlan_id[FLOW_MAX_VLAN_HEADERS];
     uint8_t vlan_prio[FLOW_MAX_VLAN_HEADERS];
 

@@ -650,6 +650,12 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         } else if (key->ip_proto == IPPROTO_SCTP) {
             match_set_tp_dst_masked(match, key->sctp_dst, mask->sctp_dst);
             match_set_tp_src_masked(match, key->sctp_src, mask->sctp_src);
+        } else if (key->ip_proto == IPPROTO_ICMP ||
+                   key->ip_proto == IPPROTO_ICMPV6) {
+            match_set_tp_dst_masked(match, htons(key->icmp_code),
+                                    htons(mask->icmp_code));
+            match_set_tp_src_masked(match, htons(key->icmp_type),
+                                    htons(mask->icmp_type));
         }
 
         if (mask->ct_state) {
@@ -1329,18 +1335,6 @@ test_key_and_mask(struct match *match)
     }
 
     if (key->dl_type == htons(ETH_TYPE_IP) &&
-        key->nw_proto == IPPROTO_ICMP) {
-        if (mask->tp_src) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute icmp_type isn't supported");
-            return EOPNOTSUPP;
-        }
-        if (mask->tp_dst) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute icmp_code isn't supported");
-            return EOPNOTSUPP;
-        }
-    } else if (key->dl_type == htons(ETH_TYPE_IP) &&
                key->nw_proto == IPPROTO_IGMP) {
         if (mask->tp_src) {
             VLOG_DBG_RL(&rl,
@@ -1350,18 +1344,6 @@ test_key_and_mask(struct match *match)
         if (mask->tp_dst) {
             VLOG_DBG_RL(&rl,
                         "offloading attribute igmp_code isn't supported");
-            return EOPNOTSUPP;
-        }
-    } else if (key->dl_type == htons(ETH_TYPE_IPV6) &&
-               key->nw_proto == IPPROTO_ICMPV6) {
-        if (mask->tp_src) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute icmpv6_type isn't supported");
-            return EOPNOTSUPP;
-        }
-        if (mask->tp_dst) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute icmpv6_code isn't supported");
             return EOPNOTSUPP;
         }
     } else if (key->dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)) {
@@ -1629,6 +1611,14 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             flower.mask.sctp_dst = mask->tp_dst;
             flower.key.sctp_src = key->tp_src;
             flower.mask.sctp_src = mask->tp_src;
+            mask->tp_src = 0;
+            mask->tp_dst = 0;
+        } else if (key->nw_proto == IPPROTO_ICMP ||
+                   key->nw_proto == IPPROTO_ICMPV6) {
+            flower.key.icmp_code = (uint8_t) ntohs(key->tp_dst);
+            flower.mask.icmp_code = (uint8_t) ntohs (mask->tp_dst);
+            flower.key.icmp_type = (uint8_t) ntohs(key->tp_src);
+            flower.mask.icmp_type = (uint8_t) ntohs(mask->tp_src);
             mask->tp_src = 0;
             mask->tp_dst = 0;
         }
