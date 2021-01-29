@@ -111,6 +111,7 @@ $(OVSIDL_BUILT): ovsdb/ovsdb-idlc.in python/ovs/dirs.py
 # ovsdb-doc
 EXTRA_DIST += ovsdb/ovsdb-doc
 OVSDB_DOC = $(run_python) $(srcdir)/ovsdb/ovsdb-doc
+ovsdb/ovsdb-doc: python/ovs/dirs.py
 
 # ovsdb-dot
 EXTRA_DIST += ovsdb/ovsdb-dot.in ovsdb/dot2pic
