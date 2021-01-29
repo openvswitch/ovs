@@ -43,7 +43,7 @@ rm -rf $distdir
 mkdir $distdir
 
 # Install manpages.
-${MAKE-make} install-man mandir="$abs_distdir"/man
+${MAKE-make} install-man install-man-rst mandir="$abs_distdir"/man
 (cd $distdir && mv `find man -type f` . && rm -rf man)
 manpages=`cd $distdir && echo *`
 
