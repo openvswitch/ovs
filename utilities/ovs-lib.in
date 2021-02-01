@@ -273,7 +273,7 @@ stop_daemon () {
                 case $action in
                     EXIT)
                         action "Exiting $1 ($pid)" \
-                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit $2
+                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit
                         # The above command could have resulted in delayed
                         # daemon segfault. And if a monitor is running, it
                         # would restart the daemon giving it a new pid.
