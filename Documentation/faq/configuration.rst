@@ -281,3 +281,28 @@ the sense of OFPP_LOCAL)
 
     A: Open vSwitch does not support such a configuration.  Bridges always have
     their local ports.
+
+Q: Why does OVS pick its default datapath ID the way it does?
+
+    A: The default OpenFlow datapath ID for a bridge is the minimum
+    non-local MAC address among all of the ports in a bridge.  This
+    means that a bridge with a given set of physical ports will always
+    have the same datapath ID.  This is useful for virtualization
+    systems, which typically put a single physical port (or a single
+    bond of multiple ports) on a given bridge alongside the virtual
+    ports for running VMs.  In such a setup, the IP address for the
+    NIC associated with a physical port gets migrated from the
+    physical NIC to the bridge port.  The bridge port should have the
+    same MAC address as the physical NIC, so that the host doesn't
+    suddenly start using a different MAC, and taking the minimum MAC
+    address does this automatically and, if there is bond,
+    consistently.  Virtual ports for running VMs do not affect the
+    situation because these normally have the "local" bit set, which
+    OVS ignores.
+
+    If you want a stable MAC and datapath ID, you could set your own
+    MAC by ``hwaddr`` in ``other_config`` of bridge.
+
+    ::
+
+        ovs-vsctl set bridge br-int other_config:hwaddr=3a:4d:a7:05:2a:45
