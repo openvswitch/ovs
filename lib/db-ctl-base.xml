@@ -152,7 +152,7 @@
         later:
       </p>
 
-      <dl
+      <dl>
         <dt><code>{in}</code></dt>
         <dd>
           Selects records in which every element in
