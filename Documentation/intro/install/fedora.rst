@@ -117,6 +117,13 @@ can be added:
 
     $ make rpm-fedora RPMBUILD_OPT="--with dpdk --without check"
 
+To enable AF_XDP support in the openvswitch package, the ``--with afxdp``
+option can be added:
+
+::
+
+    $ make rpm-fedora RPMBUILD_OPT="--with afxdp --without check"
+
 You can also have the above commands automatically run the Open vSwitch unit
 tests.  This can take several minutes.
 

@@ -28,6 +28,8 @@
 %bcond_without libcapng
 # To enable DPDK support, specify '--with dpdk' when building
 %bcond_with dpdk
+# To enable AF_XDP support, specify '--with afxdp' when building
+%bcond_with afxdp
 
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
@@ -72,6 +74,9 @@ BuildRequires: libcap-ng libcap-ng-devel
 BuildRequires: libpcap-devel numactl-devel
 BuildRequires: dpdk-devel >= 17.05.1
 Provides: %{name}-dpdk = %{version}-%{release}
+%endif
+%if %{with afxdp}
+BuildRequires: libbpf-devel numactl-devel
 %endif
 BuildRequires: unbound unbound-devel
 
@@ -163,6 +168,9 @@ This package provides IPsec tunneling support for OVS tunnels.
 %endif
 %if %{with dpdk}
         --with-dpdk=shared \
+%endif
+%if %{with afxdp}
+        --enable-afxdp \
 %endif
         --enable-ssl \
         --disable-static \
