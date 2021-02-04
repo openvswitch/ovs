@@ -1646,6 +1646,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_NEW;
             }
             flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_NEW;
+            mask->ct_state &= ~OVS_CS_F_NEW;
         }
 
         if (mask->ct_state & OVS_CS_F_ESTABLISHED) {
@@ -1653,6 +1654,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
             }
             flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED;
+            mask->ct_state &= ~OVS_CS_F_ESTABLISHED;
         }
 
         if (mask->ct_state & OVS_CS_F_TRACKED) {
@@ -1660,14 +1662,13 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 flower.key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
             }
             flower.mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+            mask->ct_state &= ~OVS_CS_F_TRACKED;
         }
 
         if (flower.key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
             flower.key.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
             flower.mask.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
         }
-
-        mask->ct_state = 0;
     }
 
     if (mask->ct_zone) {
