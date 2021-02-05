@@ -4346,8 +4346,12 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     }
 
     struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
+    bool cur_rebalance_requested = pmd_alb->auto_lb_requested;
     pmd_alb->auto_lb_requested = smap_get_bool(other_config, "pmd-auto-lb",
                               false);
+    if (cur_rebalance_requested != pmd_alb->auto_lb_requested) {
+        log_autolb = true;
+    }
 
     rebalance_intvl = smap_get_int(other_config, "pmd-auto-lb-rebal-interval",
                                    ALB_REBALANCE_INTERVAL);
