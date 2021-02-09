@@ -155,6 +155,16 @@ kmod_versions=()
 kversion=$(rpm -ql ${rpmname} | grep '\.ko$' | \
            sed -n -e 's/^\/lib\/modules\/\(.*\)\/extra\/.*$/\1/p' | \
            sort | uniq)
+
+IFS='.\|-' read installed_major installed_minor installed_patch \
+    installed_major_rev installed_minor_rev installed_extra <<<"${kversion}"
+
+if [ "$installed_major_rev" -lt "$major_rev" ]; then
+    echo "Not installing RPM with major revision $installed_major_rev" \
+         "to kernel with greater major revision $major_rev.  Exiting"
+    exit 1
+fi
+
 for kv in $kversion; do
     IFS='.\|-' read -r -a kv_nums <<<"${kv}"
     kmod_versions+=(${kv_nums[$ver_offset]})
