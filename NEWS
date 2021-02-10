@@ -1,5 +1,8 @@
-v2.7.13 - xx xxx xxxx
+v2.7.13 - 10 Feb 2021
 ---------------------
+   - Bug fixes
+   - Security:
+     * Fixed packet parsing vulnerability CVE-2020-35498.
 
 v2.7.12 - 13 Jan 2021
 ---------------------
