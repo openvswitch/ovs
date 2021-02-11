@@ -210,15 +210,30 @@ If any of above is not met PMD Auto Load Balancing is disabled.
 
 Once auto load balancing is set, each non-isolated PMD measures the processing
 load for each of its associated queues every 10 seconds. If the aggregated PMD
-load reaches 95% for 6 consecutive intervals then PMD considers itself to be
-overloaded.
+load reaches the load threshold for 6 consecutive intervals then PMD considers
+itself to be overloaded.
+
+For example, to set the load threshold to 70%::
+
+    $ ovs-vsctl set open_vswitch .\
+        other_config:pmd-auto-lb-load-threshold="70"
+
+If not set, the default load threshold is 95%.
 
 If any PMD is overloaded, a dry-run of the PMD assignment algorithm is
 performed by OVS main thread. The dry-run does NOT change the existing queue
 to PMD assignments.
 
 If the resultant mapping of dry-run indicates an improved distribution of the
-load then the actual reassignment will be performed.
+load by at least the variance improvement threshold then the actual
+reassignment will be performed.
+
+For example, to set the variance improvement threshold to 40%::
+
+    $ ovs-vsctl set open_vswitch .\
+        other_config:pmd-auto-lb-improvement-threshold="40"
+
+If not set, the default variance improvement threshold is 25%.
 
 .. note::
 
