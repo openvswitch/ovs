@@ -88,7 +88,7 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="18.11.9"
+        DPDK_VER="18.11.11"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
