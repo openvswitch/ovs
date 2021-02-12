@@ -392,9 +392,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-18.11.9.tar.xz
-    $ tar xf dpdk-18.11.9.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-18.11.9
+    $ wget http://fast.dpdk.org/rel/dpdk-18.11.11.tar.xz
+    $ tar xf dpdk-18.11.11.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-18.11.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
