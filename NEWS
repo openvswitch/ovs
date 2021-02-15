@@ -4,7 +4,7 @@ Post-v2.15.0
      operators {in} and {not-in}.
 
 
-v2.15.0 - xx xxx xxxx
+v2.15.0 - 15 Feb 2021
 ---------------------
    - OVSDB:
      * Changed format in which ovsdb transactions are stored in database files.
