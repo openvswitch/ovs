@@ -134,7 +134,8 @@ FUZZ_REGRESSION_TESTS = \
 	tests/fuzz-regression/ofp_print_fuzzer-5722747668791296 \
 	tests/fuzz-regression/ofp_print_fuzzer-6285128790704128 \
 	tests/fuzz-regression/ofp_print_fuzzer-6470117922701312 \
-	tests/fuzz-regression/ofp_print_fuzzer-6502620041576448
+	tests/fuzz-regression/ofp_print_fuzzer-6502620041576448 \
+	tests/fuzz-regression/ofp_print_fuzzer-6540965472632832
 $(srcdir)/tests/fuzz-regression-list.at: tests/automake.mk
 	$(AM_V_GEN)for name in $(FUZZ_REGRESSION_TESTS); do \
             basename=`echo $$name | sed 's,^.*/,,'`; \
