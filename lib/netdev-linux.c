@@ -1255,21 +1255,21 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
      * aux_buf is allocated so that it can be prepended to TSO buffer. */
     std_len = virtio_net_hdr_size + VLAN_ETH_HEADER_LEN + mtu;
     for (i = 0; i < NETDEV_MAX_BURST; i++) {
-         buffers[i] = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
-         iovs[i][IOV_PACKET].iov_base = dp_packet_data(buffers[i]);
-         iovs[i][IOV_PACKET].iov_len = std_len;
-         if (iovlen == IOV_TSO_SIZE) {
-             iovs[i][IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
-             iovs[i][IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
-         }
+        buffers[i] = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
+        iovs[i][IOV_PACKET].iov_base = dp_packet_data(buffers[i]);
+        iovs[i][IOV_PACKET].iov_len = std_len;
+        if (iovlen == IOV_TSO_SIZE) {
+            iovs[i][IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
+            iovs[i][IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
+        }
 
-         mmsgs[i].msg_hdr.msg_name = NULL;
-         mmsgs[i].msg_hdr.msg_namelen = 0;
-         mmsgs[i].msg_hdr.msg_iov = iovs[i];
-         mmsgs[i].msg_hdr.msg_iovlen = iovlen;
-         mmsgs[i].msg_hdr.msg_control = &cmsg_buffers[i];
-         mmsgs[i].msg_hdr.msg_controllen = sizeof cmsg_buffers[i];
-         mmsgs[i].msg_hdr.msg_flags = 0;
+        mmsgs[i].msg_hdr.msg_name = NULL;
+        mmsgs[i].msg_hdr.msg_namelen = 0;
+        mmsgs[i].msg_hdr.msg_iov = iovs[i];
+        mmsgs[i].msg_hdr.msg_iovlen = iovlen;
+        mmsgs[i].msg_hdr.msg_control = &cmsg_buffers[i];
+        mmsgs[i].msg_hdr.msg_controllen = sizeof cmsg_buffers[i];
+        mmsgs[i].msg_hdr.msg_flags = 0;
     }
 
     do {
