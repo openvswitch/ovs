@@ -4322,6 +4322,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
 {
     struct ofpact_encap *encap;
     const struct ofp_ed_prop_header *ofp_prop;
+    const size_t encap_ofs = out->size;
     size_t props_len;
     uint16_t n_props = 0;
     int err;
@@ -4349,6 +4350,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
         }
         n_props++;
     }
+    encap = ofpbuf_at_assert(out, encap_ofs, sizeof *encap);
     encap->n_props = n_props;
     out->header = &encap->ofpact;
     ofpact_finish_ENCAP(out, &encap);
