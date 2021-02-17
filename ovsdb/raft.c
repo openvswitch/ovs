@@ -935,6 +935,34 @@ raft_reset_ping_timer(struct raft *raft)
 }
 
 static void
+raft_conn_update_probe_interval(struct raft *raft, struct raft_conn *r_conn)
+{
+    /* Inactivity probe will be sent if connection will remain idle for the
+     * time of an election timeout.  Connection will be dropped if inactivity
+     * will last twice that time.
+     *
+     * It's not enough to just have heartbeats if connection is still
+     * established, but no packets received from the other side.  Without
+     * inactivity probe follower will just try to initiate election
+     * indefinitely staying in 'candidate' role.  And the leader will continue
+     * to send heartbeats to the dead connection thinking that remote server
+     * is still part of the cluster. */
+    int probe_interval = raft->election_timer + ELECTION_RANGE_MSEC;
+
+    jsonrpc_session_set_probe_interval(r_conn->js, probe_interval);
+}
+
+static void
+raft_update_probe_intervals(struct raft *raft)
+{
+    struct raft_conn *r_conn;
+
+    LIST_FOR_EACH (r_conn, list_node, &raft->conns) {
+        raft_conn_update_probe_interval(raft, r_conn);
+    }
+}
+
+static void
 raft_add_conn(struct raft *raft, struct jsonrpc_session *js,
               const struct uuid *sid, bool incoming)
 {
@@ -948,7 +976,7 @@ raft_add_conn(struct raft *raft, struct jsonrpc_session *js,
                                               &conn->sid);
     conn->incoming = incoming;
     conn->js_seqno = jsonrpc_session_get_seqno(conn->js);
-    jsonrpc_session_set_probe_interval(js, 0);
+    raft_conn_update_probe_interval(raft, conn);
     jsonrpc_session_set_backlog_threshold(js, raft->conn_backlog_max_n_msgs,
                                               raft->conn_backlog_max_n_bytes);
 }
@@ -2792,6 +2820,7 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
                           raft->election_timer, e->election_timer);
                 raft->election_timer = e->election_timer;
                 raft->election_timer_new = 0;
+                raft_update_probe_intervals(raft);
             }
             if (e->servers) {
                 /* raft_run_reconfigure() can write a new Raft entry, which can
@@ -2808,6 +2837,7 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
                 VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
                           raft->election_timer, e->election_timer);
                 raft->election_timer = e->election_timer;
+                raft_update_probe_intervals(raft);
             }
         }
         /* Check if any pending command can be completed, and complete it.
