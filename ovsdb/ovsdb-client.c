@@ -1661,14 +1661,15 @@ static void
 do_needs_conversion(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
                     int argc OVS_UNUSED, char *argv[])
 {
+    const char *schema_file_name = argv[argc - 1];
     struct ovsdb_schema *schema1;
-    check_ovsdb_error(ovsdb_schema_from_file(argv[0], &schema1));
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema1));
 
     char *database = schema1->name;
     open_rpc(1, NEED_DATABASE, argc, argv, &rpc, &database);
 
     if (is_database_clustered(rpc, database)) {
-        ovsdb_schema_persist_ephemeral_columns(schema1, argv[0]);
+        ovsdb_schema_persist_ephemeral_columns(schema1, schema_file_name);
     }
 
     struct ovsdb_schema *schema2 = fetch_schema(rpc, schema1->name);
