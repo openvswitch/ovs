@@ -273,7 +273,26 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
         authenticated; otherwise, any certificate signed by the CA would be
         accepted.
 
-3. Test IPsec tunnel.
+3. Set the `local_ip` field in the Interface table (Optional)
+
+    Make sure that the `local_ip` field in the Interface table is set to the
+    NIC used for egress traffic.
+
+    On `host 1`::
+
+       # ovs-vsctl set Interface tun options:local_ip=$ip_1
+
+    Similarly, on `host 2`::
+
+       # ovs-vsctl set Interface tun options:local_ip=$ip_2
+
+   .. note::
+
+        It is not strictly necessary to set the `local_ip` field if your system
+        only has one NIC or the default gateway interface is set to the NIC
+        used for egress traffic.
+
+4. Test IPsec tunnel.
 
    Now you should have an IPsec GRE tunnel running between two hosts. To verify
    it, in `host_1`::
