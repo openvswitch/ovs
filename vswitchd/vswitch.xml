@@ -4530,7 +4530,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         packets per second the CIR would be set to to to 46000000. This value
         can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
         rate for the number of packets per second and 46 represents the size
-        of the packet data for a 64 byte ip packet.
+        of the packet data for a 64 bytes IP packet without 14 bytes Ethernet
+        and 4 bytes FCS header.
       </column>
       <column name="other_config" key="cbs" type='{"type": "integer"}'>
         The Committed Burst Size (CBS) is measured in bytes and represents a
@@ -4551,7 +4552,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         packets per second the EIR would be set to to to 46000000. This value
         can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
         rate for the number of packets per second and 46 represents the size
-        of the packet data for a 64 byte ip packet.
+        of the packet data for a 64 bytes IP packet without 14 bytes Ethernet
+        and 4 bytes FCS header.
       </column>
       <column name="other_config" key="ebs" type='{"type": "integer"}'>
         The Excess Burst Size (EBS) is measured in bytes and represents a
