@@ -4424,6 +4424,8 @@ raft_unixctl_status(struct unixctl_conn *conn,
                   : raft->leaving ? "leaving cluster"
                   : raft->left ? "left cluster"
                   : raft->failed ? "failed"
+                  : raft->candidate_retrying
+                      ? "disconnected from the cluster (election timeout)"
                   : "cluster member");
     if (raft->joining) {
         ds_put_format(&s, "Remotes for joining:");
