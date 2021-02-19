@@ -225,6 +225,14 @@ def inet_parse_active(target, default_port):
 def inet_open_active(style, target, default_port, dscp):
     address = inet_parse_active(target, default_port)
     try:
+        # If address is domain name convert it to ip address string
+        address_list = list(address)
+        address_list[0] = socket.gethostbyname(address_list[0])
+        address = tuple(address_list)
+    except socket.gaierror as e:
+        return get_exception_errno(e), None
+    address = inet_parse_active(target, default_port)
+    try:
         is_addr_inet = is_valid_ipv4_address(address[0])
         if is_addr_inet:
             sock = socket.socket(socket.AF_INET, style, 0)
