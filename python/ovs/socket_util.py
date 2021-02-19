@@ -223,7 +223,7 @@ def inet_parse_active(target, default_port):
         # If host_name is domain name convert it to ip address string
         host_name = socket.gethostbyname(host_name)
     except socket.gaierror as e:
-        return get_exception_errno(e), None
+        raise e
     return (host_name, port)
 
 
