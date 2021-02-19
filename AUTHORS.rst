@@ -40,6 +40,7 @@ Alexander Duyck                    alexander.h.duyck@redhat.com
 Alexandru Copot                    alex.mihai.c@gmail.com
 Alexei Starovoitov                 ast@plumgrid.com
 Alexey I. Froloff                  raorn@raorn.name
+Alexey Roytman                     roytman@il.ibm.com
 Alex Wang                          ee07b291@gmail.com
 Alfredo Finelli                    alf@computationes.de
 Alin Balutoiu                      abalutoiu@cloudbasesolutions.com
