@@ -75,7 +75,8 @@ enum raft_failure_test {
     FT_CRASH_AFTER_SEND_EXEC_REQ,
     FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE,
     FT_DELAY_ELECTION,
-    FT_DONT_SEND_VOTE_REQUEST
+    FT_DONT_SEND_VOTE_REQUEST,
+    FT_STOP_RAFT_RPC,
 };
 static enum raft_failure_test failure_test;
 
@@ -1474,6 +1475,10 @@ raft_send_add_server_request(struct raft *raft, struct raft_conn *conn)
 static void
 raft_conn_run(struct raft *raft, struct raft_conn *conn)
 {
+    if (failure_test == FT_STOP_RAFT_RPC) {
+        return;
+    }
+
     jsonrpc_session_run(conn->js);
 
     unsigned int new_seqno = jsonrpc_session_get_seqno(conn->js);
@@ -1794,7 +1799,8 @@ static void
 raft_open_conn(struct raft *raft, const char *address, const struct uuid *sid)
 {
     if (strcmp(address, raft->local_address)
-        && !raft_find_conn_by_address(raft, address)) {
+        && !raft_find_conn_by_address(raft, address)
+        && failure_test != FT_STOP_RAFT_RPC) {
         raft_add_conn(raft, jsonrpc_session_open(address, true), sid, false);
     }
 }
@@ -1870,7 +1876,7 @@ raft_run(struct raft *raft)
         free(paddr);
     }
 
-    if (raft->listener) {
+    if (raft->listener && failure_test != FT_STOP_RAFT_RPC) {
         struct stream *stream;
         int error = pstream_accept(raft->listener, &stream);
         if (!error) {
@@ -1995,7 +2001,7 @@ raft_run(struct raft *raft)
 static void
 raft_wait_session(struct jsonrpc_session *js)
 {
-    if (js) {
+    if (js && failure_test != FT_STOP_RAFT_RPC) {
         jsonrpc_session_wait(js);
         jsonrpc_session_recv_wait(js);
     }
@@ -2012,10 +2018,12 @@ raft_wait(struct raft *raft)
 
     raft_waiters_wait(raft);
 
-    if (raft->listener) {
-        pstream_wait(raft->listener);
-    } else {
-        poll_timer_wait_until(raft->listen_backoff);
+    if (failure_test != FT_STOP_RAFT_RPC) {
+        if (raft->listener) {
+            pstream_wait(raft->listener);
+        } else {
+            poll_timer_wait_until(raft->listen_backoff);
+        }
     }
 
     struct raft_conn *conn;
@@ -4361,8 +4369,9 @@ raft_send_to_conn_at(struct raft *raft, const union raft_rpc *rpc,
                      struct raft_conn *conn, int line_number)
 {
     log_rpc(rpc, "-->", conn, line_number);
-    return !jsonrpc_session_send(
-        conn->js, raft_rpc_to_jsonrpc(&raft->cid, &raft->sid, rpc));
+    return failure_test == FT_STOP_RAFT_RPC
+           || !jsonrpc_session_send(
+                  conn->js, raft_rpc_to_jsonrpc(&raft->cid, &raft->sid, rpc));
 }
 
 static bool
@@ -4856,6 +4865,8 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
         }
     } else if (!strcmp(test, "dont-send-vote-request")) {
         failure_test = FT_DONT_SEND_VOTE_REQUEST;
+    } else if (!strcmp(test, "stop-raft-rpc")) {
+        failure_test = FT_STOP_RAFT_RPC;
     } else if (!strcmp(test, "clear")) {
         failure_test = FT_NO_TEST;
         unixctl_command_reply(conn, "test dismissed");
