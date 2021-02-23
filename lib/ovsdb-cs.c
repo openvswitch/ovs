@@ -1367,7 +1367,7 @@ ovsdb_cs_send_transaction(struct ovsdb_cs *cs, struct json *operations)
                               sizeof *cs->txns);
     }
     cs->txns[cs->n_txns++] = request_id;
-    return request_id;
+    return json_clone(request_id);
 }
 
 /* Makes 'cs' drop its record of transaction 'request_id'.  If a reply arrives
@@ -1380,6 +1380,7 @@ ovsdb_cs_forget_transaction(struct ovsdb_cs *cs, const struct json *request_id)
 {
     for (size_t i = 0; i < cs->n_txns; i++) {
         if (json_equal(request_id, cs->txns[i])) {
+            json_destroy(cs->txns[i]);
             cs->txns[i] = cs->txns[--cs->n_txns];
             return true;
         }
