@@ -1,5 +1,10 @@
 v2.15.1 - xx xxx xxxx
 ---------------------
+   - ovs-ctl:
+     * New option '--no-record-hostname' to disable hostname configuration
+       in ovsdb on startup.
+     * New command 'record-hostname-if-not-set' to update hostname in ovsdb.
+
 
 v2.15.0 - 15 Feb 2021
 ---------------------
