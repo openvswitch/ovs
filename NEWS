@@ -3,6 +3,10 @@ v2.14.3 - xx xxx xxxx
    - DPDK:
      * OVS validated with DPDK 19.11.6. It is recommended to use this version
        until further releases.
+   - ovs-ctl:
+     * New option '--no-record-hostname' to disable hostname configuration
+       in ovsdb on startup.
+     * New command 'record-hostname-if-not-set' to update hostname in ovsdb.
 
 v2.14.2 - 10 Feb 2021
 ---------------------
