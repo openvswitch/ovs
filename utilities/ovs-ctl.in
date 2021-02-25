@@ -230,7 +230,9 @@ start_forwarding () {
     if test X"$OVS_VSWITCHD" = Xyes; then
         do_start_forwarding || return 1
     fi
-    set_hostname &
+    if test X"$RECORD_HOSTNAME" = Xyes; then
+        set_hostname &
+    fi
     return 0
 }
 
@@ -321,6 +323,7 @@ set_defaults () {
     SYSTEM_ID=
 
     FULL_HOSTNAME=yes
+    RECORD_HOSTNAME=yes
 
     DELETE_BRIDGES=no
     DELETE_TRANSIENT_PORTS=no
@@ -382,19 +385,24 @@ This program is intended to be invoked internally by Open vSwitch startup
 scripts.  System administrators should not normally invoke it directly.
 
 Commands:
-  start                   start Open vSwitch daemons
-  stop                    stop Open vSwitch daemons
-  restart                 stop and start Open vSwitch daemons
-  status                  check whether Open vSwitch daemons are running
-  version                 print versions of Open vSwitch daemons
-  load-kmod               insert modules if not already present
-  force-reload-kmod       save OVS network device state, stop OVS, unload kernel
-                          module, reload kernel module, start OVS, restore state
-  enable-protocol         enable protocol specified in options with iptables
-  delete-transient-ports  delete transient (other_config:transient=true) ports
-  start-ovs-ipsec         start Open vSwitch ipsec daemon
-  stop-ovs-ipsec          stop Open vSwitch ipsec daemon
-  help                    display this help message
+  start                       start Open vSwitch daemons
+  stop                        stop Open vSwitch daemons
+  restart                     stop and start Open vSwitch daemons
+  status                      check whether Open vSwitch daemons are running
+  version                     print versions of Open vSwitch daemons
+  load-kmod                   insert modules if not already present
+  force-reload-kmod           save OVS network device state, stop OVS, unload
+                              kernel module, reload kernel module, start OVS,
+                              restore state
+  enable-protocol             enable protocol specified in options with
+                              iptables
+  delete-transient-ports      delete transient (other_config:transient=true)
+                              ports
+  start-ovs-ipsec             start Open vSwitch ipsec daemon
+  stop-ovs-ipsec              stop Open vSwitch ipsec daemon
+  record-hostname-if-not-set  determine the system hostname and record it in
+                              the Open vSwitch database if not already set
+  help                        display this help message
 
 One of the following options is required for "start", "restart" and "force-reload-kmod":
   --system-id=UUID   set specific ID to uniquely identify this system
@@ -415,6 +423,8 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
   --no-full-hostname             set short hostname instead of full hostname
+  --no-record-hostname           do not attempt to determine/record system
+                                 hostname as part of start command
 
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER
@@ -572,6 +582,9 @@ case $command in
         ;;
     stop-ovs-ipsec)
         stop_ovs_ipsec
+        ;;
+    record-hostname-if-not-set)
+        set_hostname
         ;;
     help)
         usage

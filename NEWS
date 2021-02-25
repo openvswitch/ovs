@@ -2,6 +2,10 @@ Post-v2.15.0
 ---------------------
    - In ovs-vsctl and vtep-ctl, the "find" command now accept new
      operators {in} and {not-in}.
+   - ovs-ctl:
+     * New option '--no-record-hostname' to disable hostname configuration
+       in ovsdb on startup.
+     * New command 'record-hostname-if-not-set' to update hostname in ovsdb.
 
 
 v2.15.0 - 15 Feb 2021
