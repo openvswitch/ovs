@@ -4421,6 +4421,10 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
             error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
         }
 
+        if (!ctx->xin->xcache) {
+            ofproto_flow_mod_uninit(ofm);
+        }
+
         if (error) {
             xlate_report_error(ctx, "LEARN action execution failed (%s).",
                                ofperr_to_string(error));
