@@ -3830,6 +3830,15 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         return error;
     }
 
+    if (match.wc.masks.in_port.odp_port != ODPP_NONE) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        VLOG_ERR_RL(&rl, "failed to put%s flow: in_port is not an exact match",
+                    (put->flags & DPIF_FP_CREATE) ? "[create]"
+                    : (put->flags & DPIF_FP_MODIFY) ? "[modify]" : "[zero]");
+        return EINVAL;
+    }
+
     if (put->ufid) {
         ufid = *put->ufid;
     } else {

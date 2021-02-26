@@ -585,3 +585,20 @@ arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
 
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
+
+AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure])
+
+AT_CHECK([ovs-appctl dpctl/add-flow "eth(),eth_type(0x0800),ipv4()" "3"], [2],
+[], [dnl
+ovs-vswitchd: updating flow table (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_WAIT_UNTIL([grep "flow: in_port is not an exact match" ovs-vswitchd.log])
+OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
+/failed to put/d"])
+AT_CLEANUP
