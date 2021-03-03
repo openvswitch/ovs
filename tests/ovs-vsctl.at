@@ -1639,3 +1639,26 @@ AT_CHECK([grep "server name" ovsdb-server.log], [0],
 
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([set ingress policing test])
+
+AT_SETUP([set ingress_policing_rate and ingress_policing_burst])
+AT_KEYWORDS([ingress_policing])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [add-br a],
+   [add-port a a1],
+   [set interface a1 ingress_policing_rate=100],
+   [set interface a1 ingress_policing_burst=10],
+   [--columns=ingress_policing_burst,ingress_policing_rate list interface a1])],
+   [0],
+   [
+
+
+
+ingress_policing_burst: 10
+ingress_policing_rate: 100
+])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
