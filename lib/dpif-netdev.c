@@ -280,8 +280,8 @@ static bool dpcls_lookup(struct dpcls *cls,
 
 struct dp_meter_band {
     uint32_t rate;
+    uint32_t burst_size;
     uint64_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
-    uint64_t burst_size;
     uint64_t packet_count;
     uint64_t byte_count;
 };
@@ -6226,12 +6226,14 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     /* Update all bands and find the one hit with the highest rate for each
      * packet (if any). */
     for (int m = 0; m < meter->n_bands; ++m) {
-        band = &meter->bands[m];
+        uint64_t max_bucket_size;
 
+        band = &meter->bands[m];
+        max_bucket_size = (band->rate + band->burst_size) * 1000ULL;
         /* Update band's bucket. */
         band->bucket += (uint64_t) delta_t * band->rate;
-        if (band->bucket > band->burst_size) {
-            band->bucket = band->burst_size;
+        if (band->bucket > max_bucket_size) {
+            band->bucket = max_bucket_size;
         }
 
         /* Drain the bucket for all the packets, if possible. */
@@ -6352,13 +6354,15 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
             config->bands[i].burst_size = config->bands[i].rate;
         }
 
-        meter->bands[i].bucket = 0;
         meter->bands[i].rate = config->bands[i].rate;
-        meter->bands[i].burst_size = config->bands[i].burst_size * 1000ULL;
+        meter->bands[i].burst_size = config->bands[i].burst_size;
+        /* Start with a full bucket. */
+        meter->bands[i].bucket =
+            (meter->bands[i].burst_size + meter->bands[i].rate) * 1000ULL;
 
         /* Figure out max delta_t that is enough to fill any bucket. */
         band_max_delta_t
-            = meter->bands[i].burst_size / meter->bands[i].rate;
+            = meter->bands[i].bucket / meter->bands[i].rate;
         if (band_max_delta_t > meter->max_delta_t) {
             meter->max_delta_t = band_max_delta_t;
         }
