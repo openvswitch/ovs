@@ -279,8 +279,9 @@ static bool dpcls_lookup(struct dpcls *cls,
     ( 1 << OFPMBT13_DROP )
 
 struct dp_meter_band {
-    struct ofputil_meter_band up; /* type, prec_level, pad, rate, burst_size */
-    uint32_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
+    uint32_t rate;
+    uint64_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
+    uint64_t burst_size;
     uint64_t packet_count;
     uint64_t byte_count;
 };
@@ -6215,9 +6216,9 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
         band = &meter->bands[m];
 
         /* Update band's bucket. */
-        band->bucket += delta_t * band->up.rate;
-        if (band->bucket > band->up.burst_size) {
-            band->bucket = band->up.burst_size;
+        band->bucket += (uint64_t) delta_t * band->rate;
+        if (band->bucket > band->burst_size) {
+            band->bucket = band->burst_size;
         }
 
         /* Drain the bucket for all the packets, if possible. */
@@ -6235,8 +6236,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
                  * (Only one band will be fired by a packet, and that
                  * can be different for each packet.) */
                 for (int i = band_exceeded_pkt; i < cnt; i++) {
-                    if (band->up.rate > exceeded_rate[i]) {
-                        exceeded_rate[i] = band->up.rate;
+                    if (band->rate > exceeded_rate[i]) {
+                        exceeded_rate[i] = band->rate;
                         exceeded_band[i] = m;
                     }
                 }
@@ -6255,8 +6256,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
                         /* Update the exceeding band for the exceeding packet.
                          * (Only one band will be fired by a packet, and that
                          * can be different for each packet.) */
-                        if (band->up.rate > exceeded_rate[i]) {
-                            exceeded_rate[i] = band->up.rate;
+                        if (band->rate > exceeded_rate[i]) {
+                            exceeded_rate[i] = band->rate;
                             exceeded_band[i] = m;
                         }
                     }
@@ -6338,16 +6339,13 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
             config->bands[i].burst_size = config->bands[i].rate;
         }
 
-        meter->bands[i].up = config->bands[i];
-        /* Convert burst size to the bucket units: */
-        /* pkts => 1/1000 packets, kilobits => bits. */
-        meter->bands[i].up.burst_size *= 1000;
-        /* Initialize bucket to empty. */
         meter->bands[i].bucket = 0;
+        meter->bands[i].rate = config->bands[i].rate;
+        meter->bands[i].burst_size = config->bands[i].burst_size * 1000ULL;
 
         /* Figure out max delta_t that is enough to fill any bucket. */
         band_max_delta_t
-            = meter->bands[i].up.burst_size / meter->bands[i].up.rate;
+            = meter->bands[i].burst_size / meter->bands[i].rate;
         if (band_max_delta_t > meter->max_delta_t) {
             meter->max_delta_t = band_max_delta_t;
         }
