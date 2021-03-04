@@ -45,6 +45,9 @@ struct rtnetlink_change {
     int mtu;                    /* Current MTU. */
     struct eth_addr mac;
     unsigned int ifi_flags;     /* Flags of network device. */
+    bool irrelevant;            /* Some events, notably wireless extensions,
+                                   don't really indicate real netdev change
+                                   that OVS should care about. */
 
     /* Network device address status. */
     /* xxx To be added when needed. */
