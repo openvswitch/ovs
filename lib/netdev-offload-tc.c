@@ -751,6 +751,20 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 ct_statem |= OVS_CS_F_TRACKED;
             }
 
+            if (mask->ct_state & TCA_FLOWER_KEY_CT_FLAGS_REPLY) {
+                if (key->ct_state & TCA_FLOWER_KEY_CT_FLAGS_REPLY) {
+                    ct_statev |= OVS_CS_F_REPLY_DIR;
+                }
+                ct_statem |= OVS_CS_F_REPLY_DIR;
+            }
+
+            if (mask->ct_state & TCA_FLOWER_KEY_CT_FLAGS_INVALID) {
+                if (key->ct_state & TCA_FLOWER_KEY_CT_FLAGS_INVALID) {
+                    ct_statev |= OVS_CS_F_INVALID;
+                }
+                ct_statem |= OVS_CS_F_INVALID;
+            }
+
             match_set_ct_state_masked(match, ct_statev, ct_statem);
         }
 
@@ -1490,6 +1504,22 @@ parse_match_ct_state_to_flower(struct tc_flower *flower, struct match *match)
             }
             flower->mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
             mask->ct_state &= ~OVS_CS_F_TRACKED;
+        }
+
+        if (mask->ct_state & OVS_CS_F_REPLY_DIR) {
+            if (key->ct_state & OVS_CS_F_REPLY_DIR) {
+                flower->key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_REPLY;
+            }
+            flower->mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_REPLY;
+            mask->ct_state &= ~OVS_CS_F_REPLY_DIR;
+        }
+
+        if (mask->ct_state & OVS_CS_F_INVALID) {
+            if (key->ct_state & OVS_CS_F_INVALID) {
+                flower->key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_INVALID;
+            }
+            flower->mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_INVALID;
+            mask->ct_state &= ~OVS_CS_F_INVALID;
         }
 
         if (flower->key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
