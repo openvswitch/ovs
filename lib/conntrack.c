@@ -1661,15 +1661,22 @@ static inline bool
 checksum_valid(const struct conn_key *key, const void *data, size_t size,
                const void *l3)
 {
+    bool valid;
+
     if (key->dl_type == htons(ETH_TYPE_IP)) {
         uint32_t csum = packet_csum_pseudoheader(l3);
-        return csum_finish(csum_continue(csum, data, size)) == 0;
+        valid = (csum_finish(csum_continue(csum, data, size)) == 0);
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)) {
-        return packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0;
+        valid = (packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0);
     } else {
-        COVERAGE_INC(conntrack_l4csum_err);
-        return false;
+        valid = false;
     }
+
+    if (!valid) {
+        COVERAGE_INC(conntrack_l4csum_err);
+    }
+
+    return valid;
 }
 
 static inline bool
@@ -2067,6 +2074,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
                 ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
                 return true;
             }
+        } else {
+            COVERAGE_INC(conntrack_l4csum_err);
         }
     }
 
