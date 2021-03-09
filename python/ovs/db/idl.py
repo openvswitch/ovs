@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import functools
 import uuid
 
@@ -37,6 +38,10 @@ ROW_DELETE = "delete"
 
 OVSDB_UPDATE = 0
 OVSDB_UPDATE2 = 1
+
+
+Notice = collections.namedtuple('Notice', ('event', 'row', 'updates'))
+Notice.__new__.__defaults__ = (None,)  # default updates=None
 
 
 class Idl(object):
@@ -479,6 +484,7 @@ class Idl(object):
             raise error.Error("<table-updates> is not an object",
                               table_updates)
 
+        notices = []
         for table_name, table_update in six.iteritems(table_updates):
             table = self.tables.get(table_name)
             if not table:
@@ -504,7 +510,9 @@ class Idl(object):
                                       % (table_name, uuid_string))
 
                 if version == OVSDB_UPDATE2:
-                    if self.__process_update2(table, uuid, row_update):
+                    changes = self.__process_update2(table, uuid, row_update)
+                    if changes:
+                        notices.append(changes)
                         self.change_seqno += 1
                     continue
 
@@ -517,17 +525,20 @@ class Idl(object):
                     raise error.Error('<row-update> missing "old" and '
                                       '"new" members', row_update)
 
-                if self.__process_update(table, uuid, old, new):
+                changes = self.__process_update(table, uuid, old, new)
+                if changes:
+                    notices.append(changes)
                     self.change_seqno += 1
+        for notice in notices:
+            self.notify(*notice)
 
     def __process_update2(self, table, uuid, row_update):
+        """Returns Notice if a column changed, False otherwise."""
         row = table.rows.get(uuid)
-        changed = False
         if "delete" in row_update:
             if row:
                 del table.rows[uuid]
-                self.notify(ROW_DELETE, row)
-                changed = True
+                return Notice(ROW_DELETE, row)
             else:
                 # XXX rate-limit
                 vlog.warn("cannot delete missing row %s from table"
@@ -546,29 +557,27 @@ class Idl(object):
             changed = self.__row_update(table, row, row_update)
             table.rows[uuid] = row
             if changed:
-                self.notify(ROW_CREATE, row)
+                return Notice(ROW_CREATE, row)
         elif "modify" in row_update:
             if not row:
                 raise error.Error('Modify non-existing row')
 
             old_row = self.__apply_diff(table, row, row_update['modify'])
-            self.notify(ROW_UPDATE, row, Row(self, table, uuid, old_row))
-            changed = True
+            return Notice(ROW_UPDATE, row, Row(self, table, uuid, old_row))
         else:
             raise error.Error('<row-update> unknown operation',
                               row_update)
-        return changed
+        return False
 
     def __process_update(self, table, uuid, old, new):
-        """Returns True if a column changed, False otherwise."""
+        """Returns Notice if a column changed, False otherwise."""
         row = table.rows.get(uuid)
         changed = False
         if not new:
             # Delete row.
             if row:
                 del table.rows[uuid]
-                changed = True
-                self.notify(ROW_DELETE, row)
+                return Notice(ROW_DELETE, row)
             else:
                 # XXX rate-limit
                 vlog.warn("cannot delete missing row %s from table %s"
@@ -588,7 +597,7 @@ class Idl(object):
             if op == ROW_CREATE:
                 table.rows[uuid] = row
             if changed:
-                self.notify(ROW_CREATE, row)
+                return Notice(ROW_CREATE, row)
         else:
             op = ROW_UPDATE
             if not row:
@@ -602,8 +611,8 @@ class Idl(object):
             if op == ROW_CREATE:
                 table.rows[uuid] = row
             if changed:
-                self.notify(op, row, Row.from_json(self, table, uuid, old))
-        return changed
+                return Notice(op, row, Row.from_json(self, table, uuid, old))
+        return False
 
     def __column_name(self, column):
         if column.type.key.type == ovs.db.types.UuidType:

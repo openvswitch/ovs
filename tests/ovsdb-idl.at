@@ -1430,6 +1430,26 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY],
    [OVSDB_CHECK_IDL_NOTIFY_PY($@)
     OVSDB_CHECK_IDL_NOTIFY_SSL_PY($@)])
 
+OVSDB_CHECK_IDL_NOTIFY([simple link idl verify notify],
+  [['track-notify' \
+    '["idltest",
+       {"op": "insert",
+       "table": "link1",
+       "row": {"i": 1, "k": ["named-uuid", "l1row"], "l2": ["set", [["named-uuid", "l2row"]]]},
+       "uuid-name": "l1row"},
+      {"op": "insert",
+       "table": "link2",
+       "uuid-name": "l2row",
+       "row": {"i": 2, "l1": ["set", [["named-uuid", "l1row"]]]}}]']],
+[[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: event:create, row={i=1 uuid=<0> l2=[<1>]}, updates=None
+002: event:create, row={i=2 uuid=<1> l1=[<0>]}, updates=None
+002: i=1 k=1 ka=[] l2=2 uuid=<0>
+002: i=2 l1=1 uuid=<1>
+003: done
+]])
+
 OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
   [['track-notify' \
     '["idltest",

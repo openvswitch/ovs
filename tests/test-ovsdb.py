@@ -166,6 +166,8 @@ def get_simple_printable_row_string(row, columns):
             if isinstance(value, dict):
                 value = sorted((row_to_uuid(k), row_to_uuid(v))
                                for k, v in value.items())
+            if isinstance(value, (list, tuple)):
+                value = sorted((row_to_uuid(v) for v in value))
             s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
@@ -176,9 +178,10 @@ def get_simple_printable_row_string(row, columns):
     return s
 
 
-def get_simple_table_printable_row(row):
+def get_simple_table_printable_row(row, *additional_columns):
     simple_columns = ["i", "r", "b", "s", "u", "ia",
                       "ra", "ba", "sa", "ua", "uuid"]
+    simple_columns.extend(additional_columns)
     return get_simple_printable_row_string(row, simple_columns)
 
 
@@ -644,7 +647,8 @@ def do_idl(schema_file, remote, *commands):
     def mock_notify(event, row, updates=None):
         output = "%03d: " % step
         output += "event:" + str(event) + ", row={"
-        output += get_simple_table_printable_row(row) + "}, updates="
+        output += get_simple_table_printable_row(row,
+                                                 'l2', 'l1') + "}, updates="
         if updates is None:
             output += "None"
         else:
