@@ -8,9 +8,7 @@ jobs:
       dependencies: |
         automake libtool gcc bc libjemalloc1 libjemalloc-dev    \
         libssl-dev llvm-dev libelf-dev libnuma-dev libpcap-dev  \
-        ninja-build python3-openssl python3-pip                 \
-        python3-setuptools python3-sphinx python3-wheel         \
-        selinux-policy-dev
+        ninja-build selinux-policy-dev
       deb_dependencies: |
         linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
       AFXDP:       ${{ matrix.afxdp }}
@@ -115,6 +113,16 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
+    - name: update PATH
+      run:  |
+        echo "$HOME/bin"        >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: set up python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
     - name: create ci signature file for the dpdk cache key
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
       # This will collect most of DPDK related lines, so hash will be different
@@ -151,7 +159,7 @@ jobs:
       run:  ./.ci/linux-prepare.sh
 
     - name: build
-      run:  PATH="$PATH:$HOME/bin:$HOME/.local/bin" ./.ci/linux-build.sh
+      run:  ./.ci/linux-build.sh
 
     - name: upload deb packages
       if:   matrix.deb_package != ''
@@ -194,12 +202,20 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: update PATH
+      run:  |
+        echo "$HOME/bin"        >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    - name: set up python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
     - name: install dependencies
       run:  brew install automake libtool
     - name: prepare
       run:  ./.ci/osx-prepare.sh
     - name: build
-      run:  PATH="$PATH:$HOME/bin" ./.ci/osx-build.sh
+      run:  ./.ci/osx-build.sh
     - name: upload logs on failure
       if: failure()
       uses: actions/upload-artifact@v2
