@@ -356,6 +356,8 @@ recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:2
 ])
 
+AT_CHECK([ovs-ofctl -O OpenFlow13 del-meters br0])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
