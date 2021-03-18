@@ -3,7 +3,8 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0)
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0)) || \
+     (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,8)))
 #include_next <net/flow_keys.h>
 #else
 struct flow_keys {

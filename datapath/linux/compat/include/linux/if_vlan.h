@@ -5,6 +5,13 @@
 #include <linux/version.h>
 #include_next <linux/if_vlan.h>
 
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)) || \
+     (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,8)))
+#define vlan_tx_tag_present skb_vlan_tag_present
+#define vlan_tx_tag_get skb_vlan_tag_get
+#define vlan_tx_tag_get_id skb_vlan_tag_get_id
+#endif
+
 #ifndef HAVE_VLAN_INSERT_TAG_SET_PROTO
 /*
  * The behavior of __vlan_put_tag()/vlan_insert_tag_set_proto() has changed
