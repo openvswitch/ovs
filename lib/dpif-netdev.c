@@ -4887,6 +4887,12 @@ struct rr_numa {
     bool idx_inc;
 };
 
+static size_t
+rr_numa_list_count(struct rr_numa_list *rr)
+{
+    return hmap_count(&rr->numas);
+}
+
 static struct rr_numa *
 rr_numa_list_lookup(struct rr_numa_list *rr, int numa_id)
 {
@@ -5599,10 +5605,17 @@ get_dry_run_variance(struct dp_netdev *dp, uint32_t *core_list,
     for (int i = 0; i < n_rxqs; i++) {
         int numa_id = netdev_get_numa_id(rxqs[i]->port->netdev);
         numa = rr_numa_list_lookup(&rr, numa_id);
+        /* If there is no available pmd on the local numa but there is only one
+         * numa for cross-numa polling, we can estimate the dry run. */
+        if (!numa && rr_numa_list_count(&rr) == 1) {
+            numa = rr_numa_list_next(&rr, NULL);
+        }
         if (!numa) {
-            /* Abort if cross NUMA polling. */
-            VLOG_DBG("PMD auto lb dry run."
-                     " Aborting due to cross-numa polling.");
+            VLOG_DBG("PMD auto lb dry run: "
+                     "There's no available (non-isolated) PMD thread on NUMA "
+                     "node %d for port '%s' and there are PMD threads on more "
+                     "than one NUMA node available for cross-NUMA polling. "
+                     "Aborting.", numa_id, netdev_rxq_get_name(rxqs[i]->rx));
             goto cleanup;
         }
 
