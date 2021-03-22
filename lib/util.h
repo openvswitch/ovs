@@ -144,7 +144,9 @@ void ctl_timeout_setup(unsigned int secs);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
 void set_memory_locked(void);
+void set_memory_unlocked(void);
 bool memory_locked(void);
+bool retry_after_out_of_memory(void);
 
 OVS_NO_RETURN void out_of_memory(void);
 void *xmalloc(size_t) MALLOC_LIKE;

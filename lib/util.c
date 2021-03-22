@@ -41,6 +41,9 @@
 #ifdef _WIN32
 #include <shlwapi.h>
 #endif
+#ifdef HAVE_MLOCKALL
+#include <sys/mman.h>
+#endif
 
 VLOG_DEFINE_THIS_MODULE(util);
 
@@ -103,6 +106,12 @@ set_memory_locked(void)
     is_memory_locked = true;
 }
 
+void
+set_memory_unlocked(void)
+{
+    is_memory_locked = false;
+}
+
 bool
 memory_locked(void)
 {
@@ -115,12 +124,30 @@ out_of_memory(void)
     ovs_abort(0, "virtual memory exhausted");
 }
 
+bool
+retry_after_out_of_memory(void)
+{
+#ifdef HAVE_MLOCKALL
+    if (errno == EAGAIN && memory_locked()) {
+        /* Locked memory allocation failed
+         * unlock and try again */
+        munlockall();
+        set_memory_unlocked();
+        return true;
+    }
+#endif // HAVE_MLOCKALL
+    return false;
+}
+
 void *
 xcalloc(size_t count, size_t size)
 {
     void *p = count && size ? calloc(count, size) : malloc(1);
     COVERAGE_INC(util_xalloc);
     if (p == NULL) {
+        if (retry_after_out_of_memory()) {
+            return xcalloc(count, size);
+        }
         out_of_memory();
     }
     return p;
@@ -138,6 +165,9 @@ xmalloc(size_t size)
     void *p = malloc(size ? size : 1);
     COVERAGE_INC(util_xalloc);
     if (p == NULL) {
+        if (retry_after_out_of_memory()) {
+            return xmalloc(size);
+        }
         out_of_memory();
     }
     return p;
@@ -146,12 +176,15 @@ xmalloc(size_t size)
 void *
 xrealloc(void *p, size_t size)
 {
-    p = realloc(p, size ? size : 1);
+    void *rp = realloc(p, size ? size : 1);
     COVERAGE_INC(util_xalloc);
-    if (p == NULL) {
+    if (rp == NULL) {
+        if (retry_after_out_of_memory()) {
+            return xrealloc(p, size);
+        }
         out_of_memory();
     }
-    return p;
+    return rp;
 }
 
 void *
