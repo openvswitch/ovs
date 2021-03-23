@@ -330,7 +330,7 @@ lldp_print_neighbor_port(struct ds *ds, struct lldpd_hardware *hw)
     struct lldpd_port *port;
 
     LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
-        const char *none_str = "<None>";
+        const char *none_str = "";
         char *id = NULL;
         const char *name = NULL;
         const char *port_id = NULL;
@@ -375,10 +375,10 @@ lldp_print_neighbor_port(struct ds *ds, struct lldpd_hardware *hw)
                       id ? id : none_str);
         ds_put_format(ds, "  Neighbor Chassis SysName: %s\n",
                       name ? name : none_str);
+        ds_put_format(ds, "  Neighbor Management IP: %s\n",
+                      ipaddress);
         ds_put_format(ds, "  Neighbor Port ID: %s\n",
                       port_id ? port_id : none_str);
-        ds_put_format(ds, "  Neighbor Management IP: %s\n",
-                      ipaddress ? ipaddress : none_str);
 
         if (id != NULL) {
             free(id);
