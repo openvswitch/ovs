@@ -128,7 +128,7 @@ ovsdb_test_cluster_disconnect () {
            "rows": [{"i": 1}]}]]' > test-ovsdb.log 2>&1 &
     echo $! > test-ovsdb.pid
 
-    OVS_WAIT_UNTIL([grep "000: i=1" test-ovsdb.log])
+    OVS_WAIT_UNTIL([grep "000: table simple: i=1" test-ovsdb.log])
 
     # Start collecting raft_is_connected logs for $target before shutting down
     # any servers.

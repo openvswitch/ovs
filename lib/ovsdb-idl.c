@@ -182,7 +182,6 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *,
 static struct ovsdb_idl_table *
 ovsdb_idl_table_from_class(const struct ovsdb_idl *,
                            const struct ovsdb_idl_table_class *);
-static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 static void ovsdb_idl_track_clear__(struct ovsdb_idl *, bool flush_all);
 
 static void ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *);
@@ -1140,7 +1139,7 @@ ovsdb_idl_track_add_all(struct ovsdb_idl *idl)
 }
 
 /* Returns true if 'table' has any tracked column. */
-static bool
+bool
 ovsdb_idl_track_is_set(struct ovsdb_idl_table *table)
 {
     size_t i;
