@@ -198,6 +198,8 @@ static void ovsdb_idl_remove_from_indexes(const struct ovsdb_idl_row *);
 static int ovsdb_idl_try_commit_loop_txn(struct ovsdb_idl_loop *loop,
                                          bool *may_need_wakeup);
 
+static void add_tracked_change_for_references(struct ovsdb_idl_row *);
+
 /* Creates and returns a connection to database 'remote', which should be in a
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
  * in-memory replica of the remote database whose schema is described by
@@ -1385,6 +1387,7 @@ ovsdb_idl_reparse_deleted(struct ovsdb_idl *db)
 
     LIST_FOR_EACH_SAFE (row, next, track_node, &db->deleted_untracked_rows) {
         ovsdb_idl_row_untrack_change(row);
+        add_tracked_change_for_references(row);
         ovsdb_idl_row_reparse_backrefs(row);
 
         /* Orphan rows that are still unreferenced or are part of tables that
