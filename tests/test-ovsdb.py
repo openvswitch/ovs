@@ -164,6 +164,8 @@ def get_simple_printable_row_string(row, columns):
                                for k, v in value.items())
             if isinstance(value, (list, tuple)):
                 value = sorted((row_to_uuid(v) for v in value))
+            elif isinstance(value, list):
+                value = sorted(row_to_uuid(v) for v in value)
             s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
@@ -187,13 +189,23 @@ def get_simple2_table_printable_row(row):
 
 
 def get_simple3_table_printable_row(row):
-    simple3_columns = ["name", "uset"]
+    simple3_columns = ["name", "uset", "uref"]
     return get_simple_printable_row_string(row, simple3_columns)
+
+
+def get_simple4_table_printable_row(row):
+    simple4_columns = ["name"]
+    return get_simple_printable_row_string(row, simple4_columns)
 
 
 def get_simple5_table_printable_row(row):
     simple5_columns = ["name", "irefmap"]
     return get_simple_printable_row_string(row, simple5_columns)
+
+
+def get_simple6_table_printable_row(row):
+    simple6_columns = ["name", "weak_ref"]
+    return get_simple_printable_row_string(row, simple6_columns)
 
 
 def get_link1_table_printable_row(row):
@@ -249,11 +261,25 @@ def print_idl(idl, step):
                       get_simple3_table_printable_row(row))
             n += 1
 
+    if "simple4" in idl.tables:
+        simple4 = idl.tables["simple4"].rows
+        for row in simple4.values():
+            print_row("simple4", row, step,
+                      get_simple4_table_printable_row(row))
+            n += 1
+
     if "simple5" in idl.tables:
         simple5 = idl.tables["simple5"].rows
         for row in simple5.values():
             print_row("simple5", row, step,
                       get_simple5_table_printable_row(row))
+            n += 1
+
+    if "simple6" in idl.tables:
+        simple6 = idl.tables["simple6"].rows
+        for row in simple6.values():
+            print_row("simple6", row, step,
+                      get_simple6_table_printable_row(row))
             n += 1
 
     if "link1" in idl.tables:
