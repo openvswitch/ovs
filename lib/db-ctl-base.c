@@ -1823,6 +1823,11 @@ cmd_destroy(struct ctl_context *ctx)
         return;
     }
 
+    if (!delete_all && ctx->argc == 2) {
+        VLOG_WARN("either --all or records argument should be specified");
+        return;
+    }
+
     if (delete_all) {
         const struct ovsdb_idl_row *row;
         const struct ovsdb_idl_row *next_row;
