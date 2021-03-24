@@ -168,7 +168,7 @@ SUFFIXES += .in
 	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
 	  chmod +x $@.tmp; \
 	fi
-	$(AM_V_at) mv $@.tmp $@
+	$(AM_V_at) mv -f $@.tmp $@
 
 SUFFIXES += .xml
 %: %.xml
