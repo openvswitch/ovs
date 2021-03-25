@@ -510,40 +510,38 @@ For ovs vswitchd, we need to load ovs kernel modules on host.
 
 Hence, OVS containers kernel version needs to be same as that of host kernel.
 
-Export following variables in .env  and place it under
-project root::
+If you want to change the default values for building an image then set these 
+variables::
 
-    $ OVS_BRANCH=<BRANCH>
-    $ OVS_VERSION=<VERSION>
-    $ DISTRO=<LINUX_DISTRO>
-    $ KERNEL_VERSION=<LINUX_KERNEL_VERSION>
-    $ GITHUB_SRC=<GITHUB_URL>
-    $ DOCKER_REPO=<REPO_TO_PUSH_IMAGE>
+    $ export OVS_BRANCH=<BRANCH>
+    $ export OVS_VERSION=<VERSION>
+    $ export DISTRO=<LINUX_DISTRO>
+    $ export KERNEL_VERSION=<LINUX_KERNEL_VERSION>
+    $ export GITHUB_SRC=<GITHUB_URL>
+    $ export DOCKER_REPO=<REPO_TO_PUSH_IMAGE>
+    $ export DOCKER_TAG=<DOCKER_IMAGE_TAG>
 
-To build ovs modules::
+To setup for using a local registry (localhost:5000)::
 
-    $ cd utilities/docker
-    $ make build
+    $ make docker-registry
+    $ export DOCKER_REPO=localhost:5000/ovsvswitch/ovs
 
-Compiled Modules will be tagged with docker image
+To build ovs modules (tagged with docker image)::
 
-To Push ovs modules::
+    $ make docker-build
 
-    $ make push
+To push ovs modules to docker repo::
 
-OVS docker image will be pushed to specified docker repo.
+     $ make docker-push
 
 Start ovsdb-server using below command::
 
-    $ docker run -itd --net=host --name=ovsdb-server \
-      <docker_repo>:<tag> ovsdb-server
+     $ make docker-ovsdb-server
 
 Start ovs-vswitchd with priviledged mode as it needs to load kernel module in
 host using below command::
 
-    $ docker run -itd --net=host --name=ovs-vswitchd \
-      --volumes-from=ovsdb-server -v /lib:/lib --privileged \
-      <docker_repo>:<tag> ovs-vswitchd
+    $ make docker-ovs-vswitchd
 
 .. note::
     The debian docker file uses ubuntu 16.04 as a base image for reference.

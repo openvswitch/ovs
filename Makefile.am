@@ -499,3 +499,4 @@ include datapath-windows/include/automake.mk
 include windows/automake.mk
 include selinux/automake.mk
 include build-aux/automake.mk
+include utilities/docker/automake.mk
