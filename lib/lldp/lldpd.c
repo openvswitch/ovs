@@ -77,7 +77,7 @@ lldpd_get_hardware(struct lldpd *cfg, char *name, int index,
 }
 
 struct lldpd_hardware *
-lldpd_alloc_hardware(struct lldpd *cfg, char *name, int index)
+lldpd_alloc_hardware(struct lldpd *cfg, const char *name, int index)
 {
     struct lldpd_hardware *hw;
 
