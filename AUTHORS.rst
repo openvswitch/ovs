@@ -358,6 +358,7 @@ Scott Mann                         sdmnix@gmail.com
 Selvamuthukumar                    smkumar@merunetworks.com
 Sha Zhang                          zhangsha.zhang@huawei.com
 Shad Ansari                        shad.ansari@hpe.com
+Shahar Klein                       sklein@nvidia.com
 Shan Wei                           davidshan@tencent.com
 Sharon Krendel                     thekafkaf@gmail.com
 Shashank Ram                       rams@vmware.com
