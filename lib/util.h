@@ -147,6 +147,8 @@ void set_memory_locked(void);
 bool memory_locked(void);
 
 OVS_NO_RETURN void out_of_memory(void);
+
+/* Allocation wrappers that abort if memory is exhausted. */
 void *xmalloc(size_t) MALLOC_LIKE;
 void *xcalloc(size_t, size_t) MALLOC_LIKE;
 void *xzalloc(size_t) MALLOC_LIKE;
@@ -159,6 +161,13 @@ bool nullable_string_is_equal(const char *a, const char *b);
 char *xasprintf(const char *format, ...) OVS_PRINTF_FORMAT(1, 2) MALLOC_LIKE;
 char *xvasprintf(const char *format, va_list) OVS_PRINTF_FORMAT(1, 0) MALLOC_LIKE;
 void *x2nrealloc(void *p, size_t *n, size_t s);
+
+/* Allocation wrappers for specialized situations where coverage counters
+ * cannot be used. */
+void *xmalloc__(size_t) MALLOC_LIKE;
+void *xcalloc__(size_t, size_t) MALLOC_LIKE;
+void *xzalloc__(size_t) MALLOC_LIKE;
+void *xrealloc__(void *, size_t);
 
 void *xmalloc_cacheline(size_t) MALLOC_LIKE;
 void *xzalloc_cacheline(size_t) MALLOC_LIKE;
