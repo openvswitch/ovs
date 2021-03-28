@@ -1484,6 +1484,11 @@ AT_CHECK([RUN_OVS_VSCTL(
 qos                 : []
 ]])
 AT_CHECK([RUN_OVS_VSCTL(
+   [ destroy Qos])], [0],[], [stderr])
+AT_CHECK([sed "s/^.*|WARN|//" < stderr], [0],
+[[either --all or records argument should be specified
+]])
+AT_CHECK([RUN_OVS_VSCTL(
    [--all destroy Qos])])
 AT_CHECK([RUN_OVS_VSCTL(
    [-- list Qos])])
