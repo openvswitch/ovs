@@ -173,6 +173,7 @@ SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-layer3-tunnels.at \
 	tests/system-traffic.at \
+	tests/system-ipsec.at \
 	tests/system-interface.at
 
 SYSTEM_OFFLOADS_TESTSUITE_AT = \
@@ -200,7 +201,7 @@ SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 OVSDB_CLUSTER_TESTSUITE = $(srcdir)/tests/ovsdb-cluster-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR)
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:ipsec:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR)
 
 check-local:
 	set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH); \
