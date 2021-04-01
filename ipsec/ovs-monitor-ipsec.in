@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import argparse
+import ipaddress
 import re
 import subprocess
 import sys
@@ -415,6 +416,11 @@ conn prevent_unencrypted_vxlan
 
 """
 
+    IPV6_CONN = """\
+    hostaddrfamily=ipv6
+    clientaddrfamily=ipv6
+"""
+
     auth_tmpl = {"psk": Template("""\
     left=$local_ip
     right=$remote_ip
@@ -519,6 +525,9 @@ conn prevent_unencrypted_vxlan
                                  'P,P,P')
         else:
             auth_section = self.auth_tmpl["pki_ca"].substitute(tunnel.conf)
+
+        if tunnel.conf["address_family"] == "IPv6":
+            auth_section = self.IPV6_CONN + auth_section
 
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
@@ -756,6 +765,7 @@ class IPsecTunnel(object):
   Tunnel Type:    $tunnel_type
   Local IP:       $local_ip
   Remote IP:      $remote_ip
+  Address Family: $address_family
   SKB mark:       $skb_mark
   Local cert:     $certificate
   Local name:     $local_name
@@ -797,6 +807,9 @@ class IPsecTunnel(object):
             "tunnel_type": row.type,
             "local_ip": options.get("local_ip", "%defaultroute"),
             "remote_ip": options.get("remote_ip"),
+            "address_family": self._get_conn_address_family(
+                                                   options.get("remote_ip"),
+                                                   options.get("local_ip")),
             "skb_mark": monitor.conf["skb_mark"],
             "certificate": monitor.conf["pki"]["certificate"],
             "private_key": monitor.conf["pki"]["private_key"],
@@ -864,6 +877,17 @@ class IPsecTunnel(object):
                 cons += "  " + conns[self.name][tname] + "\n"
 
         return header + conf + status + spds + sas + cons + "\n"
+
+    def _get_conn_address_family(self, remote_ip, local_ip):
+        remote = address_family(remote_ip)
+        local = address_family(local_ip)
+
+        if local is None:
+            return remote
+        elif local != remote:
+            return None
+        else:
+            return remote
 
     def _is_valid_tunnel_conf(self):
         """This function verifies if IPsec tunnel has valid configuration
@@ -1118,6 +1142,19 @@ class IPsecMonitor(object):
             return None
 
         return m.group(1)
+
+
+def address_family(address):
+    try:
+        ip = ipaddress.ip_address(address)
+        ipstr = str(type(ip))
+    # ipaddress has inconsistencies with what exceptions are raised:
+    # https://mail.openvswitch.org/pipermail/ovs-dev/2021-April/381696.html
+    except (ValueError, ipaddress.AddressValueError):
+        return None
+    if ipstr.find('v6') != -1:
+        return "IPv6"
+    return "IPv4"
 
 
 def unixctl_xfrm_policies(conn, unused_argv, unused_aux):
