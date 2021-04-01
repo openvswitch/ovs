@@ -14,12 +14,12 @@
 # limitations under the License.
 
 import argparse
+import copy
 import ipaddress
+import os
 import re
 import subprocess
 import sys
-import copy
-import os
 from string import Template
 
 import ovs.daemon
