@@ -452,6 +452,8 @@ ovsdb_idl_db_init(struct ovsdb_idl_db *db, const struct ovsdb_idl_class *class,
     ovs_list_init(&db->deleted_untracked_rows);
 }
 
+static void add_tracked_change_for_references(struct ovsdb_idl_row *);
+
 /* Creates and returns a connection to database 'remote', which should be in a
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
  * in-memory replica of the remote database whose schema is described by
@@ -2593,6 +2595,7 @@ ovsdb_idl_reparse_deleted(struct ovsdb_idl_db *db)
 
     LIST_FOR_EACH_SAFE (row, next, track_node, &db->deleted_untracked_rows) {
         ovsdb_idl_row_untrack_change(row);
+        add_tracked_change_for_references(row);
         ovsdb_idl_row_reparse_backrefs(row);
 
         /* Orphan rows that are still unreferenced or are part of tables that
