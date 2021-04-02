@@ -590,7 +590,7 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]sysconfdir[@],"$(sysconfdir)",g' \
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
 	     > lib/dirs.c.tmp && \
-	mv lib/dirs.c.tmp lib/dirs.c
+	mv -f lib/dirs.c.tmp lib/dirs.c
 
 lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/meta-flow.h
 	$(AM_V_GEN)$(run_python) $< meta-flow $(srcdir)/include/openvswitch/meta-flow.h > $@.tmp
