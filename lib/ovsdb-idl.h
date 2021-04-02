@@ -53,6 +53,7 @@ struct ovsdb_datum;
 struct ovsdb_idl_class;
 struct ovsdb_idl_row;
 struct ovsdb_idl_column;
+struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
 struct uuid;
 
@@ -217,6 +218,7 @@ unsigned int ovsdb_idl_row_get_seqno(
 void ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
                                 const struct ovsdb_idl_column *column);
 void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
+bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);
