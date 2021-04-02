@@ -1286,6 +1286,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan rows, cond
 003: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 003: table simple: updated columns: s
 004: change conditions
+005: table simple6: name=first_row weak_ref=[] uuid=<0>
 005: table simple: deleted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 005: table simple: inserted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
 005: table simple: updated columns: s
@@ -1497,6 +1498,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, strong references
 001: table simple4: inserted row: name=row0_s4 uuid=<0>
 001: table simple4: updated columns: name
 002: change conditions
+003: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
 003: table simple4: deleted row: name=row0_s4 uuid=<0>
 004: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
 005: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
