@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -51,6 +52,8 @@
 #include "timeval.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(test_ovsdb);
 
 struct test_ovsdb_pvt_context {
     bool track;
@@ -1844,194 +1847,191 @@ compare_link1(const void *a_, const void *b_)
     return a->i < b->i ? -1 : a->i > b->i;
 }
 
+static void OVS_PRINTF_FORMAT(1, 2)
+print_and_log(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    char *message = xvasprintf(format, args);
+    va_end(args);
+
+    printf("%s\n", message);
+    VLOG_INFO("%s", message);
+
+    free(message);
+}
+
 static void
 print_idl_row_updated_simple(const struct idltest_simple *s, int step)
 {
-    size_t i;
-    bool updated = false;
-
-    for (i = 0; i < IDLTEST_SIMPLE_N_COLUMNS; i++) {
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SIMPLE_N_COLUMNS; i++) {
         if (idltest_simple_is_updated(s, i)) {
-            if (!updated) {
-                printf("%03d: updated columns:", step);
-                updated = true;
-            }
-            printf(" %s", idltest_simple_columns[i].name);
+            ds_put_format(&updates, " %s", idltest_simple_columns[i].name);
         }
     }
-    if (updated) {
-        printf("\n");
+    if (updates.length) {
+        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        ds_destroy(&updates);
     }
 }
 
 static void
 print_idl_row_updated_link1(const struct idltest_link1 *l1, int step)
 {
-    size_t i;
-    bool updated = false;
-
-    for (i = 0; i < IDLTEST_LINK1_N_COLUMNS; i++) {
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_LINK1_N_COLUMNS; i++) {
         if (idltest_link1_is_updated(l1, i)) {
-            if (!updated) {
-                printf("%03d: updated columns:", step);
-                updated = true;
-            }
-            printf(" %s", idltest_link1_columns[i].name);
+            ds_put_format(&updates, " %s", idltest_link1_columns[i].name);
         }
     }
-    if (updated) {
-        printf("\n");
+    if (updates.length) {
+        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        ds_destroy(&updates);
     }
 }
 
 static void
 print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
 {
-    size_t i;
-    bool updated = false;
-
-    for (i = 0; i < IDLTEST_LINK2_N_COLUMNS; i++) {
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_LINK2_N_COLUMNS; i++) {
         if (idltest_link2_is_updated(l2, i)) {
-            if (!updated) {
-                printf("%03d: updated columns:", step);
-                updated = true;
-            }
-            printf(" %s", idltest_link2_columns[i].name);
+            ds_put_format(&updates, " %s", idltest_link2_columns[i].name);
         }
     }
-    if (updated) {
-        printf("\n");
+    if (updates.length) {
+        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        ds_destroy(&updates);
     }
 }
 
 static void
 print_idl_row_updated_simple6(const struct idltest_simple6 *s6, int step)
 {
-    size_t i;
-    bool updated = false;
-
-    for (i = 0; i < IDLTEST_SIMPLE6_N_COLUMNS; i++) {
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SIMPLE6_N_COLUMNS; i++) {
         if (idltest_simple6_is_updated(s6, i)) {
-            if (!updated) {
-                printf("%03d: updated columns:", step);
-                updated = true;
-            }
-            printf(" %s", idltest_simple6_columns[i].name);
+            ds_put_format(&updates, " %s", idltest_simple6_columns[i].name);
         }
     }
-    if (updated) {
-        printf("\n");
+    if (updates.length) {
+        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        ds_destroy(&updates);
     }
 }
 
 static void
 print_idl_row_updated_singleton(const struct idltest_singleton *sng, int step)
 {
-    size_t i;
-    bool updated = false;
-
-    for (i = 0; i < IDLTEST_SINGLETON_N_COLUMNS; i++) {
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SINGLETON_N_COLUMNS; i++) {
         if (idltest_singleton_is_updated(sng, i)) {
-            if (!updated) {
-                printf("%03d: updated columns:", step);
-                updated = true;
-            }
-            printf(" %s", idltest_singleton_columns[i].name);
+            ds_put_format(&updates, " %s", idltest_singleton_columns[i].name);
         }
     }
-    if (updated) {
-        printf("\n");
+    if (updates.length) {
+        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        ds_destroy(&updates);
     }
 }
 
 static void
 print_idl_row_simple(const struct idltest_simple *s, int step)
 {
-    size_t i;
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
+                  step, s->i, s->r, s->b ? "true" : "false",
+                  s->s, UUID_ARGS(&s->u));
+    for (size_t i = 0; i < s->n_ia; i++) {
+        ds_put_format(&msg, "%s%"PRId64, i ? " " : "", s->ia[i]);
+    }
+    ds_put_cstr(&msg, "] ra=[");
+    for (size_t i = 0; i < s->n_ra; i++) {
+        ds_put_format(&msg, "%s%g", i ? " " : "", s->ra[i]);
+    }
+    ds_put_cstr(&msg, "] ba=[");
+    for (size_t i = 0; i < s->n_ba; i++) {
+        ds_put_format(&msg, "%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
+    }
+    ds_put_cstr(&msg, "] sa=[");
+    for (size_t i = 0; i < s->n_sa; i++) {
+        ds_put_format(&msg, "%s%s", i ? " " : "", s->sa[i]);
+    }
+    ds_put_cstr(&msg, "] ua=[");
+    for (size_t i = 0; i < s->n_ua; i++) {
+        ds_put_format(&msg, "%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
+    }
+    ds_put_format(&msg, "] uuid="UUID_FMT, UUID_ARGS(&s->header_.uuid));
+    print_and_log("%s", ds_cstr(&msg));
+    ds_destroy(&msg);
 
-    printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
-           step, s->i, s->r, s->b ? "true" : "false",
-           s->s, UUID_ARGS(&s->u));
-    for (i = 0; i < s->n_ia; i++) {
-        printf("%s%"PRId64, i ? " " : "", s->ia[i]);
-    }
-    printf("] ra=[");
-    for (i = 0; i < s->n_ra; i++) {
-        printf("%s%g", i ? " " : "", s->ra[i]);
-    }
-    printf("] ba=[");
-    for (i = 0; i < s->n_ba; i++) {
-        printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
-    }
-    printf("] sa=[");
-    for (i = 0; i < s->n_sa; i++) {
-        printf("%s%s", i ? " " : "", s->sa[i]);
-    }
-    printf("] ua=[");
-    for (i = 0; i < s->n_ua; i++) {
-        printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
-    }
-    printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
     print_idl_row_updated_simple(s, step);
 }
 
 static void
 print_idl_row_link1(const struct idltest_link1 *l1, int step)
 {
-    struct idltest_link1 **links;
-    size_t i;
-
-    printf("%03d: i=%"PRId64" k=", step, l1->i);
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "%03d: i=%"PRId64" k=", step, l1->i);
     if (l1->k) {
-        printf("%"PRId64, l1->k->i);
+        ds_put_format(&msg, "%"PRId64, l1->k->i);
     }
-    printf(" ka=[");
-    links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
+    ds_put_cstr(&msg, " ka=[");
+    struct idltest_link1 **links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
     qsort(links, l1->n_ka, sizeof *links, compare_link1);
-    for (i = 0; i < l1->n_ka; i++) {
-        printf("%s%"PRId64, i ? " " : "", links[i]->i);
+    for (size_t i = 0; i < l1->n_ka; i++) {
+        ds_put_format(&msg, "%s%"PRId64, i ? " " : "", links[i]->i);
     }
     free(links);
-    printf("] l2=");
+    ds_put_cstr(&msg, "] l2=");
     if (l1->l2) {
-        printf("%"PRId64, l1->l2->i);
+        ds_put_format(&msg, "%"PRId64, l1->l2->i);
     }
-    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
+    ds_put_format(&msg, " uuid="UUID_FMT, UUID_ARGS(&l1->header_.uuid));
+    print_and_log("%s", ds_cstr(&msg));
+    ds_destroy(&msg);
+
     print_idl_row_updated_link1(l1, step);
 }
 
 static void
 print_idl_row_link2(const struct idltest_link2 *l2, int step)
 {
-    printf("%03d: i=%"PRId64" l1=", step, l2->i);
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "%03d: i=%"PRId64" l1=", step, l2->i);
     if (l2->l1) {
-        printf("%"PRId64, l2->l1->i);
+        ds_put_format(&msg, "%"PRId64, l2->l1->i);
     }
-    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
+    ds_put_format(&msg, " uuid="UUID_FMT, UUID_ARGS(&l2->header_.uuid));
+    print_and_log("%s", ds_cstr(&msg));
+    ds_destroy(&msg);
+
     print_idl_row_updated_link2(l2, step);
 }
 
 static void
 print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
 {
-    int i;
-
-    printf("%03d: name=%s ", step, s6->name);
-    printf("weak_ref=[");
-    for (i = 0; i < s6->n_weak_ref; i++) {
-        printf("%s"UUID_FMT, i ? " " : "",
-               UUID_ARGS(&s6->weak_ref[i]->header_.uuid));
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "%03d: name=%s ", step, s6->name);
+    ds_put_cstr(&msg, "weak_ref=[");
+    for (size_t i = 0; i < s6->n_weak_ref; i++) {
+        ds_put_format(&msg, "%s"UUID_FMT, i ? " " : "",
+                      UUID_ARGS(&s6->weak_ref[i]->header_.uuid));
     }
+    ds_put_format(&msg, "] uuid="UUID_FMT, UUID_ARGS(&s6->header_.uuid));
+    print_and_log("%s", ds_cstr(&msg));
+    ds_destroy(&msg);
 
-    printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s6->header_.uuid));
     print_idl_row_updated_simple6(s6, step);
 }
 
 static void
 print_idl_row_singleton(const struct idltest_singleton *sng, int step)
 {
-    printf("%03d: name=%s", step, sng->name);
-    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&sng->header_.uuid));
+    print_and_log("%03d: name=%s uuid="UUID_FMT, step, sng->name,
+                  UUID_ARGS(&sng->header_.uuid));
     print_idl_row_updated_singleton(sng, step);
 }
 
@@ -2061,7 +2061,7 @@ print_idl(struct ovsdb_idl *idl, int step)
         n++;
     }
     if (!n) {
-        printf("%03d: empty\n", step);
+        print_and_log("%03d: empty", step);
     }
 }
 
@@ -2077,36 +2077,36 @@ print_idl_track(struct ovsdb_idl *idl, int step)
     IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
         print_idl_row_simple(s, step);
         if (idltest_simple_is_deleted(s)) {
-            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
-                   UUID_ARGS(&s->header_.uuid));
+            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
+                          UUID_ARGS(&s->header_.uuid));
         } else if (idltest_simple_is_new(s)) {
-            printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
-                   UUID_ARGS(&s->header_.uuid));
+            print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
+                          UUID_ARGS(&s->header_.uuid));
         }
         n++;
     }
     IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
         if (idltest_link1_is_deleted(l1)) {
-            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
-                   UUID_ARGS(&l1->header_.uuid));
+            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
+                          UUID_ARGS(&l1->header_.uuid));
         } else {
             print_idl_row_link1(l1, step);
             if (idltest_link1_is_new(l1)) {
-                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
-                       UUID_ARGS(&l1->header_.uuid));
+                print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
+                              UUID_ARGS(&l1->header_.uuid));
             }
         }
         n++;
     }
     IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
         if (idltest_link2_is_deleted(l2)) {
-            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
-                   UUID_ARGS(&l2->header_.uuid));
+            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
+                          UUID_ARGS(&l2->header_.uuid));
         } else {
             print_idl_row_link2(l2, step);
             if (idltest_link2_is_new(l2)) {
-                printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
-                       UUID_ARGS(&l2->header_.uuid));
+                print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
+                              UUID_ARGS(&l2->header_.uuid));
             }
 
         }
@@ -2115,17 +2115,17 @@ print_idl_track(struct ovsdb_idl *idl, int step)
     IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
         print_idl_row_simple6(s6, step);
         if (idltest_simple6_is_deleted(s6)) {
-            printf("%03d: deleted row: uuid="UUID_FMT"\n", step,
+            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
                    UUID_ARGS(&s6->header_.uuid));
         } else if (idltest_simple6_is_new(s6)) {
-            printf("%03d: inserted row: uuid="UUID_FMT"\n", step,
-                   UUID_ARGS(&s6->header_.uuid));
+            print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
+                          UUID_ARGS(&s6->header_.uuid));
         }
         n++;
     }
 
     if (!n) {
-        printf("%03d: empty\n", step);
+        print_and_log("%03d: empty", step);
     }
 }
 
@@ -2314,7 +2314,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             ovsdb_idl_check_consistency(idl);
             break;
         } else if (!strcmp(name, "destroy")) {
-            printf("%03d: destroy\n", step);
+            print_and_log("%03d: destroy", step);
             ovsdb_idl_txn_destroy(txn);
             ovsdb_idl_check_consistency(idl);
             return;
@@ -2325,13 +2325,17 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
-    printf("%03d: commit, status=%s",
-           step, ovsdb_idl_txn_status_to_string(status));
+
+    struct ds s = DS_EMPTY_INITIALIZER;
+    ds_put_format(&s, "%03d: commit, status=%s",
+                  step, ovsdb_idl_txn_status_to_string(status));
     if (increment) {
-        printf(", increment=%"PRId64,
-               ovsdb_idl_txn_get_increment_new_value(txn));
+        ds_put_format(&s, ", increment=%"PRId64,
+                      ovsdb_idl_txn_get_increment_new_value(txn));
     }
-    putchar('\n');
+    print_and_log("%s", ds_cstr(&s));
+    ds_destroy(&s);
+
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_check_consistency(idl);
 }
@@ -2505,7 +2509,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     const char cond_s[] = "condition ";
     if (ctx->argc > 2 && strstr(ctx->argv[2], cond_s)) {
         update_conditions(idl, ctx->argv[2] + strlen(cond_s));
-        printf("%03d: change conditions\n", step++);
+        print_and_log("%03d: change conditions", step++);
         i = 3;
     } else {
         i = 2;
@@ -2543,11 +2547,11 @@ do_idl(struct ovs_cmdl_context *ctx)
         seqno = ovsdb_idl_get_seqno(idl);
 
         if (!strcmp(arg, "reconnect")) {
-            printf("%03d: reconnect\n", step++);
+            print_and_log("%03d: reconnect", step++);
             ovsdb_idl_force_reconnect(idl);
         }  else if (!strncmp(arg, cond_s, strlen(cond_s))) {
             update_conditions(idl, arg + strlen(cond_s));
-            printf("%03d: change conditions\n", step++);
+            print_and_log("%03d: change conditions", step++);
         } else if (arg[0] != '[') {
             idl_set(idl, arg, step++);
         } else {
@@ -2558,13 +2562,17 @@ do_idl(struct ovs_cmdl_context *ctx)
             if (error || reply->error) {
                 ovs_fatal(error, "jsonrpc transaction failed");
             }
-            printf("%03d: ", step++);
             if (reply->result) {
                 parse_uuids(reply->result, symtab, &n_uuids);
             }
             json_destroy(reply->id);
             reply->id = NULL;
-            print_and_free_json(jsonrpc_msg_to_json(reply));
+
+            struct json *msg_json = jsonrpc_msg_to_json(reply);
+            char *msg_s = json_to_string(msg_json, JSSF_SORT);
+            json_destroy(msg_json);
+            print_and_log("%03d: %s", step++, msg_s);
+            free(msg_s);
         }
     }
     ovsdb_symbol_table_destroy(symtab);
@@ -2584,7 +2592,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     print_idl(idl, step++);
     ovsdb_idl_track_clear(idl);
     ovsdb_idl_destroy(idl);
-    printf("%03d: done\n", step);
+    print_and_log("%03d: done", step);
 }
 
 static void
