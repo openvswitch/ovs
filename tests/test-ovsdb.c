@@ -1947,6 +1947,23 @@ print_idl_row_updated_simple3(const struct idltest_simple3 *s3, int step)
 }
 
 static void
+print_idl_row_updated_simple4(const struct idltest_simple4 *s4, int step)
+{
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SIMPLE4_N_COLUMNS; i++) {
+        if (idltest_simple4_is_updated(s4, i)) {
+            ds_put_format(&updates, " %s", idltest_simple4_columns[i].name);
+        }
+    }
+    if (updates.length) {
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, s4->header_.table->class_->name,
+                      ds_cstr(&updates));
+        ds_destroy(&updates);
+    }
+}
+
+static void
 print_idl_row_updated_simple6(const struct idltest_simple6 *s6, int step)
 {
     struct ds updates = DS_EMPTY_INITIALIZER;
@@ -2069,13 +2086,13 @@ print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
 
     ds_put_format(&msg, "name=%s uset=[", s3->name);
     for (i = 0; i < s3->n_uset; i++) {
-        ds_put_format(&msg, "["UUID_FMT"]%s",
+        ds_put_format(&msg, UUID_FMT"%s",
                       UUID_ARGS(&s3->uset[i]),
                       i < s3->n_uset - 1 ? "," : "");
     }
     ds_put_cstr(&msg, "] uref=[");
     for (i = 0; i < s3->n_uref; i++) {
-        ds_put_format(&msg, "["UUID_FMT"]%s",
+        ds_put_format(&msg, UUID_FMT"%s",
                       UUID_ARGS(&s3->uref[i]->header_.uuid),
                       i < s3->n_uref -1 ? "," : "");
     }
@@ -2087,6 +2104,20 @@ print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
     free(row_msg);
 
     print_idl_row_updated_simple3(s3, step);
+}
+
+static void
+print_idl_row_simple4(const struct idltest_simple4 *s4, int step)
+{
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "name=%s", s4->name);
+
+    char *row_msg = format_idl_row(&s4->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
+    ds_destroy(&msg);
+    free(row_msg);
+
+    print_idl_row_updated_simple4(s4, step);
 }
 
 static void
@@ -2126,6 +2157,9 @@ print_idl_row_singleton(const struct idltest_singleton *sng, int step)
 static void
 print_idl(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple3 *s3;
+    const struct idltest_simple4 *s4;
+    const struct idltest_simple6 *s6;
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
     const struct idltest_link2 *l2;
@@ -2144,6 +2178,18 @@ print_idl(struct ovsdb_idl *idl, int step)
         print_idl_row_link2(l2, step);
         n++;
     }
+    IDLTEST_SIMPLE3_FOR_EACH (s3, idl) {
+        print_idl_row_simple3(s3, step);
+        n++;
+    }
+    IDLTEST_SIMPLE4_FOR_EACH (s4, idl) {
+        print_idl_row_simple4(s4, step);
+        n++;
+    }
+    IDLTEST_SIMPLE6_FOR_EACH (s6, idl) {
+        print_idl_row_simple6(s6, step);
+        n++;
+    }
     IDLTEST_SINGLETON_FOR_EACH (sng, idl) {
         print_idl_row_singleton(sng, step);
         n++;
@@ -2156,6 +2202,8 @@ print_idl(struct ovsdb_idl *idl, int step)
 static void
 print_idl_track(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple3 *s3;
+    const struct idltest_simple4 *s4;
     const struct idltest_simple6 *s6;
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
@@ -2172,6 +2220,14 @@ print_idl_track(struct ovsdb_idl *idl, int step)
     }
     IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
         print_idl_row_link2(l2, step);
+        n++;
+    }
+    IDLTEST_SIMPLE3_FOR_EACH_TRACKED (s3, idl) {
+        print_idl_row_simple3(s3, step);
+        n++;
+    }
+    IDLTEST_SIMPLE4_FOR_EACH_TRACKED (s4, idl) {
+        print_idl_row_simple4(s4, step);
         n++;
     }
     IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
@@ -2404,6 +2460,10 @@ find_table_class(const char *name)
         return &idltest_table_link1;
     } else if (!strcmp(name, "link2")) {
         return &idltest_table_link2;
+    } else if (!strcmp(name, "simple3")) {
+        return &idltest_table_simple3;
+    } else if (!strcmp(name, "simple4")) {
+        return &idltest_table_simple4;
     } else if (!strcmp(name, "simple6")) {
         return &idltest_table_simple6;
     }
