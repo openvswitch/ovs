@@ -727,7 +727,7 @@ struct dpif_execute {
     bool probe;                     /* Suppress error messages. */
     unsigned int mtu;               /* Maximum transmission unit to fragment.
                                        0 if not a fragmented packet */
-    uint64_t hash;
+    uint64_t hash;                  /* Packet flow hash. 0 if not specified. */
     const struct flow *flow;         /* Flow extracted from 'packet'. */
 
     /* Input, but possibly modified as a side effect of execution. */
