@@ -2923,8 +2923,6 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
                            const uint32_t *default_limits,
                            const struct ovs_list *zone_limits)
 {
-    struct ovs_zone_limit req_zone_limit;
-
     if (ovs_ct_limit_family < 0) {
         return EOPNOTSUPP;
     }
@@ -2941,8 +2939,10 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
     size_t opt_offset;
     opt_offset = nl_msg_start_nested(request, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
     if (default_limits) {
-        req_zone_limit.zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE;
-        req_zone_limit.limit = *default_limits;
+        struct ovs_zone_limit req_zone_limit = {
+            .zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE,
+            .limit   = *default_limits,
+        };
         nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
     }
 
@@ -2950,8 +2950,10 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
         struct ct_dpif_zone_limit *zone_limit;
 
         LIST_FOR_EACH (zone_limit, node, zone_limits) {
-            req_zone_limit.zone_id = zone_limit->zone;
-            req_zone_limit.limit = zone_limit->limit;
+            struct ovs_zone_limit req_zone_limit = {
+                .zone_id = zone_limit->zone,
+                .limit   = zone_limit->limit,
+            };
             nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
         }
     }
@@ -3035,8 +3037,9 @@ dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
         size_t opt_offset = nl_msg_start_nested(request,
                                                 OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
 
-        struct ovs_zone_limit req_zone_limit;
-        req_zone_limit.zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE;
+        struct ovs_zone_limit req_zone_limit = {
+            .zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE,
+        };
         nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
 
         struct ct_dpif_zone_limit *zone_limit;
@@ -3086,8 +3089,9 @@ dpif_netlink_ct_del_limits(struct dpif *dpif OVS_UNUSED,
 
         struct ct_dpif_zone_limit *zone_limit;
         LIST_FOR_EACH (zone_limit, node, zone_limits) {
-            struct ovs_zone_limit req_zone_limit;
-            req_zone_limit.zone_id = zone_limit->zone;
+            struct ovs_zone_limit req_zone_limit = {
+                .zone_id = zone_limit->zone,
+            };
             nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
         }
         nl_msg_end_nested(request, opt_offset);
