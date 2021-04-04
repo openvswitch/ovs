@@ -676,7 +676,9 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
             uint32_t block_id;
             int error = 0;
 
-            if_indextoname(change->master_ifindex, master_name);
+            if (!if_indextoname(change->master_ifindex, master_name)) {
+                return;
+            }
             master_netdev = netdev_from_name(master_name);
             if (!master_netdev) {
                 return;
