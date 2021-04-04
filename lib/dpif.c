@@ -1235,6 +1235,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         execute.needs_help = false;
         execute.probe = false;
         execute.mtu = 0;
+        execute.hash = 0;
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &this_module, &execute,
                             true, aux->error);
