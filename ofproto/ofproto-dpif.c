@@ -5412,6 +5412,8 @@ ct_add_timeout_policy_to_dpif(struct dpif *dpif,
     struct ct_dpif_timeout_policy cdtp;
     struct simap_node *node;
 
+    memset(&cdtp, 0, sizeof cdtp);
+
     cdtp.id = ct_tp->tp_id;
     SIMAP_FOR_EACH (node, &ct_tp->tp) {
         ct_dpif_set_timeout_policy_attr_by_name(&cdtp, node->name, node->data);
