@@ -1065,6 +1065,8 @@ raft_open(struct ovsdb_log *log, struct raft **raftp)
     raft_reset_ping_timer(raft);
     raft_reset_election_timer(raft);
 
+    VLOG_INFO("local server ID is "SID_FMT, SID_ARGS(&raft->sid));
+
     *raftp = raft;
     hmap_insert(&all_rafts, &raft->hmap_node, hash_string(raft->name, 0));
     return NULL;
