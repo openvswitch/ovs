@@ -760,8 +760,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                     action->encap.tp_dst);
                 }
                 if (!action->encap.no_csum) {
-                    nl_msg_put_u8(buf, OVS_TUNNEL_KEY_ATTR_CSUM,
-                                  !action->encap.no_csum);
+                    nl_msg_put_flag(buf, OVS_TUNNEL_KEY_ATTR_CSUM);
                 }
 
                 parse_tc_flower_geneve_opts(action, buf);
