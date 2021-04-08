@@ -2047,6 +2047,7 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     uint8_t csum_on = false;
     int err;
 
+    info.tc_modify_flow_deleted = false;
     if (put->flags & DPIF_FP_PROBE) {
         return EOPNOTSUPP;
     }
@@ -2092,7 +2093,6 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     info.tunnel_csum_on = csum_on;
     info.recirc_id_shared_with_tc = (dpif->user_features
                                      & OVS_DP_F_TC_RECIRC_SHARING);
-    info.tc_modify_flow_deleted = false;
     err = netdev_flow_put(dev, &match,
                           CONST_CAST(struct nlattr *, put->actions),
                           put->actions_len,
