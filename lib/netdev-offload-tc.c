@@ -1840,6 +1840,7 @@ probe_multi_mask_per_prio(int ifindex)
 
     memset(&flower, 0, sizeof flower);
 
+    flower.tc_policy = TC_POLICY_SKIP_HW;
     flower.key.eth_type = htons(ETH_P_IP);
     flower.mask.eth_type = OVS_BE16_MAX;
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
@@ -1887,6 +1888,7 @@ probe_tc_block_support(int ifindex)
 
     memset(&flower, 0, sizeof flower);
 
+    flower.tc_policy = TC_POLICY_SKIP_HW;
     flower.key.eth_type = htons(ETH_P_IP);
     flower.mask.eth_type = OVS_BE16_MAX;
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);

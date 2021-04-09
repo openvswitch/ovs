@@ -304,6 +304,14 @@ is_tcf_id_eq(struct tcf_id *id1, struct tcf_id *id2)
            && id1->chain == id2->chain;
 }
 
+enum tc_offload_policy {
+    TC_POLICY_NONE = 0,
+    TC_POLICY_SKIP_SW,
+    TC_POLICY_SKIP_HW
+};
+
+BUILD_ASSERT_DECL(TC_POLICY_NONE == 0);
+
 struct tc_flower {
     struct tc_flower_key key;
     struct tc_flower_key mask;
@@ -329,6 +337,8 @@ struct tc_flower {
     bool needs_full_ip_proto_mask;
 
     enum tc_offloaded_state offloaded_state;
+    /* Used to force skip_hw when probing tc features. */
+    enum tc_offload_policy tc_policy;
 };
 
 /* assert that if we overflow with a masked write of uint32_t to the last byte
