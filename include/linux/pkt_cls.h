@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_ACT_FLAGS)
+#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_CT_FLAGS_REPLY)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -255,6 +255,9 @@ enum {
 	TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED = 1 << 1, /* Part of an existing connection. */
 	TCA_FLOWER_KEY_CT_FLAGS_RELATED = 1 << 2, /* Related to an established connection. */
 	TCA_FLOWER_KEY_CT_FLAGS_TRACKED = 1 << 3, /* Conntrack has occurred. */
+	TCA_FLOWER_KEY_CT_FLAGS_INVALID = 1 << 4, /* Conntrack is invalid. */
+	TCA_FLOWER_KEY_CT_FLAGS_REPLY = 1 << 5, /* Packet is in the reply direction. */
+	__TCA_FLOWER_KEY_CT_FLAGS_MAX,
 };
 
 enum {
