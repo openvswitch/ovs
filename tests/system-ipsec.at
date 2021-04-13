@@ -79,6 +79,20 @@ m4_define([OVS_VSCTL],
 m4_define([OVS_VSCTL_LEFT], [OVS_VSCTL(left, $1)])
 m4_define([OVS_VSCTL_RIGHT], [OVS_VSCTL(right, $1)])
 
+dnl IPSEC_ADD_TUNNEL([namespace], [type], [options]])
+dnl
+dnl Creates a tunnel of type 'type' in namespace 'namespace' using 'options'
+m4_define([IPSEC_ADD_TUNNEL],
+      [OVS_VSCTL([$1], [add-port br-ipsec tun -- set Interface tun type=$2 $3])
+      dnl Wait for all expected connections to be loaded into Libreswan.
+      dnl GRE creates 1 connection, all others create 2.
+      m4_if($2, [gre],
+            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 1])],
+            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 2])])
+      ])
+m4_define([IPSEC_ADD_TUNNEL_LEFT], [IPSEC_ADD_TUNNEL(left, $1, $2)])
+m4_define([IPSEC_ADD_TUNNEL_RIGHT], [IPSEC_ADD_TUNNEL(right, $1, $2)])
+
 dnl CHECK_LIBRESWAN()
 dnl
 dnl Check if necessary Libreswan dependencies are available on the test machine
@@ -124,13 +138,6 @@ m4_define([CHECK_ESP_TRAFFIC],
       tcpdump -l -nn -i ovs-p1 esp > $ovs_base/right/tcpdump.log &
       on_exit "kill $!"
 
-      dnl GRE creates 1 connection, all others create 2
-      m4_if($1, [gre],
-            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq 1])
-             OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq 1])],
-            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq 2])
-             OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq 2])])
-
       dnl Wait for all loaded connections to be active
       OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq `IPSEC_STATUS_ACTIVE(left)`])
       OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq `IPSEC_STATUS_ACTIVE(right)`])
@@ -163,15 +170,13 @@ IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
 IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.2 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.1 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(geneve)
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -190,15 +195,15 @@ IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
 IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.2 options:local_ip=10.1.1.1 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 \
+                      options:local_ip=10.1.1.1 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.1 options:local_ip=10.1.1.2 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(geneve)
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 \
+                       options:local_ip=10.1.1.2 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -229,15 +234,15 @@ OVS_VSCTL_RIGHT(set Open_vSwitch . \
       other_config:private_key=${ovs_base}/right-privkey.pem)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.2 options:remote_cert=${ovs_base}/right-cert.pem)
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 \
+                      options:remote_cert=${ovs_base}/right-cert.pem])
 
 dnl Set up IPsec tunnel on 'right' host
-
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.1 options:remote_cert=${ovs_base}/left-cert.pem)
-
-CHECK_ESP_TRAFFIC(geneve)
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 \
+                       options:remote_cert=${ovs_base}/left-cert.pem])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -269,14 +274,13 @@ OVS_VSCTL_RIGHT(set Open_vSwitch . \
       other_config:private_key=${ovs_base}/right-privkey.pem)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.2 options:remote_name=right)
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:remote_name=right])
 
 dnl Set up IPsec tunnel on 'right' host
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=10.1.1.1 options:remote_name=left)
-
-CHECK_ESP_TRAFFIC(geneve)
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:remote_name=left])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -293,15 +297,13 @@ IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
 IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=gre \
-          options:remote_ip=10.1.1.2 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([gre],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=gre \
-          options:remote_ip=10.1.1.1 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(gre)
+IPSEC_ADD_TUNNEL_RIGHT([gre],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -318,15 +320,13 @@ IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
 IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=10.1.1.2 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=10.1.1.1 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(vxlan)
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -343,14 +343,13 @@ IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
 IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=fd01::102 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=fd01::102 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=fd01::101 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(vxlan)
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=fd01::101 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -367,14 +366,15 @@ IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
 IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=fd01::102 options:local_ip=fd01::101 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=fd01::102 \
+                      options:local_ip=fd01::101 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=vxlan \
-          options:remote_ip=fd01::101 options:local_ip=fd01::102 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(vxlan)
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=fd01::101 \
+                       options:local_ip=fd01::102 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
@@ -393,14 +393,13 @@ IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
 IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
 
 dnl Set up IPsec tunnel on 'left' host
-OVS_VSCTL_LEFT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=fd01::102 options:psk=swordfish)
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=fd01::102 options:psk=swordfish])
 
 dnl Set up IPsec tunnel on 'right' host
-OVS_VSCTL_RIGHT(add-port br-ipsec tun -- set Interface tun type=geneve \
-          options:remote_ip=fd01::101 options:psk=swordfish)
-
-CHECK_ESP_TRAFFIC(geneve)
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=fd01::101 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
 
 OVS_TRAFFIC_VSWITCHD_STOP()
 AT_CLEANUP
