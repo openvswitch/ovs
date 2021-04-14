@@ -377,10 +377,9 @@ def block_xml_to_nroff(nodes, para='.PP'):
                                   'h4': ('SU', r'\fI')}[node.tagName]
                 to_upper = node.tagName == 'h1'
                 s += ".%s \"" % nroffTag
-                for child_node in node.childNodes:
-                    s += flatten_header(
-                        inline_xml_to_nroff(child_node, font, to_upper)
-                    )
+                s += flatten_header(''.join([
+                    inline_xml_to_nroff(child_node, font, to_upper)
+                    for child_node in node.childNodes]))
                 s += "\"\n"
             elif node.tagName == 'pre':
                 fixed = node.getAttribute('fixed')
