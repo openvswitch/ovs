@@ -28,6 +28,7 @@
 #include "openvswitch/poll-loop.h"
 #include "server.h"
 #include "transaction.h"
+#include "transaction-forward.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
 
@@ -53,6 +54,7 @@ ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
     trigger->request = request;
     trigger->reply = NULL;
     trigger->progress = NULL;
+    trigger->txn_forward = NULL;
     trigger->created = now;
     trigger->timeout_msec = LLONG_MAX;
     trigger->read_only = read_only;
@@ -65,6 +67,7 @@ void
 ovsdb_trigger_destroy(struct ovsdb_trigger *trigger)
 {
     ovsdb_txn_progress_destroy(trigger->progress);
+    ovsdb_txn_forward_destroy(trigger->db, trigger->txn_forward);
     ovs_list_remove(&trigger->node);
     jsonrpc_msg_destroy(trigger->request);
     jsonrpc_msg_destroy(trigger->reply);
@@ -75,7 +78,7 @@ ovsdb_trigger_destroy(struct ovsdb_trigger *trigger)
 bool
 ovsdb_trigger_is_complete(const struct ovsdb_trigger *trigger)
 {
-    return trigger->reply && !trigger->progress;
+    return trigger->reply && !trigger->progress && !trigger->txn_forward;
 }
 
 struct jsonrpc_msg *
@@ -96,6 +99,11 @@ ovsdb_trigger_cancel(struct ovsdb_trigger *trigger, const char *reason)
          * tracking it. */
         ovsdb_txn_progress_destroy(trigger->progress);
         trigger->progress = NULL;
+    }
+
+    if (trigger->txn_forward) {
+        ovsdb_txn_forward_destroy(trigger->db, trigger->txn_forward);
+        trigger->txn_forward = NULL;
     }
 
     jsonrpc_msg_destroy(trigger->reply);
@@ -148,7 +156,7 @@ ovsdb_trigger_run(struct ovsdb *db, long long int now)
     LIST_FOR_EACH_SAFE (t, next, node, &db->triggers) {
         if (run_triggers
             || now - t->created >= t->timeout_msec
-            || t->progress) {
+            || t->progress || t->txn_forward) {
             if (ovsdb_trigger_try(t, now)) {
                 disconnect_all = true;
             }
@@ -188,7 +196,7 @@ static bool
 ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
     /* Handle "initialized" state. */
-    if (!t->reply) {
+    if (!t->reply && !t->txn_forward) {
         ovs_assert(!t->progress);
 
         struct ovsdb_txn *txn = NULL;
@@ -198,13 +206,14 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                 return false;
             }
 
-            bool durable;
+            bool durable, forwarding_needed;
 
             struct json *result;
+            /* Trying to compose transaction. */
             txn = ovsdb_execute_compose(
                 t->db, t->session, t->request->params, t->read_only,
                 t->role, t->id, now - t->created, &t->timeout_msec,
-                &durable, &result);
+                &durable, &forwarding_needed, &result);
             if (!txn) {
                 if (result) {
                     /* Complete.  There was an error but we still represent it
@@ -217,9 +226,20 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                 return false;
             }
 
-            /* Transition to "committing" state. */
-            t->reply = jsonrpc_create_reply(result, t->request->id);
-            t->progress = ovsdb_txn_propose_commit(txn, durable);
+            if (forwarding_needed) {
+                /* Transaction is good, but we don't need it. */
+                ovsdb_txn_abort(txn);
+                json_destroy(result);
+                /* Transition to "forwarding" state. */
+                t->txn_forward = ovsdb_txn_forward_create(t->db, t->request);
+                /* Forward will not be completed immediately.  Will check
+                 * next time. */
+                return false;
+            } else {
+                /* Transition to "committing" state. */
+                t->reply = jsonrpc_create_reply(result, t->request->id);
+                t->progress = ovsdb_txn_propose_commit(txn, durable);
+            }
         } else if (!strcmp(t->request->method, "convert")) {
             /* Permission check. */
             if (t->role && *t->role) {
@@ -348,6 +368,19 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
             ovsdb_trigger_complete(t);
         }
 
+        return false;
+    } else if (t->txn_forward) {
+        /* Handle "forwarding" state. */
+        if (!ovsdb_txn_forward_is_complete(t->txn_forward)) {
+            return false;
+        }
+
+        /* Transition to "complete". */
+        ovs_assert(!t->reply);
+        t->reply = ovsdb_txn_forward_steal_reply(t->txn_forward);
+        ovsdb_txn_forward_destroy(t->db, t->txn_forward);
+        t->txn_forward = NULL;
+        ovsdb_trigger_complete(t);
         return false;
     }
 

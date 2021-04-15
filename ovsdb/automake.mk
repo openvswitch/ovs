@@ -48,6 +48,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/trigger.h \
 	ovsdb/transaction.c \
 	ovsdb/transaction.h \
+	ovsdb/transaction-forward.c \
+	ovsdb/transaction-forward.h \
 	ovsdb/ovsdb-util.c \
 	ovsdb/ovsdb-util.h
 ovsdb_libovsdb_la_CFLAGS = $(AM_CFLAGS)

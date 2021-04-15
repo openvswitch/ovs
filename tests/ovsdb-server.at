@@ -3,10 +3,13 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 m4_define([OVSDB_SERVER_SHUTDOWN],
   [OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])])
 
+m4_define([OVSDB_SERVER_SHUTDOWN_N],
+  [cp pid$1 savepid$1
+   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl$1 -e exit], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat savepid$1`], [kill `cat savepid$1`])])
+
 m4_define([OVSDB_SERVER_SHUTDOWN2],
-  [cp pid2 savepid2
-   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 -e exit], [0], [ignore], [ignore])
-   OVS_WAIT_WHILE([kill -0 `cat savepid2`], [kill `cat savepid2`])])
+  [OVSDB_SERVER_SHUTDOWN_N([2])])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -1412,6 +1415,82 @@ m4_define([OVSDB_CHECK_EXECUTION],
 
 EXECUTION_EXAMPLES
 
+AT_BANNER([OVSDB -- ovsdb-server relay])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA and starts an ovsdb-server on
+# it.  Also starts a daisy chain of ovsdb-servers in relay mode where the
+# first relay server is connected to the main non-relay ovsdb-server.
+#
+# Runs each of the TRANSACTIONS (which should be a quoted list of
+# quoted strings) against one of relay servers in the middle with
+# ovsdb-client one at a time.  The server executes read-only transactions
+# and forwards rest of them to the previous ovsdb-server in a chain.
+# The main ovsdb-server executes 'write' transactions.  Transaction
+# reply with data updates propagates back through the chain to all
+# the servers and the client.
+#
+#    main        relay       relay       relay       relay       relay
+#   server1 <-- server2 <-- server3 <-- server4 <-- server5 <-- server6
+#                                         ^
+#                                         |
+#                                     ovsdb-client
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# Checks that the dump of all databases is the same.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server tcp relay $5])
+   n_servers=6
+   target=4
+   $2 > schema
+   schema_name=`ovsdb-tool schema-name schema`
+   AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
+
+   on_exit 'kill `cat *.pid`'
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log dnl
+                          --pidfile --remote=punix:db1.sock db1
+            ], [0], [ignore], [ignore])
+
+   for i in $(seq 2 ${n_servers}); do
+     AT_CHECK([ovsdb-server --detach --no-chdir                           dnl
+                            --log-file=ovsdb-server$i.log                 dnl
+                            --pidfile=${i}.pid --remote=punix:db${i}.sock dnl
+                            --unixctl=unixctl${i} -vjsonrpc:file:dbg      dnl
+                            relay:${schema_name}:unix:db$((i-1)).sock
+            ], [0], [ignore], [ignore])
+   done
+
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client transact unix:db${target}.sock 'txn'], [0],
+               [stdout], [ignore])
+      cat stdout >> output
+   ])
+
+   AT_CHECK([uuidfilt output], [0], [$4], [ignore])
+
+   AT_CHECK([ovsdb-client dump unix:db1.sock], [0], [stdout], [ignore])
+   for i in $(seq 2 ${n_servers}); do
+     OVS_WAIT_UNTIL([ovsdb-client dump unix:db${i}.sock > dump${i}; dnl
+                     diff stdout dump${i}])
+   done
+
+   OVSDB_SERVER_SHUTDOWN
+   for i in $(seq 2 ${n_servers}); do
+     OVSDB_SERVER_SHUTDOWN_N([$i])
+   done
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
 AT_BANNER([OVSDB -- ovsdb-server replication])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])

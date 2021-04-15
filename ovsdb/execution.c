@@ -99,7 +99,8 @@ lookup_executor(const char *name, bool *read_only)
 }
 
 /* On success, returns a transaction and stores the results to return to the
- * client in '*resultsp'.
+ * client in '*resultsp'.  If 'forwarding_needed' is nonnull and transaction
+ * needs to be forwarded (in relay mode), sets '*forwarding_needed' to true.
  *
  * On failure, returns NULL.  If '*resultsp' is nonnull, then it is the results
  * to return to the client.  If '*resultsp' is null, then the execution failed
@@ -111,7 +112,8 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
                       const struct json *params, bool read_only,
                       const char *role, const char *id,
                       long long int elapsed_msec, long long int *timeout_msec,
-                      bool *durable, struct json **resultsp)
+                      bool *durable, bool *forwarding_needed,
+                      struct json **resultsp)
 {
     struct ovsdb_execution x;
     struct ovsdb_error *error;
@@ -120,6 +122,9 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
     size_t i;
 
     *durable = false;
+    if (forwarding_needed) {
+        *forwarding_needed = false;
+    }
     if (params->type != JSON_ARRAY
         || !params->array.n
         || params->array.elems[0]->type != JSON_STRING
@@ -196,11 +201,8 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
                                     "%s operation not allowed on "
                                     "table in reserved database %s",
                                     op_name, db->schema->name);
-            } else if (db->is_relay) {
-                error = ovsdb_error("not allowed",
-                                    "%s operation not allowed when "
-                                    "database server is in relay mode",
-                                    op_name);
+            } else if (db->is_relay && forwarding_needed) {
+                *forwarding_needed = true;
             }
         }
         if (error) {
@@ -245,7 +247,7 @@ ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
     struct json *results;
     struct ovsdb_txn *txn = ovsdb_execute_compose(
         db, session, params, read_only, role, id, elapsed_msec, timeout_msec,
-        &durable, &results);
+        &durable, NULL, &results);
     if (!txn) {
         return results;
     }
