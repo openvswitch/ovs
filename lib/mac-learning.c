@@ -491,12 +491,8 @@ mac_learning_lookup(const struct mac_learning *ml,
                     const struct eth_addr dst, uint16_t vlan)
 {
     if (eth_addr_is_multicast(dst)) {
-        /* No tag because the treatment of multicast destinations never
-         * changes. */
         return NULL;
     } else if (!is_learning_vlan(ml, vlan)) {
-        /* We don't tag this property.  The set of learning VLANs changes so
-         * rarely that we revalidate every flow when it changes. */
         return NULL;
     } else {
         struct mac_entry *e = mac_entry_lookup(ml, dst, vlan);
