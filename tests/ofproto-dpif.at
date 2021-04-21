@@ -1871,7 +1871,7 @@ AT_CHECK([ovs-appctl revalidator/purge])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl Add a controller meter.
-AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps burst stats bands=type=drop rate=1 burst_size=1'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps stats bands=type=drop rate=2'])
 
 dnl Advance time by 1 second.
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
