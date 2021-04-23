@@ -1,7 +1,7 @@
 v2.13.4 - xx xxx xxxx
 ---------------------
    - DPDK:
-     * OVS validated with DPDK 19.11.6. It is recommended to use this version
+     * OVS validated with DPDK 19.11.8. It is recommended to use this version
        until further releases.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
