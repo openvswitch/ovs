@@ -212,8 +212,11 @@ do_start_forwarding () {
         # Start ovs-vswitchd.
         set ovs-vswitchd unix:"$DB_SOCK"
         set "$@" -vconsole:emer -vsyslog:err -vfile:info
-        if test X"$MLOCKALL" != Xno; then
-            set "$@" --mlockall
+        # Disable mlockall in containers
+        if ! in_container; then
+            if test X"$MLOCKALL" != Xno; then
+                set "$@" --mlockall
+            fi
         fi
         if test X"$SELF_CONFINEMENT" = Xno; then
             set "$@" --no-self-confinement

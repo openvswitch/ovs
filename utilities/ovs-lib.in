@@ -702,3 +702,11 @@ restart () {
     flow_restore_complete
     add_managers
 }
+
+in_container () {
+    if [ -x /usr/bin/systemd-detect-virt ]; then
+        systemd-detect-virt -c -q
+        return $?
+    fi
+    return 1
+}
