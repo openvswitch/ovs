@@ -34,6 +34,7 @@
 #include "table.h"
 #include "timeval.h"
 #include "transaction.h"
+#include "unixctl.h"
 #include "uuid.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -53,8 +54,33 @@ static void ovsdb_file_txn_add_row(struct ovsdb_file_txn *,
                                    const struct ovsdb_row *new,
                                    const unsigned long int *changed);
 
+/* If set to 'true', file transactions will contain difference between
+ * datums of old and new rows and not the whole new datum for the column. */
+static bool use_column_diff = true;
+
+static void
+ovsdb_file_column_diff_enable(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                              const char *argv[] OVS_UNUSED,
+                              void *arg OVS_UNUSED)
+{
+    use_column_diff = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+void
+ovsdb_file_column_diff_disable(void)
+{
+    if (!use_column_diff) {
+        return;
+    }
+    use_column_diff = false;
+    unixctl_command_register("ovsdb/file/column-diff-enable", "",
+                             0, 0, ovsdb_file_column_diff_enable, NULL);
+}
+
 static struct ovsdb_error *
 ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
+                                bool row_contains_diff,
                                 const struct json *json)
 {
     struct ovsdb_table_schema *schema = row->table->schema;
@@ -84,6 +110,20 @@ ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
         if (error) {
             return error;
         }
+        if (row_contains_diff
+            && !ovsdb_datum_is_default(&row->fields[column->index],
+                                       &column->type)) {
+            struct ovsdb_datum new_datum;
+
+            error = ovsdb_datum_apply_diff(&new_datum,
+                                           &row->fields[column->index],
+                                           &datum, &column->type);
+            ovsdb_datum_destroy(&datum, &column->type);
+            if (error) {
+                return error;
+            }
+            ovsdb_datum_swap(&datum, &new_datum);
+        }
         ovsdb_datum_swap(&row->fields[column->index], &datum);
         ovsdb_datum_destroy(&datum, &column->type);
     }
@@ -93,7 +133,7 @@ ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
 
 static struct ovsdb_error *
 ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
-                             bool converting,
+                             bool converting, bool row_contains_diff,
                              const struct uuid *row_uuid, struct json *json)
 {
     const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
@@ -107,14 +147,16 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
         return NULL;
     } else if (row) {
         return ovsdb_file_update_row_from_json(ovsdb_txn_row_modify(txn, row),
-                                               converting, json);
+                                               converting, row_contains_diff,
+                                               json);
     } else {
         struct ovsdb_error *error;
         struct ovsdb_row *new;
 
         new = ovsdb_row_create(table);
         *ovsdb_row_get_uuid_rw(new) = *row_uuid;
-        error = ovsdb_file_update_row_from_json(new, converting, json);
+        error = ovsdb_file_update_row_from_json(new, converting,
+                                                row_contains_diff, json);
         if (error) {
             ovsdb_row_destroy(new);
         } else {
@@ -127,7 +169,9 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
 static struct ovsdb_error *
 ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
                                struct ovsdb_table *table,
-                               bool converting, struct json *json)
+                               bool converting,
+                               bool row_contains_diff,
+                               struct json *json)
 {
     struct shash_node *node;
 
@@ -147,6 +191,7 @@ ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
         }
 
         error = ovsdb_file_txn_row_from_json(txn, table, converting,
+                                             row_contains_diff,
                                              &row_uuid, txn_row_json);
         if (error) {
             return error;
@@ -176,6 +221,13 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
         return ovsdb_syntax_error(json, NULL, "object expected");
     }
 
+    struct json *is_diff = shash_find_data(json->object, "_is_diff");
+    bool row_contains_diff = false;
+
+    if (is_diff && is_diff->type == JSON_TRUE) {
+        row_contains_diff = true;
+    }
+
     txn = ovsdb_txn_create(db);
     SHASH_FOR_EACH (node, json->object) {
         const char *table_name = node->name;
@@ -187,6 +239,10 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
             if (!strcmp(table_name, "_date")
                 && node_json->type == JSON_INTEGER) {
                 continue;
+            } else if (!strcmp(table_name, "_is_diff")
+                       && (node_json->type == JSON_TRUE
+                           || node_json->type == JSON_FALSE)) {
+                continue;
             } else if (!strcmp(table_name, "_comment") || converting) {
                 continue;
             }
@@ -197,7 +253,7 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
         }
 
         error = ovsdb_file_txn_table_from_json(txn, table, converting,
-                                               node_json);
+                                               row_contains_diff, node_json);
         if (error) {
             goto error;
         }
@@ -235,10 +291,14 @@ ovsdb_convert_table(struct ovsdb_txn *txn,
                 continue;
             }
 
+            ovsdb_datum_destroy(&dst_row->fields[dst_column->index],
+                                &dst_column->type);
+
             struct ovsdb_error *error = ovsdb_datum_convert(
                 &dst_row->fields[dst_column->index], &dst_column->type,
                 &src_row->fields[src_column->index], &src_column->type);
             if (error) {
+                ovsdb_datum_init_empty(&dst_row->fields[dst_column->index]);
                 ovsdb_row_destroy(dst_row);
                 return error;
             }
@@ -349,6 +409,9 @@ ovsdb_file_txn_annotate(struct json *json, const char *comment)
     if (comment) {
         json_object_put_string(json, "_comment", comment);
     }
+    if (use_column_diff) {
+        json_object_put(json, "_is_diff", json_boolean_create(true));
+    }
     json_object_put(json, "_date", json_integer_create(time_wall_msec()));
     return json;
 }
@@ -379,17 +442,26 @@ ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
             const struct ovsdb_column *column = node->data;
             const struct ovsdb_type *type = &column->type;
             unsigned int idx = column->index;
+            struct ovsdb_datum datum;
+            struct json *column_json;
 
             if (idx != OVSDB_COL_UUID && column->persistent
                 && (old
                     ? bitmap_is_set(changed, idx)
                     : !ovsdb_datum_is_default(&new->fields[idx], type)))
             {
+                if (old && use_column_diff) {
+                    ovsdb_datum_diff(&datum, &old->fields[idx],
+                                     &new->fields[idx], type);
+                    column_json = ovsdb_datum_to_json(&datum, type);
+                    ovsdb_datum_destroy(&datum, type);
+                } else {
+                    column_json = ovsdb_datum_to_json(&new->fields[idx], type);
+                }
                 if (!row) {
                     row = json_object_create();
                 }
-                json_object_put(row, column->name,
-                                ovsdb_datum_to_json(&new->fields[idx], type));
+                json_object_put(row, column->name, column_json);
             }
         }
     }

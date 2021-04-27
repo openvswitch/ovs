@@ -1094,6 +1094,18 @@ MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf,
         goto done;
     }
 
+    if (!NlMsgPutTailU16(nlBuf, OVS_TUNNEL_KEY_ATTR_TP_SRC,
+                         tunKey->flow_hash)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU16(nlBuf, OVS_TUNNEL_KEY_ATTR_TP_DST,
+                         tunKey->dst_port)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
 done:
     NlMsgEndNested(nlBuf, offset);
 error_nested_start:

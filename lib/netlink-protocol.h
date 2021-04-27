@@ -47,12 +47,16 @@
 #define NLM_F_ACK               0x004
 #define NLM_F_ECHO              0x008
 
+/* GET request flag.*/
 #define NLM_F_ROOT              0x100
 #define NLM_F_MATCH             0x200
-#define NLM_F_EXCL              0x200
 #define NLM_F_ATOMIC            0x400
-#define NLM_F_CREATE            0x400
 #define NLM_F_DUMP              (NLM_F_ROOT | NLM_F_MATCH)
+
+/* NEW request flags. */
+#define NLM_F_REPLACE           0x100
+#define NLM_F_EXCL              0x200
+#define NLM_F_CREATE            0x400
 
 /* nlmsg_type values. */
 #define NLMSG_NOOP              1

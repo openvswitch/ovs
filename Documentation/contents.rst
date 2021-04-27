@@ -35,8 +35,9 @@ Open vSwitch Documentation Contents
 
    intro/index
    tutorials/index
-   topics/index
    howto/index
+   topics/index
    ref/index
-   faq/index
    internals/index
+   intro/install/documentation
+   faq/index

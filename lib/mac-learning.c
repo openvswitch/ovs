@@ -384,7 +384,7 @@ is_mac_learning_update_needed(const struct mac_learning *ml,
 
     if (is_gratuitous_arp) {
         /* We don't want to learn from gratuitous ARP packets that are
-         * reflected back over bond slaves so we lock the learning table.  For
+         * reflected back over bond members so we lock the learning table.  For
          * more detail, see the bigger comment in update_learning_table__(). */
         if (!is_bond) {
             return true;   /* Need to set the gratuitous ARP lock. */
@@ -424,7 +424,7 @@ update_learning_table__(struct mac_learning *ml, struct eth_addr src,
     mac = mac_learning_insert(ml, src, vlan);
     if (is_gratuitous_arp) {
         /* Gratuitous ARP packets received over non-bond interfaces could be
-         * reflected back over bond slaves.  We don't want to learn from these
+         * reflected back over bond members.  We don't want to learn from these
          * reflected packets, so we lock each entry for which a gratuitous ARP
          * packet was received over a non-bond interface and refrain from
          * learning from gratuitous ARP packets that arrive over bond

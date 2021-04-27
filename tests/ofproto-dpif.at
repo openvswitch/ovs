@@ -29,12 +29,16 @@ AT_CHECK([ovs-appctl revalidator/wait])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - active-backup bonding])
-# Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and p2
-#    and br1 with interfaces p3, p4 and p8.
-# toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
+AT_SETUP([ofproto-dpif - active-backup bonding (with primary)])
+
+dnl Create br0 with members p1, p2 and p7, creating bond0 with p1 and
+dnl    p2 (p1 as primary) and br1 with members p3, p4 and p8.
+dnl toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
+dnl With p1 down and p2 up/active, bring p1 back up.  Since p1 is the primary,
+dnl it should become active.
 OVS_VSWITCHD_START(
-  [add-bond br0 bond0 p1 p2 bond_mode=active-backup --\
+  [add-bond br0 bond0 p1 p2 bond_mode=active-backup \
+                other_config:bond-primary=p1 -- \
    set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
    set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
    add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
@@ -45,8 +49,10 @@ OVS_VSWITCHD_START(
    add-port br1 p3 -- set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
    add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
    add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
-WAIT_FOR_DUMMY_PORTS([p3], [p4])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+WAIT_FOR_DUMMY_PORTS([p3], [p4])
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | grep 'active-backup primary: p1'`"])
+
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -63,22 +69,239 @@ ovs-appctl netdev-dummy/set-admin-state p1 down
 ovs-appctl time/warp 100
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-ovs-appctl time/warp 200 100
-sleep 1
-AT_CHECK([grep 'in_port([[348]])' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
+ovs-appctl time/warp 2000 100
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep 'in_port([[348]])' | strip_xout], [0], [dnl
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+])
+
+ovs-appctl netdev-dummy/set-admin-state p1 up
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: p1
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - active-backup bonding (primary validation)])
+dnl Make a switch with 3 ports in a bond, so that when we delete one of
+dnl the ports from the bond, there are still 2 ports left and the bond
+dnl remains functional.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 p3 bond_mode=active-backup \
+                other_config:bond-primary=p1 -- \
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   set interface p3 type=dummy options:pstream=punix:$OVS_RUNDIR/p3.sock ofport_request=3 -- \
+   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy --])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+dnl Make sure the initial primary member is set
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | grep 'active-backup primary: p1'`"])
+
+dnl Down the primary member and verify that we switched.  Then
+dnl bring the primary back and verify that we switched back to the
+dnl primary.
+ovs-appctl netdev-dummy/set-admin-state p1 down
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'member p1: disabled'`"])
+ovs-appctl netdev-dummy/set-admin-state p1 up
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: p1
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+
+])
+
+dnl Now delete the primary and verify that the output shows that the
+dnl primary is no longer an member
+ovs-vsctl --id=@p1 get Interface p1 -- remove Port bond0 interfaces @p1
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'active-backup primary: p1 (no such member)'`"])
+
+dnl Now re-add the primary and verify that the output shows that the
+dnl primary is available again.
+dnl
+dnl First, get the UUIDs of the members that exist on bond0.
+dnl Strip the trailing ] so that we can add a new UUID to the end.
+uuids=`ovs-vsctl get Port bond0 interfaces | sed -e 's/]//'`
+dnl Create a new port "p1" and add its UUID to the set of members
+dnl on bond0.
+ovs-vsctl \
+   --id=@p1 create Interface name=p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set Port bond0 interfaces="$uuids, @p1]"
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: p1
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+
+])
+
+dnl Switch to another primary
+ovs-vsctl set port bond0 other_config:bond-primary=p2
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: p2
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+
+])
+
+dnl Remove the "bond-primary" config directive from the bond.
+AT_CHECK([ovs-vsctl remove Port bond0 other_config bond-primary])
+ovs-appctl time/warp 100
+OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+---- bond0 ----
+bond_mode: active-backup
+bond may use recirculation: no, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: <none>
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+
+member p3: enabled
+  may_enable: true
+
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - active-backup bonding (without primary)])
+dnl Create br0 with members p1, p2 and p7, creating bond0 with p1 and p2
+dnl    and br1 with members p3, p4 and p8.
+dnl toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=active-backup --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 -- \
+   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p3 -- set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 -- \
+   add-port br1 p4 -- set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 -- \
+   add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+WAIT_FOR_DUMMY_PORTS([p3], [p4])
+OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | grep 'active-backup primary: <none>'`"])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+ovs-appctl netdev-dummy/set-admin-state up
+ovs-appctl time/warp 100
+ovs-appctl netdev-dummy/set-admin-state p2 down
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl time/warp 100
+ovs-appctl netdev-dummy/set-admin-state p2 up
+ovs-appctl netdev-dummy/set-admin-state p1 down
+ovs-appctl time/warp 100
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl time/warp 2000 100
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep 'in_port([[348]])' | strip_xout], [0], [dnl
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), packets:0, bytes:0, used:never, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - balance-slb bonding])
-# Create br0 with interfaces bond0(p1, p2, p3) and p7,
-#    and br1 with interfaces p4, p5, p6 and p8.
+# Create br0 with members bond0(p1, p2, p3) and p7,
+#    and br1 with members p4, p5, p6 and p8.
 #    p1 <-> p4, p2 <-> p5, p3 <-> p6
 # Send some traffic, make sure the traffic are spread based on source mac.
 OVS_VSWITCHD_START(
@@ -120,8 +343,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - balance-tcp bonding])
-# Create br0 with interfaces bond0(p1, p2, p3) and p7,
-#    and br1 with interfaces bond1(p4, p5, p6) and p8.
+# Create br0 with members bond0(p1, p2, p3) and p7,
+#    and br1 with members bond1(p4, p5, p6) and p8.
 #    bond0 <-> bond1
 # Send some traffic, make sure the traffic are spread based on L4 headers.
 OVS_VSWITCHD_START(
@@ -152,6 +375,8 @@ ovs-appctl time/stop
 ovs-appctl time/warp 100
 ovs-appctl lacp/show > lacp.txt
 ovs-appctl bond/show > bond.txt
+# Check that lb_output is not enabled by default.
+AT_CHECK([grep -q '^lb_output action: disabled' bond.txt])
 (
 for i in `seq 0 255` ;
     do
@@ -164,9 +389,36 @@ AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
 # Make sure there is resonable distribution to all three ports.
 # We don't want to make this check precise, in case hash function changes.
-AT_CHECK([test `grep in_port.4 br1_flows.txt |wc -l` -gt 24])
-AT_CHECK([test `grep in_port.5 br1_flows.txt |wc -l` -gt 24])
-AT_CHECK([test `grep in_port.6 br1_flows.txt |wc -l` -gt 24])
+AT_CHECK([test $(grep -c in_port.4 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.5 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.6 br1_flows.txt) -gt 24])
+# Check that bonding is doing dp_hash.
+AT_CHECK([grep -q dp_hash br0_flows.txt])
+# Enabling lb_output.
+AT_CHECK([ovs-vsctl set Port bond0 other_config:lb-output-action=true])
+OVS_WAIT_UNTIL([ovs-appctl bond/show | grep -q '^lb_output action: enabled'])
+ovs-appctl time/warp 10000 500
+ovs-appctl revalidator/wait
+OVS_WAIT_WHILE([ovs-appctl dpif/dump-flows br1 | grep -q tcp])
+(
+for i in $(seq 256) ;
+    do
+    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
+    done
+)
+ovs-appctl time/warp 300 100
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | grep tcp > br0_flows.txt])
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | grep tcp > br1_flows.txt])
+# Make sure there is resonable distribution to all three ports, again.
+AT_CHECK([test $(grep -c in_port.4 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.5 br1_flows.txt) -gt 24])
+AT_CHECK([test $(grep -c in_port.6 br1_flows.txt) -gt 24])
+AT_CHECK([grep -q lb_output br0_flows.txt])
+
+AT_CHECK([test $(ovs-appctl dpif-netdev/bond-show | grep -c bucket) -eq 256])
+AT_CHECK([ovs-vsctl set Port bond0 other_config:lb-output-action=false])
+OVS_WAIT_UNTIL([test -z "$(ovs-appctl dpif-netdev/bond-show)"])
 
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
@@ -367,7 +619,7 @@ for d in 0 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' |  sed 's/packets.*actions:/actions:/' | strip_ufid | strip_used | sort], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:hash(sym_l4(0)),recirc(0x1)
 recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),10
 ])
@@ -475,7 +727,7 @@ for d in 0 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sort| sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | strip_ufid | strip_used], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:3, bytes:318, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
 recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:3, bytes:318, used:0.0s, actions:11
 ])
@@ -1856,7 +2108,7 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:1, bytes:14, used:0.001s, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535))
 ])
 
@@ -1871,7 +2123,7 @@ AT_CHECK([ovs-appctl revalidator/purge])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl Add a controller meter.
-AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps stats bands=type=drop rate=2'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps burst stats bands=type=drop rate=1 burst_size=1'])
 
 dnl Advance time by 1 second.
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
@@ -1881,7 +2133,7 @@ for i in `seq 1 8`; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:7, bytes:98, used:0.001s, actions:sample(sample=100.0%,actions(meter(0),userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=2,rule_cookie=0,controller_id=0,max_len=65535))))
 ])
 
@@ -1933,7 +2185,7 @@ cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->OXM_
 cookie=0xd dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:OXM_OF_IPV4_DST[[]]->OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:OXM_OF_IPV4_DST[[]],pop:OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,OXM_OF_IPV4_SRC[[0..7]]),controller
-cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],slaves:1,2),controller
+cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],members:1,2),controller
 cookie=0xd dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,OXM_OF_IPV4_SRC[[]]=OXM_OF_IPV4_DST[[]]),controller
 
 cookie=0xd dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
@@ -2931,7 +3183,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:NXM_OF_IP_DST[[]],pop:NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,NXM_OF_IP_SRC[[0..7]]),CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],slaves:1,2),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],members:1,2),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,NXM_OF_IP_SRC[[]]=NXM_OF_IP_DST[[]]),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:09 actions=resubmit(,2),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:0a actions=pop_mpls:0x0800,mod_nw_dst:10.0.0.1,CONTROLLER:65535
@@ -3149,13 +3401,13 @@ AT_CHECK([ovs-ofctl --protocols=OpenFlow13 add-flow br0 'priority=0 actions=outp
 dnl Singleton controller action.
 AT_CHECK([ovs-ofctl monitor -P standard --protocols=OpenFlow13 br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-# Become slave (OF 1.3), which should disable everything except port status.
+# Become secondary (OF 1.3), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000200000003000000000000000000000001
 
 # Ensure that ovs-vswitchd gets a chance to reply before sending another command.
 ovs-appctl time/warp 500 100
 
-# Use OF 1.3 OFPT_SET_ASYNC to enable OFPR_NO_MATCH for slave only.
+# Use OF 1.3 OFPT_SET_ASYNC to enable OFPR_NO_MATCH for secondary only.
 ovs-appctl -t ovs-ofctl ofctl/send 041c002000000002000000000000000100000000000000000000000000000000
 
 ovs-appctl time/warp 500 100
@@ -3167,11 +3419,11 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-send: OFPT_ROLE_REQUEST (OF1.3) (xid=0x2): role=slave generation_id=1
-OFPT_ROLE_REPLY (OF1.3) (xid=0x2): role=slave generation_id=1
+send: OFPT_ROLE_REQUEST (OF1.3) (xid=0x2): role=secondary generation_id=1
+OFPT_ROLE_REPLY (OF1.3) (xid=0x2): role=secondary generation_id=1
 dnl
 send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
- master:
+ primary:
        PACKET_IN: (off)
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)
@@ -3179,7 +3431,7 @@ send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: no_match
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)
@@ -4384,7 +4636,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),5
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
@@ -4402,7 +4654,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=first), packets:0, bytes:0, used:never, actions:drop
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, used:never, actions:drop
@@ -4420,7 +4672,7 @@ for type in no first later; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),2
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
@@ -4495,7 +4747,7 @@ dnl The set_field action only modifies 8 bits of the tcp_src, so both the flow
 dnl wildcard and the set_field action have a mask of 0xFF. Up to (including)
 dnl OVS-2.5, the wildcards and set_field mask are shared internally.
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
@@ -4510,7 +4762,7 @@ for frag in 4000 6000 6008 4010; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:38, used:0.001s, actions:1
@@ -4525,7 +4777,7 @@ for frag in 4000 6000 6001 4002; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:34, used:0.001s, actions:1
@@ -5171,6 +5423,36 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# Checks for regression against a bug in which OVS dropped packets
+# with in_port=CONTROLLER when they were recirculated (because
+# CONTROLLER isn't a real port and could not be looked up).
+AT_SETUP([ofproto-dpif - packet-out recirculation])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_DATA([flows.txt], [dnl
+table=0 ip actions=mod_dl_dst:83:83:83:83:83:83,ct(table=1)
+table=1 ip actions=ct(commit),output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+packet=ffffffffffff00102030405008004500001c00000000401100000a000002ffffffff0035111100080000
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=controller packet=$packet actions=table"])
+
+# Dumps out the flow table, extracts the number of packets that have gone
+# through the (single) flow in table 1, and returns success if it's exactly 1.
+#
+# If this remains 0, then the recirculation isn't working properly since the
+# packet never goes through flow in table 1.
+check_flows () {
+    n=$(ovs-ofctl dump-flows br0 table=1 | sed -n 's/.*n_packets=\([[0-9]]\{1,\}\).*/\1/p')
+    echo "n_packets=$n"
+    test "$n" = 1
+}
+OVS_WAIT_UNTIL([check_flows], [ovs dump-flows br0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - debug_slow action])
 OVS_VSWITCHD_START
@@ -5394,7 +5676,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 2
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5429,7 +5711,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 2
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5470,7 +5752,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
 ])
 
 # The packet should be received by port 1
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p1-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p1-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5506,8 +5788,8 @@ ovs-vsctl show
 ovs-ofctl dump-flows br0
 
 # The packet should be received by port 2 and not port 3
-AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
-AT_CHECK([test 0 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
+AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 0 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
 
 # NXT_RESUMEs should be 1 and reg1 should be set to 0x5.
 OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep NXT_RESUME | grep -c reg1=0x5`])
@@ -7079,7 +7361,7 @@ for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:userspace(pid=0,ipfix(output_port=4294967295))
 ])
 
@@ -7093,7 +7375,7 @@ for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:sample(sample=100.0%,actions(meter(0),userspace(pid=0,ipfix(output_port=4294967295))))
 ])
 
@@ -7106,7 +7388,7 @@ for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
@@ -7185,7 +7467,7 @@ for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)),2
 ])
 
@@ -7198,7 +7480,7 @@ for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
@@ -7970,7 +8252,7 @@ dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8847,controller
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 dnl Packet is dropped because an MPLS PUSH action is applied to a packet with
-dnl 4 MPLS LSEs but ovs-vswtichd can only handle up to 3 MPLS LSEs and thus
+dnl 4 MPLS LSEs but ovs-vswitchd can only handle up to 3 MPLS LSEs and thus
 dnl can't determine the resulting MPLS label after MPLS push/pop actions.
 dnl
 dnl The input is a frame with two MPLS headers which tcpdump -vve shows as:
@@ -8352,8 +8634,8 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - normal, balance-tcp bonding])
-# Create bond0 on br0 with interfaces p0 and p1
-#    and bond1 on br1 with interfaces p2 and p3
+# Create bond0 on br0 with members p0 and p1
+#    and bond1 on br1 with members p2 and p3
 # with p0 patched to p2 and p1 patched to p3.
 OVS_VSWITCHD_START(
   [add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
@@ -8632,6 +8914,29 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=50:54:00:00:00:0c),eth_ty
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif megaflow - set dl_dst with match on dl_src])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+add_of_ports br0 1 2
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,dl_src=50:54:00:00:00:09 actions=mod_dl_dst(50:54:00:00:00:0a),output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.5,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+sleep 1
+dnl The first packet is essentially a no-op, as the new destination MAC is the
+dnl same as the original.  The second entry actually updates the destination
+dnl MAC.  The last one must be dropped as it doesn't match with dl_src.
+AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions:set(eth(dst=50:54:00:00:00:0a)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions:drop
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 m4_define([OFPROTO_DPIF_MEGAFLOW_DISABLED],
   [AT_SETUP([ofproto-dpif megaflow - disabled$1])
    OVS_VSWITCHD_START([], [], [], [m4_if([$1], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])])
@@ -8718,7 +9023,7 @@ AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
   Local Session State: up
   Remote Session State: up
 ])
-# bond/show should show 'may-enable: true' for all slaves.
+# bond/show should show 'may-enable: true' for all members.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
   may_enable: true
   may_enable: true
@@ -9425,7 +9730,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=
 # are wildcarded.
 AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], [dnl
 dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), actions:100
-dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
+dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:drop
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
 dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), actions:drop
 ])
@@ -9466,7 +9771,7 @@ dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
 dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
 dnl get the ACL lookup using the conntrack tuple and the inverted direction.
 dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
-dnl of the master connection, as storted in ct_mark.
+dnl of the parent connection, as storted in ct_mark.
 dnl
 dnl Incoming non-related packet in the original direction (ACL IN)
 table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
@@ -9477,7 +9782,7 @@ table=1 reg3=2, ip, ct_state=-rel-rpl+trk-inv action=set_field:2->reg0,resubmit(
 dnl Outgoing non-related reply packet (CT ACL IN)
 table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
 dnl
-dnl Related packet (CT ACL in the direction of the master connection.)
+dnl Related packet (CT ACL in the direction of the parent connection.)
 table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_MARK[[]]->NXM_NX_REG0[[]],resubmit(,3,ct),goto_table:4
 dnl Drop everything else.
 table=1 priority=0, action=drop
@@ -9510,7 +9815,7 @@ table=5 reg2=0 priority=1000 action=drop
 dnl Commit new non-related IP connections.
 table=5 priority=10 reg2=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit new related connections in either direction, which inherit the mark
-dnl (the direction of the original direction master tuple) from the master
+dnl (the direction of the original direction parent tuple) from the parent
 dnl connection.
 table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Forward everything else, including stateless accepts.
@@ -10342,6 +10647,144 @@ n_packets=0
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - conntrack - disable tcp sequence checking])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+dnl Table 0
+dnl
+table=0,priority=10,in_port=1,ip,action=ct(commit,table=1)
+table=0,priority=10,in_port=2,ip,action=ct(table=1)
+table=0,priority=1,action=drop
+dnl
+dnl Table 1
+dnl
+dnl The following two flows are separated to explicitly count the packets
+dnl that create a new connection
+table=1,priority=100,cookie=0x1,in_port=1,ip,ct_state=+trk+new-inv-rpl,action=2
+table=1,priority=100,cookie=0x2,in_port=1,ip,ct_state=+trk-new-inv-rpl,action=2
+dnl
+table=1,priority=100,cookie=0x3,in_port=2,ip,ct_state=+trk+est+rpl-new-inv,action=1
+table=1,cookie=0x4,ip,ct_state=+trk+inv,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Send 9 packets; one packet will be marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=4
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: enabled
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-disable-tcp-seq-chk], [], [dnl
+disabling TCP sequence checking successful
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: disabled
+])
+
+dnl Send exactly the same 9 packets to confirm no additional packets are marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=2
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=8
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=7
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=1
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-enable-tcp-seq-chk], [], [dnl
+enabling TCP sequence checking successful
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-tcp-seq-chk], [], [dnl
+TCP sequence checking: enabled
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Send exactly the same 9 packets after disabling TCP sequence checking to
+dnl confirm one more packet is marked invalid.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200010000000000000000501872106a7300007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x2 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=12
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x3 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=10
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x4 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+n_packets=2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is a truncated version of "ofproto-dpif - conntrack - controller",
 dnl with extra send-to-controller actions following ct_clear to show that
 dnl the connection tracking data has been cleared.
@@ -10399,6 +10842,62 @@ dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 in_port=2 (via action) data_len=106 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:553
 ])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - match masked ct fields])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+table=0,arp,action=normal
+table=0,ip,in_port=1,udp,nw_src=10.1.2.1/24,action=ct(commit)
+table=0,ip,in_port=1,udp6,ipv6_dst=2001:db8::1/64,action=ct(commit)
+table=0,ip,in_port=1,udp,tp_src=3/0x1,action=ct(commit)
+table=0,ip,in_port=2,actions=ct(table=1)
+table=0,ip6,in_port=2,actions=ct(table=1)
+table=1,priority=10,udp,ct_state=+trk+rpl,ct_nw_src=10.1.2.1/24,actions=controller
+table=1,priority=10,udp6,ct_state=+trk+rpl,ct_ipv6_dst=2001:db8::1/64,actions=controller
+table=1,priority=10,udp,ct_state=+trk+rpl,ct_tp_src=3/0x1,actions=controller
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Match ct_nw_src=10.1.2.1/24
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.2.100,dst=10.1.2.200,proto=17,tos=0,ttl=64,frag=no),udp(src=6,dst=6)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.2.200,dst=10.1.2.100,proto=17,tos=0,ttl=64,frag=no),udp(src=6,dst=6)'])
+
+dnl Match ct_ipv6_dst=2001:db8::1/64
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=2001:db8::2,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x86dd),ipv6(src=2001:db8::2,dst=2001:db8::1,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=2,dst=1)'])
+
+dnl Match ct_tp_src=3/0x1
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 ct_state=est|rpl|trk,ct_nw_src=10.1.2.100,ct_nw_dst=10.1.2.200,ct_nw_proto=17,ct_tp_src=6,ct_tp_dst=6,ip,in_port=2 (via action) data_len=106 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.2.200,nw_dst=10.1.2.100,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=6,tp_dst=6 udp_csum:221
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=126 ct_state=est|rpl|trk,ct_ipv6_src=2001:db8::1,ct_ipv6_dst=2001:db8::2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ipv6,in_port=2 (via action) data_len=126 (unbuffered)
+udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,ipv6_src=2001:db8::2,ipv6_dst=2001:db8::1,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=2,tp_dst=1 udp_csum:bfe2
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=106 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:553
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -10460,6 +10959,42 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - nat - ofproto/trace])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3
+
+flow="in_port=1,udp,nw_src=1.1.1.1,nw_dst=1.1.1.2,udp_src=100,udp_dst=200"
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,ip,nw_src=1.1.1.1,ct_state=-trk,action=ct(commit,nat(src=10.0.0.1-10.0.0.42:1000-1042),table=0)
+table=0,priority=100,udp,ct_state=+trk,nw_src=10.0.0.1,nw_dst=1.1.1.2,tp_src=1000,tp_dst=200,action=ct(commit,nat(dst=20.0.0.1-20.0.0.42:2000-2042),table=0)
+table=0,priority=100,udp,ct_state=+trk,nw_src=10.0.0.1,nw_dst=20.0.0.1,tp_src=1000,tp_dst=2000,action=3
+table=0,priority=90,ip,ct_state=+trk,action=2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 3
+])
+
+flow="in_port=1,udp6,ipv6_src=1::1,ipv6_dst=1::2,udp_src=100,udp_dst=200"
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,ip6,ipv6_src=1::1,ct_state=-trk,action=ct(commit,nat(src=[[10::1]]-[[10::42]]:1000-1042),table=0)
+table=0,priority=100,udp6,ct_state=+trk,ipv6_src=10::1,ipv6_dst=1::2,tp_src=1000,tp_dst=200,action=ct(commit,nat(dst=[[20::1]]-[[20::42]]:2000-2042),table=0)
+table=0,priority=100,udp6,ct_state=+trk,ipv6_src=10::1,ipv6_dst=20::1,tp_src=1000,tp_dst=2000,action=3
+table=0,priority=90,ip6,ct_state=+trk,action=2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - set mtu])
 OVS_VSWITCHD_START
 
@@ -10477,35 +11012,35 @@ AT_CHECK([ovs-vsctl get Interface p1 mtu], [0], [dnl
 AT_CHECK([ovs-vsctl set Interface p1 mtu_request=1600])
 
 # Check that the new MTU is applied
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p1 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface p1 mtu=1600])
 # The internal port 'br0' should have the same MTU value as p1, becase it's
 # the new bridge minimum.
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1600])
 
 AT_CHECK([ovs-vsctl del-port br0 p1])
 
 # When 'p1' is deleted, the internal port should return to the default MTU
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1500])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1500])
 
 # New port with 'mtu_request' in the same transaction.
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set int p2 type=dummy mtu_request=1600])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1600])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface p2 mtu=1600])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1600])
 
-# Explicitly set mtu_request on the internal interface.  This should prevent
+# Explicitly set mtu_request on the internal member.  This should prevent
 # the MTU from being overriden.
 AT_CHECK([ovs-vsctl set int br0 mtu_request=1700])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1700])
 
 # The new MTU on p2 should not affect br0.
 AT_CHECK([ovs-vsctl set int p2 mtu_request=1400])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1400])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+AT_CHECK([ovs-vsctl wait-until Interface p2 mtu=1400])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1700])
 
 # Remove explicit mtu_request from br0.  Now it should track the bridge
 # minimum again.
 AT_CHECK([ovs-vsctl set int br0 mtu_request=[[]]])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1400])
+AT_CHECK([ovs-vsctl wait-until Interface br0 mtu=1400])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

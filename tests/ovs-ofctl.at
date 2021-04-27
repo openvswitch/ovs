@@ -101,6 +101,7 @@ for test_case in \
     'mpls,mpls_label=5                           NXM,OXM,OpenFlow11' \
     'mpls,mpls_tc=1                              NXM,OXM,OpenFlow11' \
     'mpls,mpls_bos=0                             NXM,OXM' \
+    'mpls,mpls_ttl=5                             NXM,OXM' \
     'ip,ip_src=1.2.3.4                           any' \
     'ip,ip_src=192.168.0.0/24                    any' \
     'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM,OpenFlow11' \
@@ -413,20 +414,20 @@ actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetri
 table=1,actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 metadata=0x1234ffff5678ffff/0xffff0000ffff0000,actions=drop
-actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
-actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
-actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
-actions=bundle(symmetric_l3,60,hrw,ofport,slaves:2,3)
-actions=bundle(symmetric_l3,60,hrw,ofport,slaves:)
-actions=output:1,bundle(eth_src,0,hrw,ofport,slaves:1),output:2
-actions=bundle_load(eth_src,50,active_backup,ofport,reg0,slaves:1)
-actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-actions=bundle_load(symmetric_l4,60,hrw,ofport,reg0[0..15],slaves:[2,3])
-actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..30],slaves:)
-actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-actions=bundle_load(symmetric_l3,60,hrw,ofport,reg0[0..15],slaves:[2,3])
-actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..30],slaves:)
-actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],slaves:1),output:2
+actions=bundle(eth_src,50,active_backup,ofport,members:1)
+actions=bundle(symmetric_l4,60,hrw,ofport,members:2,3)
+actions=bundle(symmetric_l4,60,hrw,ofport,members:)
+actions=bundle(symmetric_l3,60,hrw,ofport,members:2,3)
+actions=bundle(symmetric_l3,60,hrw,ofport,members:)
+actions=output:1,bundle(eth_src,0,hrw,ofport,members:1),output:2
+actions=bundle_load(eth_src,50,active_backup,ofport,reg0,members:1)
+actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+actions=bundle_load(symmetric_l4,60,hrw,ofport,reg0[0..15],members:[2,3])
+actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..30],members:)
+actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+actions=bundle_load(symmetric_l3,60,hrw,ofport,reg0[0..15],members:[2,3])
+actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..30],members:)
+actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],members:1),output:2
 actions=resubmit:1,resubmit(2),resubmit(,3),resubmit(2,3)
 send_flow_rem,actions=output:1,output:NXM_NX_REG0,output:2,output:reg1[16..31],output:3
 check_overlap,actions=output:1,exit,output:2
@@ -434,6 +435,7 @@ tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0,actions=drop
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
@@ -469,20 +471,20 @@ NXT_FLOW_MOD: ADD table:255 actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0.
 NXT_FLOW_MOD: ADD table:1 actions=drop
 NXT_FLOW_MOD: ADD table:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
 NXT_FLOW_MOD: ADD table:255 metadata=0x1234000056780000/0xffff0000ffff0000 actions=drop
-NXT_FLOW_MOD: ADD table:255 actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
-NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
-NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l3,60,hrw,ofport,slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l3,60,hrw,ofport,slaves:)
-NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle(eth_src,0,hrw,ofport,slaves:1),output:2
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(eth_src,50,active_backup,ofport,NXM_NX_REG0[],slaves:1)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..30],slaves:)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..30],slaves:)
-NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],slaves:1),output:2
+NXT_FLOW_MOD: ADD table:255 actions=bundle(eth_src,50,active_backup,ofport,members:1)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,members:)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l3,60,hrw,ofport,members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l3,60,hrw,ofport,members:)
+NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle(eth_src,0,hrw,ofport,members:1),output:2
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(eth_src,50,active_backup,ofport,NXM_NX_REG0[],members:1)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..30],members:)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..15],members:2,3)
+NXT_FLOW_MOD: ADD table:255 actions=bundle_load(symmetric_l3,60,hrw,ofport,NXM_NX_REG0[0..30],members:)
+NXT_FLOW_MOD: ADD table:255 actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],members:1),output:2
 NXT_FLOW_MOD: ADD table:255 actions=resubmit:1,resubmit:2,resubmit(,3),resubmit(2,3)
 NXT_FLOW_MOD: ADD table:255 send_flow_rem actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
 NXT_FLOW_MOD: ADD table:255 check_overlap actions=output:1,exit,output:2
@@ -490,6 +492,7 @@ NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+NXT_FLOW_MOD: ADD table:255 mpls,mpls_label=5,mpls_tc=1,mpls_ttl=1,mpls_bos=0 actions=drop
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))

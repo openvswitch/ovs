@@ -95,23 +95,12 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([Invalid --with-pthread value])
               ;;
             *)
-            if (cl) 2>&1 | grep 'x64' >/dev/null 2>&1; then
-              cl_cv_x64=yes
-            else
-              cl_cv_x64=no
-            fi
-            if test "$cl_cv_x64" = yes; then
-                PTHREAD_WIN32_DIR=$withval/lib/x64
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x64
-                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x64
-            else
-                PTHREAD_WIN32_DIR=$withval/lib/x86
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x86
-                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x86
-            fi
+            PTHREAD_WIN32_DIR=$withval/lib
+            PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/bin
+            PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/bin
             PTHREAD_INCLUDES=-I$withval/include
             PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
-            PTHREAD_LIBS="-lpthreadVC2"
+            PTHREAD_LIBS="-lpthreadVC3"
             AC_SUBST([PTHREAD_WIN32_DIR_DLL_WIN_FORM])
             AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
@@ -146,51 +135,51 @@ dnl OVS_CHECK_WINDOWS
 dnl
 dnl Configure Visual Studio solution build
 AC_DEFUN([OVS_CHECK_VISUAL_STUDIO_DDK], [
-AC_ARG_WITH([vstudiotarget],
-         [AS_HELP_STRING([--with-vstudiotarget=target_type],
-            [Target type: Debug/Release])],
-         [
-            case "$withval" in
-            "Release") ;;
-            "Debug") ;;
-            *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
-            esac
+if test "$WIN32" = yes; then
+  AC_ARG_WITH([vstudiotarget],
+          [AS_HELP_STRING([--with-vstudiotarget=target_type],
+              [Target type: Debug/Release])],
+          [
+              case "$withval" in
+              "Release") ;;
+              "Debug") ;;
+              *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
+              esac
 
-            VSTUDIO_CONFIG=$withval
-         ], [
-            VSTUDIO_CONFIG=
-         ]
-      )
+              VSTUDIO_CONFIG=$withval
+          ], [
+              VSTUDIO_CONFIG="Debug"
+          ]
+        )
 
-  AC_SUBST([VSTUDIO_CONFIG])
+    AC_SUBST([VSTUDIO_CONFIG])
 
-AC_ARG_WITH([vstudiotargetver],
-         [AS_HELP_STRING([--with-vstudiotargetver=target_ver1,target_ver2],
-            [Target versions: Win8,Win8.1,Win10])],
-         [
-            targetver=`echo "$withval" | tr -s , ' ' `
-            for ver in $targetver; do
-                case "$ver" in
-                "Win8") VSTUDIO_WIN8=true ;;
-                "Win8.1")  VSTUDIO_WIN8_1=true ;;
-                "Win10") VSTUDIO_WIN10=true ;;
-                *) AC_MSG_ERROR([No valid Visual Studio target version found]) ;;
-                esac
-            done
+  AC_ARG_WITH([vstudiotargetver],
+          [AS_HELP_STRING([--with-vstudiotargetver=target_ver1,target_ver2],
+              [Target versions: Win8,Win8.1,Win10])],
+          [
+              targetver=`echo "$withval" | tr -s , ' ' `
+              for ver in $targetver; do
+                  case "$ver" in
+                  "Win8") VSTUDIO_WIN8=true ;;
+                  "Win8.1")  VSTUDIO_WIN8_1=true ;;
+                  "Win10") VSTUDIO_WIN10=true ;;
+                  *) AC_MSG_ERROR([No valid Visual Studio target version found]) ;;
+                  esac
+              done
 
-         ], [
-            VSTUDIO_WIN8=true
-            VSTUDIO_WIN8_1=true
-            VSTUDIO_WIN10=true
-         ]
-      )
-
-  AM_CONDITIONAL([VSTUDIO_WIN8], [test -n "$VSTUDIO_WIN8"])
-  AM_CONDITIONAL([VSTUDIO_WIN8_1], [test -n "$VSTUDIO_WIN8_1"])
-  AM_CONDITIONAL([VSTUDIO_WIN10], [test -n "$VSTUDIO_WIN10"])
-
-  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
-  AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
+          ], [
+              VSTUDIO_WIN8=true
+              VSTUDIO_WIN8_1=true
+              VSTUDIO_WIN10=true
+          ]
+        )
+    AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
+fi
+AM_CONDITIONAL([VSTUDIO_WIN8], [test -n "$VSTUDIO_WIN8"])
+AM_CONDITIONAL([VSTUDIO_WIN8_1], [test -n "$VSTUDIO_WIN8_1"])
+AM_CONDITIONAL([VSTUDIO_WIN10], [test -n "$VSTUDIO_WIN10"])
+AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
 ])
 
 dnl Checks for Netlink support.
@@ -354,57 +343,16 @@ dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
 
-dnl Checks for Python 2.x, x >= 7.
-AC_DEFUN([OVS_CHECK_PYTHON2],
-  [AC_CACHE_CHECK(
-     [for Python 2.x for x >= 7],
-     [ovs_cv_python2],
-     [if test -n "$PYTHON2"; then
-        ovs_cv_python2=$PYTHON2
-      else
-        ovs_cv_python2=no
-        for binary in python2 python2.7 python; do
-          ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-          for dir in $PATH; do
-            IFS=$ovs_save_IFS
-            test -z "$dir" && dir=.
-            if test -x "$dir"/"$binary" && "$dir"/"$binary" -c 'import sys
-if sys.hexversion >= 0x02070000 and sys.hexversion < 0x03000000:
-    sys.exit(0)
-else:
-    sys.exit(1)'; then
-              ovs_cv_python2=$dir/$binary
-              break 2
-            fi
-          done
-        done
-        if test "$ovs_cv_python2" != no && test -x "$ovs_cv_python2"; then
-          if ! "$ovs_cv_python2" -c 'import six ; six.moves.range' >&AS_MESSAGE_LOG_FD 2>&1; then
-            ovs_cv_python2=no
-            AC_MSG_WARN([Missing Python six library or version too old.])
-          fi
-        fi
-      fi])
-   AC_SUBST([HAVE_PYTHON2])
-   AM_MISSING_PROG([PYTHON2], [python2])
-   if test "$ovs_cv_python2" != no; then
-     PYTHON2=$ovs_cv_python2
-     HAVE_PYTHON2=yes
-   else
-     HAVE_PYTHON2=no
-   fi
-   AM_CONDITIONAL([HAVE_PYTHON2], [test "$HAVE_PYTHON2" = yes])])
-
-dnl Checks for Python 3.x, x >= 4.
+dnl Checks for Python 3.4 or later.
 AC_DEFUN([OVS_CHECK_PYTHON3],
   [AC_CACHE_CHECK(
-     [for Python 3.x for x >= 4],
+     [for Python 3 (version 3.4 or later)],
      [ovs_cv_python3],
      [if test -n "$PYTHON3"; then
         ovs_cv_python3=$PYTHON3
       else
         ovs_cv_python3=no
-        for binary in python3 python3.4; do
+        for binary in python3 python3.4 python3.5 python3.6 python3.7; do
           ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
           for dir in $PATH; do
             IFS=$ovs_save_IFS
@@ -419,46 +367,12 @@ else:
             fi
           done
         done
-        if test "$ovs_cv_python3" != no; then
-          if test -x "$ovs_cv_python3" && ! "$ovs_cv_python3" -c 'import six' >/dev/null 2>&1; then
-            ovs_cv_python3=no
-            AC_MSG_WARN([Missing Python six library.])
-          fi
-        fi
       fi])
-   AC_SUBST([HAVE_PYTHON3])
-   AM_MISSING_PROG([PYTHON3], [python3])
-   if test "$ovs_cv_python3" != no; then
-     PYTHON3=$ovs_cv_python3
-     HAVE_PYTHON3=yes
-   else
-     HAVE_PYTHON3=no
+   if test "$ovs_cv_python3" = no; then
+     AC_MSG_ERROR([Python 3.4 or later is required but not found in $PATH, please install it or set $PYTHON3 to point to it])
    fi
-   AM_CONDITIONAL([HAVE_PYTHON3], [test "$HAVE_PYTHON3" = yes])])
-
-dnl Checks if you have any compatible Python version installed.
-dnl Python 2.7+ has the preference to 3.4+
-AC_DEFUN([OVS_CHECK_PYTHON],
-  [AC_CACHE_CHECK(
-     [for Python 2 or 3],
-     [ovs_cv_python],
-     [if test -n "$PYTHON"; then
-        ovs_cv_python=$PYTHON
-      else
-        ovs_cv_python=no
-        if test "$ovs_cv_python2" != no; then
-          ovs_cv_python=$ovs_cv_python2
-        elif test "$ovs_cv_python3" != no; then
-          ovs_cv_python=$ovs_cv_python3
-        else
-          AC_MSG_ERROR([Missing Python.])
-        fi
-      fi])
-    AC_SUBST([PYTHON])
-    PYTHON=$ovs_cv_python
-    AC_SUBST([HAVE_PYTHON])
-    HAVE_PYTHON=yes
-    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])
+   AC_ARG_VAR([PYTHON3])
+   PYTHON3=$ovs_cv_python3])
 
 dnl Checks for flake8.
 AC_DEFUN([OVS_CHECK_FLAKE8],
@@ -474,15 +388,44 @@ AC_DEFUN([OVS_CHECK_FLAKE8],
 
 dnl Checks for sphinx.
 AC_DEFUN([OVS_CHECK_SPHINX],
+  [AC_CHECK_PROGS(
+     [SPHINXBUILD], [sphinx-build-3 sphinx-build-2 sphinx-build], [none])
+   AC_ARG_VAR([SPHINXBUILD])
+   AM_CONDITIONAL([HAVE_SPHINX], [test "$SPHINXBUILD" != none])])
+
+dnl Checks for binutils/assembler known issue with AVX512.
+dnl Due to backports, we probe assembling a reproducer instead of checking
+dnl binutils version string. More details, including ASM dumps and debug here:
+dnl   GCC: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90028
+dnl The checking of binutils funcationality instead of LD version is similar
+dnl to as how DPDK proposes to solve this issue:
+dnl   http://patches.dpdk.org/patch/71723/
+AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
   [AC_CACHE_CHECK(
-    [for sphinx],
-    [ovs_cv_sphinx],
-    [if type sphinx-build >/dev/null 2>&1; then
-       ovs_cv_sphinx=yes
+    [binutils avx512 assembler checks passing],
+    [ovs_cv_binutils_avx512_good],
+    [dnl Assemble a short snippet to test for issue in "build-aux" dir:
+     mkdir -p build-aux
+     OBJFILE=build-aux/binutils_avx512_check.o
+     GATHER_PARAMS='0x8(,%ymm1,1),%ymm0{%k2}'
+     echo "vpgatherqq $GATHER_PARAMS" | as --64 -o $OBJFILE -
+     if ($CC -dumpmachine | grep x86_64) >/dev/null 2>&1; then
+       if (objdump -d  --no-show-raw-insn $OBJFILE | grep -q $GATHER_PARAMS) >/dev/null 2>&1; then
+         ovs_cv_binutils_avx512_good=yes
+         CFLAGS="$CFLAGS -DHAVE_LD_AVX512_GOOD"
+       else
+         ovs_cv_binutils_avx512_good=no
+         dnl Explicitly disallow avx512f to stop compiler auto-vectorizing
+         dnl and causing zmm usage with buggy binutils versions.
+         CFLAGS="$CFLAGS -mno-avx512f"
+       fi
      else
-       ovs_cv_sphinx=no
+       dnl non x86_64 architectures don't have avx512, so not affected
+       ovs_cv_binutils_avx512_good=no
      fi])
-   AM_CONDITIONAL([HAVE_SPHINX], [test "$ovs_cv_sphinx" = yes])])
+     rm $OBJFILE
+   AM_CONDITIONAL([HAVE_LD_AVX512_GOOD],
+                  [test "$ovs_cv_binutils_avx512_good" = yes])])
 
 dnl Checks for dot.
 AC_DEFUN([OVS_CHECK_DOT],
@@ -705,3 +648,15 @@ AC_DEFUN([OVS_CHECK_UNBOUND],
    fi
    AM_CONDITIONAL([HAVE_UNBOUND], [test "$HAVE_UNBOUND" = yes])
    AC_SUBST([HAVE_UNBOUND])])
+
+dnl Checks for libunwind.
+AC_DEFUN([OVS_CHECK_UNWIND],
+  [AC_CHECK_LIB([unwind], [unw_backtrace],
+   [AC_CHECK_HEADERS([libunwind.h], [HAVE_UNWIND=yes], [HAVE_UNWIND=no])],
+   [HAVE_UNWIND=no])
+   if test "$HAVE_UNWIND" = yes; then
+     AC_DEFINE([HAVE_UNWIND], [1], [Define to 1 if unwind is detected.])
+     LIBS="$LIBS -lunwind"
+   fi
+   AM_CONDITIONAL([HAVE_UNWIND], [test "$HAVE_UNWIND" = yes])
+   AC_SUBST([HAVE_UNWIND])])

@@ -48,13 +48,62 @@ enum OVS_PACKED_ENUM dp_packet_source {
 
 #define DP_PACKET_CONTEXT_SIZE 64
 
-#ifndef DPDK_NETDEV
+#ifdef DPDK_NETDEV
+#define DEF_OL_FLAG(NAME, DPDK_DEF, GENERIC_DEF) NAME = DPDK_DEF
+#else
+#define DEF_OL_FLAG(NAME, DPDK_DEF, GENERIC_DEF) NAME = GENERIC_DEF
+#endif
+
 /* Bit masks for the 'ol_flags' member of the 'dp_packet' structure. */
 enum dp_packet_offload_mask {
-    DP_PACKET_OL_RSS_HASH_MASK  = 0x1, /* Is the 'rss_hash' valid? */
-    DP_PACKET_OL_FLOW_MARK_MASK = 0x2, /* Is the 'flow_mark' valid? */
+    /* Value 0 is not used. */
+    /* Is the 'rss_hash' valid? */
+    DEF_OL_FLAG(DP_PACKET_OL_RSS_HASH, PKT_RX_RSS_HASH, 0x1),
+    /* Is the 'flow_mark' valid? */
+    DEF_OL_FLAG(DP_PACKET_OL_FLOW_MARK, PKT_RX_FDIR_ID, 0x2),
+    /* Bad L4 checksum in the packet. */
+    DEF_OL_FLAG(DP_PACKET_OL_RX_L4_CKSUM_BAD, PKT_RX_L4_CKSUM_BAD, 0x4),
+    /* Bad IP checksum in the packet. */
+    DEF_OL_FLAG(DP_PACKET_OL_RX_IP_CKSUM_BAD, PKT_RX_IP_CKSUM_BAD, 0x8),
+    /* Valid L4 checksum in the packet. */
+    DEF_OL_FLAG(DP_PACKET_OL_RX_L4_CKSUM_GOOD, PKT_RX_L4_CKSUM_GOOD, 0x10),
+    /* Valid IP checksum in the packet. */
+    DEF_OL_FLAG(DP_PACKET_OL_RX_IP_CKSUM_GOOD, PKT_RX_IP_CKSUM_GOOD, 0x20),
+    /* TCP Segmentation Offload. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_SEG, PKT_TX_TCP_SEG, 0x40),
+    /* Offloaded packet is IPv4. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_IPV4, PKT_TX_IPV4, 0x80),
+    /* Offloaded packet is IPv6. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_IPV6, PKT_TX_IPV6, 0x100),
+    /* Offload TCP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_TCP_CKSUM, PKT_TX_TCP_CKSUM, 0x200),
+    /* Offload UDP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_UDP_CKSUM, PKT_TX_UDP_CKSUM, 0x400),
+    /* Offload SCTP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_SCTP_CKSUM, PKT_TX_SCTP_CKSUM, 0x800),
+    /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
-#endif
+
+#define DP_PACKET_OL_SUPPORTED_MASK (DP_PACKET_OL_RSS_HASH         | \
+                                     DP_PACKET_OL_FLOW_MARK        | \
+                                     DP_PACKET_OL_RX_L4_CKSUM_BAD  | \
+                                     DP_PACKET_OL_RX_IP_CKSUM_BAD  | \
+                                     DP_PACKET_OL_RX_L4_CKSUM_GOOD | \
+                                     DP_PACKET_OL_RX_IP_CKSUM_GOOD | \
+                                     DP_PACKET_OL_TX_TCP_SEG       | \
+                                     DP_PACKET_OL_TX_IPV4          | \
+                                     DP_PACKET_OL_TX_IPV6          | \
+                                     DP_PACKET_OL_TX_TCP_CKSUM     | \
+                                     DP_PACKET_OL_TX_UDP_CKSUM     | \
+                                     DP_PACKET_OL_TX_SCTP_CKSUM)
+
+#define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
+                                 DP_PACKET_OL_TX_UDP_CKSUM | \
+                                 DP_PACKET_OL_TX_SCTP_CKSUM)
+#define DP_PACKET_OL_RX_IP_CKSUM_MASK (DP_PACKET_OL_RX_IP_CKSUM_GOOD | \
+                                       DP_PACKET_OL_RX_IP_CKSUM_BAD)
+#define DP_PACKET_OL_RX_L4_CKSUM_MASK (DP_PACKET_OL_RX_L4_CKSUM_GOOD | \
+                                       DP_PACKET_OL_RX_L4_CKSUM_BAD)
 
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
@@ -76,7 +125,7 @@ struct dp_packet {
 
     /* All the following elements of this struct are copied in a single call
      * of memcpy in dp_packet_clone_with_headroom. */
-    uint8_t l2_pad_size;           /* Detected l2 padding size.
+    uint16_t l2_pad_size;          /* Detected l2 padding size.
                                     * Padding is non-pullable. */
     uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
     uint16_t l3_ofs;               /* Network-level header offset,
@@ -113,8 +162,8 @@ void *dp_packet_resize_l2(struct dp_packet *, int increment);
 void *dp_packet_resize_l2_5(struct dp_packet *, int increment);
 static inline void *dp_packet_eth(const struct dp_packet *);
 static inline void dp_packet_reset_offsets(struct dp_packet *);
-static inline uint8_t dp_packet_l2_pad_size(const struct dp_packet *);
-static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint8_t);
+static inline uint16_t dp_packet_l2_pad_size(const struct dp_packet *);
+static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint16_t);
 static inline void *dp_packet_l2_5(const struct dp_packet *);
 static inline void dp_packet_set_l2_5(struct dp_packet *, void *);
 static inline void *dp_packet_l3(const struct dp_packet *);
@@ -147,6 +196,8 @@ struct dp_packet *dp_packet_clone_with_headroom(const struct dp_packet *,
 struct dp_packet *dp_packet_clone_data(const void *, size_t);
 struct dp_packet *dp_packet_clone_data_with_headroom(const void *, size_t,
                                                      size_t headroom);
+void dp_packet_resize(struct dp_packet *b, size_t new_headroom,
+                      size_t new_tailroom);
 static inline void dp_packet_delete(struct dp_packet *);
 
 static inline void *dp_packet_at(const struct dp_packet *, size_t offset,
@@ -320,14 +371,14 @@ dp_packet_reset_offsets(struct dp_packet *b)
     b->l4_ofs = UINT16_MAX;
 }
 
-static inline uint8_t
+static inline uint16_t
 dp_packet_l2_pad_size(const struct dp_packet *b)
 {
     return b->l2_pad_size;
 }
 
 static inline void
-dp_packet_set_l2_pad_size(struct dp_packet *b, uint8_t pad_size)
+dp_packet_set_l2_pad_size(struct dp_packet *b, uint16_t pad_size)
 {
     ovs_assert(pad_size <= dp_packet_size(b));
     b->l2_pad_size = pad_size;
@@ -415,6 +466,18 @@ dp_packet_get_tcp_payload(const struct dp_packet *b)
     return NULL;
 }
 
+static inline uint32_t
+dp_packet_get_tcp_payload_length(const struct dp_packet *pkt)
+{
+    const char *tcp_payload = dp_packet_get_tcp_payload(pkt);
+    if (tcp_payload) {
+        return ((char *) dp_packet_tail(pkt) - dp_packet_l2_pad_size(pkt)
+                - tcp_payload);
+    } else {
+        return 0;
+    }
+}
+
 static inline const void *
 dp_packet_get_udp_payload(const struct dp_packet *b)
 {
@@ -444,6 +507,45 @@ dp_packet_get_nd_payload(const struct dp_packet *b)
 }
 
 #ifdef DPDK_NETDEV
+static inline uint64_t *
+dp_packet_ol_flags_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint64_t *, &b->mbuf.ol_flags);
+}
+
+static inline uint32_t *
+dp_packet_rss_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint32_t *, &b->mbuf.hash.rss);
+}
+
+static inline uint32_t *
+dp_packet_flow_mark_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint32_t *, &b->mbuf.hash.fdir.hi);
+}
+
+#else
+static inline uint32_t *
+dp_packet_ol_flags_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint32_t *, &b->ol_flags);
+}
+
+static inline uint32_t *
+dp_packet_rss_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint32_t *, &b->rss_hash);
+}
+
+static inline uint32_t *
+dp_packet_flow_mark_ptr(const struct dp_packet *b)
+{
+    return CONST_CAST(uint32_t *, &b->flow_mark);
+}
+#endif
+
+#ifdef DPDK_NETDEV
 BUILD_ASSERT_DECL(offsetof(struct dp_packet, mbuf) == 0);
 
 static inline void
@@ -451,7 +553,7 @@ dp_packet_init_specific(struct dp_packet *p)
 {
     /* This initialization is needed for packets that do not come from DPDK
      * interfaces, when vswitchd is built with --with-dpdk. */
-    p->mbuf.tx_offload = p->mbuf.packet_type = 0;
+    p->mbuf.ol_flags = p->mbuf.tx_offload = p->mbuf.packet_type = 0;
     p->mbuf.nb_segs = 1;
     p->mbuf.next = NULL;
 }
@@ -514,79 +616,6 @@ dp_packet_set_allocated(struct dp_packet *b, uint16_t s)
     b->mbuf.buf_len = s;
 }
 
-/* Returns the RSS hash of the packet 'p'.  Note that the returned value is
- * correct only if 'dp_packet_rss_valid(p)' returns true */
-static inline uint32_t
-dp_packet_get_rss_hash(const struct dp_packet *p)
-{
-    return p->mbuf.hash.rss;
-}
-
-static inline void
-dp_packet_set_rss_hash(struct dp_packet *p, uint32_t hash)
-{
-    p->mbuf.hash.rss = hash;
-    p->mbuf.ol_flags |= PKT_RX_RSS_HASH;
-}
-
-static inline bool
-dp_packet_rss_valid(const struct dp_packet *p)
-{
-    return p->mbuf.ol_flags & PKT_RX_RSS_HASH;
-}
-
-static inline void
-dp_packet_reset_offload(struct dp_packet *p)
-{
-    p->mbuf.ol_flags = 0;
-}
-
-static inline bool
-dp_packet_ip_checksum_valid(const struct dp_packet *p)
-{
-    return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
-            PKT_RX_IP_CKSUM_GOOD;
-}
-
-static inline bool
-dp_packet_ip_checksum_bad(const struct dp_packet *p)
-{
-    return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
-            PKT_RX_IP_CKSUM_BAD;
-}
-
-static inline bool
-dp_packet_l4_checksum_valid(const struct dp_packet *p)
-{
-    return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
-            PKT_RX_L4_CKSUM_GOOD;
-}
-
-static inline bool
-dp_packet_l4_checksum_bad(const struct dp_packet *p)
-{
-    return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
-            PKT_RX_L4_CKSUM_BAD;
-}
-
-static inline bool
-dp_packet_has_flow_mark(const struct dp_packet *p, uint32_t *mark)
-{
-    if (p->mbuf.ol_flags & PKT_RX_FDIR_ID) {
-        *mark = p->mbuf.hash.fdir.hi;
-        return true;
-    }
-
-    return false;
-}
-
-static inline void
-dp_packet_set_flow_mark(struct dp_packet *p, uint32_t mark)
-{
-    p->mbuf.hash.fdir.hi = mark;
-    p->mbuf.ol_flags |= PKT_RX_FDIR_ID;
-}
-
 #else /* DPDK_NETDEV */
 
 static inline void
@@ -643,73 +672,6 @@ dp_packet_set_allocated(struct dp_packet *b, uint16_t s)
     b->allocated_ = s;
 }
 
-/* Returns the RSS hash of the packet 'p'.  Note that the returned value is
- * correct only if 'dp_packet_rss_valid(p)' returns true */
-static inline uint32_t
-dp_packet_get_rss_hash(const struct dp_packet *p)
-{
-    return p->rss_hash;
-}
-
-static inline void
-dp_packet_set_rss_hash(struct dp_packet *p, uint32_t hash)
-{
-    p->rss_hash = hash;
-    p->ol_flags |= DP_PACKET_OL_RSS_HASH_MASK;
-}
-
-static inline bool
-dp_packet_rss_valid(const struct dp_packet *p)
-{
-    return p->ol_flags & DP_PACKET_OL_RSS_HASH_MASK;
-}
-
-static inline void
-dp_packet_reset_offload(struct dp_packet *p)
-{
-    p->ol_flags = 0;
-}
-
-static inline bool
-dp_packet_ip_checksum_valid(const struct dp_packet *p OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-dp_packet_ip_checksum_bad(const struct dp_packet *p OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-dp_packet_l4_checksum_valid(const struct dp_packet *p OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-dp_packet_l4_checksum_bad(const struct dp_packet *p OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-dp_packet_has_flow_mark(const struct dp_packet *p, uint32_t *mark)
-{
-    if (p->ol_flags & DP_PACKET_OL_FLOW_MARK_MASK) {
-        *mark = p->flow_mark;
-        return true;
-    }
-    return false;
-}
-
-static inline void
-dp_packet_set_flow_mark(struct dp_packet *p, uint32_t mark)
-{
-    p->flow_mark = mark;
-    p->ol_flags |= DP_PACKET_OL_FLOW_MARK_MASK;
-}
 #endif /* DPDK_NETDEV */
 
 static inline void
@@ -874,7 +836,15 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
 
     dp_packet_batch_init(dst);
     DP_PACKET_BATCH_FOR_EACH (i, packet, src) {
-        dp_packet_batch_add(dst, dp_packet_clone(packet));
+        if (i + 1 < dp_packet_batch_size(src)) {
+            OVS_PREFETCH(src->packets[i + 1]);
+        }
+
+        uint32_t headroom = dp_packet_headroom(packet);
+        struct dp_packet *pkt_clone;
+
+        pkt_clone  = dp_packet_clone_with_headroom(packet, headroom);
+        dp_packet_batch_add(dst, pkt_clone);
     }
     dst->trunc = src->trunc;
 }
@@ -928,6 +898,178 @@ dp_packet_batch_reset_cutlen(struct dp_packet_batch *batch)
         }
         batch->trunc = false;
     }
+}
+
+/* Returns the RSS hash of the packet 'p'.  Note that the returned value is
+ * correct only if 'dp_packet_rss_valid(p)' returns 'true'. */
+static inline uint32_t
+dp_packet_get_rss_hash(const struct dp_packet *p)
+{
+    return *dp_packet_rss_ptr(p);
+}
+
+static inline void
+dp_packet_set_rss_hash(struct dp_packet *p, uint32_t hash)
+{
+    *dp_packet_rss_ptr(p) = hash;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RSS_HASH;
+}
+
+static inline bool
+dp_packet_rss_valid(const struct dp_packet *p)
+{
+    return *dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RSS_HASH;
+}
+
+static inline void
+dp_packet_reset_offload(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_SUPPORTED_MASK;
+}
+
+static inline bool
+dp_packet_has_flow_mark(const struct dp_packet *p, uint32_t *mark)
+{
+    if (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_FLOW_MARK) {
+        *mark = *dp_packet_flow_mark_ptr(p);
+        return true;
+    }
+
+    return false;
+}
+
+static inline void
+dp_packet_set_flow_mark(struct dp_packet *p, uint32_t mark)
+{
+    *dp_packet_flow_mark_ptr(p) = mark;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_FLOW_MARK;
+}
+
+/* Returns the L4 cksum offload bitmask. */
+static inline uint64_t
+dp_packet_hwol_l4_mask(const struct dp_packet *b)
+{
+    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK;
+}
+
+/* Return true if the packet 'b' requested L4 checksum offload. */
+static inline bool
+dp_packet_hwol_tx_l4_checksum(const struct dp_packet *b)
+{
+    return !!dp_packet_hwol_l4_mask(b);
+}
+
+/* Returns 'true' if packet 'b' is marked for TCP segmentation offloading. */
+static inline bool
+dp_packet_hwol_is_tso(const struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TCP_SEG);
+}
+
+/* Returns 'true' if packet 'b' is marked for IPv4 checksum offloading. */
+static inline bool
+dp_packet_hwol_is_ipv4(const struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_IPV4);
+}
+
+/* Returns 'true' if packet 'b' is marked for TCP checksum offloading. */
+static inline bool
+dp_packet_hwol_l4_is_tcp(const struct dp_packet *b)
+{
+    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
+            DP_PACKET_OL_TX_TCP_CKSUM;
+}
+
+/* Returns 'true' if packet 'b' is marked for UDP checksum offloading. */
+static inline bool
+dp_packet_hwol_l4_is_udp(struct dp_packet *b)
+{
+    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
+            DP_PACKET_OL_TX_UDP_CKSUM;
+}
+
+/* Returns 'true' if packet 'b' is marked for SCTP checksum offloading. */
+static inline bool
+dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
+{
+    return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
+            DP_PACKET_OL_TX_SCTP_CKSUM;
+}
+
+/* Mark packet 'b' for IPv4 checksum offloading. */
+static inline void
+dp_packet_hwol_set_tx_ipv4(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_IPV4;
+}
+
+/* Mark packet 'b' for IPv6 checksum offloading. */
+static inline void
+dp_packet_hwol_set_tx_ipv6(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_IPV6;
+}
+
+/* Mark packet 'b' for TCP checksum offloading.  It implies that either
+ * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
+static inline void
+dp_packet_hwol_set_csum_tcp(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_CKSUM;
+}
+
+/* Mark packet 'b' for UDP checksum offloading.  It implies that either
+ * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
+static inline void
+dp_packet_hwol_set_csum_udp(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_UDP_CKSUM;
+}
+
+/* Mark packet 'b' for SCTP checksum offloading.  It implies that either
+ * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
+static inline void
+dp_packet_hwol_set_csum_sctp(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_SCTP_CKSUM;
+}
+
+/* Mark packet 'b' for TCP segmentation offloading.  It implies that
+ * either the packet 'b' is marked for IPv4 or IPv6 checksum offloading
+ * and also for TCP checksum offloading. */
+static inline void
+dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
+}
+
+static inline bool
+dp_packet_ip_checksum_valid(const struct dp_packet *p)
+{
+    return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_IP_CKSUM_MASK) ==
+            DP_PACKET_OL_RX_IP_CKSUM_GOOD;
+}
+
+static inline bool
+dp_packet_ip_checksum_bad(const struct dp_packet *p)
+{
+    return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_IP_CKSUM_MASK) ==
+            DP_PACKET_OL_RX_IP_CKSUM_BAD;
+}
+
+static inline bool
+dp_packet_l4_checksum_valid(const struct dp_packet *p)
+{
+    return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_L4_CKSUM_MASK) ==
+            DP_PACKET_OL_RX_L4_CKSUM_GOOD;
+}
+
+static inline bool
+dp_packet_l4_checksum_bad(const struct dp_packet *p)
+{
+    return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_L4_CKSUM_MASK) ==
+            DP_PACKET_OL_RX_L4_CKSUM_BAD;
 }
 
 #ifdef  __cplusplus

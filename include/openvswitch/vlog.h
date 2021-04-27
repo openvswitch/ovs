@@ -143,6 +143,9 @@ void vlog_set_syslog_method(const char *method);
 /* Configure syslog target. */
 void vlog_set_syslog_target(const char *target);
 
+/* Write directly to log file. */
+void vlog_direct_write_to_log_file_unsafe(const char *s);
+
 /* Initialization. */
 void vlog_init(void);
 void vlog_enable_async(void);

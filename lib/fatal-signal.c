@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <config.h>
+#include "backtrace.h"
 #include "fatal-signal.h"
 #include <errno.h>
 #include <signal.h>
@@ -34,6 +35,10 @@
 
 #include "openvswitch/type-props.h"
 
+#ifdef HAVE_UNWIND
+#include "daemon-private.h"
+#endif
+
 #ifndef SIG_ATOMIC_MAX
 #define SIG_ATOMIC_MAX TYPE_MAXIMUM(sig_atomic_t)
 #endif
@@ -42,7 +47,8 @@ VLOG_DEFINE_THIS_MODULE(fatal_signal);
 
 /* Signals to catch. */
 #ifndef _WIN32
-static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
+static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM,
+                                     SIGSEGV };
 #else
 static const int fatal_signals[] = { SIGTERM };
 #endif
@@ -151,6 +157,95 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
     ovs_mutex_unlock(&mutex);
 }
 
+#ifdef HAVE_UNWIND
+/* Convert unsigned long long to string.  This is needed because
+ * using snprintf() is not async signal safe. */
+static inline int
+llong_to_hex_str(unsigned long long value, char *str)
+{
+    int i = 0, res;
+
+    if (value / 16 > 0) {
+        i = llong_to_hex_str(value / 16, str);
+    }
+
+    res = value % 16;
+    str[i] = "0123456789abcdef"[res];
+
+    return i + 1;
+}
+
+/* Send the backtrace buffer to monitor thread.
+ *
+ * Note that this runs in the signal handling context, any system
+ * library functions used here must be async-signal-safe.
+ */
+static inline void
+send_backtrace_to_monitor(void) {
+    /* volatile added to prevent a "clobbered" error on ppc64le with gcc */
+    volatile int dep;
+    struct unw_backtrace unw_bt[UNW_MAX_DEPTH];
+    unw_cursor_t cursor;
+    unw_context_t uc;
+
+    if (daemonize_fd == -1) {
+        return;
+    }
+
+    dep = 0;
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+
+    while (dep < UNW_MAX_DEPTH && unw_step(&cursor)) {
+        memset(unw_bt[dep].func, 0, UNW_MAX_FUNCN);
+        unw_get_reg(&cursor, UNW_REG_IP, &unw_bt[dep].ip);
+        unw_get_proc_name(&cursor, unw_bt[dep].func, UNW_MAX_FUNCN,
+                          &unw_bt[dep].offset);
+        dep++;
+    }
+
+    if (monitor) {
+        ignore(write(daemonize_fd, unw_bt,
+                     dep * sizeof(struct unw_backtrace)));
+    } else {
+        /* Since there is no monitor daemon running, write backtrace
+         * in current process.
+         */
+        char str[] = "SIGSEGV detected, backtrace:\n";
+        char ip_str[16], offset_str[6];
+        char line[64], fn_name[UNW_MAX_FUNCN];
+
+        vlog_direct_write_to_log_file_unsafe(str);
+
+        for (int i = 0; i < dep; i++) {
+            memset(line, 0, sizeof line);
+            memset(fn_name, 0, sizeof fn_name);
+            memset(offset_str, 0, sizeof offset_str);
+            memset(ip_str, ' ', sizeof ip_str);
+            ip_str[sizeof(ip_str) - 1] = 0;
+
+            llong_to_hex_str(unw_bt[i].ip, ip_str);
+            llong_to_hex_str(unw_bt[i].offset, offset_str);
+
+            strcat(line, "0x");
+            strcat(line, ip_str);
+            strcat(line, "<");
+            memcpy(fn_name, unw_bt[i].func, UNW_MAX_FUNCN - 1);
+            strcat(line, fn_name);
+            strcat(line, "+0x");
+            strcat(line, offset_str);
+            strcat(line, ">\n");
+            vlog_direct_write_to_log_file_unsafe(line);
+        }
+    }
+}
+#else
+static inline void
+send_backtrace_to_monitor(void) {
+    /* Nothing. */
+}
+#endif
+
 /* Handles fatal signal number 'sig_nr'.
  *
  * Ordinarily this is the actual signal handler.  When other code needs to
@@ -164,6 +259,11 @@ void
 fatal_signal_handler(int sig_nr)
 {
 #ifndef _WIN32
+    if (sig_nr == SIGSEGV) {
+        signal(sig_nr, SIG_DFL); /* Set it back immediately. */
+        send_backtrace_to_monitor();
+        raise(sig_nr);
+    }
     ignore(write(signal_fds[1], "", 1));
 #else
     SetEvent(wevent);

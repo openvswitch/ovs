@@ -115,10 +115,10 @@ enum ofperr {
      * OFPBIC_BAD_EXP_TYPE. */
 
     /* Expected: 0x0,1,5 in OF1.0 means both OFPBRC_EPERM and
-     * OFPBRC_IS_SLAVE. */
+     * OFPBRC_IS_SECONDARY. */
 
     /* Expected: 0x0,1,5 in OF1.1 means both OFPBRC_EPERM and
-     * OFPBRC_IS_SLAVE. */
+     * OFPBRC_IS_SECONDARY. */
 
 /* ## ------------------ ## */
 /* ## OFPET_HELLO_FAILED ## */
@@ -168,8 +168,9 @@ enum ofperr {
      *   code defined the specification. ] */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
-    /* OF1.0-1.1(1,5), OF1.2+(1,10).  Denied because controller is slave. */
-    OFPERR_OFPBRC_IS_SLAVE,
+    /* OF1.0-1.1(1,5), OF1.2+(1,10).  Denied because controller has secondary
+     * role.  (Secondary controllers have only read-only access.) */
+    OFPERR_OFPBRC_IS_SECONDARY,
 
     /* NX1.0-1.1(1,514), OF1.2+(1,11).  Invalid or missing port.  [ A
      * non-standard error (1,514), formerly OFPERR_NXBRC_BAD_IN_PORT is used

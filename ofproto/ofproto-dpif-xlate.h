@@ -206,19 +206,6 @@ int xlate_lookup(const struct dpif_backer *, const struct flow *,
                  struct dpif_sflow **, struct netflow **,
                  ofp_port_t *ofp_in_port);
 
-enum xlate_error {
-    XLATE_OK = 0,
-    XLATE_BRIDGE_NOT_FOUND,
-    XLATE_RECURSION_TOO_DEEP,
-    XLATE_TOO_MANY_RESUBMITS,
-    XLATE_STACK_TOO_DEEP,
-    XLATE_NO_RECIRCULATION_CONTEXT,
-    XLATE_RECIRCULATION_CONFLICT,
-    XLATE_TOO_MANY_MPLS_LABELS,
-    XLATE_INVALID_TUNNEL_METADATA,
-    XLATE_UNSUPPORTED_PACKET_TYPE,
-};
-
 const char *xlate_strerror(enum xlate_error error);
 
 enum xlate_error xlate_actions(struct xlate_in *, struct xlate_out *);

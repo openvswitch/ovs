@@ -41,7 +41,7 @@ static void maybe_unlink_and_free(char *path);
 #define LOCAL_PREFIX "\\\\.\\pipe\\"
 
 /* Size of the allowed PSIDs for securing Named Pipe. */
-#define ALLOWED_PSIDS_SIZE 2
+#define ALLOWED_PSIDS_SIZE 3
 
 /* This function has the purpose to remove all the slashes received in s. */
 static char *
@@ -412,6 +412,9 @@ create_pnpipe(char *name)
     PACL acl = NULL;
     PSECURITY_DESCRIPTOR psd = NULL;
     HANDLE npipe;
+    HANDLE hToken = NULL;
+    DWORD dwBufSize = 0;
+    PTOKEN_USER pTokenUsr = NULL;
 
     /* Disable access over network. */
     if (!AllocateAndInitializeSid(&sia, 1, SECURITY_NETWORK_RID,
@@ -437,6 +440,32 @@ create_pnpipe(char *name)
         VLOG_ERR_RL(&rl, "Error creating Administrator SID.");
         goto handle_error;
     }
+
+    /* Open the access token of calling process */
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        VLOG_ERR_RL(&rl, "Error opening access token of calling process.");
+        goto handle_error;
+    }
+
+    /* get the buffer size buffer needed for SID */
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwBufSize);
+
+    pTokenUsr = xmalloc(dwBufSize);
+    memset(pTokenUsr, 0, dwBufSize);
+
+    /* Retrieve the token information in a TOKEN_USER structure. */
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUsr, dwBufSize,
+        &dwBufSize)) {
+        VLOG_ERR_RL(&rl, "Error retrieving token information.");
+        goto handle_error;
+    }
+    CloseHandle(hToken);
+
+    if (!IsValidSid(pTokenUsr->User.Sid)) {
+        VLOG_ERR_RL(&rl, "Invalid SID.");
+        goto handle_error;
+    }
+    allowedPsid[2] = pTokenUsr->User.Sid;
 
     for (int i = 0; i < ALLOWED_PSIDS_SIZE; i++) {
         aclSize += sizeof(ACCESS_ALLOWED_ACE) +
@@ -490,11 +519,13 @@ create_pnpipe(char *name)
     npipe = CreateNamedPipe(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                             PIPE_TYPE_MESSAGE | PIPE_READMODE_BYTE | PIPE_WAIT,
                             64, BUFSIZE, BUFSIZE, 0, &sa);
+    free(pTokenUsr);
     free(acl);
     free(psd);
     return npipe;
 
 handle_error:
+    free(pTokenUsr);
     free(acl);
     free(psd);
     return INVALID_HANDLE_VALUE;

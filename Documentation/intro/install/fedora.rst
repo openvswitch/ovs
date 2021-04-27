@@ -69,6 +69,11 @@ repositories to help yum-builddep, e.g.::
     $ subscription-manager repos --enable=rhel-7-server-extras-rpms
     $ subscription-manager repos --enable=rhel-7-server-optional-rpms
 
+or for RHEL 8::
+
+    $ subscription-manager repos \
+      --enable=codeready-builder-for-rhel-8-x86_64-rpms
+
 DNF::
 
     $ dnf builddep /tmp/ovs.spec
@@ -102,7 +107,7 @@ in which `./configure` was executed:
 
     $ make rpm-fedora
 
-This will create the RPMs `openvswitch`, `python-openvswitch`,
+This will create the RPMs `openvswitch`, `python3-openvswitch`,
 `openvswitch-test`, `openvswitch-devel` and `openvswitch-debuginfo`.
 
 To enable DPDK support in the openvswitch package, the ``--with dpdk`` option
@@ -112,22 +117,19 @@ can be added:
 
     $ make rpm-fedora RPMBUILD_OPT="--with dpdk --without check"
 
+To enable AF_XDP support in the openvswitch package, the ``--with afxdp``
+option can be added:
+
+::
+
+    $ make rpm-fedora RPMBUILD_OPT="--with afxdp --without check"
+
 You can also have the above commands automatically run the Open vSwitch unit
 tests.  This can take several minutes.
 
 ::
 
     $ make rpm-fedora RPMBUILD_OPT="--with check"
-
-To build OVN RPMs, execute the following from the directory in which
-`./configure` was executed:
-
-::
-
-    $ make rpm-fedora-ovn
-
-This will create the RPMs `ovn`, `ovn-common`, `ovn-central`, `ovn-host`,
-`ovn-docker` and `ovn-vtep`.
 
 
 Kernel OVS Tree Datapath RPM
@@ -161,11 +163,9 @@ Refer to the :doc:`/faq/index` for more information about the various Open
 vSwitch datapath options.
 
 In most cases only the `openvswitch` RPM will need to be installed. The
-`python-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
+`python3-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
 `openvswitch-debuginfo` RPMs are optional unless required for a specific
 purpose.
-
-The `ovn-*` packages are only needed when using OVN.
 
 Refer to the `RHEL README`__ for additional usage and configuration
 information.

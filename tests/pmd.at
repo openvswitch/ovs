@@ -21,7 +21,7 @@ parse_pmd_rxq_show_group () {
 # (one per line), with the pmd_id at the beginning of the line
 #
 flow_dump_prepend_pmd () {
-    awk '/flow-dump from non-dpdk/ {pmd_id=-1; next} /flow-dump from pmd/ {pmd_id=$7; next} {print pmd_id, $0}' | sort
+    awk '/flow-dump from the main/ {pmd_id=-1; next} /flow-dump from pmd/ {pmd_id=$7; next} {print pmd_id, $0}' | sort
 }
 
 m4_divert_pop([PREPARE_TESTS])
@@ -657,8 +657,8 @@ dnl busy, and uncover race conditions with the main thread.
 AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
 AT_CHECK([ovs-vsctl set Interface p2 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
 
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p1 bfd_status:forwarding=true \
-                              -- wait-until Interface p2 bfd_status:forwarding=true])
+AT_CHECK([ovs-vsctl wait-until Interface p1 bfd_status:forwarding=true \
+                 -- wait-until Interface p2 bfd_status:forwarding=true])
 
 dnl Trigger reconfiguration of the datapath
 AT_CHECK([ovs-vsctl set Interface p1 options:n_rxq=2])
@@ -701,9 +701,18 @@ AT_CHECK([ovs-appctl dpctl/add-flow dummy@dp0 'in_port(1),eth(src=00:00:00:00:00
 ])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 | sort], [0], [dnl
-flow-dump from non-dpdk interfaces:
 flow-dump from pmd on cpu core: 0
+flow-dump from the main thread:
 recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+
+dnl Check pmd filtering option.
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 pmd=0], [0], [dnl
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 pmd=-1], [0], [dnl
 recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
 ])
 

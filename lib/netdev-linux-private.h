@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "dp-packet.h"
 #include "netdev-afxdp.h"
 #include "netdev-afxdp-pool.h"
 #include "netdev-provider.h"
@@ -37,10 +38,15 @@
 
 struct netdev;
 
+/* The maximum packet length is 16 bits */
+#define LINUX_RXQ_TSO_MAX_LEN 65535
+
 struct netdev_rxq_linux {
     struct netdev_rxq up;
     bool is_tap;
     int fd;
+    struct dp_packet *aux_bufs[NETDEV_MAX_BURST]; /* Preallocated TSO
+                                                     packets. */
 };
 
 int netdev_linux_construct(struct netdev *);
@@ -92,17 +98,26 @@ struct netdev_linux {
     int tap_fd;
     bool present;               /* If the device is present in the namespace */
     uint64_t tx_dropped;        /* tap device can drop if the iface is down */
+    uint64_t rx_dropped;        /* Packets dropped while recv from kernel. */
 
     /* LAG information. */
     bool is_lag_master;         /* True if the netdev is a LAG master. */
+
+    int numa_id;                /* NUMA node id. */
 
 #ifdef HAVE_AF_XDP
     /* AF_XDP information. */
     struct xsk_socket_info **xsks;
     int requested_n_rxq;
-    int xdpmode;                /* AF_XDP running mode: driver or skb. */
-    int requested_xdpmode;
-    struct ovs_spin *tx_locks;  /* spin lock array for TX queues. */
+
+    enum afxdp_mode xdp_mode;               /* Configured AF_XDP mode. */
+    enum afxdp_mode requested_xdp_mode;     /* Requested  AF_XDP mode. */
+    enum afxdp_mode xdp_mode_in_use;        /* Effective  AF_XDP mode. */
+
+    bool use_need_wakeup;
+    bool requested_need_wakeup;
+
+    struct netdev_afxdp_tx_lock *tx_locks;  /* Array of locks for TX queues. */
 #endif
 };
 

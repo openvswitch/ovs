@@ -22,6 +22,7 @@
 
 #include "cmap.h"
 #include "ofproto-dpif-mirror.h"
+#include "ofproto/ofproto-provider.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofp-actions.h"
 #include "ovs-thread.h"
@@ -40,8 +41,8 @@ struct rule;
  *
  * Recirculation is the use of freezing to allow a frame to re-enter the
  * datapath packet processing path to achieve more flexible packet processing,
- * such as modifying header fields after MPLS POP action and selecting a slave
- * port for bond ports.
+ * such as modifying header fields after MPLS POP action and selecting a
+ * member interface for bond ports.
  *
  *
  * Data path and user space interface
@@ -99,7 +100,7 @@ struct rule;
 /* Metadata for restoring pipeline context after recirculation.  Helpers
  * are inlined below to keep them together with the definition for easier
  * updates. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
 struct frozen_metadata {
     /* Metadata in struct flow. */
@@ -115,16 +116,25 @@ frozen_metadata_from_flow(struct frozen_metadata *md,
 {
     memset(md, 0, sizeof *md);
     md->tunnel = flow->tunnel;
+    /* It is unsafe for frozen_state to reference tun_table because
+     * tun_table is protected by RCU while the lifecycle of frozen_state
+     * can span several RCU quiesce states.
+     *
+     * The latest valid tun_table can be found by ofproto_get_tun_tab()
+     * efficiently. */
+    md->tunnel.metadata.tab = NULL;
     md->metadata = flow->metadata;
     memcpy(md->regs, flow->regs, sizeof md->regs);
     md->in_port = flow->in_port.ofp_port;
 }
 
 static inline void
-frozen_metadata_to_flow(const struct frozen_metadata *md,
+frozen_metadata_to_flow(struct ofproto *ofproto,
+                        const struct frozen_metadata *md,
                         struct flow *flow)
 {
     flow->tunnel = md->tunnel;
+    flow->tunnel.metadata.tab = ofproto_get_tun_tab(ofproto);
     flow->metadata = md->metadata;
     memcpy(flow->regs, md->regs, sizeof flow->regs);
     flow->in_port.ofp_port = md->in_port;
@@ -143,6 +153,7 @@ struct frozen_state {
     size_t stack_size;
     mirror_mask_t mirrors;        /* Mirrors already output. */
     bool conntracked;             /* Conntrack occurred prior to freeze. */
+    bool was_mpls;                /* MPLS packet */
     struct uuid xport_uuid;       /* UUID of 1st port packet received on. */
 
     /* Actions to be translated when thawing. */

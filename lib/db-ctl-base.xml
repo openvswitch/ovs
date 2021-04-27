@@ -40,8 +40,8 @@
     <dd>
       Either a universally unique identifier in the style of RFC 4122,
       e.g. <code>f81d4fae-7dec-11d0-a765-00a0c91e6bf6</code>, or an <code>@</code><var>name</var>
-      defined by a <code>get</code> or <code>create</code> command within the same <code>ovn-nbctl</code>
-      invocation.
+      defined by a <code>get</code> or <code>create</code> command within the
+      same <code>ovs-vsctl</code> invocation.
     </dd>
 
   </dl>
@@ -145,7 +145,27 @@
           selects records in which the <code>flood-vlans</code> column contains both 1
           and 2.
         </dd>
+      </dl>
 
+      <p>
+        The following operators are available only in Open vSwitch 2.16 and
+        later:
+      </p>
+
+      <dl>
+        <dt><code>{in}</code></dt>
+        <dd>
+          Selects records in which every element in
+          <var>column</var>[<code>:</code><var>key</var>] is also in
+          <var>value</var>.  (This is the same as <code>{&lt;=}</code>.)
+        </dd>
+
+        <dt><code>{not-in}</code></dt>
+        <dd>
+          Selects records in which every element in
+          <var>column</var>[<code>:</code><var>key</var>] is not in
+          <var>value</var>.
+        </dd>
       </dl>
 
       <p>
@@ -177,7 +197,7 @@
       </p>
 
       <p>
-        The UUIDs shown for rows created in the same <code>ovn-nbctl</code>
+        The UUIDs shown for rows created in the same <code>ovs-vsctl</code>
         invocation will be wrong.
       </p>
 
@@ -199,7 +219,7 @@
       </p>
       <p>
         If <code>@</code><var>name</var> is specified, then the UUID for <var>record</var> may be
-        referred to by that name later in the same <code>ovn-nbctl</code>
+        referred to by that name later in the same <code>ovs-vsctl</code>
         invocation in contexts where a UUID is expected.
       </p>
       <p>
@@ -350,14 +370,12 @@
     <dt><code>wait-until</code> <var>table record</var> [<var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>]...</dt>
     <dd>
       <p>
-        Waits until <var>table</var> contains a record named <var>record</var> whose
-        <var>column</var> equals <var>value</var> or, if <var>key</var> is specified, whose
-        <var>column</var> contains a <var>key</var> with the specified <var>value</var>.  Any
-        of the operators <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, or <code>&gt;=</code> may
-        be substituted for <code>=</code> to test for inequality, less than, greater
-        than, less than or equal to, or greater than or equal to,
-        respectively.  (Don't forget to escape <code>&lt;</code> or <code>&gt;</code> from
-        interpretation by the shell.)
+        Waits until <var>table</var> contains a record named <var>record</var>
+        whose <var>column</var> equals <var>value</var> or, if <var>key</var>
+        is specified, whose <var>column</var> contains a <var>key</var> with
+        the specified <var>value</var>.  This command supports the same
+        operators and semantics described for the <code>find</code> command
+        above.
       </p>
       <p>
         If no <var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var> arguments are given,
@@ -379,8 +397,8 @@
       </dl>
       <p>
         Consider specifying <code>--timeout=0</code> along with
-        <code>--wait-until</code>, to prevent <code>ovn-nbctl</code> from terminating
-        after waiting only at most 5 seconds.
+        <code>--wait-until</code>, to prevent <code>ovs-vsctl</code> from
+        terminating after waiting only at most 5 seconds.
       </p>
     </dd>
 

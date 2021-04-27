@@ -30,17 +30,17 @@ dnl RUN_VTEP_CTL(COMMAND, ...)
 dnl
 dnl Executes each vtep-ctl COMMAND.
 m4_define([RUN_VTEP_CTL],
-  [m4_foreach([command], [$@], [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket command
+  [m4_foreach([command], [$@], [vtep-ctl -vreconnect:emer --db=unix:socket command
 ])])
 m4_define([RUN_VTEP_CTL_ONELINE],
-  [m4_foreach([command], [$@], [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket --oneline -- command
+  [m4_foreach([command], [$@], [vtep-ctl -vreconnect:emer --db=unix:socket --oneline -- command
 ])])
 
 dnl RUN_VTEP_CTL_TOGETHER(COMMAND, ...)
 dnl
 dnl Executes each vtep-ctl COMMAND in a single run of vtep-ctl.
 m4_define([RUN_VTEP_CTL_TOGETHER],
-  [vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket --oneline dnl
+  [vtep-ctl -vreconnect:emer --db=unix:socket --oneline dnl
 m4_foreach([command], [$@], [ -- command])])
 
 dnl CHECK_PSWITCHES([PSWITCH], ...)
@@ -128,6 +128,39 @@ m4_define([CHECK_LSWITCHES],
                         [], [VTEP_CTL_CLEANUP])])
    AT_CHECK([RUN_VTEP_CTL([ls-exists nonexistent])], [2], [], [],
             [VTEP_CTL_CLEANUP])])
+
+
+dnl CHECK_LROUTERS([LROUTER], ...)
+dnl
+dnl Verifies that "vtep-ctl list-lr" prints the specified list of
+dnl logical routers, which must be in alphabetical order.
+m4_define([CHECK_LROUTERS],
+  [dnl Check that the lrouters appear on list-lr, without --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL([list-lr])],
+     [0],
+     [m4_foreach([lrinfo], [$@], [m4_car(lrinfo)
+])],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that the lswitches appear on list-lr, with --oneline.
+   AT_CHECK(
+     [RUN_VTEP_CTL_ONELINE([list-lr])],
+     [0],
+     [m4_join([\n], m4_foreach([lrinfo], [$@], [m4_car(lrinfo),]))
+],
+     [],
+     [VTEP_CTL_CLEANUP])
+
+   dnl Check that each lrouter exists according to lr-exists and that
+   dnl a prouter that should not exist does not.
+   m4_foreach([lrinfo], [$@],
+              [AT_CHECK([RUN_VTEP_CTL([lr-exists m4_car(lrinfo)])], [0], [],
+                        [], [VTEP_CTL_CLEANUP])])
+   AT_CHECK([RUN_VTEP_CTL([lr-exists nonexistent])], [2], [], [],
+            [VTEP_CTL_CLEANUP])])
+
 
 dnl ----------------------------------------------------------------------
 AT_BANNER([vtep-ctl unit tests -- physical switch tests])
@@ -348,6 +381,60 @@ AT_CHECK([RUN_VTEP_CTL(
   [get-replication-mode a])],
   [0], [service_node
 ], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([vtep-ctl unit tests -- logical router tests])
+
+AT_SETUP([add-lr a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-lr a])], [0], [], [], [VTEP_CTL_CLEANUP])
+CHECK_LROUTERS([a])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-lr a, add-lr a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-lr a])], [0], [], [], [VTEP_CTL_CLEANUP])
+AT_CHECK([RUN_VTEP_CTL([add-lr a])], [1], [],
+  [vtep-ctl: cannot create logical router a because it already exists
+], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-lr a, add-lr b])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-lr a], [add-lr b])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_LROUTERS([a], [b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-lr a, add-lr b, del-lr a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL([add-lr a], [add-lr b], [del-lr a])], [0], [], [],
+         [VTEP_CTL_CLEANUP])
+CHECK_LROUTERS([b])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-lr a, del-lr a, add-lr a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL_TOGETHER(
+  [add-lr a],
+  [del-lr a],
+  [add-lr a])], [0], [
+
+
+], [], [VTEP_CTL_CLEANUP])
+CHECK_LROUTERS([a])
 VTEP_CTL_CLEANUP
 AT_CLEANUP
 
@@ -934,7 +1021,7 @@ AT_CHECK([RUN_VTEP_CTL(
   [bind-ls a a1 100 ls1],
   [set Physical_Switch a management_ips=[[4.3.2.1]] tunnel_ips=[[1.2.3.4]]])], [0], [ignore], [], [VTEP_CTL_CLEANUP])
 
-AT_CHECK([vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket show | tail -n+2 | sed 's/=[[a-f0-9-]][[a-f0-9-]]*}/=<ls>}/' ], [0], [dnl
+AT_CHECK([vtep-ctl -vreconnect:emer --db=unix:socket show | tail -n+2 | sed 's/=[[a-f0-9-]][[a-f0-9-]]*}/=<ls>}/' ], [0], [dnl
     Manager "tcp:4.5.6.7"
     Physical_Switch a
         management_ips: [["4.3.2.1"]]

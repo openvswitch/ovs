@@ -29,16 +29,16 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 
-# OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])
+# OVS_TRAFFIC_VSWITCHD_STOP([ALLOWLIST], [extra_cmds])
 #
 # Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
 # for messages with severity WARN or higher and signaling an error if any
-# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# is present.  The optional ALLOWLIST may contain shell-quoted "sed"
 # commands to delete any warnings that are actually expected, e.g.:
 #
 #   OVS_TRAFFIC_VSWITCHD_STOP(["/expected error/d"])
 #
-# 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
+# 'extra_cmds' are shell commands to be executed after OVS_VSWITCHD_STOP() is
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
 m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
@@ -59,8 +59,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 # kernel conntrack tables when the test is finished.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON2 = no])
-     m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
+    [m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp],
                         [nf_nat_tftp]],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
@@ -100,12 +99,16 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
-# CHECK_CT_DPIF_PER_ZONE_LIMIT()
+# CHECK_CONNTRACK_TIMEOUT()
 #
-# Perform requirements checks for running ovs-dpctl ct-[set|get|del]-limits per
-# zone. The kernel datapath does support this feature. Will remove this check
-# after both kernel and userspace datapath support it.
-m4_define([CHECK_CT_DPIF_PER_ZONE_LIMIT])
+# Perform requirements checks for running conntrack customized timeout tests.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT],
+[
+    AT_SKIP_IF([! cat /boot/config-$(uname -r) | grep NF_CONNTRACK_TIMEOUT | grep '=y' > /dev/null])
+    modprobe nfnetlink_cttimeout
+    on_exit 'modprobe -r nfnetlink_cttimeout'
+])
 
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
 #
@@ -185,3 +188,19 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     sublevel=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 2}')
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
 ])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create system datapath table "system" for kernel tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"system"=@m], [0], [stdout])
+    DP_TYPE=$(echo "system")
+])
+
+# CHECK_L3L4_CONNTRACK_REASM()
+#
+# Only allow this test to run on the kernel datapath - it is not useful
+# or necessary for the userspace datapath as it is checking for a kernel
+# specific regression.
+m4_define([CHECK_L3L4_CONNTRACK_REASM])

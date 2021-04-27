@@ -1,7 +1,0 @@
-usr/bin/ovn-nbctl
-usr/bin/ovn-sbctl
-usr/bin/ovn-trace
-usr/bin/ovn-detrace
-usr/share/openvswitch/scripts/ovn-ctl
-usr/share/openvswitch/scripts/ovndb-servers.ocf
-usr/lib/*/libovn*.so.*

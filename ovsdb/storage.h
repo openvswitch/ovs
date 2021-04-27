@@ -23,6 +23,7 @@
 struct json;
 struct ovsdb_schema;
 struct ovsdb_storage;
+struct simap;
 struct uuid;
 
 struct ovsdb_error *ovsdb_storage_open(const char *filename, bool rw,
@@ -39,6 +40,9 @@ bool ovsdb_storage_is_leader(const struct ovsdb_storage *);
 const struct uuid *ovsdb_storage_get_cid(const struct ovsdb_storage *);
 const struct uuid *ovsdb_storage_get_sid(const struct ovsdb_storage *);
 uint64_t ovsdb_storage_get_applied_index(const struct ovsdb_storage *);
+void ovsdb_storage_get_memory_usage(const struct ovsdb_storage *,
+                                    struct simap *usage);
+char *ovsdb_storage_get_error(const struct ovsdb_storage *);
 
 void ovsdb_storage_run(struct ovsdb_storage *);
 void ovsdb_storage_wait(struct ovsdb_storage *);

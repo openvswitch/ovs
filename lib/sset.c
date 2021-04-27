@@ -18,6 +18,7 @@
 
 #include "sset.h"
 
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 
 static uint32_t
@@ -116,6 +117,36 @@ sset_from_delimited_string(struct sset *set, const char *s_,
         sset_add(set, token);
     }
     free(s);
+}
+
+/* Returns a malloc()'d string that consists of the concatenation of all of the
+ * strings in 'sset' in lexicographic order, each separated from the next by
+ * 'delimiter' and followed by 'terminator'.  For example:
+ *
+ *   sset_join(("a", "b", "c"), ", ", ".") -> "a, b, c."
+ *   sset_join(("xyzzy"),       ", ", ".") -> "xyzzy."
+ *   sset_join((""),            ", ", ".") -> "."
+ *
+ * The caller is responsible for freeing the returned string (with free()).
+ */
+char *
+sset_join(const struct sset *sset,
+          const char *delimiter, const char *terminator)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+
+    const char **names = sset_sort(sset);
+    for (size_t i = 0; i < sset_count(sset); i++) {
+        if (i) {
+            ds_put_cstr(&s, delimiter);
+        }
+        ds_put_cstr(&s, names[i]);
+    }
+    free(names);
+
+    ds_put_cstr(&s, terminator);
+
+    return ds_steal_cstr(&s);
 }
 
 /* Returns true if 'set' contains no strings, false if it contains at least one

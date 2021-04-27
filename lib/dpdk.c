@@ -22,14 +22,11 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
+#include <rte_cpuflags.h>
 #include <rte_errno.h>
 #include <rte_log.h>
 #include <rte_memzone.h>
 #include <rte_version.h>
-#ifdef DPDK_PDUMP
-#include <rte_mempool.h>
-#include <rte_pdump.h>
-#endif
 
 #include "dirs.h"
 #include "fatal-signal.h"
@@ -40,6 +37,7 @@
 #include "ovs-numa.h"
 #include "smap.h"
 #include "svec.h"
+#include "unixctl.h"
 #include "util.h"
 #include "vswitch-idl.h"
 
@@ -232,40 +230,131 @@ construct_dpdk_args(const struct smap *ovs_other_config, struct svec *args)
 static ssize_t
 dpdk_log_write(void *c OVS_UNUSED, const char *buf, size_t size)
 {
-    char *str = xmemdup0(buf, size);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
     static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
     switch (rte_log_cur_msg_loglevel()) {
         case RTE_LOG_DEBUG:
-            VLOG_DBG_RL(&dbg_rl, "%s", str);
+            VLOG_DBG_RL(&dbg_rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_INFO:
         case RTE_LOG_NOTICE:
-            VLOG_INFO_RL(&rl, "%s", str);
+            VLOG_INFO_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_WARNING:
-            VLOG_WARN_RL(&rl, "%s", str);
+            VLOG_WARN_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_ERR:
-            VLOG_ERR_RL(&rl, "%s", str);
+            VLOG_ERR_RL(&rl, "%.*s", (int) size, buf);
             break;
         case RTE_LOG_CRIT:
         case RTE_LOG_ALERT:
         case RTE_LOG_EMERG:
-            VLOG_EMER("%s", str);
+            VLOG_EMER("%.*s", (int) size, buf);
             break;
         default:
             OVS_NOT_REACHED();
     }
 
-    free(str);
     return size;
 }
 
 static cookie_io_functions_t dpdk_log_func = {
     .write = dpdk_log_write,
 };
+
+static void
+dpdk_unixctl_mem_stream(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                        const char *argv[] OVS_UNUSED, void *aux)
+{
+    void (*callback)(FILE *) = aux;
+    char *response = NULL;
+    FILE *stream;
+    size_t size;
+
+    stream = open_memstream(&response, &size);
+    if (!stream) {
+        response = xasprintf("Unable to open memstream: %s.",
+                             ovs_strerror(errno));
+        unixctl_command_reply_error(conn, response);
+        goto out;
+    }
+
+    callback(stream);
+    fclose(stream);
+    unixctl_command_reply(conn, response);
+out:
+    free(response);
+}
+
+static int
+dpdk_parse_log_level(const char *s)
+{
+    static const char * const levels[] = {
+        [RTE_LOG_EMERG]   = "emergency",
+        [RTE_LOG_ALERT]   = "alert",
+        [RTE_LOG_CRIT]    = "critical",
+        [RTE_LOG_ERR]     = "error",
+        [RTE_LOG_WARNING] = "warning",
+        [RTE_LOG_NOTICE]  = "notice",
+        [RTE_LOG_INFO]    = "info",
+        [RTE_LOG_DEBUG]   = "debug",
+    };
+    int i;
+
+    for (i = 1; i < ARRAY_SIZE(levels); ++i) {
+        if (!strcmp(s, levels[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void
+dpdk_unixctl_log_set(struct unixctl_conn *conn, int argc, const char *argv[],
+                     void *aux OVS_UNUSED)
+{
+    int i;
+
+    /* With no argument, set all components level to 'debug'. */
+    if (argc == 1) {
+        rte_log_set_level_pattern("*", RTE_LOG_DEBUG);
+    }
+    for (i = 1; i < argc; i++) {
+        char *err_msg = NULL;
+        char *level_string;
+        char *pattern;
+        char *s;
+        int level;
+
+        s = xstrdup(argv[i]);
+        level_string = strchr(s, ':');
+        if (level_string == NULL) {
+            pattern = "*";
+            level_string = s;
+        } else {
+            pattern = s;
+            level_string[0] = '\0';
+            level_string++;
+        }
+
+        level = dpdk_parse_log_level(level_string);
+        if (level == -1) {
+            err_msg = xasprintf("invalid log level: '%s'", level_string);
+        } else if (rte_log_set_level_pattern(pattern, level) < 0) {
+            err_msg = xasprintf("cannot set log level for '%s'", argv[i]);
+        }
+
+        if (err_msg) {
+            unixctl_command_reply_error(conn, err_msg);
+            free(err_msg);
+            free(s);
+            return;
+        }
+        free(s);
+    }
+    unixctl_command_reply(conn, NULL);
+}
 
 static bool
 dpdk_init__(const struct smap *ovs_other_config)
@@ -275,7 +364,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     int result;
     bool auto_determine = true;
     int err = 0;
-    cpu_set_t cpuset;
+    struct ovs_numa_dump *affinity = NULL;
     struct svec args = SVEC_EMPTY_INITIALIZER;
 
     log_stream = fopencookie(NULL, "w+", dpdk_log_func);
@@ -354,25 +443,25 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     /**
      * NOTE: This is an unsophisticated mechanism for determining the DPDK
-     * lcore for the DPDK Master.
+     * main core.
      */
     if (auto_determine) {
+        const struct ovs_numa_info_core *core;
         int cpu = 0;
 
         /* Get the main thread affinity */
-        CPU_ZERO(&cpuset);
-        err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                     &cpuset);
-        if (!err) {
-            for (cpu = 0; cpu < CPU_SETSIZE; cpu++) {
-                if (CPU_ISSET(cpu, &cpuset)) {
-                    break;
+        affinity = ovs_numa_thread_getaffinity_dump();
+        if (affinity) {
+            cpu = INT_MAX;
+            FOR_EACH_CORE_ON_DUMP (core, affinity) {
+                if (cpu > core->core_id) {
+                    cpu = core->core_id;
                 }
             }
         } else {
             /* User did not set dpdk-lcore-mask and unable to get current
              * thread affintity - default to core #0 */
-            VLOG_ERR("Thread getaffinity error %d. Using core #0", err);
+            VLOG_ERR("Thread getaffinity failed. Using core #0");
         }
         svec_add(&args, "-l");
         svec_add_nocopy(&args, xasprintf("%d", cpu));
@@ -403,12 +492,9 @@ dpdk_init__(const struct smap *ovs_other_config)
     svec_destroy(&args);
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    if (auto_determine && !err) {
-        err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                     &cpuset);
-        if (err) {
-            VLOG_ERR("Thread setaffinity error %d", err);
-        }
+    if (affinity) {
+        ovs_numa_thread_setaffinity_dump(affinity);
+        ovs_numa_dump_destroy(affinity);
     }
 
     if (result < 0) {
@@ -422,36 +508,26 @@ dpdk_init__(const struct smap *ovs_other_config)
         FILE *stream = open_memstream(&response, &size);
 
         if (stream) {
+            fprintf(stream, "rte_memzone_dump:\n");
             rte_memzone_dump(stream);
+            fprintf(stream, "rte_log_dump:\n");
+            rte_log_dump(stream);
             fclose(stream);
-            if (size) {
-                VLOG_DBG("rte_memzone_dump:\n%s", response);
-            }
+            VLOG_DBG("%s", response);
             free(response);
         } else {
-            VLOG_DBG("Could not dump memzone. Unable to open memstream: %s.",
-                     ovs_strerror(errno));
+            VLOG_DBG("Could not dump memzone and log levels. "
+                     "Unable to open memstream: %s.", ovs_strerror(errno));
         }
     }
 
+    unixctl_command_register("dpdk/log-list", "", 0, 0,
+                             dpdk_unixctl_mem_stream, rte_log_dump);
+    unixctl_command_register("dpdk/log-set", "{level | pattern:level}", 0,
+                             INT_MAX, dpdk_unixctl_log_set, NULL);
+
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
-
-#ifdef DPDK_PDUMP
-    VLOG_INFO("DPDK pdump packet capture enabled");
-    err = rte_pdump_init(ovs_rundir());
-    if (err) {
-        VLOG_INFO("Error initialising DPDK pdump");
-        rte_pdump_uninit();
-    } else {
-        char *server_socket_path;
-
-        server_socket_path = xasprintf("%s/%s", ovs_rundir(),
-                                       "pdump_server_socket");
-        fatal_signal_add_file_to_unlink(server_socket_path);
-        free(server_socket_path);
-    }
-#endif
 
     /* Finally, register the dpdk classes */
     netdev_dpdk_register();
@@ -518,6 +594,12 @@ dpdk_per_port_memory(void)
     return per_port_memory;
 }
 
+bool
+dpdk_available(void)
+{
+    return dpdk_initialized;
+}
+
 void
 dpdk_set_lcore_id(unsigned cpu)
 {
@@ -530,6 +612,35 @@ void
 print_dpdk_version(void)
 {
     puts(rte_version());
+}
+
+#define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
+    do {                                                                \
+        if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
+            int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);        \
+            VLOG_DBG("CPU flag %s, available %s\n", name_str,           \
+                      has_isa ? "yes" : "no");                          \
+            return true;                                                \
+        }                                                               \
+    } while (0)
+
+bool
+dpdk_get_cpu_has_isa(const char *arch, const char *feature)
+{
+    /* Ensure Arch is x86_64. */
+    if (strncmp(arch, "x86_64", 6) != 0) {
+        return false;
+    }
+
+#if __x86_64__
+    /* CPU flags only defined for the architecture that support it. */
+    CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
+    CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
+#endif
+
+    VLOG_WARN("Unknown CPU arch,feature: %s,%s. Returning not supported.\n",
+              arch, feature);
+    return false;
 }
 
 void

@@ -59,6 +59,8 @@ struct ct_dpif_timestamp {
     uint64_t stop;
 };
 
+#define DEFAULT_TP_ID 0
+
 #define CT_DPIF_TCP_STATES \
     CT_DPIF_TCP_STATE(CLOSED) \
     CT_DPIF_TCP_STATE(LISTEN) \
@@ -175,7 +177,7 @@ struct ct_dpif_entry {
     /* Const members. */
     struct ct_dpif_tuple tuple_orig;
     struct ct_dpif_tuple tuple_reply;
-    struct ct_dpif_tuple tuple_master;
+    struct ct_dpif_tuple tuple_parent;
     struct ct_dpif_helper helper;
     uint32_t id;
     uint16_t zone;
@@ -225,6 +227,50 @@ struct ct_dpif_zone_limit {
     struct ovs_list node;
 };
 
+#define CT_DPIF_TP_TCP_ATTRS \
+    CT_DPIF_TP_TCP_ATTR(SYN_SENT) \
+    CT_DPIF_TP_TCP_ATTR(SYN_RECV) \
+    CT_DPIF_TP_TCP_ATTR(ESTABLISHED) \
+    CT_DPIF_TP_TCP_ATTR(FIN_WAIT) \
+    CT_DPIF_TP_TCP_ATTR(CLOSE_WAIT) \
+    CT_DPIF_TP_TCP_ATTR(LAST_ACK) \
+    CT_DPIF_TP_TCP_ATTR(TIME_WAIT) \
+    CT_DPIF_TP_TCP_ATTR(CLOSE) \
+    CT_DPIF_TP_TCP_ATTR(SYN_SENT2) \
+    CT_DPIF_TP_TCP_ATTR(RETRANSMIT) \
+    CT_DPIF_TP_TCP_ATTR(UNACK)
+
+#define CT_DPIF_TP_UDP_ATTRS \
+    CT_DPIF_TP_UDP_ATTR(FIRST) \
+    CT_DPIF_TP_UDP_ATTR(SINGLE) \
+    CT_DPIF_TP_UDP_ATTR(MULTIPLE)
+
+#define CT_DPIF_TP_ICMP_ATTRS \
+    CT_DPIF_TP_ICMP_ATTR(FIRST) \
+    CT_DPIF_TP_ICMP_ATTR(REPLY)
+
+enum OVS_PACKED_ENUM ct_dpif_tp_attr {
+#define CT_DPIF_TP_TCP_ATTR(ATTR) CT_DPIF_TP_ATTR_TCP_##ATTR,
+    CT_DPIF_TP_TCP_ATTRS
+#undef CT_DPIF_TP_TCP_ATTR
+#define CT_DPIF_TP_UDP_ATTR(ATTR) CT_DPIF_TP_ATTR_UDP_##ATTR,
+    CT_DPIF_TP_UDP_ATTRS
+#undef CT_DPIF_TP_UDP_ATTR
+#define CT_DPIF_TP_ICMP_ATTR(ATTR) CT_DPIF_TP_ATTR_ICMP_##ATTR,
+    CT_DPIF_TP_ICMP_ATTRS
+#undef CT_DPIF_TP_ICMP_ATTR
+    CT_DPIF_TP_ATTR_MAX
+};
+
+struct ct_dpif_timeout_policy {
+    uint32_t    id;         /* Unique identifier for the timeout policy in
+                             * the datapath. */
+    uint32_t    present;    /* If a timeout attribute is present set the
+                             * corresponding CT_DPIF_TP_ATTR_* mapping bit. */
+    uint32_t    attrs[CT_DPIF_TP_ATTR_MAX];     /* An array that specifies
+                                                 * timeout attribute values */
+};
+
 int ct_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
                        const uint16_t *zone, int *);
 int ct_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_entry *);
@@ -234,6 +280,8 @@ int ct_dpif_flush(struct dpif *, const uint16_t *zone,
 int ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns);
 int ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns);
 int ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns);
+int ct_dpif_set_tcp_seq_chk(struct dpif *dpif, bool enabled);
+int ct_dpif_get_tcp_seq_chk(struct dpif *dpif, bool *enabled);
 int ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
                        const struct ovs_list *);
 int ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
@@ -250,6 +298,7 @@ int ct_dpif_ipf_dump_done(struct dpif *dpif, void *);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);
+void ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto);
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
@@ -261,5 +310,20 @@ bool ct_dpif_parse_zone_limit_tuple(const char *s, uint16_t *pzone,
                                     uint32_t *plimit, struct ds *);
 void ct_dpif_format_zone_limits(uint32_t default_limit,
                                 const struct ovs_list *, struct ds *);
+bool ct_dpif_set_timeout_policy_attr_by_name(struct ct_dpif_timeout_policy *tp,
+                                             const char *key, uint32_t value);
+bool ct_dpif_timeout_policy_support_ipproto(uint8_t ipproto);
+int ct_dpif_set_timeout_policy(struct dpif *dpif,
+                               const struct ct_dpif_timeout_policy *tp);
+int ct_dpif_get_timeout_policy(struct dpif *dpif, uint32_t tp_id,
+                               struct ct_dpif_timeout_policy *tp);
+int ct_dpif_del_timeout_policy(struct dpif *dpif, uint32_t tp_id);
+int ct_dpif_timeout_policy_dump_start(struct dpif *dpif, void **statep);
+int ct_dpif_timeout_policy_dump_next(struct dpif *dpif, void *state,
+                                     struct ct_dpif_timeout_policy *tp);
+int ct_dpif_timeout_policy_dump_done(struct dpif *dpif, void *state);
+int ct_dpif_get_timeout_policy_name(struct dpif *dpif, uint32_t tp_id,
+                                    uint16_t dl_type, uint8_t nw_proto,
+                                    char **tp_name, bool *is_generic);
 
 #endif /* CT_DPIF_H */

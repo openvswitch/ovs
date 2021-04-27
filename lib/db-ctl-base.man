@@ -98,6 +98,15 @@ Same as \fB{<=}\fR and \fB{<}\fR, respectively, except that the
 relationship is reversed.  For example, \fBflood-vlans{>=}1,2\fR
 selects records in which the \fBflood-vlans\fR column contains both 1
 and 2.
+.PP
+The following operators are available only in Open vSwitch 2.16 and
+later:
+.IP "\fB{in}\fR"
+Selects records in which every element in \fIcolumn\fR[\fB:\fIkey\fR]
+is also in \fIvalue\fR.  (This is the same as \fB{<=}\fR.)
+.IP "\fB{not-in}\fR"
+Selects records in which every element in \fIcolumn\fR[\fB:\fIkey\fR]
+is not in \fIvalue\fR.
 .RE
 .IP
 For arithmetic operators (\fB= != < > <= >=\fR), when \fIkey\fR is
@@ -240,12 +249,9 @@ in these tables, \fBdestroy\fR is silently ignored.  See the
 .IP "\fBwait\-until \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
 Waits until \fItable\fR contains a record named \fIrecord\fR whose
 \fIcolumn\fR equals \fIvalue\fR or, if \fIkey\fR is specified, whose
-\fIcolumn\fR contains a \fIkey\fR with the specified \fIvalue\fR.  Any
-of the operators \fB!=\fR, \fB<\fR, \fB>\fR, \fB<=\fR, or \fB>=\fR may
-be substituted for \fB=\fR to test for inequality, less than, greater
-than, less than or equal to, or greater than or equal to,
-respectively.  (Don't forget to escape \fB<\fR or \fB>\fR from
-interpretation by the shell.)
+\fIcolumn\fR contains a \fIkey\fR with the specified \fIvalue\fR.  This
+command supports the same operators and semantics described for the
+\fBfind\fR command above.
 .IP
 If no \fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR arguments are given,
 this command waits only until \fIrecord\fR exists.  If more than one

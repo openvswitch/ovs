@@ -3,10 +3,9 @@ AT_BANNER([struct alignment checker unit tests])
 m4_define([check_structs], [$top_srcdir/build-aux/check-structs])
 m4_define([RUN_STRUCT_CHECKER], 
   [AT_KEYWORDS([check-structs])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_DATA([test.h], [$1
 ])
-   AT_CHECK_UNQUOTED([$PYTHON check_structs test.h], [$2], [$3], [$4])])
+   AT_CHECK_UNQUOTED([$PYTHON3 check_structs test.h], [$2], [$3], [$4])])
 
 AT_SETUP([check struct tail padding])
 RUN_STRUCT_CHECKER(

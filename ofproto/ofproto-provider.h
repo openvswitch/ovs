@@ -524,6 +524,14 @@ extern unsigned ofproto_flow_limit;
  * on system load and other factors. This variable is subject to change. */
 extern unsigned ofproto_max_idle;
 
+/* Maximum timeout (in ms) for revalidator timer.
+ * Revalidator timeout is a minimum of max_idle and max_revalidator values. */
+extern unsigned ofproto_max_revalidator;
+
+/* Minimum pps that flow must have in order to be revalidated when revalidation
+ * duration exceeds half of max-revalidator config variable. */
+extern unsigned ofproto_min_revalidate_pps;
+
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;
@@ -578,6 +586,13 @@ struct ofgroup {
     struct ofputil_group_props props;
 
     struct rule_collection rules OVS_GUARDED;   /* Referring rules. */
+};
+
+struct pkt_stats {
+    uint64_t n_packets;
+    uint64_t n_bytes;
+    uint64_t n_offload_packets; /* n_offload_packets are a subset n_packets */
+    uint64_t n_offload_bytes;   /* n_offload_bytes are a subset of n_bytes */
 };
 
 struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
@@ -1210,7 +1225,7 @@ struct ofproto_class {
      * not support LACP.
      */
     int (*port_get_lacp_stats)(const struct ofport *port,
-                               struct lacp_slave_stats *stats);
+                               struct lacp_member_stats *stats);
 
 /* ## ----------------------- ## */
 /* ## OpenFlow Rule Functions ## */
@@ -1340,8 +1355,8 @@ struct ofproto_class {
      * matched it in '*packet_count' and the number of bytes in those packets
      * in '*byte_count'.  UINT64_MAX indicates that the packet count or byte
      * count is unknown. */
-    void (*rule_get_stats)(struct rule *rule, uint64_t *packet_count,
-                           uint64_t *byte_count, long long int *used)
+    void (*rule_get_stats)(struct rule *rule, struct pkt_stats *stats,
+                           long long int *used)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
     /* Translates actions in 'opo->ofpacts', for 'opo->packet' in flow tables
@@ -1368,9 +1383,15 @@ struct ofproto_class {
      * packet_xlate_revert() calls have to be made in reverse order. */
     void (*packet_xlate_revert)(struct ofproto *, struct ofproto_packet_out *);
 
-    /* Executes the datapath actions, translation side-effects, and stats as
-     * produced by ->packet_xlate().  The caller retains ownership of 'opo'.
-     */
+    /* Translates side-effects, and stats as produced by ->packet_xlate().
+     * Prepares to execute datapath actions.  The caller retains ownership
+     * of 'opo'. */
+    void (*packet_execute_prepare)(struct ofproto *,
+                                   struct ofproto_packet_out *opo);
+
+    /* Executes the datapath actions.  The caller retains ownership of 'opo'.
+     * Should be called after successful packet_execute_prepare().
+     * No-op if called after packet_xlate_revert(). */
     void (*packet_execute)(struct ofproto *, struct ofproto_packet_out *opo);
 
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
@@ -1686,11 +1707,11 @@ struct ofproto_class {
 
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as
-     * a Port in OVSDB, that is, it consists of one or more "slave" devices
-     * (Interfaces, in OVSDB) along with VLAN and LACP configuration and, if
-     * there is more than one slave, a bonding configuration.  If 'aux' is
-     * already registered then this function updates its configuration to 's'.
-     * Otherwise, this function registers a new bundle.
+     * a Port in OVSDB, that is, it consists of one or more "member"
+     * devices (Interfaces, in OVSDB) along with VLAN and LACP configuration
+     * and, if there is more than one member, a bonding configuration.  If 'aux'
+     * is already registered then this function updates its configuration to
+     * 's'.  Otherwise, this function registers a new bundle.
      *
      * If 's' is NULL, this function unregisters the bundle registered on
      * 'ofproto' associated with client data pointer 'aux'.  If no such bundle
@@ -1859,6 +1880,9 @@ struct ofproto_class {
      */
     const char *(*get_datapath_version)(const struct ofproto *);
 
+    /* Get capabilities of the datapath type 'dp_type'. */
+    void (*get_datapath_cap)(const char *dp_type, struct smap *caps);
+
     /* Pass custom configuration options to the 'type' datapath.
      *
      * This function should be NULL if an implementation does not support it.
@@ -1872,6 +1896,15 @@ struct ofproto_class {
     /* Flushes the connection tracking tables. If 'zone' is not NULL,
      * only deletes connections in '*zone'. */
     void (*ct_flush)(const struct ofproto *, const uint16_t *zone);
+
+    /* Sets conntrack timeout policy specified by 'timeout_policy' to 'zone'
+     * in datapath type 'dp_type'. */
+    void (*ct_set_zone_timeout_policy)(const char *dp_type, uint16_t zone,
+                                       struct simap *timeout_policy);
+
+    /* Deletes the timeout policy associated with 'zone' in datapath type
+     * 'dp_type'. */
+    void (*ct_del_zone_timeout_policy)(const char *dp_type, uint16_t zone);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

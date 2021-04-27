@@ -16,13 +16,11 @@
 rpcserver is an XML RPC server that allows RPC client to initiate tests
 """
 
-from __future__ import print_function
-
 import sys
 
 import exceptions
 
-import six.moves.xmlrpc_client
+import xmlrpc.client
 
 import tcp
 
@@ -113,8 +111,7 @@ class TestArena(xmlrpc.XMLRPC):
         Returns the ovs-test server IP address that the other ovs-test server
         with the given ip will see.
         """
-        server1 = six.moves.xmlrpc_client.Server("http://%s:%u/" %
-                                                 (his_ip, his_port))
+        server1 = xmlrpc.client.Server("http://%s:%u/" % (his_ip, his_port))
         return server1.get_my_address()
 
     def xmlrpc_create_udp_listener(self, port):

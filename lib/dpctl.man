@@ -104,7 +104,7 @@ default.  When multiple datapaths exist, then a datapath name is
 required.
 .
 .TP
-.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR]"
+.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR] [\fBpmd=\fIpmd\fR]"
 Prints to the console all flow entries in datapath \fIdp\fR's flow
 table.  Without \fB\-m\fR or \fB\-\-more\fR, output omits match fields
 that a flow wildcards entirely; with \fB\-m\fR or \fB\-\-more\fR,
@@ -118,14 +118,20 @@ The \fIfilter\fR is also useful to match wildcarded fields in the datapath
 flow. As an example, \fBfilter='tcp,tp_src=100'\fR will match the
 datapath flow containing '\fBtcp(src=80/0xff00,dst=8080/0xff)\fR'.
 .IP
+If \fBpmd=\fIpmd\fR is specified, only displays flows of the specified pmd.
+Using \fBpmd=\fI-1\fR will restrict the dump to flows from the main thread.
+This option is only supported by the \fBuserspace datapath\fR.
+.IP
 If \fBtype=\fItype\fR is specified, only displays flows of the specified types.
 This option supported only for \fBovs\-appctl dpctl/dump\-flows\fR.
 \fItype\fR is a comma separated list, which can contain any of the following:
 .
    \fBovs\fR - displays flows handled in the ovs dp
    \fBtc\fR - displays flows handled in the tc dp
+   \fBdpdk\fR - displays flows fully offloaded by dpdk
    \fBoffloaded\fR - displays flows offloaded to the HW
    \fBnon-offloaded\fR - displays flows not offloaded to the HW
+   \fBpartially-offloaded\fR - displays flows where only part of their proccessing is done in HW
    \fBall\fR - displays all the types of flows
 .IP
 By default all the types of flows are displayed.
@@ -191,6 +197,22 @@ ovs-dpctl add-flow myDP \\
    ipv4(src=172.31.110.5,dst=172.31.110.4)" 1
 .
 .RE
+.TP
+\*(DX\fBadd\-flows\fR [\fIdp\fR] \fIfile\fR
+.TQ
+\*(DX\fBmod\-flows\fR [\fIdp\fR] \fIfile\fR
+.TQ
+\*(DX\fBdel\-flows\fR [\fIdp\fR] \fIfile\fR
+Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
+\fB\-\fR) and adds, modifies, or deletes each entry to the datapath.
+.
+Each flow specification (e.g., each line in \fIfile\fR) may start with
+\fBadd\fR, \fBmodify\fR, or \fBdelete\fR keyword to specify whether a
+flow is to be added, modified, or deleted. A flow specification without
+one of these keywords is treated based on the used command.  All flow
+modifications are executed as individual transactions in the order
+specified.
+.
 .TP
 .DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdel\-flow\fR" "[\fIdp\fR] \fIflow\fR"
 Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
@@ -320,6 +342,24 @@ Prints the current number of connection tracker entries on \fIdp\fR.
 Only supported for userspace datapath.
 .
 .TP
+\*(DX\fBct\-enable\-tcp\-seq\-chk\fR [\fIdp\fR]
+.TQ
+\*(DX\fBct\-disable\-tcp\-seq\-chk\fR [\fIdp\fR]
+Enables or disables TCP sequence checking.  When set to disabled, all sequence
+number verification is disabled, including for TCP resets.  This is
+similar, but not the same as 'be_liberal' mode, as in Netfilter.  Disabling
+sequence number verification is not an optimization in itself, but is needed
+for some hardware offload support which might offer some performance
+advantage. Sequence number checking is enabled by default to enforce better
+security and should only be disabled if required for hardware offload support.
+This command is only supported for the userspace datapath.
+.
+.TP
+\*(DX\fBct\-get\-tcp\-seq\-chk\fR [\fIdp\fR]
+Prints whether TCP sequence checking is enabled or disabled on \fIdp\fR.  Only
+supported for the userspace datapath.
+.
+.TP
 \*(DX\fBct\-set\-limits\fR [\fIdp\fR] [\fBdefault=\fIdefault_limit\fR] [\fBzone=\fIzone\fR,\fBlimit=\fIlimit\fR]...
 Sets the maximum allowed number of connections in a connection tracking
 zone.  A specific \fIzone\fR may be set to \fIlimit\fR, and multiple zones
@@ -328,18 +368,16 @@ particular zone is not specified in the datapath, it defaults to the
 default per-zone limit.  A default zone may be specified with the
 \fBdefault=\fIdefault_limit\fR argument.   Initially, the default
 per-zone limit is unlimited.  An unlimited number of entries may be set
-with \fB0\fR limit.  Only supported for Linux kernel datapath.
+with \fB0\fR limit.
 .
 .TP
 \*(DX\fBct\-del\-limits\fR [\fIdp\fR] \fBzone=\fIzone[,zone]\fR...
 Deletes the connection tracking limit for \fIzone\fR.  Multiple zones may
-be specified with a comma-separated list.  Only supported for Linux
-kernel datapath.
+be specified with a comma-separated list.
 .
 .TP
 \*(DX\fBct\-get\-limits\fR [\fIdp\fR] [\fBzone=\fIzone\fR[\fB,\fIzone\fR]...]
 Retrieves the maximum allowed number of connections and current
 counts per-zone.  If \fIzone\fR is given, only the specified zone(s) are
 printed.  If no zones are specified, all the zone limits and counts are
-provided.  The command always displays the default zone limit.  Only
-supported for Linux kernel datapath.
+provided.  The command always displays the default zone limit.

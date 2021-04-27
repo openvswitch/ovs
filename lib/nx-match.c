@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2010-2017, 2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1051,7 +1051,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     ovs_be32 spi_mask;
     int match_len;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
     struct nxm_put_ctx ctx = { .output = b, .implied_ethernet = false };
 
@@ -1133,6 +1133,11 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                       mpls_lse_to_bos(flow->mpls_lse[0]));
         }
 
+        if (match->wc.masks.mpls_lse[0] & htonl(MPLS_TTL_MASK)) {
+            nxm_put_8(&ctx, MFF_MPLS_TTL, oxm,
+                      mpls_lse_to_ttl(flow->mpls_lse[0]));
+        }
+
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {
             nxm_put_32(&ctx, MFF_MPLS_LABEL, oxm,
                        htonl(mpls_lse_to_label(flow->mpls_lse[0])));
@@ -1190,6 +1195,12 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.erspan_dir, match->wc.masks.tunnel.erspan_dir);
     nxm_put_8m(&ctx, MFF_TUN_ERSPAN_HWID, oxm,
                 flow->tunnel.erspan_hwid, match->wc.masks.tunnel.erspan_hwid);
+
+    /* GTP-U */
+    nxm_put_8m(&ctx, MFF_TUN_GTPU_FLAGS, oxm, flow->tunnel.gtpu_flags,
+               match->wc.masks.tunnel.gtpu_flags);
+    nxm_put_8m(&ctx, MFF_TUN_GTPU_MSGTYPE, oxm, flow->tunnel.gtpu_msgtype,
+               match->wc.masks.tunnel.gtpu_msgtype);
 
     /* Network Service Header */
     nxm_put_8m(&ctx, MFF_NSH_FLAGS, oxm, flow->nsh.flags,
@@ -1986,6 +1997,24 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
         /* Attempted to pop from an empty stack. */
         return false;
     }
+}
+
+/* Parses a field from '*s' into '*field'.  If successful, stores the
+ * reference to the field in '*field', and returns NULL.  On failure,
+ * returns a malloc()'ed error message.
+ */
+char * OVS_WARN_UNUSED_RESULT
+mf_parse_field(const struct mf_field **field, const char *s)
+{
+    const struct nxm_field *f;
+    int s_len = strlen(s);
+
+    f = nxm_field_by_name(s, s_len);
+    (*field) = f ? mf_from_id(f->id) : mf_from_name_len(s, s_len);
+    if (!*field) {
+        return xasprintf("unknown field `%s'", s);
+    }
+    return NULL;
 }
 
 /* Formats 'sf' into 's' in a format normally acceptable to

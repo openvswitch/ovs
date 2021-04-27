@@ -23,9 +23,6 @@ import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
 
-import six
-from six.moves import range
-
 if sys.platform == 'win32':
     import ovs.winutils as winutils
     import win32file
@@ -296,8 +293,8 @@ def write_fully(fd, buf):
     bytes_written = 0
     if len(buf) == 0:
         return 0, 0
-    if six.PY3 and not isinstance(buf, six.binary_type):
-        buf = six.binary_type(buf, 'utf-8')
+    if not isinstance(buf, bytes):
+        buf = bytes(buf, 'utf-8')
     while True:
         try:
             retval = os.write(fd, buf)

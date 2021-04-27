@@ -176,7 +176,7 @@ enum ofp12_group_capabilities {
 struct ofp12_role_request {
     ovs_be32 role;            /* One of OFPCR12_ROLE_*. */
     uint8_t pad[4];           /* Align to 64 bits. */
-    ovs_be64 generation_id;   /* Master Election Generation Id */
+    ovs_be64 generation_id;   /* Primary Election Generation Id */
 };
 OFP_ASSERT(sizeof(struct ofp12_role_request) == 16);
 
@@ -184,8 +184,8 @@ OFP_ASSERT(sizeof(struct ofp12_role_request) == 16);
 enum ofp12_controller_role {
     OFPCR12_ROLE_NOCHANGE,    /* Don't change current role. */
     OFPCR12_ROLE_EQUAL,       /* Default role, full access. */
-    OFPCR12_ROLE_MASTER,      /* Full access, at most one master. */
-    OFPCR12_ROLE_SLAVE,       /* Read-only access. */
+    OFPCR12_ROLE_PRIMARY,     /* Full access, at most one primary. */
+    OFPCR12_ROLE_SECONDARY,   /* Read-only access. */
 };
 
 /* Packet received on port (datapath -> controller). */

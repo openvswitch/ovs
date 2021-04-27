@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! @PYTHON3@
 
 from datetime import date
 import ovs.db.error

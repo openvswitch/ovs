@@ -72,7 +72,7 @@ endif
 # header file has the proper extern declaration for use with C++.
 #
 # Some header files don't declare any external functions, so they
-# don't really need extern "C".  We only white list a couple of these
+# don't really need extern "C".  We only permit a couple of these
 # below, which are the ones that seem unlikely to ever declare
 # external functions.  For the rest, we add extern "C" anyway; it
 # doesn't hurt.

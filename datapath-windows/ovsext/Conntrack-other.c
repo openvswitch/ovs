@@ -49,17 +49,19 @@ OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
 {
     ASSERT(conn_);
     struct conn_other *conn = OvsCastConntrackEntryToOtherEntry(conn_);
+    enum CT_UPDATE_RES ret = CT_UPDATE_VALID;
 
     if (reply && conn->state != OTHERS_BIDIR) {
         conn->state = OTHERS_BIDIR;
     } else if (conn->state == OTHERS_FIRST) {
         conn->state = OTHERS_MULTIPLE;
+        ret = CT_UPDATE_VALID_NEW;
     }
 
     OvsConntrackUpdateExpiration(&conn->up, now,
                                  other_timeouts[conn->state]);
 
-    return CT_UPDATE_VALID;
+    return ret;
 }
 
 OVS_CT_ENTRY *

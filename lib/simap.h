@@ -70,6 +70,7 @@ bool simap_find_and_delete(struct simap *, const char *);
 
 const struct simap_node **simap_sort(const struct simap *);
 bool simap_equal(const struct simap *, const struct simap *);
+uint32_t simap_hash(const struct simap *);
 
 #ifdef  __cplusplus
 }

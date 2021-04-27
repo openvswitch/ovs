@@ -31,7 +31,6 @@
 #include "simap.h"
 #include "hash.h"
 #include "table.h"
-#include "hash.h"
 #include "timeval.h"
 #include "transaction.h"
 #include "jsonrpc-server.h"

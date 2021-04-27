@@ -26,9 +26,14 @@ struct if_notifier {
 };
 
 static void
-if_notifier_cb(const struct rtnetlink_change *change OVS_UNUSED, void *aux)
+if_notifier_cb(const struct rtnetlink_change *change, void *aux)
 {
     struct if_notifier *notifier;
+
+    if (change && change->irrelevant) {
+        return;
+    }
+
     notifier = aux;
     notifier->cb(notifier->aux);
 }

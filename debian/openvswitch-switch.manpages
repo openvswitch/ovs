@@ -1,12 +1,12 @@
 ovsdb/ovsdb-server.1
 ovsdb/ovsdb-server.5
-utilities/ovs-ctl.8
+debian/tmp/usr/share/man/man8/ovs-ctl.8
 utilities/ovs-dpctl-top.8
 utilities/ovs-dpctl.8
 utilities/ovs-kmod-ctl.8
 utilities/ovs-pcap.1
-utilities/ovs-tcpdump.8
-utilities/ovs-tcpundump.1
+debian/tmp/usr/share/man/man8/ovs-tcpdump.8
+debian/tmp/usr/share/man/man1/ovs-tcpundump.1
 utilities/ovs-vsctl.8
 vswitchd/ovs-vswitchd.8
 vswitchd/ovs-vswitchd.conf.db.5

@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import getopt
 import os
 import re
@@ -30,9 +28,8 @@ import ovs.util
 import ovs.vlog
 from ovs.db import data
 from ovs.db import error
+from ovs.db.idl import _row_to_uuid as row_to_uuid
 from ovs.fatal_signal import signal_alarm
-
-import six
 
 vlog = ovs.vlog.Vlog("test-ovsdb")
 vlog.set_levels_from_string("console:dbg")
@@ -163,7 +160,12 @@ def get_simple_printable_row_string(row, columns):
                                          is ovs.db.data.Atom):
             value = getattr(row, column)
             if isinstance(value, dict):
-                value = sorted(value.items())
+                value = sorted((row_to_uuid(k), row_to_uuid(v))
+                               for k, v in value.items())
+            if isinstance(value, (list, tuple)):
+                value = sorted((row_to_uuid(v) for v in value))
+            elif isinstance(value, list):
+                value = sorted(row_to_uuid(v) for v in value)
             s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
@@ -174,9 +176,10 @@ def get_simple_printable_row_string(row, columns):
     return s
 
 
-def get_simple_table_printable_row(row):
+def get_simple_table_printable_row(row, *additional_columns):
     simple_columns = ["i", "r", "b", "s", "u", "ia",
-                      "ra", "ba", "sa", "ua", "uuid"]
+                      "ra", "ba", "sa", "ua"]
+    simple_columns.extend(additional_columns)
     return get_simple_printable_row_string(row, simple_columns)
 
 
@@ -186,73 +189,118 @@ def get_simple2_table_printable_row(row):
 
 
 def get_simple3_table_printable_row(row):
-    simple3_columns = ["name", "uset"]
+    simple3_columns = ["name", "uset", "uref"]
     return get_simple_printable_row_string(row, simple3_columns)
+
+
+def get_simple4_table_printable_row(row):
+    simple4_columns = ["name"]
+    return get_simple_printable_row_string(row, simple4_columns)
+
+
+def get_simple5_table_printable_row(row):
+    simple5_columns = ["name", "irefmap"]
+    return get_simple_printable_row_string(row, simple5_columns)
+
+
+def get_simple6_table_printable_row(row):
+    simple6_columns = ["name", "weak_ref"]
+    return get_simple_printable_row_string(row, simple6_columns)
+
+
+def get_link1_table_printable_row(row):
+    s = ["i=%s k=" % row.i]
+    if hasattr(row, "k") and row.k:
+        s.append(str(row.k.i))
+    if hasattr(row, "ka"):
+        s.append(" ka=[")
+        s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
+        s.append("] l2=")
+    if hasattr(row, "l2") and row.l2:
+        s.append(str(row.l2[0].i))
+    return ''.join(s)
+
+
+def get_link2_table_printable_row(row):
+    s = "i=%s l1=" % row.i
+    if hasattr(row, "l1") and row.l1:
+        s += str(row.l1[0].i)
+    return s
+
+
+def get_singleton_table_printable_row(row):
+    return "name=%s" % row.name
+
+
+def print_row(table, row, step, contents):
+    s = "%03d: table %s: %s " % (step, table, contents)
+    s += get_simple_printable_row_string(row, ["uuid"])
+    print(s)
 
 
 def print_idl(idl, step):
     n = 0
     if "simple" in idl.tables:
         simple = idl.tables["simple"].rows
-        for row in six.itervalues(simple):
-            s = "%03d: " % step
-            s += get_simple_table_printable_row(row)
-            print(s)
+        for row in simple.values():
+            print_row("simple", row, step,
+                      get_simple_table_printable_row(row))
             n += 1
 
     if "simple2" in idl.tables:
         simple2 = idl.tables["simple2"].rows
-        for row in six.itervalues(simple2):
-            s = "%03d: " % step
-            s += get_simple2_table_printable_row(row)
-            print(s)
+        for row in simple2.values():
+            print_row("simple2", row, step,
+                      get_simple2_table_printable_row(row))
             n += 1
 
     if "simple3" in idl.tables:
         simple3 = idl.tables["simple3"].rows
-        for row in six.itervalues(simple3):
-            s = "%03d: " % step
-            s += get_simple3_table_printable_row(row)
-            print(s)
+        for row in simple3.values():
+            print_row("simple3", row, step,
+                      get_simple3_table_printable_row(row))
+            n += 1
+
+    if "simple4" in idl.tables:
+        simple4 = idl.tables["simple4"].rows
+        for row in simple4.values():
+            print_row("simple4", row, step,
+                      get_simple4_table_printable_row(row))
+            n += 1
+
+    if "simple5" in idl.tables:
+        simple5 = idl.tables["simple5"].rows
+        for row in simple5.values():
+            print_row("simple5", row, step,
+                      get_simple5_table_printable_row(row))
+            n += 1
+
+    if "simple6" in idl.tables:
+        simple6 = idl.tables["simple6"].rows
+        for row in simple6.values():
+            print_row("simple6", row, step,
+                      get_simple6_table_printable_row(row))
             n += 1
 
     if "link1" in idl.tables:
         l1 = idl.tables["link1"].rows
-        for row in six.itervalues(l1):
-            s = ["%03d: i=%s k=" % (step, row.i)]
-            if hasattr(row, "k") and row.k:
-                s.append(str(row.k.i))
-            if hasattr(row, "ka"):
-                s.append(" ka=[")
-                s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
-                s.append("] l2=")
-            if hasattr(row, "l2") and row.l2:
-                s.append(str(row.l2[0].i))
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+        for row in l1.values():
+            print_row("link1", row, step,
+                      get_link1_table_printable_row(row))
             n += 1
 
     if "link2" in idl.tables:
         l2 = idl.tables["link2"].rows
-        for row in six.itervalues(l2):
-            s = ["%03d:" % step]
-            s.append(" i=%s l1=" % row.i)
-            if hasattr(row, "l1") and row.l1:
-                s.append(str(row.l1[0].i))
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+        for row in l2.values():
+            print_row("link2", row, step,
+                      get_link2_table_printable_row(row))
             n += 1
 
     if "singleton" in idl.tables:
         sng = idl.tables["singleton"].rows
-        for row in six.itervalues(sng):
-            s = ["%03d:" % step]
-            s.append(" name=%s" % row.name)
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+        for row in sng.values():
+            print_row("singleton", row, step,
+                      get_singleton_table_printable_row(row))
             n += 1
 
     if not n:
@@ -261,7 +309,7 @@ def print_idl(idl, step):
 
 
 def substitute_uuids(json, symtab):
-    if isinstance(json, six.string_types):
+    if isinstance(json, str):
         symbol = symtab.get(json)
         if symbol:
             return str(symbol)
@@ -269,14 +317,14 @@ def substitute_uuids(json, symtab):
         return [substitute_uuids(element, symtab) for element in json]
     elif type(json) == dict:
         d = {}
-        for key, value in six.iteritems(json):
+        for key, value in json.items():
             d[key] = substitute_uuids(value, symtab)
         return d
     return json
 
 
 def parse_uuids(json, symtab):
-    if (isinstance(json, six.string_types)
+    if (isinstance(json, str)
             and ovs.ovsuuid.is_valid_string(json)):
         name = "#%d#" % len(symtab)
         sys.stderr.write("%s = %s\n" % (name, json))
@@ -285,19 +333,19 @@ def parse_uuids(json, symtab):
         for element in json:
             parse_uuids(element, symtab)
     elif type(json) == dict:
-        for value in six.itervalues(json):
+        for value in json.values():
             parse_uuids(value, symtab)
 
 
 def idltest_find_simple(idl, i):
-    for row in six.itervalues(idl.tables["simple"].rows):
+    for row in idl.tables["simple"].rows.values():
         if row.i == i:
             return row
     return None
 
 
 def idltest_find_simple2(idl, i):
-    for row in six.itervalues(idl.tables["simple2"].rows):
+    for row in idl.tables["simple2"].rows.values():
         if row.name == i:
             return row
     return None
@@ -305,6 +353,11 @@ def idltest_find_simple2(idl, i):
 
 def idltest_find_simple3(idl, i):
     return next(idl.index_equal("simple3", "simple3_by_name", i), None)
+
+
+def idltest_find(idl, table, col, match):
+    return next((r for r in idl.tables[table].rows.values() if
+                getattr(r, col) == match), None)
 
 
 def idl_set(idl, commands, step):
@@ -346,12 +399,9 @@ def idl_set(idl, commands, step):
             if args[1] == "b":
                 s.b = args[2] == "1"
             elif args[1] == "s":
-                if six.PY2:
-                    s.s = args[2].decode('utf-8')
-                else:
-                    s.s = args[2].encode(sys.getfilesystemencoding(),
-                                         'surrogateescape') \
-                                 .decode('utf-8', 'replace')
+                s.s = args[2].encode(sys.getfilesystemencoding(),
+                                     'surrogateescape') \
+                             .decode('utf-8', 'replace')
             elif args[1] == "u":
                 s.u = uuid.UUID(args[2])
             elif args[1] == "r":
@@ -531,6 +581,12 @@ def idl_set(idl, commands, step):
             setattr(new_row3, 'name', 'String3')
             new_row3.addvalue('uset', new_row41.uuid)
             assert len(getattr(new_row3, 'uset', [])) == 1
+        elif name == 'partialmapmutateirefmap':
+            row3 = idltest_find_simple3(idl, "myString1")
+            row5 = idltest_find(idl, "simple5", "name", "myString2")
+            row5.setkey('irefmap', 1, row3.uuid)
+            maplen = len(row5.irefmap)
+            assert maplen == 1, "expected 1, got %d" % maplen
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)
@@ -623,7 +679,8 @@ def do_idl(schema_file, remote, *commands):
     def mock_notify(event, row, updates=None):
         output = "%03d: " % step
         output += "event:" + str(event) + ", row={"
-        output += get_simple_table_printable_row(row) + "}, updates="
+        output += get_simple_table_printable_row(row, 'l2', 'l1') + "}, "
+        output += get_simple_printable_row_string(row, ["uuid"]) + ", updates="
         if updates is None:
             output += "None"
         else:
@@ -677,7 +734,7 @@ def do_idl(schema_file, remote, *commands):
             step += 1
         else:
             json = ovs.json.from_string(command)
-            if isinstance(json, six.string_types):
+            if isinstance(json, str):
                 sys.stderr.write("\"%s\": %s\n" % (command, json))
                 sys.exit(1)
             json = substitute_uuids(json, symtab)
@@ -730,7 +787,7 @@ def do_idl_passive(schema_file, remote, *commands):
 
     for command in commands:
         json = ovs.json.from_string(command)
-        if isinstance(json, six.string_types):
+        if isinstance(json, str):
             sys.stderr.write("\"%s\": %s\n" % (command, json))
             sys.exit(1)
         json = substitute_uuids(json, symtab)

@@ -58,6 +58,18 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #define IFLA_GENEVE_UDP_ZERO_CSUM6_RX 10
 #endif
 
+#ifndef IFLA_BAREUDP_MAX
+#define IFLA_BAREUDP_MAX 0
+#endif
+#if IFLA_BAREUDP_MAX < 4
+#define IFLA_BAREUDP_PORT 1
+#define IFLA_BAREUDP_ETHERTYPE 2
+#define IFLA_BAREUDP_SRCPORT_MIN 3
+#define IFLA_BAREUDP_MULTIPROTO_MODE 4
+#endif
+
+#define BAREUDP_SRCPORT_MIN 49153
+
 static const struct nl_policy rtlink_policy[] = {
     [IFLA_LINKINFO] = { .type = NL_A_NESTED },
 };
@@ -80,6 +92,10 @@ static const struct nl_policy geneve_policy[] = {
     [IFLA_GENEVE_COLLECT_METADATA] = { .type = NL_A_FLAG },
     [IFLA_GENEVE_UDP_ZERO_CSUM6_RX] = { .type = NL_A_U8 },
     [IFLA_GENEVE_PORT] = { .type = NL_A_U16 },
+};
+static const struct nl_policy bareudp_policy[] = {
+    [IFLA_BAREUDP_PORT] = { .type = NL_A_U16 },
+    [IFLA_BAREUDP_ETHERTYPE] = { .type = NL_A_U16 },
 };
 
 static const char *
@@ -111,6 +127,10 @@ vport_type_to_kind(enum ovs_vport_type type,
         } else {
             return NULL;
         }
+    case OVS_VPORT_TYPE_GTPU:
+        return NULL;
+    case OVS_VPORT_TYPE_BAREUDP:
+        return "bareudp";
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
@@ -241,6 +261,24 @@ dpif_netlink_rtnl_geneve_verify(const struct netdev_tunnel_config *tnl_cfg,
 
     return err;
 }
+static int
+dpif_netlink_rtnl_bareudp_verify(const struct netdev_tunnel_config *tnl_cfg,
+                                const char *kind, struct ofpbuf *reply)
+{
+    struct nlattr *bareudp[ARRAY_SIZE(bareudp_policy)];
+    int err;
+
+    err = rtnl_policy_parse(kind, reply, bareudp_policy, bareudp,
+                            ARRAY_SIZE(bareudp_policy));
+    if (!err) {
+        if ((tnl_cfg->dst_port != nl_attr_get_be16(bareudp[IFLA_BAREUDP_PORT]))
+            || (tnl_cfg->payload_ethertype
+                != nl_attr_get_be16(bareudp[IFLA_BAREUDP_ETHERTYPE]))) {
+            err = EINVAL;
+        }
+    }
+    return err;
+}
 
 static int
 dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
@@ -273,10 +311,14 @@ dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_GENEVE:
         err = dpif_netlink_rtnl_geneve_verify(tnl_cfg, kind, reply);
         break;
+    case OVS_VPORT_TYPE_BAREUDP:
+        err = dpif_netlink_rtnl_bareudp_verify(tnl_cfg, kind, reply);
+        break;
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_GTPU:
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:
@@ -354,10 +396,21 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
         nl_msg_put_u8(&request, IFLA_GENEVE_UDP_ZERO_CSUM6_RX, 1);
         nl_msg_put_be16(&request, IFLA_GENEVE_PORT, tnl_cfg->dst_port);
         break;
+    case OVS_VPORT_TYPE_BAREUDP:
+        nl_msg_put_be16(&request, IFLA_BAREUDP_ETHERTYPE,
+                        tnl_cfg->payload_ethertype);
+        nl_msg_put_u16(&request, IFLA_BAREUDP_SRCPORT_MIN,
+                       BAREUDP_SRCPORT_MIN);
+        nl_msg_put_be16(&request, IFLA_BAREUDP_PORT, tnl_cfg->dst_port);
+        if (tnl_cfg->exts & (1 << OVS_BAREUDP_EXT_MULTIPROTO_MODE)) {
+            nl_msg_put_flag(&request, IFLA_BAREUDP_MULTIPROTO_MODE);
+        }
+        break;
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_GTPU:
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:
@@ -466,11 +519,13 @@ dpif_netlink_rtnl_port_destroy(const char *name, const char *type)
     case OVS_VPORT_TYPE_ERSPAN:
     case OVS_VPORT_TYPE_IP6ERSPAN:
     case OVS_VPORT_TYPE_IP6GRE:
+    case OVS_VPORT_TYPE_BAREUDP:
         return dpif_netlink_rtnl_destroy(name);
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_GTPU:
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:

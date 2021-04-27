@@ -7,7 +7,6 @@
 /idltest.h
 /idltest.ovsidl
 /ovstest
-/test-dpdkr
 /ovs-pki.log
 /ovsdb-cluster-testsuite
 /ovsdb-cluster-testsuite.dir/
@@ -25,6 +24,9 @@
 /system-userspace-testsuite
 /system-userspace-testsuite.dir/
 /system-userspace-testsuite.log
+/system-tso-testsuite
+/system-tso-testsuite.dir/
+/system-tso-testsuite.log
 /system-offloads-testsuite
 /system-offloads-testsuite.dir/
 /system-offloads-testsuite.log

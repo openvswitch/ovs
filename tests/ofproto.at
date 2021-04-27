@@ -2205,18 +2205,7 @@ head_table() {
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
-      in_port: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      nw_proto: exact match or wildcard
-      nw_tos: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
+      exact match or wildcard: in_port eth_{src,dst,type} vlan_{vid,pcp} ip_{src,dst} nw_{proto,tos} tcp_{src,dst}
 
 ' "$1"
 }
@@ -2276,18 +2265,7 @@ head_table() {
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
-      in_port: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      nw_proto: exact match or wildcard
-      nw_tos: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
+      exact match or wildcard: in_port eth_{src,dst,type} vlan_{vid,pcp} ip_{src,dst} nw_{proto,tos} tcp_{src,dst}
 
 '
 }
@@ -2307,46 +2285,12 @@ head_table() {
     config=controller
     max_entries=1000000
     instructions (table miss and others):
-      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      instructions: apply_actions clear_actions write_actions write_metadata goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
+        supported on Set-Field: metadata in_port_oxm eth_{src,dst} vlan_{vid,pcp} mpls_{label,tc} ip_{src,dst} ipv6_{src,dst,label} ip_dscp nw_ecn arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll}
     matching:
-      metadata: exact match or wildcard
-      in_port_oxm: exact match or wildcard
-      eth_src: exact match or wildcard
-      eth_dst: exact match or wildcard
-      eth_type: exact match or wildcard
-      vlan_vid: exact match or wildcard
-      vlan_pcp: exact match or wildcard
-      mpls_label: exact match or wildcard
-      mpls_tc: exact match or wildcard
-      ip_src: exact match or wildcard
-      ip_dst: exact match or wildcard
-      ipv6_src: exact match or wildcard
-      ipv6_dst: exact match or wildcard
-      ipv6_label: exact match or wildcard
-      nw_proto: exact match or wildcard
-      ip_dscp: exact match or wildcard
-      nw_ecn: exact match or wildcard
-      arp_op: exact match or wildcard
-      arp_spa: exact match or wildcard
-      arp_tpa: exact match or wildcard
-      arp_sha: exact match or wildcard
-      arp_tha: exact match or wildcard
-      tcp_src: exact match or wildcard
-      tcp_dst: exact match or wildcard
-      udp_src: exact match or wildcard
-      udp_dst: exact match or wildcard
-      sctp_src: exact match or wildcard
-      sctp_dst: exact match or wildcard
-      icmp_type: exact match or wildcard
-      icmp_code: exact match or wildcard
-      icmpv6_type: exact match or wildcard
-      icmpv6_code: exact match or wildcard
-      nd_target: exact match or wildcard
-      nd_sll: exact match or wildcard
-      nd_tll: exact match or wildcard
+      exact match or wildcard: metadata in_port_oxm eth_{src,dst,type} vlan_{vid,pcp} mpls_{label,tc} ip_{src,dst} ipv6_{src,dst,label} nw_proto ip_dscp nw_ecn arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll}
 
 ' "$1"
 }
@@ -2357,7 +2301,7 @@ tail_table() {
     config=controller
     max_entries=1000000
     instructions (table miss and others):
-      instructions: apply_actions,clear_actions,write_actions,write_metadata
+      instructions: apply_actions clear_actions write_actions write_metadata
       (same actions)
     (same matching)
 '
@@ -2403,189 +2347,13 @@ head_table () {
     max_entries=1000000
     instructions (table miss and others):
       next tables: 1-253
-      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      instructions: meter apply_actions clear_actions write_actions write_metadata goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: tun_id tun_src tun_dst tun_ipv6_src tun_ipv6_dst tun_flags tun_gbp_id tun_gbp_flags tun_erspan_idx tun_erspan_ver tun_erspan_dir tun_erspan_hwid tun_metadata0 dnl
-tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 dnl
-metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 reg8 reg9 reg10 reg11 reg12 reg13 reg14 reg15 xreg0 xreg1 xreg2 xreg3 xreg4 xreg5 xreg6 xreg7 xxreg0 xxreg1 xxreg2 xxreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc mpls_ttl ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll nd_reserved nd_options_type nsh_flags nsh_spi nsh_si nsh_c1 nsh_c2 nsh_c3 nsh_c4 nsh_ttl
+        supported on Set-Field: tun_{id,src,dst,ipv6_{src,dst},flags,gbp_{id,flags},erspan_{idx,ver,dir,hwid},metadata0...metadata63} metadata in_{port,port_oxm} pkt_mark ct_{mark,label} reg0...reg15 xreg0...xreg7 xxreg0...xxreg3 eth_{src,dst} vlan_{tci,vid,pcp} mpls_{label,tc,ttl} ip_{src,dst} ipv6_{src,dst,label} nw_tos ip_dscp nw_{ecn,ttl} arp_{op,spa,tpa,sha,tha} tcp_{src,dst} udp_{src,dst} sctp_{src,dst} icmp_{type,code} icmpv6_{type,code} nd_{target,sll,tll,reserved,options_type} nsh_{flags,spi,si,c1...c4,ttl}
     matching:
-      dp_hash: arbitrary mask
-      recirc_id: exact match or wildcard
-      packet_type: exact match or wildcard
-      conj_id: exact match or wildcard
-      tun_id: arbitrary mask
-      tun_src: arbitrary mask
-      tun_dst: arbitrary mask
-      tun_ipv6_src: arbitrary mask
-      tun_ipv6_dst: arbitrary mask
-      tun_flags: arbitrary mask
-      tun_gbp_id: arbitrary mask
-      tun_gbp_flags: arbitrary mask
-      tun_erspan_idx: arbitrary mask
-      tun_erspan_ver: arbitrary mask
-      tun_erspan_dir: arbitrary mask
-      tun_erspan_hwid: arbitrary mask
-      tun_metadata0: arbitrary mask
-      tun_metadata1: arbitrary mask
-      tun_metadata2: arbitrary mask
-      tun_metadata3: arbitrary mask
-      tun_metadata4: arbitrary mask
-      tun_metadata5: arbitrary mask
-      tun_metadata6: arbitrary mask
-      tun_metadata7: arbitrary mask
-      tun_metadata8: arbitrary mask
-      tun_metadata9: arbitrary mask
-      tun_metadata10: arbitrary mask
-      tun_metadata11: arbitrary mask
-      tun_metadata12: arbitrary mask
-      tun_metadata13: arbitrary mask
-      tun_metadata14: arbitrary mask
-      tun_metadata15: arbitrary mask
-      tun_metadata16: arbitrary mask
-      tun_metadata17: arbitrary mask
-      tun_metadata18: arbitrary mask
-      tun_metadata19: arbitrary mask
-      tun_metadata20: arbitrary mask
-      tun_metadata21: arbitrary mask
-      tun_metadata22: arbitrary mask
-      tun_metadata23: arbitrary mask
-      tun_metadata24: arbitrary mask
-      tun_metadata25: arbitrary mask
-      tun_metadata26: arbitrary mask
-      tun_metadata27: arbitrary mask
-      tun_metadata28: arbitrary mask
-      tun_metadata29: arbitrary mask
-      tun_metadata30: arbitrary mask
-      tun_metadata31: arbitrary mask
-      tun_metadata32: arbitrary mask
-      tun_metadata33: arbitrary mask
-      tun_metadata34: arbitrary mask
-      tun_metadata35: arbitrary mask
-      tun_metadata36: arbitrary mask
-      tun_metadata37: arbitrary mask
-      tun_metadata38: arbitrary mask
-      tun_metadata39: arbitrary mask
-      tun_metadata40: arbitrary mask
-      tun_metadata41: arbitrary mask
-      tun_metadata42: arbitrary mask
-      tun_metadata43: arbitrary mask
-      tun_metadata44: arbitrary mask
-      tun_metadata45: arbitrary mask
-      tun_metadata46: arbitrary mask
-      tun_metadata47: arbitrary mask
-      tun_metadata48: arbitrary mask
-      tun_metadata49: arbitrary mask
-      tun_metadata50: arbitrary mask
-      tun_metadata51: arbitrary mask
-      tun_metadata52: arbitrary mask
-      tun_metadata53: arbitrary mask
-      tun_metadata54: arbitrary mask
-      tun_metadata55: arbitrary mask
-      tun_metadata56: arbitrary mask
-      tun_metadata57: arbitrary mask
-      tun_metadata58: arbitrary mask
-      tun_metadata59: arbitrary mask
-      tun_metadata60: arbitrary mask
-      tun_metadata61: arbitrary mask
-      tun_metadata62: arbitrary mask
-      tun_metadata63: arbitrary mask
-      metadata: arbitrary mask
-      in_port: exact match or wildcard
-      in_port_oxm: exact match or wildcard
-      actset_output: exact match or wildcard
-      pkt_mark: arbitrary mask
-      ct_state: arbitrary mask
-      ct_zone: exact match or wildcard
-      ct_mark: arbitrary mask
-      ct_label: arbitrary mask
-      ct_nw_proto: exact match or wildcard
-      ct_nw_src: arbitrary mask
-      ct_nw_dst: arbitrary mask
-      ct_ipv6_src: arbitrary mask
-      ct_ipv6_dst: arbitrary mask
-      ct_tp_src: arbitrary mask
-      ct_tp_dst: arbitrary mask
-      reg0: arbitrary mask
-      reg1: arbitrary mask
-      reg2: arbitrary mask
-      reg3: arbitrary mask
-      reg4: arbitrary mask
-      reg5: arbitrary mask
-      reg6: arbitrary mask
-      reg7: arbitrary mask
-      reg8: arbitrary mask
-      reg9: arbitrary mask
-      reg10: arbitrary mask
-      reg11: arbitrary mask
-      reg12: arbitrary mask
-      reg13: arbitrary mask
-      reg14: arbitrary mask
-      reg15: arbitrary mask
-      xreg0: arbitrary mask
-      xreg1: arbitrary mask
-      xreg2: arbitrary mask
-      xreg3: arbitrary mask
-      xreg4: arbitrary mask
-      xreg5: arbitrary mask
-      xreg6: arbitrary mask
-      xreg7: arbitrary mask
-      xxreg0: arbitrary mask
-      xxreg1: arbitrary mask
-      xxreg2: arbitrary mask
-      xxreg3: arbitrary mask
-      eth_src: arbitrary mask
-      eth_dst: arbitrary mask
-      eth_type: exact match or wildcard
-      vlan_tci: arbitrary mask
-      vlan_vid: arbitrary mask
-      vlan_pcp: exact match or wildcard
-      mpls_label: exact match or wildcard
-      mpls_tc: exact match or wildcard
-      mpls_bos: exact match or wildcard
-      mpls_ttl: exact match or wildcard
-      ip_src: arbitrary mask
-      ip_dst: arbitrary mask
-      ipv6_src: arbitrary mask
-      ipv6_dst: arbitrary mask
-      ipv6_label: arbitrary mask
-      nw_proto: exact match or wildcard
-      nw_tos: exact match or wildcard
-      ip_dscp: exact match or wildcard
-      nw_ecn: exact match or wildcard
-      nw_ttl: exact match or wildcard
-      ip_frag: arbitrary mask
-      arp_op: exact match or wildcard
-      arp_spa: arbitrary mask
-      arp_tpa: arbitrary mask
-      arp_sha: arbitrary mask
-      arp_tha: arbitrary mask
-      tcp_src: arbitrary mask
-      tcp_dst: arbitrary mask
-      tcp_flags: arbitrary mask
-      udp_src: arbitrary mask
-      udp_dst: arbitrary mask
-      sctp_src: arbitrary mask
-      sctp_dst: arbitrary mask
-      icmp_type: exact match or wildcard
-      icmp_code: exact match or wildcard
-      icmpv6_type: exact match or wildcard
-      icmpv6_code: exact match or wildcard
-      nd_target: arbitrary mask
-      nd_sll: arbitrary mask
-      nd_tll: arbitrary mask
-      nd_reserved: exact match or wildcard
-      nd_options_type: exact match or wildcard
-      nsh_flags: arbitrary mask
-      nsh_mdtype: exact match or wildcard
-      nsh_np: exact match or wildcard
-      nsh_spi: exact match or wildcard
-      nsh_si: exact match or wildcard
-      nsh_c1: arbitrary mask
-      nsh_c2: arbitrary mask
-      nsh_c3: arbitrary mask
-      nsh_c4: arbitrary mask
-      nsh_ttl: exact match or wildcard
+      arbitrary mask: dp_hash tun_{id,src,dst,ipv6_{src,dst},flags,gbp_{id,flags},erspan_{idx,ver,dir,hwid},gtpu_{flags,msgtype},metadata0...metadata63} metadata pkt_mark ct_{state,mark,label,nw_{src,dst},ipv6_{src,dst},tp_{src,dst}} reg0...reg15 xreg0...xreg7 xxreg0...xxreg3 eth_{src,dst} vlan_{tci,vid} ip_{src,dst} ipv6_{src,dst,label} ip_frag arp_{spa,tpa,sha,tha} tcp_{src,dst,flags} udp_{src,dst} sctp_{src,dst} nd_{target,sll,tll} nsh_{flags,c1...c4}
+      exact match or wildcard: recirc_id packet_type conj_id in_{port,port_oxm} actset_output ct_{zone,nw_proto} eth_type vlan_pcp mpls_{label,tc,bos,ttl} nw_{proto,tos} ip_dscp nw_{ecn,ttl} arp_op icmp_{type,code} icmpv6_{type,code} nd_{reserved,options_type} nsh_{mdtype,np,spi,si,ttl}
 
 ' "$1"
 }
@@ -2594,7 +2362,7 @@ echo '  table 253:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
     instructions (table miss and others):
-      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata
+      instructions: meter apply_actions clear_actions write_actions write_metadata
       (same actions)
     (same matching)
 '
@@ -3389,7 +3157,7 @@ check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700040080
 check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
-# Become slave, which should disable everything except port status.
+# Become secondary, which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000002
 check_async 4 OFPPR_ADD OFPPR_DELETE
 
@@ -3404,7 +3172,7 @@ check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 010400180000000300002320000000140000000000000000
 
-# Become master.
+# Become primary.
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
 check_async 7 OFPR_ACTION OFPPR_ADD
 
@@ -3496,7 +3264,7 @@ check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700040080
 check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
-# Become slave (OF 1.2), which should disable everything except port status.
+# Become secondary (OF 1.2), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000200000003000000000000000000000001
 check_async 4 OFPPR_ADD OFPPR_DELETE
 
@@ -3511,7 +3279,7 @@ check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 030400180000000300002320000000140000000000000000
 
-# Become master (OF 1.2).
+# Become primary (OF 1.2).
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
 check_async 7 OFPR_ACTION OFPPR_ADD
 
@@ -3615,7 +3383,7 @@ check_async 1
 ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
 check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
-# Become slave (OF 1.3), which should disable everything except port status.
+# Become secondary (OF 1.3), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_DELETE
 
@@ -3630,7 +3398,7 @@ check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 040400180000000300002320000000140000000000000000
 
-# Become master (OF 1.3).
+# Become primary (OF 1.3).
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000400000002000000000000000000000002
 check_async 6 OFPR_ACTION OFPPR_ADD
 
@@ -3643,46 +3411,58 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p1 -- set Interface p1 type=dummy ofport_request=10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow14 -P standard monitor br0 --detach --no-chdir --pidfile])
+ovs_appctl () {
+    echo ovs-appctl "$@"
+    AT_CHECK([ovs-appctl "$@"], [0], [ignore], [ignore])
+}
+ovs_ofctl () {
+    echo ovs-ofctl --no-names "$@"
+    AT_CHECK([ovs-ofctl --no-names "$@"])
+}
+ovs_vsctl () {
+    echo ovs-vsctl "$@"
+    AT_CHECK([ovs-vsctl "$@"])
+}
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
     shift
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+    ovs_appctl -t ovs-ofctl ofctl/barrier
+    ovs_appctl -t ovs-ofctl ofctl/set-output-file monitor.log
     : > expout
 
     # OFPT_PACKET_IN, OFPR_PACKET_OUT (controller_id=0)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs_ofctl -O OpenFlow14 packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_PACKET_OUT"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_ACTION_SET (controller_id=0)
-    ovs-ofctl -O OpenFlow14 add-flow br0 'in_port=10 actions=write_actions(output(CONTROLLER))'
-    ovs-appctl netdev-dummy/receive p1 'in_port(10),eth(src=00:10:20:30:40:50,dst=00:01:02:03:04:05),eth_type(0x1234)'
+    ovs_ofctl -O OpenFlow14 add-flow br0 'in_port=10 actions=write_actions(output(CONTROLLER))'
+    ovs_appctl netdev-dummy/receive p1 'in_port(10),eth(src=00:10:20:30:40:50,dst=00:01:02:03:04:05),eth_type(0x1234)'
     if test X"$1" = X"OFPR_ACTION_SET"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): cookie=0x0 total_len=14 in_port=10 (via action_set) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -O OpenFlow14 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs_ofctl -O OpenFlow14  packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
-    ovs-ofctl -O OpenFlow14 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    ovs_ofctl -O OpenFlow14 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
 # OFPT_PORT_STATUS, OFPPR_ADD
-    ovs-vsctl add-port br0 test -- set Interface test type=dummy
+    ovs_vsctl add-port br0 test -- set Interface test type=dummy
     if test X"$1" = X"OFPPR_ADD"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): ADD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     0
@@ -3695,7 +3475,7 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_PORT_STATUS, OFPPR_MODIFY
-    ovs-ofctl -O OpenFlow14 -vwarn mod-port br0 test down
+    ovs_ofctl -O OpenFlow14 -vwarn mod-port br0 test down
     if test X"$1" = X"OFPPR_MODIFY"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -3708,7 +3488,7 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_PORT_STATUS, OFPPR_DELETE
-    ovs-vsctl del-port br0 test
+    ovs_vsctl del-port br0 test
     if test X"$1" = X"OFPPR_DELETE"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): DEL: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -3717,39 +3497,41 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_DELETE
-    ovs-ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=drop
-    ovs-ofctl -O OpenFlow14 --strict del-flows br0 ''
+    ovs_ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=drop
+    ovs-ofctl -O OpenFlow14 dump-flows br0
+    ovs_ofctl -O OpenFlow14 --strict del-flows br0 ''
+    ovs-ofctl -O OpenFlow14 dump-flows br0
     if test X"$1" = X"OFPRR_DELETE"; then shift;
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=delete table_id=0"
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_GROUP_DELETE
-    ovs-ofctl -O OpenFlow14 add-group br0 group_id=1234,type=all,bucket=output:10
-    ovs-ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=group:1234
-    ovs-ofctl -O OpenFlow14 --strict del-groups br0 group_id=1234
+    ovs_ofctl -O OpenFlow14 add-group br0 group_id=1234,type=all,bucket=output:10
+    ovs_ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=group:1234
+    ovs_ofctl -O OpenFlow14 --strict del-groups br0 group_id=1234
     if test X"$1" = X"OFPRR_GROUP_DELETE"; then shift;
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=group_delete table_id=0"
     fi
 
     # OFPT_TABLE_STATUS, OFPTR_VACANCY_UP
     if test X"$1" = X"OFPTR_VACANCY_UP"; then shift;
-        ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1
+        AT_CHECK([ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1], [0], [ignore], [])
 
         # Turn on vacancy events, then add flows until we're full.
         # With initial vacancy of 100% and vacancy_up of 80%, so that
         # vacancy >= vacancy_up, this enables VACANY_DOWN events, so
         # we get a single such message when vacancy dips below 20%.
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_DOWN
 table_desc:-
   table 1:
@@ -3758,16 +3540,16 @@ table_desc:-
         # Then delete flows until we're empty.  Sending the
         # VACANCY_DOWN message enabled VACANCY_UP events, so we get a
         # single such message when vacancy rises above 80%.
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
 table_desc:-
   table 1:
@@ -3780,28 +3562,28 @@ table_desc:-
         # That means that filling up the table generates no message,
         # but deleting all the flows generates VACANCY_UP at the point
         # vacancy rises above 80%.
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 novacancy
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
-        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
-        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
-        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 novacancy
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs_ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs_ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs_ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
         echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
 table_desc:-
   table 1:
@@ -3811,13 +3593,18 @@ table_desc:-
 
     AT_FAIL_IF([test X"$1" != X])
 
-    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
+    normalize_log () {
+       sed '
+s/ (xid=0x[[0-9a-fA-F]]*)//
+s/ *duration.*//
+s/00:0.$/00:0x/' < monitor.log
+    }
+
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`],
+                   [normalize_log | diff -u - expout])
 
     AT_CHECK(
-      [[sed '
-s/ (xid=0x[0-9a-fA-F]*)//
-s/ *duration.*//
-s/00:0.$/00:0x/' < monitor.log]],
+      [normalize_log],
       [0], [expout])
 }
 
@@ -3825,26 +3612,26 @@ s/00:0.$/00:0x/' < monitor.log]],
 check_async 1
 
 # Set miss_send_len to 128, turning on packet-ins for our service connection.
-ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
+ovs_appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
 check_async 2 OFPR_PACKET_OUT OFPR_ACTION_SET OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
-# Become slave (OF 1.4), which should disable everything except port status.
-ovs-appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
+# Become secondary (OF 1.4), which should disable everything except port status.
+ovs_appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
 # Use OF 1.4 OFPT_SET_ASYNC to enable a patchwork of asynchronous messages.
-ovs-appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000002000020008000000020003000800000005000400080000001c00050008000000050008000800000018
+ovs_appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000002000020008000000020003000800000005000400080000001c00050008000000050008000800000018
 check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE OFPTR_VACANCY_UP
 
 # Set controller ID 123.
-ovs-appctl -t ovs-ofctl ofctl/send 05040018000000030000232000000014000000000000007b
+ovs_appctl -t ovs-ofctl ofctl/send 05040018000000030000232000000014000000000000007b
 check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
 # Restore controller ID 0.
-ovs-appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000000
+ovs_appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000000
 
-# Become master (OF 1.4).
-ovs-appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
+# Become primary (OF 1.4).
+ovs_appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
 check_async 6 OFPR_PACKET_OUT OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
@@ -3953,27 +3740,27 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.2): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 031800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.2): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.2): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.2): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 031800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=master generation_id=1"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.2): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.2): role=primary generation_id=1"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -3992,8 +3779,8 @@ AT_CLEANUP
 
 dnl This test checks that the role request/response messaging works,
 dnl that generation_id is handled properly, and that role status update
-dnl messages are sent when a controller's role gets changed from master
-dnl to slave.
+dnl messages are sent when a controller's role gets changed from primary
+dnl to secondary.
 AT_SETUP([ofproto - controller role (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 on_exit 'kill `cat c1.pid c2.pid`'
@@ -4018,28 +3805,28 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.4): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 051800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.4): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.4): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.4): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 051800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=master generation_id=1"
-echo >>expout2 "OFPT_ROLE_STATUS (OF1.4): role=slave generation_id=1 reason=master_request"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.4): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.4): role=primary generation_id=1"
+echo >>expout2 "OFPT_ROLE_STATUS (OF1.4): role=secondary generation_id=1 reason=primary_request"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -4058,8 +3845,8 @@ AT_CLEANUP
 
 dnl This test checks that the role request/response messaging works,
 dnl that generation_id is handled properly, and that role status update
-dnl messages are sent when a controller's role gets changed from master
-dnl to slave.
+dnl messages are sent when a controller's role gets changed from primary
+dnl to secondary.
 AT_SETUP([ofproto - controller role (OpenFlow 1.3)])
 OVS_VSWITCHD_START
 on_exit 'kill `cat c1.pid c2.pid`'
@@ -4084,28 +3871,28 @@ for i in 1 2; do
     echo >>expout$i "OFPT_ROLE_REPLY (OF1.3): role=equal"
 done
 
-# controller 1: Become slave (generation_id is initially undefined, so
+# controller 1: Become secondary (generation_id is initially undefined, so
 # 2^63+2 should not be stale)
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000300000003000000008000000000000002
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=slave generation_id=9223372036854775810"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=slave generation_id=9223372036854775810"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=secondary generation_id=9223372036854775810"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=secondary generation_id=9223372036854775810"
 
-# controller 2: Become master.
+# controller 2: Become primary.
 ovs-appctl -t `pwd`/c2 ofctl/send 041800180000000300000002000000008000000000000003
-echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=9223372036854775811"
-echo >>expout2 "OFPT_ROLE_REPLY (OF1.3): role=master generation_id=9223372036854775811"
+echo >>experr2 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=9223372036854775811"
+echo >>expout2 "OFPT_ROLE_REPLY (OF1.3): role=primary generation_id=9223372036854775811"
 
-# controller 1: Try to become the master using a stale generation ID
+# controller 1: Try to become the primary using a stale generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000400000002000000000000000000000003
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=3"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=3"
 echo >>expout1 "OFPT_ERROR (OF1.3): OFPRRFC_STALE"
-echo >>expout1 "OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=3"
+echo >>expout1 "OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=3"
 
-# controller 1: Become master using a valid generation ID
+# controller 1: Become primary using a valid generation ID
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000500000002000000000000000000000001
-echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=master generation_id=1"
-echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=master generation_id=1"
-echo >>expout2 "ONFT_ROLE_STATUS (OF1.3): role=slave generation_id=1 reason=master_request"
+echo >>experr1 "send: OFPT_ROLE_REQUEST (OF1.3): role=primary generation_id=1"
+echo >>expout1 "OFPT_ROLE_REPLY (OF1.3): role=primary generation_id=1"
+echo >>expout2 "ONFT_ROLE_STATUS (OF1.3): role=secondary generation_id=1 reason=primary_request"
 
 for i in 1 2; do
     ovs-appctl -t `pwd`/c$i ofctl/barrier
@@ -4191,13 +3978,13 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
+# controller 1: Become secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 061800180000000300000003000000008000000000000002
 
-# controller 2: Become master
+# controller 2: Become primary
 ovs-appctl -t `pwd`/c2 ofctl/send 051800180000000300000002000000008000000000000003
 
-# controller 1: Become slave
+# controller 1: Become secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 051800180000000300000003000000008000000000000004
 
 # controller 1: Enabled requestforward using set Asynchronous message
@@ -4287,16 +4074,16 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
-# NXT_ROLE_REQUEST (xid=0x3): role=slave
+# controller 1: Become secondary
+# NXT_ROLE_REQUEST (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 0104001400000003000023200000000a00000002
 
-# controller 2: Become master
-# NXT_ROLE_REQUEST (xid=0x3): role=master
+# controller 2: Become primary
+# NXT_ROLE_REQUEST (xid=0x3): role=primary
 ovs-appctl -t `pwd`/c2 ofctl/send 0104001400000003000023200000000a00000001
 
-# controller 1: Become slave
-# NXT_ROLE_REQUEST (xid=0x3): role=slave
+# controller 1: Become secondary
+# NXT_ROLE_REQUEST (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 0104001400000003000023200000000a00000002
 
 # controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2
@@ -4385,16 +4172,16 @@ s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
     done
 }
 
-# controller 1: Become slave
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+# controller 1: Become secondary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000300000003000000008000000000000002
 
-# controller 2: Become master
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=master
+# controller 2: Become primary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=primary
 ovs-appctl -t `pwd`/c2 ofctl/send 041800180000000300000002000000008000000000000003
 
-# controller 1: Become slave
-# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+# controller 1: Become secondary
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=secondary
 ovs-appctl -t `pwd`/c3 ofctl/send 041800180000000300000003000000008000000000000004
 
 # controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2 (necessary for OF1.3)
@@ -4769,7 +4556,7 @@ m4_divert_push([PREPARE_TESTS])
 # past the nearest line that does not start with a space.
 [
 multiline_sort () {
-    $PYTHON -c '
+    $PYTHON3 -c '
 import sys
 
 buffer = []
@@ -5056,7 +4843,7 @@ ovs-appctl -t ovs-ofctl ofctl/block
 
 # Add $n_msgs flows.
 (echo "in_port=2,actions=output:2"
-$PYTHON -c '
+$PYTHON3 -c '
 for i in range('$n_msgs'):
     print("cookie=1,reg1=%d,actions=drop" % i)
 ') > flows.txt
@@ -5124,6 +4911,27 @@ NXT_FLOW_MONITOR_RESUMED:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - flow monitoring usable protocols])
+AT_KEYWORDS([monitor])
+
+OVS_VSWITCHD_START
+
+on_exit 'kill `cat ovs-ofctl.pid`'
+ovs-ofctl -OOpenFlow14 monitor br0 watch:udp,udp_dst=8 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# ovs-ofctl should exit because monitor is not supported in OpenFlow 1.4
+OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+
+# check that only NXM flag is returned as usable protocols for sctp_dst
+# and ovs-ofctl should exit since monitor is not supported in OpenFlow 1.4
+ovs-ofctl -OOpenFlow14 monitor br0 watch:sctp,sctp_dst=9 --detach --no-chdir --pidfile >monitor.log 2>&1
+OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([ofproto - event filtering (OpenFlow 1.3)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
@@ -5143,7 +4951,7 @@ EOF
 AT_CHECK([ofctl_strip < monitor.log], [], [dnl
 send: OFPT_GET_ASYNC_REQUEST (OF1.3):
 OFPT_GET_ASYNC_REPLY (OF1.3):
- master:
+ primary:
        PACKET_IN: no_match action
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard delete group_delete
@@ -5151,7 +4959,7 @@ OFPT_GET_ASYNC_REPLY (OF1.3):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 
- slave:
+ secondary:
        PACKET_IN: (off)
      PORT_STATUS: add delete modify
     FLOW_REMOVED: (off)
@@ -6514,12 +6322,12 @@ AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: OFPBAC_BAD_SET_LEN
 ])
 
-AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata1[[0..31]], slaves:4,8)"], [1], [], [stderr])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata1[[0..31]], members:4,8)"], [1], [], [stderr])
 AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: NXFMFC_INVALID_TLV_FIELD
 ])
 
-AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata0[[32..63]], slaves:4,8)"], [1], [], [stderr])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=bundle_load(eth_src,50,hrw,ofport,tun_metadata0[[32..63]], members:4,8)"], [1], [], [stderr])
 AT_CHECK([strip_xids < stderr | sed '/FLOW_MOD/,$d'], [0], [dnl
 OFPT_ERROR: OFPBAC_BAD_SET_LEN
 ])

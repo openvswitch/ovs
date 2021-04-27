@@ -18,10 +18,7 @@ import ovs.jsonrpc
 import ovs.stream
 import ovs.util
 
-import six
-
 vlog = ovs.vlog.Vlog("unixctl_client")
-strtypes = six.string_types
 
 
 class UnixctlClient(object):
@@ -30,10 +27,10 @@ class UnixctlClient(object):
         self._conn = conn
 
     def transact(self, command, argv):
-        assert isinstance(command, strtypes)
+        assert isinstance(command, str)
         assert isinstance(argv, list)
         for arg in argv:
-            assert isinstance(arg, strtypes)
+            assert isinstance(arg, str)
 
         request = ovs.jsonrpc.Message.create_request(command, argv)
         error, reply = self._conn.transact_block(request)

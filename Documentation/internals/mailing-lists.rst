@@ -35,7 +35,7 @@ ovs-announce
 The `ovs-announce`__ mailing list is used to announce new versions of Open
 vSwitch and is extremely low-volume. `(subscribe)`__ `(archives)`__
 
-__ ovs-announce@openvswitch.org
+__ mailto:ovs-announce@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-announce/
 __ https://mail.openvswitch.org/pipermail/ovs-announce/
 
@@ -46,7 +46,7 @@ The `ovs-discuss`__ mailing list is used to discuss plans and design decisions
 for Open vSwitch. It is also an appropriate place for user questions.
 `(subscribe)`__ `(archives)`__
 
-__ ovs-discuss@openvswitch.org
+__ mailto:ovs-discuss@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-discuss/
 __ https://mail.openvswitch.org/pipermail/ovs-discuss/
 
@@ -56,7 +56,7 @@ ovs-dev
 The `ovs-dev`__ mailing list is used to discuss development and review code
 before being committed. `(subscribe)`__ `(archives)`__
 
-__ ovs-dev@openvswitch.org
+__ mailto:ovs-dev@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-dev/
 __ https://mail.openvswitch.org/pipermail/ovs-dev/
 
@@ -66,7 +66,7 @@ ovs-git
 The `ovs-git`__ mailing list hooks into Open vSwitch's version control system
 to receive commits. `(subscribe)`__ `(archives)`__
 
-__ ovs-git@openvswitch.org
+__ mailto:ovs-git@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-git/
 __ https://mail.openvswitch.org/pipermail/ovs-git/
 
@@ -76,7 +76,7 @@ ovs-build
 The `ovs-build`__ mailing list hooks into Open vSwitch's continuous integration
 system to receive build reports. `(subscribe)`__ `(archives)`__
 
-__ ovs-build@openvswitch.org
+__ mailto:ovs-build@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-build/
 __ https://mail.openvswitch.org/pipermail/ovs-build/
 
@@ -85,7 +85,7 @@ bugs
 
 The `bugs`__ mailing list is an alias for the discuss mailing list.
 
-__ bugs@openvswitch.org
+__ mailto:bugs@openvswitch.org
 
 security
 --------
@@ -93,4 +93,4 @@ security
 The `security`__ mailing list is for submitting security vulnerabilities to the
 security team.
 
-__ security@ovs.org
+__ mailto:security@openvswitch.org

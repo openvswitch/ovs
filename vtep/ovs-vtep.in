@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! @PYTHON3@
 # Copyright (C) 2013 Nicira, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +28,6 @@ import ovs.dirs
 import ovs.unixctl.server
 import ovs.util
 import ovs.vlog
-
-import six
-from six.moves import range
 
 
 VERSION = "0.99"
@@ -123,7 +120,7 @@ class Logical_Switch(object):
         ovs_ofctl("add-flow %s priority=0,action=drop" % self.short_name)
 
     def cleanup_ls(self):
-        for port_no, tun_name, remote_ip in six.itervalues(self.tunnels):
+        for port_no, tun_name, remote_ip in self.tunnels.values():
             del_bfd(remote_ip)
 
     def update_flood(self):
@@ -257,7 +254,7 @@ class Logical_Switch(object):
         column = vtep_ctl("--columns=tunnel_key find logical_switch "
                           "name=%s" % self.name)
         tunnel_key = column.partition(":")[2].strip()
-        if tunnel_key and isinstance(eval(tunnel_key), six.integer_types):
+        if tunnel_key and isinstance(eval(tunnel_key), int):
             vlog.info("update_remote_macs: using tunnel key %s in %s"
                       % (tunnel_key, self.name))
         else:
@@ -293,11 +290,11 @@ class Logical_Switch(object):
         for tunnel in old_tunnels.difference(tunnels):
             self.del_tunnel(tunnel)
 
-        for mac in six.iterkeys(remote_macs):
+        for mac in remote_macs.keys():
             if (self.remote_macs.get(mac) != remote_macs[mac]):
                 self.add_remote_mac(mac, remote_macs[mac])
 
-        for mac in six.iterkeys(self.remote_macs):
+        for mac in self.remote_macs.keys():
             if mac not in remote_macs:
                 self.del_remote_mac(mac)
 
@@ -341,7 +338,7 @@ class Logical_Switch(object):
 
         # Go through all the logical switch's interfaces that end with "-l"
         # and copy the statistics to logical_binding_stats.
-        for interface in six.iterkeys(self.ports):
+        for interface in self.ports.keys():
             if not interface.endswith("-l"):
                 continue
             # Physical ports can have a '-' as part of its name.
@@ -352,7 +349,7 @@ class Logical_Switch(object):
             if not uuid:
                 continue
 
-            for mapfrom, mapto in six.iteritems(stats_map):
+            for mapfrom, mapto in stats_map.items():
                 value = ovs_vsctl("get interface %s statistics:%s"
                                   % (interface, mapfrom)).strip('"')
                 vtep_ctl("set logical_binding_stats %s %s=%s"
@@ -468,7 +465,7 @@ def run_bfd():
                               'bfd_params:check_tnl_key': 'false'}
         bfd_params_values = {}
 
-        for key, default in six.iteritems(bfd_params_default):
+        for key, default in bfd_params_default.items():
             column = vtep_ctl("--if-exists get tunnel %s %s"
                               % (tunnel, key))
             if not column:
@@ -476,7 +473,7 @@ def run_bfd():
             else:
                 bfd_params_values[key] = column
 
-        for key, value in six.iteritems(bfd_params_values):
+        for key, value in bfd_params_values.items():
             new_key = key.replace('_params', '')
             ovs_vsctl("set interface %s %s=%s" % (port, new_key, value))
 
@@ -498,7 +495,7 @@ def run_bfd():
         bfd_lconf_default = {'bfd_config_local:bfd_dst_ip': '169.254.1.0',
                              'bfd_config_local:bfd_dst_mac':
                              '00:23:20:00:00:01'}
-        for key, value in six.iteritems(bfd_lconf_default):
+        for key, value in bfd_lconf_default.items():
             vtep_ctl("set tunnel %s %s=%s" % (tunnel, key, value))
 
         # bfd_config_remote options from VTEP DB should be populated to
@@ -750,7 +747,7 @@ def main():
 
         handle_physical()
 
-        for ls_name, ls in six.iteritems(Lswitches):
+        for ls_name, ls in Lswitches.items():
             ls.run()
 
         run_bfd()

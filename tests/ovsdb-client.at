@@ -12,6 +12,30 @@ AT_CHECK([ovsdb-client get-schema-cksum unix:socket ordinals], [0], [12345678 9
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
+AT_SETUP([ovsdb-client needs-conversion (no conversion needed)])
+AT_KEYWORDS([ovsdb client file positive])
+ordinal_schema > schema
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client needs-conversion unix:socket schema], [0], [no
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([ovsdb-client needs-conversion (conversion needed)])
+AT_KEYWORDS([ovsdb client file positive])
+ordinal_schema > schema
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0], [ignore], [ignore])
+sed 's/5\.1\.3/5.1.4/' < schema > schema2
+AT_CHECK([diff schema schema2], [1], [ignore])
+AT_CHECK([ovsdb-client needs-conversion unix:socket schema2], [0], [yes
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
 AT_SETUP([ovsdb-client backup and restore])
 AT_KEYWORDS([ovsdb client positive])
 

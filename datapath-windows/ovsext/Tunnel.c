@@ -308,7 +308,7 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
 
             datapath->misses++;
             elem = OvsCreateQueueNlPacket(NULL, 0, OVS_PACKET_CMD_MISS,
-                                          vport, &key, pNbl, curNb,
+                                          vport, &key, NULL, pNbl, curNb,
                                           TRUE, &layers);
             if (elem) {
                 /* Complete the packet since it was copied to user buffer. */

@@ -46,32 +46,32 @@ struct lacp *lacp_ref(const struct lacp *);
 void lacp_configure(struct lacp *, const struct lacp_settings *);
 bool lacp_is_active(const struct lacp *);
 
-bool lacp_process_packet(struct lacp *, const void *slave,
+bool lacp_process_packet(struct lacp *, const void *member,
                          const struct dp_packet *packet);
 enum lacp_status lacp_status(const struct lacp *);
 
-struct lacp_slave_settings {
+struct lacp_member_settings {
     char *name;                       /* Name (for debugging). */
     uint16_t id;                      /* Port ID. */
     uint16_t priority;                /* Port priority. */
     uint16_t key;                     /* Aggregation key. */
 };
 
-void lacp_slave_register(struct lacp *, void *slave_,
-                         const struct lacp_slave_settings *);
-void lacp_slave_unregister(struct lacp *, const void *slave);
-void lacp_slave_carrier_changed(const struct lacp *, const void *slave,
-                                bool carrier_up);
-bool lacp_slave_may_enable(const struct lacp *, const void *slave);
-bool lacp_slave_is_current(const struct lacp *, const void *slave_);
+void lacp_member_register(struct lacp *, void *member_,
+                          const struct lacp_member_settings *);
+void lacp_member_unregister(struct lacp *, const void *member);
+void lacp_member_carrier_changed(const struct lacp *, const void *member,
+                                 bool carrier_up);
+bool lacp_member_may_enable(const struct lacp *, const void *member);
+bool lacp_member_is_current(const struct lacp *, const void *member_);
 
 /* Callback function for lacp_run() for sending a LACP PDU. */
-typedef void lacp_send_pdu(void *slave, const void *pdu, size_t pdu_size);
+typedef void lacp_send_pdu(void *member, const void *pdu, size_t pdu_size);
 
 void lacp_run(struct lacp *, lacp_send_pdu *);
 void lacp_wait(struct lacp *);
 
-struct lacp_slave_stats {
+struct lacp_member_stats {
     /* id */
     struct eth_addr dot3adAggPortActorSystemID;
     struct eth_addr dot3adAggPortPartnerOperSystemID;
@@ -92,6 +92,7 @@ struct lacp_slave_stats {
     /* uint32_t dot3adAggPortStatsMarkerResponsePDUsTx; */
 };
 
-bool lacp_get_slave_stats(const struct lacp *, const void *slave_, struct lacp_slave_stats *);
+bool lacp_get_member_stats(const struct lacp *, const void *member_,
+                           struct lacp_member_stats *);
 
 #endif /* lacp.h */

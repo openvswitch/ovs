@@ -296,16 +296,16 @@ enum nx_packet_in2_prop_type {
  *
  * The other possible roles are a related pair:
  *
- *    - Master (NX_ROLE_MASTER) is equivalent to Other, except that there may
- *      be at most one Master controller at a time: when a controller
- *      configures itself as Master, any existing Master is demoted to the
- *      Slave role.
+ *    - Primary (NX_ROLE_PRIMARY) is equivalent to Other, except that there may
+ *      be at most one Primary controller at a time: when a controller
+ *      configures itself as Primary, any existing Primary is demoted to the
+ *      Secondary role.
  *
- *    - Slave (NX_ROLE_SLAVE) allows the controller read-only access to
+ *    - Secondary (NX_ROLE_SECONDARY) allows the controller read-only access to
  *      OpenFlow features.  In particular attempts to modify the flow table
  *      will be rejected with an OFPBRC_EPERM error.
  *
- *      Slave controllers do not receive OFPT_PACKET_IN or OFPT_FLOW_REMOVED
+ *      Secondary controllers do not receive OFPT_PACKET_IN or OFPT_FLOW_REMOVED
  *      messages, but they do receive OFPT_PORT_STATUS messages.
  */
 struct nx_role_request {
@@ -315,23 +315,23 @@ OFP_ASSERT(sizeof(struct nx_role_request) == 4);
 
 enum nx_role {
     NX_ROLE_OTHER,              /* Default role, full access. */
-    NX_ROLE_MASTER,             /* Full access, at most one. */
-    NX_ROLE_SLAVE               /* Read-only access. */
+    NX_ROLE_PRIMARY,            /* Full access, at most one. */
+    NX_ROLE_SECONDARY           /* Read-only access. */
 };
 
 /* NXT_SET_ASYNC_CONFIG.
  *
  * Sent by a controller, this message configures the asynchronous messages that
  * the controller wants to receive.  Element 0 in each array specifies messages
- * of interest when the controller has an "other" or "master" role; element 1,
- * when the controller has a "slave" role.
+ * of interest when the controller has an "other" or "primary" role; element 1,
+ * when the controller has a "secondary" role.
  *
  * Each array element is a bitmask in which a 0-bit disables receiving a
  * particular message and a 1-bit enables receiving it.  Each bit controls the
  * message whose 'reason' corresponds to the bit index.  For example, the bit
  * with value 1<<2 == 4 in port_status_mask[1] determines whether the
  * controller will receive OFPT_PORT_STATUS messages with reason OFPPR_MODIFY
- * (value 2) when the controller has a "slave" role.
+ * (value 2) when the controller has a "secondary" role.
  *
  * As a side effect, for service controllers, this message changes the
  * miss_send_len from default of zero to OFP_DEFAULT_MISS_SEND_LEN (128).

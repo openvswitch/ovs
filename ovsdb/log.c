@@ -212,7 +212,7 @@ ovsdb_log_open(const char *name, const char *magic,
     if (!strcmp(name, "/dev/stdin") && open_mode == OVSDB_LOG_READ_ONLY) {
         fd = dup(STDIN_FILENO);
     } else {
-        fd = open(name, flags, 0666);
+        fd = open(name, flags, 0660);
     }
     if (fd < 0) {
         const char *op = (open_mode == OVSDB_LOG_CREATE_EXCL ? "create"
@@ -658,7 +658,16 @@ ovsdb_log_write_and_free(struct ovsdb_log *log, struct json *json)
 struct ovsdb_error *
 ovsdb_log_commit_block(struct ovsdb_log *file)
 {
+#if (_POSIX_C_SOURCE >= 199309L || _XOPEN_SOURCE >= 500)
+    /* we do not check metadata - mtime, atime, anywhere, so we
+     * do not need to update it every time we sync the log.
+     * if the system supports it, the log update should be
+     * data only
+     */
+    if (file->stream && fdatasync(fileno(file->stream))) {
+#else
     if (file->stream && fsync(fileno(file->stream))) {
+#endif
         return ovsdb_io_error(errno, "%s: fsync failed", file->display_name);
     }
     return NULL;

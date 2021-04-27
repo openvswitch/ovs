@@ -30,7 +30,7 @@ ovsdb_check_monitor () {
     done
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])
     OVS_WAIT_UNTIL([test ! -e ovsdb-client.pid])
-    AT_CHECK_UNQUOTED([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$output], [ignore])
+    AT_CHECK_UNQUOTED([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$output], [ignore])
 }
 OVS_END_SHELL_HELPERS
 
@@ -105,7 +105,7 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
             [ignore], [ignore])
    AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
    OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-   AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$7], [ignore])
+   AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$7], [ignore])
    AT_CLEANUP])
 
 OVSDB_CHECK_MONITOR([monitor insert into empty table],
@@ -649,7 +649,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [[row,action,name
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [[row,action,name
 <0>,insert,"""ten"""
 
 row,action,name
@@ -701,7 +701,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
 row,action,name,number,_version
 <1>,initial,"""one""",1,"[""uuid"",""<2>""]"
@@ -770,7 +770,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: true, last_id: <0>
 row,action,name,number,_version
 <1>,insert,"""ten""",10,"[""uuid"",""<2>""]"
@@ -814,7 +814,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: true, last_id: <0>
 ]], [ignore])
 AT_CLEANUP
@@ -837,7 +837,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
 ]], [ignore])
 AT_CLEANUP
@@ -876,7 +876,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
 row,action,name,number,_version
 <1>,initial,"""one""",1,"[""uuid"",""<2>""]"
@@ -945,7 +945,62 @@ OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 
 # Transaction shouldn't be found, and last_id returned should always
 # be the same (all zero uuid)
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
+         [[found: false, last_id: <0>
+row,action,name,number,_version
+<1>,initial,"""one""",1,"[""uuid"",""<2>""]"
+
+last_id: <0>
+row,action,name,number,_version
+<3>,insert,"""ten""",10,"[""uuid"",""<4>""]"
+]], [ignore])
+AT_CLEANUP
+
+
+# Test monitor-cond-since with non-cluster mode server with non-zero last_id
+AT_SETUP([monitor-cond-since non-cluster non-zero last_id])
+AT_KEYWORDS([ovsdb server monitor monitor-cond-since negative])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+AT_CAPTURE_FILE([ovsdb-server-log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+on_exit 'kill `cat ovsdb-server.pid`'
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+# A non-zero uuid
+last_id=11111111-1111-1111-1111-111111111111
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+       [0], [ignore], [ignore])
+on_exit 'kill `cat ovsdb-client.pid`'
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 11, "name": "eleven"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0],
+           [ignore], [ignore], [kill `cat server-pid client-pid`])
+done
+AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
+         [ignore], [ignore])
+AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
+
+# Transaction shouldn't be found, and last_id returned should always
+# be the same (all zero uuid)
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
 row,action,name,number,_version
 <1>,initial,"""one""",1,"[""uuid"",""<2>""]"

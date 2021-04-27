@@ -789,15 +789,16 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
 
     <action name="BUNDLE,BUNDLE_LOAD">
       <h2>The <code>bundle</code> and <code>bundle_load</code> actions</h2>
-      <syntax><code>bundle(</code><var>fields</var><code>, </code><var>basis</var><code>, </code><var>algorithm</var><code>, ofport, slaves:</code><var>port</var>...<code>)</code></syntax>
-      <syntax><code>bundle_load(</code><var>fields</var><code>, </code><var>basis</var><code>, </code><var>algorithm</var><code>, ofport, </code><var>dst</var><code>, slaves:</code><var>port</var>...<code>)</code></syntax>
+      <syntax><code>bundle(</code><var>fields</var><code>, </code><var>basis</var><code>, </code><var>algorithm</var><code>, ofport, members:</code><var>port</var>...<code>)</code></syntax>
+      <syntax><code>bundle_load(</code><var>fields</var><code>, </code><var>basis</var><code>, </code><var>algorithm</var><code>, ofport, </code><var>dst</var><code>, members:</code><var>port</var>...<code>)</code></syntax>
 
       <p>
-        These actions choose a port (``slave'') from a comma-separated OpenFlow
-        <var>port</var> list.  After selecting the port, <code>bundle</code>
-        outputs to it, whereas <code>bundle_load</code> writes its port number
-        to <var>dst</var>, which must be a 16-bit or wider field or subfield in
-        the syntax described under ``Field Specifications'' above.
+        These actions choose a port (a ``member'') from a
+        comma-separated OpenFlow <var>port</var> list.  After selecting the
+        port, <code>bundle</code> outputs to it, whereas
+        <code>bundle_load</code> writes its port number to <var>dst</var>,
+        which must be a 16-bit or wider field or subfield in the syntax
+        described under ``Field Specifications'' above.
       </p>
 
       <p>
@@ -854,20 +855,20 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
       <dl>
         <dt><code>active_backup</code></dt>
         <dd>
-          Chooses the first live port listed in <var>slaves</var>.
+          Chooses the first live port listed in <var>members</var>.
         </dd>
 
         <dt><code>hrw</code> (Highest Random Weight)</dt>
         <dd>
           <p>
             Computes the following, considering only the live ports in
-            <var>slaves</var>:
+            <var>members</var>:
           </p>
 
           <pre>
-for <var>i</var> in [1,<var>n_slaves</var>]:
+for <var>i</var> in [1,<var>n_members</var>]:
     <var>weights</var>[<var>i</var>] = hash(<var>flow</var>, <var>i</var>)
-<var>slave</var> = { <var>i</var> such that <var>weights</var>[<var>i</var>] &gt;= <var>weights</var>[<var>j</var>] for all <var>j</var> != <var>i</var> }
+<var>member</var> = { <var>i</var> such that <var>weights</var>[<var>i</var>] &gt;= <var>weights</var>[<var>j</var>] for all <var>j</var> != <var>i</var> }
           </pre>
 
           <p>
@@ -877,17 +878,17 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
       </dl>
 
       <p>
-        The algorithms take port liveness into account when selecting slaves.
-        The definition of whether a port is live is subject to change.  It
-        currently takes into account carrier status and link monitoring
-        protocols such as BFD and CFM.  If none of the slaves is live,
-        <code>bundle</code> does not output the packet and
+        The algorithms take port liveness into account when selecting
+        members.  The definition of whether a port is live is subject to
+        change.  It currently takes into account carrier status and link
+        monitoring protocols such as BFD and CFM.  If none of the members is
+        live, <code>bundle</code> does not output the packet and
         <code>bundle_load</code> stores <code>OFPP_NONE</code> (65535) in the
         output field.
       </p>
 
       <p>
-        Example: <code>bundle(eth_src,0,hrw,ofport,slaves:4,8)</code> uses an
+        Example: <code>bundle(eth_src,0,hrw,ofport,members:4,8)</code> uses an
         Ethernet source hash with basis 0, to select between OpenFlow ports 4
         and 8 using the Highest Random Weight algorithm.
       </p>
@@ -933,14 +934,31 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
         based on which bucket was selected.  An obvious design would be for the
         bucket to communicate the value via <code>set_field</code> on a
         register.  This does not work because registers are part of the
-        metadata that <code>group</code> saves and restores.  A design that
-        would work would be for the bucket to recursively invoke the rest of
-        the pipeline with <code>resubmit</code> rather than to attempt to
-        return it.  Another possibility is for the bucket to use
-        <code>push</code> to put the value on the stack for the caller to
-        <code>pop</code> off, since <code>group</code> preserves only packet
-        data and metadata, not the stack.
+        metadata that <code>group</code> saves and restores.  The following
+        alternative bucket designs do work:
       </p>
+
+      <ul>
+        <li>
+          Recursively invoke the rest of the pipeline with
+          <code>resubmit</code>.
+        </li>
+
+        <li>
+          <p>
+            Use <code>resubmit</code> into a table that uses <code>push</code>
+            to put the value on the stack for the caller to <code>pop</code>
+            off.  This works because <code>group</code> preserves only packet
+            data and metadata, not the stack.
+          </p>
+
+          <p>
+            (This design requires indirection through <code>resubmit</code>
+            because actions sets may not contain <code>push</code> or
+            <code>pop</code> actions.)
+          </p>
+        </li>
+      </ul>
 
       <p>
         An <code>exit</code> action within a group bucket terminates only
@@ -1512,7 +1530,7 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
       </p>
 
       <p>
-        The packet length to check againt the argument <var>pkt_len</var>
+        The packet length to check against the argument <var>pkt_len</var>
         includes the L2 header and L2 payload of the packet, but not the VLAN
         tag (if present).
       </p>
@@ -1535,6 +1553,22 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
         This action was added in Open vSwitch 2.11.90.
       </p>
     </action>
+
+    <action name="DELETE_FIELD">
+      <h2>The <code>delete_field</code> action</h2>
+      <syntax><code>delete_field:</code><var>field</var></syntax>
+
+      <p>
+        The <code>delete_field</code> action deletes a field in the syntax
+        described under ``Field Specifications'' above.  Currently, only
+        the tun_metadta fields are supported.
+      </p>
+
+      <p>
+        This action was added in Open vSwitch 2.13.90.
+      </p>
+    </action>
+
   </group>
 
   <group title="Metadata Actions">

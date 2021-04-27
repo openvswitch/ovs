@@ -52,6 +52,12 @@
 #include "openvswitch/ofp-flow.h"
 #include "openvswitch/ofp-port.h"
 
+enum {
+    DPCTL_FLOWS_ADD = 0,
+    DPCTL_FLOWS_DEL,
+    DPCTL_FLOWS_MOD
+};
+
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);
 struct dpctl_command {
@@ -818,20 +824,29 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
 
     dpif_flow_stats_format(&f->stats, ds);
     if (dpctl_p->verbosity && f->attrs.offloaded) {
-        ds_put_cstr(ds, ", offloaded:yes");
+        if (f->attrs.dp_layer && !strcmp(f->attrs.dp_layer, "ovs")) {
+            ds_put_cstr(ds, ", offloaded:partial");
+        } else {
+            ds_put_cstr(ds, ", offloaded:yes");
+        }
     }
     if (dpctl_p->verbosity && f->attrs.dp_layer) {
         ds_put_format(ds, ", dp:%s", f->attrs.dp_layer);
     }
     ds_put_cstr(ds, ", actions:");
     format_odp_actions(ds, f->actions, f->actions_len, ports);
+    if (dpctl_p->verbosity && f->attrs.dp_extra_info) {
+        ds_put_format(ds, ", dp-extra-info:%s", f->attrs.dp_extra_info);
+    }
 }
 
 struct dump_types {
     bool ovs;
     bool tc;
+    bool dpdk;
     bool offloaded;
     bool non_offloaded;
+    bool partially_offloaded;
 };
 
 static void
@@ -839,8 +854,10 @@ enable_all_dump_types(struct dump_types *dump_types)
 {
     dump_types->ovs = true;
     dump_types->tc = true;
+    dump_types->dpdk = true;
     dump_types->offloaded = true;
     dump_types->non_offloaded = true;
+    dump_types->partially_offloaded = true;
 }
 
 static int
@@ -865,10 +882,14 @@ populate_dump_types(char *types_list, struct dump_types *dump_types,
             dump_types->ovs = true;
         } else if (!strcmp(current_type, "tc")) {
             dump_types->tc = true;
+        } else if (!strcmp(current_type, "dpdk")) {
+            dump_types->dpdk = true;
         } else if (!strcmp(current_type, "offloaded")) {
             dump_types->offloaded = true;
         } else if (!strcmp(current_type, "non-offloaded")) {
             dump_types->non_offloaded = true;
+        } else if (!strcmp(current_type, "partially-offloaded")) {
+            dump_types->partially_offloaded = true;
         } else if (!strcmp(current_type, "all")) {
             enable_all_dump_types(dump_types);
         } else {
@@ -886,7 +907,9 @@ determine_dpif_flow_dump_types(struct dump_types *dump_types,
 {
     dpif_dump_types->ovs_flows = dump_types->ovs || dump_types->non_offloaded;
     dpif_dump_types->netdev_flows = dump_types->tc || dump_types->offloaded
-                                    || dump_types->non_offloaded;
+                                    || dump_types->non_offloaded
+                                    || dump_types->dpdk
+                                    || dump_types->partially_offloaded;
 }
 
 static bool
@@ -899,7 +922,15 @@ flow_passes_type_filter(const struct dpif_flow *f,
     if (dump_types->tc && !strcmp(f->attrs.dp_layer, "tc")) {
         return true;
     }
-    if (dump_types->offloaded && f->attrs.offloaded) {
+    if (dump_types->dpdk && !strcmp(f->attrs.dp_layer, "dpdk")) {
+        return true;
+    }
+    if (dump_types->offloaded && f->attrs.offloaded &&
+        strcmp(f->attrs.dp_layer, "ovs")) {
+        return true;
+    }
+    if (dump_types->partially_offloaded && f->attrs.offloaded &&
+        !strcmp(f->attrs.dp_layer, "ovs")) {
         return true;
     }
     if (dump_types->non_offloaded && !(f->attrs.offloaded)) {
@@ -955,6 +986,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct dpif_flow_dump *flow_dump;
     struct dpif_flow f;
     int pmd_id = PMD_ID_NULL;
+    bool pmd_id_filter = false;
     int lastargc = 0;
     int error;
 
@@ -971,6 +1003,16 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
                 goto out_free;
             }
             types_list = xstrdup(argv[--argc] + 5);
+        } else if (!strncmp(argv[argc - 1], "pmd=", 4)) {
+            if (!ovs_scan(argv[--argc], "pmd=%d", &pmd_id)) {
+                error = EINVAL;
+                goto out_free;
+            }
+
+            if (pmd_id == -1) {
+                pmd_id = NON_PMD_CORE_ID;
+            }
+            pmd_id_filter = true;
         }
     }
 
@@ -1006,7 +1048,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     memset(&dump_types, 0, sizeof dump_types);
     error = populate_dump_types(types_list, &dump_types, dpctl_p);
     if (error) {
-        goto out_free;
+        goto out_dpifclose;
     }
     determine_dpif_flow_dump_types(&dump_types, &dpif_dump_types);
 
@@ -1045,16 +1087,17 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         /* If 'pmd_id' is specified, overlapping flows could be dumped from
          * different pmd threads.  So, separates dumps from different pmds
          * by printing a title line. */
-        if (pmd_id != f.pmd_id) {
+        if (!pmd_id_filter && pmd_id != f.pmd_id) {
             if (f.pmd_id == NON_PMD_CORE_ID) {
-                ds_put_format(&ds, "flow-dump from non-dpdk interfaces:\n");
+                ds_put_format(&ds, "flow-dump from the main thread:\n");
             } else {
                 ds_put_format(&ds, "flow-dump from pmd on cpu core: %d\n",
                               f.pmd_id);
             }
             pmd_id = f.pmd_id;
         }
-        if (flow_passes_type_filter(&f, &dump_types)) {
+        if (pmd_id == f.pmd_id &&
+            flow_passes_type_filter(&f, &dump_types)) {
             format_dpif_flow(&ds, &f, portno_names, dpctl_p);
             dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
         }
@@ -1077,27 +1120,21 @@ out_free:
 }
 
 static int
-dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
-               struct dpctl_params *dpctl_p)
+dpctl_put_flow_dpif(struct dpif *dpif, const char *key_s,
+                    const char *actions_s,
+                    enum dpif_flow_put_flags flags,
+                    struct dpctl_params *dpctl_p)
 {
-    const char *key_s = argv[argc - 2];
-    const char *actions_s = argv[argc - 1];
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct ofpbuf actions;
     struct ofpbuf key;
     struct ofpbuf mask;
-    struct dpif *dpif;
     ovs_u128 ufid;
     bool ufid_present;
     struct simap port_names;
     int n, error;
-
-    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
-    if (error) {
-        return error;
-    }
 
     ufid_present = false;
     n = odp_ufid_from_string(key_s, &ufid);
@@ -1132,6 +1169,16 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
         goto out_freeactions;
     }
 
+    if (!ufid_present && dpctl_p->is_appctl) {
+        /* Generating UFID for this flow so it could be offloaded to HW.  We're
+         * not doing that if invoked from ovs-dpctl utility because
+         * odp_flow_key_hash() uses randomly generated base for flow hashes
+         * that will be different for each invocation.  And, anyway, offloading
+         * is only available via appctl. */
+        odp_flow_key_hash(key.data, key.size, &ufid);
+        ufid_present = true;
+    }
+
     /* The flow will be added on all pmds currently in the datapath. */
     error = dpif_flow_put(dpif, flags,
                           key.data, key.size,
@@ -1160,6 +1207,24 @@ out_freeactions:
 out_freekeymask:
     ofpbuf_uninit(&mask);
     ofpbuf_uninit(&key);
+    return error;
+}
+
+static int
+dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
+               struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error;
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = dpctl_put_flow_dpif(dpif, argv[argc - 2], argv[argc - 1], flags,
+                                dpctl_p);
+
     dpif_close(dpif);
     return error;
 }
@@ -1233,24 +1298,20 @@ out:
 }
 
 static int
-dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+dpctl_del_flow_dpif(struct dpif *dpif, const char *key_s,
+                    struct dpctl_params *dpctl_p)
 {
-    const char *key_s = argv[argc - 1];
     struct dpif_flow_stats stats;
     struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
     struct ofpbuf key;
     struct ofpbuf mask; /* To be ignored. */
-    struct dpif *dpif;
+
     ovs_u128 ufid;
+    bool ufid_generated;
     bool ufid_present;
     struct simap port_names;
     int n, error;
-
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
-    if (error) {
-        return error;
-    }
 
     ufid_present = false;
     n = odp_ufid_from_string(key_s, &ufid);
@@ -1278,6 +1339,14 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out;
     }
 
+    if (!ufid_present && dpctl_p->is_appctl) {
+        /* While adding flow via appctl we're generating UFID to make HW
+         * offloading possible.  Generating UFID here to be sure that such
+         * flows could be removed the same way they were added. */
+        odp_flow_key_hash(key.data, key.size, &ufid);
+        ufid_present = ufid_generated = true;
+    }
+
     /* The flow will be deleted from all pmds currently in the datapath. */
     error = dpif_flow_del(dpif, key.data, key.size,
                           ufid_present ? &ufid : NULL, PMD_ID_NULL,
@@ -1285,7 +1354,7 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
     if (error) {
         dpctl_error(dpctl_p, error, "deleting flow");
-        if (error == ENOENT && !ufid_present) {
+        if (error == ENOENT && (!ufid_present || ufid_generated)) {
             struct ds s;
 
             ds_init(&s);
@@ -1309,16 +1378,157 @@ out:
     ofpbuf_uninit(&mask);
     ofpbuf_uninit(&key);
     simap_destroy(&port_names);
+    return error;
+}
+
+static int
+dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+{
+    const char *key_s = argv[argc - 1];
+    struct dpif *dpif;
+    int error;
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = dpctl_del_flow_dpif(dpif, key_s, dpctl_p);
+
     dpif_close(dpif);
     return error;
+}
+
+static int
+dpctl_parse_flow_line(int command, struct ds *s, char **flow, char **action)
+{
+    const char *line = ds_cstr(s);
+    size_t len;
+
+    /* First figure out the command, or fallback to FLOWS_ADD. */
+    line += strspn(line, " \t\r\n");
+    len = strcspn(line, ", \t\r\n");
+
+    if (!strncmp(line, "add", len)) {
+         command = DPCTL_FLOWS_ADD;
+    } else if (!strncmp(line, "delete", len)) {
+        command = DPCTL_FLOWS_DEL;
+    } else if (!strncmp(line, "modify", len)) {
+        command = DPCTL_FLOWS_MOD;
+    } else {
+        len = 0;
+    }
+    line += len;
+
+    /* Isolate flow and action (for add/modify). */
+    line += strspn(line, " \t\r\n");
+    len = strcspn(line, " \t\r\n");
+
+    if (len == 0) {
+        *flow = NULL;
+        *action = NULL;
+        return command;
+    }
+
+    *flow = xzalloc(len + 1);
+    ovs_strlcpy(*flow, line, len + 1);
+
+    line += len;
+    line += strspn(line, " \t\r\n");
+    if (strlen(line)) {
+        *action = xstrdup(line);
+    } else {
+        *action = NULL;
+    }
+
+    return command;
+}
+
+static int
+dpctl_process_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
+{
+    const char *file_name = argv[argc - 1];
+    int line_number = 0;
+    struct dpif *dpif;
+    struct ds line;
+    FILE *stream;
+    int error;
+    int def_cmd = DPCTL_FLOWS_ADD;
+
+    if (strstr(argv[0], "mod-flows")) {
+        def_cmd = DPCTL_FLOWS_MOD;
+    } else if (strstr(argv[0], "del-flows")) {
+        def_cmd = DPCTL_FLOWS_DEL;
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (error) {
+        return error;
+    }
+
+    stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
+    if (!stream) {
+        error = errno;
+        dpctl_error(dpctl_p, error, "Opening file \"%s\" failed", file_name);
+        goto out_close_dpif;
+    }
+
+    ds_init(&line);
+    while (!ds_get_preprocessed_line(&line, stream, &line_number)) {
+        /* We do not process all the lines first and then execute the actions
+         * as we would like to take commands as a continuous stream of
+         * commands from stdin.
+         */
+        char *flow = NULL;
+        char *action = NULL;
+        int cmd = dpctl_parse_flow_line(def_cmd, &line, &flow, &action);
+
+        if ((!flow && !action)
+            || ((cmd == DPCTL_FLOWS_ADD || cmd == DPCTL_FLOWS_MOD) && !action)
+            || (cmd == DPCTL_FLOWS_DEL && action)) {
+            dpctl_error(dpctl_p, 0,
+                        "Failed parsing line number %u, skipped!",
+                        line_number);
+        } else {
+            switch (cmd) {
+            case DPCTL_FLOWS_ADD:
+                dpctl_put_flow_dpif(dpif, flow, action,
+                                    DPIF_FP_CREATE, dpctl_p);
+                break;
+            case DPCTL_FLOWS_MOD:
+                dpctl_put_flow_dpif(dpif, flow, action,
+                                    DPIF_FP_MODIFY, dpctl_p);
+                break;
+            case DPCTL_FLOWS_DEL:
+                dpctl_del_flow_dpif(dpif, flow, dpctl_p);
+                break;
+            }
+        }
+
+        free(flow);
+        free(action);
+    }
+
+    ds_destroy(&line);
+    if (stream != stdin) {
+        fclose(stream);
+    }
+out_close_dpif:
+    dpif_close(dpif);
+    return 0;
 }
 
 static int
 dpctl_del_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
+    int error;
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if ((!dp_arg_exists(argc, argv) && argc == 2) || argc > 2) {
+        return dpctl_process_flows(argc, argv, dpctl_p);
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -1763,6 +1973,62 @@ dpctl_ct_get_nconns(int argc, const char *argv[],
         dpif_close(dpif);
     }
 
+    return error;
+}
+
+static int
+dpctl_ct_set_tcp_seq_chk__(int argc, const char *argv[],
+                           struct dpctl_params *dpctl_p, bool enabled)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (!error) {
+        error = ct_dpif_set_tcp_seq_chk(dpif, enabled);
+        if (!error) {
+            dpctl_print(dpctl_p,
+                        "%s TCP sequence checking successful",
+                        enabled ? "enabling" : "disabling");
+        } else {
+            dpctl_error(dpctl_p, error,
+                        "%s TCP sequence checking failed",
+                        enabled ? "enabling" : "disabling");
+        }
+        dpif_close(dpif);
+    }
+    return error;
+}
+
+static int
+dpctl_ct_enable_tcp_seq_chk(int argc, const char *argv[],
+                            struct dpctl_params *dpctl_p)
+{
+    return dpctl_ct_set_tcp_seq_chk__(argc, argv, dpctl_p, true);
+}
+
+static int
+dpctl_ct_disable_tcp_seq_chk(int argc, const char *argv[],
+                             struct dpctl_params *dpctl_p)
+{
+    return dpctl_ct_set_tcp_seq_chk__(argc, argv, dpctl_p, false);
+}
+
+static int
+dpctl_ct_get_tcp_seq_chk(int argc, const char *argv[],
+                         struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (!error) {
+        bool enabled;
+        error = ct_dpif_get_tcp_seq_chk(dpif, &enabled);
+        if (!error) {
+            dpctl_print(dpctl_p, "TCP sequence checking: %s\n",
+                        enabled ? "enabled" : "disabled");
+        } else {
+            dpctl_error(dpctl_p, error, "TCP sequence checking query failed");
+        }
+        dpif_close(dpif);
+    }
     return error;
 }
 
@@ -2421,23 +2687,32 @@ static const struct dpctl_command all_commands[] = {
     { "del-if", "dp iface...", 2, INT_MAX, dpctl_del_if, DP_RW },
     { "set-if", "dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
     { "dump-dps", "", 0, 0, dpctl_dump_dps, DP_RO },
-    { "show", "[dp...]", 0, INT_MAX, dpctl_show, DP_RO },
-    { "dump-flows", "[dp] [filter=..] [type=..]",
-      0, 3, dpctl_dump_flows, DP_RO },
+    { "show", "[-s] [dp...]", 0, INT_MAX, dpctl_show, DP_RO },
+    { "dump-flows", "[-m] [--names] [dp] [filter=..] [type=..] [pmd=..]",
+      0, 6, dpctl_dump_flows, DP_RO },
     { "add-flow", "[dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
     { "mod-flow", "[dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
     { "get-flow", "[dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
     { "del-flow", "[dp] flow", 1, 2, dpctl_del_flow, DP_RW },
-    { "del-flows", "[dp]", 0, 1, dpctl_del_flows, DP_RW },
-    { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
+    { "add-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
+    { "mod-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
+    { "del-flows", "[dp] [file]", 0, 2, dpctl_del_flows, DP_RW },
+    { "dump-conntrack", "[-m] [-s] [dp] [zone=N]",
+      0, 4, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
       dpctl_flush_conntrack, DP_RW },
     { "ct-stats-show", "[dp] [zone=N]",
       0, 3, dpctl_ct_stats_show, DP_RO },
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
-    { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns, DP_RW },
+    { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns,
+       DP_RW },
     { "ct-get-maxconns", "[dp]", 0, 1, dpctl_ct_get_maxconns, DP_RO },
     { "ct-get-nconns", "[dp]", 0, 1, dpctl_ct_get_nconns, DP_RO },
+    { "ct-enable-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_enable_tcp_seq_chk,
+       DP_RW },
+    { "ct-disable-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_disable_tcp_seq_chk,
+       DP_RW },
+    { "ct-get-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_get_tcp_seq_chk, DP_RO },
     { "ct-set-limits", "[dp] [default=L] [zone=N,limit=L]...", 1, INT_MAX,
         dpctl_ct_set_limits, DP_RO },
     { "ct-del-limits", "[dp] zone=N1[,N2]...", 1, 2, dpctl_ct_del_limits,

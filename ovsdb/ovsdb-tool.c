@@ -173,6 +173,9 @@ usage(void)
            "  compare-versions A OP B  compare OVSDB schema version numbers\n"
            "  query [DB] TRNS         execute read-only transaction on DB\n"
            "  transact [DB] TRNS      execute read/write transaction on DB\n"
+           "  cluster-to-standalone DB DB    Convert clustered DB to\n"
+           "      standalone DB when cluster is down and cannot be\n"
+           "        revived\n"
            "  [-m]... show-log [DB]   print DB's log entries\n"
            "The default DB is %s.\n"
            "The default SCHEMA is %s.\n",
@@ -388,6 +391,9 @@ compact_or_convert(const char *src_name_, const char *dst_name_,
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
     }
 
+    /* Resulted DB will contain a single transaction without diff anyway. */
+    ovsdb_file_column_diff_disable();
+
     /* Save a copy. */
     struct ovsdb *ovsdb = (new_schema
                            ? ovsdb_file_read_as_schema(src_name, new_schema)
@@ -559,7 +565,9 @@ do_db_has_magic(struct ovs_cmdl_context *ctx, const char *magic)
 
     check_ovsdb_error(ovsdb_log_open(filename, OVSDB_MAGIC"|"RAFT_MAGIC,
                                      OVSDB_LOG_READ_ONLY, -1, &log));
-    if (strcmp(ovsdb_log_get_magic(log), magic)) {
+    int cmp = strcmp(ovsdb_log_get_magic(log), magic);
+    ovsdb_log_close(log);
+    if (cmp) {
         exit(2);
     }
 }
@@ -643,6 +651,8 @@ static void
 print_db_changes(struct shash *tables, struct smap *names,
                  const struct ovsdb_schema *schema)
 {
+    struct json *is_diff = shash_find_data(tables, "_is_diff");
+    bool diff = (is_diff && is_diff->type == JSON_TRUE);
     struct shash_node *n1;
 
     int i = 0;
@@ -686,7 +696,8 @@ print_db_changes(struct shash *tables, struct smap *names,
                     printf(" insert row %.8s:\n", row_uuid);
                 }
             } else {
-                printf(" row %s (%.8s):\n", old_name, row_uuid);
+                printf(" row %s (%.8s)%s:\n", old_name, row_uuid,
+                                              diff ? " diff" : "");
             }
 
             if (columns->type == JSON_OBJECT) {
@@ -715,6 +726,7 @@ print_db_changes(struct shash *tables, struct smap *names,
                                 ds_init(&s);
                                 ovsdb_datum_to_string(&datum, type, &s);
                                 value_string = ds_steal_cstr(&s);
+                                ovsdb_datum_destroy(&datum, type);
                             } else {
                                 ovsdb_error_destroy(error);
                             }
@@ -939,6 +951,59 @@ print_raft_record(const struct raft_record *r,
 
     default:
         OVS_NOT_REACHED();
+    }
+}
+
+static void
+raft_header_to_standalone_log(const struct raft_header *h,
+                              struct ovsdb_log *db_log_data)
+{
+    if (h->snap_index) {
+        if (!h->snap.data || json_array(h->snap.data)->n != 2) {
+            ovs_fatal(0, "Incorrect raft header data array length");
+        }
+
+        struct json_array *pa = json_array(h->snap.data);
+        struct json *schema_json = pa->elems[0];
+        struct ovsdb_error *error = NULL;
+
+        if (schema_json->type != JSON_NULL) {
+            struct ovsdb_schema *schema;
+            check_ovsdb_error(ovsdb_schema_from_json(schema_json, &schema));
+            ovsdb_schema_destroy(schema);
+            error = ovsdb_log_write(db_log_data, schema_json);
+        }
+
+        if (!error) {
+            struct json *data_json = pa->elems[1];
+            if (!data_json || data_json->type != JSON_OBJECT) {
+                ovs_fatal(0, "Invalid raft header data");
+            }
+            if (data_json->type != JSON_NULL) {
+                error = ovsdb_log_write(db_log_data, data_json);
+            }
+        }
+        check_ovsdb_error(error);
+    }
+}
+
+static void
+raft_record_to_standalone_log(const struct raft_record *r,
+                              struct ovsdb_log *db_log_data)
+{
+    if (r->type == RAFT_REC_ENTRY) {
+        if (!r->entry.data) {
+            return;
+        }
+        struct json_array *pa = json_array(r->entry.data);
+
+        if (pa->n != 2) {
+            ovs_fatal(0, "Incorrect raft record array length");
+        }
+        struct json *data_json = pa->elems[1];
+        if (data_json->type != JSON_NULL) {
+            check_ovsdb_error(ovsdb_log_write(db_log_data, data_json));
+        }
     }
 }
 
@@ -1439,6 +1504,44 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
         }
     }
 
+    /* Check for db consistency:
+     * The serverid must be in the servers list.
+     */
+
+    for (struct server *s = c.servers; s < &c.servers[c.n_servers]; s++) {
+        struct shash *servers_obj = json_object(s->snap->servers);
+        char *server_id = xasprintf(SID_FMT, SID_ARGS(&s->header.sid));
+        bool found = false;
+        const struct shash_node *node;
+
+        SHASH_FOR_EACH (node, servers_obj) {
+            if (!strncmp(server_id, node->name, SID_LEN)) {
+                found = true;
+            }
+        }
+
+        if (!found) {
+            for (struct raft_entry *e = s->entries;
+                 e < &s->entries[s->log_end - s->log_start]; e++) {
+                if (e->servers == NULL) {
+                    continue;
+                }
+                struct shash *log_servers_obj = json_object(e->servers);
+                SHASH_FOR_EACH (node, log_servers_obj) {
+                    if (!strncmp(server_id, node->name, SID_LEN)) {
+                        found = true;
+                    }
+                }
+            }
+        }
+
+        if (!found) {
+            ovs_fatal(0, "%s: server %s not found in server list",
+                      s->filename, server_id);
+        }
+        free(server_id);
+    }
+
     /* Clean up. */
 
     for (size_t i = 0; i < c.n_servers; i++) {
@@ -1511,6 +1614,52 @@ do_compare_versions(struct ovs_cmdl_context *ctx)
     exit(result ? 0 : 2);
 }
 
+static void
+do_convert_to_standalone(struct ovsdb_log *log, struct ovsdb_log *db_log_data)
+{
+    for (unsigned int i = 0; ; i++) {
+        struct json *json;
+        check_ovsdb_error(ovsdb_log_read(log, &json));
+        if (!json) {
+            break;
+        }
+
+        if (i == 0) {
+            struct raft_header h;
+            check_ovsdb_error(raft_header_from_json(&h, json));
+            raft_header_to_standalone_log(&h, db_log_data);
+            raft_header_uninit(&h);
+        } else {
+            struct raft_record r;
+            check_ovsdb_error(raft_record_from_json(&r, json));
+            raft_record_to_standalone_log(&r, db_log_data);
+            raft_record_uninit(&r);
+        }
+        json_destroy(json);
+    }
+}
+
+static void
+do_cluster_standalone(struct ovs_cmdl_context *ctx)
+{
+    const char *db_file_name = ctx->argv[1];
+    const char *cluster_db_file_name = ctx->argv[2];
+    struct ovsdb_log *log;
+    struct ovsdb_log *db_log_data;
+
+    check_ovsdb_error(ovsdb_log_open(cluster_db_file_name,
+                                     OVSDB_MAGIC"|"RAFT_MAGIC,
+                                     OVSDB_LOG_READ_ONLY, -1, &log));
+    check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_MAGIC,
+                                     OVSDB_LOG_CREATE_EXCL, -1, &db_log_data));
+    if (strcmp(ovsdb_log_get_magic(log), RAFT_MAGIC) != 0) {
+        ovs_fatal(0, "Database is not clustered db.\n");
+    }
+    do_convert_to_standalone(log, db_log_data);
+    check_ovsdb_error(ovsdb_log_commit_block(db_log_data));
+    ovsdb_log_close(db_log_data);
+    ovsdb_log_close(log);
+}
 
 static void
 do_help(struct ovs_cmdl_context *ctx OVS_UNUSED)
@@ -1550,7 +1699,9 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "compare-versions", "a op b", 3, 3, do_compare_versions, OVS_RO },
     { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
     { "list-commands", NULL, 0, INT_MAX, do_list_commands, OVS_RO },
-    { NULL, NULL, 0, 0, NULL, OVS_RO },
+    { "cluster-to-standalone", "db clusterdb", 2, 2,
+    do_cluster_standalone, OVS_RW },
+    { NULL, NULL, 2, 2, NULL, OVS_RO },
 };
 
 static const struct ovs_cmdl_command *get_all_commands(void)

@@ -306,6 +306,8 @@ struct ovs_mutex ofproto_mutex = OVS_MUTEX_INITIALIZER;
 
 unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
+unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
+unsigned ofproto_min_revalidate_pps = OFPROTO_MIN_REVALIDATE_PPS_DEFAULT;
 
 size_t n_handlers, n_revalidators;
 
@@ -702,6 +704,23 @@ ofproto_set_max_idle(unsigned max_idle)
     ofproto_max_idle = max_idle;
 }
 
+/* Sets the maximum allowed revalidator timeout. */
+void
+ofproto_set_max_revalidator(unsigned max_revalidator)
+{
+    if (max_revalidator >= 100) {
+        ofproto_max_revalidator = max_revalidator;
+    }
+}
+
+/* Set minimum pps that flow must have in order to be revalidated when
+ * revalidation duration exceeds half of max-revalidator config variable. */
+void
+ofproto_set_min_revalidate_pps(unsigned min_revalidate_pps)
+{
+    ofproto_min_revalidate_pps = min_revalidate_pps ? min_revalidate_pps : 1;
+}
+
 /* If forward_bpdu is true, the NORMAL action will forward frames with
  * reserved (e.g. STP) destination Ethernet addresses. if forward_bpdu is false,
  * the NORMAL action will drop these frames. */
@@ -794,6 +813,13 @@ ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
 {
     free(p->dp_desc);
     p->dp_desc = nullable_xstrdup(dp_desc);
+}
+
+void
+ofproto_set_serial_desc(struct ofproto *p, const char *serial_desc)
+{
+    free(p->serial_desc);
+    p->serial_desc = nullable_xstrdup(serial_desc);
 }
 
 int
@@ -933,6 +959,44 @@ bool
 ofproto_get_flow_restore_wait(void)
 {
     return flow_restore_wait;
+}
+
+/* Retrieve datapath capabilities. */
+void
+ofproto_get_datapath_cap(const char *datapath_type, struct smap *dp_cap)
+{
+    datapath_type = ofproto_normalize_type(datapath_type);
+    const struct ofproto_class *class = ofproto_class_find__(datapath_type);
+
+    if (class->get_datapath_cap) {
+        class->get_datapath_cap(datapath_type, dp_cap);
+    }
+}
+
+/* Connection tracking configuration. */
+void
+ofproto_ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
+                                   struct simap *timeout_policy)
+{
+    datapath_type = ofproto_normalize_type(datapath_type);
+    const struct ofproto_class *class = ofproto_class_find__(datapath_type);
+
+    if (class->ct_set_zone_timeout_policy) {
+        class->ct_set_zone_timeout_policy(datapath_type, zone_id,
+                                          timeout_policy);
+    }
+}
+
+void
+ofproto_ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
+{
+    datapath_type = ofproto_normalize_type(datapath_type);
+    const struct ofproto_class *class = ofproto_class_find__(datapath_type);
+
+    if (class->ct_del_zone_timeout_policy) {
+        class->ct_del_zone_timeout_policy(datapath_type, zone_id);
+    }
+
 }
 
 
@@ -1327,7 +1391,8 @@ ofproto_port_is_lacp_current(struct ofproto *ofproto, ofp_port_t ofp_port)
 }
 
 int
-ofproto_port_get_lacp_stats(const struct ofport *port, struct lacp_slave_stats *stats)
+ofproto_port_get_lacp_stats(const struct ofport *port,
+                            struct lacp_member_stats *stats)
 {
     struct ofproto *ofproto = port->ofproto;
     int error;
@@ -1345,8 +1410,8 @@ ofproto_port_get_lacp_stats(const struct ofport *port, struct lacp_slave_stats *
 
 /* Registers a "bundle" associated with client data pointer 'aux' in 'ofproto'.
  * A bundle is the same concept as a Port in OVSDB, that is, it consists of one
- * or more "slave" devices (Interfaces, in OVSDB) along with a VLAN
- * configuration plus, if there is more than one slave, a bonding
+ * or more "member" devices (Interfaces, in OVSDB) along with a VLAN
+ * configuration plus, if there is more than one member, a bonding
  * configuration.
  *
  * If 'aux' is already registered then this function updates its configuration
@@ -1544,13 +1609,13 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
 }
 
 static void
-ofproto_flush__(struct ofproto *ofproto)
+ofproto_flush__(struct ofproto *ofproto, bool del)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct oftable *table;
 
     /* This will flush all datapath flows. */
-    if (ofproto->ofproto_class->flush) {
+    if (del && ofproto->ofproto_class->flush) {
         ofproto->ofproto_class->flush(ofproto);
     }
 
@@ -1653,7 +1718,7 @@ ofproto_destroy(struct ofproto *p, bool del)
         return;
     }
 
-    ofproto_flush__(p);
+    ofproto_flush__(p, del);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
         ofport_destroy(ofport, del);
     }
@@ -1842,7 +1907,8 @@ ofproto_wait(struct ofproto *p)
 bool
 ofproto_is_alive(const struct ofproto *p)
 {
-    return connmgr_has_controllers(p->connmgr);
+    return (connmgr_has_controllers(p->connmgr)
+            && connmgr_is_any_controller_admitted(p->connmgr));
 }
 
 /* Adds some memory usage statistics for 'ofproto' into 'usage', for use with
@@ -2231,7 +2297,7 @@ void
 ofproto_flush_flows(struct ofproto *ofproto)
 {
     COVERAGE_INC(ofproto_flush);
-    ofproto_flush__(ofproto);
+    ofproto_flush__(ofproto, false);
     connmgr_flushed(ofproto->connmgr);
 }
 
@@ -2511,6 +2577,9 @@ ofproto_port_unregister(struct ofproto *ofproto, ofp_port_t ofp_port)
 {
     struct ofport *port = ofproto_get_port(ofproto, ofp_port);
     if (port) {
+        if (port->ofproto->ofproto_class->set_lldp) {
+            port->ofproto->ofproto_class->set_lldp(port, NULL);
+        }
         if (port->ofproto->ofproto_class->set_stp_port) {
             port->ofproto->ofproto_class->set_stp_port(port, NULL);
         }
@@ -3403,7 +3472,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     if (ofconn_get_type(ofconn) != OFCONN_PRIMARY
-        || ofconn_get_role(ofconn) != OFPCR12_ROLE_SLAVE) {
+        || ofconn_get_role(ofconn) != OFPCR12_ROLE_SECONDARY) {
         enum ofputil_frag_handling cur = ofproto->frag_handling;
         enum ofputil_frag_handling next = config.frag;
 
@@ -3428,16 +3497,16 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-/* Checks whether 'ofconn' is a slave controller.  If so, returns an OpenFlow
- * error message code for the caller to propagate upward.  Otherwise, returns
- * 0.
+/* Checks whether 'ofconn' is a secondary controller.  If so, returns an
+ * OpenFlow error message code for the caller to propagate upward.  Otherwise,
+ * returns 0.
  *
  * The log message mentions 'msg_type'. */
 static enum ofperr
-reject_slave_controller(struct ofconn *ofconn)
+reject_secondary_controller(struct ofconn *ofconn)
 {
-    if (ofconn_get_role(ofconn) == OFPCR12_ROLE_SLAVE) {
-        return OFPERR_OFPBRC_IS_SLAVE;
+    if (ofconn_get_role(ofconn) == OFPCR12_ROLE_SECONDARY) {
+        return OFPERR_OFPBRC_IS_SECONDARY;
     } else {
         return 0;
     }
@@ -3587,9 +3656,20 @@ ofproto_packet_out_revert(struct ofproto *ofproto,
 }
 
 static void
+ofproto_packet_out_prepare(struct ofproto *ofproto,
+                           struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    ofproto->ofproto_class->packet_execute_prepare(ofproto, opo);
+}
+
+/* Execution of packet_out action in datapath could end up in upcall with
+ * subsequent flow translations and possible rule modifications.
+ * So, the caller should not hold 'ofproto_mutex'. */
+static void
 ofproto_packet_out_finish(struct ofproto *ofproto,
                           struct ofproto_packet_out *opo)
-    OVS_REQUIRES(ofproto_mutex)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     ofproto->ofproto_class->packet_execute(ofproto, opo);
 }
@@ -3607,7 +3687,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     COVERAGE_INC(ofproto_packet_out);
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -3632,10 +3712,13 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     opo.version = p->tables_version;
     error = ofproto_packet_out_start(p, &opo);
     if (!error) {
-        ofproto_packet_out_finish(p, &opo);
+        ofproto_packet_out_prepare(p, &opo);
     }
     ovs_mutex_unlock(&ofproto_mutex);
 
+    if (!error) {
+        ofproto_packet_out_finish(p, &opo);
+    }
     ofproto_packet_out_uninit(&opo);
     return error;
 }
@@ -3726,7 +3809,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofport *port;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -4595,6 +4678,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     RULE_COLLECTION_FOR_EACH (rule, &rules) {
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
+        struct pkt_stats stats;
         long long int created, used, modified;
         const struct rule_actions *actions;
         enum ofputil_flow_mod_flags flags;
@@ -4610,8 +4694,9 @@ handle_flow_stats_request(struct ofconn *ofconn,
         flags = rule->flags;
         ovs_mutex_unlock(&rule->mutex);
 
-        ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
-                                               &fs.byte_count, &used);
+        ofproto->ofproto_class->rule_get_stats(rule, &stats, &used);
+        fs.packet_count = stats.n_packets;
+        fs.byte_count = stats.n_bytes;
 
         minimatch_expand(&rule->cr.match, &fs.match);
         fs.table_id = rule->table_id;
@@ -4636,14 +4721,14 @@ handle_flow_stats_request(struct ofconn *ofconn,
 }
 
 static void
-flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
+flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results,
+              bool offload_stats)
 {
-    uint64_t packet_count, byte_count;
+    struct pkt_stats stats;
     const struct rule_actions *actions;
     long long int created, used;
 
-    rule->ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
-                                                 &byte_count, &used);
+    rule->ofproto->ofproto_class->rule_get_stats(rule, &stats, &used);
 
     ovs_mutex_lock(&rule->mutex);
     actions = rule_get_actions(rule);
@@ -4654,8 +4739,14 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
         ds_put_format(results, "table_id=%"PRIu8", ", rule->table_id);
     }
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
-    ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
-    ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
+    ds_put_format(results, "n_packets=%"PRIu64", ", stats.n_packets);
+    ds_put_format(results, "n_bytes=%"PRIu64", ", stats.n_bytes);
+    if (offload_stats) {
+        ds_put_format(results, "n_offload_packets=%"PRIu64", ",
+                      stats.n_offload_packets);
+        ds_put_format(results, "n_offload_bytes=%"PRIu64", ",
+                      stats.n_offload_bytes);
+    }
     cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), NULL, results);
     ds_put_char(results, ',');
 
@@ -4669,7 +4760,8 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 /* Adds a pretty-printed description of all flows to 'results', including
  * hidden flows (e.g., set up by in-band control). */
 void
-ofproto_get_all_flows(struct ofproto *p, struct ds *results)
+ofproto_get_all_flows(struct ofproto *p, struct ds *results,
+                      bool offload_stats)
 {
     struct oftable *table;
 
@@ -4677,7 +4769,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
         struct rule *rule;
 
         CLS_FOR_EACH (rule, cr, &table->cls) {
-            flow_stats_ds(p, rule, results);
+            flow_stats_ds(p, rule, results, offload_stats);
         }
     }
 }
@@ -4765,23 +4857,21 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 
     struct rule *rule;
     RULE_COLLECTION_FOR_EACH (rule, &rules) {
-        uint64_t packet_count;
-        uint64_t byte_count;
+        struct pkt_stats pkt_stats;
         long long int used;
 
-        ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
-                                               &byte_count, &used);
+        ofproto->ofproto_class->rule_get_stats(rule, &pkt_stats, &used);
 
-        if (packet_count == UINT64_MAX) {
+        if (pkt_stats.n_packets == UINT64_MAX) {
             unknown_packets = true;
         } else {
-            stats.packet_count += packet_count;
+            stats.packet_count += pkt_stats.n_packets;
         }
 
-        if (byte_count == UINT64_MAX) {
+        if (pkt_stats.n_bytes == UINT64_MAX) {
             unknown_bytes = true;
         } else {
-            stats.byte_count += byte_count;
+            stats.byte_count += pkt_stats.n_bytes;
         }
 
         stats.flow_count++;
@@ -5972,6 +6062,7 @@ ofproto_rule_send_removed(struct rule *rule)
 {
     struct ofputil_flow_removed fr;
     long long int used;
+    struct pkt_stats stats;
 
     minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
@@ -5994,8 +6085,9 @@ ofproto_rule_send_removed(struct rule *rule)
     fr.idle_timeout = rule->idle_timeout;
     fr.hard_timeout = rule->hard_timeout;
     ovs_mutex_unlock(&rule->mutex);
-    rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
-                                                 &fr.byte_count, &used);
+    rule->ofproto->ofproto_class->rule_get_stats(rule, &stats, &used);
+    fr.packet_count = stats.n_packets;
+    fr.byte_count = stats.n_bytes;
     connmgr_send_flow_removed(connmgr, &fr);
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -6083,7 +6175,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf ofpacts;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -6146,7 +6238,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     if (request.role != OFPCR12_ROLE_NOCHANGE) {
         if (request.role != OFPCR12_ROLE_EQUAL
             && request.have_generation_id
-            && !ofconn_set_master_election_id(ofconn, request.generation_id)) {
+            && !ofconn_set_primary_election_id(ofconn, request.generation_id)) {
                 return OFPERR_OFPRRFC_STALE;
         }
 
@@ -6154,7 +6246,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     reply.role = ofconn_get_role(ofconn);
-    reply.have_generation_id = ofconn_get_master_election_id(
+    reply.have_generation_id = ofconn_get_primary_election_id(
         ofconn, &reply.generation_id);
     buf = ofputil_encode_role_reply(oh, &reply);
     ofconn_send_reply(ofconn, buf);
@@ -6774,7 +6866,7 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     uint32_t meter_id;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -7710,7 +7802,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofproto_group_mod ogm;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -7831,7 +7923,7 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofputil_table_mod tm;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -8154,7 +8246,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                     } else if (be->type == OFPTYPE_GROUP_MOD) {
                         ofproto_group_mod_finish(ofproto, &be->ogm, &req);
                     } else if (be->type == OFPTYPE_PACKET_OUT) {
-                        ofproto_packet_out_finish(ofproto, &be->opo);
+                        ofproto_packet_out_prepare(ofproto, &be->opo);
                     }
                 }
                 if (error) {
@@ -8165,7 +8257,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                 /* Send error referring to the original message. */
                 ofconn_send_error(ofconn, be->msg, error);
                 error = OFPERR_OFPBFC_MSG_FAILED;
-                
+
                 /* Revert.  Undo all the changes made above. */
                 LIST_FOR_EACH_REVERSE_CONTINUE (be, node, &bundle->msg_list) {
                     if (be->type == OFPTYPE_FLOW_MOD) {
@@ -8184,6 +8276,13 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         ovs_mutex_unlock(&ofproto_mutex);
     }
 
+    /* Executing remaining datapath actions. */
+    LIST_FOR_EACH (be, node, &bundle->msg_list) {
+        if (be->type == OFPTYPE_PACKET_OUT) {
+            ofproto_packet_out_finish(ofproto, &be->opo);
+        }
+    }
+
     /* The bundle is discarded regardless the outcome. */
     ofp_bundle_remove__(ofconn, bundle);
     return error;
@@ -8197,7 +8296,7 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -8251,7 +8350,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofputil_bundle_add_msg badd;
     enum ofptype type;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -8329,7 +8428,7 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofputil_tlv_table_mod ttm;
     enum ofperr error;
 
-    error = reject_slave_controller(ofconn);
+    error = reject_secondary_controller(ofconn);
     if (error) {
         return error;
     }
@@ -8805,11 +8904,11 @@ rule_eviction_priority(struct ofproto *ofproto, struct rule *rule)
         expiration = modified + rule->hard_timeout * 1000;
     }
     if (rule->idle_timeout) {
-        uint64_t packets, bytes;
+        struct pkt_stats stats;
         long long int used;
         long long int idle_expiration;
 
-        ofproto->ofproto_class->rule_get_stats(rule, &packets, &bytes, &used);
+        ofproto->ofproto_class->rule_get_stats(rule, &stats, &used);
         idle_expiration = used + rule->idle_timeout * 1000;
         expiration = MIN(expiration, idle_expiration);
     }

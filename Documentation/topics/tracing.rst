@@ -31,9 +31,7 @@ to know what is happening with packets as they go through the data plane
 processing.
 
 The `ovs-vswitchd(8)`_ manpage describes basic usage of the
-ofproto/trace command used for tracing in Open vSwitch.  For a tool
-with a goal similar to ofproto/trace for tracing packets through OVN
-logical switches, see `ovn-trace(8)`_.
+ofproto/trace command used for tracing in Open vSwitch.
 
 Packet Tracing
 --------------
@@ -132,4 +130,3 @@ This document is heavily based on content from Flavio Bruno Leitner at Red Hat:
 
 .. _ovs-vswitchd(8): http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html
 .. _ovs-fields(7): http://openvswitch.org/support/dist-docs/ovs-fields.7.pdf
-.. _ovn-trace(8): http://openvswitch.org/support/dist-docs/ovn-trace.8.html

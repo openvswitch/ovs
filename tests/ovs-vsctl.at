@@ -504,6 +504,152 @@ tcp:1.2.3.4
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+
+AT_SETUP([fail-mode])
+AT_KEYWORDS([fail-mode ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [add-br br0],
+
+  [get-fail-mode br0],
+  [set-fail-mode br0 secure],
+  [get-fail-mode br0],
+
+  [del-fail-mode br0],
+  [get-fail-mode br0],
+
+  [set-fail-mode br0 standalone],
+  [get-fail-mode br0])], [0], [
+
+
+secure
+
+
+
+standalone
+])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+
+# check if emer-reset reset switch to known good state
+# test is implemented by creating switch entities and checks if after applying
+# emer-reset these entities are deleted
+AT_SETUP([emer-reset])
+AT_KEYWORDS([emer-reset ovs-vsctl])
+OVS_VSCTL_SETUP
+
+# define controllers, fail-mode, netflow, mirror
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [add-br br0],
+   [add-port br0 eth0],
+   [add-port br0 eth1],
+   [set-controller br0 tcp:4.5.6.7],
+   [set-fail-mode br0 secure],
+   [set bridge br0 netflow=@nf],
+   [--id=@nf create netflow targets=3.4.5.6],
+   [set bridge br0 mirrors=@m],
+   [--id=@eth0 get port eth0],
+   [--id=@eth1 get port eth1],
+   [--id=@m create mirror name=mymirror select-dst-port=@eth0 select-src-port=@eth0 output-port=@eth1],
+   [set bridge br0 sflow=@sf],
+   [--id=@sf create sflow targets=1.2.3.4],
+   [set bridge br0 datapath-type=dummy other-config:datapath-id=1234 other-config:hwaddr="00:12:34:56:78:bb"],
+   [set bridge br0 ipfix=@fix],
+   [--id=@fix create ipfix targets=1.2.3.4],
+   [set bridge br0 flood_vlans=1],
+   [set bridge br0 datapath_id=2 datapath_version="alpha"],
+   [list bridge > configured_bridge.txt]
+   )], [0], [stdout])
+
+AT_CHECK(
+    [uuidfilt configured_bridge.txt],
+    [0],[[
+
+
+
+
+
+<0>
+
+
+
+<1>
+
+<2>
+
+
+<3>
+
+
+_uuid               : <4>
+auto_attach         : []
+controller          : [<5>]
+datapath_id         : "2"
+datapath_type       : dummy
+datapath_version    : alpha
+external_ids        : {}
+fail_mode           : secure
+flood_vlans         : [1]
+flow_tables         : {}
+ipfix               : <6>
+mcast_snooping_enable: false
+mirrors             : [<7>]
+name                : br0
+netflow             : <8>
+other_config        : {datapath-id="1234", hwaddr="00:12:34:56:78:bb"}
+ports               : [<9>, <10>, <11>]
+protocols           : []
+rstp_enable         : false
+rstp_status         : {}
+sflow               : <12>
+status              : {}
+stp_enable          : false
+]])
+
+
+# execute emer-reset
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [emer-reset])], [0], [
+])
+
+# check if bridge was cleaned/reset
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [list bridge > cleaned_bridge.txt]
+   )], [0], [stdout])
+
+AT_CHECK(
+    [uuidfilt cleaned_bridge.txt],
+    [0],[[_uuid               : <0>
+auto_attach         : []
+controller          : []
+datapath_id         : "2"
+datapath_type       : dummy
+datapath_version    : alpha
+external_ids        : {}
+fail_mode           : []
+flood_vlans         : []
+flow_tables         : {}
+ipfix               : []
+mcast_snooping_enable: false
+mirrors             : []
+name                : br0
+netflow             : []
+other_config        : {hwaddr="00:12:34:56:78:bb"}
+ports               : [<1>, <2>, <3>]
+protocols           : []
+rstp_enable         : false
+rstp_status         : {}
+sflow               : []
+status              : {}
+stp_enable          : false
+]])
+
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+
+
 dnl ----------------------------------------------------------------------
 dnl OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([VLAN])
 m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
@@ -805,6 +951,32 @@ AT_CHECK(
   [RUN_OVS_VSCTL([--if-exists remove netflow x targets '"1.2.3.4:567"'])])
 AT_CHECK(
   [RUN_OVS_VSCTL([--if-exists clear netflow x targets])])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=1 icmp_first=1 icmp_reply=2])])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-zone-tp netdev zone=1 icmp_first=1 icmp_reply=2])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:1, Timeout Policies: icmp_first=1 icmp_reply=2
+])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:1, Timeout Policies: icmp_first=1 icmp_reply=2
+Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=1])])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-tp netdev zone=1])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+
+AT_CHECK(
+  [RUN_OVS_VSCTL_TOGETHER([--id=@n create CT_Zone external_ids:"test"="123"],
+                          [--id=@m create Datapath datapath_version=0 ct_zones:"10"=@n],
+                          [set Open_vSwitch . datapaths:"netdev"=@m])],
+  [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:10, Timeout Policies: system default
+])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-dp-cap system])], [0], [recirc=true
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -848,6 +1020,9 @@ targets             : ["1.2.3.4:567"]
 AT_CHECK([RUN_OVS_VSCTL([list interx x])],
   [1], [], [ovs-vsctl: unknown table "interx"
 ])
+AT_CHECK([RUN_OVS_VSCTL([list c x])],
+  [1], [], [ovs-vsctl: "c" matches multiple table names: CT_Timeout_Policy, CT_Zone, Controller
+])
 AT_CHECK([RUN_OVS_VSCTL([list bridge x])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ])
@@ -855,7 +1030,7 @@ AT_CHECK([RUN_OVS_VSCTL([get bridge x datapath_id])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 d])],
-  [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
+  [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d": datapath_id, datapath_type, datapath_version
 ])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 x])],
   [1], [], [ovs-vsctl: Bridge does not contain a column whose name matches "x"
@@ -873,7 +1048,7 @@ AT_CHECK([RUN_OVS_VSCTL([set controller x connection_mode=standalone])],
   [1], [], [ovs-vsctl: no row "x" in table Controller
 ])
 AT_CHECK([RUN_OVS_VSCTL([wait-until bridge br0 datapath_id:y,z])],
-  [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", or "{>=}" followed by a value.
+  [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", "{>=}", "{in}", or "{not-in}" followed by a value.
 ])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 datapath_id::])],
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
@@ -890,10 +1065,10 @@ AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=-1])],
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=4096])],
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])],
+AT_CHECK([RUN_OVS_VSCTL([set controller br1 'connection-mode=xyz'])],
   [1], [], [[ovs-vsctl: constraint violation: xyz is not one of the allowed values ([in-band, out-of-band])
 ]])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])],
+AT_CHECK([RUN_OVS_VSCTL([set controller br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ])
 AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])],
@@ -929,6 +1104,28 @@ AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 flood-vlans true])],
 AT_CHECK([RUN_OVS_VSCTL([clear bridge br1 name])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
 ])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdevxx zone=1 icmp_first=1 icmp_reply=2])],
+  [1], [], [ovs-vsctl: datapath netdevxx does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])])
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])],
+  [1], [], [ovs-vsctl: zone id 2 already exists
+])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=11])],
+  [1], [], [ovs-vsctl: zone id 11 does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+
+AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list-dp-cap nosystem])],
+  [1], [], [ovs-vsctl: datapath "nosystem" record not found
+])
+
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1001,10 +1198,16 @@ VSCTL_CHECK_FIND([flood_vlans{!=}3], [br0 br1 br2 br3 br4 br5 br6 br7])
 
 VSCTL_CHECK_FIND([flood_vlans{<}[[]]], [])
 VSCTL_CHECK_FIND([flood_vlans{<=}[[]]], [br0])
+VSCTL_CHECK_FIND([flood_vlans{in}[[]]], [br0])
+VSCTL_CHECK_FIND([flood_vlans{not-in}[[]]], [br0 br1 br2 br3 br4 br5 br6 br7])
 VSCTL_CHECK_FIND([flood_vlans{<}0], [br0])
 VSCTL_CHECK_FIND([flood_vlans{<=}0], [br0 br1])
+VSCTL_CHECK_FIND([flood_vlans{in}0], [br0 br1])
+VSCTL_CHECK_FIND([flood_vlans{not-in}0], [br0 br2 br4 br6])
 VSCTL_CHECK_FIND([flood_vlans{<}1,2], [br0 br2 br4])
 VSCTL_CHECK_FIND([flood_vlans{<=}1,2], [br0 br2 br4 br6])
+VSCTL_CHECK_FIND([flood_vlans{in}1,2], [br0 br2 br4 br6])
+VSCTL_CHECK_FIND([flood_vlans{not-in}1,2], [br0 br1])
 
 VSCTL_CHECK_FIND([flood_vlans{>}[[]]], [br1 br2 br3 br4 br5 br6 br7])
 VSCTL_CHECK_FIND([flood_vlans{>=}[[]]], [br0 br1 br2 br3 br4 br5 br6 br7])
@@ -1063,6 +1266,20 @@ VSCTL_CHECK_FIND([other-config:x{>}x], [])
 VSCTL_CHECK_FIND([other-config:x{>}""], [])
 VSCTL_CHECK_FIND([other-config:x{>}y], [])
 VSCTL_CHECK_FIND([other-config:x{>}z], [])
+
+VSCTL_CHECK_FIND([other-config:x{in}[[]]], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{in}x], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{in}""], [br0 br1 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{in}y], [br0 br2 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{in}z], [br0 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{in}x,y,z], [br0 br2 br3 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([other-config:x{not-in}[[]]], [br0 br1 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{not-in}x], [br0 br1 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{not-in}""], [br0 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{not-in}y], [br0 br1 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{not-in}z], [br0 br1 br2 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{not-in}x,y,z], [br0 br1 br4 br5 br6 br7])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1267,6 +1484,11 @@ AT_CHECK([RUN_OVS_VSCTL(
 qos                 : []
 ]])
 AT_CHECK([RUN_OVS_VSCTL(
+   [ destroy Qos])], [0],[], [stderr])
+AT_CHECK([sed "s/^.*|WARN|//" < stderr], [0],
+[[either --all or records argument should be specified
+]])
+AT_CHECK([RUN_OVS_VSCTL(
    [--all destroy Qos])])
 AT_CHECK([RUN_OVS_VSCTL(
    [-- list Qos])])
@@ -1440,5 +1662,28 @@ AT_CHECK([grep "server name" ovsdb-server.log], [0],
          [connection indicated server name localhost
 ])
 
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([set ingress policing test])
+
+AT_SETUP([set ingress_policing_rate and ingress_policing_burst])
+AT_KEYWORDS([ingress_policing])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [add-br a],
+   [add-port a a1],
+   [set interface a1 ingress_policing_rate=100],
+   [set interface a1 ingress_policing_burst=10],
+   [--columns=ingress_policing_burst,ingress_policing_rate list interface a1])],
+   [0],
+   [
+
+
+
+ingress_policing_burst: 10
+ingress_policing_rate: 100
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP

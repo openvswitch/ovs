@@ -102,7 +102,7 @@ Q: How do I configure ingress policing?
     A: A policing policy can be configured on an interface to drop packets that
     arrive at a higher rate than the configured value.  For example, the
     following commands will rate-limit traffic that vif1.0 may generate to
-    10Mbps:
+    10Mbps::
 
         $ ovs-vsctl set interface vif1.0 ingress_policing_rate=10000
         $ ovs-vsctl set interface vif1.0 ingress_policing_burst=8000

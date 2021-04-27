@@ -191,10 +191,13 @@ usage(void *userdata OVS_UNUSED)
            "  show DP...               show basic info on each DP\n"
            "  dump-flows [DP]          display flows in DP\n"
            "  add-flow [DP] FLOW ACTIONS add FLOW with ACTIONS to DP\n"
+           "  add-flows [DP] FILE        add flows from FILE\n"
            "  mod-flow [DP] FLOW ACTIONS change FLOW actions to ACTIONS in DP\n"
+           "  mod-flows [DP] FILE        change flows from FILE\n"
            "  get-flow [DP] ufid:UFID    fetch flow corresponding to UFID\n"
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
-           "  del-flows [DP]             delete all flows from DP\n"
+           "  del-flows [DP] [FILE]      " \
+               "delete all or specified flows from DP\n"
            "  dump-conntrack [DP] [zone=ZONE]  " \
                "display conntrack entries for ZONE\n"
            "  flush-conntrack [DP] [zone=ZONE] [ct-tuple]" \
@@ -205,8 +208,9 @@ usage(void *userdata OVS_UNUSED)
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"
-           "For COMMAND dump-flows, add-flow, mod-flow, del-flow and\n"
-           "del-flows, DP is optional if there is only one datapath.\n",
+           "For COMMAND dump-flows, add-flow, add-flows, mod-flow,\n"
+           "mod-flows, del-flow and del-flows, DP is optional if there is\n"
+           "only one datapath.\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOptions for show and mod-flow:\n"

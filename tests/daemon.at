@@ -97,7 +97,7 @@ check_process_name $child ovsdb-server
 
 # Avoid a race between pidfile creation and notifying the parent,
 # which can easily trigger if ovsdb-server is slow (e.g. due to valgrind).
-OVS_WAIT_UNTIL([ovs-appctl --timeout=10 -t ovsdb-server version])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new child process to get spawned.
@@ -218,11 +218,11 @@ OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
 OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep RUNNING > /dev/null 2>&1])
 AT_CHECK([kill -0 `cat ovsdb-server.pid`], [0], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs], [0],
-[Open_vSwitch
+[_Server
 ])
 AT_CHECK([sc stop ovsdb-server], [0], [ignore])
 OVS_WAIT_UNTIL([test ! -s ovsdb-server.pid])
-AT_CHECK([sc query ovsdb-server | grep STATE | grep STOPPED], [0], [ignore])
+OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep STOPPED > /dev/null 2>&1])
 AT_CHECK([sc delete ovsdb-server], [0], [[[SC]] DeleteService SUCCESS
 ])
 AT_CLEANUP

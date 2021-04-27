@@ -967,7 +967,10 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	bool use_cache = (dst_cache && ip_tunnel_dst_cache_usable(skb, info));
 	struct dst_entry *ndst;
 	struct flowi6 fl6;
+#if !defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) || \
+    !defined(HAVE_IPV6_DST_LOOKUP_FLOW)
 	int err;
+#endif
 
 	if (!sock6)
 		return ERR_PTR(-EIO);
@@ -990,20 +993,35 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	fl6.fl6_dport = dport;
 	fl6.fl6_sport = sport;
 
-#ifdef HAVE_IPV6_DST_LOOKUP_NET
-	err = ipv6_stub->ipv6_dst_lookup(vxlan->net,
-					 sock6->sock->sk,
-					 &ndst, &fl6);
+#if defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+#ifdef HAVE_IPV6_DST_LOOKUP_FLOW_NET
+	ndst = ipv6_stub->ipv6_dst_lookup_flow(vxlan->net, sock6->sock->sk,
+					       &fl6, NULL);
 #else
-#ifdef HAVE_IPV6_STUB
+	ndst = ipv6_stub->ipv6_dst_lookup_flow(sock6->sock->sk, &fl6, NULL);
+#endif
+	if (unlikely(IS_ERR(ndst))) {
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW_NET)
+	err = ipv6_stub->ipv6_dst_lookup_flow(vxlan->net, sock6->sock->sk,
+					      &ndst, &fl6);
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+	err = ipv6_stub->ipv6_dst_lookup_flow(sock6->sock->sk, &ndst, &fl6);
+#elif defined(HAVE_IPV6_DST_LOOKUP_NET)
+	err = ipv6_stub->ipv6_dst_lookup(vxlan->net, sock6->sock->sk,
+					 &ndst, &fl6);
+#elif defined(HAVE_IPV6_STUB)
 	err = ipv6_stub->ipv6_dst_lookup(vxlan->vn6_sock->sock->sk,
 					 &ndst, &fl6);
 #else
 	err = ip6_dst_lookup(vxlan->vn6_sock->sock->sk, &ndst, &fl6);
 #endif
-#endif
+#if defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+		return ERR_PTR(-ENETUNREACH);
+	}
+#else
 	if (err < 0)
 		return ERR_PTR(err);
+#endif
 
 	*saddr = fl6.saddr;
 	if (use_cache)
@@ -1680,10 +1698,10 @@ static void vxlan_raw_setup(struct net_device *dev)
 
 static const struct nla_policy vxlan_policy[IFLA_VXLAN_MAX + 1] = {
 	[IFLA_VXLAN_ID]		= { .type = NLA_U32 },
-	[IFLA_VXLAN_GROUP]	= { .len = FIELD_SIZEOF(struct iphdr, daddr) },
+	[IFLA_VXLAN_GROUP]	= { .len = sizeof_field(struct iphdr, daddr) },
 	[IFLA_VXLAN_GROUP6]	= { .len = sizeof(struct in6_addr) },
 	[IFLA_VXLAN_LINK]	= { .type = NLA_U32 },
-	[IFLA_VXLAN_LOCAL]	= { .len = FIELD_SIZEOF(struct iphdr, saddr) },
+	[IFLA_VXLAN_LOCAL]	= { .len = sizeof_field(struct iphdr, saddr) },
 	[IFLA_VXLAN_LOCAL6]	= { .len = sizeof(struct in6_addr) },
 	[IFLA_VXLAN_TOS]	= { .type = NLA_U8 },
 	[IFLA_VXLAN_TTL]	= { .type = NLA_U8 },
@@ -1708,7 +1726,7 @@ static const struct nla_policy vxlan_policy[IFLA_VXLAN_MAX + 1] = {
 	[IFLA_VXLAN_REMCSUM_NOPARTIAL]	= { .type = NLA_FLAG },
 };
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int vxlan_validate(struct nlattr *tb[], struct nlattr *data[],
 			  struct netlink_ext_ack *extack)
 #else

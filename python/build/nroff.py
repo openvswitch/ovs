@@ -290,6 +290,11 @@ fillval = .2
 \\}"""
 
 
+def flatten_header(s):
+    s = s.strip()
+    return re.sub(r'\s+', ' ', s)
+
+
 def block_xml_to_nroff(nodes, para='.PP'):
     HEADER_TAGS = ('h1', 'h2', 'h3', 'h4')
     s = ''
@@ -373,7 +378,9 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 to_upper = node.tagName == 'h1'
                 s += ".%s \"" % nroffTag
                 for child_node in node.childNodes:
-                    s += inline_xml_to_nroff(child_node, font, to_upper)
+                    s += flatten_header(
+                        inline_xml_to_nroff(child_node, font, to_upper)
+                    )
                 s += "\"\n"
             elif node.tagName == 'pre':
                 fixed = node.getAttribute('fixed')

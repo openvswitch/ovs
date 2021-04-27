@@ -47,11 +47,11 @@ While OVSDB is general-purpose and not particularly specialized for use with
 Open vSwitch, Open vSwitch does use it for multiple purposes.  The leading use
 of OVSDB is for configuring and monitoring ``ovs-vswitchd(8)``, the Open
 vSwitch switch daemon, using the schema documented in
-``ovs-vswitchd.conf.db(5)``.  The Open Virtual Network (OVN) sub-project of OVS
-uses two OVSDB schemas, documented in ``ovn-nb(5)`` and ``ovn-sb(5)``.
-Finally, Open vSwitch includes the "VTEP" schema, documented in
-``vtep(5)`` that many third-party hardware switches support for
-configuring VXLAN, although OVS itself does not directly use this schema.
+``ovs-vswitchd.conf.db(5)``.  The Open Virtual Network (OVN) project uses two
+OVSDB schemas, documented as part of that project.  Finally, Open vSwitch
+includes the "VTEP" schema, documented in ``vtep(5)`` that many third-party
+hardware switches support for configuring VXLAN, although OVS itself does not
+directly use this schema.
 
 The OVSDB protocol specification allows independent, interoperable
 implementations of OVSDB to be developed.  Open vSwitch includes an OVSDB
@@ -65,9 +65,8 @@ otherwise be unclear from the context.
 
 In addition to these generic OVSDB server and client tools, Open vSwitch
 includes tools for working with databases that have specific schemas:
-``ovs-vsctl`` works with the ``ovs-vswitchd`` configuration database,
-``vtep-ctl`` works with the VTEP database, ``ovn-nbctl`` works with
-the OVN Northbound database, and so on.
+``ovs-vsctl`` works with the ``ovs-vswitchd`` configuration database and
+``vtep-ctl`` works with the VTEP database.
 
 RFC 7047 specifies the OVSDB protocol but it does not specify an on-disk
 storage format.  Open vSwitch includes ``ovsdb-tool(1)`` for working with its
@@ -183,8 +182,8 @@ can switch the backup server to an active role with the ``ovs-appctl`` command
 access to the now-active server.  Of course, administrators are slow to respond
 compared to software, so in practice external management software detects the
 active server's failure and changes the backup server's role.  For example, the
-"Integration Guide for Centralized Control" in the Open vSwitch documentation
-describes how to use Pacemaker for this purpose in OVN.
+"Integration Guide for Centralized Control" in the OVN documentation describes
+how to use Pacemaker for this purpose in OVN.
 
 Suppose an active server fails and its backup is promoted to active.  If the
 failed server is revived, it must be started as a backup server.  Otherwise, if
@@ -205,6 +204,14 @@ split-brain.
 
 Open vSwitch 2.6 introduced support for the active-backup service model.
 
+.. important::
+
+   There was a change of a database file format in version 2.15.
+   To upgrade/downgrade the ``ovsdb-server`` processes across this version
+   follow the instructions described under
+   `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
+   `Downgrading from version 2.15 and later to 2.14 and earlier`_.
+
 Clustered Database Service Model
 --------------------------------
 
@@ -222,11 +229,10 @@ To set up a clustered database, first initialize it on a single node by running
 arguments, the ``create-cluster`` command can create an empty database or copy
 a standalone database's contents into the new database.
 
-To configure a client, such as ``ovn-controller`` or ``ovn-sbctl``, to use a
-clustered database, first configure all of the servers to listen on a
-connection method that the client can reach, then point the client to all of
-the servers' connection methods, comma-separated.  See `Connection Methods`_,
-below, for more detail.
+To configure a client to use a clustered database, first configure all of the
+servers to listen on a connection method that the client can reach, then point
+the client to all of the servers' connection methods, comma-separated.  See
+`Connection Methods`_, below, for more detail.
 
 Open vSwitch 2.9 introduced support for the clustered service model.
 
@@ -272,10 +278,67 @@ vSwitch to another, upgrading them one at a time will keep the cluster healthy
 during the upgrade process.  (This is different from upgrading a database
 schema, which is covered later under `Upgrading or Downgrading a Database`_.)
 
+.. important::
+
+   There was a change of a database file format in version 2.15.
+   To upgrade/downgrade the ``ovsdb-server`` processes across this version
+   follow the instructions described under
+   `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
+   `Downgrading from version 2.15 and later to 2.14 and earlier`_.
+
 Clustered OVSDB does not support the OVSDB "ephemeral columns" feature.
 ``ovsdb-tool`` and ``ovsdb-client`` change ephemeral columns into persistent
 ones when they work with schemas for clustered databases.  Future versions of
 OVSDB might add support for this feature.
+
+Upgrading from version 2.14 and earlier to 2.15 and later
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is a change of a database file format in version 2.15 that doesn't allow
+older versions of ``ovsdb-server`` to read the database file modified by the
+``ovsdb-server`` version 2.15 or later.  This also affects runtime
+communications between servers in **active-backup** and **cluster** service
+models. To upgrade the ``ovsdb-server`` processes from one version of Open
+vSwitch (2.14 or earlier) to another (2.15 or higher) instructions below should
+be followed. (This is different from upgrading a database schema, which is
+covered later under `Upgrading or Downgrading a Database`_.)
+
+In case of **standalone** service model no special handling during upgrade is
+required.
+
+For the **active-backup** service model, administrator needs to update backup
+``ovsdb-server`` first and the active one after that, or shut down both servers
+and upgrade at the same time.
+
+For the **cluster** service model recommended upgrade strategy is following:
+
+1. Upgrade processes one at a time.  Each ``ovsdb-server`` process after
+   upgrade should be started with ``--disable-file-column-diff`` command line
+   argument.
+
+2. When all ``ovsdb-server`` processes upgraded, use ``ovs-appctl`` to invoke
+   ``ovsdb/file/column-diff-enable`` command on each of them or restart all
+   ``ovsdb-server`` processes one at a time without
+   ``--disable-file-column-diff`` command line option.
+
+Downgrading from version 2.15 and later to 2.14 and earlier
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Similar to upgrading covered under `Upgrading from version 2.14 and earlier to
+2.15 and later`_, downgrading from the ``ovsdb-server`` version 2.15 and later
+to 2.14 and earlier requires additional steps. (This is different from
+upgrading a database schema, which is covered later under
+`Upgrading or Downgrading a Database`_.)
+
+For all service models it's required to:
+
+1. Stop all ``ovsdb-server`` processes (single process for **standalone**
+   service model, all involved processes for **active-backup** and **cluster**
+   service models).
+
+2. Compact all database files with ``ovsdb-tool compact`` command.
+
+3. Downgrade and restart ``ovsdb-server`` processes.
 
 Understanding Cluster Consistency
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -328,8 +391,8 @@ following consequences:
 * When a client conducts a mix of read and write transactions across more than
   one server in a cluster, it can see inconsistent results because a read
   transaction might read stale data whose updates have not yet propagated from
-  the leader.  By default, ``ovn-sbctl`` and similar utilities connect to the
-  cluster leader to avoid this issue.
+  the leader.  By default, utilities such as ``ovn-sbctl`` (in OVN) connect to
+  the cluster leader to avoid this issue.
 
   The same might occur for transactions against a single follower except that
   the OVSDB server ensures that the results of a write forwarded to the leader
@@ -424,7 +487,8 @@ punix:<file>
     named <file>.
 
     On Windows, listens on a local named pipe, creating a named pipe
-    <file> to mimic the behavior of a Unix domain socket.
+    <file> to mimic the behavior of a Unix domain socket. The ACLs of the named
+    pipe include LocalSystem, Administrators, and Creator Owner.
 
 All IP-based connection methods accept IPv4 and IPv6 addresses.  To specify an
 IPv6 address, wrap it in square brackets, e.g.  ``ssl:[::1]:6640``.  Passive
@@ -509,8 +573,13 @@ Changing Database Service Model
 -------------------------------
 
 Use ``ovsdb-tool create-cluster`` to create a clustered database from the
-contents of a standalone database.  Use ``ovsdb-tool backup`` to create a
-standalone database from the contents of a clustered database.
+contents of a standalone database.  Use ``ovsdb-client backup`` to create a
+standalone database from the contents of a running clustered database.
+When the cluster is down and cannot be revived, ``ovsdb-client backup`` will
+not work.
+
+Use ``ovsdb-tool cluster-to-standalone`` to convert clustered database to
+standalone database when the cluster is down and cannot be revived.
 
 Upgrading or Downgrading a Database
 -----------------------------------
@@ -644,7 +713,9 @@ Open vSwitch implementations of generic OVSDB functionality:
 ``ovsdb-server(1)``, ``ovsdb-client(1)``, ``ovsdb-tool(1)``.
 
 Tools for working with databases that have specific OVSDB schemas:
-``ovs-vsctl(8)``, ``vtep-ctl(8)``, ``ovn-nbctl(8)``, ``ovn-sbctl(8)``.
+``ovs-vsctl(8)``, ``vtep-ctl(8)``, and (in OVN) ``ovn-nbctl(8)``,
+``ovn-sbctl(8)``.
 
 OVSDB schemas for Open vSwitch and related functionality:
-``ovs-vswitchd.conf.db(5)``, ``vtep(5)``, ``ovn-nb(5)``, ``ovn-sb(5)``.
+``ovs-vswitchd.conf.db(5)``, ``vtep(5)``, and (in OVN) ``ovn-nb(5)``,
+``ovn-sb(5)``.

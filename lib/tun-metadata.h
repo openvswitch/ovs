@@ -47,6 +47,7 @@ void tun_metadata_read(const struct flow_tnl *,
                        const struct mf_field *, union mf_value *);
 void tun_metadata_write(struct flow_tnl *,
                         const struct mf_field *, const union mf_value *);
+void tun_metadata_delete(struct flow_tnl *, const struct mf_field *);
 void tun_metadata_set_match(const struct mf_field *,
                             const union mf_value *value,
                             const union mf_value *mask, struct match *,

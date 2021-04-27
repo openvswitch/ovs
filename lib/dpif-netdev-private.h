@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
- * Copyright (c) 2019 Intel Corperation.
+ * Copyright (c) 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,21 +59,6 @@ uint32_t (*dpcls_subtable_lookup_func)(struct dpcls_subtable *subtable,
                                        uint32_t keys_map,
                                        const struct netdev_flow_key *keys[],
                                        struct dpcls_rule **rules);
-
-/* Prototype for generic lookup func, using generic scalar code path. */
-uint32_t
-dpcls_subtable_lookup_generic(struct dpcls_subtable *subtable,
-                              uint32_t keys_map,
-                              const struct netdev_flow_key *keys[],
-                              struct dpcls_rule **rules);
-
-/* Probe function to select a specialized version of the generic lookup
- * implementation. This provides performance benefit due to compile-time
- * optimizations such as loop-unrolling. These are enabled by the compile-time
- * constants in the specific function implementations.
- */
-dpcls_subtable_lookup_func
-dpcls_subtable_generic_probe(uint32_t u0_bit_count, uint32_t u1_bit_count);
 
 /* A set of rules that all have the same fields wildcarded. */
 struct dpcls_subtable {

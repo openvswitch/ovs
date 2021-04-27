@@ -68,12 +68,12 @@ rtnetlink_parse_link_info(const struct nlattr *nla,
                              ARRAY_SIZE(linkinfo_policy));
 
     if (parsed) {
-        change->master = (linkinfo[IFLA_INFO_KIND]
-                          ? nl_attr_get_string(linkinfo[IFLA_INFO_KIND])
-                          : NULL);
-        change->slave = (linkinfo[IFLA_INFO_SLAVE_KIND]
-                         ? nl_attr_get_string(linkinfo[IFLA_INFO_SLAVE_KIND])
-                         : NULL);
+        change->primary = (linkinfo[IFLA_INFO_KIND]
+                           ? nl_attr_get_string(linkinfo[IFLA_INFO_KIND])
+                           : NULL);
+        change->sub = (linkinfo[IFLA_INFO_SLAVE_KIND]
+                       ? nl_attr_get_string(linkinfo[IFLA_INFO_SLAVE_KIND])
+                       : NULL);
     }
 
     return parsed;
@@ -88,6 +88,8 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
     const struct nlmsghdr *nlmsg = buf->data;
     bool parsed = false;
 
+    change->irrelevant = false;
+
     if (rtnetlink_type_is_rtnlgrp_link(nlmsg->nlmsg_type)) {
         /* Policy for RTNLGRP_LINK messages.
          *
@@ -99,6 +101,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
             [IFLA_MTU]    = { .type = NL_A_U32,    .optional = true },
             [IFLA_ADDRESS] = { .type = NL_A_UNSPEC, .optional = true },
             [IFLA_LINKINFO] = { .type = NL_A_NESTED, .optional = true },
+            [IFLA_WIRELESS] = { .type = NL_A_UNSPEC, .optional = true },
         };
 
         struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -110,6 +113,23 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
             const struct ifinfomsg *ifinfo;
 
             ifinfo = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *ifinfo);
+
+            /* Wireless events can be spammy and cause a
+             * lot of unnecessary churn and CPU load in
+             * ovs-vswitchd. The best way to filter them out
+             * is to rely on the IFLA_WIRELESS and
+             * ifi_change. As per rtnetlink_ifinfo_prep() in
+             * the kernel, the ifi_change = 0. That combined
+             * with the fact wireless events never really
+             * change interface state (as far as core
+             * networking is concerned) they can be ignored
+             * by ovs-vswitchd. It doesn't understand
+             * wireless extensions anyway and has no way of
+             * presenting these bits into ovsdb.
+             */
+            if (attrs[IFLA_WIRELESS] && ifinfo->ifi_change == 0) {
+                change->irrelevant = true;
+            }
 
             change->nlmsg_type     = nlmsg->nlmsg_type;
             change->if_index       = ifinfo->ifi_index;
@@ -134,8 +154,8 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
                 parsed = rtnetlink_parse_link_info(attrs[IFLA_LINKINFO],
                                                    change);
             } else {
-                change->master = NULL;
-                change->slave = NULL;
+                change->primary = NULL;
+                change->sub = NULL;
             }
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(nlmsg->nlmsg_type)) {

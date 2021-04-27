@@ -74,6 +74,13 @@ static inline void rpl_static_key_disable(struct static_key *key)
 #define static_branch_enable(x)		rpl_static_key_enable(&(x)->key)
 #define static_branch_disable(x)	rpl_static_key_disable(&(x)->key)
 
+#ifndef HAVE_DECLARE_STATIC_KEY
+#define DECLARE_STATIC_KEY_TRUE(name)   \
+        extern struct static_key_true name
+#define DECLARE_STATIC_KEY_FALSE(name)  \
+        extern struct static_key_false name
+#endif
+
 #endif /* HAVE_UPSTREAM_STATIC_KEY */
 
 #endif /* _STATIC_KEY_WRAPPER_H */

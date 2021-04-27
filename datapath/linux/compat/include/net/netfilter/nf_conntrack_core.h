@@ -7,11 +7,10 @@
 
 #include <net/netfilter/nf_conntrack_zones.h>
 
-#define nf_ct_tmpl_alloc rpl_nf_ct_tmpl_alloc
 /* Released via destroy_conntrack() */
 static inline struct nf_conn *
-nf_ct_tmpl_alloc(struct net *net, const struct nf_conntrack_zone *zone,
-		 gfp_t flags)
+rpl_nf_ct_tmpl_alloc(struct net *net, const struct nf_conntrack_zone *zone,
+		     gfp_t flags)
 {
 	struct nf_conn *tmpl;
 
@@ -32,8 +31,9 @@ out_free:
 	kfree(tmpl);
 	return NULL;
 }
+#define nf_ct_tmpl_alloc rpl_nf_ct_tmpl_alloc
 
-static void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
+static inline void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
 {
 	nf_ct_ext_destroy(tmpl);
 	nf_ct_ext_free(tmpl);
@@ -112,5 +112,19 @@ rpl_nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
 }
 #define nf_conntrack_in rpl_nf_conntrack_in
 #endif /* HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE */
+
+#ifdef HAVE_NF_CT_INVERT_TUPLEPR
+static inline bool rpl_nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
+	const struct nf_conntrack_tuple *orig)
+{
+	return nf_ct_invert_tuplepr(inverse, orig);
+}
+#else
+static inline bool rpl_nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
+	const struct nf_conntrack_tuple *orig)
+{
+	return nf_ct_invert_tuple(inverse, orig);
+}
+#endif /* HAVE_NF_CT_INVERT_TUPLEPR */
 
 #endif /* _NF_CONNTRACK_CORE_WRAPPER_H */

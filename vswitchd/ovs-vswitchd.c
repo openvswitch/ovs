@@ -228,7 +228,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             break;
 
         case OPT_DISABLE_SYSTEM:
-            dp_blacklist_provider("system");
+            dp_disallow_provider("system");
             break;
 
         case OPT_DISABLE_SYSTEM_ROUTE:

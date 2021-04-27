@@ -220,6 +220,10 @@ cycles_counter_update(struct pmd_perf_stats *s)
     asm volatile("rdtsc" : "=a" (l), "=d" (h));
 
     return s->last_tsc = ((uint64_t) h << 32) | l;
+#elif !defined(_MSC_VER) && defined(__aarch64__)
+    asm volatile("mrs %0, cntvct_el0" : "=r" (s->last_tsc));
+
+    return s->last_tsc;
 #elif defined(__linux__)
     return rdtsc_syscall(s);
 #else
@@ -232,6 +236,8 @@ cycles_counter_get(struct pmd_perf_stats *s)
 {
     return s->last_tsc;
 }
+
+void pmd_perf_estimate_tsc_frequency(void);
 
 /* A nestable timer for measuring execution time in TSC cycles.
  *

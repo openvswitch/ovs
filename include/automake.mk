@@ -11,7 +11,6 @@ include/odp-netlink-macros.h: include/odp-netlink.h \
 EXTRA_DIST += build-aux/extract-odp-netlink-h build-aux/extract-odp-netlink-macros-h
 CLEANFILES += include/odp-netlink.h include/odp-netlink-macros.h
 
-include include/ovn/automake.mk
 include include/openflow/automake.mk
 include include/openvswitch/automake.mk
 include include/sparse/automake.mk

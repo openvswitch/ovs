@@ -41,7 +41,7 @@ llsat_add__(long long int x, long long int y)
 static inline long long int
 llsat_add(long long int x, long long int y)
 {
-#if __GNUC__ >= 5 || __has_builtin(__builtin_saddll_overflow)
+#if (__GNUC__ >= 5 || __has_builtin(__builtin_saddll_overflow)) && !__CHECKER__
     long long int sum;
     return (!__builtin_saddll_overflow(x, y, &sum) ? sum
             : x > 0 ? LLONG_MAX : LLONG_MIN);
@@ -67,7 +67,7 @@ llsat_sub__(long long int x, long long int y)
 static inline long long int
 llsat_sub(long long int x, long long int y)
 {
-#if __GNUC__ >= 5 || __has_builtin(__builtin_ssubll_overflow)
+#if (__GNUC__ >= 5 || __has_builtin(__builtin_ssubll_overflow)) && !__CHECKER__
     long long int difference;
     return (!__builtin_ssubll_overflow(x, y, &difference) ? difference
             : x >= 0 ? LLONG_MAX : LLONG_MIN);
@@ -97,7 +97,7 @@ llsat_mul__(long long int x, long long int y)
 static inline long long int
 llsat_mul(long long int x, long long int y)
 {
-#if __GNUC__ >= 5 || __has_builtin(__builtin_smulll_overflow)
+#if (__GNUC__ >= 5 || __has_builtin(__builtin_smulll_overflow)) && !__CHECKER__
     long long int product;
     return (!__builtin_smulll_overflow(x, y, &product) ? product
             : (x > 0) == (y > 0) ? LLONG_MAX : LLONG_MIN);

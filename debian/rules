@@ -22,7 +22,7 @@ PARALLEL =
 endif
 
 %:
-	dh $@ --with autoreconf,python2 --parallel
+	dh $@ --with autoreconf,python3 --parallel
 
 # use --as-needed only if supported by dh-autoreconf (to simplify backporting)
 DH_AS_NEEDED=$(shell dpkg --compare-versions $$(dpkg --status dh-autoreconf | grep Version | cut -d' ' -f2) ge 6 && echo --as-needed)
@@ -30,7 +30,7 @@ override_dh_autoreconf:
 	dh_autoreconf $(DH_AS_NEEDED)
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS)
+	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS) $(EXTRA_CONFIGURE_OPTS)
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -52,12 +52,6 @@ override_dh_install-arch:
 	dh_install
 	# openvswitch-switch
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
-
-	# ovn-host
-	cp debian/ovn-host.template debian/ovn-host/usr/share/ovn/host/default.template
-
-	# ovn-central
-	cp debian/ovn-central.template debian/ovn-central/usr/share/ovn/central/default.template
 
 override_dh_install-indep:
 	dh_install

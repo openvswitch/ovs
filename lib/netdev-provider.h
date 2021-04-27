@@ -37,6 +37,14 @@ extern "C" {
 struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
+enum netdev_ol_flags {
+    NETDEV_TX_OFFLOAD_IPV4_CKSUM = 1 << 0,
+    NETDEV_TX_OFFLOAD_TCP_CKSUM = 1 << 1,
+    NETDEV_TX_OFFLOAD_UDP_CKSUM = 1 << 2,
+    NETDEV_TX_OFFLOAD_SCTP_CKSUM = 1 << 3,
+    NETDEV_TX_OFFLOAD_TCP_TSO = 1 << 4,
+};
+
 /* A network device (e.g. an Ethernet device).
  *
  * Network device implementations may read these members but should not modify
@@ -51,6 +59,9 @@ struct netdev {
      * opening this device, and therefore got assigned to the "system" class */
     bool auto_classified;
 
+    /* This bitmask of the offloading features enabled by the netdev. */
+    uint64_t ol_flags;
+
     /* If this is 'true', the user explicitly specified an MTU for this
      * netdev.  Otherwise, Open vSwitch is allowed to override it. */
     bool mtu_user_config;
@@ -63,7 +74,7 @@ struct netdev {
      *
      * Minimally, the sequence number is required to change whenever
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
-    uint64_t change_seq;
+    atomic_uint64_t change_seq;
 
     /* A netdev provider might be unable to change some of the device's
      * parameter (n_rxq, mtu) when the device is in use.  In this case
@@ -85,18 +96,24 @@ struct netdev {
 
     /* Functions to control flow offloading. */
     OVSRCU_TYPE(const struct netdev_flow_api *) flow_api;
-    struct netdev_hw_info hw_info;	/* offload-capable netdev info */
+    const char *dpif_type;          /* Type of dpif this netdev belongs to. */
+    struct netdev_hw_info hw_info;  /* Offload-capable netdev info. */
 };
 
 static inline void
 netdev_change_seq_changed(const struct netdev *netdev_)
 {
+    uint64_t change_seq;
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
     seq_change(connectivity_seq_get());
-    netdev->change_seq++;
-    if (!netdev->change_seq) {
-        netdev->change_seq++;
+
+    atomic_read_relaxed(&netdev->change_seq, &change_seq);
+    change_seq++;
+    if (OVS_UNLIKELY(!change_seq)) {
+        change_seq++;
     }
+    atomic_store_explicit(&netdev->change_seq, change_seq,
+                          memory_order_release);
 }
 
 static inline void
@@ -834,6 +851,7 @@ extern const struct netdev_class netdev_tap_class;
 
 #ifdef HAVE_AF_XDP
 extern const struct netdev_class netdev_afxdp_class;
+extern const struct netdev_class netdev_afxdp_nonpmd_class;
 #endif
 #ifdef  __cplusplus
 }

@@ -25,13 +25,14 @@
 DPDK Bridges
 ============
 
-The DPDK datapath requires specially configured bridge(s) in order to utilize
-DPDK-backed :doc:`physical <phy>` and :doc:`virtual <vhost-user>` ports.
+Bridge must be specially configured to utilize DPDK-backed
+:doc:`physical <phy>` and :doc:`virtual <vhost-user>` ports.
 
 Quick Example
 -------------
 
-This example demonstrates how to add a bridge using the DPDK datapath::
+This example demonstrates how to add a bridge that will take advantage
+of DPDK::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
@@ -73,6 +74,12 @@ You can also query the port statistics by explicitly specifying the ``-O
 OpenFlow14`` option::
 
     $ ovs-ofctl -O OpenFlow14 dump-ports br0
+
+There are custom statistics that OVS accumulates itself and these stats has
+``ovs_`` as prefix. These custom stats are shown along with other stats
+using the following command::
+
+    $ ovs-vsctl get Interface <iface> statistics
 
 EMC Insertion Probability
 -------------------------
@@ -130,3 +137,80 @@ currently turned off by default.
 To turn on SMC::
 
     $ ovs-vsctl --no-wait set Open_vSwitch . other_config:smc-enable=true
+
+Datapath Classifier Performance
+-------------------------------
+
+The datapath classifier (dpcls) performs wildcard rule matching, a compute
+intensive process of matching a packet ``miniflow`` to a rule ``miniflow``. The
+code that does this compute work impacts datapath performance, and optimizing
+it can provide higher switching performance.
+
+Modern CPUs provide extensive SIMD instructions which can be used to get higher
+performance. The CPU OVS is being deployed on must be capable of running these
+SIMD instructions in order to take advantage of the performance benefits.
+In OVS v2.14 runtime CPU detection was introduced to enable identifying if
+these CPU ISA additions are available, and to allow the user to enable them.
+
+OVS provides multiple implementations of dpcls. The following command enables
+the user to check what implementations are available in a running instance ::
+
+    $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
+    Available lookup functions (priority : name)
+            0 : autovalidator
+            1 : generic
+            0 : avx512_gather
+
+To set the priority of a lookup function, run the ``prio-set`` command ::
+
+    $ ovs-appctl dpif-netdev/subtable-lookup-prio-set avx512_gather 5
+    Lookup priority change affected 1 dpcls ports and 1 subtables.
+
+The highest priority lookup function is used for classification, and the output
+above indicates that one subtable of one DPCLS port is has changed its lookup
+function due to the command being run. To verify the prioritization, re-run the
+get command, note the updated priority of the ``avx512_gather`` function ::
+
+    $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
+    Available lookup functions (priority : name)
+            0 : autovalidator
+            1 : generic
+            5 : avx512_gather
+
+If two lookup functions have the same priority, the first one in the list is
+chosen, and the 2nd occurance of that priority is not used. Put in logical
+terms, a subtable is chosen if its priority is greater than the previous
+best candidate.
+
+CPU ISA Testing and Validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As multiple versions of DPCLS can co-exist, each with different CPU ISA
+optimizations, it is important to validate that they all give the exact same
+results. To easily test all DPCLS implementations, an ``autovalidator``
+implementation of the DPCLS exists. This implementation runs all other
+available DPCLS implementations, and verifies that the results are identical.
+
+Running the OVS unit tests with the autovalidator enabled ensures all
+implementations provide the same results. Note that the performance of the
+autovalidator is lower than all other implementations, as it tests the scalar
+implementation against itself, and against all other enabled DPCLS
+implementations.
+
+To adjust the DPCLS autovalidator priority, use this command ::
+
+    $ ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 7
+
+Running Unit Tests with Autovalidator
++++++++++++++++++++++++++++++++++++++
+
+To run the OVS unit test suite with the DPCLS autovalidator as the default
+implementation, it is required to recompile OVS. During the recompilation,
+the default priority of the `autovalidator` implementation is set to the
+maximum priority, ensuring every test will be run with every lookup
+implementation ::
+
+    $ ./configure --enable-autovalidator
+
+Compile OVS in debug mode to have `ovs_assert` statements error out if
+there is a mis-match in the DPCLS lookup implementation.

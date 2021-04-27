@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 18.11.2
+- DPDK 20.11
 
 - A `DPDK supported NIC`_
 
@@ -59,8 +59,10 @@ vSwitch with DPDK will require the following:
 
 Detailed system requirements can be found at `DPDK requirements`_.
 
-.. _DPDK supported NIC: http://dpdk.org/doc/nics
-.. _DPDK requirements: http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html
+.. _DPDK supported NIC: https://doc.dpdk.org/guides-20.11/nics/index.html
+.. _DPDK requirements: https://doc.dpdk.org/guides-20.11/linux_gsg/sys_reqs.html
+
+.. _dpdk-install:
 
 Installing
 ----------
@@ -71,44 +73,61 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-18.11.2.tar.xz
-       $ tar xf dpdk-18.11.2.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-18.11.2
+       $ wget https://fast.dpdk.org/rel/dpdk-20.11.tar.xz
+       $ tar xf dpdk-20.11.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-20.11
        $ cd $DPDK_DIR
 
-#. (Optional) Configure DPDK as a shared library
+#. Configure and install DPDK using Meson
 
-   DPDK can be built as either a static library or a shared library.  By
-   default, it is configured for the former. If you wish to use the latter, set
-   ``CONFIG_RTE_BUILD_SHARED_LIB=y`` in ``$DPDK_DIR/config/common_base``.
+   Build and install the DPDK library::
+
+       $ export DPDK_BUILD=$DPDK_DIR/build
+       $ meson build
+       $ ninja -C build
+       $ sudo ninja -C build install
+       $ sudo ldconfig
+
+   Check if libdpdk can be found by pkg-config::
+
+       $ pkg-config --modversion libdpdk
+
+   The above command should return the DPDK version installed. If not found,
+   export the path to the installed DPDK libraries::
+
+       $ export PKG_CONFIG_PATH=/path/to/installed/".pc" file/for/DPDK
+
+   For example, On Fedora 32::
+
+       $ export PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig
+
+   Detailed information can be found at `DPDK documentation`_.
+
+#. (Optional) Configure and export the DPDK shared library location
+
+   Since DPDK is built both as static and shared library by default, no extra
+   configuration is required for the build.
+
+   Exporting the path to library is not necessary if the DPDK libraries are
+   system installed. For libraries installed using a prefix, export the path
+   to this library::
+
+      $ export LD_LIBRARY_PATH=/path/to/installed/DPDK/libraries
 
    .. note::
 
       Minor performance loss is expected when using OVS with a shared DPDK
       library compared to a static DPDK library.
 
-#. Configure and install DPDK
-
-   Build and install the DPDK library::
-
-       $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
-       $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
-       $ make install T=$DPDK_TARGET DESTDIR=install
-
-#. (Optional) Export the DPDK shared library location
-
-   If DPDK was built as a shared library, export the path to this library for
-   use when building OVS::
-
-       $ export LD_LIBRARY_PATH=$DPDK_DIR/x86_64-native-linuxapp-gcc/lib
-
 .. _DPDK sources: http://dpdk.org/rel
+.. _DPDK documentation:
+   https://doc.dpdk.org/guides-20.11/linux_gsg/build_dpdk.html
 
 Install OVS
 ~~~~~~~~~~~
 
-OVS can be installed using different methods. For OVS to use DPDK datapath, it
-has to be configured with DPDK support (``--with-dpdk``).
+OVS can be installed using different methods.  For OVS to use DPDK, it
+has to be configured to build against the DPDK library (``--with-dpdk``).
 
 .. note::
   This section focuses on generic recipe that suits most cases. For
@@ -121,20 +140,30 @@ has to be configured with DPDK support (``--with-dpdk``).
 
 #. Bootstrap, if required, as described in :ref:`general-bootstrapping`
 
-#. Configure the package using the ``--with-dpdk`` flag::
+#. Configure the package using the ``--with-dpdk`` flag:
 
-       $ ./configure --with-dpdk=$DPDK_BUILD
+   If OVS must consume DPDK static libraries
+   (also equivalent to ``--with-dpdk=yes`` )::
 
-   where ``DPDK_BUILD`` is the path to the built DPDK library. This can be
-   skipped if DPDK library is installed in its default location.
+       $ ./configure --with-dpdk=static
 
-   If no path is provided to ``--with-dpdk``, but a pkg-config configuration
-   for libdpdk is available the include paths will be generated via an
-   equivalent ``pkg-config --cflags libdpdk``.
+   If OVS must consume DPDK shared libraries::
+
+       $ ./configure --with-dpdk=shared
 
    .. note::
      While ``--with-dpdk`` is required, you can pass any other configuration
      option described in :ref:`general-configuring`.
+
+   It is strongly recommended to build OVS with at least ``-msse4.2`` and
+   ``-mpopcnt`` optimization flags. If these flags are not enabled, the AVX512
+   optimized DPCLS implementation is not available in the resulting binary.
+   For technical details see the subtable registration code in the
+   ``lib/dpif-netdev-lookup.c`` file.
+
+   An example that enables the AVX512 optimizations is::
+
+       $ ./configure --with-dpdk=static CFLAGS="-Ofast -msse4.2 -mpopcnt"
 
 #. Build and install OVS, as described in :ref:`general-building`
 
@@ -146,6 +175,26 @@ Additional information can be found in :doc:`general`.
   working IOMMU.  Visit the `RHEL README`__ for additional information.
 
 __ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
+
+
+Possible issues when enabling AVX512
+++++++++++++++++++++++++++++++++++++
+
+The enabling of ISA optimized builds requires build-system support.
+Certain versions of the assembler provided by binutils is known to have
+AVX512 assembling issues. The binutils versions affected are 2.30 and 2.31.
+As many distros backport fixes to previous versions of a package, checking
+the version output of ``as -v`` can err on the side of disabling AVX512. To
+remedy this, the OVS build system uses a build-time check to see if ``as``
+will correctly assemble the AVX512 code. The output of a good version when
+running the ``./configure`` step of the build process is as follows::
+
+   $ checking binutils avx512 assembler checks passing... yes
+
+If a bug is detected in the binutils assembler, it would indicate ``no``.
+Build an updated binutils, or request a backport of this binutils
+fix commit ``2069ccaf8dc28ea699bd901fdd35d90613e4402a`` to fix the issue.
+
 
 Setup
 -----
@@ -288,7 +337,7 @@ with either the ovs-vswitchd logs, or by running either of the commands::
   "DPDK 17.11.0"
 
 At this point you can use ovs-vsctl to set up bridges and other Open vSwitch
-features. Seeing as we've configured the DPDK datapath, we will use DPDK-type
+features. Seeing as we've configured DPDK support, we will use DPDK-type
 ports. For example, to create a userspace bridge named ``br0`` and add two
 ``dpdk`` ports to it, run::
 
@@ -673,7 +722,7 @@ Limitations
   release notes`_.
 
 .. _DPDK release notes:
-   https://doc.dpdk.org/guides/rel_notes/release_18_11.html
+   https://doc.dpdk.org/guides-20.11/rel_notes/release_20_11.html
 
 - Upper bound MTU: DPDK device drivers differ in how the L2 frame for a
   given MTU value is calculated e.g. i40e driver includes 2 x vlan headers in
@@ -686,6 +735,15 @@ Limitations
   ixgbe devices upper bound MTU is reduced from 9710 to 9702. This work
   around is temporary and is expected to be removed once a method is provided
   by DPDK to query the upper bound MTU value for a given device.
+
+- Flow Control: When using i40e devices (Intel(R) 700 Series) it is recommended
+  to set Link State Change detection to interrupt mode. Otherwise it has been
+  observed that using the default polling mode, flow control changes may not be
+  applied, and flow control states will not be reflected correctly.
+  The issue is under investigation, this is a temporary work around.
+
+  For information about setting Link State Change detection, refer to
+  :ref:`lsc-detection`.
 
 Reporting Bugs
 --------------

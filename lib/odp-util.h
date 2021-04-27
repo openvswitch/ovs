@@ -147,7 +147,7 @@ void odp_portno_name_format(const struct hmap *portno_names,
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
@@ -203,7 +203,11 @@ int odp_flow_from_string(const char *s, const struct simap *port_names,
                                                                              \
     /* Conntrack original direction tuple matching * supported. */           \
     ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")                  \
-    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")        \
+                                                                             \
+    /* If true, it means that the datapath supports the IPv6 Neigh           \
+     * Discovery Extension bits. */                                          \
+    ODP_SUPPORT_FIELD(bool, nd_ext, "IPv6 ND Extension")
 
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
@@ -239,7 +243,7 @@ struct odp_flow_key_parms {
 void odp_flow_key_from_flow(const struct odp_flow_key_parms *, struct ofpbuf *);
 void odp_flow_key_from_mask(const struct odp_flow_key_parms *, struct ofpbuf *);
 
-uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
+void odp_flow_key_hash(const void *key, size_t key_len, ovs_u128 *hash);
 
 /* Estimated space needed for metadata. */
 enum { ODP_KEY_METADATA_SIZE = 9 * 8 };
@@ -352,11 +356,12 @@ struct user_action_cookie {
 };
 BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 48);
 
-size_t odp_put_userspace_action(uint32_t pid,
-                                const void *userdata, size_t userdata_size,
-                                odp_port_t tunnel_out_port,
-                                bool include_actions,
-                                struct ofpbuf *odp_actions);
+int odp_put_userspace_action(uint32_t pid,
+                             const void *userdata, size_t userdata_size,
+                             odp_port_t tunnel_out_port,
+                             bool include_actions,
+                             struct ofpbuf *odp_actions,
+                             size_t *odp_actions_ofs);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions,
                            const char *tnl_type);

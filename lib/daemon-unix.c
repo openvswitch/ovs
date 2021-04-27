@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include "backtrace.h"
 #include "daemon.h"
 #include "daemon-private.h"
 #include <errno.h>
@@ -75,11 +76,11 @@ static bool overwrite_pidfile;
 static bool chdir_ = true;
 
 /* File descriptor used by daemonize_start() and daemonize_complete(). */
-static int daemonize_fd = -1;
+int daemonize_fd = -1;
 
 /* --monitor: Should a supervisory process monitor the daemon and restart it if
  * it dies due to an error signal? */
-static bool monitor;
+bool monitor;
 
 /* --user: Only root can use this option. Switch to new uid:gid after
  * initially running as root.  */
@@ -291,8 +292,7 @@ fork_and_wait_for_startup(int *fdp, pid_t *child_pid)
                 OVS_NOT_REACHED();
             }
         }
-        close(fds[0]);
-        *fdp = -1;
+        *fdp = fds[0];
     } else if (!pid) {
         /* Running in child process. */
         close(fds[0]);
@@ -313,8 +313,6 @@ fork_notify_startup(int fd)
         if (error) {
             VLOG_FATAL("pipe write failed (%s)", ovs_strerror(error));
         }
-
-        close(fd);
     }
 }
 
@@ -393,6 +391,8 @@ monitor_daemon(pid_t daemon_pid)
                     }
                 }
 
+                log_received_backtrace(daemonize_fd);
+
                 /* Throttle restarts to no more than once every 10 seconds. */
                 if (time(NULL) < last_restart + 10) {
                     VLOG_WARN("%s, waiting until 10 seconds since last "
@@ -434,8 +434,8 @@ monitor_daemon(pid_t daemon_pid)
 /* If daemonization is configured, then starts daemonization, by forking and
  * returning in the child process.  The parent process hangs around until the
  * child lets it know either that it completed startup successfully (by calling
- * daemon_complete()) or that it failed to start up (by exiting with a nonzero
- * exit code). */
+ * daemonize_complete()) or that it failed to start up (by exiting with a
+ * nonzero exit code). */
 void
 daemonize_start(bool access_datapath)
 {
@@ -508,7 +508,6 @@ daemonize_complete(void)
         detached = true;
 
         fork_notify_startup(daemonize_fd);
-        daemonize_fd = -1;
         daemonize_post_detach();
     }
 }

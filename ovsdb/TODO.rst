@@ -27,11 +27,7 @@ OVSDB Clustering To-do List
 
 * Ephemeral columns.
 
-* Unit test snapshotting.
-
 * Locks.
-
-* Investigate 100% CPU for long-running triggers
 
 * Tons of unit tests.
 
@@ -46,10 +42,6 @@ OVSDB Clustering To-do List
 * Documentation:
 
   * ACID (and CAP?) explanation.
-
-  * Upgrading OVN to a clustered database
-
-  * Installing OVN with a clustered database
 
   * Overall diagram explaining the cluster and ovsdb protocol pieces
 

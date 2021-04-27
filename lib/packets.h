@@ -35,6 +35,7 @@
 #include "timeval.h"
 
 struct dp_packet;
+struct conn;
 struct ds;
 
 /* Purely internal to OVS userspace. These flags should never be exposed to
@@ -49,6 +50,12 @@ static inline bool
 flow_tnl_dst_is_set(const struct flow_tnl *tnl)
 {
     return tnl->ip_dst || ipv6_addr_is_set(&tnl->ipv6_dst);
+}
+
+static inline bool
+flow_tnl_src_is_set(const struct flow_tnl *tnl)
+{
+    return tnl->ip_src || ipv6_addr_is_set(&tnl->ipv6_src);
 }
 
 struct in6_addr flow_tnl_dst(const struct flow_tnl *tnl);
@@ -108,6 +115,9 @@ PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
     uint32_t ct_mark;           /* Connection mark. */
     ovs_u128 ct_label;          /* Connection label. */
     union flow_in_port in_port; /* Input port. */
+    struct conn *conn;          /* Cached conntrack connection. */
+    bool reply;                 /* True if reply direction. */
+    bool icmp_related;          /* True if ICMP related. */
 );
 
 PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
@@ -140,6 +150,12 @@ pkt_metadata_init_tnl(struct pkt_metadata *md)
 }
 
 static inline void
+pkt_metadata_init_conn(struct pkt_metadata *md)
+{
+    md->conn = NULL;
+}
+
+static inline void
 pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 {
     /* This is called for every packet in userspace datapath and affects
@@ -157,6 +173,7 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
     md->tunnel.ip_dst = 0;
     md->tunnel.ipv6_dst = in6addr_any;
     md->in_port.odp_port = port;
+    md->conn = NULL;
 }
 
 /* This function prefetches the cachelines touched by pkt_metadata_init()
@@ -264,12 +281,7 @@ static inline bool eth_addr_equal_except(const struct eth_addr a,
              || ((a.be16[2] ^ b.be16[2]) & mask.be16[2]));
 }
 
-static inline uint64_t eth_addr_to_uint64(const struct eth_addr ea)
-{
-    return (((uint64_t) ntohs(ea.be16[0]) << 32)
-            | ((uint64_t) ntohs(ea.be16[1]) << 16)
-            | ntohs(ea.be16[2]));
-}
+uint64_t eth_addr_to_uint64(const struct eth_addr ea);
 
 static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
                                                uint16_t vlan)
@@ -277,12 +289,7 @@ static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
     return (((uint64_t)vlan << 48) | eth_addr_to_uint64(ea));
 }
 
-static inline void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
-{
-    ea->be16[0] = htons(x >> 32);
-    ea->be16[1] = htons((x & 0xFFFF0000) >> 16);
-    ea->be16[2] = htons(x & 0xFFFF);
-}
+void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea);
 
 static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
 {
@@ -295,11 +302,7 @@ static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
     return dst;
 }
 
-static inline void eth_addr_mark_random(struct eth_addr *ea)
-{
-    ea->ea[0] &= ~1;                /* Unicast. */
-    ea->ea[0] |= 2;                 /* Private. */
-}
+void eth_addr_mark_random(struct eth_addr *ea);
 
 static inline void eth_addr_random(struct eth_addr *ea)
 {
@@ -769,6 +772,9 @@ struct icmp_header {
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
+/* ICMPV4 */
+#define ICMP_ERROR_DATA_L4_LEN 8
+
 #define IGMP_HEADER_LEN 8
 struct igmp_header {
     uint8_t igmp_type;
@@ -949,7 +955,7 @@ union ovs_16aligned_in6_addr {
     ovs_16aligned_be32 be32[4];
 };
 
-/* Like struct in6_hdr, but whereas that struct requires 32-bit alignment, this
+/* Like struct ip6_hdr, but whereas that struct requires 32-bit alignment, this
  * one only requires 16-bit alignment. */
 struct ovs_16aligned_ip6_hdr {
     union {
@@ -982,12 +988,16 @@ struct icmp6_header {
 };
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 
-#define ICMP6_ERROR_HEADER_LEN 8
-struct icmp6_error_header {
+#define ICMP6_DATA_HEADER_LEN 8
+struct icmp6_data_header {
     struct icmp6_header icmp6_base;
-    ovs_be32 icmp6_error_ext;
+    union {
+        ovs_16aligned_be32 be32[1];
+        ovs_be16           be16[2];
+        uint8_t            u8[4];
+    } icmp6_data;
 };
-BUILD_ASSERT_DECL(ICMP6_ERROR_HEADER_LEN == sizeof(struct icmp6_error_header));
+BUILD_ASSERT_DECL(ICMP6_DATA_HEADER_LEN == sizeof(struct icmp6_data_header));
 
 uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
 ovs_be16 packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
@@ -1187,80 +1197,19 @@ in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
     }
 }
 
-static inline void
-in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) addr;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[0] = htons(0xff02);
-    taddr->be16[5] = htons(0x1);
-    taddr->be16[6] = htons(0xff00);
-    memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
-}
+void in6_addr_solicited_node(struct in6_addr *addr,
+                             const struct in6_addr *ip6);
 
-/*
- * Generates ipv6 EUI64 address from the given eth addr
- * and prefix and stores it in 'lla'
- */
-static inline void
-in6_generate_eui64(struct eth_addr ea, struct in6_addr *prefix,
-                   struct in6_addr *lla)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) lla;
-    union ovs_16aligned_in6_addr *prefix_taddr =
-        (union ovs_16aligned_in6_addr *) prefix;
-    taddr->be16[0] = prefix_taddr->be16[0];
-    taddr->be16[1] = prefix_taddr->be16[1];
-    taddr->be16[2] = prefix_taddr->be16[2];
-    taddr->be16[3] = prefix_taddr->be16[3];
-    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
-    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
-    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
-    taddr->be16[7] = ea.be16[2];
-}
+void in6_generate_eui64(struct eth_addr ea, const struct in6_addr *prefix,
+                        struct in6_addr *lla);
 
-/*
- * Generates ipv6 link local address from the given eth addr
- * with prefix 'fe80::/64' and stores it in 'lla'
- */
-static inline void
-in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) lla;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[0] = htons(0xfe80);
-    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
-    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
-    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
-    taddr->be16[7] = ea.be16[2];
-}
+void in6_generate_lla(struct eth_addr ea, struct in6_addr *lla);
 
 /* Returns true if 'addr' is a link local address.  Otherwise, false. */
-static inline bool
-in6_is_lla(struct in6_addr *addr)
-{
-#ifdef s6_addr32
-    return addr->s6_addr32[0] == htonl(0xfe800000) && !(addr->s6_addr32[1]);
-#else
-    return addr->s6_addr[0] == 0xfe && addr->s6_addr[1] == 0x80 &&
-         !(addr->s6_addr[2] | addr->s6_addr[3] | addr->s6_addr[4] |
-           addr->s6_addr[5] | addr->s6_addr[6] | addr->s6_addr[7]);
-#endif
-}
+bool in6_is_lla(struct in6_addr *addr);
 
-static inline void
-ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
-{
-    eth->ea[0] = 0x33;
-    eth->ea[1] = 0x33;
-    eth->ea[2] = ip6->s6_addr[12];
-    eth->ea[3] = ip6->s6_addr[13];
-    eth->ea[4] = ip6->s6_addr[14];
-    eth->ea[5] = ip6->s6_addr[15];
-}
+void ipv6_multicast_to_ethernet(struct eth_addr *eth,
+                                const struct in6_addr *ip6);
 
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 {
@@ -1429,6 +1378,74 @@ static inline ovs_be32 get_erspan_ts(enum erspan_ts_gra gra)
     return ts;
 }
 
+/*
+ * GTP-U protocol header and metadata
+ * See:
+ *   User Plane Protocol and Architectural Analysis on 3GPP 5G System
+ *                 draft-hmm-dmm-5g-uplane-analysis-00
+ *
+ * 0                   1                   2                   3
+ * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * | Ver |P|R|E|S|N| Message Type|             Length              |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                Tunnel Endpoint Identifier                     |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |      Sequence Number        |   N-PDU Number  |  Next-Ext-Hdr |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * GTP-U Flags:
+ *   P: Protocol Type (Set to '1')
+ *   R: Reserved Bit (Set to '0')
+ *   E: Extension Header Flag (Set to '1' if extension header exists)
+ *   S: Sequence Number Flag (Set to '1' if sequence number exists)
+ *   N: N-PDU Number Flag (Set to '1' if N-PDU number exists)
+ *
+ * GTP-U Message Type:
+ *   Indicates the type of GTP-U message.
+ *
+ * GTP-U Length:
+ *   Indicates the length in octets of the payload.
+ *
+ * User payload is transmitted in G-PDU packets.
+ */
+
+#define GTPU_VER_MASK   0xe0
+#define GTPU_P_MASK     0x10
+#define GTPU_E_MASK     0x04
+#define GTPU_S_MASK     0x02
+
+/* GTP-U UDP port. */
+#define GTPU_DST_PORT   2152
+
+/* Default GTP-U flags: Ver = 1 and P = 1. */
+#define GTPU_FLAGS_DEFAULT  0x30
+
+/* GTP-U message type for normal user plane PDU. */
+#define GTPU_MSGTYPE_REQ    1   /* Echo Request. */
+#define GTPU_MSGTYPE_REPL   2   /* Echo Reply. */
+#define GTPU_MSGTYPE_GPDU   255 /* User Payload. */
+
+struct gtpu_metadata {
+    uint8_t flags;
+    uint8_t msgtype;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpu_metadata) == 2);
+
+struct gtpuhdr {
+    struct gtpu_metadata md;
+    ovs_be16 len;
+    ovs_16aligned_be32 teid;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpuhdr) == 8);
+
+struct gtpuhdr_opt {
+    ovs_be16 seqno;
+    uint8_t pdu_number;
+    uint8_t next_ext_type;
+};
+BUILD_ASSERT_DECL(sizeof(struct gtpuhdr_opt) == 4);
+
 /* VXLAN protocol header */
 struct vxlanhdr {
     union {
@@ -1587,6 +1604,9 @@ void packet_set_igmp3_query(struct dp_packet *, uint8_t max_resp,
                             uint8_t qqic);
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
+void *compose_ipv6(struct dp_packet *packet, uint8_t proto,
+                   const struct in6_addr *src, const struct in6_addr *dst,
+                   uint8_t key_tc, ovs_be32 key_fl, uint8_t key_hl, int size);
 void compose_arp__(struct dp_packet *);
 void compose_arp(struct dp_packet *, uint16_t arp_op,
                  const struct eth_addr arp_sha,

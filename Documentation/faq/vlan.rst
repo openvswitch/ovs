@@ -77,46 +77,6 @@ Q: What's a VLAN?
 
 Q: VLANs don't work.
 
-    A: Many drivers in Linux kernels before version 3.3 had VLAN-related bugs.
-    If you are having problems with VLANs that you suspect to be driver
-    related, then you have several options:
-
-    - Upgrade to Linux 3.3 or later.
-
-    - Build and install a fixed version of the particular driver that is
-      causing trouble, if one is available.
-
-    - Use a NIC whose driver does not have VLAN problems.
-
-    - Use "VLAN splinters", a feature in Open vSwitch 1.4 upto 2.5 that works
-      around bugs in kernel drivers.  To enable VLAN splinters on interface
-      eth0, use the command::
-
-          $ ovs-vsctl set interface eth0 other-config:enable-vlan-splinters=true
-
-      For VLAN splinters to be effective, Open vSwitch must know which VLANs
-      are in use.  See the "VLAN splinters" section in the Interface table in
-      ovs-vswitchd.conf.db(5) for details on how Open vSwitch infers in-use
-      VLANs.
-
-      VLAN splinters increase memory use and reduce performance, so use them
-      only if needed.
-
-    - Apply the "vlan workaround" patch from the XenServer kernel patch queue,
-      build Open vSwitch against this patched kernel, and then use
-      ovs-vlan-bug-workaround(8) to enable the VLAN workaround for each
-      interface whose driver is buggy.
-
-      (This is a nontrivial exercise, so this option is included only for
-      completeness.)
-
-    It is not always easy to tell whether a Linux kernel driver has buggy VLAN
-    support.  The ovs-vlan-test(8) and ovs-test(8) utilities can help you test.
-    See their manpages for details.  Of the two utilities, ovs-test(8) is newer
-    and more thorough, but ovs-vlan-test(8) may be easier to use.
-
-Q: VLANs still don't work.  I've tested the driver so I know that it's OK.
-
     A: Do you have VLANs enabled on the physical switch that OVS is attached
     to?  Make sure that the port is configured to trunk the VLAN or VLANs that
     you are using with OVS.

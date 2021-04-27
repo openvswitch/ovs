@@ -104,32 +104,36 @@ int make_unix_socket(int style, bool nonblock,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(const struct sockaddr_un *sun, socklen_t sun_len);
 
-/* Universal sendmmsg support.
+/* Universal sendmmsg and recvmmsg support on Linux.
  *
- * Some platforms, such as new enough Linux and FreeBSD, support sendmmsg, but
- * other platforms (or older ones) do not.  We add the following infrastructure
- * to allow all code to use sendmmsg, regardless of platform support:
+ * New enough Linux supports sendmmsg and recvmmsg, but older versions do not.
+ * We add the following infrastructure to allow all code on Linux to use
+ * sendmmsg and recvmmsg, regardless of platform support:
  *
- *   - For platforms that lack sendmmsg entirely, we emulate it.
+ * - For platforms that lack these functions entirely, we emulate them.
  *
- *   - Some platforms have sendmmsg() in the C library but not in the kernel.
- *     For example, this is true if a Linux system has a newer glibc with an
- *     old kernel.  To compensate, even if sendmmsg() appears to be available,
- *     we still wrap it with a handler that uses our emulation if sendmmsg()
- *     returns ENOSYS.
+ * - With newer glibc but an old kernel, sendmmsg() and recvmmsg() fail with
+ *   ENOSYS.  To compensate, even if these functions appear to be available, we
+ *   wrap them with handlers that use our emulation in this case.
  */
+#ifdef __linux__
 #ifndef HAVE_STRUCT_MMSGHDR_MSG_LEN
 struct mmsghdr {
     struct msghdr msg_hdr;
     unsigned int msg_len;
 };
 #endif
+
 #ifndef HAVE_SENDMMSG
 int sendmmsg(int, struct mmsghdr *, unsigned int, unsigned int);
+int recvmmsg(int, struct mmsghdr *, unsigned int, int, struct timespec *);
 #else
 #define sendmmsg wrap_sendmmsg
 int wrap_sendmmsg(int, struct mmsghdr *, unsigned int, unsigned int);
+#define recvmmsg wrap_recvmmsg
+int wrap_recvmmsg(int, struct mmsghdr *, unsigned int, int, struct timespec *);
 #endif
+#endif /* __linux__ */
 
 /* Helpers for calling ioctl() on an AF_INET socket. */
 struct ifreq;

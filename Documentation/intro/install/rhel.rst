@@ -89,12 +89,12 @@ And to install specific dependencies, use yum-builddep tool::
 
 Once that is completed, remove the file ``/tmp/ovs.spec``.
 
-If python-sphinx package is not available in your version of RHEL, you can
+If python3-sphinx package is not available in your version of RHEL, you can
 install it via pip with 'pip install sphinx'.
 
-Open vSwitch requires python 2.7 or newer which is not available in older
+Open vSwitch requires python 3.4 or newer which is not available in older
 distributions. In the case of RHEL 6.x and its derivatives, one option is
-to install python34 and python34-six from `EPEL`_.
+to install python34 from `EPEL`_.
 
 .. _EPEL: https://fedoraproject.org/wiki/EPEL
 
@@ -201,7 +201,7 @@ On RHEL 6, to build the Open vSwitch kernel module run::
 
     $ rpmbuild -bb rhel/kmod-openvswitch-rhel6.spec
 
-You might have to specify a kernel version and/or variants, e.g.:
+You might have to specify a kernel version and/or variants, e.g.::
 
     $ rpmbuild -bb \
         -D "kversion 2.6.32-131.6.1.el6.x86_64" \

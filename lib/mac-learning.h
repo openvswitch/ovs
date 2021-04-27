@@ -95,7 +95,7 @@ struct mac_learning;
 #define MAC_ENTRY_DEFAULT_IDLE_TIME 300
 
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
- * relearning based on a reflection from a bond slave. */
+ * relearning based on a reflection from a bond member. */
 #define MAC_GRAT_ARP_LOCK_TIME 5
 
 /* A MAC learning table entry.

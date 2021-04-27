@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017, 2019 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019-2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,6 +361,9 @@ enum ofp_raw_action_type {
     /* NX1.0+(49): struct nx_action_check_pkt_larger, ... VLMFF */
     NXAST_RAW_CHECK_PKT_LARGER,
 
+    /* NX1.0+(50): struct nx_action_delete_field. VLMFF */
+    NXAST_RAW_DELETE_FIELD,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -500,6 +503,7 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
         return ofpact_next(ofpact);
 
     case OFPACT_CLONE:
@@ -1330,39 +1334,39 @@ check_OUTPUT_REG(const struct ofpact_output_reg *a,
 
 /* Action structure for NXAST_BUNDLE and NXAST_BUNDLE_LOAD.
  *
- * The bundle actions choose a slave from a supplied list of options.
+ * The bundle actions choose a member from a supplied list of options.
  * NXAST_BUNDLE outputs to its selection.  NXAST_BUNDLE_LOAD writes its
  * selection to a register.
  *
- * The list of possible slaves follows the nx_action_bundle structure. The size
- * of each slave is governed by its type as indicated by the 'slave_type'
- * parameter. The list of slaves should be padded at its end with zeros to make
- * the total length of the action a multiple of 8.
+ * The list of possible members follows the nx_action_bundle structure. The
+ * size of each member is governed by its type as indicated by the
+ * 'member_type' parameter. The list of members should be padded at its end
+ * with zeros to make the total length of the action a multiple of 8.
  *
- * Switches infer from the 'slave_type' parameter the size of each slave.  All
- * implementations must support the NXM_OF_IN_PORT 'slave_type' which indicates
- * that the slaves are OpenFlow port numbers with NXM_LENGTH(NXM_OF_IN_PORT) ==
- * 2 byte width.  Switches should reject actions which indicate unknown or
- * unsupported slave types.
+ * Switches infer from the 'member_type' parameter the size of each member.
+ * All implementations must support the NXM_OF_IN_PORT 'member_type' which
+ * indicates that the members are OpenFlow port numbers with
+ * NXM_LENGTH(NXM_OF_IN_PORT) == 2 byte width.  Switches should reject actions
+ * which indicate unknown or unsupported member types.
  *
  * Switches use a strategy dictated by the 'algorithm' parameter to choose a
- * slave.  If the switch does not support the specified 'algorithm' parameter,
+ * member.  If the switch does not support the specified 'algorithm' parameter,
  * it should reject the action.
  *
- * Several algorithms take into account liveness when selecting slaves.  The
- * liveness of a slave is implementation defined (with one exception), but will
- * generally take into account things like its carrier status and the results
- * of any link monitoring protocols which happen to be running on it.  In order
- * to give controllers a place-holder value, the OFPP_NONE port is always
- * considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the output
- * register if no slave is live.
+ * Several algorithms take into account liveness when selecting members.  The
+ * liveness of a member is implementation defined (with one exception), but
+ * will generally take into account things like its carrier status and the
+ * results of any link monitoring protocols which happen to be running on it.
+ * In order to give controllers a place-holder value, the OFPP_NONE port is
+ * always considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the
+ * output register if no member is live.
  *
- * Some slave selection strategies require the use of a hash function, in which
- * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
- * parameter (one of NX_HASH_FIELDS_*) designates which parts of the flow to
- * hash.  Refer to the definition of "enum nx_hash_fields" for details.  The
- * 'basis' parameter is used as a universal hash parameter.  Different values
- * of 'basis' yield different hash results.
+ * Some member selection strategies require the use of a hash function, in
+ * which case the 'fields' and 'basis' parameters should be populated.  The
+ * 'fields' parameter (one of NX_HASH_FIELDS_*) designates which parts of the
+ * flow to hash.  Refer to the definition of "enum nx_hash_fields" for details.
+ * The 'basis' parameter is used as a universal hash parameter.  Different
+ * values of 'basis' yield different hash results.
  *
  * The 'zero' parameter at the end of the action structure is reserved for
  * future use.  Switches are required to reject actions which have nonzero
@@ -1371,24 +1375,24 @@ check_OUTPUT_REG(const struct ofpact_output_reg *a,
  * NXAST_BUNDLE actions should have 'ofs_nbits' and 'dst' zeroed.  Switches
  * should reject actions which have nonzero bytes in either of these fields.
  *
- * NXAST_BUNDLE_LOAD stores the OpenFlow port number of the selected slave in
+ * NXAST_BUNDLE_LOAD stores the OpenFlow port number of the selected member in
  * dst[ofs:ofs+n_bits].  The format and semantics of 'dst' and 'ofs_nbits' are
  * similar to those for the NXAST_REG_LOAD action. */
 struct nx_action_bundle {
     ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length including slaves. */
+    ovs_be16 len;               /* Length including members. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be16 subtype;           /* NXAST_BUNDLE or NXAST_BUNDLE_LOAD. */
 
-    /* Slave choice algorithm to apply to hash value. */
+    /* Member choice algorithm to apply to hash value. */
     ovs_be16 algorithm;         /* One of NX_BD_ALG_*. */
 
     /* What fields to hash and how. */
     ovs_be16 fields;            /* One of NX_HASH_FIELDS_*. */
     ovs_be16 basis;             /* Universal hash parameter. */
 
-    ovs_be32 slave_type;        /* NXM_OF_IN_PORT. */
-    ovs_be16 n_slaves;          /* Number of slaves. */
+    ovs_be32 member_type;       /* NXM_OF_IN_PORT. */
+    ovs_be16 n_members;         /* Number of members. */
 
     ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
     ovs_be32 dst;               /* Destination. */
@@ -1404,29 +1408,29 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
 {
     static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
     struct ofpact_bundle *bundle;
-    uint32_t slave_type;
-    size_t slaves_size, i;
+    uint32_t member_type;
+    size_t members_size, i;
     enum ofperr error;
 
     bundle = ofpact_put_BUNDLE(ofpacts);
 
-    bundle->n_slaves = ntohs(nab->n_slaves);
+    bundle->n_members = ntohs(nab->n_members);
     bundle->basis = ntohs(nab->basis);
     bundle->fields = ntohs(nab->fields);
     bundle->algorithm = ntohs(nab->algorithm);
-    slave_type = ntohl(nab->slave_type);
-    slaves_size = ntohs(nab->len) - sizeof *nab;
+    member_type = ntohl(nab->member_type);
+    members_size = ntohs(nab->len) - sizeof *nab;
 
     error = OFPERR_OFPBAC_BAD_ARGUMENT;
     if (!flow_hash_fields_valid(bundle->fields)) {
         VLOG_WARN_RL(&rll, "unsupported fields %d", (int) bundle->fields);
-    } else if (bundle->n_slaves > BUNDLE_MAX_SLAVES) {
-        VLOG_WARN_RL(&rll, "too many slaves");
+    } else if (bundle->n_members > BUNDLE_MAX_MEMBERS) {
+        VLOG_WARN_RL(&rll, "too many members");
     } else if (bundle->algorithm != NX_BD_ALG_HRW
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rll, "unsupported algorithm %d", (int) bundle->algorithm);
-    } else if (slave_type != mf_nxm_header(MFF_IN_PORT)) {
-        VLOG_WARN_RL(&rll, "unsupported slave type %"PRIu32, slave_type);
+    } else if (member_type != mf_nxm_header(MFF_IN_PORT)) {
+        VLOG_WARN_RL(&rll, "unsupported member type %"PRIu32, member_type);
     } else {
         error = 0;
     }
@@ -1457,15 +1461,15 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         }
     }
 
-    if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
+    if (members_size < bundle->n_members * sizeof(ovs_be16)) {
         VLOG_WARN_RL(&rll, "Nicira action %s only has %"PRIuSIZE" bytes "
-                     "allocated for slaves.  %"PRIuSIZE" bytes are required "
-                     "for %u slaves.",
-                     load ? "bundle_load" : "bundle", slaves_size,
-                     bundle->n_slaves * sizeof(ovs_be16), bundle->n_slaves);
+                     "allocated for members.  %"PRIuSIZE" bytes are "
+                     "required for %u members.",
+                     load ? "bundle_load" : "bundle", members_size,
+                     bundle->n_members * sizeof(ovs_be16), bundle->n_members);
         error = OFPERR_OFPBAC_BAD_LEN;
     } else {
-        for (i = 0; i < bundle->n_slaves; i++) {
+        for (i = 0; i < bundle->n_members; i++) {
             ofp_port_t ofp_port
                 = u16_to_ofp(ntohs(((ovs_be16 *)(nab + 1))[i]));
             ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
@@ -1502,29 +1506,29 @@ encode_BUNDLE(const struct ofpact_bundle *bundle,
               enum ofp_version ofp_version OVS_UNUSED,
               struct ofpbuf *out)
 {
-    int slaves_len = ROUND_UP(2 * bundle->n_slaves, OFP_ACTION_ALIGN);
+    int members_len = ROUND_UP(2 * bundle->n_members, OFP_ACTION_ALIGN);
     struct nx_action_bundle *nab;
-    ovs_be16 *slaves;
+    ovs_be16 *members;
     size_t i;
 
     nab = (bundle->dst.field
            ? put_NXAST_BUNDLE_LOAD(out)
            : put_NXAST_BUNDLE(out));
-    nab->len = htons(ntohs(nab->len) + slaves_len);
+    nab->len = htons(ntohs(nab->len) + members_len);
     nab->algorithm = htons(bundle->algorithm);
     nab->fields = htons(bundle->fields);
     nab->basis = htons(bundle->basis);
-    nab->slave_type = htonl(mf_nxm_header(MFF_IN_PORT));
-    nab->n_slaves = htons(bundle->n_slaves);
+    nab->member_type = htonl(mf_nxm_header(MFF_IN_PORT));
+    nab->n_members = htons(bundle->n_members);
     if (bundle->dst.field) {
         nab->ofs_nbits = nxm_encode_ofs_nbits(bundle->dst.ofs,
                                               bundle->dst.n_bits);
         nab->dst = htonl(nxm_header_from_mff(bundle->dst.field));
     }
 
-    slaves = ofpbuf_put_zeros(out, slaves_len);
-    for (i = 0; i < bundle->n_slaves; i++) {
-        slaves[i] = htons(ofp_to_u16(bundle->slaves[i]));
+    members = ofpbuf_put_zeros(out, members_len);
+    for (i = 0; i < bundle->n_members; i++) {
+        members[i] = htons(ofp_to_u16(bundle->members[i]));
     }
 }
 
@@ -3581,7 +3585,7 @@ check_STACK_POP(const struct ofpact_stack *a,
  */
 struct nx_action_cnt_ids {
     ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length including slaves. */
+    ovs_be16 len;               /* Length including cnt_ids. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be16 subtype;           /* NXAST_DEC_TTL_CNT_IDS. */
 
@@ -4140,6 +4144,87 @@ check_SET_TUNNEL(const struct ofpact_tunnel *a OVS_UNUSED,
     return 0;
 }
 
+/* Delete field action. */
+
+/* Action structure for DELETE_FIELD */
+struct nx_action_delete_field {
+    ovs_be16 type;          /* OFPAT_VENDOR */
+    ovs_be16 len;           /* Length is 24. */
+    ovs_be32 vendor;        /* NX_VENDOR_ID. */
+    ovs_be16 subtype;       /* NXAST_DELETE_FIELD. */
+    /* Followed by:
+     * - OXM/NXM header for field to delete (4 or 8 bytes).
+     * - Enough 0-bytes to pad out the action to 24 bytes. */
+    uint8_t pad[14];
+};
+OFP_ASSERT(sizeof(struct nx_action_delete_field ) == 24);
+
+static enum ofperr
+decode_NXAST_RAW_DELETE_FIELD(const struct nx_action_delete_field *nadf,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              const struct vl_mff_map *vl_mff_map,
+                              uint64_t *tlv_bitmap, struct ofpbuf *out)
+{
+    struct ofpact_delete_field *delete_field;
+    enum ofperr err;
+
+    delete_field = ofpact_put_DELETE_FIELD(out);
+    delete_field->ofpact.raw = NXAST_RAW_DELETE_FIELD;
+
+    struct ofpbuf b = ofpbuf_const_initializer(nadf, ntohs(nadf->len));
+    ofpbuf_pull(&b, OBJECT_OFFSETOF(nadf, pad));
+
+    err = mf_vl_mff_nx_pull_header(&b, vl_mff_map, &delete_field->field,
+                                   NULL, tlv_bitmap);
+    if (err) {
+        return err;
+    }
+
+    return 0;
+}
+
+static void
+encode_DELETE_FIELD(const struct ofpact_delete_field *delete_field,
+                    enum ofp_version ofp_version OVS_UNUSED,
+                    struct ofpbuf *out)
+{
+    struct nx_action_delete_field *nadf = put_NXAST_DELETE_FIELD(out);
+    size_t size = out->size;
+
+    out->size = size - sizeof nadf->pad;
+    nx_put_mff_header(out, delete_field->field, 0, false);
+    out->size = size;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DELETE_FIELD(char *arg, const struct ofpact_parse_params *pp)
+{
+    struct ofpact_delete_field *delete_field;
+
+    delete_field = ofpact_put_DELETE_FIELD(pp->ofpacts);
+    return mf_parse_field(&delete_field->field, arg);
+}
+
+static void
+format_DELETE_FIELD(const struct ofpact_delete_field *odf,
+                          const struct ofpact_format_params *fp)
+{
+    ds_put_format(fp->s, "%sdelete_field:%s", colors.param,
+                  colors.end);
+    ds_put_format(fp->s, "%s", odf->field->name);
+}
+
+static enum ofperr
+check_DELETE_FIELD(const struct ofpact_delete_field *odf,
+                         struct ofpact_check_params *cp OVS_UNUSED)
+{
+    if (odf->field->id < MFF_TUN_METADATA0 ||
+        odf->field->id > MFF_TUN_METADATA63) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    return 0;
+}
+
 /* Set queue action. */
 
 static enum ofperr
@@ -4346,6 +4431,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
 {
     struct ofpact_encap *encap;
     const struct ofp_ed_prop_header *ofp_prop;
+    const size_t encap_ofs = out->size;
     size_t props_len;
     uint16_t n_props = 0;
     int err;
@@ -4373,6 +4459,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
         }
         n_props++;
     }
+    encap = ofpbuf_at_assert(out, encap_ofs, sizeof *encap);
     encap->n_props = n_props;
     out->header = &encap->ofpact;
     ofpact_finish_ENCAP(out, &encap);
@@ -5966,6 +6053,7 @@ parse_CLONE(char *arg, const struct ofpact_parse_params *pp)
     clone = pp->ofpacts->header;
 
     if (ofpbuf_oversized(pp->ofpacts)) {
+        free(error);
         return xasprintf("input too big");
     }
 
@@ -6657,6 +6745,7 @@ parse_CT(char *arg, const struct ofpact_parse_params *pp)
     }
 
     if (ofpbuf_oversized(pp->ofpacts)) {
+        free(error);
         return xasprintf("input too big");
     }
 
@@ -7868,6 +7957,7 @@ action_set_classify(const struct ofpact *a)
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_DEBUG_SLOW:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
         return ACTION_SLOT_INVALID;
 
     default:
@@ -8071,6 +8161,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type,
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -8982,6 +9073,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_DECAP:
     case OFPACT_DEC_NSH_TTL:
     case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
     default:
         return false;
     }

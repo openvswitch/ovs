@@ -13,6 +13,7 @@ strip_timers () {
 
 strip_xout () {
     sed '
+    s/mega_ufid:[-0-9a-f]* //
     s/ufid:[-0-9a-f]* //
     s/used:[0-9]*\.[0-9]*/used:0.0/
     s/actions:.*/actions: <del>/
@@ -23,6 +24,7 @@ strip_xout () {
 
 strip_xout_keep_actions () {
     sed '
+    s/mega_ufid:[-0-9a-f]* //
     s/ufid:[-0-9a-f]* //
     s/used:[0-9]*\.[0-9]*/used:0.0/
     s/packets:[0-9]*/packets:0/
@@ -68,11 +70,13 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 ovs-appctl time/stop
 ovs-appctl time/warp 5000
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:02:00),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)'])
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:01,dst=50:54:00:00:02:00),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
 ])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:06:00),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.6,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)' --len 1024])
+   OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:06:00),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.6,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
 ])
@@ -132,8 +136,8 @@ m4_define([DPIF_NETDEV_MISS_FLOW_INSTALL],
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
    ovs-appctl ofproto/trace 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
-   sleep 1
 
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
@@ -145,8 +149,8 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:
    AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-   sleep 1
 
+   OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
@@ -229,11 +233,12 @@ m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-   sleep 1
 
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
+   ovs-appctl revalidator/wait
    AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
@@ -244,11 +249,12 @@ skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label
    AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-   sleep 1
 
+   OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
+   ovs-appctl revalidator/wait
    AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
@@ -293,60 +299,70 @@ type=drop rate=1 burst_size=2
 ])
 
 ovs-appctl time/warp 5000
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+for i in `seq 1 7`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p7 \
+       'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
+for i in `seq 1 5`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p8 \
+       'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
 sleep 1  # wait for forwarders process packets
 
 # Meter 1 is measuring packets, allowing one packet per second with
-# bursts of one packet, so 4 out of 5 packets should hit the drop
+# bursts of one packet, so 3 out of 5 packets should hit the drop
 # band.
-# Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). 4 packets
-# (240 bytes == 1920 bits) pass, but the last packet should hit the drop band.
+# Meter 2 is measuring kbps, with burst size 2 (== 3000 bits). 6 packets
+# (360 bytes == 2880 bits) pass, but the last packet should hit the drop band.
 AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
 meter:1 flow_count:1 packet_in_count:5 byte_in_count:300 duration:0.0s bands:
-0: packet_count:4 byte_count:240
+0: packet_count:3 byte_count:180
 
-meter:2 flow_count:1 packet_in_count:5 byte_in_count:300 duration:0.0s bands:
+meter:2 flow_count:1 packet_in_count:7 byte_in_count:420 duration:0.0s bands:
 0: packet_count:1 byte_count:60
 ])
 
 # Advance time by 1/2 second
 ovs-appctl time/warp 500
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+for i in `seq 1 5`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p7 \
+       'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p8 \
+       'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
 sleep 1  # wait for forwarders process packets
 
 # Meter 1 is measuring packets, allowing one packet per second with
 # bursts of one packet, so all 5 of the new packets should hit the drop
 # band.
-# Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). After 500ms
-# there should be space for 80 + 500 bits, so one new 60 byte (480 bit) packet
+# Meter 2 is measuring kbps, with burst size 2 (== 3000 bits). After 500ms
+# there should be space for 120 + 500 bits, so one new 60 byte (480 bit) packet
 # should pass, remaining 4 should hit the drop band.
 AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
 meter:1 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
-0: packet_count:9 byte_count:540
+0: packet_count:8 byte_count:480
 
-meter:2 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
+meter:2 flow_count:1 packet_in_count:12 byte_in_count:720 duration:0.0s bands:
 0: packet_count:5 byte_count:300
+])
+
+ovs-appctl time/warp 5000
+
+AT_CHECK([
+ovs-appctl coverage/read-counter datapath_drop_meter
+], [0], [dnl
+13
 ])
 
 AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout_keep_actions], [0], [dnl
@@ -356,6 +372,8 @@ recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:2
 ])
 
+AT_CHECK([ovs-ofctl -O OpenFlow13 del-meters br0])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -363,7 +381,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
   [AT_SETUP([dpif-netdev - partial hw offload - $1])
    OVS_VSWITCHD_START(
      [add-port br0 p1 -- \
-      set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock options:ifindex=1 -- \
+      set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock options:ifindex=1100 -- \
       set bridge br0 datapath-type=dummy \
                      other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
@@ -385,7 +403,7 @@ skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc
    # Check that flow successfully offloaded.
    OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
    AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, mark: 0
+p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, mark: 1
 ])
    # Check that datapath flow installed successfully.
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
@@ -396,7 +414,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 
    # Check for succesfull packet matching with installed offloaded flow.
    AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000,nw_frag=no with mark: 0
+p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000,nw_frag=no with mark: 1
 ])
 
    ovs-appctl revalidator/wait
@@ -413,10 +431,182 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), p
    # Check that flow successfully deleted from HW.
    OVS_WAIT_UNTIL([grep "succeed to delete netdev flow" ovs-vswitchd.log])
    AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: flow del: mark: 0
+p1: flow del: mark: 1
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
 DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy])
 DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy-pmd])
+
+
+m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
+  [AT_SETUP([dpif-netdev - partial hw offload with packet modifications - $1])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- \
+      set interface p1 type=$1 ofport_request=1 options:pcap=p1.pcap options:ifindex=1101 -- \
+      set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+
+   AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+
+   AT_CHECK([ovs-ofctl del-flows br0])
+
+   # Setting flow to modify ipv4 src address and udp dst port to be sure that
+   # offloaded packets has correctly initialized l3/l4 offsets.
+   AT_CHECK([ovs-ofctl add-flow br0 in_port=1,udp,actions=mod_nw_src:192.168.0.7,mod_tp_dst:3773,output:IN_PORT])
+
+   packet="packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=17,ttl=64,frag=no),udp(src=81,dst=82))"
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),dnl
+packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=17,tos=0,ttl=64,frag=no),udp(src=81,dst=82))
+])
+   # Check that flow successfully offloaded.
+   OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow put[[create]]: flow match: recirc_id=0,eth,udp,in_port=1,dl_vlan=99,dl_vlan_pcp=7,nw_src=127.0.0.1,nw_frag=no,tp_dst=82, mark: 1
+])
+   # Check that datapath flow installed successfully.
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), actions: <del>
+])
+   # Inject the same packet again.
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   # Check for succesfull packet matching with installed offloaded flow.
+   AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: packet: udp,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82 dnl
+matches with flow: recirc_id=0,eth,udp,dl_vlan=99,dl_vlan_pcp=7,nw_src=127.0.0.1,nw_frag=no,tp_dst=82 with mark: 1
+])
+
+   ovs-appctl revalidator/wait
+   # Dump the datapath flow to see that actions was executed for a packet.
+   AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), dnl
+packets:1, bytes:64, used:0.0s, actions:set(ipv4(src=192.168.0.7)),set(udp(dst=3773)),1
+])
+
+   # Wait for datapath flow expiration.
+   ovs-appctl time/stop
+   ovs-appctl time/warp 15000
+   ovs-appctl revalidator/wait
+
+   # Check that flow successfully deleted from HW.
+   OVS_WAIT_UNTIL([grep "succeed to delete netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow del: mark: 1
+])
+
+   # Check that ip address and udp port were correctly modified in output packets.
+   AT_CHECK([ovs-ofctl parse-pcap p1.pcap], [0], [dnl
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=3773
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=3773
+])
+
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
+
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS([dummy-pmd])
+
+m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP],
+  [AT_SETUP([dpif-netdev - partial hw offload with arp vlan id packet modifications - $1])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- \
+      set interface p1 type=$1 ofport_request=1 options:pcap=p1.pcap options:ifindex=1102 -- \
+      set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+
+   AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+
+   AT_CHECK([ovs-ofctl del-flows br0])
+
+   # Setting flow to modify vlan id with arp packet to be sure that
+   # offloaded packets has correctly initialized l3 offset.
+   AT_CHECK([ovs-ofctl add-flow br0 in_port=1,arp,dl_vlan=99,actions=mod_vlan_vid=11,output:IN_PORT])
+
+   packet="packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806),arp(sip=127.0.0.1,tip=127.0.0.1,op=1,sha=00:0b:0c:0d:0e:0f,tha=00:00:00:00:00:00))"
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),dnl
+packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806),arp(sip=127.0.0.1,tip=127.0.0.1,op=1,sha=00:0b:0c:0d:0e:0f,tha=00:00:00:00:00:00))
+])
+   # Check that flow successfully offloaded.
+   OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow put[[create]]: flow match: recirc_id=0,eth,arp,in_port=1,dl_vlan=99,dl_vlan_pcp=7, mark: 1
+])
+   # Check that datapath flow installed successfully.
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806)), actions: <del>
+])
+   # Inject the same packet again.
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   # Check for succesfull packet matching with installed offloaded flow.
+   AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: packet: arp,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00 dnl
+matches with flow: recirc_id=0,eth,arp,dl_vlan=99,dl_vlan_pcp=7 with mark: 1
+])
+
+   ovs-appctl revalidator/wait
+   # Dump the datapath flow to see that actions was executed for a packet.
+   AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806)), dnl
+packets:1, bytes:64, used:0.0s, actions:pop_vlan,push_vlan(vid=11,pcp=7),1
+])
+
+   # Wait for datapath flow expiration.
+   ovs-appctl time/stop
+   ovs-appctl time/warp 15000
+   ovs-appctl revalidator/wait
+
+   # Check that flow successfully deleted from HW.
+   OVS_WAIT_UNTIL([grep "succeed to delete netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow del: mark: 1
+])
+
+   # Check that VLAN ID was correctly modified in output packets.
+   AT_CHECK([ovs-ofctl parse-pcap p1.pcap], [0], [dnl
+arp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00
+arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00
+arp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00
+arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,arp_spa=127.0.0.1,arp_tpa=127.0.0.1,arp_op=1,arp_sha=00:0b:0c:0d:0e:0f,arp_tha=00:00:00:00:00:00
+])
+
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
+
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
+
+AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure])
+
+AT_CHECK([ovs-appctl dpctl/add-flow "eth(),eth_type(0x0800),ipv4()" "3"], [2],
+[], [dnl
+ovs-vswitchd: updating flow table (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_WAIT_UNTIL([grep "flow: in_port is not an exact match" ovs-vswitchd.log])
+OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
+/failed to put/d"])
+AT_CLEANUP

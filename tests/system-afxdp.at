@@ -1,0 +1,47 @@
+AT_BANNER([AF_XDP])
+
+AT_SETUP([AF_XDP - infinite re-addition of failed ports])
+AT_KEYWORDS([afxdp infinite])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+
+AT_CHECK([ovs-vsctl del-port ovs-p0])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p0 -- \
+                    set interface ovs-p0 type=afxdp options:n_rxq=42],
+         [0], [], [stderr])
+OVS_WAIT_UNTIL([grep "ovs-p0: could not set configuration" ovs-vswitchd.log])
+sleep 5
+AT_CHECK([grep "ovs-p0: could not set configuration" ovs-vswitchd.log | wc -l],
+         [0], [1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/ovs-p0: Too big 'n_rxq'/d
+/ovs-p0: could not set configuration/d"])
+AT_CLEANUP
+
+
+AT_SETUP([AF_XDP - ping between pmd and non-pmd ports])
+AT_KEYWORDS([afxdp nonpmd])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_CHECK([ovs-vsctl del-port ovs-p0])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p0 -- \
+                    set interface ovs-p0 type=afxdp-nonpmd options:n_rxq=1],
+         [0], [], [stderr])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

@@ -82,6 +82,18 @@ dns_resolve_init(bool is_daemon)
         return;
     }
 
+    const char *ub_conf_filename = getenv("OVS_UNBOUND_CONF");
+    if (ub_conf_filename != NULL) {
+        int retval = ub_ctx_config(ub_ctx__, ub_conf_filename);
+        if (retval != 0) {
+            VLOG_WARN_RL(&rl, "Failed to set libunbound context config: %s",
+                         ub_strerror(retval));
+            ub_ctx_delete(ub_ctx__);
+            ub_ctx__ = NULL;
+            return;
+        }
+    }
+
     const char *filename = getenv("OVS_RESOLV_CONF");
     if (!filename) {
 #ifdef _WIN32
@@ -251,6 +263,7 @@ resolve_callback__(void *req_, int err, struct ub_result *result)
     struct resolve_request *req = req_;
 
     if (err != 0 || (result->qtype == ns_t_aaaa && !result->havedata)) {
+        ub_resolve_free(result);
         req->state = RESOLVE_ERROR;
         VLOG_ERR_RL(&rl, "%s: failed to resolve", req->name);
         return;
@@ -265,6 +278,7 @@ resolve_callback__(void *req_, int err, struct ub_result *result)
 
     char *addr;
     if (!resolve_result_to_addr__(result, &addr)) {
+        ub_resolve_free(result);
         req->state = RESOLVE_ERROR;
         VLOG_ERR_RL(&rl, "%s: failed to resolve", req->name);
         return;
