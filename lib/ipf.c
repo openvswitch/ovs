@@ -36,6 +36,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ipf);
 COVERAGE_DEFINE(ipf_stuck_frag_list_purged);
+COVERAGE_DEFINE(ipf_l3csum_err);
 
 enum {
     IPV4_PACKET_MAX_HDR_SIZE = 60,
@@ -574,6 +575,7 @@ static bool
 ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
 {
     if (OVS_UNLIKELY(dp_packet_ip_checksum_bad(pkt))) {
+        COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
     }
 
@@ -609,6 +611,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(pkt)
                      && !dp_packet_hwol_is_ipv4(pkt)
                      && csum(l3, ip_hdr_len) != 0)) {
+        COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
     }
 

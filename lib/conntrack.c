@@ -45,6 +45,7 @@ VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
 COVERAGE_DEFINE(conntrack_long_cleanup);
+COVERAGE_DEFINE(conntrack_l3csum_err);
 COVERAGE_DEFINE(conntrack_l4csum_err);
 
 struct conn_lookup_ctx {
@@ -1613,6 +1614,7 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
     }
 
     if (validate_checksum && csum(data, ip_len) != 0) {
+        COVERAGE_INC(conntrack_l3csum_err);
         return false;
     }
 
@@ -2058,6 +2060,7 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         bool hwol_bad_l3_csum = dp_packet_ip_checksum_bad(pkt);
         if (hwol_bad_l3_csum) {
             ok = false;
+            COVERAGE_INC(conntrack_l3csum_err);
         } else {
             bool hwol_good_l3_csum = dp_packet_ip_checksum_valid(pkt)
                                      || dp_packet_hwol_is_ipv4(pkt);
