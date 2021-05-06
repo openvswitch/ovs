@@ -1683,7 +1683,7 @@ find_match(const struct cls_subtable *subtable, ovs_version_t version,
 
 static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
-              const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
+              const struct flow *flow, struct trie_ctx *trie_ctx,
               unsigned int n_tries, struct flow_wildcards *wc)
 {
     if (OVS_UNLIKELY(!wc)) {
