@@ -55,6 +55,7 @@
 /docs-check
 /install-sh
 /libtool
+/manpages.mk
 /manpage-check
 /missing
 /missing-distfiles

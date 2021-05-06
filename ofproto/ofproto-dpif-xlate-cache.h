@@ -142,8 +142,10 @@ struct xlate_cache {
 void xlate_cache_init(struct xlate_cache *);
 struct xlate_cache *xlate_cache_new(void);
 struct xc_entry *xlate_cache_add_entry(struct xlate_cache *, enum xc_type);
-void xlate_push_stats_entry(struct xc_entry *, struct dpif_flow_stats *);
-void xlate_push_stats(struct xlate_cache *, struct dpif_flow_stats *);
+void xlate_push_stats_entry(struct xc_entry *, struct dpif_flow_stats *,
+                            bool);
+void xlate_push_stats(struct xlate_cache *, struct dpif_flow_stats *,
+                      bool);
 void xlate_cache_clear_entry(struct xc_entry *);
 void xlate_cache_clear(struct xlate_cache *);
 void xlate_cache_uninit(struct xlate_cache *);

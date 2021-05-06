@@ -59,6 +59,9 @@ struct conn_key {
     uint8_t nw_proto;
 };
 
+/* Verify that nw_proto stays uint8_t as it's used to index into l4_protos[] */
+BUILD_ASSERT_DECL(MEMBER_SIZEOF(struct conn_key, nw_proto) == sizeof(uint8_t));
+
 /* This is used for alg expectations; an expectation is a
  * context created in preparation for establishing a data
  * connection. The expectation is created by the control
@@ -71,13 +74,13 @@ struct alg_exp_node {
     /* Key of data connection to be created. */
     struct conn_key key;
     /* Corresponding key of the control connection. */
-    struct conn_key master_key;
+    struct conn_key parent_key;
     /* The NAT replacement address to be used by the data connection. */
     union ct_addr alg_nat_repl_addr;
-    /* The data connection inherits the master control
+    /* The data connection inherits the parent control
      * connection label and mark. */
-    ovs_u128 master_label;
-    uint32_t master_mark;
+    ovs_u128 parent_label;
+    uint32_t parent_mark;
     /* True if for NAT application, the alg replaces the dest address;
      * otherwise, the source address is replaced.  */
     bool nat_rpl_dst;
@@ -92,7 +95,7 @@ struct conn {
     /* Immutable data. */
     struct conn_key key;
     struct conn_key rev_key;
-    struct conn_key master_key; /* Only used for orig_tuple support. */
+    struct conn_key parent_key; /* Only used for orig_tuple support. */
     struct ovs_list exp_node;
     struct cmap_node cm_node;
     struct nat_action_info_t *nat_info;
@@ -105,6 +108,12 @@ struct conn {
     long long expiration;
     uint32_t mark;
     int seq_skew;
+
+    /* Immutable data. */
+    int32_t admit_zone; /* The zone for managing zone limit counts. */
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+
+    /* Mutable data. */
     bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
                         * control messages; true if reply direction. */
     bool cleaned; /* True if cleaned from expiry lists. */
@@ -112,40 +121,35 @@ struct conn {
     /* Immutable data. */
     bool alg_related; /* True if alg data connection. */
     enum ct_conn_type conn_type;
+
+    uint32_t tp_id; /* Timeout policy ID. */
 };
 
 enum ct_update_res {
     CT_UPDATE_INVALID,
     CT_UPDATE_VALID,
     CT_UPDATE_NEW,
+    CT_UPDATE_VALID_NEW,
 };
 
 /* Timeouts: all the possible timeout states passed to update_expiration()
  * are listed here. The name will be prefix by CT_TM_ and the value is in
  * milliseconds */
 #define CT_TIMEOUTS \
-    CT_TIMEOUT(TCP_FIRST_PACKET, 30 * 1000) \
-    CT_TIMEOUT(TCP_OPENING, 30 * 1000) \
-    CT_TIMEOUT(TCP_ESTABLISHED, 24 * 60 * 60 * 1000) \
-    CT_TIMEOUT(TCP_CLOSING, 15 * 60 * 1000) \
-    CT_TIMEOUT(TCP_FIN_WAIT, 45 * 1000) \
-    CT_TIMEOUT(TCP_CLOSED, 30 * 1000) \
-    CT_TIMEOUT(OTHER_FIRST, 60 * 1000) \
-    CT_TIMEOUT(OTHER_MULTIPLE, 60 * 1000) \
-    CT_TIMEOUT(OTHER_BIDIR, 30 * 1000) \
-    CT_TIMEOUT(ICMP_FIRST, 60 * 1000) \
-    CT_TIMEOUT(ICMP_REPLY, 30 * 1000)
-
-/* The smallest of the above values: it is used as an upper bound for the
- * interval between two rounds of cleanup of expired entries */
-#define CT_TM_MIN (30 * 1000)
-
-#define CT_TIMEOUT(NAME, VAL) BUILD_ASSERT_DECL(VAL >= CT_TM_MIN);
-    CT_TIMEOUTS
-#undef CT_TIMEOUT
+    CT_TIMEOUT(TCP_FIRST_PACKET) \
+    CT_TIMEOUT(TCP_OPENING) \
+    CT_TIMEOUT(TCP_ESTABLISHED) \
+    CT_TIMEOUT(TCP_CLOSING) \
+    CT_TIMEOUT(TCP_FIN_WAIT) \
+    CT_TIMEOUT(TCP_CLOSED) \
+    CT_TIMEOUT(OTHER_FIRST) \
+    CT_TIMEOUT(OTHER_MULTIPLE) \
+    CT_TIMEOUT(OTHER_BIDIR) \
+    CT_TIMEOUT(ICMP_FIRST) \
+    CT_TIMEOUT(ICMP_REPLY)
 
 enum ct_timeout {
-#define CT_TIMEOUT(NAME, VALUE) CT_TM_##NAME,
+#define CT_TIMEOUT(NAME) CT_TM_##NAME,
     CT_TIMEOUTS
 #undef CT_TIMEOUT
     N_CT_TM
@@ -155,6 +159,8 @@ struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
     struct cmap conns OVS_GUARDED;
     struct ovs_list exp_lists[N_CT_TM] OVS_GUARDED;
+    struct hmap zone_limits OVS_GUARDED;
+    struct hmap timeout_policies OVS_GUARDED;
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
     struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
@@ -171,8 +177,9 @@ struct conntrack {
     struct hindex alg_expectation_refs OVS_GUARDED; /* For lookup from
                                                      * control context.  */
 
-    /* Fragmentation handling context. */
-    struct ipf *ipf;
+    struct ipf *ipf; /* Fragmentation handling context. */
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+    atomic_bool tcp_seq_chk; /* Check TCP sequence numbers. */
 };
 
 /* Lock acquisition order:
@@ -188,7 +195,7 @@ extern struct ct_l4_proto ct_proto_icmp6;
 
 struct ct_l4_proto {
     struct conn *(*new_conn)(struct conntrack *ct, struct dp_packet *pkt,
-                             long long now);
+                             long long now, uint32_t tp_id);
     bool (*valid_new)(struct dp_packet *pkt);
     enum ct_update_res (*conn_update)(struct conntrack *ct, struct conn *conn,
                                       struct dp_packet *pkt, bool reply,
@@ -196,50 +203,5 @@ struct ct_l4_proto {
     void (*conn_get_protoinfo)(const struct conn *,
                                struct ct_dpif_protoinfo *);
 };
-
-extern long long ct_timeout_val[];
-
-
-/* ct_lock must be held. */
-static inline void
-conn_init_expiration(struct conntrack *ct, struct conn *conn,
-                     enum ct_timeout tm, long long now)
-{
-    conn->expiration = now + ct_timeout_val[tm];
-    ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
-}
-
-/* The conn entry lock must be held on entry and exit. */
-static inline void
-conn_update_expiration(struct conntrack *ct, struct conn *conn,
-                       enum ct_timeout tm, long long now)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    ovs_mutex_unlock(&conn->lock);
-
-    ovs_mutex_lock(&ct->ct_lock);
-    ovs_mutex_lock(&conn->lock);
-    if (!conn->cleaned) {
-        conn->expiration = now + ct_timeout_val[tm];
-        ovs_list_remove(&conn->exp_node);
-        ovs_list_push_back(&ct->exp_lists[tm], &conn->exp_node);
-    }
-    ovs_mutex_unlock(&conn->lock);
-    ovs_mutex_unlock(&ct->ct_lock);
-
-    ovs_mutex_lock(&conn->lock);
-}
-
-static inline uint32_t
-tcp_payload_length(struct dp_packet *pkt)
-{
-    const char *tcp_payload = dp_packet_get_tcp_payload(pkt);
-    if (tcp_payload) {
-        return ((char *) dp_packet_tail(pkt) - dp_packet_l2_pad_size(pkt)
-                - tcp_payload);
-    } else {
-        return 0;
-    }
-}
 
 #endif /* conntrack-private.h */

@@ -23,7 +23,6 @@
 #include <net/route.h>
 #include <net/udp.h>
 #include <net/xfrm.h>
-#include <net/stt.h>
 
 #include "datapath.h"
 #include "vport.h"

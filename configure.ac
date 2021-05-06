@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.63)
-AC_INIT(openvswitch, 2.12.90, bugs@openvswitch.org)
+AC_INIT(openvswitch, 2.15.90, bugs@openvswitch.org)
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -92,9 +92,7 @@ OVS_CHECK_NETLINK
 OVS_CHECK_OPENSSL
 OVS_CHECK_LIBCAPNG
 OVS_CHECK_LOGDIR
-OVS_CHECK_PYTHON2
 OVS_CHECK_PYTHON3
-OVS_CHECK_PYTHON
 OVS_CHECK_FLAKE8
 OVS_CHECK_SPHINX
 OVS_CHECK_DOT
@@ -102,6 +100,7 @@ OVS_CHECK_IF_DL
 OVS_CHECK_STRTOK_R
 OVS_CHECK_LINUX_AF_XDP
 AC_CHECK_DECLS([sys_siglist], [], [], [[#include <signal.h>]])
+AC_CHECK_DECLS([malloc_trim], [], [], [[#include <malloc.h>]])
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
 AC_CHECK_MEMBERS([struct ifreq.ifr_flagshigh], [], [], [[#include <net/if.h>]])
@@ -139,6 +138,7 @@ OVS_LIBTOOL_VERSIONS
 OVS_CHECK_CXX
 AX_FUNC_POSIX_MEMALIGN
 OVS_CHECK_UNBOUND
+OVS_CHECK_UNWIND
 
 OVS_CHECK_INCLUDE_NEXT([stdio.h string.h])
 AC_CONFIG_FILES([
@@ -148,7 +148,6 @@ AC_CONFIG_FILES([
     ofproto/libofproto.sym
     lib/libsflow.sym
     lib/libopenvswitch.sym
-    ovn/lib/libovn.sym
     vtep/libvtep.sym])
 
 OVS_ENABLE_OPTION([-Wall])
@@ -180,15 +179,21 @@ OVS_ENABLE_OPTION([-Wno-null-pointer-arithmetic])
 OVS_ENABLE_OPTION([-Warray-bounds-pointer-arithmetic])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused-parameter], [HAVE_WNO_UNUSED_PARAMETER])
+OVS_CONDITIONAL_CC_OPTION([-mavx512f], [HAVE_AVX512F])
+OVS_CHECK_CC_OPTION([-mavx512f], [CFLAGS="$CFLAGS -DHAVE_AVX512F"])
 OVS_ENABLE_WERROR
 OVS_ENABLE_SPARSE
 OVS_CTAGS_IDENTIFIERS
+OVS_CHECK_DPCLS_AUTOVALIDATOR
+OVS_CHECK_BINUTILS_AVX512
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
 OVS_CHECK_LINUX
+OVS_CHECK_LINUX_NETLINK
 OVS_CHECK_LINUX_TC
 OVS_CHECK_LINUX_SCTP_CT
+OVS_CHECK_LINUX_VIRTIO_TYPES
 OVS_CHECK_DPDK
 OVS_CHECK_PRAGMA_MESSAGE
 AC_SUBST([OVS_CFLAGS])
@@ -210,8 +215,6 @@ dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
-AC_CONFIG_COMMANDS([ovn/dummy], [:])
-AC_CONFIG_COMMANDS([ovn/utilities/dummy], [:])
 AC_CONFIG_COMMANDS([ipsec/dummy], [:])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])

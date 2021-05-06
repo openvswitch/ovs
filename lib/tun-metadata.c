@@ -261,6 +261,23 @@ tun_metadata_write(struct flow_tnl *tnl,
                        value->tun_metadata + mf->n_bytes - loc->len, loc, idx);
 }
 
+/* Deletes field 'mf' in 'tnl' (in non-UDPIF format).
+ * 'mf' must be an MFF_TUN_METADATA* field.
+ */
+void
+tun_metadata_delete(struct flow_tnl *tnl, const struct mf_field *mf)
+{
+    unsigned int idx;
+
+    if (tnl->flags & FLOW_TNL_F_UDPIF) {
+        return;
+    }
+
+    idx = mf->id - MFF_TUN_METADATA0;
+    ovs_assert(idx < TUN_METADATA_NUM_OPTS);
+    ULLONG_SET0(tnl->metadata.present.map, idx);
+}
+
 static const struct tun_metadata_loc *
 metadata_loc_from_match(const struct tun_table *map, struct match *match,
                         const char *name, unsigned int idx,

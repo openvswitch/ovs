@@ -68,9 +68,9 @@ approaches:
      $ git clone https://github.com/openvswitch/ovs.git
      $ cd ovs
 
-   The default checkout is the master branch.  You can check out a tag
-   (such as v2.8.0) or a branch (such as origin/branch-2.8), if you
-   prefer.
+   The default checkout is the master branch.  You will need to use the master
+   branch for this tutorial as it includes some functionality required for this
+   tutorial.
 
 2. If you do not already have an installed copy of Open vSwitch on your system,
    or if you do not want to use it for the sandbox (the sandbox will not
@@ -79,6 +79,13 @@ approaches:
    to start the sandbox by running::
 
      $ tutorial/ovs-sandbox
+
+   .. note::
+
+     The default behaviour for some of the commands used in this tutorial
+     changed in Open vSwitch versions 2.9.x and 2.10.x which breaks the
+     tutorial.  We recommend following step 3 and building master from
+     source or using a system Open vSwitch that is version 2.8.x or older.
 
    If it is successful, you will find yourself in a subshell environment, which
    is the sandbox (you can exit with ``exit`` or Control+D).  If so, you're
@@ -89,6 +96,12 @@ approaches:
    requirements.  Read :doc:`/intro/install/general` to find out.  For this
    tutorial, there is no need to compile the Linux kernel module, or to use any
    of the optional libraries such as OpenSSL, DPDK, or libcap-ng.
+
+   If you are using a Linux system that uses apt and have some ``deb-src``
+   repos listed in ``/etc/apt/sources.list``, often an easy way to install
+   the build dependencies for a package is to use ``build-dep``::
+
+     $ sudo apt-get build-dep openvswitch
 
 4. Configure and build Open vSwitch::
 
@@ -130,7 +143,7 @@ between one and the other.
 
 2. Build a docker container image::
 
-     $ docker build -t faucet/faucet .
+     $ sudo docker build -t faucet/faucet -f Dockerfile.faucet .
 
    This will take a few minutes.
 
@@ -147,7 +160,7 @@ between one and the other.
 
 4. Create a container and start Faucet::
 
-     $ docker run -d --name faucet --restart=always -v $(pwd)/inst/:/etc/faucet/ -v $(pwd)/inst/:/var/log/faucet/ -p 6653:6653 -p 9302:9302 faucet/faucet
+     $ sudo docker run -d --name faucet --restart=always -v $(pwd)/inst/:/etc/faucet/ -v $(pwd)/inst/:/var/log/faucet/ -p 6653:6653 -p 9302:9302 faucet/faucet
 
 5. Look in ``inst/faucet.log`` to verify that Faucet started.  It will
    probably start with an exception and traceback because we have not
@@ -156,17 +169,17 @@ between one and the other.
 6. Later on, to make a new or updated Faucet configuration take
    effect quickly, you can run::
 
-     $ docker exec faucet pkill -HUP -f faucet.faucet
+     $ sudo docker exec faucet pkill -HUP -f faucet.faucet
 
    Another way is to stop and start the Faucet container::
 
-     $ docker restart faucet
+     $ sudo docker restart faucet
 
    You can also stop and delete the container; after this, to start it
    again, you need to rerun the ``docker run`` command::
 
-     $ docker stop faucet
-     $ docker rm faucet
+     $ sudo docker stop faucet
+     $ sudo docker rm faucet
 
 Overview
 --------
@@ -260,17 +273,16 @@ to be 0x1.
 
   This also sets high MAC learning and ARP timeouts.  The defaults are
   5 minutes and about 8 minutes, which are fine in production but
-  sometimes too fast for manual experimentation.  (Don't use a timeout
-  bigger than about 65000 seconds because it will crash Faucet.)
+  sometimes too fast for manual experimentation.
 
 Now restart Faucet so that the configuration takes effect, e.g.::
 
-  $ docker restart faucet
+  $ sudo docker restart faucet
 
 Assuming that the configuration update is successful, you should now
 see a new line at the end of ``inst/faucet.log``::
 
-  Jan 06 15:14:35 faucet INFO     Add new datapath DPID 1 (0x1)
+  Sep 10 06:44:10 faucet INFO     Add new datapath DPID 1 (0x1)
 
 Faucet is now waiting for a switch with datapath ID 0x1 to connect to
 it over OpenFlow, so our next step is to create a switch with OVS and
@@ -319,18 +331,24 @@ information, run ``man ovs-vswitchd.conf.db`` and search for
   means that, for example, there is never a time when the controller
   is set but it has not yet been configured as out-of-band.
 
+Faucet requires ports to be in the up state before it will configure them.  In
+Open vSwitch versions earlier than 2.11.0 dummy ports started in the down state.
+You will need to force them to come up with the following ``ovs-appctl`` command
+(please skip this step if using a newer version of Open vSwitch)::
+
+  $ ovs-appctl netdev-dummy/set-admin-state up
+
 Now, if you look at ``inst/faucet.log`` again, you should see that
 Faucet recognized and configured the new switch and its ports::
 
-  Jan 06 15:17:10 faucet       INFO     DPID 1 (0x1) connected
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Cold start configuring DP
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Configuring VLAN 100 vid:100 ports:Port 1,Port 2,Port 3
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Configuring VLAN 200 vid:200 ports:Port 4,Port 5
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Port 1 up, configuring
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Port 2 up, configuring
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Port 3 up, configuring
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Port 4 up, configuring
-  Jan 06 15:17:10 faucet.valve INFO     DPID 1 (0x1) Port 5 up, configuring
+  Sep 10 06:45:03 faucet.valve INFO     DPID 1 (0x1) switch-1 Cold start configuring DP
+  Sep 10 06:45:03 faucet.valve INFO     DPID 1 (0x1) switch-1 Configuring VLAN 100 vid:100 ports:Port 1,Port 2,Port 3
+  Sep 10 06:45:03 faucet.valve INFO     DPID 1 (0x1) switch-1 Configuring VLAN 200 vid:200 ports:Port 4,Port 5
+  Sep 10 06:45:24 faucet.valve INFO     DPID 1 (0x1) switch-1 Port 1 (1) up
+  Sep 10 06:45:24 faucet.valve INFO     DPID 1 (0x1) switch-1 Port 2 (2) up
+  Sep 10 06:45:24 faucet.valve INFO     DPID 1 (0x1) switch-1 Port 3 (3) up
+  Sep 10 06:45:24 faucet.valve INFO     DPID 1 (0x1) switch-1 Port 4 (4) up
+  Sep 10 06:45:24 faucet.valve INFO     DPID 1 (0x1) switch-1 Port 5 (5) up
 
 Over on the Open vSwitch side, you can see a lot of related activity
 if you take a look in ``sandbox/ovs-vswitchd.log``.  For example, here
@@ -340,51 +358,48 @@ ports and capabilities::
   rconn|INFO|br0<->tcp:127.0.0.1:6653: connecting...
   vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPT_HELLO (OF1.4) (xid=0x1):
    version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_HELLO (OF1.3) (xid=0x2f24810a):
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_HELLO (OF1.3) (xid=0xdb9dab08):
    version bitmap: 0x01, 0x02, 0x03, 0x04
   vconn|DBG|tcp:127.0.0.1:6653: negotiated OpenFlow version 0x04 (we support version 0x05 and earlier, peer supports version 0x04 and earlier)
   rconn|INFO|br0<->tcp:127.0.0.1:6653: connected
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_ECHO_REQUEST (OF1.3) (xid=0x2f24810b): 0 bytes of payload
-  vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPT_ECHO_REPLY (OF1.3) (xid=0x2f24810b): 0 bytes of payload
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FEATURES_REQUEST (OF1.3) (xid=0x2f24810c):
-  vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPT_FEATURES_REPLY (OF1.3) (xid=0x2f24810c): dpid:0000000000000001
-   n_tables:254, n_buffers:0
-   capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPST_PORT_DESC request (OF1.3) (xid=0x2f24810d): port=ANY
-  vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPST_PORT_DESC reply (OF1.3) (xid=0x2f24810d):
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FEATURES_REQUEST (OF1.3) (xid=0xdb9dab09):
+  00040|vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPT_FEATURES_REPLY (OF1.3) (xid=0xdb9dab09): dpid:0000000000000001
+  n_tables:254, n_buffers:0
+  capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPST_PORT_DESC request (OF1.3) (xid=0xdb9dab0a): port=ANY
+  vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPST_PORT_DESC reply (OF1.3) (xid=0xdb9dab0a):
    1(p1): addr:aa:55:aa:55:00:14
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
    2(p2): addr:aa:55:aa:55:00:15
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
    3(p3): addr:aa:55:aa:55:00:16
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
    4(p4): addr:aa:55:aa:55:00:17
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
    5(p5): addr:aa:55:aa:55:00:18
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
-   LOCAL(br0): addr:c6:64:ff:59:48:41
-       config:     PORT_DOWN
-       state:      LINK_DOWN
+   LOCAL(br0): addr:42:51:a1:c4:97:45
+       config:     0
+       state:      LIVE
        speed: 0 Mbps now, 0 Mbps max
 
 After that, you can see Faucet delete all existing flows and then
 start adding new ones::
 
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0x2f24810e): DEL table:255 priority=0 actions=drop
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_BARRIER_REQUEST (OF1.3) (xid=0x2f24810f):
-  vconn|DBG|tcp:127.0.0.1:6653: sent (Success): OFPT_BARRIER_REPLY (OF1.3) (xid=0x2f24810f):
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0x2f248110): ADD priority=0 cookie:0x5adc15c0 out_port:0 actions=drop
-  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0x2f248111): ADD table:1 priority=0 cookie:0x5adc15c0 out_port:0 actions=drop
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0xdb9dab0f): DEL table:255 priority=0 actions=drop
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0xdb9dab10): ADD priority=0 cookie:0x5adc15c0 out_port:0 actions=drop
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0xdb9dab11): ADD table:1 priority=0 cookie:0x5adc15c0 out_port:0 actions=goto_table:2
+  vconn|DBG|tcp:127.0.0.1:6653: received: OFPT_FLOW_MOD (OF1.3) (xid=0xdb9dab12): ADD table:2 priority=0 cookie:0x5adc15c0 out_port:0 actions=goto_table:3
   ...
 
 OpenFlow Layer
@@ -393,7 +408,8 @@ OpenFlow Layer
 Let's take a look at the OpenFlow tables that Faucet set up.  Before
 we do that, it's helpful to take a look at ``docs/architecture.rst``
 in the Faucet documentation to learn how Faucet structures its flow
-tables.  In summary, this document says:
+tables.  In summary, this document says that when all features are enabled
+our table layout will be:
 
 Table 0
   Port-based ACLs
@@ -456,38 +472,43 @@ this::
 
   $ dump-flows br0
 
-First, table 0 has a flow that just jumps to table 1 for each
-configured port, and drops other unrecognized packets.  Presumably it
-will do more if we configured port-based ACLs::
+To reduce resource utilisation on hardware switches, Faucet will try to install
+the minimal set of OpenFlow tables to match the features enabled in
+``faucet.yaml``.  Since we have only enabled switching we will end up
+with 4 tables. If we inspect the contents of ``inst/faucet.log`` Faucet will
+tell us what each table does::
 
-  priority=9099,in_port=p1 actions=goto_table:1
-  priority=9099,in_port=p2 actions=goto_table:1
-  priority=9099,in_port=p3 actions=goto_table:1
-  priority=9099,in_port=p4 actions=goto_table:1
-  priority=9099,in_port=p5 actions=goto_table:1
+  Sep 10 06:44:10 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 0 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('eth_type', False), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: None name: vlan next_tables: ['eth_src'] output: True set_fields: ('vlan_vid',) size: 32 table_id: 0 vlan_port_scale: 1.5
+  Sep 10 06:44:10 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 1 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('eth_src', False), ('eth_type', False), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: eth_dst name: eth_src next_tables: ['eth_dst', 'flood'] output: True set_fields: ('vlan_vid', 'eth_dst') size: 32 table_id: 1 vlan_port_scale: 4.1
+  Sep 10 06:44:10 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 2 table config dec_ttl: None exact_match: True match_types: (('eth_dst', False), ('vlan_vid', False)) meter: None miss_goto: flood name: eth_dst next_tables: [] output: True set_fields: None size: 41 table_id: 2 vlan_port_scale: 4.1
+  Sep 10 06:44:10 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 3 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: None name: flood next_tables: [] output: True set_fields: None size: 32 table_id: 3 vlan_port_scale: 2.1
+
+Currently, we have:
+
+Table 0 (vlan)
+  Ingress VLAN processing
+
+Table 1 (eth_src)
+  Ingress L2 processing, MAC learning
+
+Table 2 (eth_dst)
+  Egress L2 processing
+
+Table 3 (flood)
+  Flooding
+
+In Table 0 we see flows that recognize packets without a VLAN header on each of
+our ports (``vlan_tci=0x0000/0x1fff``), push on the VLAN configured for the
+port, and proceed to table 3.  There is also a fallback flow to drop other
+packets, which in practice means that if any received packet already has a
+VLAN header then it will be dropped::
+
+  priority=9000,in_port=p1,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:1
+  priority=9000,in_port=p2,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:1
+  priority=9000,in_port=p3,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:1
+  priority=9000,in_port=p4,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4296->vlan_vid,goto_table:1
+  priority=9000,in_port=p5,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4296->vlan_vid,goto_table:1
   priority=0 actions=drop
-
-Table 1, for ingress VLAN processing, has a bunch of flows that drop
-inappropriate packets, such as LLDP and STP::
-
-  table=1, priority=9099,dl_dst=01:80:c2:00:00:00 actions=drop
-  table=1, priority=9099,dl_dst=01:00:0c:cc:cc:cd actions=drop
-  table=1, priority=9099,dl_type=0x88cc actions=drop
-
-Table 1 also has some more interesting flows that recognize packets
-without a VLAN header on each of our ports
-(``vlan_tci=0x0000/0x1fff``), push on the VLAN configured for the
-port, and proceed to table 3.  Presumably these skip table 2 because
-we did not configure any VLAN-based ACLs.  There is also a fallback
-flow to drop other packets, which in practice means that if any
-received packet already has a VLAN header then it will be dropped::
-
-  table=1, priority=9000,in_port=p1,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:3
-  table=1, priority=9000,in_port=p2,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:3
-  table=1, priority=9000,in_port=p3,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4196->vlan_vid,goto_table:3
-  table=1, priority=9000,in_port=p4,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4296->vlan_vid,goto_table:3
-  table=1, priority=9000,in_port=p5,vlan_tci=0x0000/0x1fff actions=push_vlan:0x8100,set_field:4296->vlan_vid,goto_table:3
-  table=1, priority=0 actions=drop
 
 .. note::
 
@@ -497,82 +518,54 @@ received packet already has a VLAN header then it will be dropped::
   since 4196 is 0x1064, this action sets VLAN value 0x64, which in
   decimal is 100.
 
-Table 2 isn't used because there are no VLAN-based ACLs.  It just has
-a drop flow::
+Table 1 starts off with a flow that drops some inappropriate packets,
+in this case EtherType 0x9000 (Ethernet Configuration Testing Protocol),
+which should not be forwarded by a switch::
 
-  table=2, priority=0 actions=drop
+  table=1, priority=9099,dl_type=0x9000 actions=drop
 
-Table 3 is used for MAC learning but the controller hasn't learned any
-MAC yet. It also drops some inappropriate packets such as those that claim
-to be from a broadcast source address (why not from all multicast source
-addresses, though?). We'll come back here later::
+Table 1 is primarily used for MAC learning but the controller hasn't learned
+any MAC addresses yet. It also drops some more inappropriate packets such as
+those that claim to be from a broadcast source address (why not from all
+multicast source addresses, though?). We'll come back here later::
 
-  table=3, priority=9099,dl_src=ff:ff:ff:ff:ff:ff actions=drop
-  table=3, priority=9001,dl_src=0e:00:00:00:00:01 actions=drop
-  table=3, priority=0 actions=drop
-  table=3, priority=9000 actions=CONTROLLER:96,goto_table:7
+  table=1, priority=9099,dl_src=ff:ff:ff:ff:ff:ff actions=drop
+  table=1, priority=9001,dl_src=0e:00:00:00:00:01 actions=drop
+  table=1, priority=9000,dl_vlan=100 actions=CONTROLLER:96,goto_table:2
+  table=1, priority=9000,dl_vlan=200 actions=CONTROLLER:96,goto_table:2
+  table=1, priority=0 actions=goto_table:2
 
-Tables 4, 5, and 6 aren't used because we haven't configured any
-routing::
+Table 2 is used to direct packets to learned MACs but Faucet hasn't
+learned any MACs yet, so it just sends all the packets along to table 3::
 
-  table=4, priority=0 actions=drop
-  table=5, priority=0 actions=drop
-  table=6, priority=0 actions=drop
+  table=2, priority=0 actions=goto_table:3
 
-Table 7 is used to direct packets to learned MACs but Faucet hasn't
-learned any MACs yet, so it just sends all the packets along to table
-8::
+Table 3 does some more dropping of packets we don't want to forward,
+in this case STP::
 
-  table=7, priority=0 actions=drop
-  table=7, priority=9000 actions=goto_table:8
+  table=3, priority=9099,dl_dst=01:00:0c:cc:cc:cd actions=drop
+  table=3, priority=9099,dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0 actions=drop
 
-Table 8 implements flooding, broadcast, and multicast.  The flows for
+Table 3 implements flooding, broadcast, and multicast.  The flows for
 broadcast and flood are easy to understand: if the packet came in on a
 given port and needs to be flooded or broadcast, output it to all the
 other ports in the same VLAN::
 
-  table=8, priority=9008,in_port=p1,dl_vlan=100,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p2,output:p3
-  table=8, priority=9008,in_port=p2,dl_vlan=100,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p1,output:p3
-  table=8, priority=9008,in_port=p3,dl_vlan=100,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p1,output:p2
-  table=8, priority=9008,in_port=p4,dl_vlan=200,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p5
-  table=8, priority=9008,in_port=p5,dl_vlan=200,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p4
-  table=8, priority=9000,in_port=p1,dl_vlan=100 actions=pop_vlan,output:p2,output:p3
-  table=8, priority=9000,in_port=p2,dl_vlan=100 actions=pop_vlan,output:p1,output:p3
-  table=8, priority=9000,in_port=p3,dl_vlan=100 actions=pop_vlan,output:p1,output:p2
-  table=8, priority=9000,in_port=p4,dl_vlan=200 actions=pop_vlan,output:p5
-  table=8, priority=9000,in_port=p5,dl_vlan=200 actions=pop_vlan,output:p4
-
-.. note::
-
-  These flows could apparently be simpler because OpenFlow says that
-  ``output:<port>`` is ignored if ``<port>`` is the input port.  That
-  means that the first three flows above could apparently be collapsed
-  into just::
-
-    table=8, priority=9008,dl_vlan=100,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p1,output:p2,output:p3
-
-  There might be some reason why this won't work or isn't practical,
-  but that isn't obvious from looking at the flow table.
+  table=3, priority=9004,dl_vlan=100,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p1,output:p2,output:p3
+  table=3, priority=9004,dl_vlan=200,dl_dst=ff:ff:ff:ff:ff:ff actions=pop_vlan,output:p4,output:p5
+  table=3, priority=9000,dl_vlan=100 actions=pop_vlan,output:p1,output:p2,output:p3
+  table=3, priority=9000,dl_vlan=200 actions=pop_vlan,output:p4,output:p5
 
 There are also some flows for handling some standard forms of
 multicast, and a fallback drop flow::
 
-  table=8, priority=9006,in_port=p1,dl_vlan=100,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p2,output:p3
-  table=8, priority=9006,in_port=p2,dl_vlan=100,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p1,output:p3
-  table=8, priority=9006,in_port=p3,dl_vlan=100,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p1,output:p2
-  table=8, priority=9006,in_port=p4,dl_vlan=200,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p5
-  table=8, priority=9006,in_port=p5,dl_vlan=200,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p4
-  table=8, priority=9002,in_port=p1,dl_vlan=100,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p2,output:p3
-  table=8, priority=9002,in_port=p2,dl_vlan=100,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p3
-  table=8, priority=9002,in_port=p3,dl_vlan=100,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p2
-  table=8, priority=9004,in_port=p1,dl_vlan=100,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p2,output:p3
-  table=8, priority=9004,in_port=p2,dl_vlan=100,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p3
-  table=8, priority=9004,in_port=p3,dl_vlan=100,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p2
-  table=8, priority=9002,in_port=p4,dl_vlan=200,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p5
-  table=8, priority=9002,in_port=p5,dl_vlan=200,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p4
-  table=8, priority=9004,in_port=p4,dl_vlan=200,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p5
-  table=8, priority=9004,in_port=p5,dl_vlan=200,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p4
-  table=8, priority=0 actions=drop
+  table=3, priority=9003,dl_vlan=100,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p1,output:p2,output:p3
+  table=3, priority=9003,dl_vlan=200,dl_dst=33:33:00:00:00:00/ff:ff:00:00:00:00 actions=pop_vlan,output:p4,output:p5
+  table=3, priority=9001,dl_vlan=100,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p2,output:p3
+  table=3, priority=9002,dl_vlan=100,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p1,output:p2,output:p3
+  table=3, priority=9001,dl_vlan=200,dl_dst=01:80:c2:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p4,output:p5
+  table=3, priority=9002,dl_vlan=200,dl_dst=01:00:5e:00:00:00/ff:ff:ff:00:00:00 actions=pop_vlan,output:p4,output:p5
+  table=3, priority=0 actions=drop
 
 Tracing
 ~~~~~~~
@@ -580,7 +573,7 @@ Tracing
 Let's go a level deeper.  So far, everything we've done has been
 fairly general.  We can also look at something more specific: the path
 that a particular packet would take through Open vSwitch.  We can use
-OVN ``ofproto/trace`` command to play "what-if?" games.  This command
+the ``ofproto/trace`` command to play "what-if?" games.  This command
 is one that we send directly to ``ovs-vswitchd``, using the
 ``ovs-appctl`` utility.
 
@@ -602,25 +595,25 @@ trivial example::
 
   bridge("br0")
   -------------
-   0. in_port=1, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
-      goto_table:3
-   3. priority 9000, cookie 0x5adc15c0
+      goto_table:1
+   1. dl_vlan=100, priority 9000, cookie 0x5adc15c0
       CONTROLLER:96
-      goto_table:7
-   7. priority 9000, cookie 0x5adc15c0
-      goto_table:8
-   8. in_port=1,dl_vlan=100, priority 9000, cookie 0x5adc15c0
+      goto_table:2
+   2. priority 0, cookie 0x5adc15c0
+      goto_table:3
+   3. dl_vlan=100, priority 9000, cookie 0x5adc15c0
       pop_vlan
+      output:1
+       >> skipping output to input port
       output:2
       output:3
 
   Final flow: unchanged
   Megaflow: recirc_id=0,eth,in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,flags=1,recirc_id=1,rule_cookie=0x5adc15c0,controller_id=0,max_len=96)),pop_vlan,2,3
+  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,dont_send=1,continuation=0,recirc_id=1,rule_cookie=0x5adc15c0,controller_id=0,max_len=96)),pop_vlan,2,3
 
 The first line of output, beginning with ``Flow:``, just repeats our
 request in a more verbose form, including the L2 fields that were
@@ -628,10 +621,10 @@ zeroed.
 
 Each of the numbered items under ``bridge("br0")`` shows what would
 happen to our hypothetical packet in the table with the given number.
-For example, we see in table 1 that the packet matches a flow that
+For example, we see in table 0 that the packet matches a flow that
 push on a VLAN header, set the VLAN ID to 100, and goes on to further
-processing in table 3.  In table 3, the packet gets sent to the
-controller to allow MAC learning to take place, and then table 8
+processing in table 1.  In table 1, the packet gets sent to the
+controller to allow MAC learning to take place, and then table 3
 floods the packet to the other ports in the same VLAN.
 
 Summary information follows the numbered tables.  The packet hasn't
@@ -662,7 +655,7 @@ here.  But, take a look at ``inst/faucet.log`` now.  It should now
 include a line at the end that says that it learned about our MAC
 00:11:11:00:00:00, like this::
 
-  Jan 06 15:56:02 faucet.valve INFO     DPID 1 (0x1) L2 learned 00:11:11:00:00:00 (L2 type 0x0000, L3 src None) on Port 1 on VLAN 100 (1 hosts total
+  Sep 10 08:16:28 faucet.valve INFO     DPID 1 (0x1) switch-1 L2 learned 00:11:11:00:00:00 (L2 type 0x0000, L3 src None, L3 dst None) Port 1 VLAN 100  (1 hosts total)
 
 Now compare the flow tables that we saved to the current ones::
 
@@ -671,8 +664,8 @@ Now compare the flow tables that we saved to the current ones::
 The result should look like this, showing new flows for the learned
 MACs::
 
-  +table=3 priority=9098,in_port=1,dl_vlan=100,dl_src=00:11:11:00:00:00 hard_timeout=3601 actions=goto_table:7
-  +table=7 priority=9099,dl_vlan=100,dl_dst=00:11:11:00:00:00 idle_timeout=3601 actions=pop_vlan,output:1
+  +table=1 priority=9098,in_port=1,dl_vlan=100,dl_src=00:11:11:00:00:00 hard_timeout=3605 actions=goto_table:2
+  +table=2 priority=9099,dl_vlan=100,dl_dst=00:11:11:00:00:00 idle_timeout=3605 actions=pop_vlan,output:1
 
 To demonstrate the usefulness of the learned MAC, try tracing (with
 side effects) a packet arriving on ``p2`` (or ``p3``) and destined to
@@ -686,31 +679,29 @@ address::
 
   bridge("br0")
   -------------
-   0. in_port=2, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
-      goto_table:3
-   3. priority 9000, cookie 0x5adc15c0
+      goto_table:1
+   1. dl_vlan=100, priority 9000, cookie 0x5adc15c0
       CONTROLLER:96
-      goto_table:7
-   7. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
+      goto_table:2
+   2. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
       pop_vlan
       output:1
 
 If you check ``inst/faucet.log``, you can see that ``p2``'s MAC has
 been learned too::
 
-  Jan 06 15:58:09 faucet.valve INFO     DPID 1 (0x1) L2 learned 00:22:22:00:00:00 (L2 type 0x0000, L3 src None) on Port 2 on VLAN 100 (2 hosts total)
+  Sep 10 08:17:45 faucet.valve INFO     DPID 1 (0x1) switch-1 L2 learned 00:22:22:00:00:00 (L2 type 0x0000, L3 src None, L3 dst None) Port 2 VLAN 100  (2 hosts total)
 
 Similarly for ``diff-flows``::
 
   $ diff-flows flows1 br0
-  +table=3 priority=9098,in_port=1,dl_vlan=100,dl_src=00:11:11:00:00:00 hard_timeout=3601 actions=goto_table:7
-  +table=3 priority=9098,in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00 hard_timeout=3604 actions=goto_table:7
-  +table=7 priority=9099,dl_vlan=100,dl_dst=00:11:11:00:00:00 idle_timeout=3601 actions=pop_vlan,output:1
-  +table=7 priority=9099,dl_vlan=100,dl_dst=00:22:22:00:00:00 idle_timeout=3604 actions=pop_vlan,output:2
+  +table=1 priority=9098,in_port=1,dl_vlan=100,dl_src=00:11:11:00:00:00 hard_timeout=3605 actions=goto_table:2
+  +table=1 priority=9098,in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00 hard_timeout=3599 actions=goto_table:2
+  +table=2 priority=9099,dl_vlan=100,dl_dst=00:11:11:00:00:00 idle_timeout=3605 actions=pop_vlan,output:1
+  +table=2 priority=9099,dl_vlan=100,dl_dst=00:22:22:00:00:00 idle_timeout=3599 actions=pop_vlan,output:2
 
 Then, if you re-run either of the ``ofproto/trace`` commands (with or
 without ``-generate``), you can see that the packets go back and forth
@@ -721,15 +712,13 @@ without any further MAC learning, e.g.::
 
   bridge("br0")
   -------------
-   0. in_port=2, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
-      goto_table:3
-   3. in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00, priority 9098, cookie 0x5adc15c0
-      goto_table:7
-   7. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
+      goto_table:1
+   1. in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00, priority 9098, cookie 0x5adc15c0
+      goto_table:2
+   2. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
       pop_vlan
       output:1
 
@@ -812,15 +801,13 @@ at the most recent ``ofproto/trace`` output::
 
   bridge("br0")
   -------------
-   0. in_port=2, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=2,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
-      goto_table:3
-   3. in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00, priority 9098, cookie 0x5adc15c0
-      goto_table:7
-   7. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
+      goto_table:1
+   1. in_port=2,dl_vlan=100,dl_src=00:22:22:00:00:00, priority 9098, cookie 0x5adc15c0
+      goto_table:2
+   2. dl_vlan=100,dl_dst=00:11:11:00:00:00, priority 9099, cookie 0x5adc15c0
       pop_vlan
       output:1
 
@@ -844,17 +831,17 @@ megaflow entry includes:
   visited:
 
   ``in_port``
-    In tables 0, 1, and 3.
+    In tables 0 and 1.
 
   ``vlan_tci``
-    In tables 1, 3, and 7 (``vlan_tci`` includes the VLAN ID and PCP
+    In tables 0, 1, and 2 (``vlan_tci`` includes the VLAN ID and PCP
     fields and``dl_vlan`` is just the VLAN ID).
 
   ``dl_src``
-    In table 3
+    In table 1.
 
   ``dl_dst``
-    In table 7.
+    In table 2.
 
 * All of the fields matched by flows that had to be ruled out to
   ensure that the ones that actually matched were the highest priority
@@ -865,12 +852,12 @@ The last one is important.  Notice how the megaflow matches on
 ``dl_type`` (the Ethernet type).  One reason is because of this flow
 in OpenFlow table 1 (which shows up in ``dump-flows`` output)::
 
-  table=1, priority=9099,dl_type=0x88cc actions=drop
+  table=1, priority=9099,dl_type=0x9000 actions=drop
 
 This flow has higher priority than the flow in table 1 that actually
 matched.  This means that, to put it in the megaflow cache,
 ``ovs-vswitchd`` has to add a match on ``dl_type`` to ensure that the
-cache entry doesn't match LLDP packets (with Ethertype 0x88cc).
+cache entry doesn't match ECTP packets (with Ethertype 0x9000).
 
 .. note::
 
@@ -935,59 +922,81 @@ each VLAN and define a router between them. The ``dps`` section is unchanged::
       router-1:
           vlans: [100, 200]
 
-Then we restart Faucet::
+Then we can tell Faucet to reload its configuration::
 
-  $ docker restart faucet
-
-.. note::
-
-  One should be able to tell Faucet to re-read its configuration file
-  without restarting it.  I sometimes saw anomalous behavior when I
-  did this, although I didn't characterize it well enough to make a
-  quality bug report.  I found restarting the container to be
-  reliable.
+  $ sudo docker exec faucet pkill -HUP -f faucet.faucet
 
 OpenFlow Layer
 ~~~~~~~~~~~~~~
 
-Back in the OVS sandbox, let's see how the flow table has changed, with::
+Now that we have an additional feature enabled (routing) we will notice some
+additional OpenFlow tables if we check ``inst/faucet.log``::
 
-  $ diff-flows flows1 br0
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 0 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('eth_type', False), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: None name: vlan next_tables: ['eth_src'] output: True set_fields: ('vlan_vid',) size: 32 table_id: 0 vlan_port_scale: 1.5
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 1 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('eth_src', False), ('eth_type', False), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: eth_dst name: eth_src next_tables: ['ipv4_fib', 'vip', 'eth_dst', 'flood'] output: True set_fields: ('vlan_vid', 'eth_dst') size: 32 table_id: 1 vlan_port_scale: 4.1
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 2 table config dec_ttl: True exact_match: None match_types: (('eth_type', False), ('ipv4_dst', True), ('vlan_vid', False)) meter: None miss_goto: None name: ipv4_fib next_tables: ['vip', 'eth_dst', 'flood'] output: True set_fields: ('eth_dst', 'eth_src', 'vlan_vid') size: 32 table_id: 2 vlan_port_scale: 3.1
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 3 table config dec_ttl: None exact_match: None match_types: (('arp_tpa', False), ('eth_dst', False), ('eth_type', False), ('icmpv6_type', False), ('ip_proto', False)) meter: None miss_goto: None name: vip next_tables: ['eth_dst', 'flood'] output: True set_fields: None size: 32 table_id: 3 vlan_port_scale: None
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 4 table config dec_ttl: None exact_match: True match_types: (('eth_dst', False), ('vlan_vid', False)) meter: None miss_goto: flood name: eth_dst next_tables: [] output: True set_fields: None size: 41 table_id: 4 vlan_port_scale: 4.1
+  Sep 10 08:28:14 faucet.valve INFO     DPID 1 (0x1) switch-1 table ID 5 table config dec_ttl: None exact_match: None match_types: (('eth_dst', True), ('in_port', False), ('vlan_vid', False)) meter: None miss_goto: None name: flood next_tables: [] output: True set_fields: None size: 32 table_id: 5 vlan_port_scale: 2.1
 
-First, table 3 has new flows to direct ARP packets to table 6 (the
+So now we have an additional FIB and VIP table:
+
+Table 0 (vlan)
+  Ingress VLAN processing
+
+Table 1 (eth_src)
+  Ingress L2 processing, MAC learning
+
+Table 2 (ipv4_fib)
+  L3 forwarding for IPv4
+
+Table 3 (vip)
+  Virtual IP processing, e.g. for router IP addresses implemented by Faucet
+
+Table 4 (eth_dst)
+  Egress L2 processing
+
+Table 5 (flood)
+  Flooding
+
+Back in the OVS sandbox, let's see what new flow rules have been added, with::
+
+  $ diff-flows flows1 br0 | grep +
+
+First, table 1 has new flows to direct ARP packets to table 3 (the
 virtual IP processing table), presumably to handle ARP for the router
 IPs.  New flows also send IP packets destined to a particular Ethernet
-address to table 4 (the L3 forwarding table); we can make the educated
+address to table 2 (the L3 forwarding table); we can make the educated
 guess that the Ethernet address is the one used by the Faucet router::
 
-  +table=3 priority=9131,arp,dl_vlan=100 actions=goto_table:6
-  +table=3 priority=9131,arp,dl_vlan=200 actions=goto_table:6
-  +table=3 priority=9099,ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01 actions=goto_table:4
-  +table=3 priority=9099,ip,dl_vlan=200,dl_dst=0e:00:00:00:00:01 actions=goto_table:4
+  +table=1 priority=9131,arp,dl_vlan=100 actions=goto_table:3
+  +table=1 priority=9131,arp,dl_vlan=200 actions=goto_table:3
+  +table=1 priority=9099,ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01 actions=goto_table:2
+  +table=1 priority=9099,ip,dl_vlan=200,dl_dst=0e:00:00:00:00:01 actions=goto_table:2
 
-The new flows in table 4 appear to be verifying that the packets are
-indeed addressed to a network or IP address that Faucet knows how to
-route::
+In the new ``ipv4_fib`` table (table 2) there appear to be flows for verifying
+that the packets are indeed addressed to a network or IP address that Faucet
+knows how to route::
 
-  +table=4 priority=9131,ip,dl_vlan=100,nw_dst=10.100.0.254 actions=goto_table:6
-  +table=4 priority=9131,ip,dl_vlan=200,nw_dst=10.200.0.254 actions=goto_table:6
-  +table=4 priority=9123,ip,dl_vlan=100,nw_dst=10.100.0.0/24 actions=goto_table:6
-  +table=4 priority=9123,ip,dl_vlan=200,nw_dst=10.100.0.0/24 actions=goto_table:6
-  +table=4 priority=9123,ip,dl_vlan=100,nw_dst=10.200.0.0/24 actions=goto_table:6
-  +table=4 priority=9123,ip,dl_vlan=200,nw_dst=10.200.0.0/24 actions=goto_table:6
+  +table=2 priority=9131,ip,dl_vlan=100,nw_dst=10.100.0.254 actions=goto_table:3
+  +table=2 priority=9131,ip,dl_vlan=200,nw_dst=10.200.0.254 actions=goto_table:3
+  +table=2 priority=9123,ip,dl_vlan=200,nw_dst=10.100.0.0/24 actions=goto_table:3
+  +table=2 priority=9123,ip,dl_vlan=100,nw_dst=10.100.0.0/24 actions=goto_table:3
+  +table=2 priority=9123,ip,dl_vlan=200,nw_dst=10.200.0.0/24 actions=goto_table:3
+  +table=2 priority=9123,ip,dl_vlan=100,nw_dst=10.200.0.0/24 actions=goto_table:3
 
-Table 6 has a few different things going on.  It sends ARP requests
-for the router IPs to the controller; presumably the controller will
-generate replies and send them back to the requester.  It switches
-other ARP packets, either broadcasting them if they have a broadcast
+In our new ``vip`` table (table 3) there are a few different things going on.
+It sends ARP requests for the router IPs to the controller; presumably the
+controller will generate replies and send them back to the requester.
+It switches other ARP packets, either broadcasting them if they have a broadcast
 destination or attempting to unicast them otherwise.  It sends all
 other IP packets to the controller::
 
-  +table=6 priority=9133,arp,arp_tpa=10.100.0.254 actions=CONTROLLER:128
-  +table=6 priority=9133,arp,arp_tpa=10.200.0.254 actions=CONTROLLER:128
-  +table=6 priority=9132,arp,dl_dst=ff:ff:ff:ff:ff:ff actions=goto_table:8
-  +table=6 priority=9131,arp actions=goto_table:7
-  +table=6 priority=9130,ip actions=CONTROLLER:128
+  +table=3 priority=9133,arp,arp_tpa=10.100.0.254 actions=CONTROLLER:128
+  +table=3 priority=9133,arp,arp_tpa=10.200.0.254 actions=CONTROLLER:128
+  +table=3 priority=9132,arp,dl_dst=ff:ff:ff:ff:ff:ff actions=goto_table:4
+  +table=3 priority=9131,arp actions=goto_table:4
+  +table=3 priority=9130,ip actions=CONTROLLER:128
 
 Performance is clearly going to be poor if every packet that needs to
 be routed has to go to the controller, but it's unlikely that's the
@@ -1039,27 +1048,27 @@ The important part of the output is where it shows that the packet was
 recognized as an ARP request destined to the router gateway and
 therefore sent to the controller::
 
-   6. arp,arp_tpa=10.100.0.254, priority 9133, cookie 0x5adc15c0
-      CONTROLLER:128
+  3. arp,arp_tpa=10.100.0.254, priority 9133, cookie 0x5adc15c0
+    CONTROLLER:128
 
 The Faucet log shows that Faucet learned the host's MAC address,
 its MAC-to-IP mapping, and responded to the ARP request::
 
-  Jan 06 16:12:23 faucet.valve INFO     DPID 1 (0x1) Adding new route 10.100.0.1/32 via 10.100.0.1 (00:01:02:03:04:05) on VLAN 100
-  Jan 06 16:12:23 faucet.valve INFO     DPID 1 (0x1) Responded to ARP request for 10.100.0.254 from 10.100.0.1 (00:01:02:03:04:05) on VLAN 100
-  Jan 06 16:12:23 faucet.valve INFO     DPID 1 (0x1) L2 learned 00:01:02:03:04:05 (L2 type 0x0806, L3 src 10.100.0.1) on Port 1 on VLAN 100 (1 hosts total)
+  Sep 10 08:52:46 faucet.valve INFO     DPID 1 (0x1) switch-1 Adding new route 10.100.0.1/32 via 10.100.0.1 (00:01:02:03:04:05) on VLAN 100
+  Sep 10 08:52:46 faucet.valve INFO     DPID 1 (0x1) switch-1 Resolve response to 10.100.0.254 from 00:01:02:03:04:05 (L2 type 0x0806, L3 src 10.100.0.1, L3 dst 10.100.0.254) Port 1 VLAN 100
+  Sep 10 08:52:46 faucet.valve INFO     DPID 1 (0x1) switch-1 L2 learned 00:01:02:03:04:05 (L2 type 0x0806, L3 src 10.100.0.1, L3 dst 10.100.0.254) Port 1 VLAN 100  (1 hosts total)
 
 We can also look at the changes to the flow tables::
 
   $ diff-flows flows2 br0
-  +table=3 priority=9098,in_port=1,dl_vlan=100,dl_src=00:01:02:03:04:05 hard_timeout=3600 actions=goto_table:7
-  +table=4 priority=9131,ip,dl_vlan=100,nw_dst=10.100.0.1 actions=set_field:4196->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:01:02:03:04:05->eth_dst,dec_ttl,goto_table:7
-  +table=4 priority=9131,ip,dl_vlan=200,nw_dst=10.100.0.1 actions=set_field:4196->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:01:02:03:04:05->eth_dst,dec_ttl,goto_table:7
-  +table=7 priority=9099,dl_vlan=100,dl_dst=00:01:02:03:04:05 idle_timeout=3600 actions=pop_vlan,output:1
+  +table=1 priority=9098,in_port=1,dl_vlan=100,dl_src=00:01:02:03:04:05 hard_timeout=3605 actions=goto_table:4
+  +table=2 priority=9131,ip,dl_vlan=200,nw_dst=10.100.0.1 actions=set_field:4196->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:01:02:03:04:05->eth_dst,dec_ttl,goto_table:4
+  +table=2 priority=9131,ip,dl_vlan=100,nw_dst=10.100.0.1 actions=set_field:4196->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:01:02:03:04:05->eth_dst,dec_ttl,goto_table:4
+  +table=4 priority=9099,dl_vlan=100,dl_dst=00:01:02:03:04:05 idle_timeout=3605 actions=pop_vlan,output:1
 
-The new flows include one in table 3 and one in table 7 for the
+The new flows include one in table 1 and one in table 4 for the
 learned MAC, which have the same forms we saw before.  The new flows
-in table 4 are different.  They matches packets directed to 10.100.0.1
+in table 2 are different.  They matches packets directed to 10.100.0.1
 (in two VLANs) and forward them to the host by updating the Ethernet
 source and destination addresses appropriately, decrementing the TTL,
 and skipping ahead to unicast output in table 7.  This means that
@@ -1083,7 +1092,7 @@ And dump the reply packet::
 
   $ /usr/sbin/tcpdump -evvvr sandbox/p1.pcap
   reading from file sandbox/p1.pcap, link-type EN10MB (Ethernet)
-  16:14:47.670727 0e:00:00:00:00:01 (oui Unknown) > 00:01:02:03:04:05 (oui Unknown), ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Reply 10.100.0.254 is-at 0e:00:00:00:00:01 (oui Unknown), length 46
+  20:55:13.186932 0e:00:00:00:00:01 (oui Unknown) > 00:01:02:03:04:05 (oui Unknown), ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Reply 10.100.0.254 is-at 0e:00:00:00:00:01 (oui Unknown), length 46
 
 We clearly see the ARP reply, which tells us that the Faucet router's
 Ethernet address is 0e:00:00:00:00:01 (as we guessed before from the
@@ -1105,26 +1114,24 @@ this::
 
   bridge("br0")
   -------------
-   0. in_port=1, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
+      goto_table:1
+   1. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
+      goto_table:2
+   2. ip,dl_vlan=100,nw_dst=10.200.0.0/24, priority 9123, cookie 0x5adc15c0
       goto_table:3
-   3. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
-      goto_table:4
-   4. ip,dl_vlan=100,nw_dst=10.200.0.0/24, priority 9123, cookie 0x5adc15c0
-      goto_table:6
-   6. ip, priority 9130, cookie 0x5adc15c0
+   3. ip, priority 9130, cookie 0x5adc15c0
       CONTROLLER:128
 
   Final flow: udp,in_port=1,dl_vlan=100,dl_vlan_pcp=0,vlan_tci1=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=0
   Megaflow: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_dst=10.200.0.0/25,nw_frag=no
-  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,flags=0,recirc_id=6,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
+  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=6,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
 
 Observe that the packet gets recognized as destined to the router, in
-table 3, and then as properly destined to the 10.200.0.0/24 network,
-in table 4.  In table 6, however, it gets sent to the controller.
+table 1, and then as properly destined to the 10.200.0.0/24 network,
+in table 2.  In table 3, however, it gets sent to the controller.
 Presumably, this is because Faucet has not yet resolved an Ethernet
 address for the destination host 10.200.0.1.  It probably sent out an
 ARP request.  Let's take a look in the next step.
@@ -1140,13 +1147,13 @@ Let's make sure::
 
   $ /usr/sbin/tcpdump -evvvr sandbox/p4.pcap
   reading from file sandbox/p4.pcap, link-type EN10MB (Ethernet)
-  16:17:43.174006 0e:00:00:00:00:01 (oui Unknown) > Broadcast, ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Request who-has 10.200.0.1 tell 10.200.0.254, length 46
+  20:57:31.116097 0e:00:00:00:00:01 (oui Unknown) > Broadcast, ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Request who-has 10.200.0.1 tell 10.200.0.254, length 46
 
 and::
 
   $ /usr/sbin/tcpdump -evvvr sandbox/p5.pcap
   reading from file sandbox/p5.pcap, link-type EN10MB (Ethernet)
-  16:17:43.174268 0e:00:00:00:00:01 (oui Unknown) > Broadcast, ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Request who-has 10.200.0.1 tell 10.200.0.254, length 46
+  20:58:04.129735 0e:00:00:00:00:01 (oui Unknown) > Broadcast, ethertype ARP (0x0806), length 60: Ethernet (len 6), IPv4 (len 4), Request who-has 10.200.0.1 tell 10.200.0.254, length 46
 
 For good measure, let's make sure that it wasn't sent to ``p3``::
 
@@ -1164,37 +1171,34 @@ reply::
 
   bridge("br0")
   -------------
-   0. in_port=4, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=4,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=4,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4296->vlan_vid
+      goto_table:1
+   1. arp,dl_vlan=200, priority 9131, cookie 0x5adc15c0
       goto_table:3
-   3. arp,dl_vlan=200, priority 9131, cookie 0x5adc15c0
-      goto_table:6
-   6. arp,arp_tpa=10.200.0.254, priority 9133, cookie 0x5adc15c0
+   3. arp,arp_tpa=10.200.0.254, priority 9133, cookie 0x5adc15c0
       CONTROLLER:128
 
   Final flow: arp,in_port=4,dl_vlan=200,dl_vlan_pcp=0,vlan_tci1=0x0000,dl_src=00:10:20:30:40:50,dl_dst=0e:00:00:00:00:01,arp_spa=10.200.0.1,arp_tpa=10.200.0.254,arp_op=2,arp_sha=00:10:20:30:40:50,arp_tha=0e:00:00:00:00:01
-  Megaflow: recirc_id=0,eth,arp,in_port=4,vlan_tci=0x0000/0x1fff,dl_dst=0e:00:00:00:00:01,arp_tpa=10.200.0.254
-  Datapath actions: push_vlan(vid=200,pcp=0),userspace(pid=0,controller(reason=1,flags=0,recirc_id=7,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
+  Megaflow: recirc_id=0,eth,arp,in_port=4,vlan_tci=0x0000/0x1fff,arp_tpa=10.200.0.254
+  Datapath actions: push_vlan(vid=200,pcp=0),userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=7,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
 
 It shows up in ``inst/faucet.log``::
 
-  Jan 06 03:20:11 faucet.valve INFO     DPID 1 (0x1) Adding new route 10.200.0.1/32 via 10.200.0.1 (00:10:20:30:40:50) on VLAN 200
-  Jan 06 03:20:11 faucet.valve INFO     DPID 1 (0x1) ARP response 10.200.0.1 (00:10:20:30:40:50) on VLAN 200
-  Jan 06 03:20:11 faucet.valve INFO     DPID 1 (0x1) L2 learned 00:10:20:30:40:50 (L2 type 0x0806, L3 src 10.200.0.1) on Port 4 on VLAN 200 (1 hosts total)
+  Sep 10 08:59:02 faucet.valve INFO     DPID 1 (0x1) switch-1 Adding new route 10.200.0.1/32 via 10.200.0.1 (00:10:20:30:40:50) on VLAN 200
+  Sep 10 08:59:02 faucet.valve INFO     DPID 1 (0x1) switch-1 Received advert for 10.200.0.1 from 00:10:20:30:40:50 (L2 type 0x0806, L3 src 10.200.0.1, L3 dst 10.200.0.254) Port 4 VLAN 200
+  Sep 10 08:59:02 faucet.valve INFO     DPID 1 (0x1) switch-1 L2 learned 00:10:20:30:40:50 (L2 type 0x0806, L3 src 10.200.0.1, L3 dst 10.200.0.254) Port 4 VLAN 200  (1 hosts total)
 
 and in the OVS flow tables::
 
   $ diff-flows flows2 br0
-  +table=3 priority=9098,in_port=4,dl_vlan=200,dl_src=00:10:20:30:40:50 hard_timeout=3601 actions=goto_table:7
+  +table=1 priority=9098,in_port=4,dl_vlan=200,dl_src=00:10:20:30:40:50 hard_timeout=3598 actions=goto_table:4
   ...
-  +table=4 priority=9131,ip,dl_vlan=200,nw_dst=10.200.0.1 actions=set_field:4296->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:10:20:30:40:50->eth_dst,dec_ttl,goto_table:7
-  +table=4 priority=9131,ip,dl_vlan=100,nw_dst=10.200.0.1 actions=set_field:4296->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:10:20:30:40:50->eth_dst,dec_ttl,goto_table:7
+  +table=2 priority=9131,ip,dl_vlan=200,nw_dst=10.200.0.1 actions=set_field:4296->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:10:20:30:40:50->eth_dst,dec_ttl,goto_table:4
+  +table=2 priority=9131,ip,dl_vlan=100,nw_dst=10.200.0.1 actions=set_field:4296->vlan_vid,set_field:0e:00:00:00:00:01->eth_src,set_field:00:10:20:30:40:50->eth_dst,dec_ttl,goto_table:4
   ...
-  +table=4 priority=9123,ip,dl_vlan=100,nw_dst=10.200.0.0/24 actions=goto_table:6
-  +table=7 priority=9099,dl_vlan=200,dl_dst=00:10:20:30:40:50 idle_timeout=3601 actions=pop_vlan,output:4
+  +table=4 priority=9099,dl_vlan=200,dl_dst=00:10:20:30:40:50 idle_timeout=3598 actions=pop_vlan,output:4
 
 Step 6: IP Packet Delivery
 ++++++++++++++++++++++++++
@@ -1213,25 +1217,23 @@ for the original sending host to re-send the packet.  We can do that
 by re-running the trace::
 
   $ ovs-appctl ofproto/trace br0 in_port=p1,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,udp,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_ttl=64 -generate
-  Flow: udp,in_port=1,vlan_tci=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=0
 
+  Flow: udp,in_port=1,vlan_tci=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=0
   bridge("br0")
   -------------
-   0. in_port=1, priority 9099, cookie 0x5adc15c0
-      goto_table:1
-   1. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
+   0. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
-      goto_table:3
-   3. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
-      goto_table:4
-   4. ip,dl_vlan=100,nw_dst=10.200.0.1, priority 9131, cookie 0x5adc15c0
+      goto_table:1
+   1. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
+      goto_table:2
+   2. ip,dl_vlan=100,nw_dst=10.200.0.1, priority 9131, cookie 0x5adc15c0
       set_field:4296->vlan_vid
       set_field:0e:00:00:00:00:01->eth_src
       set_field:00:10:20:30:40:50->eth_dst
       dec_ttl
-      goto_table:7
-   7. dl_vlan=200,dl_dst=00:10:20:30:40:50, priority 9099, cookie 0x5adc15c0
+      goto_table:4
+   4. dl_vlan=200,dl_dst=00:10:20:30:40:50, priority 9099, cookie 0x5adc15c0
       pop_vlan
       output:4
 
@@ -1325,18 +1327,27 @@ the ways that OVS tries to optimize megaflows.  Update
               actions:
                   allow: 1
 
-Then restart Faucet::
+Then reload Faucet::
 
-  $ docker restart faucet
+  $ sudo docker exec faucet pkill -HUP -f faucet.faucet
 
-On port 1, this new configuration blocks all traffic to TCP port 8080
-and allows all other traffic.  The resulting change in the flow table
-shows this clearly too::
+We will now find Faucet has added a new table to the start of the pipeline
+for processing port ACLs.  Let's take a look at our new table 0 with
+``dump-flows br0``::
 
-  $ diff-flows flows2 br0
-  -priority=9099,in_port=1 actions=goto_table:1
-  +priority=9098,in_port=1 actions=goto_table:1
-  +priority=9099,tcp,in_port=1,tp_dst=8080 actions=drop
+  priority=9099,tcp,in_port=p1,tp_dst=8080 actions=drop
+  priority=9098,in_port=p1 actions=goto_table:1
+  priority=9099,in_port=p2 actions=goto_table:1
+  priority=9099,in_port=p3 actions=goto_table:1
+  priority=9099,in_port=p4 actions=goto_table:1
+  priority=9099,in_port=p5 actions=goto_table:1
+  priority=0 actions=drop
+
+We now have a flow that just jumps to table 1 (vlan) for each configured port,
+and a low priority rule to drop other unrecognized packets.  We also see a flow
+rule for dropping TCP port 8080 traffic on port 1.  If we compare this rule to
+the ACL we configured, we can clearly see how Faucet has converted this ACL to
+fit into the OpenFlow pipeline.
 
 The most interesting question here is performance.  If you recall the
 earlier discussion, when a packet through the flow table encounters a
@@ -1357,6 +1368,7 @@ Let's see what happens, by sending a packet to port 80 (instead of
 8080)::
 
   $ ovs-appctl ofproto/trace br0 in_port=p1,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,tcp,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_ttl=64,tp_dst=80 -generate
+  src=10.100.0.1,nw_dst=10.200.0.1,nw_ttl=64,tp_dst=80 -generate
   Flow: tcp,in_port=1,vlan_tci=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=80,tcp_flags=0
 
   bridge("br0")
@@ -1366,17 +1378,17 @@ Let's see what happens, by sending a packet to port 80 (instead of
    1. in_port=1,vlan_tci=0x0000/0x1fff, priority 9000, cookie 0x5adc15c0
       push_vlan:0x8100
       set_field:4196->vlan_vid
+      goto_table:2
+   2. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
       goto_table:3
-   3. ip,dl_vlan=100,dl_dst=0e:00:00:00:00:01, priority 9099, cookie 0x5adc15c0
+   3. ip,dl_vlan=100,nw_dst=10.200.0.0/24, priority 9123, cookie 0x5adc15c0
       goto_table:4
-   4. ip,dl_vlan=100,nw_dst=10.200.0.0/24, priority 9123, cookie 0x5adc15c0
-      goto_table:6
-   6. ip, priority 9130, cookie 0x5adc15c0
+   4. ip, priority 9130, cookie 0x5adc15c0
       CONTROLLER:128
 
   Final flow: tcp,in_port=1,dl_vlan=100,dl_vlan_pcp=0,vlan_tci1=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=80,tcp_flags=0
-  Megaflow: recirc_id=0,eth,tcp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_dst=10.200.0.1,nw_frag=no,tp_dst=0x0/0xf000
-  Datapath actions: push_vlan(vid=100,pcp=0)
+  Megaflow: recirc_id=0,eth,tcp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_dst=10.200.0.0/25,nw_frag=no,tp_dst=0x0/0xf000
+  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=8,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
 
 Take a look at the Megaflow line and in particular the match on
 ``tp_dst``, which says ``tp_dst=0x0/0xf000``.  What this means is that
@@ -1406,8 +1418,8 @@ Finishing Up
 ------------
 
 When you're done, you probably want to exit the sandbox session, with
-Control+D or ``exit``, and stop the Faucet controller with ``docker
-stop faucet; docker rm faucet``.
+Control+D or ``exit``, and stop the Faucet controller with ``sudo docker
+stop faucet; sudo docker rm faucet``.
 
 Further Directions
 ------------------

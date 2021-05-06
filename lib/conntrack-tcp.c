@@ -39,9 +39,15 @@
 #include <config.h>
 
 #include "conntrack-private.h"
+#include "conntrack-tp.h"
+#include "coverage.h"
 #include "ct-dpif.h"
 #include "dp-packet.h"
 #include "util.h"
+
+COVERAGE_DEFINE(conntrack_tcp_seq_chk_bypass);
+COVERAGE_DEFINE(conntrack_tcp_seq_chk_failed);
+COVERAGE_DEFINE(conntrack_invalid_tcp_flags);
 
 struct tcp_peer {
     uint32_t               seqlo;          /* Max sequence number sent     */
@@ -144,6 +150,16 @@ tcp_get_wscale(const struct tcp_header *tcp)
     return wscale;
 }
 
+static bool
+tcp_bypass_seq_chk(struct conntrack *ct)
+{
+    if (!conntrack_get_tcp_seq_chk(ct)) {
+        COVERAGE_INC(conntrack_tcp_seq_chk_bypass);
+        return true;
+    }
+    return false;
+}
+
 static enum ct_update_res
 tcp_conn_update(struct conntrack *ct, struct conn *conn_,
                 struct dp_packet *pkt, bool reply, long long now)
@@ -159,17 +175,23 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
 
     uint16_t win = ntohs(tcp->tcp_winsz);
     uint32_t ack, end, seq, orig_seq;
-    uint32_t p_len = tcp_payload_length(pkt);
+    uint32_t p_len = dp_packet_get_tcp_payload_length(pkt);
 
     if (tcp_invalid_flags(tcp_flags)) {
+        COVERAGE_INC(conntrack_invalid_tcp_flags);
         return CT_UPDATE_INVALID;
     }
 
-    if (((tcp_flags & (TCP_SYN | TCP_ACK)) == TCP_SYN)
-        && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
-        && src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
-        src->state = dst->state = CT_DPIF_TCPS_CLOSED;
-        return CT_UPDATE_NEW;
+    if ((tcp_flags & (TCP_SYN | TCP_ACK)) == TCP_SYN) {
+        if (dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
+            && src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
+            src->state = dst->state = CT_DPIF_TCPS_CLOSED;
+            return CT_UPDATE_NEW;
+        } else if (src->state <= CT_DPIF_TCPS_SYN_SENT) {
+            src->state = CT_DPIF_TCPS_SYN_SENT;
+            conn_update_expiration(ct, &conn->up, CT_TM_TCP_FIRST_PACKET, now);
+            return CT_UPDATE_VALID_NEW;
+        }
     }
 
     if (src->wscale & CT_WSCALE_FLAG
@@ -272,7 +294,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
 
     int ackskew = check_ackskew ? dst->seqlo - ack : 0;
 #define MAXACKWINDOW (0xffff + 1500)    /* 1500 is an arbitrary fudge factor */
-    if (SEQ_GEQ(src->seqhi, end)
+    if ((SEQ_GEQ(src->seqhi, end)
         /* Last octet inside other's window space */
         && SEQ_GEQ(seq, src->seqlo - (dst->max_win << dws))
         /* Retrans: not more than one window back */
@@ -281,7 +303,8 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
         && (ackskew <= (MAXACKWINDOW << sws))
         /* Acking not more than one window forward */
         && ((tcp_flags & TCP_RST) == 0 || orig_seq == src->seqlo
-            || (orig_seq == src->seqlo + 1) || (orig_seq + 1 == src->seqlo))) {
+            || (orig_seq == src->seqlo + 1) || (orig_seq + 1 == src->seqlo)))
+        || tcp_bypass_seq_chk(ct)) {
         /* Require an exact/+1 sequence match on resets when possible */
 
         /* update max window */
@@ -385,6 +408,7 @@ tcp_conn_update(struct conntrack *ct, struct conn *conn_,
             src->state = dst->state = CT_DPIF_TCPS_TIME_WAIT;
         }
     } else {
+        COVERAGE_INC(conntrack_tcp_seq_chk_failed);
         return CT_UPDATE_INVALID;
     }
 
@@ -412,7 +436,8 @@ tcp_valid_new(struct dp_packet *pkt)
 }
 
 static struct conn *
-tcp_new_conn(struct conntrack *ct, struct dp_packet *pkt, long long now)
+tcp_new_conn(struct conntrack *ct, struct dp_packet *pkt, long long now,
+             uint32_t tp_id)
 {
     struct conn_tcp* newconn = NULL;
     struct tcp_header *tcp = dp_packet_l4(pkt);
@@ -425,7 +450,7 @@ tcp_new_conn(struct conntrack *ct, struct dp_packet *pkt, long long now)
     dst = &newconn->peer[1];
 
     src->seqlo = ntohl(get_16aligned_be32(&tcp->tcp_seq));
-    src->seqhi = src->seqlo + tcp_payload_length(pkt) + 1;
+    src->seqhi = src->seqlo + dp_packet_get_tcp_payload_length(pkt) + 1;
 
     if (tcp_flags & TCP_SYN) {
         src->seqhi++;
@@ -448,6 +473,7 @@ tcp_new_conn(struct conntrack *ct, struct dp_packet *pkt, long long now)
     src->state = CT_DPIF_TCPS_SYN_SENT;
     dst->state = CT_DPIF_TCPS_CLOSED;
 
+    newconn->up.tp_id = tp_id;
     conn_init_expiration(ct, &newconn->up, CT_TM_TCP_FIRST_PACKET, now);
 
     return &newconn->up;

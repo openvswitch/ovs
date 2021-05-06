@@ -246,7 +246,6 @@ OvsPostCtEventEntry(POVS_CT_ENTRY entry, UINT8 type)
 {
     OVS_CT_EVENT_ENTRY ctEventEntry = {0};
     NdisMoveMemory(&ctEventEntry.entry, entry, sizeof(OVS_CT_ENTRY));
-    ctEventEntry.entry.parent = NULL;
     ctEventEntry.type = type;
     OvsPostCtEvent(&ctEventEntry);
 }
@@ -480,6 +479,9 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry, BOOLEAN forceDelete)
         RemoveEntryList(&entry->link);
         OVS_RELEASE_SPIN_LOCK(&(entry->lock), irql);
         NdisFreeSpinLock(&(entry->lock));
+        if (entry->helper_name) {
+            OvsFreeMemoryWithTag(entry->helper_name, OVS_CT_POOL_TAG);
+        }
         OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
         NdisInterlockedDecrement((PLONG)&ctTotalEntries);
         return;
@@ -753,6 +755,9 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
                 return NULL;
             }
             break;
+        case CT_UPDATE_VALID_NEW:
+            state |= OVS_CS_F_NEW;
+            break;
         }
     }
     if (entry) {
@@ -784,59 +789,82 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
 static __inline VOID
 OvsConntrackSetMark(OvsFlowKey *key,
                     POVS_CT_ENTRY entry,
-                    UINT32 value,
-                    UINT32 mask,
+                    MD_MARK *mark,
                     BOOLEAN *markChanged)
 {
-    UINT32 newMark;
-    newMark = value | (entry->mark & ~(mask));
-    if (entry->mark != newMark) {
+    POVS_CT_ENTRY parent = entry->parent;
+    BOOLEAN changed = FALSE;
+    UINT32 newMark = 0;
+
+    if (parent && parent->mark) {
+        newMark = parent->mark;
+        changed = TRUE;
+    } else if (mark) {
+        newMark = mark->value | (entry->mark & ~(mark->mask));
+        changed = TRUE;
+    }
+
+    if (changed && entry->mark != newMark) {
         entry->mark = newMark;
         key->ct.mark = newMark;
         *markChanged = TRUE;
     }
 }
 
+static __inline BOOLEAN
+OvsConntrackIsLabelsNonZero(const struct ovs_key_ct_labels *labels)
+{
+    UINT8 i;
+
+    for (i = 0; i < OVS_CT_LABELS_LEN_32; i++) {
+        if (labels->ct_labels_32[i]) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 static __inline void
 OvsConntrackSetLabels(OvsFlowKey *key,
                       POVS_CT_ENTRY entry,
-                      struct ovs_key_ct_labels *val,
-                      struct ovs_key_ct_labels *mask,
+                      MD_LABELS *labels,
                       BOOLEAN *labelChanged)
 {
-    ovs_u128 v, m, pktMdLabel = {0};
-    memcpy(&v, val, sizeof v);
-    memcpy(&m, mask, sizeof m);
+    POVS_CT_ENTRY parent = entry->parent;
 
-    pktMdLabel.u64.lo = v.u64.lo | (pktMdLabel.u64.lo & ~(m.u64.lo));
-    pktMdLabel.u64.hi = v.u64.hi | (pktMdLabel.u64.hi & ~(m.u64.hi));
-
-    if (!NdisEqualMemory(&entry->labels, &pktMdLabel,
-                         sizeof(struct ovs_key_ct_labels))) {
+    /* Inherit master's labels at labels initialization, if any. */
+    if (!OvsConntrackIsLabelsNonZero(&entry->labels) &&
+        parent && OvsConntrackIsLabelsNonZero(&parent->labels)) {
+        RtlCopyMemory(&entry->labels, &parent->labels, OVS_CT_LABELS_LEN);
         *labelChanged = TRUE;
     }
-    NdisMoveMemory(&entry->labels, &pktMdLabel,
-                   sizeof(struct ovs_key_ct_labels));
-    NdisMoveMemory(&key->ct.labels, &pktMdLabel,
-                   sizeof(struct ovs_key_ct_labels));
+
+    /* Update labels according to value of ct_label in ct commit */
+    if (labels && OvsConntrackIsLabelsNonZero(&labels->mask)) {
+        UINT8 i;
+        UINT32 *dst = entry->labels.ct_labels_32;
+        for (i = 0; i < OVS_CT_LABELS_LEN_32; i++) {
+            dst[i] = (dst[i] & ~(labels->mask.ct_labels_32[i])) |
+                     (labels->value.ct_labels_32[i] & labels->mask.ct_labels_32[i]);
+        }
+
+        *labelChanged = TRUE;
+    }
+
+    /* Update flow key's ct labels */
+    NdisMoveMemory(&key->ct.labels, &entry->labels, OVS_CT_LABELS_LEN);
 }
 
 static void
 OvsCtSetMarkLabel(OvsFlowKey *key,
-                       POVS_CT_ENTRY entry,
-                       MD_MARK *mark,
-                       MD_LABELS *labels,
-                       BOOLEAN *triggerUpdateEvent)
+                  POVS_CT_ENTRY entry,
+                  MD_MARK *mark,
+                  MD_LABELS *labels,
+                  BOOLEAN *triggerUpdateEvent)
 {
-    if (mark) {
-        OvsConntrackSetMark(key, entry, mark->value, mark->mask,
-                            triggerUpdateEvent);
-    }
-
-    if (labels) {
-        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask,
-                              triggerUpdateEvent);
-    }
+    OvsConntrackSetMark(key, entry, mark, triggerUpdateEvent);
+    OvsConntrackSetLabels(key, entry, labels, triggerUpdateEvent);
 }
 
 /*
@@ -879,6 +907,7 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     BOOLEAN triggerUpdateEvent = FALSE;
     BOOLEAN entryCreated = FALSE;
     POVS_CT_ENTRY entry = NULL;
+    POVS_CT_ENTRY parent = NULL;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OvsConntrackKeyLookupCtx ctx = { 0 };
     LOCK_STATE_EX lockStateTable;
@@ -955,8 +984,6 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
 
     if (OvsDetectFtpPacket(key)) {
         /* FTP parser will always be loaded */
-        UNREFERENCED_PARAMETER(helper);
-
         status = OvsCtHandleFtp(curNbl, key, layers, currentTime, entry,
                                 (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP));
         if (status != NDIS_STATUS_SUCCESS) {
@@ -964,10 +991,25 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
         }
     }
 
+    parent = entry->parent;
+    /* The entry should have the same helper name with parent's */
+    if (!entry->helper_name &&
+        (helper || (parent && parent->helper_name))) {
+
+        helper = helper ? helper : parent->helper_name;
+        entry->helper_name = OvsAllocateMemoryWithTag(strlen(helper) + 1,
+                                                      OVS_CT_POOL_TAG);
+        if (!entry->helper_name) {
+            OVS_LOG_ERROR("Error while allocating memory");
+            OVS_RELEASE_SPIN_LOCK(&(entry->lock), irql);
+            return NDIS_STATUS_RESOURCES;
+        }
+        memcpy(entry->helper_name, helper, strlen(helper) + 1);
+    }
+
     /* Add original tuple information to flow Key */
     if (entry->key.dl_type == ntohs(ETH_TYPE_IPV4)) {
-        if (entry->parent != NULL) {
-            POVS_CT_ENTRY parent = entry->parent;
+        if (parent != NULL) {
             OVS_ACQUIRE_SPIN_LOCK(&(parent->lock), irql);
             OvsCtUpdateTuple(key, &parent->key);
             OVS_RELEASE_SPIN_LOCK(&(parent->lock), irql);
@@ -1038,8 +1080,8 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                 if (helper == NULL) {
                     return NDIS_STATUS_INVALID_PARAMETER;
                 }
-                if (strcmp("ftp", helper) != 0) {
-                    /* Only support FTP */
+                if (strcmp("ftp", helper) != 0 && strcmp("tftp", helper) != 0) {
+                    /* Only support FTP/TFTP */
                     return NDIS_STATUS_NOT_SUPPORTED;
                 }
                 break;
@@ -1676,6 +1718,26 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
         NlMsgEndNested(&nlBuf, offset);
         if (status != NDIS_STATUS_SUCCESS) {
             return STATUS_UNSUCCESSFUL;
+        }
+    }
+
+    if (entry->helper_name) {
+        UINT32 offset;
+        offset = NlMsgStartNested(&nlBuf, CTA_HELP);
+        if (!offset) {
+            return NDIS_STATUS_FAILURE;
+        }
+        if (!NlMsgPutTailString(&nlBuf, CTA_HELP_NAME, entry->helper_name)) {
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+        NlMsgEndNested(&nlBuf, offset);
+    }
+
+    if (entry->parent) {
+        status = MapCtKeyTupleToNl(&nlBuf, CTA_TUPLE_MASTER,
+                                   &((POVS_CT_ENTRY)entry->parent)->key);
+        if (status != NDIS_STATUS_SUCCESS) {
+           return STATUS_UNSUCCESSFUL;
         }
     }
 

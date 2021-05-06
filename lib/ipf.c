@@ -433,9 +433,11 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
     len += rest_len;
     l3 = dp_packet_l3(pkt);
     ovs_be16 new_ip_frag_off = l3->ip_frag_off & ~htons(IP_MORE_FRAGMENTS);
-    l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_frag_off,
-                                new_ip_frag_off);
-    l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_tot_len, htons(len));
+    if (!dp_packet_hwol_is_ipv4(pkt)) {
+        l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_frag_off,
+                                    new_ip_frag_off);
+        l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_tot_len, htons(len));
+    }
     l3->ip_tot_len = htons(len);
     l3->ip_frag_off = new_ip_frag_off;
     dp_packet_set_l2_pad_size(pkt, 0);
@@ -606,6 +608,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     }
 
     if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(pkt)
+                     && !dp_packet_hwol_is_ipv4(pkt)
                      && csum(l3, ip_hdr_len) != 0)) {
         goto invalid_pkt;
     }
@@ -899,7 +902,8 @@ ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
                       MIN(max_frag_list_size, IPF_FRAG_LIST_MIN_INCREMENT));
         hmap_insert(&ipf->frag_lists, &ipf_list->node, hash);
         ipf_expiry_list_add(&ipf->frag_exp_list, ipf_list, now);
-    } else if (ipf_list->state == IPF_LIST_STATE_REASS_FAIL) {
+    } else if (ipf_list->state == IPF_LIST_STATE_REASS_FAIL ||
+               ipf_list->state == IPF_LIST_STATE_COMPLETED) {
         /* Bail out as early as possible. */
         return false;
     } else if (ipf_list->last_inuse_idx + 1 >= ipf_list->size) {
@@ -1149,7 +1153,7 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
         /* Inner batch loop is constant time since batch size is <=
          * NETDEV_MAX_BURST. */
         DP_PACKET_BATCH_REFILL_FOR_EACH (pb_idx, pb_cnt, pkt, pb) {
-            if (pkt == rp->list->reass_execute_ctx) {
+            if (rp && pkt == rp->list->reass_execute_ctx) {
                 for (int i = 0; i <= rp->list->last_inuse_idx; i++) {
                     rp->list->frag_list[i].pkt->md.ct_label = pkt->md.ct_label;
                     rp->list->frag_list[i].pkt->md.ct_mark = pkt->md.ct_mark;
@@ -1180,16 +1184,21 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                 } else {
                     struct ip_header *l3_frag = dp_packet_l3(frag_0->pkt);
                     struct ip_header *l3_reass = dp_packet_l3(pkt);
-                    ovs_be32 reass_ip = get_16aligned_be32(&l3_reass->ip_src);
-                    ovs_be32 frag_ip = get_16aligned_be32(&l3_frag->ip_src);
-                    l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
-                                                     frag_ip, reass_ip);
-                    l3_frag->ip_src = l3_reass->ip_src;
+                    if (!dp_packet_hwol_is_ipv4(frag_0->pkt)) {
+                        ovs_be32 reass_ip =
+                            get_16aligned_be32(&l3_reass->ip_src);
+                        ovs_be32 frag_ip =
+                            get_16aligned_be32(&l3_frag->ip_src);
 
-                    reass_ip = get_16aligned_be32(&l3_reass->ip_dst);
-                    frag_ip = get_16aligned_be32(&l3_frag->ip_dst);
-                    l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
-                                                     frag_ip, reass_ip);
+                        l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
+                                                         frag_ip, reass_ip);
+                        reass_ip = get_16aligned_be32(&l3_reass->ip_dst);
+                        frag_ip = get_16aligned_be32(&l3_frag->ip_dst);
+                        l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
+                                                         frag_ip, reass_ip);
+                    }
+
+                    l3_frag->ip_src = l3_reass->ip_src;
                     l3_frag->ip_dst = l3_reass->ip_dst;
                 }
 
@@ -1197,6 +1206,7 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                 ipf_reassembled_list_remove(rp);
                 dp_packet_delete(rp->pkt);
                 free(rp);
+                rp = NULL;
             } else {
                 dp_packet_batch_refill(pb, pkt, pb_idx);
             }

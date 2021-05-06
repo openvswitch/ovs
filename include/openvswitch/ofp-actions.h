@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
+ * Copyright (c) 2012-2017, 2019-2020 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ struct vl_mff_map;
     OFPACT(CONTROLLER,      ofpact_controller,  userdata, "controller") \
     OFPACT(ENQUEUE,         ofpact_enqueue,     ofpact, "enqueue")      \
     OFPACT(OUTPUT_REG,      ofpact_output_reg,  ofpact, "output_reg")   \
-    OFPACT(BUNDLE,          ofpact_bundle,      slaves, "bundle")       \
+    OFPACT(BUNDLE,          ofpact_bundle,      members, "bundle")      \
                                                                         \
     /* Header changes. */                                               \
     OFPACT(SET_FIELD,       ofpact_set_field,   ofpact, "set_field")    \
@@ -94,6 +94,7 @@ struct vl_mff_map;
     OFPACT(PUSH_MPLS,       ofpact_push_mpls,   ofpact, "push_mpls")    \
     OFPACT(POP_MPLS,        ofpact_pop_mpls,    ofpact, "pop_mpls")     \
     OFPACT(DEC_NSH_TTL,     ofpact_null,        ofpact, "dec_nsh_ttl")  \
+    OFPACT(DELETE_FIELD,    ofpact_delete_field, ofpact, "delete_field") \
                                                                         \
     /* Generic encap & decap */                                         \
     OFPACT(ENCAP,           ofpact_encap,       props, "encap")         \
@@ -363,24 +364,24 @@ struct ofpact_output_trunc {
     );
 };
 
-/* Bundle slave choice algorithm to apply.
+/* Bundle member choice algorithm to apply.
  *
- * In the descriptions below, 'slaves' is the list of possible slaves in the
+ * In the descriptions below, 'members' is the list of possible members in the
  * order they appear in the OpenFlow action. */
 enum nx_bd_algorithm {
-    /* Chooses the first live slave listed in the bundle.
+    /* Chooses the first live member listed in the bundle.
      *
-     * O(n_slaves) performance. */
+     * O(n_members) performance. */
     NX_BD_ALG_ACTIVE_BACKUP = 0,
 
     /* Highest Random Weight.
      *
-     * for i in [0,n_slaves):
+     * for i in [0,n_members):
      *   weights[i] = hash(flow, i)
-     * slave = { slaves[i] such that weights[i] >= weights[j] for all j != i }
+     * member = { members[i] such that weights[i] >= weights[j] for all j != i }
      *
-     * Redistributes 1/n_slaves of traffic when a slave's liveness changes.
-     * O(n_slaves) performance.
+     * Redistributes 1/n_members of traffic when a member's liveness changes.
+     * O(n_members) performance.
      *
      * Uses the 'fields' and 'basis' parameters. */
     NX_BD_ALG_HRW = 1
@@ -393,7 +394,7 @@ struct ofpact_bundle {
     OFPACT_PADDED_MEMBERS(
         struct ofpact ofpact;
 
-        /* Slave choice algorithm to apply to hash value. */
+        /* Member choice algorithm to apply to hash value. */
         enum nx_bd_algorithm algorithm;
 
         /* What fields to hash and how. */
@@ -402,10 +403,12 @@ struct ofpact_bundle {
 
         struct mf_subfield dst;
 
-        /* Slaves for output. */
-        unsigned int n_slaves;
+        bool compat_syntax;
+
+        /* Members for output. */
+        unsigned int n_members;
     );
-    ofp_port_t slaves[];
+    ofp_port_t members[];
 };
 
 /* OFPACT_SET_VLAN_VID.
@@ -573,6 +576,16 @@ struct ofpact_pop_mpls {
     OFPACT_PADDED_MEMBERS(
         struct ofpact ofpact;
         ovs_be16 ethertype;
+    );
+};
+
+/* OFPACT_DELETE_FIELD.
+ *
+ * Used for NXAST_DELETE_FIELD. */
+struct ofpact_delete_field {
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        const struct mf_field *field;
     );
 };
 

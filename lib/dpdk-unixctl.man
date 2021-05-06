@@ -1,0 +1,14 @@
+.SS "DPDK COMMANDS"
+These commands manage DPDK components.
+.IP "\fBdpdk/log-list\fR"
+Lists all DPDK components that emit logs and their logging levels.
+.IP "\fBdpdk/log-set\fR [\fIspec\fR]"
+Sets DPDK components logging level. Without any \fIspec\fR, sets the logging
+\fBlevel\fR for all DPDK components to \fBdebug\fR. Otherwise, \fIspec\fR is a
+list of words separated by spaces: a word can be either a logging \fBlevel\fR
+(\fBemergency\fR, \fBalert\fR, \fBcritical\fR, \fBerror\fR, \fBwarning\fR,
+\fBnotice\fR, \fBinfo\fR or \fBdebug\fR) or a \fBpattern\fR matching DPDK
+components (see \fBdpdk/log-list\fR command on \fBovs\-appctl\fR(8)) separated
+by a colon from the logging \fBlevel\fR to apply.
+.RE
+.

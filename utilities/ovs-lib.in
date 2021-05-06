@@ -127,7 +127,7 @@ fi
 pid_exists () {
     # This is better than "kill -0" because it doesn't require permission to
     # send a signal (so daemon_status in particular works as non-root).
-    test -d /proc/"$1"
+    test -n "$1" && test -d /proc/"$1"
 }
 
 pid_comm_check () {
@@ -255,20 +255,36 @@ stop_daemon () {
             if version_geq "$version" "2.5.90"; then
                 actions="$graceful $actions"
             fi
+            actiontype=""
             for action in $actions; do
                 if pid_exists "$pid" >/dev/null 2>&1; then :; else
-                    return 0
+                    # pid does not exist.
+                    if [ -n "$actiontype" ]; then
+                        return 0
+                    fi
+                    # But, does the file exist? We may have had a daemon
+                    # segfault with `ovs-appctl exit`. Check one more time
+                    # before deciding that the daemon is dead.
+                    [ -e "$rundir/$1.pid" ] && sleep 2 && pid=`cat "$rundir/$1.pid"` 2>/dev/null
+                    if pid_exists "$pid" >/dev/null 2>&1; then :; else
+                        return 0
+                    fi
                 fi
                 case $action in
                     EXIT)
                         action "Exiting $1 ($pid)" \
-                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit $2
+                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit
+                        # The above command could have resulted in delayed
+                        # daemon segfault. And if a monitor is running, it
+                        # would restart the daemon giving it a new pid.
                         ;;
                     TERM)
                         action "Killing $1 ($pid)" kill $pid
+                        actiontype="force"
                         ;;
                     KILL)
                         action "Killing $1 ($pid) with SIGKILL" kill -9 $pid
+                        actiontype="force"
                         ;;
                     FAIL)
                         log_failure_msg "Killing $1 ($pid) failed"
@@ -485,6 +501,7 @@ create_cluster () {
     elif ovsdb_tool db-is-standalone "$DB_FILE"; then
         # Convert standalone database to clustered.
         backup_db || return 1
+        rm -f "$DB_FILE"
         action "Creating cluster database $DB_FILE from existing one" \
                ovsdb_tool create-cluster "$DB_FILE" "$backup" "$LOCAL_ADDR"
     fi
@@ -653,7 +670,8 @@ force_reload_kmod () {
 
     restore_interfaces
 
-    "$datadir/scripts/ovs-check-dead-ifs"
+    action "Finding processes on dead interfaces" timeout 5 \
+        "$datadir/scripts/ovs-check-dead-ifs" || true
 }
 
 ## ------- ##

@@ -76,7 +76,7 @@ lldpd_first_hardware(struct lldpd *lldpd)
 /* lldpd.c */
 struct lldpd_hardware *lldpd_get_hardware(struct lldpd *,
     char *, int, struct lldpd_ops *);
-struct lldpd_hardware *lldpd_alloc_hardware(struct lldpd *, char *, int);
+struct lldpd_hardware *lldpd_alloc_hardware(struct lldpd *, const char *, int);
 void lldpd_hardware_cleanup(struct lldpd*, struct lldpd_hardware *);
 struct lldpd_mgmt *lldpd_alloc_mgmt(int family, void *addr, size_t addrsize,
     u_int32_t iface);

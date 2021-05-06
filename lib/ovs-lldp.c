@@ -801,13 +801,7 @@ lldp_create(const struct netdev *netdev,
     ovs_list_init(&lldp->lldpd->g_chassis);
     ovs_list_push_back(&lldp->lldpd->g_chassis, &lchassis->list);
 
-    if ((hw = lldpd_alloc_hardware(lldp->lldpd,
-                                   (char *) netdev_get_name(netdev),
-                                   0)) == NULL) {
-        VLOG_WARN("Unable to allocate space for %s",
-                  (char *) netdev_get_name(netdev));
-        out_of_memory();
-    }
+    hw = lldpd_alloc_hardware(lldp->lldpd, netdev_get_name(netdev), 0);
 
     ovs_refcount_init(&lldp->ref_cnt);
 #ifndef _WIN32

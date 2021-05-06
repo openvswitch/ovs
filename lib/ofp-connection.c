@@ -48,8 +48,8 @@ ofputil_decode_role_message(const struct ofp_header *oh,
 
         if (orr->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
             orr->role != htonl(OFPCR12_ROLE_EQUAL) &&
-            orr->role != htonl(OFPCR12_ROLE_MASTER) &&
-            orr->role != htonl(OFPCR12_ROLE_SLAVE)) {
+            orr->role != htonl(OFPCR12_ROLE_PRIMARY) &&
+            orr->role != htonl(OFPCR12_ROLE_SECONDARY)) {
             return OFPERR_OFPRRFC_BAD_ROLE;
         }
 
@@ -68,12 +68,12 @@ ofputil_decode_role_message(const struct ofp_header *oh,
         const struct nx_role_request *nrr = b.msg;
 
         BUILD_ASSERT(NX_ROLE_OTHER + 1 == OFPCR12_ROLE_EQUAL);
-        BUILD_ASSERT(NX_ROLE_MASTER + 1 == OFPCR12_ROLE_MASTER);
-        BUILD_ASSERT(NX_ROLE_SLAVE + 1 == OFPCR12_ROLE_SLAVE);
+        BUILD_ASSERT(NX_ROLE_PRIMARY + 1 == OFPCR12_ROLE_PRIMARY);
+        BUILD_ASSERT(NX_ROLE_SECONDARY + 1 == OFPCR12_ROLE_SECONDARY);
 
         if (nrr->role != htonl(NX_ROLE_OTHER) &&
-            nrr->role != htonl(NX_ROLE_MASTER) &&
-            nrr->role != htonl(NX_ROLE_SLAVE)) {
+            nrr->role != htonl(NX_ROLE_PRIMARY) &&
+            nrr->role != htonl(NX_ROLE_SECONDARY)) {
             return OFPERR_OFPRRFC_BAD_ROLE;
         }
 
@@ -100,11 +100,11 @@ format_role_generic(struct ds *string, enum ofp12_controller_role role,
     case OFPCR12_ROLE_EQUAL:
         ds_put_cstr(string, "equal"); /* OF 1.2 wording */
         break;
-    case OFPCR12_ROLE_MASTER:
-        ds_put_cstr(string, "master");
+    case OFPCR12_ROLE_PRIMARY:
+        ds_put_cstr(string, "primary");
         break;
-    case OFPCR12_ROLE_SLAVE:
-        ds_put_cstr(string, "slave");
+    case OFPCR12_ROLE_SECONDARY:
+        ds_put_cstr(string, "secondary");
         break;
     default:
         OVS_NOT_REACHED();
@@ -148,8 +148,8 @@ ofputil_encode_role_reply(const struct ofp_header *request,
         struct nx_role_request *nrr;
 
         BUILD_ASSERT(NX_ROLE_OTHER == OFPCR12_ROLE_EQUAL - 1);
-        BUILD_ASSERT(NX_ROLE_MASTER == OFPCR12_ROLE_MASTER - 1);
-        BUILD_ASSERT(NX_ROLE_SLAVE == OFPCR12_ROLE_SLAVE - 1);
+        BUILD_ASSERT(NX_ROLE_PRIMARY == OFPCR12_ROLE_PRIMARY - 1);
+        BUILD_ASSERT(NX_ROLE_SECONDARY == OFPCR12_ROLE_SECONDARY - 1);
 
         buf = ofpraw_alloc_reply(OFPRAW_NXT_ROLE_REPLY, request, 0);
         nrr = ofpbuf_put_zeros(buf, sizeof *nrr);
@@ -197,8 +197,8 @@ ofputil_decode_role_status(const struct ofp_header *oh,
     const struct ofp14_role_status *r = b.msg;
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
         r->role != htonl(OFPCR12_ROLE_EQUAL) &&
-        r->role != htonl(OFPCR12_ROLE_MASTER) &&
-        r->role != htonl(OFPCR12_ROLE_SLAVE)) {
+        r->role != htonl(OFPCR12_ROLE_PRIMARY) &&
+        r->role != htonl(OFPCR12_ROLE_SECONDARY)) {
         return OFPERR_OFPRRFC_BAD_ROLE;
     }
 
@@ -218,8 +218,8 @@ ofputil_format_role_status(struct ds *string,
     ds_put_cstr(string, " reason=");
 
     switch (rs->reason) {
-    case OFPCRR_MASTER_REQUEST:
-        ds_put_cstr(string, "master_request");
+    case OFPCRR_PRIMARY_REQUEST:
+        ds_put_cstr(string, "primary_request");
         break;
     case OFPCRR_CONFIG:
         ds_put_cstr(string, "configuration_changed");
@@ -254,13 +254,13 @@ ofputil_async_msg_type_to_string(enum ofputil_async_msg_type type)
 struct ofp14_async_prop {
     uint64_t prop_type;
     enum ofputil_async_msg_type oam;
-    bool master;
+    bool primary;
     uint32_t allowed10, allowed14;
 };
 
-#define AP_PAIR(SLAVE_PROP_TYPE, OAM, A10, A14) \
-    { SLAVE_PROP_TYPE,       OAM, false, A10, (A14) ? (A14) : (A10) },  \
-    { (SLAVE_PROP_TYPE + 1), OAM, true,  A10, (A14) ? (A14) : (A10) }
+#define AP_PAIR(SECONDARY_PROP_TYPE, OAM, A10, A14) \
+    { SECONDARY_PROP_TYPE,       OAM, false, A10, (A14) ? (A14) : (A10) },  \
+    { (SECONDARY_PROP_TYPE + 1), OAM, true,  A10, (A14) ? (A14) : (A10) }
 
 static const struct ofp14_async_prop async_props[] = {
     AP_PAIR( 0, OAM_PACKET_IN,      OFPR10_BITS, OFPR14_BITS),
@@ -288,10 +288,10 @@ get_ofp14_async_config_prop_by_prop_type(uint64_t prop_type)
 
 static const struct ofp14_async_prop *
 get_ofp14_async_config_prop_by_oam(enum ofputil_async_msg_type oam,
-                                   bool master)
+                                   bool primary)
 {
     FOR_EACH_ASYNC_PROP (ap) {
-        if (ap->oam == oam && ap->master == master) {
+        if (ap->oam == oam && ap->primary == primary) {
             return ap;
         }
     }
@@ -310,7 +310,9 @@ encode_async_mask(const struct ofputil_async_cfg *src,
                   const struct ofp14_async_prop *ap,
                   enum ofp_version version)
 {
-    uint32_t mask = ap->master ? src->master[ap->oam] : src->slave[ap->oam];
+    uint32_t mask = (ap->primary
+                     ? src->primary[ap->oam]
+                     : src->secondary[ap->oam]);
     return htonl(mask & ofp14_async_prop_allowed(ap, version));
 }
 
@@ -342,7 +344,7 @@ decode_async_mask(ovs_be32 src,
         }
     }
 
-    uint32_t *array = ap->master ? dst->master : dst->slave;
+    uint32_t *array = ap->primary ? dst->primary : dst->secondary;
     array[ap->oam] = mask;
     return 0;
 }
@@ -362,20 +364,20 @@ parse_async_tlv(const struct ofpbuf *property,
     }
 
     if (ofpprop_is_experimenter(ap->prop_type)) {
-        /* For experimenter properties, whether a property is for the master or
-         * slave role is indicated by both 'type' and 'exp_type' in struct
+        /* For experimenter properties, whether a property is for the primary or
+         * secondary role is indicated by both 'type' and 'exp_type' in struct
          * ofp_prop_experimenter.  Check that these are consistent. */
         const struct ofp_prop_experimenter *ope = property->data;
-        bool should_be_master = ope->type == htons(0xffff);
-        if (should_be_master != ap->master) {
+        bool should_be_primary = ope->type == htons(0xffff);
+        if (should_be_primary != ap->primary) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "async property type %#"PRIx16" "
                          "indicates %s role but exp_type %"PRIu32" indicates "
                          "%s role",
                          ntohs(ope->type),
-                         should_be_master ? "master" : "slave",
+                         should_be_primary ? "primary" : "secondary",
                          ntohl(ope->exp_type),
-                         ap->master ? "master" : "slave");
+                         ap->primary ? "primary" : "secondary");
             return OFPERR_OFPBPC_BAD_EXP_TYPE;
         }
     }
@@ -390,9 +392,9 @@ decode_legacy_async_masks(const ovs_be32 masks[2],
                           struct ofputil_async_cfg *dst)
 {
     for (int i = 0; i < 2; i++) {
-        bool master = i == 0;
+        bool primary = i == 0;
         const struct ofp14_async_prop *ap
-            = get_ofp14_async_config_prop_by_oam(oam, master);
+            = get_ofp14_async_config_prop_by_oam(oam, primary);
         decode_async_mask(masks[i], ap, version, true, dst);
     }
 }
@@ -479,9 +481,9 @@ encode_legacy_async_masks(const struct ofputil_async_cfg *ac,
                           ovs_be32 masks[2])
 {
     for (int i = 0; i < 2; i++) {
-        bool master = i == 0;
+        bool primary = i == 0;
         const struct ofp14_async_prop *ap
-            = get_ofp14_async_config_prop_by_oam(oam, master);
+            = get_ofp14_async_config_prop_by_oam(oam, primary);
         masks[i] = encode_async_mask(ac, ap, version);
     }
 }
@@ -507,11 +509,11 @@ ofputil_put_async_config__(const struct ofputil_async_cfg *ac,
                                  encode_async_mask(ac, ap, version));
 
                 /* For experimenter properties, we need to use type 0xfffe for
-                 * master and 0xffff for slaves. */
+                 * primary and 0xffff for secondaries. */
                 if (ofpprop_is_experimenter(ap->prop_type)) {
                     struct ofp_prop_experimenter *ope
                         = ofpbuf_at_assert(buf, ofs, sizeof *ope);
-                    ope->type = ap->master ? htons(0xffff) : htons(0xfffe);
+                    ope->type = ap->primary ? htons(0xffff) : htons(0xfffe);
                 }
             }
         }
@@ -592,8 +594,8 @@ ofp_role_reason_to_string(enum ofp14_controller_role_reason reason,
                           char *reasonbuf, size_t bufsize)
 {
     switch (reason) {
-    case OFPCRR_MASTER_REQUEST:
-        return "master_request";
+    case OFPCRR_PRIMARY_REQUEST:
+        return "primary_request";
 
     case OFPCRR_CONFIG:
         return "configuration_changed";
@@ -664,12 +666,12 @@ ofputil_format_set_async_config(struct ds *string,
                                 const struct ofputil_async_cfg *ac)
 {
     for (int i = 0; i < 2; i++) {
-        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+        ds_put_format(string, "\n %s:\n", i == 0 ? "primary" : "secondary");
         for (uint32_t type = 0; type < OAM_N_TYPES; type++) {
             ds_put_format(string, "%16s:",
                           ofputil_async_msg_type_to_string(type));
 
-            uint32_t role = i == 0 ? ac->master[type] : ac->slave[type];
+            uint32_t role = i == 0 ? ac->primary[type] : ac->secondary[type];
             for (int j = 0; j < 32; j++) {
                 if (role & (1u << j)) {
                     char reasonbuf[INT_STRLEN(int) + 1];
@@ -705,17 +707,17 @@ ofputil_async_cfg_default(enum ofp_version version)
     }
 
     struct ofputil_async_cfg oac = {
-        .master[OAM_PACKET_IN] = pin,
-        .master[OAM_PORT_STATUS] = OFPPR_BITS,
-        .slave[OAM_PORT_STATUS] = OFPPR_BITS
+        .primary[OAM_PACKET_IN] = pin,
+        .primary[OAM_PORT_STATUS] = OFPPR_BITS,
+        .secondary[OAM_PORT_STATUS] = OFPPR_BITS
     };
 
     if (version >= OFP14_VERSION) {
-        oac.master[OAM_FLOW_REMOVED] = OFPRR14_BITS;
+        oac.primary[OAM_FLOW_REMOVED] = OFPRR14_BITS;
     } else if (version == OFP13_VERSION) {
-        oac.master[OAM_FLOW_REMOVED] = OFPRR13_BITS;
+        oac.primary[OAM_FLOW_REMOVED] = OFPRR13_BITS;
     } else {
-        oac.master[OAM_FLOW_REMOVED] = OFPRR10_BITS;
+        oac.primary[OAM_FLOW_REMOVED] = OFPRR10_BITS;
     }
 
     return oac;

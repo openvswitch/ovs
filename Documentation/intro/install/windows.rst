@@ -56,23 +56,28 @@ The following explains the steps in some detail.
 
       'C:/MinGW /mingw'.
 
-- Python
+- Python 3.4 or later.
 
-  Install the latest Python 2.x from python.org and verify that its path is
+  Install the latest Python 3.x from python.org and verify that its path is
   part of Windows' PATH environment variable.
-  We require that you have Python six and pypiwin32 libraries installed.
-  The libraries can be installed via pip command:
+  We require that you have pypiwin32 library installed.
+  The library can be installed via pip command:
 
    ::
 
-      $ pip install six
       $ pip install pypiwin32
 
 - Visual Studio
 
   You will need at least Visual Studio 2013 (update 4) to compile userspace
   binaries.  In addition to that, if you want to compile the kernel module you
-  will also need to install Windows Driver Kit (WDK) 8.1 Update.
+  will also need to install Windows Driver Kit (WDK) 8.1 Update or later.
+  To generate the Windows installer you need
+  `WiX Toolset <https://wixtoolset.org/>`__ and also be able to build the
+  kernel module.
+
+  We recommend using the latest Visual Studio version together with the latest
+  WDK installed.
 
   It is important to get the Visual Studio related environment variables and to
   have the $PATH inside the bash to point to the proper compiler and linker.
@@ -93,13 +98,13 @@ The following explains the steps in some detail.
   Visual studio's linker is used. You should also see a 'which sort' report
   ``/bin/sort.exe``.
 
-- pthreads-win32
+- PThreads4W
 
-  For pthread support, install the library, dll and includes of pthreads-win32
+  For pthread support, install the library, dll and includes of PThreads4W
   project from `sourceware
-  <ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-9-1-release>`__ to a
-  directory (e.g.: ``C:/pthread``). You should add the pthread-win32's dll path
-  (e.g.: ``C:\pthread\dll\x86``) to the Windows' PATH environment variable.
+  <https://sourceforge.net/projects/pthreads4w/>`__ to a directory
+  (e.g.: ``C:/pthread``). You should add the PThreads4W's dll path
+  (e.g.: ``C:\pthread\bin``) to the Windows' PATH environment variable.
 
 - OpenSSL
 
@@ -319,6 +324,22 @@ An alternative way to do the same is to run the following command:
    If you enabled the extension using the command line, a delay of a few
    seconds has been observed for the change to be reflected in the UI.  This is
    not a bug in Open vSwitch.
+
+Generate the Windows installer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To generate the Windows installler run the following command from the top
+source directory:
+
+::
+
+   $ make windows_installer
+
+.. note::
+
+   This will generate the Windows installer in the following location (relative
+   to the top source directory):
+   windows/ovs-windows-installer/bin/Release/OpenvSwitch.msi
 
 Starting
 --------
@@ -786,10 +807,10 @@ Windows CI Service
 ------------------
 
 `AppVeyor <www.appveyor.com>`__ provides a free Windows autobuild service for
-open source projects.  Open vSwitch has integration with AppVeyor for continuous
-build.  A developer can build test his changes for Windows by logging into
-appveyor.com using a github account, creating a new project by linking it to
-his development repository in github and triggering a new build.
+open source projects.  Open vSwitch has integration with AppVeyor for
+continuous build.  A developer can build test his changes for Windows by
+logging into appveyor.com using a github account, creating a new project by
+linking it to his development repository in github and triggering a new build.
 
 TODO
 ----
@@ -798,5 +819,4 @@ TODO
 
 * Investigate and add the feature to provide QoS.
 
-* Sign the driver & create an MSI for installing the different Open vSwitch
-  components on Windows.
+* Sign the driver.

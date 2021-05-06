@@ -385,7 +385,7 @@ but OVS drops the packets instead.
         $ ovs-ofctl add-flow br0 actions=load:0->NXM_OF_IN_PORT[],2,3,4,5,6
 
     If the input port is important, then one may save and restore it on the
-    stack:
+    stack::
 
          $ ovs-ofctl add-flow br0 actions=push:NXM_OF_IN_PORT[],\
              load:0->NXM_OF_IN_PORT[],\

@@ -54,6 +54,15 @@
       },
       "isRoot" : true
     },
+    "indexed": {
+      "columns": {
+        "i": {
+          "type": "integer"
+        }
+      },
+      "indexes": [["i"]],
+      "isRoot" : true
+    },
     "simple": {
       "columns": {
         "b": {
@@ -170,6 +179,36 @@
         }
       },
       "isRoot" : false
+    },
+    "simple5": {
+      "columns" : {
+        "name": {"type": "string"},
+        "irefmap": {
+          "type": {
+            "key": {"type": "integer"},
+            "value": {"type": "uuid",
+                      "refTable": "simple3"},
+            "min": 0,
+            "max": "unlimited"
+          }
+        }
+      },
+      "isRoot": true
+    },
+    "simple6": {
+      "columns" : {
+        "name": {"type": "string"},
+        "weak_ref": {
+          "type": {
+            "key": {"type": "uuid",
+                    "refTable": "simple",
+                    "refType": "weak"},
+            "min": 0,
+            "max": "unlimited"
+          }
+        }
+      },
+      "isRoot": true
     },
     "singleton" : {
       "columns" : {

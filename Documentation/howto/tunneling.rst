@@ -130,7 +130,7 @@ Create a mirrored configuration on `host2` using the same basic steps:
        $ ovs-vsctl add-port br0 tap1
 
 #. Create the GRE tunnel on `host2`, this time using the IP address for
-   ``eth0`` on `host1` when specifying the ``remote_ip`` option:
+   ``eth0`` on `host1` when specifying the ``remote_ip`` option::
 
        $ ovs-vsctl add-port br0 gre0 \
          -- set interface gre0 type=gre options:remote_ip=<IP of eth0 on host1>

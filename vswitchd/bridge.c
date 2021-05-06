@@ -65,6 +65,7 @@
 #include "system-stats.h"
 #include "timeval.h"
 #include "tnl-ports.h"
+#include "userspace-tso.h"
 #include "util.h"
 #include "unixctl.h"
 #include "lib/vswitch-idl.h"
@@ -153,8 +154,35 @@ struct aa_mapping {
     char *br_name;
 };
 
+/* Internal representation of conntrack zone configuration table in OVSDB. */
+struct ct_zone {
+    uint16_t zone_id;
+    struct simap tp;            /* A map from timeout policy attribute to
+                                 * timeout value. */
+    struct hmap_node node;      /* Node in 'struct datapath' 'ct_zones'
+                                 * hmap. */
+    unsigned int last_used;     /* The last idl_seqno that this 'ct_zone' used
+                                 * in OVSDB. This number is used for garbage
+                                 * collection. */
+};
+
+/* Internal representation of datapath configuration table in OVSDB. */
+struct datapath {
+    char *type;                 /* Datapath type. */
+    struct hmap ct_zones;       /* Map of 'struct ct_zone' elements, indexed
+                                 * by 'zone'. */
+    struct hmap_node node;      /* Node in 'all_datapaths' hmap. */
+    struct smap caps;           /* Capabilities. */
+    unsigned int last_used;     /* The last idl_seqno that this 'datapath'
+                                 * used in OVSDB. This number is used for
+                                 * garbage collection. */
+};
+
 /* All bridges, indexed by name. */
 static struct hmap all_bridges = HMAP_INITIALIZER(&all_bridges);
+
+/* All datapath configuartions, indexed by type. */
+static struct hmap all_datapaths = HMAP_INITIALIZER(&all_datapaths);
 
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
@@ -227,6 +255,11 @@ static struct if_notifier *ifnotifier;
 static struct seq *ifaces_changed;
 static uint64_t last_ifaces_changed;
 
+/* Default/min/max packet-in queue sizes towards the controllers. */
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE 100
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_MIN_SIZE 1
+#define BRIDGE_CONTROLLER_PACKET_QUEUE_MAX_SIZE 512
+
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
@@ -255,6 +288,7 @@ static void bridge_configure_ipfix(struct bridge *);
 static void bridge_configure_spanning_tree(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
 static void bridge_configure_dp_desc(struct bridge *);
+static void bridge_configure_serial_desc(struct bridge *);
 static void bridge_configure_aa(struct bridge *);
 static void bridge_aa_refresh_queued(struct bridge *);
 static bool bridge_aa_need_refresh(struct bridge *);
@@ -270,6 +304,8 @@ static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
 static bool port_is_bond_fake_iface(const struct port *);
+
+static void datapath_destroy(struct datapath *dp);
 
 static unixctl_cb_func qos_unixctl_show_types;
 static unixctl_cb_func qos_unixctl_show;
@@ -294,7 +330,8 @@ static void mirror_destroy(struct mirror *);
 static bool mirror_configure(struct mirror *);
 static void mirror_refresh_stats(struct mirror *);
 
-static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
+static void iface_configure_lacp(struct iface *,
+                                 struct lacp_member_settings *);
 static bool iface_create(struct bridge *, const struct ovsrec_interface *,
                          const struct ovsrec_port *);
 static bool iface_is_internal(const struct ovsrec_interface *iface,
@@ -481,8 +518,8 @@ bridge_init(const char *remote)
                              qos_unixctl_show_types, NULL);
     unixctl_command_register("qos/show", "interface", 1, 1,
                              qos_unixctl_show, NULL);
-    unixctl_command_register("bridge/dump-flows", "bridge", 1, 1,
-                             bridge_unixctl_dump_flows, NULL);
+    unixctl_command_register("bridge/dump-flows", "[--offload-stats] bridge",
+                             1, 2, bridge_unixctl_dump_flows, NULL);
     unixctl_command_register("bridge/reconnect", "[bridge]", 0, 1,
                              bridge_unixctl_reconnect, NULL);
     lacp_init();
@@ -496,18 +533,26 @@ bridge_init(const char *remote)
     ifaces_changed = seq_create();
     last_ifaces_changed = seq_read(ifaces_changed);
     ifnotifier = if_notifier_create(if_change_cb, NULL);
+    if_notifier_manual_set_cb(if_change_cb);
 }
 
 void
 bridge_exit(bool delete_datapath)
 {
-    struct bridge *br, *next_br;
-
+    if_notifier_manual_set_cb(NULL);
     if_notifier_destroy(ifnotifier);
     seq_destroy(ifaces_changed);
+
+    struct datapath *dp, *next;
+    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+        datapath_destroy(dp);
+    }
+
+    struct bridge *br, *next_br;
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
         bridge_destroy(br, delete_datapath);
     }
+
     ovsdb_idl_destroy(idl);
 }
 
@@ -588,6 +633,186 @@ config_ofproto_types(const struct smap *other_config)
 }
 
 static void
+get_timeout_policy_from_ovsrec(struct simap *tp,
+                               const struct ovsrec_ct_timeout_policy *tp_cfg)
+{
+    if (tp_cfg) {
+        for (size_t i = 0; i < tp_cfg->n_timeouts; i++) {
+            simap_put(tp, tp_cfg->key_timeouts[i], tp_cfg->value_timeouts[i]);
+        }
+    }
+}
+
+static struct ct_zone *
+ct_zone_lookup(struct hmap *ct_zones, uint16_t zone_id)
+{
+    struct ct_zone *ct_zone;
+
+    HMAP_FOR_EACH_WITH_HASH (ct_zone, node, hash_int(zone_id, 0), ct_zones) {
+        if (ct_zone->zone_id == zone_id) {
+            return ct_zone;
+        }
+    }
+    return NULL;
+}
+
+static struct ct_zone *
+ct_zone_alloc(uint16_t zone_id, struct ovsrec_ct_timeout_policy *tp_cfg)
+{
+    struct ct_zone *ct_zone = xzalloc(sizeof *ct_zone);
+
+    ct_zone->zone_id = zone_id;
+    simap_init(&ct_zone->tp);
+    get_timeout_policy_from_ovsrec(&ct_zone->tp, tp_cfg);
+    return ct_zone;
+}
+
+static void
+ct_zone_remove_and_destroy(struct datapath *dp, struct ct_zone *ct_zone)
+{
+    hmap_remove(&dp->ct_zones, &ct_zone->node);
+    simap_destroy(&ct_zone->tp);
+    free(ct_zone);
+}
+
+/* Replace 'old_tp' by 'new_tp' (destroyed 'new_tp'). Returns true if 'old_tp'
+ * and 'new_tp' contains different data, false if they are the same. */
+static bool
+update_timeout_policy(struct simap *old_tp, struct simap *new_tp)
+{
+    bool changed = !simap_equal(old_tp, new_tp);
+    if (changed) {
+        simap_swap(old_tp, new_tp);
+    }
+    simap_destroy(new_tp);
+    return changed;
+}
+
+static struct datapath *
+datapath_lookup(const char *type)
+{
+    struct datapath *dp;
+
+    HMAP_FOR_EACH_WITH_HASH (dp, node, hash_string(type, 0), &all_datapaths) {
+        if (!strcmp(dp->type, type)) {
+            return dp;
+        }
+    }
+    return NULL;
+}
+
+static struct datapath *
+datapath_create(const char *type)
+{
+    struct datapath *dp = xzalloc(sizeof *dp);
+    dp->type = xstrdup(type);
+    hmap_init(&dp->ct_zones);
+    hmap_insert(&all_datapaths, &dp->node, hash_string(type, 0));
+    smap_init(&dp->caps);
+    return dp;
+}
+
+static void
+datapath_destroy(struct datapath *dp)
+{
+    if (dp) {
+        struct ct_zone *ct_zone, *next;
+        HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+            ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+            ct_zone_remove_and_destroy(dp, ct_zone);
+        }
+
+        hmap_remove(&all_datapaths, &dp->node);
+        hmap_destroy(&dp->ct_zones);
+        free(dp->type);
+        smap_destroy(&dp->caps);
+        free(dp);
+    }
+}
+
+static void
+ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
+{
+    struct ct_zone *ct_zone, *next;
+
+    /* Add new 'ct_zone's or update existing 'ct_zone's based on the database
+     * state. */
+    for (size_t i = 0; i < dp_cfg->n_ct_zones; i++) {
+        uint16_t zone_id = dp_cfg->key_ct_zones[i];
+        struct ovsrec_ct_zone *zone_cfg = dp_cfg->value_ct_zones[i];
+        struct ovsrec_ct_timeout_policy *tp_cfg = zone_cfg->timeout_policy;
+
+        ct_zone = ct_zone_lookup(&dp->ct_zones, zone_id);
+        if (ct_zone) {
+            struct simap new_tp = SIMAP_INITIALIZER(&new_tp);
+            get_timeout_policy_from_ovsrec(&new_tp, tp_cfg);
+            if (update_timeout_policy(&ct_zone->tp, &new_tp)) {
+                ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
+                                                   &ct_zone->tp);
+            }
+        } else {
+            ct_zone = ct_zone_alloc(zone_id, tp_cfg);
+            hmap_insert(&dp->ct_zones, &ct_zone->node, hash_int(zone_id, 0));
+            ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
+                                               &ct_zone->tp);
+        }
+        ct_zone->last_used = idl_seqno;
+    }
+
+    /* Purge 'ct_zone's no longer found in the database. */
+    HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+        if (ct_zone->last_used != idl_seqno) {
+            ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+            ct_zone_remove_and_destroy(dp, ct_zone);
+        }
+    }
+}
+
+static void
+dp_capability_reconfigure(struct datapath *dp,
+                          struct ovsrec_datapath *dp_cfg)
+{
+    struct smap_node *node;
+    struct smap cap;
+
+    smap_init(&cap);
+    ofproto_get_datapath_cap(dp->type, &cap);
+
+    SMAP_FOR_EACH (node, &cap) {
+        ovsrec_datapath_update_capabilities_setkey(dp_cfg, node->key,
+                                                   node->value);
+    }
+    smap_destroy(&cap);
+}
+
+static void
+datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
+{
+    struct datapath *dp, *next;
+
+    /* Add new 'datapath's or update existing ones. */
+    for (size_t i = 0; i < cfg->n_datapaths; i++) {
+        struct ovsrec_datapath *dp_cfg = cfg->value_datapaths[i];
+        char *dp_name = cfg->key_datapaths[i];
+
+        dp = datapath_lookup(dp_name);
+        if (!dp) {
+            dp = datapath_create(dp_name);
+            dp_capability_reconfigure(dp, dp_cfg);
+        }
+        dp->last_used = idl_seqno;
+        ct_zones_reconfigure(dp, dp_cfg);
+    }
+
+    /* Purge deleted 'datapath's. */
+    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+        if (dp->last_used != idl_seqno) {
+            datapath_destroy(dp);
+        }
+    }
+}
+
+static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
     struct sockaddr_in *managers;
@@ -601,6 +826,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                         OFPROTO_FLOW_LIMIT_DEFAULT));
     ofproto_set_max_idle(smap_get_int(&ovs_cfg->other_config, "max-idle",
                                       OFPROTO_MAX_IDLE_DEFAULT));
+    ofproto_set_max_revalidator(smap_get_int(&ovs_cfg->other_config,
+                                             "max-revalidator",
+                                             OFPROTO_MAX_REVALIDATOR_DEFAULT));
+    ofproto_set_min_revalidate_pps(
+        smap_get_int(&ovs_cfg->other_config, "min-revalidate-pps",
+                     OFPROTO_MIN_REVALIDATE_PPS_DEFAULT));
     ofproto_set_vlan_limit(smap_get_int(&ovs_cfg->other_config, "vlan-limit",
                                        LEGACY_MAX_VLAN_HEADERS));
     ofproto_set_bundle_idle_timeout(smap_get_int(&ovs_cfg->other_config,
@@ -669,6 +900,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
 
     reconfigure_system_stats(ovs_cfg);
+    datapath_reconfigure(ovs_cfg);
 
     /* Complete the configuration. */
     sflow_bridge_number = 0;
@@ -711,6 +943,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_spanning_tree(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
+        bridge_configure_serial_desc(br);
         bridge_configure_aa(br);
     }
     free(managers);
@@ -965,11 +1198,11 @@ port_configure(struct port *port)
     /* Get name. */
     s.name = port->name;
 
-    /* Get slaves. */
-    s.n_slaves = 0;
-    s.slaves = xmalloc(ovs_list_size(&port->ifaces) * sizeof *s.slaves);
+    /* Get members. */
+    s.n_members = 0;
+    s.members = xmalloc(ovs_list_size(&port->ifaces) * sizeof *s.members);
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        s.slaves[s.n_slaves++] = iface->ofp_port;
+        s.members[s.n_members++] = iface->ofp_port;
     }
 
     /* Get VLAN tag. */
@@ -1038,16 +1271,16 @@ port_configure(struct port *port)
     if (s.lacp) {
         size_t i = 0;
 
-        s.lacp_slaves = xmalloc(s.n_slaves * sizeof *s.lacp_slaves);
+        s.lacp_members = xmalloc(s.n_members * sizeof *s.lacp_members);
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface_configure_lacp(iface, &s.lacp_slaves[i++]);
+            iface_configure_lacp(iface, &s.lacp_members[i++]);
         }
     } else {
-        s.lacp_slaves = NULL;
+        s.lacp_members = NULL;
     }
 
     /* Get bond settings. */
-    if (s.n_slaves > 1) {
+    if (s.n_members > 1) {
         s.bond = &bond_settings;
         port_configure_bond(port, &bond_settings);
     } else {
@@ -1065,9 +1298,9 @@ port_configure(struct port *port)
 
     /* Clean up. */
     free(s.cvlans);
-    free(s.slaves);
+    free(s.members);
     free(s.trunks);
-    free(s.lacp_slaves);
+    free(s.lacp_members);
 }
 
 /* Pick local port hardware address and datapath ID for 'br'. */
@@ -1115,6 +1348,25 @@ bridge_get_allowed_versions(struct bridge *br)
 
     return ofputil_versions_from_strings(br->cfg->protocols,
                                          br->cfg->n_protocols);
+}
+
+static int
+bridge_get_controller_queue_size(struct bridge *br,
+                                 struct ovsrec_controller *c)
+{
+    if (c && c->controller_queue_size) {
+        return *c->controller_queue_size;
+    }
+
+    int queue_size = smap_get_int(&br->cfg->other_config,
+                                  "controller-queue-size",
+                                  BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE);
+    if (queue_size < BRIDGE_CONTROLLER_PACKET_QUEUE_MIN_SIZE ||
+            queue_size > BRIDGE_CONTROLLER_PACKET_QUEUE_MAX_SIZE) {
+        return BRIDGE_CONTROLLER_PACKET_QUEUE_DEFAULT_SIZE;
+    }
+
+    return queue_size;
 }
 
 /* Set NetFlow configuration on 'br'. */
@@ -1810,8 +2062,13 @@ iface_do_create(const struct bridge *br,
     *ofp_portp = iface_pick_ofport(iface_cfg);
     error = ofproto_port_add(br->ofproto, netdev, ofp_portp);
     if (error) {
-        VLOG_WARN_BUF(errp, "could not add network device %s to ofproto (%s)",
-                      iface_cfg->name, ovs_strerror(error));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        *errp = xasprintf("could not add network device %s to ofproto (%s)",
+                          iface_cfg->name, ovs_strerror(error));
+        if (!VLOG_DROP_WARN(&rl)) {
+            VLOG_WARN("%s", *errp);
+        }
         goto error;
     }
 
@@ -2021,8 +2278,8 @@ find_local_hw_addr(const struct bridge *br, struct eth_addr *ea,
         } else {
             /* Choose the interface whose MAC address will represent the port.
              * The Linux kernel bonding code always chooses the MAC address of
-             * the first slave added to a bond, and the Fedora networking
-             * scripts always add slaves to a bond in alphabetical order, so
+             * the first member added to a bond, and the Fedora networking
+             * scripts always add members to a bond in alphabetical order, so
              * for compatibility we choose the interface with the name that is
              * first in alphabetical order. */
             LIST_FOR_EACH (candidate, port_elem, &port->ifaces) {
@@ -2387,6 +2644,7 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_frame_errors,         "rx_frame_err")             \
     IFACE_STAT(rx_over_errors,          "rx_over_err")              \
     IFACE_STAT(rx_crc_errors,           "rx_crc_err")               \
+    IFACE_STAT(rx_missed_errors,        "rx_missed_errors")         \
     IFACE_STAT(collisions,              "collisions")               \
     IFACE_STAT(rx_1_to_64_packets,      "rx_1_to_64_packets")       \
     IFACE_STAT(rx_65_to_127_packets,    "rx_65_to_127_packets")     \
@@ -2611,8 +2869,6 @@ port_refresh_rstp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_rstp_status status;
-    const char *keys[4];
-    int64_t int_values[4];
     struct smap smap;
 
     if (port_is_synthetic(port)) {
@@ -2632,7 +2888,6 @@ port_refresh_rstp_status(struct port *port)
 
     if (!status.enabled) {
         ovsrec_port_set_rstp_status(port->cfg, NULL);
-        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
         return;
     }
     /* Set Status column. */
@@ -2653,6 +2908,36 @@ port_refresh_rstp_status(struct port *port)
 
     ovsrec_port_set_rstp_status(port->cfg, &smap);
     smap_destroy(&smap);
+}
+
+static void
+port_refresh_rstp_stats(struct port *port)
+{
+    struct ofproto *ofproto = port->bridge->ofproto;
+    struct iface *iface;
+    struct ofproto_port_rstp_status status;
+    const char *keys[4];
+    int64_t int_values[4];
+
+    if (port_is_synthetic(port)) {
+        return;
+    }
+
+    /* RSTP doesn't currently support bonds. */
+    if (!ovs_list_is_singleton(&port->ifaces)) {
+        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
+    if (ofproto_port_get_rstp_status(ofproto, iface->ofp_port, &status)) {
+        return;
+    }
+
+    if (!status.enabled) {
+        ovsrec_port_set_rstp_statistics(port->cfg, NULL, NULL, 0);
+        return;
+    }
 
     /* Set Statistics column. */
     keys[0] = "rstp_tx_count";
@@ -2677,7 +2962,7 @@ port_refresh_bond_status(struct port *port, bool force_update)
         return;
     }
 
-    if (bond_get_changed_active_slave(port->name, &mac, force_update)) {
+    if (bond_get_changed_active_member(port->name, &mac, force_update)) {
         struct ds mac_s;
 
         ds_init(&mac_s);
@@ -2733,10 +3018,10 @@ ofp12_controller_role_to_str(enum ofp12_controller_role role)
     switch (role) {
     case OFPCR12_ROLE_EQUAL:
         return "other";
-    case OFPCR12_ROLE_MASTER:
-        return "master";
-    case OFPCR12_ROLE_SLAVE:
-        return "slave";
+    case OFPCR12_ROLE_PRIMARY:
+        return "primary";
+    case OFPCR12_ROLE_SECONDARY:
+        return "secondary";
     case OFPCR12_ROLE_NOCHANGE:
     default:
         return NULL;
@@ -2821,6 +3106,7 @@ run_stats_update(void)
                         iface_refresh_stats(iface);
                     }
                     port_refresh_stp_stats(port);
+                    port_refresh_rstp_stats(port);
                 }
                 HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
                     mirror_refresh_stats(m);
@@ -3005,6 +3291,7 @@ bridge_run(void)
     if (cfg) {
         netdev_set_flow_api_enabled(&cfg->other_config);
         dpdk_init(&cfg->other_config);
+        userspace_tso_init(&cfg->other_config);
     }
 
     /* Initialize the ofproto library.  This only needs to run once, but
@@ -3344,20 +3631,27 @@ bridge_lookup(const char *name)
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
-bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc OVS_UNUSED,
+bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc,
                           const char *argv[], void *aux OVS_UNUSED)
 {
     struct bridge *br;
     struct ds results;
 
-    br = bridge_lookup(argv[1]);
+    br = bridge_lookup(argv[argc - 1]);
     if (!br) {
         unixctl_command_reply_error(conn, "Unknown bridge");
         return;
     }
 
+    bool offload_stats = false;
+    for (int i = 1; i < argc - 1; i++) {
+        if (!strcmp(argv[i], "--offload-stats")) {
+            offload_stats = true;
+        }
+    }
+
     ds_init(&results);
-    ofproto_get_all_flows(br->ofproto, &results);
+    ofproto_get_all_flows(br->ofproto, &results, offload_stats);
 
     unixctl_command_reply(conn, ds_cstr(&results));
     ds_destroy(&results);
@@ -3605,6 +3899,7 @@ bridge_configure_remotes(struct bridge *br,
         .band = OFPROTO_OUT_OF_BAND,
         .enable_async_msgs = true,
         .allowed_versions = bridge_get_allowed_versions(br),
+        .max_pktq_size = bridge_get_controller_queue_size(br, NULL),
     };
     shash_add_nocopy(
         &ocs, xasprintf("punix:%s/%s.mgmt", ovs_rundir(), br->name), oc);
@@ -3615,49 +3910,48 @@ bridge_configure_remotes(struct bridge *br,
             && (!strncmp(c->target, "punix:", 6)
             || !strncmp(c->target, "unix:", 5))) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            char *whitelist;
+            char *allowed;
 
             if (!strncmp(c->target, "unix:", 5)) {
                 /* Connect to a listening socket */
-                whitelist = xasprintf("unix:%s/", ovs_rundir());
+                allowed = xasprintf("unix:%s/", ovs_rundir());
                 if (strchr(c->target, '/') &&
-                   !equal_pathnames(c->target, whitelist,
-                     strlen(whitelist))) {
+                   !equal_pathnames(c->target, allowed, strlen(allowed))) {
                     /* Absolute path specified, but not in ovs_rundir */
                     VLOG_ERR_RL(&rl, "bridge %s: Not connecting to socket "
                                   "controller \"%s\" due to possibility for "
                                   "remote exploit.  Instead, specify socket "
-                                  "in whitelisted \"%s\" or connect to "
+                                  "in permitted directory \"%s\" or connect to "
                                   "\"unix:%s/%s.mgmt\" (which is always "
                                   "available without special configuration).",
-                                  br->name, c->target, whitelist,
+                                  br->name, c->target, allowed,
                                   ovs_rundir(), br->name);
-                    free(whitelist);
+                    free(allowed);
                     continue;
                 }
             } else {
-               whitelist = xasprintf("punix:%s/%s.",
+               allowed = xasprintf("punix:%s/%s.",
                                      ovs_rundir(), br->name);
-               if (!equal_pathnames(c->target, whitelist, strlen(whitelist))
-                   || strchr(c->target + strlen(whitelist), '/')) {
+               if (!equal_pathnames(c->target, allowed, strlen(allowed))
+                   || strchr(c->target + strlen(allowed), '/')) {
                    /* Prevent remote ovsdb-server users from accessing
                     * arbitrary Unix domain sockets and overwriting arbitrary
                     * local files. */
                    VLOG_ERR_RL(&rl, "bridge %s: Not adding Unix domain socket "
                                   "controller \"%s\" due to possibility of "
                                   "overwriting local files. Instead, specify "
-                                  "path in whitelisted format \"%s*\" or "
+                                  "path in permitted format \"%s*\" or "
                                   "connect to \"unix:%s/%s.mgmt\" (which is "
                                   "always available without special "
                                   "configuration).",
-                                  br->name, c->target, whitelist,
+                                  br->name, c->target, allowed,
                                   ovs_rundir(), br->name);
-                   free(whitelist);
+                   free(allowed);
                    continue;
                }
             }
 
-            free(whitelist);
+            free(allowed);
         }
 
         bridge_configure_local_iface_netdev(br, c);
@@ -3680,6 +3974,7 @@ bridge_configure_remotes(struct bridge *br,
             .enable_async_msgs = (!c->enable_async_messages
                                   || *c->enable_async_messages),
             .allowed_versions = bridge_get_allowed_versions(br),
+            .max_pktq_size = bridge_get_controller_queue_size(br, c),
             .rate_limit = (c->controller_rate_limit
                            ? *c->controller_rate_limit : 0),
             .burst_limit = (c->controller_burst_limit
@@ -3830,6 +4125,13 @@ bridge_configure_dp_desc(struct bridge *br)
 {
     ofproto_set_dp_desc(br->ofproto,
                         smap_get(&br->cfg->other_config, "dp-desc"));
+}
+
+static void
+bridge_configure_serial_desc(struct bridge *br)
+{
+    ofproto_set_serial_desc(br->ofproto,
+                        smap_get(&br->cfg->other_config, "dp-sn"));
 }
 
 static struct aa_mapping *
@@ -4204,7 +4506,7 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 }
 
 static void
-iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
+iface_configure_lacp(struct iface *iface, struct lacp_member_settings *s)
 {
     int priority, portid, key;
 
@@ -4289,6 +4591,10 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     s->lacp_fallback_ab_cfg = smap_get_bool(&port->cfg->other_config,
                                        "lacp-fallback-ab", false);
+    s->primary = NULL;
+    if (s->balance == BM_AB || s->lacp_fallback_ab_cfg) {
+        s->primary = smap_get(&port->cfg->other_config, "bond-primary");
+    }
 
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         netdev_set_miimon_interval(iface->netdev, miimon_interval);
@@ -4296,10 +4602,15 @@ port_configure_bond(struct port *port, struct bond_settings *s)
 
     mac_s = port->cfg->bond_active_slave;
     if (!mac_s || !ovs_scan(mac_s, ETH_ADDR_SCAN_FMT,
-                            ETH_ADDR_SCAN_ARGS(s->active_slave_mac))) {
+                            ETH_ADDR_SCAN_ARGS(s->active_member_mac))) {
         /* OVSDB did not store the last active interface */
-        s->active_slave_mac = eth_addr_zero;
+        s->active_member_mac = eth_addr_zero;
     }
+
+    /* lb_output action is disabled by default. */
+    s->use_lb_output_action = (s->balance == BM_TCP)
+                              && smap_get_bool(&port->cfg->other_config,
+                                               "lb-output-action", false);
 }
 
 /* Returns true if 'port' is synthetic, that is, if we constructed it locally

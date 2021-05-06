@@ -3,10 +3,9 @@ AT_BANNER([checkpatch])
 OVS_START_SHELL_HELPERS
 # try_checkpatch PATCH [ERRORS]
 #
-# Runs checkpatch under Python 2 and Python 3, if installed, on the given
-# PATCH, expecting the specified set of ERRORS (and warnings).
+# Runs checkpatch, if installed, on the given PATCH, expecting the
+# specified set of ERRORS (and warnings).
 try_checkpatch() {
-    AT_SKIP_IF([test $HAVE_PYTHON2 = no && test $HAVE_PYTHON3 = no])
     # Take the patch to test from $1.  Remove an initial four-space indent
     # from it and, if it is just headers with no body, add a null body.
     echo "$1" | sed 's/^    //' > test.patch
@@ -22,18 +21,12 @@ try_checkpatch() {
         : > expout
     fi
 
-    try_checkpatch__ "$HAVE_PYTHON2" "$PYTHON2"
-    try_checkpatch__ "$HAVE_PYTHON3" "$PYTHON3"
-}
-try_checkpatch__() {
-    if test $1 = no; then
-        :
-    elif test -s expout; then
-        AT_CHECK([$2 $top_srcdir/utilities/checkpatch.py -q test.patch],
+    if test -s expout; then
+        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py -q test.patch],
                  [1], [stdout])
         AT_CHECK([sed '/^Lines checked:/,$d' stdout], [0], [expout])
     else
-        AT_CHECK([$2 $top_srcdir/utilities/checkpatch.py -q test.patch])
+        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py -q test.patch])
     fi
 }
 OVS_END_SHELL_HELPERS
@@ -230,6 +223,11 @@ try_checkpatch \
    "COMMON_PATCH_HEADER
     +     $ctr (first_run) { \\
     "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     $ctr (a) {    \\
+    "
 done
 AT_CLEANUP
 
@@ -325,6 +323,23 @@ try_checkpatch \
     WARNING: Line lacks whitespace around operator
     #8 FILE: A.c:1:
          if (--mcs->n_refs==0) {
+"
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - whitespace around cast])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     (int) a;
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     (int)a;
+    " \
+    "ERROR: Inappropriate spacing around cast
+    #8 FILE: A.c:1:
+         (int)a;
 "
 
 AT_CLEANUP

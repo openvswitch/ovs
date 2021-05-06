@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2016, 2017 Red Hat, Inc.
 # Copyright (c) 2018 Nicira, Inc.
 #
@@ -32,7 +32,7 @@ print_file_name = None
 checking_file = False
 total_line = 0
 colors = False
-spellcheck_comments = False
+spellcheck = False
 quiet = False
 spell_check_dict = None
 
@@ -84,7 +84,12 @@ def open_spell_check_dict():
                           'cacheline', 'xlate', 'skiplist', 'idl',
                           'comparator', 'natting', 'alg', 'pasv', 'epasv',
                           'wildcard', 'nated', 'amd64', 'x86_64',
-                          'recirculation']
+                          'recirculation', 'linux', 'afxdp', 'promisc', 'goto',
+                          'misconfigured', 'misconfiguration', 'checkpatch',
+                          'debian', 'travis', 'cirrus', 'appveyor', 'faq',
+                          'erspan', 'const', 'hotplug', 'addresssanitizer',
+                          'ovsdb', 'dpif', 'veth', 'rhel', 'jsonrpc', 'json',
+                          'syscall', 'lacp', 'ipf', 'skb', 'valgrind']
 
         global spell_check_dict
         spell_check_dict = enchant.Dict("en_US")
@@ -162,6 +167,7 @@ __regex_is_for_if_single_line_bracket = \
 __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
+__regex_cast_missing_whitespace = re.compile(r'\)[a-zA-Z0-9]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
 __regex_has_comment = re.compile(r'.*(/\*|\*\s)')
 __regex_has_c99_comment = re.compile(r'.*//.*$')
@@ -172,11 +178,12 @@ __regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
 __regex_added_doc_rst = re.compile(
                     r'\ndiff .*Documentation/.*rst\nnew file mode')
 __regex_empty_return = re.compile(r'\s*return;')
-__regex_if_macros = re.compile(r'^ +(%s) \([\S][\s\S]+[\S]\) { \\' %
+__regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
                                __parenthesized_constructs)
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
+skip_gerrit_change_id_check = False
 skip_block_whitespace_check = False
 skip_signoff_check = False
 
@@ -184,13 +191,13 @@ skip_signoff_check = False
 # name, as they may have legitimate reasons to have longer lines.
 #
 # Python isn't checked as flake8 performs these checks during build.
-line_length_blacklist = re.compile(
+line_length_ignore_list = re.compile(
     r'\.(am|at|etc|in|m4|mk|patch|py)$|debian/rules')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
 # of files need lines with leading tabs.
-leading_whitespace_blacklist = re.compile(r'\.(mk|am|at)$|debian/rules')
+leading_whitespace_ignore_list = re.compile(r'\.(mk|am|at)$|debian/rules')
 
 
 def is_subtracted_line(line):
@@ -278,6 +285,12 @@ def pointer_whitespace_check(line):
     """Return TRUE if there is no space between a pointer name and the
        asterisk that denotes this is a apionter type, ie: 'struct foo*'"""
     return __regex_ptr_declaration_missing_whitespace.search(line) is not None
+
+
+def cast_whitespace_check(line):
+    """Return TRUE if there is no space between the '()' used in a cast and
+       the expression whose type is cast, i.e.: '(void *)foo'"""
+    return __regex_cast_missing_whitespace.search(line) is not None
 
 
 def line_length_check(line):
@@ -372,15 +385,19 @@ def filter_comments(current_line, keep=False):
     return sanitized_line
 
 
-def check_comment_spelling(line):
-    if not spell_check_dict or not spellcheck_comments:
+def check_spelling(line, comment):
+    if not spell_check_dict or not spellcheck:
         return False
 
-    comment_words = filter_comments(line, True).replace(':', ' ').split(' ')
-    for word in comment_words:
+    words = filter_comments(line, True) if comment else line
+    words = words.replace(':', ' ').split(' ')
+
+    for word in words:
         skip = False
         strword = re.subn(r'\W+', '', word)[0].replace(',', '')
-        if len(strword) and not spell_check_dict.check(strword.lower()):
+        if (len(strword)
+                and not spell_check_dict.check(strword.lower())
+                and not spell_check_dict.check(word.lower())):
             if any([check_char in word
                     for check_char in ['=', '(', '-', '_', '/', '\'']]):
                 skip = True
@@ -394,8 +411,8 @@ def check_comment_spelling(line):
                                      strword[1:].islower()):
                 skip = True
 
-            # skip words that start with numbers
-            if strword.startswith(tuple('0123456789')):
+            # skip words containing numbers
+            if any(check_char.isdigit() for check_char in strword):
                 skip = True
 
             if not skip:
@@ -513,11 +530,11 @@ file_checks = [
 
 checks = [
     {'regex': None,
-     'match_name': lambda x: not line_length_blacklist.search(x),
+     'match_name': lambda x: not line_length_ignore_list.search(x),
      'check': lambda x: line_length_check(x)},
 
     {'regex': None,
-     'match_name': lambda x: not leading_whitespace_blacklist.search(x),
+     'match_name': lambda x: not leading_whitespace_ignore_list.search(x),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
@@ -543,6 +560,12 @@ checks = [
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
+     'check': lambda x: cast_whitespace_check(x),
+     'print':
+     lambda: print_error("Inappropriate spacing around cast")},
+
+    {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: trailing_operator(x),
      'print':
      lambda: print_error("Line has '?' or ':' operator at end of line")},
@@ -559,7 +582,7 @@ checks = [
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),
-     'check': lambda x: check_comment_spelling(x)},
+     'check': lambda x: check_spelling(x, True)},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'check': lambda x: empty_return_with_brace(x),
@@ -805,10 +828,14 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
             elif is_co_author.match(line):
                 m = is_co_author.match(line)
                 co_authors.append(m.group(2))
-            elif is_gerrit_change_id.match(line):
+            elif (is_gerrit_change_id.match(line) and
+                  not skip_gerrit_change_id_check):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
                 print("%d: %s\n" % (lineno, line))
+            elif spellcheck:
+                check_spelling(line, False)
+
         elif parse == PARSE_STATE_CHANGE_BODY:
             newfile = hunks.match(line)
             if newfile:
@@ -844,6 +871,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
             # for a common style.
             if current_file.startswith('include/sparse'):
                 continue
+            if current_file.startswith('utilities/bugtool'):
+                continue
             run_checks(current_file, cmp_line, lineno)
 
     run_file_checks(text)
@@ -869,8 +898,10 @@ Check options:
 -l|--skip-leading-whitespace   Skips the leading whitespace test
 -q|--quiet                     Only print error and warning information
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
--S|--spellcheck-comments       Check C comments for possible spelling mistakes
--t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
+-S|--spellcheck                Check C comments and commit-message for possible
+                               spelling mistakes
+-t|--skip-trailing-whitespace  Skips the trailing whitespace test
+   --skip-gerrit-change-id     Skips the gerrit change id test"""
           % sys.argv[0])
 
 
@@ -927,7 +958,8 @@ if __name__ == '__main__':
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
                                        "skip-trailing-whitespace",
-                                       "spellcheck-comments",
+                                       "skip-gerrit-change-id",
+                                       "spellcheck",
                                        "quiet"])
     except:
         print("Unknown option encountered. Please rerun with -h for help.")
@@ -945,14 +977,16 @@ if __name__ == '__main__':
             skip_signoff_check = True
         elif o in ("-t", "--skip-trailing-whitespace"):
             skip_trailing_whitespace_check = True
+        elif o in ("--skip-gerrit-change-id"):
+            skip_gerrit_change_id_check = True
         elif o in ("-f", "--check-file"):
             checking_file = True
-        elif o in ("-S", "--spellcheck-comments"):
+        elif o in ("-S", "--spellcheck"):
             if not open_spell_check_dict():
                 print("WARNING: The enchant library isn't available.")
                 print("         Please install python enchant.")
             else:
-                spellcheck_comments = True
+                spellcheck = True
         elif o in ("-q", "--quiet"):
             quiet = True
         else:

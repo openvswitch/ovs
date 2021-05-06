@@ -375,6 +375,34 @@ match_set_tun_erspan_hwid(struct match *match, uint8_t hwid)
 }
 
 void
+match_set_tun_gtpu_flags_masked(struct match *match, uint8_t flags,
+                                uint8_t mask)
+{
+    match->wc.masks.tunnel.gtpu_flags = flags;
+    match->flow.tunnel.gtpu_flags = flags & mask;
+}
+
+void
+match_set_tun_gtpu_flags(struct match *match, uint8_t flags)
+{
+    match_set_tun_gtpu_flags_masked(match, flags, UINT8_MAX);
+}
+
+void
+match_set_tun_gtpu_msgtype_masked(struct match *match, uint8_t msgtype,
+                                  uint8_t mask)
+{
+    match->wc.masks.tunnel.gtpu_msgtype = msgtype;
+    match->flow.tunnel.gtpu_msgtype = msgtype & mask;
+}
+
+void
+match_set_tun_gtpu_msgtype(struct match *match, uint8_t msgtype)
+{
+    match_set_tun_gtpu_msgtype_masked(match, msgtype, UINT8_MAX);
+}
+
+void
 match_set_in_port(struct match *match, ofp_port_t ofp_port)
 {
     match->wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
@@ -417,8 +445,14 @@ match_set_ct_state_masked(struct match *match, uint32_t ct_state, uint32_t mask)
 void
 match_set_ct_zone(struct match *match, uint16_t ct_zone)
 {
-    match->flow.ct_zone = ct_zone;
-    match->wc.masks.ct_zone = UINT16_MAX;
+    match_set_ct_zone_masked(match, ct_zone, UINT16_MAX);
+}
+
+void
+match_set_ct_zone_masked(struct match *match, uint16_t ct_zone, uint16_t mask)
+{
+    match->flow.ct_zone = ct_zone & mask;
+    match->wc.masks.ct_zone = mask;
 }
 
 void
@@ -894,6 +928,14 @@ match_set_nw_proto(struct match *match, uint8_t nw_proto)
 }
 
 void
+match_set_nw_proto_masked(struct match *match,
+                          const uint8_t nw_proto, const uint8_t mask)
+{
+    match->flow.nw_proto = nw_proto;
+    match->wc.masks.nw_proto = mask;
+}
+
+void
 match_set_nw_src(struct match *match, ovs_be32 nw_src)
 {
     match->flow.nw_src = nw_src;
@@ -984,6 +1026,30 @@ void
 match_set_icmp_code(struct match *match, uint8_t icmp_code)
 {
     match_set_tp_dst(match, htons(icmp_code));
+}
+
+void
+match_set_arp_opcode_masked(struct match *match,
+                            const uint8_t opcode,
+                            const uint8_t mask)
+{
+    match_set_nw_proto_masked(match, opcode, mask);
+}
+
+void
+match_set_arp_spa_masked(struct match *match,
+                         const ovs_be32 arp_spa,
+                         const ovs_be32 mask)
+{
+    match_set_nw_src_masked(match, arp_spa, mask);
+}
+
+void
+match_set_arp_tpa_masked(struct match *match,
+                         const ovs_be32 arp_tpa,
+                         const ovs_be32 mask)
+{
+    match_set_nw_dst_masked(match, arp_tpa, mask);
 }
 
 void
@@ -1311,13 +1377,19 @@ format_flow_tunnel(struct ds *s, const struct match *match)
         ds_put_format(s, "tun_erspan_ver=%"PRIu8",", tnl->erspan_ver);
     }
     if (wc->masks.tunnel.erspan_idx && tnl->erspan_ver == 1) {
-       ds_put_format(s, "tun_erspan_idx=%#"PRIx32",", tnl->erspan_idx); 
+       ds_put_format(s, "tun_erspan_idx=%#"PRIx32",", tnl->erspan_idx);
     }
     if (wc->masks.tunnel.erspan_dir && tnl->erspan_ver == 2) {
         ds_put_format(s, "tun_erspan_dir=%"PRIu8",", tnl->erspan_dir);
     }
     if (wc->masks.tunnel.erspan_hwid && tnl->erspan_ver == 2) {
         ds_put_format(s, "tun_erspan_hwid=%#"PRIx8",", tnl->erspan_hwid);
+    }
+    if (wc->masks.tunnel.gtpu_flags) {
+        ds_put_format(s, "gtpu_flags=%#"PRIx8",", tnl->gtpu_flags);
+    }
+    if (wc->masks.tunnel.gtpu_msgtype) {
+        ds_put_format(s, "gtpu_msgtype=%"PRIu8",", tnl->gtpu_msgtype);
     }
     if (wc->masks.tunnel.flags & FLOW_TNL_F_MASK) {
         format_flags_masked(s, "tun_flags", flow_tun_flag_to_string,
@@ -1390,7 +1462,7 @@ match_format(const struct match *match,
     bool is_megaflow = false;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",

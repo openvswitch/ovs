@@ -305,7 +305,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     SFLEthernet_counters* eth_counters;
     struct netdev_stats stats;
     enum netdev_flags flags;
-    struct lacp_slave_stats lacp_stats;
+    struct lacp_member_stats lacp_stats;
     const char *ifName;
 
     dsp = dpif_sflow_find_port(ds, u32_to_odp(poller->bridgePort));
@@ -1026,7 +1026,7 @@ sflow_read_set_action(const struct nlattr *attr,
                 sflow_actions->tunnel.ip_tos = key->ipv4_tos;
             }
             if (key->ipv4_ttl) {
-                sflow_actions->tunnel.ip_tos = key->ipv4_ttl;
+                sflow_actions->tunnel.ip_ttl = key->ipv4_ttl;
             }
         }
         break;
@@ -1175,8 +1175,9 @@ dpif_sflow_read_actions(const struct flow *flow,
         case OVS_ACTION_ATTR_RECIRC:
         case OVS_ACTION_ATTR_HASH:
         case OVS_ACTION_ATTR_CT:
-    case OVS_ACTION_ATTR_CT_CLEAR:
+        case OVS_ACTION_ATTR_CT_CLEAR:
         case OVS_ACTION_ATTR_METER:
+        case OVS_ACTION_ATTR_LB_OUTPUT:
             break;
 
         case OVS_ACTION_ATTR_SET_MASKED:
@@ -1224,6 +1225,7 @@ dpif_sflow_read_actions(const struct flow *flow,
         case OVS_ACTION_ATTR_POP_NSH:
         case OVS_ACTION_ATTR_UNSPEC:
         case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+        case OVS_ACTION_ATTR_DROP:
         case __OVS_ACTION_ATTR_MAX:
         default:
             break;
@@ -1290,10 +1292,10 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
     ovs_be16 vlan_tci;
 
     ovs_mutex_lock(&mutex);
-    sampler = ds->sflow_agent->samplers;
-    if (!sampler) {
+    if (!ds->sflow_agent || !ds->sflow_agent->samplers) {
         goto out;
     }
+    sampler = ds->sflow_agent->samplers;
 
     /* Build a flow sample. */
     memset(&fs, 0, sizeof fs);

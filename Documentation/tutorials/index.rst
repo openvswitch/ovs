@@ -27,8 +27,7 @@
 Tutorials
 =========
 
-Getting started with Open vSwitch (OVS) and Open Virtual Network (OVN) for Open
-vSwitch.
+Getting started with Open vSwitch (OVS).
 
 .. TODO(stephenfin): We could really do with a few basic tutorials, along with
    some more specialized ones (DPDK, XenServer, Windows). The latter could
@@ -42,8 +41,4 @@ vSwitch.
    faucet
    ipsec
    ovs-advanced
-   ovn-sandbox
-   ovn-openstack
-   ovn-rbac
-   ovn-ipsec
    ovs-conntrack

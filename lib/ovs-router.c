@@ -505,7 +505,7 @@ ovs_router_flush(void)
     ovs_mutex_lock(&mutex);
     classifier_defer(&cls);
     CLS_FOR_EACH(rt, cr, &cls) {
-        if (rt->priority == rt->plen) {
+        if (rt->priority == rt->plen || rt->local) {
             rt_entry_delete__(&rt->cr);
         }
     }

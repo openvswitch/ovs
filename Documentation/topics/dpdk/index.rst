@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-=================
-The DPDK Datapath
-=================
+============
+DPDK Support
+============
 
 .. NOTE(stephenfin): Part of this doc is included in 'howto/dpdk'. Update that
 .. if you modify this document
@@ -34,10 +34,8 @@ The DPDK Datapath
    /topics/dpdk/bridge
    /topics/dpdk/phy
    /topics/dpdk/vhost-user
-   /topics/dpdk/ring
    /topics/dpdk/vdev
    /topics/dpdk/pmd
    /topics/dpdk/qos
-   /topics/dpdk/pdump
    /topics/dpdk/jumbo-frames
    /topics/dpdk/memory

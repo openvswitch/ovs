@@ -962,14 +962,26 @@ static struct dst_entry *geneve_get_v6_dst(struct sk_buff *skb,
 			return dst;
 	}
 
-#ifdef HAVE_IPV6_DST_LOOKUP_NET
-	if (ipv6_stub->ipv6_dst_lookup(geneve->net, gs6->sock->sk, &dst, fl6)) {
+#if defined(HAVE_IPV6_STUB_WITH_DST_ENTRY) && defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+#ifdef HAVE_IPV6_DST_LOOKUP_FLOW_NET
+	dst = ipv6_stub->ipv6_dst_lookup_flow(geneve->net, gs6->sock->sk, fl6,
+					      NULL);
 #else
-#ifdef HAVE_IPV6_STUB
+	dst = ipv6_stub->ipv6_dst_lookup_flow(gs6->sock->sk, fl6,
+					      NULL);
+#endif
+	if (IS_ERR(dst)) {
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW_NET)
+	if (ipv6_stub->ipv6_dst_lookup_flow(geneve->net, gs6->sock->sk, &dst,
+                                            fl6)) {
+#elif defined(HAVE_IPV6_DST_LOOKUP_FLOW)
+	if (ipv6_stub->ipv6_dst_lookup_flow(gs6->sock->sk, &dst, fl6)) {
+#elif defined(HAVE_IPV6_DST_LOOKUP_NET)
+	if (ipv6_stub->ipv6_dst_lookup(geneve->net, gs6->sock->sk, &dst, fl6)) {
+#elif defined(HAVE_IPV6_STUB)
 	if (ipv6_stub->ipv6_dst_lookup(gs6->sock->sk, &dst, fl6)) {
 #else
 	if (ip6_dst_lookup(gs6->sock->sk, &dst, fl6)) {
-#endif
 #endif
 		netdev_dbg(dev, "no route to %pI6\n", &fl6->daddr);
 		return ERR_PTR(-ENETUNREACH);
@@ -1407,7 +1419,7 @@ static void geneve_setup(struct net_device *dev)
 
 static const struct nla_policy geneve_policy[IFLA_GENEVE_MAX + 1] = {
 	[IFLA_GENEVE_ID]		= { .type = NLA_U32 },
-	[IFLA_GENEVE_REMOTE]		= { .len = FIELD_SIZEOF(struct iphdr, daddr) },
+	[IFLA_GENEVE_REMOTE]		= { .len = sizeof_field(struct iphdr, daddr) },
 	[IFLA_GENEVE_REMOTE6]		= { .len = sizeof(struct in6_addr) },
 	[IFLA_GENEVE_TTL]		= { .type = NLA_U8 },
 	[IFLA_GENEVE_TOS]		= { .type = NLA_U8 },
@@ -1419,7 +1431,7 @@ static const struct nla_policy geneve_policy[IFLA_GENEVE_MAX + 1] = {
 	[IFLA_GENEVE_UDP_ZERO_CSUM6_RX]	= { .type = NLA_U8 },
 };
 
-#ifdef  HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef  HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int geneve_validate(struct nlattr *tb[], struct nlattr *data[],
 			   struct netlink_ext_ack *extack)
 #else

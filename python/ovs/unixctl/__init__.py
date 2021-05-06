@@ -16,10 +16,7 @@ import sys
 
 import ovs.util
 
-import six
-
 commands = {}
-strtypes = six.string_types
 
 
 class _UnixctlCommand(object):
@@ -59,8 +56,8 @@ def command_register(name, usage, min_args, max_args, callback, aux):
     request at a time, so a reply must be made eventually to avoid blocking
     that connection."""
 
-    assert isinstance(name, strtypes)
-    assert isinstance(usage, strtypes)
+    assert isinstance(name, str)
+    assert isinstance(usage, str)
     assert isinstance(min_args, int)
     assert isinstance(max_args, int)
     assert callable(callback)
@@ -71,7 +68,7 @@ def command_register(name, usage, min_args, max_args, callback, aux):
 
 
 def socket_name_from_target(target):
-    assert isinstance(target, strtypes)
+    assert isinstance(target, str)
 
     """ On Windows an absolute path contains ':' ( i.e: C:\\ ) """
     if target.startswith('/') or target.find(':') > -1:

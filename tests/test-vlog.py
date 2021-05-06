@@ -16,8 +16,6 @@ import argparse
 
 import ovs.vlog
 
-from six.moves import range
-
 
 def main():
     modules = [ovs.vlog.Vlog("module_%d" % i) for i in range(3)]

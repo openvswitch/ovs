@@ -53,6 +53,7 @@ struct ovsdb_datum;
 struct ovsdb_idl_class;
 struct ovsdb_idl_row;
 struct ovsdb_idl_column;
+struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
 struct uuid;
 
@@ -62,8 +63,9 @@ struct ovsdb_idl *ovsdb_idl_create(const char *remote,
                                    bool retry);
 struct ovsdb_idl *ovsdb_idl_create_unconnected(
     const struct ovsdb_idl_class *, bool monitor_everything_by_default);
-void ovsdb_idl_set_remote(struct ovsdb_idl *, const char *, bool);
-void ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *, bool);
+void ovsdb_idl_set_remote(struct ovsdb_idl *, const char *remote, bool retry);
+void ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *, bool shuffle);
+void ovsdb_idl_reset_min_index(struct ovsdb_idl *);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
 void ovsdb_idl_set_leader_only(struct ovsdb_idl *, bool leader_only);
@@ -75,7 +77,6 @@ void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
 bool ovsdb_idl_has_lock(const struct ovsdb_idl *);
 bool ovsdb_idl_is_lock_contended(const struct ovsdb_idl *);
 
-const struct uuid  * ovsdb_idl_get_monitor_id(const struct ovsdb_idl *);
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_enable_reconnect(struct ovsdb_idl *);
@@ -99,12 +100,12 @@ const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
  * The client may choose any subset of the columns and tables to replicate,
  * specifying it one of two ways:
  *
- *   - As a blacklist (adding the columns or tables to replicate).  To do so,
+ *   - As a deny list (adding the columns or tables to replicate).  To do so,
  *     the client passes false as 'monitor_everything_by_default' to
  *     ovsdb_idl_create() and then calls ovsdb_idl_add_column() and
  *     ovsdb_idl_add_table() for the desired columns and, if necessary, tables.
  *
- *   - As a whitelist (replicating all columns and tables except those
+ *   - As an allow list (replicating all columns and tables except those
  *     explicitly removed).  To do so, the client passes true as
  *     'monitor_everything_by_default' to ovsdb_idl_create() and then calls
  *     ovsdb_idl_omit() to remove columns.
@@ -217,6 +218,7 @@ unsigned int ovsdb_idl_row_get_seqno(
 void ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
                                 const struct ovsdb_idl_column *column);
 void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
+bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);

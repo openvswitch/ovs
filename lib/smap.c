@@ -248,6 +248,22 @@ smap_get_int(const struct smap *smap, const char *key, int def)
 }
 
 /* Gets the value associated with 'key' in 'smap' and converts it to an
+ * unsigned int. If 'key' is not in 'smap' or a valid unsigned integer
+ * can't be parsed from it's value, returns 'def'. */
+unsigned int
+smap_get_uint(const struct smap *smap, const char *key, unsigned int def)
+{
+    const char *value = smap_get(smap, key);
+    unsigned int u_value;
+
+    if (!value || !str_to_uint(value, 10, &u_value)) {
+        return def;
+    }
+
+    return u_value;
+}
+
+/* Gets the value associated with 'key' in 'smap' and converts it to an
  * unsigned long long.  If 'key' is not in 'smap' or a valid number can't be
  * parsed from it's value, returns 'def'. */
 unsigned long long int

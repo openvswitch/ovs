@@ -106,6 +106,7 @@ if test "$IS_WIN32" = "yes"; then
         signal=
         retval=0
         for arg; do
+            arg=$(echo $arg | tr -d '\n\r')
             case $arg in
             -*) signal=$arg ;;
             [1-9][0-9]*)
@@ -155,7 +156,7 @@ kill_ovs_vswitchd () {
     fi
 
     # Tell the daemon to terminate gracefully
-    ovs-appctl --timeout=10 -t ovs-vswitchd exit --cleanup 2>/dev/null
+    ovs-appctl -t ovs-vswitchd exit --cleanup 2>/dev/null
 
     # Nothing else to be done if there is no PID
     test -z "$TMPPID" && return
@@ -184,7 +185,7 @@ wc () {
 }
 
 uuidfilt () {
-    $PYTHON "$top_srcdir"/tests/uuidfilt.py "$@"
+    $PYTHON3 "$top_srcdir"/tests/uuidfilt.py "$@"
 }
 
 # run_as PROGRAM_NAME COMMAND [ARG...]
@@ -229,9 +230,9 @@ ovs_wait () {
     sleep 0.1
     if ovs_wait_cond; then echo "$1: wait succeeded quickly" >&AS_MESSAGE_LOG_FD; return 0; fi
 
-    # Then wait up to 10 seconds.
+    # Then wait up to OVS_CTL_TIMEOUT seconds.
     local d
-    for d in 1 2 3 4 5 6 7 8 9 10; do
+    for d in `seq 1 "$OVS_CTL_TIMEOUT"`; do
         sleep 1
         if ovs_wait_cond; then echo "$1: wait succeeded after $d seconds" >&AS_MESSAGE_LOG_FD; return 0; fi
     done
@@ -252,21 +253,19 @@ ovs_wait_failed () {
 ovs_wait "AS_ESCAPE([$3])" "AS_ESCAPE([$4])"
 ])
 
-dnl OVS_WAIT_UNTIL(COMMAND)
+dnl OVS_WAIT_UNTIL(COMMAND, [IF-FAILED])
 dnl
-dnl Executes shell COMMAND in a loop until it returns
-dnl zero return code.  If COMMAND did not return
-dnl zero code within reasonable time limit, then
-dnl the test fails.
+dnl Executes shell COMMAND in a loop until it returns zero.  If COMMAND does
+dnl not return zero within a reasonable time limit, executes the commands
+dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_UNTIL],
   [OVS_WAIT([$1], [$2], [AT_LINE], [until $1])])
 
-dnl OVS_WAIT_WHILE(COMMAND)
+dnl OVS_WAIT_WHILE(COMMAND, [IF-FAILED])
 dnl
-dnl Executes shell COMMAND in a loop until it returns
-dnl non-zero return code.  If COMMAND did not return
-dnl non-zero code within reasonable time limit, then
-dnl the test fails.
+dnl Executes shell COMMAND in a loop until it returns nonzero.  If COMMAND does
+dnl not return nonzero within a reasonable time limit, executes the commands
+dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_WHILE],
   [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2],
             [AT_LINE], [while $1])])
@@ -279,8 +278,8 @@ m4_define([OVS_APP_EXIT_AND_WAIT],
   [AT_CHECK([test -e $OVS_RUNDIR/$1.pid])
    TMPPID=$(cat $OVS_RUNDIR/$1.pid)
    AT_CHECK(m4_if([$1],[ovs-vswitchd],
-                  [ovs-appctl --timeout=10 -t $1 exit --cleanup],
-                  [ovs-appctl --timeout=10 -t $1 exit]))
+                  [ovs-appctl -t $1 exit --cleanup],
+                  [ovs-appctl -t $1 exit]))
    OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
 dnl OVS_APP_EXIT_AND_WAIT_BY_TARGET(TARGET, PIDFILE)
@@ -290,7 +289,7 @@ dnl argument), and then wait for it to exit.
 m4_define([OVS_APP_EXIT_AND_WAIT_BY_TARGET],
   [AT_CHECK([test -e $2])
    TMPPID=$(cat $2)
-   AT_CHECK([ovs-appctl --timeout=10 --target=$1 exit])
+   AT_CHECK([ovs-appctl --target=$1 exit])
    OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
 dnl on_exit "COMMAND"
@@ -335,3 +334,10 @@ m4_ifndef([AT_FAIL_IF],
   [m4_define([AT_FAIL_IF],
     [AT_CHECK([($1) \
     && exit 99 || exit 0], [0], [ignore], [ignore])])])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from bridges such as br-underlay.
+dnl Add a rule to always accept the traffic.
+m4_define([IPTABLES_ACCEPT],
+  [AT_CHECK([iptables -I INPUT 1 -i $1 -j ACCEPT])
+   on_exit 'iptables -D INPUT 1 -i $1'])

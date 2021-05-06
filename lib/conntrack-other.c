@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include "conntrack-private.h"
+#include "conntrack-tp.h"
 #include "dp-packet.h"
 
 enum OVS_PACKED_ENUM other_state {
@@ -47,16 +48,18 @@ other_conn_update(struct conntrack *ct, struct conn *conn_,
                   struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_other *conn = conn_other_cast(conn_);
+    enum ct_update_res ret = CT_UPDATE_VALID;
 
     if (reply && conn->state != OTHERS_BIDIR) {
         conn->state = OTHERS_BIDIR;
     } else if (conn->state == OTHERS_FIRST) {
         conn->state = OTHERS_MULTIPLE;
+        ret = CT_UPDATE_VALID_NEW;
     }
 
     conn_update_expiration(ct, &conn->up, other_timeouts[conn->state], now);
 
-    return CT_UPDATE_VALID;
+    return ret;
 }
 
 static bool
@@ -67,12 +70,13 @@ other_valid_new(struct dp_packet *pkt OVS_UNUSED)
 
 static struct conn *
 other_new_conn(struct conntrack *ct, struct dp_packet *pkt OVS_UNUSED,
-               long long now)
+               long long now, uint32_t tp_id)
 {
     struct conn_other *conn;
 
     conn = xzalloc(sizeof *conn);
     conn->state = OTHERS_FIRST;
+    conn->up.tp_id = tp_id;
 
     conn_init_expiration(ct, &conn->up, other_timeouts[conn->state], now);
 

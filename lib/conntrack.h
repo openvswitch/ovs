@@ -20,6 +20,7 @@
 #include <stdbool.h>
 
 #include "cmap.h"
+#include "ct-dpif.h"
 #include "latch.h"
 #include "odp-netlink.h"
 #include "openvswitch/hmap.h"
@@ -93,7 +94,7 @@ int conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                       const struct ovs_key_ct_labels *setlabel,
                       ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
                       const struct nat_action_info_t *nat_action_info,
-                      long long now);
+                      long long now, uint32_t tp_id);
 void conntrack_clear(struct dp_packet *packet);
 
 struct conntrack_dump {
@@ -102,6 +103,25 @@ struct conntrack_dump {
     struct cmap_position cm_pos;
     bool filter_zone;
     uint16_t zone;
+};
+
+struct conntrack_zone_limit {
+    int32_t zone;
+    uint32_t limit;
+    uint32_t count;
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+};
+
+struct timeout_policy {
+    struct hmap_node node;
+    struct ct_dpif_timeout_policy policy;
+};
+
+enum {
+    INVALID_ZONE = -2,
+    DEFAULT_ZONE = -1, /* Default zone for zone limit management. */
+    MIN_ZONE = 0,
+    MAX_ZONE = 0xFFFF,
 };
 
 struct ct_dpif_entry;
@@ -118,6 +138,12 @@ int conntrack_flush_tuple(struct conntrack *, const struct ct_dpif_tuple *,
 int conntrack_set_maxconns(struct conntrack *ct, uint32_t maxconns);
 int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
 int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
+int conntrack_set_tcp_seq_chk(struct conntrack *ct, bool enabled);
+bool conntrack_get_tcp_seq_chk(struct conntrack *ct);
 struct ipf *conntrack_ipf_ctx(struct conntrack *ct);
+struct conntrack_zone_limit zone_limit_get(struct conntrack *ct,
+                                           int32_t zone);
+int zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit);
+int zone_limit_delete(struct conntrack *ct, uint16_t zone);
 
 #endif /* conntrack.h */

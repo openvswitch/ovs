@@ -611,6 +611,16 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+dnl Test OVS handles TLV map modifictions properly when restores frozen state.
+NS_CHECK_EXEC([at_ns0], [ping 10.1.1.100 > /dev/null &])
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0x88,len=4}->tun_metadata1"])
+sleep 1
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0x99,len=4}->tun_metadata2"])
+sleep 1
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0xaa,len=4}->tun_metadata3"])
+sleep 1
+
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -678,11 +688,7 @@ AT_CHECK([ip link set dev br-underlay up])
 dnl Set up tunnel endpoints on OVS outside the namespace.
 ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from br-underlay. Here we add a rule to walk
-dnl around it.
-iptables -I INPUT 1 -i br-underlay -j ACCEPT
-on_exit 'iptables -D INPUT 1'
+IPTABLES_ACCEPT([br-underlay])
 
 ip netns exec at_ns0 tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap &
 sleep 1
@@ -729,11 +735,7 @@ dnl Set up tunnel endpoints on OVS outside the namespace and emulate a native
 dnl linux device inside the namespace.
 ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [options:key=1 options:erspan_ver=1 options:erspan_idx=7])
 
-dnl Certain Linux distributions, like CentOS, have default iptable rules
-dnl to reject input traffic from br-underlay. Here we add a rule to walk
-dnl around it.
-iptables -I INPUT 1 -i br-underlay -j ACCEPT
-on_exit 'iptables -D INPUT 1'
+IPTABLES_ACCEPT([br-underlay])
 
 ip netns exec at_ns0 tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap &
 sleep 1
@@ -992,6 +994,45 @@ NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], 
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([datapath - multiple mpls label pop])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0])
+AT_CHECK([ovs-vsctl add-port br1 patch1])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:3,push_mpls:0x8847,set_mpls_label:2,push_mpls:0x8847,set_mpls_label:1,resubmit(,3)
+table=0,priority=100,dl_type=0x8847,mpls_label=1 actions=pop_mpls:0x8847,resubmit(,1)
+table=1,priority=100,dl_type=0x8847,mpls_label=2 actions=pop_mpls:0x8847,resubmit(,2)
+table=2,priority=100,dl_type=0x8847,mpls_label=3 actions=pop_mpls:0x0800,resubmit(,3)
+table=0,priority=10 actions=resubmit(,3)
+table=3,priority=10 actions=normal
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flows br1 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - basic truncate action])
 AT_SKIP_IF([test $HAVE_NC = no])
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2251,6 +2292,76 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - new connections])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows1.txt], [dnl
+table=0, priority=1,action=drop
+table=0, priority=10,arp,action=normal
+table=0, priority=100,tcp,action=ct(table=1)
+table=0, priority=100,udp,action=ct(table=1)
+table=1, priority=100,in_port=1,tcp,ct_state=+trk+new,action=ct(commit)
+table=1, priority=100,in_port=1,udp,ct_state=+trk+new,action=ct(commit)
+table=1, priority=100,in_port=1,ct_state=+trk+est,action=2
+table=1, priority=100,in_port=2,ct_state=+trk+est,action=1
+])
+
+ovs-appctl vlog/set dbg
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows1.txt])
+
+dnl TCP traffic from ns0 to ns1 should fail.
+OVS_START_L7([at_ns1], [http])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log], [4])
+
+dnl Send UDP packet on port 1 twice.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+dnl There should not be any packet that matches the established ct_state.
+AT_CHECK([ovs-ofctl dump-flows br0 "table=1 in_port=1,ct_state=+trk+est" | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ table=1, priority=100,ct_state=+est+trk,in_port=1 actions=output:2
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - generic IP protocol])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+table=0, priority=1,action=drop
+table=0, priority=10,arp,action=normal
+table=0, priority=100,ip,action=ct(table=1)
+table=1, priority=100,in_port=1,ip,ct_state=+trk+new,action=ct(commit)
+table=1, priority=100,in_port=1,ct_state=+trk+est,action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=01005e00001200005e000101080045c0002800000000ff7019cdc0a8001ee0000012210164010001ba52c0a800010000000000000000000000000000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=192\.168\.0\.30,"], [], [dnl
+112,orig=(src=192.168.0.30,dst=224.0.0.18,sport=0,dport=0),reply=(src=224.0.0.18,dst=192.168.0.30,sport=0,dport=0)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ICMP related])
 AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()
@@ -3179,6 +3290,142 @@ NXST_FLOW reply:
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - zone-based timeout policy])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_TIMEOUT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ip,action=ct(zone=5, table=1)
+priority=100,in_port=2,ip,action=ct(zone=5, table=1)
+table=1,in_port=2,ip,ct_state=+trk+est,action=1
+table=1,in_port=1,ip,ct_state=+trk+new,action=ct(commit,zone=5),2
+table=1,in_port=1,ip,ct_state=+trk+est,action=2
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Test with default timeout
+dnl The default udp_single and icmp_first timeouts are 30 seconds in
+dnl kernel DP, and 60 seconds in userspace DP.
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+sleep 4
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Shorten the udp_single and icmp_first timeout in zone 5
+dnl Userspace datapath uses udp_first and icmp_reply, and
+dnl kernel datapath uses udp_single and icmp_first
+VSCTL_ADD_DATAPATH_TABLE()
+
+dnl Creating more timeout policies
+for i in `seq 1 255`; do
+ovs-vsctl --may-exist add-zone-tp $DP_TYPE zone=$i udp_first=$i udp_single=$i icmp_first=$i icmp_reply=$i;
+done
+AT_CHECK([ovs-vsctl --may-exist add-zone-tp $DP_TYPE zone=5 udp_first=1 udp_single=1 icmp_first=1 icmp_reply=1])
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+dnl Wait until the timeout expire.
+dnl We intend to wait a bit longer, because conntrack does not recycle the entry right after it is expired.
+sleep 6
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+])
+
+dnl Re-send ICMP and UDP traffic to test conntrack cache
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+dnl Wait until the timeout expire.
+dnl We intend to wait a bit longer, because conntrack does not recycle the entry right after it is expired.
+sleep 6
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+])
+
+dnl Set the timeout policy to default again.
+AT_CHECK([ovs-vsctl del-zone-tp $DP_TYPE zone=5])
+
+dnl Send ICMP and UDP traffic
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+sleep 1
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sort], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=5
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Check kernel datapath to make sure conntrack fills in L3 and L4
+dnl protocol information
+AT_SETUP([conntrack - fragment reassembly with L3 L4 protocol information])
+CHECK_CONNTRACK()
+CHECK_L3L4_CONNTRACK_REASM()
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_DATA([flows.txt], [dnl
+action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl packet-out br0 "packet=52540003287c525400444ab586dd6006f70605b02c4020010001000000000000000000000020200100010000000000000000000000101100000134e88deb13891389080803136161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616"dnl
+"16161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"dnl
+"61616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616"dnl
+"1616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161, actions=ct(table=1)"])
+
+AT_CHECK([ovs-ofctl packet-out br0 "packet=52540003287c525400444ab586dd6006f70602682c402001000100000000000000000000002020010001000000000000000000000010110005a834e88deb6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616"dnl
+"161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161, actions=ct(table=1)"])
+
+AT_CHECK([ovs-ofctl packet-out br0 "packet=52540003287c525400444ab586dd6006f706033d1140200100010000000000000000000000202001000100000000000000000000001013891389033d923861616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616"dnl
+"1616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161610a, actions=ct(table=1)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | head -2 | tail -1 | grep -q -e ["]udp[(]src=5001["]])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conntrack - L7])
 
 AT_SETUP([conntrack - IPv4 HTTP])
@@ -3422,7 +3669,6 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - limit by zone])
 CHECK_CONNTRACK()
-CHECK_CT_DPIF_PER_ZONE_LIMIT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -3524,8 +3770,8 @@ table=0,action=normal
 
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
 
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp1.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -4593,7 +4839,7 @@ dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
 dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
 dnl get the ACL lookup using the conntrack tuple and the inverted direction.
 dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
-dnl of the master connection, as stored in ct_label[0].
+dnl of the parent connection, as stored in ct_label[0].
 dnl
 dnl Incoming non-related packet in the original direction (ACL IN)
 table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
@@ -4604,7 +4850,7 @@ table=1 reg3=2, ip, ct_state=-rel-rpl+trk-inv action=set_field:2->reg0,resubmit(
 dnl Outgoing non-related reply packet (CT ACL IN)
 table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
 dnl
-dnl Related packet (CT ACL in the direction of the master connection.)
+dnl Related packet (CT ACL in the direction of the parent connection.)
 table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_LABEL[[0]]->NXM_NX_REG0[[0]],resubmit(,3,ct),goto_table:4
 dnl Drop everything else.
 table=1 priority=0, action=drop
@@ -4646,7 +4892,7 @@ dnl (This should not get any packets in this test.)
 table=5 priority=10 reg2=1 reg3=2 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(dst=$2),exec(move:NXM_NX_REG3[[0]]->NXM_NX_CT_LABEL[[0]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit new related connections in either direction, which need 'nat'
 dnl and which inherit the label (the direction of the original direction
-dnl master tuple) from the master connection.
+dnl parent tuple) from the parent connection.
 table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl
 dnl NAT incoming non-NEW packets. Outgoing packets were NATted in table 0.
@@ -5291,7 +5537,7 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON3 $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -5618,6 +5864,113 @@ grep "tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),r
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - negative test for recirculation optimization])
+dnl This test will fail if 'conn' caching is being used, because the tuple
+dnl has been changed outside of conntrack.
+AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_CT_CLEAR()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01") dnl FIP 10.254.254.1
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02") dnl FIP 10.254.254.2
+
+dnl Static ARPs
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
+
+dnl Static ARP and route entries for the FIP "gateway"
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p1])
+NS_CHECK_EXEC([at_ns0], [ip route add default nexthop via 10.1.1.254])
+NS_CHECK_EXEC([at_ns1], [ip route add default nexthop via 10.1.1.254])
+
+NETNS_DAEMONIZE([at_ns0], [nc -l -k 1234 > /dev/null], [nc0.pid])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=10  ip action=ct(table=1)
+dnl dst FIP
+table=1,priority=20  ip,ct_state=+trk+est,nw_dst=10.254.254.0/24 action=goto_table:2
+table=1,priority=20  ip,ct_state=+trk+new,nw_dst=10.254.254.0/24 action=ct(commit,exec(set_field:1->ct_mark),table=2)
+dnl
+dnl FIP translation (dst FIP, src local) --> (dst local, src FIP)
+table=2             ip,nw_dst=10.254.254.1 action=set_field:10.1.1.1->nw_dst,goto_table:3
+table=2             ip,nw_dst=10.254.254.2 action=set_field:10.1.1.2->nw_dst,goto_table:3
+table=3             ip,nw_src=10.1.1.1 action=set_field:10.254.254.1->nw_src,goto_table:4
+table=3             ip,nw_src=10.1.1.2 action=set_field:10.254.254.2->nw_src,goto_table:4
+table=4             ip,nw_dst=10.1.1.1 action=set_field:f0:00:00:01:01:01->eth_dst,goto_table:5
+table=4             ip,nw_dst=10.1.1.2 action=set_field:f0:00:00:01:01:02->eth_dst,goto_table:5
+table=5             ip,nw_src=10.254.254.0/24 action=set_field:f0:00:00:01:01:FE->eth_src,goto_table:6
+dnl
+dnl Tuple has been changed outside of conntrack
+table=6,priority=10 ip action=ct(table=7)
+dnl
+table=7             ip,ct_state=+trk+est action=goto_table:8
+table=7             ip,ct_mark=0x0,ct_state=+trk+new action=ct(commit,exec(set_field:2->ct_mark),table=8)
+dnl
+table=8             ip,nw_dst=10.1.1.1 action=output:ovs-p0
+table=8             ip,nw_dst=10.1.1.2 action=output:ovs-p1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.254.254.1 1234])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.254.254)], [0], [dnl
+tcp,orig=(src=10.1.1.2,dst=10.254.254.1,sport=<cleared>,dport=<cleared>),reply=(src=10.254.254.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.254.254.2,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
+])
+
+ovs-appctl dpif/dump-flows br0
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - Multiple ICMP traverse])
+dnl This tracks sending ICMP packets via conntrack multiple times for the
+dnl same packet
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_CT_CLEAR()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+dnl setup ct flows
+AT_DATA([flows.txt], [dnl
+table=0,priority=10  ip,icmp,ct_state=-trk action=ct(zone=1,table=1)
+table=0,priority=0   action=drop
+table=1,priority=10  ct_state=-est+trk+new,ip,ct_zone=1,in_port=1 action=ct(commit,table=2)
+table=1,priority=10  ct_state=+est-new+trk,ct_zone=1,in_port=1 action=resubmit(,2)
+table=1,priority=0   action=drop
+table=2,priority=10  ct_state=+trk+new,in_port=1 action=drop
+table=2,priority=10  ct_state=+trk+est action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+# sending icmp pkts, first and second
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f0 00 00 01 01 02 f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a 01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+
+sleep 1
+
+dnl ensure CT picked up the packet
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1)], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep table=2, | OFPROTO_CLEAR_DURATION_IDLE],
+         [0], [dnl
+ cookie=0x0, duration=<cleared>, table=2, n_packets=2, n_bytes=84, idle_age=<cleared>, priority=10,ct_state=+new+trk,in_port=1 actions=drop
+ cookie=0x0, duration=<cleared>, table=2, n_packets=0, n_bytes=0, idle_age=<cleared>, priority=10,ct_state=+est+trk actions=drop
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
@@ -5879,7 +6232,7 @@ sleep 1
 dnl The hex dump is a TCP syn packet. pkt=eth/ip/tcp
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected nsh encapsulated packet on the egress interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
@@ -5911,7 +6264,7 @@ sleep 1
 dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected de-capsulated TCP packet on the egress interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
@@ -5944,7 +6297,7 @@ dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
 dnl The nsh_ttl is 8, nsh_spi is 0x100 and nsh_si is 3
 dnl The packet is sent from p0(at_ns0) interface directed to
 dnl p1(at_ns1) interface
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected NSH packet with new fields in the header
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
@@ -5978,7 +6331,7 @@ NS_CHECK_EXEC([at_ns2], [tcpdump -l -n -xx -U -i p2 > p2.pcap &])
 sleep 1
 
 dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
-NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p1 interface
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
@@ -5989,7 +6342,7 @@ OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800
 OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1
-NS_CHECK_EXEC([at_ns1], [$PYTHON $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+NS_CHECK_EXEC([at_ns1], [$PYTHON3 $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p2 interface
 OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])

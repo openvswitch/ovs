@@ -25,20 +25,32 @@
 /* These functions are Linux AF_XDP specific, so they should be used directly
  * only by Linux-specific code. */
 
-struct netdev;
-struct xsk_socket_info;
-struct xdp_umem;
-struct dp_packet_batch;
-struct smap;
+enum afxdp_mode {
+    OVS_AF_XDP_MODE_UNSPEC,
+    OVS_AF_XDP_MODE_BEST_EFFORT,
+    OVS_AF_XDP_MODE_NATIVE_ZC,
+    OVS_AF_XDP_MODE_NATIVE,
+    OVS_AF_XDP_MODE_GENERIC,
+    OVS_AF_XDP_MODE_MAX,
+};
+
 struct dp_packet;
+struct dp_packet_batch;
+struct netdev;
+struct netdev_afxdp_tx_lock;
+struct netdev_custom_stats;
 struct netdev_rxq;
 struct netdev_stats;
-struct netdev_custom_stats;
+struct smap;
+struct xdp_umem;
+struct xsk_socket_info;
 
 int netdev_afxdp_rxq_construct(struct netdev_rxq *rxq_);
 void netdev_afxdp_rxq_destruct(struct netdev_rxq *rxq_);
+int netdev_afxdp_init(void);
 int netdev_afxdp_construct(struct netdev *netdev_);
 void netdev_afxdp_destruct(struct netdev *netdev_);
+int netdev_afxdp_verify_mtu_size(const struct netdev *netdev, int mtu);
 
 int netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_,
                           struct dp_packet_batch *batch,
@@ -49,7 +61,6 @@ int netdev_afxdp_batch_send(struct netdev *netdev_, int qid,
 int netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
                             char **errp);
 int netdev_afxdp_get_config(const struct netdev *netdev, struct smap *args);
-int netdev_afxdp_get_numa_id(const struct netdev *netdev);
 int netdev_afxdp_get_stats(const struct netdev *netdev_,
                            struct netdev_stats *stats);
 int netdev_afxdp_get_custom_stats(const struct netdev *netdev,

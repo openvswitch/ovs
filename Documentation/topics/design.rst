@@ -70,79 +70,79 @@ that the message is suppressed.
 
 .. table:: ``OFPT_PACKET_IN`` / ``NXT_PACKET_IN``
 
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPR_NO_MATCH``                             yes    ---
-  ``OFPR_ACTION``                               yes    ---
-  ``OFPR_INVALID_TTL``                          ---    ---
-  ``OFPR_ACTION_SET`` (OF1.4+)                  yes    ---
-  ``OFPR_GROUP`` (OF1.4+)                       yes    ---
-  ``OFPR_PACKET_OUT`` (OF1.4+)                  yes    ---
-  =========================================== ======= =====
+  =========================================== ======== =========
+                                              primary/ 
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPR_NO_MATCH``                             yes       ---
+  ``OFPR_ACTION``                               yes       ---
+  ``OFPR_INVALID_TTL``                          ---       ---
+  ``OFPR_ACTION_SET`` (OF1.4+)                  yes       ---
+  ``OFPR_GROUP`` (OF1.4+)                       yes       ---
+  ``OFPR_PACKET_OUT`` (OF1.4+)                  yes       ---
+  =========================================== ======== =========
 
 .. table:: ``OFPT_FLOW_REMOVED`` / ``NXT_FLOW_REMOVED``
 
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPRR_IDLE_TIMEOUT``                        yes    ---
-  ``OFPRR_HARD_TIMEOUT``                        yes    ---
-  ``OFPRR_DELETE``                              yes    ---
-  ``OFPRR_GROUP_DELETE`` (OF1.3+)               yes    ---
-  ``OFPRR_METER_DELETE`` (OF1.4+)               yes    ---
-  ``OFPRR_EVICTION`` (OF1.4+)                   yes    ---
-  =========================================== ======= =====
+  =========================================== ======== =========
+                                              primary/
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPRR_IDLE_TIMEOUT``                        yes       ---
+  ``OFPRR_HARD_TIMEOUT``                        yes       ---
+  ``OFPRR_DELETE``                              yes       ---
+  ``OFPRR_GROUP_DELETE`` (OF1.3+)               yes       ---
+  ``OFPRR_METER_DELETE`` (OF1.4+)               yes       ---
+  ``OFPRR_EVICTION`` (OF1.4+)                   yes       ---
+  =========================================== ======== =========
 
 .. table:: ``OFPT_PORT_STATUS``
 
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPPR_ADD``                                 yes    yes
-  ``OFPPR_DELETE``                              yes    yes
-  ``OFPPR_MODIFY``                              yes    yes
-  =========================================== ======= =====
-
+  =========================================== ======== =========
+                                              primary/          
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPPR_ADD``                                 yes       ---   
+  ``OFPPR_DELETE``                              yes       ---   
+  ``OFPPR_MODIFY``                              yes       ---   
+  =========================================== ======== =========
+                                                       
 .. table:: ``OFPT_ROLE_REQUEST`` / ``OFPT_ROLE_REPLY`` (OF1.4+)
-
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPCRR_MASTER_REQUEST``                     ---    ---
-  ``OFPCRR_CONFIG``                             ---    ---
-  ``OFPCRR_EXPERIMENTER``                       ---    ---
-  =========================================== ======= =====
+                                                       
+  =========================================== ======== =========
+                                              primary/          
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPCRR_PROMOTE_REQUEST``                    ---       ---   
+  ``OFPCRR_CONFIG``                             ---       ---   
+  ``OFPCRR_EXPERIMENTER``                       ---       ---   
+  =========================================== ======== =========
 
 .. table:: ``OFPT_TABLE_STATUS`` (OF1.4+)
 
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPTR_VACANCY_DOWN``                        ---    ---
-  ``OFPTR_VACANCY_UP``                          ---    ---
-  =========================================== ======= =====
+  =========================================== ======== =========
+                                              primary/
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPTR_VACANCY_DOWN``                        ---       ---
+  ``OFPTR_VACANCY_UP``                          ---       ---
+  =========================================== ======== =========
 
 
 .. table:: ``OFPT_REQUESTFORWARD`` (OF1.4+)
 
-  =========================================== ======= =====
-                                              master/
-           message and reason code            other   slave
-  =========================================== ======= =====
-  ``OFPRFR_GROUP_MOD``                          ---    ---
-  ``OFPRFR_METER_MOD``                          ---    ---
-  =========================================== ======= =====
+  =========================================== ======== =========
+                                              primary/          
+           message and reason code            other    secondary
+  =========================================== ======== =========
+  ``OFPRFR_GROUP_MOD``                          ---       ---   
+  ``OFPRFR_METER_MOD``                          ---       ---   
+  =========================================== ======== =========
 
 The ``NXT_SET_ASYNC_CONFIG`` message directly sets all of the values in this
 table for the current connection.  The ``OFPC_INVALID_TTL_TO_CONTROLLER`` bit
 in the ``OFPT_SET_CONFIG`` message controls the setting for
-``OFPR_INVALID_TTL`` for the "master" role.
+``OFPR_INVALID_TTL`` for the "primary" role.
 
 ``OFPAT_ENQUEUE``
 -----------------

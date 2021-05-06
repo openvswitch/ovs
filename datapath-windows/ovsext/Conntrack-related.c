@@ -47,8 +47,11 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
     }
 
     /* FTP ACTIVE - Server initiates the connection */
+    /* Some ftp server, such as pyftpdlib, may use random (>1024) data port
+     * except 20. In this case, the incomingKey's src port is different with
+     * entryKey's src port.
+     */
     if ((incomingKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
-        (incomingKey.src.port == entryKey.src.port) &&
         (incomingKey.dst.addr.ipv4 == entryKey.dst.addr.ipv4) &&
         (incomingKey.dst.port == entryKey.dst.port) &&
         (incomingKey.dl_type == entryKey.dl_type) &&

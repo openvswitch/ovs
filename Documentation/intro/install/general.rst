@@ -90,15 +90,16 @@ need the following software:
   If libcap-ng is installed, then Open vSwitch will automatically build with
   support for it.
 
-- Python 2.7. You must also have the Python ``six`` library version 1.4.0
-  or later.
+- Python 3.4 or later.
 
 - Unbound library, from http://www.unbound.net, is optional but recommended if
   you want to enable ovs-vswitchd and other utilities to use DNS names when
   specifying OpenFlow and OVSDB remotes. If unbound library is already
   installed, then Open vSwitch will automatically build with support for it.
   The environment variable OVS_RESOLV_CONF can be used to specify DNS server
-  configuration file (the default file on Linux is /etc/resolv.conf).
+  configuration file (the default file on Linux is /etc/resolv.conf), and
+  environment variable OVS_UNBOUND_CONF can be used to specify the
+  configuration file for unbound.
 
 On Linux, you may choose to compile the kernel module that comes with the Open
 vSwitch distribution or to use the kernel module built into the Linux kernel
@@ -203,8 +204,7 @@ simply install and run Open vSwitch you require the following software:
   from iproute2 (part of all major distributions and available at
   https://wiki.linuxfoundation.org/networking/iproute2).
 
-- Python 2.7. You must also have the Python six library version 1.4.0
-  or later.
+- Python 3.4 or later.
 
 On Linux you should ensure that ``/dev/urandom`` exists. To support TAP
 devices, you must also ensure that ``/dev/net/tun`` exists.
@@ -503,6 +503,55 @@ domain socket::
 
     $ ovs-vswitchd --pidfile --detach --log-file
 
+Starting OVS in container
+-------------------------
+
+For ovs vswitchd, we need to load ovs kernel modules on host.
+
+Hence, OVS containers kernel version needs to be same as that of host kernel.
+
+Export following variables in .env  and place it under
+project root::
+
+    $ OVS_BRANCH=<BRANCH>
+    $ OVS_VERSION=<VERSION>
+    $ DISTRO=<LINUX_DISTRO>
+    $ KERNEL_VERSION=<LINUX_KERNEL_VERSION>
+    $ GITHUB_SRC=<GITHUB_URL>
+    $ DOCKER_REPO=<REPO_TO_PUSH_IMAGE>
+
+To build ovs modules::
+
+    $ cd utilities/docker
+    $ make build
+
+Compiled Modules will be tagged with docker image
+
+To Push ovs modules::
+
+    $ make push
+
+OVS docker image will be pushed to specified docker repo.
+
+Start ovsdb-server using below command::
+
+    $ docker run -itd --net=host --name=ovsdb-server \
+      <docker_repo>:<tag> ovsdb-server
+
+Start ovs-vswitchd with priviledged mode as it needs to load kernel module in
+host using below command::
+
+    $ docker run -itd --net=host --name=ovs-vswitchd \
+      --volumes-from=ovsdb-server -v /lib:/lib --privileged \
+      <docker_repo>:<tag> ovs-vswitchd
+
+.. note::
+    The debian docker file uses ubuntu 16.04 as a base image for reference.
+
+    User can use any other base image for debian, e.g. u14.04, etc.
+
+    RHEL based docker build support needs to be added.
+
 Validating
 ----------
 
@@ -516,6 +565,10 @@ and ``vif1.0`` to it::
 
 Refer to ovs-vsctl(8) for more details. You may also wish to refer to
 :doc:`/topics/testing` for information on more generic testing of OVS.
+
+When using ovs in container, exec to container to run above commands::
+
+    $ docker exec -it <ovsdb-server/ovs-vswitchd> /bin/bash
 
 Upgrading
 ---------
@@ -585,6 +638,18 @@ needs some considerations:
    and the kernel flows are lost. The downtime of the traffic can be reduced if
    the userspace daemons are restarted immediately and the userspace flows are
    restored as soon as possible.
+
+5. When upgrading ovs running in container on host that is managed by ovn,
+   simply stop the docker container, remove and re-run with new docker image
+   that has newer ovs version.
+
+6. When running ovs in container, if ovs is used in bridged mode where
+   management interface is managed by ovs, docker restart will result in loss
+   of network connectivity. Hence, make sure to delete the bridge mapping of
+   physical interface from ovs, upgrade ovs via docker and then add back the
+   interface to ovs bridge. This mapping need not be deleted in case of multi
+   nics if management interface is not managed by ovs.
+
 
 The ovs-ctl utility's ``restart`` function only restarts the userspace daemons,
 makes sure that the 'ofport' values remain consistent across restarts, restores

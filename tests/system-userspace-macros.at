@@ -21,16 +21,16 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 
-# OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])
+# OVS_TRAFFIC_VSWITCHD_STOP([ALLOWLIST], [extra_cmds])
 #
 # Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
 # for messages with severity WARN or higher and signaling an error if any
-# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# is present.  The optional ALLOWLIST may contain shell-quoted "sed"
 # commands to delete any warnings that are actually expected, e.g.:
 #
 #   OVS_TRAFFIC_VSWITCHD_STOP(["/expected error/d"])
 #
-# 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
+# 'extra_cmds' are shell commands to be executed after OVS_VSWITCHD_STOP() is
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
 m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
@@ -64,9 +64,7 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 #
 # Perform requirements checks for running conntrack tests.
 #
-m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_PYTHON2 = no])]
-)
+m4_define([CHECK_CONNTRACK], [])
 
 # CHECK_CONNTRACK_ALG()
 #
@@ -98,14 +96,11 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP])
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
-# CHECK_CT_DPIF_PER_ZONE_LIMIT()
+# CHECK_CONNTRACK_TIMEOUT()
 #
-# Perform requirements checks for running ovs-dpctl ct-[set|get|del]-limits per
-# zone. The userspace datapath does not support this feature yet.
-m4_define([CHECK_CT_DPIF_PER_ZONE_LIMIT],
-[
-    AT_SKIP_IF([:])
-])
+# Perform requirements checks for running conntrack customized timeout tests.
+#
+m4_define([CHECK_CONNTRACK_TIMEOUT])
 
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
 #
@@ -292,6 +287,26 @@ m4_define([OVS_CHECK_MIN_KERNEL],
 #
 # The userspace skips all tests that check kernel version.
 m4_define([OVS_CHECK_KERNEL_EXCL],
+[
+    AT_SKIP_IF([:])
+])
+
+# VSCTL_ADD_DATAPATH_TABLE()
+#
+# Create datapath table "netdev" for userspace tests in ovsdb
+m4_define([VSCTL_ADD_DATAPATH_TABLE],
+[
+    AT_CHECK([ovs-vsctl -- --id=@m create Datapath datapath_version=0 -- set Open_vSwitch . datapaths:"netdev"=@m], [0], [stdout])
+    DP_TYPE=$(echo "netdev")
+])
+
+
+# CHECK_L3L4_CONNTRACK_REASM()
+#
+# Only allow this test to run on the kernel datapath - it is not useful
+# or necessary for the userspace datapath as it is checking for a kernel
+# specific regression.
+m4_define([CHECK_L3L4_CONNTRACK_REASM],
 [
     AT_SKIP_IF([:])
 ])

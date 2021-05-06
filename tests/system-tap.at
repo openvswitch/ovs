@@ -1,0 +1,34 @@
+AT_SETUP([traffic between namespaces using tap])
+AT_KEYWORDS([http_tap])
+OVS_TRAFFIC_VSWITCHD_START()
+AT_SKIP_IF([test $HAVE_TUNCTL = no])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+AT_CHECK([ip tuntap add tap0 mode tap])
+on_exit 'ip tuntap del tap0 mode tap'
+AT_CHECK([ip tuntap add tap1 mode tap])
+on_exit 'ip tuntap del tap1 mode tap'
+
+AT_CHECK([ovs-vsctl add-port br0 tap0 -- set int tap0 type=tap])
+AT_CHECK([ovs-vsctl add-port br0 tap1 -- set int tap1 type=tap])
+AT_CHECK([ip link set tap0 netns at_ns0])
+AT_CHECK([ip link set tap1 netns at_ns1])
+
+AT_CHECK([ip netns exec at_ns0 ip link set dev tap0 up])
+AT_CHECK([ip netns exec at_ns1 ip link set dev tap1 up])
+AT_CHECK([ip netns exec at_ns0 ip addr add 10.1.1.1/24 dev tap0])
+AT_CHECK([ip netns exec at_ns1 ip addr add 10.1.1.2/24 dev tap1])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_START_L7([at_ns1], [http])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/.*ethtool command ETHTOOL_G.*/d"])
+
+AT_CLEANUP

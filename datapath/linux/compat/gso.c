@@ -171,7 +171,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	__be16 proto = skb->protocol;
 	char cb[sizeof(skb->cb)];
 
-	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > FIELD_SIZEOF(struct sk_buff, cb));
+	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > sizeof_field(struct sk_buff, cb));
 	OVS_GSO_CB(skb)->ipv6 = (sa_family == AF_INET6);
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);

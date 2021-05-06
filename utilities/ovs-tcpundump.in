@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! @PYTHON3@
 #
 # Copyright (c) 2010 Nicira, Inc.
 #
@@ -47,6 +47,7 @@ if __name__ == "__main__":
             usage()
         elif key in ['-V', '--version']:
             print("ovs-tcpundump (Open vSwitch) @VERSION@")
+            sys.exit(0)
         else:
             sys.exit(0)
 
@@ -56,7 +57,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     packet = ''
-    regex = re.compile(r'^\s+0x([0-9a-fA-F]+): ((?: [0-9a-fA-F]{4})+)')
+    regex = re.compile(r'^\s+0x([0-9a-fA-F]+): ((?: [0-9a-fA-F]{2,4})+)')
     while True:
         line = sys.stdin.readline()
         if line == "":

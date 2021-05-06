@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! @PYTHON3@
 # Copyright (c) 2017 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,11 +14,12 @@
 # limitations under the License.
 
 import argparse
+import copy
+import ipaddress
+import os
 import re
 import subprocess
 import sys
-import copy
-import os
 from string import Template
 
 import ovs.daemon
@@ -101,7 +102,7 @@ class XFRM(object):
         proc = subprocess.Popen([self.IP, 'xfrm', 'policy'],
                                 stdout=subprocess.PIPE)
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             a = line.split(" ")
@@ -124,7 +125,7 @@ class XFRM(object):
         proc = subprocess.Popen([self.IP, 'xfrm', 'state'],
                                 stdout=subprocess.PIPE)
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             a = line.split(" ")
@@ -145,10 +146,18 @@ class StrongSwanHelper(object):
     """This class does StrongSwan specific configurations."""
 
     STRONGSWAN_CONF = """%s
-charon.plugins.kernel-netlink.set_proto_port_transport_sa = yes
-charon.plugins.kernel-netlink.xfrm_ack_expires = 10
-charon.load_modular = yes
-charon.plugins.gcm.load = yes
+charon {
+  plugins {
+    kernel-netlink {
+      set_proto_port_transport_sa = yes
+      xfrm_ack_expires = 10
+    }
+    gcm {
+      load = yes
+    }
+  }
+  load_modular = yes
+}
 """ % (FILE_HEADER)
 
     CONF_HEADER = """%s
@@ -246,7 +255,7 @@ conn prevent_unencrypted_vxlan
         proc = subprocess.Popen([self.IPSEC, 'status'], stdout=subprocess.PIPE)
 
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
             tunnel_name = line.split(":")
@@ -340,7 +349,7 @@ conn prevent_unencrypted_vxlan
         # about possibility of ovs-monitor-ipsec to block for each tunnel
         # while strongSwan sends IKE messages over Internet.
         conns_dict = self.get_active_conns()
-        for ifname, conns in conns_dict.iteritems():
+        for ifname, conns in conns_dict.items():
             tunnel = monitor.tunnels.get(ifname)
             for conn in conns:
                 # IPsec "connection" names that we choose in strongswan
@@ -407,20 +416,25 @@ conn prevent_unencrypted_vxlan
 
 """
 
+    IPV6_CONN = """\
+    hostaddrfamily=ipv6
+    clientaddrfamily=ipv6
+"""
+
     auth_tmpl = {"psk": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     authby=secret"""),
                  "pki_remote": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     leftid=@$local_name
     rightid=@$remote_name
-    leftcert="$local_name"
-    rightcert="$remote_name"
+    leftcert="ovs_certkey_$local_name"
+    rightcert="ovs_cert_$remote_name"
     leftrsasigkey=%cert"""),
                  "pki_ca": Template("""\
-    left=%defaultroute
+    left=$local_ip
     right=$remote_ip
     leftid=@$local_name
     rightid=@$remote_name
@@ -431,12 +445,26 @@ conn prevent_unencrypted_vxlan
     CERT_PREFIX = "ovs_cert_"
     CERTKEY_PREFIX = "ovs_certkey_"
 
-    def __init__(self, libreswan_root_prefix):
+    def __init__(self, libreswan_root_prefix, args):
+        ipsec_conf = args.ipsec_conf if args.ipsec_conf else "/etc/ipsec.conf"
+        ipsec_d = args.ipsec_d if args.ipsec_d else "/etc/ipsec.d"
+        ipsec_secrets = (args.ipsec_secrets if args.ipsec_secrets
+                        else "/etc/ipsec.secrets")
+        ipsec_ctl = (args.ipsec_ctl if args.ipsec_ctl
+                        else "/run/pluto/pluto.ctl")
+
         self.IPSEC = libreswan_root_prefix + "/usr/sbin/ipsec"
-        self.IPSEC_CONF = libreswan_root_prefix + "/etc/ipsec.conf"
-        self.IPSEC_SECRETS = libreswan_root_prefix + "/etc/ipsec.secrets"
+        self.IPSEC_CONF = libreswan_root_prefix + ipsec_conf
+        self.IPSEC_SECRETS = libreswan_root_prefix + ipsec_secrets
+        self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
+        self.IPSEC_CTL = libreswan_root_prefix + ipsec_ctl
         self.conf_file = None
         self.secrets_file = None
+        vlog.dbg("Using: " + self.IPSEC)
+        vlog.dbg("Configuration file: " + self.IPSEC_CONF)
+        vlog.dbg("Secrets file: " + self.IPSEC_SECRETS)
+        vlog.dbg("ipsec.d: " + self.IPSEC_D)
+        vlog.dbg("Pluto socket: " + self.IPSEC_CTL)
 
     def restart_ike_daemon(self):
         """This function restarts LibreSwan."""
@@ -512,6 +540,9 @@ conn prevent_unencrypted_vxlan
         else:
             auth_section = self.auth_tmpl["pki_ca"].substitute(tunnel.conf)
 
+        if tunnel.conf["address_family"] == "IPv6":
+            auth_section = self.IPV6_CONN + auth_section
+
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
         vals["version"] = tunnel.version
@@ -531,12 +562,13 @@ conn prevent_unencrypted_vxlan
 
     def refresh(self, monitor):
         vlog.info("Refreshing LibreSwan configuration")
-        subprocess.call([self.IPSEC, "auto", "--rereadsecrets"])
+        subprocess.call([self.IPSEC, "auto", "--ctlsocket", self.IPSEC_CTL,
+                        "--config", self.IPSEC_CONF, "--rereadsecrets"])
         tunnels = set(monitor.tunnels.keys())
 
         # Delete old connections
         conns_dict = self.get_active_conns()
-        for ifname, conns in conns_dict.iteritems():
+        for ifname, conns in conns_dict.items():
             tunnel = monitor.tunnels.get(ifname)
 
             for conn in conns:
@@ -558,7 +590,9 @@ conn prevent_unencrypted_vxlan
 
                 if not tunnel or tunnel.version != ver:
                     vlog.info("%s is outdated %u" % (conn, ver))
-                    subprocess.call([self.IPSEC, "auto", "--delete", conn])
+                    subprocess.call([self.IPSEC, "auto", "--ctlsocket",
+                                    self.IPSEC_CTL, "--config",
+                                    self.IPSEC_CONF, "--delete", conn])
                 elif ifname in tunnels:
                     tunnels.remove(ifname)
 
@@ -578,22 +612,46 @@ conn prevent_unencrypted_vxlan
         # Update shunt policy if changed
         if monitor.conf_in_use["skb_mark"] != monitor.conf["skb_mark"]:
             if monitor.conf["skb_mark"]:
-                subprocess.call([self.IPSEC, "auto", "--add",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--add",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto", "--add",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--add",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto", "--add",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--add",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto", "--add",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--add",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             else:
-                subprocess.call([self.IPSEC, "auto", "--delete",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--delete",
                             "--asynchronous", "prevent_unencrypted_gre"])
-                subprocess.call([self.IPSEC, "auto", "--delete",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--delete",
                             "--asynchronous", "prevent_unencrypted_geneve"])
-                subprocess.call([self.IPSEC, "auto", "--delete",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--delete",
                             "--asynchronous", "prevent_unencrypted_stt"])
-                subprocess.call([self.IPSEC, "auto", "--delete",
+                subprocess.call([self.IPSEC, "auto",
+                            "--config", self.IPSEC_CONF,
+                            "--ctlsocket", self.IPSEC_CTL,
+                            "--delete",
                             "--asynchronous", "prevent_unencrypted_vxlan"])
             monitor.conf_in_use["skb_mark"] = monitor.conf["skb_mark"]
 
@@ -605,10 +663,11 @@ conn prevent_unencrypted_vxlan
         sample line from the parsed outpus as <value>. """
 
         conns = {}
-        proc = subprocess.Popen([self.IPSEC, 'status'], stdout=subprocess.PIPE)
+        proc = subprocess.Popen([self.IPSEC, 'status', '--ctlsocket',
+                                self.IPSEC_CTL], stdout=subprocess.PIPE)
 
         while True:
-            line = proc.stdout.readline().strip()
+            line = proc.stdout.readline().strip().decode()
             if line == '':
                 break
 
@@ -617,7 +676,10 @@ conn prevent_unencrypted_vxlan
                 continue
 
             conn = m.group(1)
-            m = re.match(r"(.*)(-in-\d+|-out-\d+|-\d+)", conn)
+            m = re.match(r"(.*)(-in-\d+|-out-\d+)", conn)
+            if not m:
+                # GRE connections have format <iface>-<ver>
+                m = re.match(r"(.*)(-\d+)", conn)
             if not m:
                 continue
 
@@ -633,7 +695,10 @@ conn prevent_unencrypted_vxlan
         # the "ipsec auto --start" command is lost. Just retry to make sure
         # the command is received by LibreSwan.
         while True:
-            proc = subprocess.Popen([self.IPSEC, "auto", "--start",
+            proc = subprocess.Popen([self.IPSEC, "auto",
+                                    "--config", self.IPSEC_CONF,
+                                    "--ctlsocket", self.IPSEC_CTL,
+                                    "--start",
                                     "--asynchronous", conn],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
@@ -647,9 +712,10 @@ conn prevent_unencrypted_vxlan
         """Remove all OVS IPsec related state from the NSS database"""
         try:
             proc = subprocess.Popen(['certutil', '-L', '-d',
-                                    'sql:/etc/ipsec.d/'],
+                                    self.IPSEC_D],
                                     stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+                                    stderr=subprocess.PIPE,
+                                    universal_newlines=True)
             lines = proc.stdout.readlines()
 
             for line in lines:
@@ -670,7 +736,7 @@ conn prevent_unencrypted_vxlan
         normal certificate."""
         try:
             proc = subprocess.Popen(['certutil', '-A', '-a', '-i', cert,
-                                    '-d', 'sql:/etc/ipsec.d/', '-n',
+                                    '-d', self.IPSEC_D, '-n',
                                     name, '-t', cert_type],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
@@ -678,19 +744,19 @@ conn prevent_unencrypted_vxlan
             if proc.returncode:
                 raise Exception(proc.stderr.read())
         except Exception as e:
-            vlog.err("Failed to import ceretificate into NSS.\n" + str(e))
+            vlog.err("Failed to import certificate into NSS.\n" + str(e))
 
     def _nss_delete_cert(self, name):
         try:
             proc = subprocess.Popen(['certutil', '-D', '-d',
-                                    'sql:/etc/ipsec.d/', '-n', name],
+                                    self.IPSEC_D, '-n', name],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
             proc.wait()
             if proc.returncode:
                 raise Exception(proc.stderr.read())
         except Exception as e:
-            vlog.err("Failed to delete ceretificate from NSS.\n" + str(e))
+            vlog.err("Failed to delete certificate from NSS.\n" + str(e))
 
     def _nss_import_cert_and_key(self, cert, key, name):
         try:
@@ -711,7 +777,7 @@ conn prevent_unencrypted_vxlan
 
             # Load p12 file to the database
             proc = subprocess.Popen(['pk12util', '-i', path, '-d',
-                                    'sql:/etc/ipsec.d/', '-W', ''],
+                                    self.IPSEC_D, '-W', ''],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
             proc.wait()
@@ -726,7 +792,7 @@ conn prevent_unencrypted_vxlan
         try:
             # Delete certificate and private key
             proc = subprocess.Popen(['certutil', '-F', '-d',
-                                    'sql:/etc/ipsec.d/', '-n', name],
+                                    self.IPSEC_D, '-n', name],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
             proc.wait()
@@ -742,7 +808,9 @@ class IPsecTunnel(object):
 
     unixctl_config_tmpl = Template("""\
   Tunnel Type:    $tunnel_type
+  Local IP:       $local_ip
   Remote IP:      $remote_ip
+  Address Family: $address_family
   SKB mark:       $skb_mark
   Local cert:     $certificate
   Local name:     $local_name
@@ -782,7 +850,11 @@ class IPsecTunnel(object):
         new_conf = {
             "ifname": self.name,
             "tunnel_type": row.type,
+            "local_ip": options.get("local_ip", "%defaultroute"),
             "remote_ip": options.get("remote_ip"),
+            "address_family": self._get_conn_address_family(
+                                                   options.get("remote_ip"),
+                                                   options.get("local_ip")),
             "skb_mark": monitor.conf["skb_mark"],
             "certificate": monitor.conf["pki"]["certificate"],
             "private_key": monitor.conf["pki"]["private_key"],
@@ -851,6 +923,17 @@ class IPsecTunnel(object):
 
         return header + conf + status + spds + sas + cons + "\n"
 
+    def _get_conn_address_family(self, remote_ip, local_ip):
+        remote = address_family(remote_ip)
+        local = address_family(local_ip)
+
+        if local is None:
+            return remote
+        elif local != remote:
+            return None
+        else:
+            return remote
+
     def _is_valid_tunnel_conf(self):
         """This function verifies if IPsec tunnel has valid configuration
         set in 'conf'.  If it is valid, then it returns True.  Otherwise,
@@ -911,7 +994,7 @@ class IPsecTunnel(object):
 class IPsecMonitor(object):
     """This class monitors and configures IPsec tunnels"""
 
-    def __init__(self, root_prefix, ike_daemon):
+    def __init__(self, root_prefix, ike_daemon, restart, args):
         self.IPSEC = root_prefix + "/usr/sbin/ipsec"
         self.tunnels = {}
 
@@ -931,7 +1014,7 @@ class IPsecMonitor(object):
         if ike_daemon == "strongswan":
             self.ike_helper = StrongSwanHelper(root_prefix)
         elif ike_daemon == "libreswan":
-            self.ike_helper = LibreSwanHelper(root_prefix)
+            self.ike_helper = LibreSwanHelper(root_prefix, args)
         else:
             vlog.err("The IKE daemon should be strongswan or libreswan.")
             sys.exit(1)
@@ -941,7 +1024,9 @@ class IPsecMonitor(object):
                 not os.access(self.IPSEC, os.X_OK):
             vlog.err("IKE daemon is not installed in the system.")
 
-        self.ike_helper.restart_ike_daemon()
+        if restart:
+            vlog.info("Restarting IKE daemon")
+            self.ike_helper.restart_ike_daemon()
 
     def is_tunneling_type_supported(self, tunnel_type):
         """Returns True if we know how to configure IPsec for these
@@ -989,7 +1074,7 @@ class IPsecMonitor(object):
         skb_mark = None
         is_valid = False
 
-        for row in data["Open_vSwitch"].rows.itervalues():
+        for row in data["Open_vSwitch"].rows.values():
             pki[0] = row.other_config.get("certificate")
             pki[1] = row.other_config.get("private_key")
             pki[2] = row.other_config.get("ca_cert")
@@ -1016,7 +1101,7 @@ class IPsecMonitor(object):
         table."""
         ifaces = set()
 
-        for row in data["Interface"].rows.itervalues():
+        for row in data["Interface"].rows.values():
             if not self.is_tunneling_type_supported(row.type):
                 continue
             if not self.is_ipsec_required(row.options):
@@ -1047,7 +1132,7 @@ class IPsecMonitor(object):
             return
         s = ""
         conns = self.ike_helper.get_active_conns()
-        for name, tunnel in self.tunnels.iteritems():
+        for name, tunnel in self.tunnels.items():
             s += tunnel.show(policies, securities, conns)
         unix_conn.reply(s)
 
@@ -1064,7 +1149,7 @@ class IPsecMonitor(object):
         if self.ike_helper.config_global(self):
             needs_refresh = True
 
-        for name, tunnel in self.tunnels.iteritems():
+        for name, tunnel in self.tunnels.items():
             if tunnel.last_refreshed_version != tunnel.version:
                 tunnel.last_refreshed_version = tunnel.version
                 needs_refresh = True
@@ -1094,7 +1179,7 @@ class IPsecMonitor(object):
             proc.wait()
             if proc.returncode:
                 raise Exception(proc.stderr.read())
-            m = re.search(r"CN=(.+?),", proc.stdout.readline())
+            m = re.search(r"CN=(.+?),", proc.stdout.readline().decode())
             if not m:
                 raise Exception("No CN in the certificate subject.")
         except Exception as e:
@@ -1102,6 +1187,19 @@ class IPsecMonitor(object):
             return None
 
         return m.group(1)
+
+
+def address_family(address):
+    try:
+        ip = ipaddress.ip_address(address)
+        ipstr = str(type(ip))
+    # ipaddress has inconsistencies with what exceptions are raised:
+    # https://mail.openvswitch.org/pipermail/ovs-dev/2021-April/381696.html
+    except (ValueError, ipaddress.AddressValueError):
+        return None
+    if ipstr.find('v6') != -1:
+        return "IPv6"
+    return "IPv4"
 
 
 def unixctl_xfrm_policies(conn, unused_argv, unused_aux):
@@ -1136,19 +1234,30 @@ def unixctl_refresh(conn, unused_argv, unused_aux):
     conn.reply(None)
 
 
-def unixctl_exit(conn, unused_argv, unused_aux):
+def unixctl_exit(conn, argv, unused_aux):
     global monitor
     global exiting
+    ret = None
     exiting = True
+    cleanup = True
 
-    # Make sure persistent global states are cleared
-    monitor.update_conf([None, None, None, None], None)
-    # Make sure persistent tunnel states are cleared
-    for tunnel in monitor.tunnels.keys():
-        monitor.del_tunnel(tunnel)
-    monitor.run()
+    for arg in argv:
+        if arg == "--no-cleanup":
+            cleanup = False
+        else:
+            cleanup = False
+            exiting = False
+            ret = str("unrecognized parameter: %s" % arg)
 
-    conn.reply(None)
+    if cleanup:
+        # Make sure persistent global states are cleared
+        monitor.update_conf([None, None, None, None], None)
+        # Make sure persistent tunnel states are cleared
+        for tunnel in monitor.tunnels.keys():
+            monitor.del_tunnel(tunnel)
+        monitor.run()
+
+    conn.reply(ret)
 
 
 def main():
@@ -1161,6 +1270,20 @@ def main():
     parser.add_argument("--ike-daemon", metavar="IKE-DAEMON",
                         help="The IKE daemon used for IPsec tunnels"
                         " (either libreswan or strongswan).")
+    parser.add_argument("--no-restart-ike-daemon", action='store_true',
+                        help="Don't restart the IKE daemon on startup.")
+    parser.add_argument("--ipsec-conf", metavar="IPSEC-CONF",
+                        help="Use DIR/IPSEC-CONF as location for "
+                        " ipsec.conf (libreswan only).")
+    parser.add_argument("--ipsec-d", metavar="IPSEC-D",
+                        help="Use DIR/IPSEC-D as location for "
+                        " ipsec.d (libreswan only).")
+    parser.add_argument("--ipsec-secrets", metavar="IPSEC-SECRETS",
+                        help="Use DIR/IPSEC-SECRETS as location for "
+                        " ipsec.secrets (libreswan only).")
+    parser.add_argument("--ipsec-ctl", metavar="IPSEC-CTL",
+                        help="Use DIR/IPSEC-CTL as location for "
+                        " pluto ctl socket (libreswan only).")
 
     ovs.vlog.add_args(parser)
     ovs.daemon.add_args(parser)
@@ -1173,7 +1296,8 @@ def main():
 
     root_prefix = args.root_prefix if args.root_prefix else ""
     xfrm = XFRM(root_prefix)
-    monitor = IPsecMonitor(root_prefix, args.ike_daemon)
+    monitor = IPsecMonitor(root_prefix, args.ike_daemon,
+                           not args.no_restart_ike_daemon, args)
 
     remote = args.database
     schema_helper = ovs.db.idl.SchemaHelper()
@@ -1194,7 +1318,8 @@ def main():
     ovs.unixctl.command_register("tunnels/show", "", 0, 0,
                                  unixctl_show, None)
     ovs.unixctl.command_register("refresh", "", 0, 0, unixctl_refresh, None)
-    ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    ovs.unixctl.command_register("exit", "[--no-cleanup]", 0, 1,
+                                 unixctl_exit, None)
 
     error, unixctl_server = ovs.unixctl.server.UnixctlServer.create(None)
     if error:

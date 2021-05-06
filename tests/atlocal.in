@@ -1,28 +1,14 @@
 # -*- shell-script -*-
 HAVE_OPENSSL='@HAVE_OPENSSL@'
 OPENSSL_SUPPORTS_SNI='@OPENSSL_SUPPORTS_SNI@'
-HAVE_PYTHON='@HAVE_PYTHON@'
-HAVE_PYTHON2='@HAVE_PYTHON2@'
-HAVE_PYTHON3='@HAVE_PYTHON3@'
 HAVE_UNBOUND='@HAVE_UNBOUND@'
 EGREP='@EGREP@'
+PYTHON3='@PYTHON3@'
 
-if test x"$PYTHON" = x; then
-    PYTHON='@PYTHON@'
-fi
-
-if test x"$PYTHON2" = x; then
-    PYTHON2='@PYTHON2@'
-fi
-
-if test x"$PYTHON3" = x; then
-    PYTHON3='@PYTHON3@'
-
-    # PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
-    # stderr that breaks almost any Python3 test (PEP 0538)
-    PYTHONCOERCECLOCALE=0
-    export PYTHONCOERCECLOCALE
-fi
+# PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
+# stderr that breaks almost any Python3 test (PEP 0538)
+PYTHONCOERCECLOCALE=0
+export PYTHONCOERCECLOCALE
 
 PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
 export PYTHONPATH
@@ -63,7 +49,7 @@ Linux)
     # in particular the patch attached there, which was applied to glibc CVS as
     # "Restore locking in free_check." between 1.11 and 1.11.1.
     vswitchd=$abs_top_builddir/vswitchd/ovs-vswitchd
-    glibc=`ldd $vswitchd | sed -n 's/^	libc\.[^ ]* => \([^ ]*\) .*/\1/p'`
+    glibc=`ldd $vswitchd | sed -n 's/^  libc\.[^ ]* => \([^ ]*\) .*/\1/p'`
     glibc_version=`$glibc | sed -n '1s/.*version \([0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/p'`
     case $glibc_version in
         2.[0-9] | 2.1[01]) mcheck=disabled ;;
@@ -116,7 +102,7 @@ FreeBSD|NetBSD)
     ;;
 esac
 
-if test x"$PYTHON3" != x && test "$IS_WIN32" = yes; then
+if test "$IS_WIN32" = yes; then
     # enables legacy windows unicode printing needed for Python3 compatibility
     # with the Python2 tests
     PYTHONLEGACYWINDOWSFSENCODING=true
@@ -125,8 +111,18 @@ if test x"$PYTHON3" != x && test "$IS_WIN32" = yes; then
     export PYTHONLEGACYWINDOWSSTDIO
 fi
 
+# Check for CPU architecture
+case `uname -m` in
+aarch64)
+    IS_ARM64="yes"
+    ;;
+*)
+    IS_ARM64="no"
+    ;;
+esac
+
 # Check whether to run IPv6 tests.
-$PYTHON -c '
+$PYTHON3 -c '
 import errno
 import socket
 import sys
@@ -140,7 +136,7 @@ except socket.error as e:
 case $? in
     0) HAVE_IPV6=yes ;;
     2) HAVE_IPV6=no ;;
-    *) echo "$0: unexpected error probing $PYTHON for IPv6 support" >&2 ;;
+    *) echo "$0: unexpected error probing $PYTHON3 for IPv6 support" >&2 ;;
 esac
 
 # Look for a python L7 library 'LIB' in the system. If it is found, defines
@@ -149,13 +145,9 @@ find_l7_lib()
 {
     set +x
     var=HAVE_`echo "$1" | tr '[a-z]' '[A-Z]'`
-    if test "$HAVE_PYTHON" = "yes"; then
-        result=$($PYTHON $abs_top_srcdir/tests/test-l7.py --help | grep "$1")
-        if test "x${result}" != x; then
-            eval ${var}="yes"
-        else
-            eval ${var}="no"
-        fi
+    result=$($PYTHON3 $abs_top_srcdir/tests/test-l7.py --help | grep "$1")
+    if test "x${result}" != x; then
+        eval ${var}="yes"
     else
         eval ${var}="no"
     fi
@@ -182,6 +174,9 @@ find_command()
 
 # Set HAVE_NC
 find_command nc
+
+# Set HAVE_TC
+find_command tc
 
 # Determine correct netcat option to quit on stdin EOF
 if nc --version 2>&1 | grep -q nmap.org; then
@@ -216,10 +211,6 @@ unset HTTP_PROXY
 unset HTTPS_PROXY
 unset FTP_PROXY
 unset NO_PROXY
-
-# Avoid OVN environment variables leaking in from external environment.
-unset OVN_NB_DB
-unset OVN_SB_DB
 
 # Prevent logging to syslog during tests.
 OVS_SYSLOG_METHOD=null

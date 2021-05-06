@@ -156,7 +156,7 @@ The clustered format has the following additional notation:
        database.
 
     2. The second element is either a transaction record in the format
-       described under ``Standalone Format'' above, or ``null``.
+       described under ``Standalone Format`` above, or ``null``.
 
     When a schema is present, the transaction record is relative to an empty
     database.  That is, a schema change effectively resets the database to
@@ -164,7 +164,7 @@ The clustered format has the following additional notation:
     This allows readers to be ignorant of the full semantics of schema change.
 
 The first record in a clustered database contains the following members,
-all of which are required:
+all of which are required, except ``prev_election_timer``:
 
 ``"server_id": <raw-uuid>``
     The server's own UUID, which must be unique within the cluster.
@@ -173,7 +173,7 @@ all of which are required:
     The address on which the server listens for connections from other
     servers in the cluster.
 
-``name": <id>``
+``"name": <id>``
     The database schema name.  It is only important when a server is in the
     process of joining a cluster: a server will only join a cluster if the
     name matches.  (If the database schema name were unique, then we would
@@ -189,6 +189,10 @@ all of which are required:
     The set of one or more servers in the cluster at index "prev_index" and
     term "prev_term".  It might not include this server, if it was not the
     initial server in the cluster.
+
+``"prev_election_timer": <uint64>``
+    The election base time before the beginning of the log.  If not exist,
+    the default value 1000 ms is used as if it exists this record.
 
 ``"prev_data": <json-value>`` and ``"prev_eid": <raw-uuid>``
     A snapshot of the data in the database at index "prev_index" and term
@@ -226,20 +230,21 @@ The table below identifies the members that each type of record contains.
 it is forbidden, and [1] that ``data`` and ``eid`` must be either both present
 or both absent.
 
-============  =====  ====  ====  ======  ============  ====
-member        Entry  Term  Vote  Leader  Commit Index  Note
-============  =====  ====  ====  ======  ============  ====
-comment         ?      ?     ?      ?          ?         ?
-term           yes    yes   yes    yes
-index          yes
-servers         ?
-data           [1]
-eid            [1]
-vote                        yes
-leader                             yes
-commit_index                                  yes
-note                                                   yes
-============  =====  ====  ====  ======  ============  ====
+==============  =====  ====  ====  ======  ============  ====
+member          Entry  Term  Vote  Leader  Commit Index  Note
+==============  =====  ====  ====  ======  ============  ====
+comment           ?      ?     ?      ?          ?         ?
+term             yes    yes   yes    yes
+index            yes
+servers           ?
+election_timer    ?
+data             [1]
+eid              [1]
+vote                          yes
+leader                               yes
+commit_index                                    yes
+note                                                     yes
+==============  =====  ====  ====  ======  ============  ====
 
 The members are:
 
@@ -255,6 +260,9 @@ The members are:
 
 ``"servers": <servers>``
     Server configuration in a log entry.
+
+``"election_timer": <uint64>``
+    Leader election timeout base value in a log entry.
 
 ``"data": <json-value>``
     The data in a log entry.

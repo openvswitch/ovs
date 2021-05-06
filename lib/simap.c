@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2017 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,6 +240,19 @@ simap_equal(const struct simap *a, const struct simap *b)
         }
     }
     return true;
+}
+
+uint32_t
+simap_hash(const struct simap *simap)
+{
+    uint32_t hash = 0;
+
+    const struct simap_node *node;
+    SIMAP_FOR_EACH (node, simap) {
+        hash ^= hash_int(node->data,
+                         hash_name(node->name, strlen(node->name)));
+    }
+    return hash;
 }
 
 static size_t

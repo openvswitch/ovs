@@ -80,6 +80,7 @@ dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
 struct ct_dpif_dump_state;
 struct ct_dpif_entry;
 struct ct_dpif_tuple;
+struct ct_dpif_timeout_policy;
 
 /* 'dpif_ipf_proto_status' and 'dpif_ipf_status' are presently in
  * sync with 'ipf_proto_status' and 'ipf_status', but more
@@ -186,6 +187,8 @@ struct dpif_class {
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
+
+    int (*set_features)(struct dpif *dpif, uint32_t user_features);
 
     /* Adds 'netdev' as a new port in 'dpif'.  If '*port_no' is not
      * ODPP_NONE, attempts to use that as the port's port number.
@@ -468,6 +471,11 @@ struct dpif_class {
     int (*ct_get_maxconns)(struct dpif *, uint32_t *maxconns);
     /* Get number of connections tracked. */
     int (*ct_get_nconns)(struct dpif *, uint32_t *nconns);
+    /* Enable or disable TCP sequence checking. */
+    int (*ct_set_tcp_seq_chk)(struct dpif *, bool enabled);
+    /* Get the TCP sequence checking configuration. */
+    int (*ct_get_tcp_seq_chk)(struct dpif *, bool *enabled);
+
 
     /* Connection tracking per zone limit */
 
@@ -497,6 +505,62 @@ struct dpif_class {
     /* Deletes per zone limit of all zones specified in 'zone_limits', a
      * list of 'struct ct_dpif_zone_limit' entries. */
     int (*ct_del_limits)(struct dpif *, const struct ovs_list *zone_limits);
+
+    /* Connection tracking timeout policy */
+
+    /* A connection tracking timeout policy contains a list of timeout
+     * attributes that specify timeout values on various connection states.
+     * In a datapath, the timeout policy is identified by a 4-byte unsigned
+     * integer.  Unsupported timeout attributes are ignored.  When a
+     * connection is committed it can be associated with a timeout
+     * policy, or it defaults to the datapath's default timeout policy. */
+
+    /* Sets timeout policy '*tp' into the datapath. */
+    int (*ct_set_timeout_policy)(struct dpif *,
+                                 const struct ct_dpif_timeout_policy *tp);
+    /* Gets a timeout policy specified by tp_id and stores it into '*tp'. */
+    int (*ct_get_timeout_policy)(struct dpif *, uint32_t tp_id,
+                                 struct ct_dpif_timeout_policy *tp);
+    /* Deletes a timeout policy identified by 'tp_id'. */
+    int (*ct_del_timeout_policy)(struct dpif *, uint32_t tp_id);
+
+    /* Conntrack timeout policy dumping interface.
+     *
+     * These functions provide a datapath-agnostic dumping interface
+     * to the conntrack timeout policy provided by the datapaths.
+     *
+     * ct_timeout_policy_dump_start() should put in '*statep' a pointer to
+     * a newly allocated structure that will be passed by the caller to
+     * ct_timeout_policy_dump_next() and ct_timeout_policy_dump_done().
+     *
+     * ct_timeout_policy_dump_next() attempts to retrieve another timeout
+     * policy from 'dpif' for 'state', which was initialized by a successful
+     * call to ct_timeout_policy_dump_start().  On success, stores a new
+     * timeout policy into 'tp' and returns 0.  Returns EOF if the last
+     * timeout policy has been dumped, or a positive errno value on error.
+     * This function will not be called again once it returns nonzero once
+     * for a given iteration (but the ct_timeout_policy_dump_done() will
+     * be called afterward).
+     *
+     * ct_timeout_policy_dump_done() should perform any cleanup necessary
+     * (including deallocating the 'state' structure, if applicable). */
+    int (*ct_timeout_policy_dump_start)(struct dpif *, void **statep);
+    int (*ct_timeout_policy_dump_next)(struct dpif *, void *state,
+                                       struct ct_dpif_timeout_policy *tp);
+    int (*ct_timeout_policy_dump_done)(struct dpif *, void *state);
+
+    /* Gets timeout policy based on 'tp_id', 'dl_type' and 'nw_proto'.
+     * On success, returns 0, stores the timeout policy name in 'tp_name',
+     * and sets 'is_generic'. 'is_generic' is false if the returned timeout
+     * policy in the 'dpif' is specific to 'dl_type' and 'nw_proto' in the
+     * datapath (e.g., the Linux kernel datapath).  Sets 'is_generic' to
+     * true, if the timeout policy supports all OVS supported L3/L4
+     * protocols.
+     *
+     * The caller is responsible for freeing 'tp_name'. */
+    int (*ct_get_timeout_policy_name)(struct dpif *, uint32_t tp_id,
+                                      uint16_t dl_type, uint8_t nw_proto,
+                                      char **tp_name, bool *is_generic);
 
     /* IP Fragmentation. */
 
@@ -552,6 +616,18 @@ struct dpif_class {
      * zero. */
     int (*meter_del)(struct dpif *, ofproto_meter_id meter_id,
                      struct ofputil_meter_stats *, uint16_t n_bands);
+
+    /* Adds a bond with 'bond_id' and the member-map to 'dpif'. */
+    int (*bond_add)(struct dpif *dpif, uint32_t bond_id,
+                    odp_port_t *member_map);
+
+    /* Removes bond identified by 'bond_id' from 'dpif'. */
+    int (*bond_del)(struct dpif *dpif, uint32_t bond_id);
+
+    /* Reads bond stats from 'dpif'.  'n_bytes' should be an array with size
+     * sufficient to store BOND_BUCKETS number of elements. */
+    int (*bond_stats_get)(struct dpif *dpif, uint32_t bond_id,
+                          uint64_t *n_bytes);
 };
 
 extern const struct dpif_class dpif_netlink_class;

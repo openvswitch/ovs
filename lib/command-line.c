@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "svec.h"
 #include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "util.h"
@@ -75,6 +76,29 @@ find_option_by_value(const struct option *options, int value)
         }
     }
     return NULL;
+}
+
+/* Parses options set using environment variable.  The caller specifies the
+ * supported options in environment variable.  On success, adds the parsed
+ * env variables in 'argv', the number of options in 'argc', and returns argv.
+ *  */
+char **
+ovs_cmdl_env_parse_all(int *argcp, char *argv[], const char *env_options)
+{
+    ovs_assert(*argcp > 0);
+
+    struct svec args = SVEC_EMPTY_INITIALIZER;
+    svec_add(&args, argv[0]);
+    if (env_options) {
+        svec_parse_words(&args, env_options);
+    }
+    for (int i = 1; i < *argcp; i++) {
+        svec_add(&args, argv[i]);
+    }
+    svec_terminate(&args);
+
+    *argcp = args.n;
+    return args.names;
 }
 
 /* Parses the command-line options in 'argc' and 'argv'.  The caller specifies

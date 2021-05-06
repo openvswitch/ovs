@@ -1,0 +1,31 @@
+# _ADD_BR([name])
+#
+# Expands into the proper ovs-vsctl commands to create a bridge with the
+# appropriate type and properties
+m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15 fail-mode=secure ]])
+
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+#
+# Creates a database and starts ovsdb-server, starts ovs-vswitchd
+# connected to that database, calls ovs-vsctl to create a bridge named
+# br0 with predictable settings, passing 'vsctl-args' as additional
+# commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
+# output (e.g. because it includes "create" commands) then 'vsctl-output'
+# specifies the expected output after filtering through uuidfilt.
+m4_define([OVS_TRAFFIC_VSWITCHD_START],
+  [
+   OVS_WAIT_WHILE([ip link show ovs-netdev])
+   _OVS_VSWITCHD_START([--disable-system])
+   dnl Add bridges, ports, etc.
+   OVS_WAIT_WHILE([ip link show br0])
+   AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:userspace-tso-enable=true])
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
+])
+
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# Enable TCP segmentation offload and scatter-gather for veths.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+    [AT_CHECK([ethtool -K $1 sg on], [0], [ignore], [ignore])]
+    [AT_CHECK([ethtool -K $1 tso on], [0], [ignore], [ignore])]
+)

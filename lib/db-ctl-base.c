@@ -430,31 +430,39 @@ static char *
 get_column(const struct ovsdb_idl_table_class *table, const char *column_name,
            const struct ovsdb_idl_column **columnp)
 {
+    struct sset best_matches = SSET_INITIALIZER(&best_matches);
     const struct ovsdb_idl_column *best_match = NULL;
     unsigned int best_score = 0;
-    size_t i;
 
-    for (i = 0; i < table->n_columns; i++) {
+    for (size_t i = 0; i < table->n_columns; i++) {
         const struct ovsdb_idl_column *column = &table->columns[i];
         unsigned int score = score_partial_match(column->name, column_name);
-        if (score > best_score) {
+        if (score && score >= best_score) {
+            if (score > best_score) {
+                sset_clear(&best_matches);
+            }
+            sset_add(&best_matches, column->name);
             best_match = column;
             best_score = score;
-        } else if (score == best_score) {
-            best_match = NULL;
         }
     }
 
-    *columnp = best_match;
-    if (best_match) {
-        return NULL;
-    } else if (best_score) {
-        return xasprintf("%s contains more than one column whose name "
-                         "matches \"%s\"", table->name, column_name);
+    char *error = NULL;
+    *columnp = NULL;
+    if (!best_match) {
+        error = xasprintf("%s does not contain a column whose name matches "
+                          "\"%s\"", table->name, column_name);
+    } else if (sset_count(&best_matches) == 1) {
+        *columnp = best_match;
     } else {
-        return xasprintf("%s does not contain a column whose name matches "
-                         "\"%s\"", table->name, column_name);
+        char *matches = sset_join(&best_matches, ", ", "");
+        error = xasprintf("%s contains more than one column "
+                          "whose name matches \"%s\": %s",
+                          table->name, column_name, matches);
+        free(matches);
     }
+    sset_destroy(&best_matches);
+    return error;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -690,7 +698,9 @@ check_mutable(const struct ovsdb_idl_row *row,
     RELOP(RELOP_SET_LT, "{<}")                  \
     RELOP(RELOP_SET_GT, "{>}")                  \
     RELOP(RELOP_SET_LE, "{<=}")                 \
-    RELOP(RELOP_SET_GE, "{>=}")
+    RELOP(RELOP_SET_GE, "{>=}")                 \
+    RELOP(RELOP_SET_IN, "{in}")                 \
+    RELOP(RELOP_SET_NOT_IN, "{not-in}")
 
 enum relop {
 #define RELOP(ENUM, STRING) ENUM,
@@ -703,7 +713,8 @@ is_set_operator(enum relop op)
 {
     return (op == RELOP_SET_EQ || op == RELOP_SET_NE ||
             op == RELOP_SET_LT || op == RELOP_SET_GT ||
-            op == RELOP_SET_LE || op == RELOP_SET_GE);
+            op == RELOP_SET_LE || op == RELOP_SET_GE ||
+            op == RELOP_SET_IN || op == RELOP_SET_NOT_IN);
 }
 
 static bool
@@ -731,9 +742,12 @@ evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
     case RELOP_SET_GT:
         return a->n > b->n && ovsdb_datum_includes_all(b, a, type);
     case RELOP_SET_LE:
+    case RELOP_SET_IN:
         return ovsdb_datum_includes_all(a, b, type);
     case RELOP_SET_GE:
         return ovsdb_datum_includes_all(b, a, type);
+    case RELOP_SET_NOT_IN:
+        return ovsdb_datum_excludes_all(a, b, type);
 
     default:
         OVS_NOT_REACHED();
@@ -1207,27 +1221,35 @@ cmd_list(struct ctl_context *ctx)
 static char * OVS_WARN_UNUSED_RESULT
 get_table(const char *table_name, const struct ovsdb_idl_table_class **tablep)
 {
+    struct sset best_matches = SSET_INITIALIZER(&best_matches);
     const struct ovsdb_idl_table_class *best_match = NULL;
     unsigned int best_score = 0;
-    char *error = NULL;
 
     for (const struct ovsdb_idl_table_class *table = idl_classes;
          table < &idl_classes[n_classes]; table++) {
         unsigned int score = score_partial_match(table->name, table_name);
-        if (score > best_score) {
+        if (score && score >= best_score) {
+            if (score > best_score) {
+                sset_clear(&best_matches);
+            }
+            sset_add(&best_matches, table->name);
             best_match = table;
             best_score = score;
-        } else if (score == best_score) {
-            best_match = NULL;
         }
     }
-    if (best_match) {
-        *tablep = best_match;
-    } else if (best_score) {
-        error = xasprintf("multiple table names match \"%s\"", table_name);
-    } else {
+
+    char *error = NULL;
+    if (!best_match) {
         error = xasprintf("unknown table \"%s\"", table_name);
+    } else if (sset_count(&best_matches) == 1) {
+        *tablep = best_match;
+    } else {
+        char *matches = sset_join(&best_matches, ", ", "");
+        error = xasprintf("\"%s\" matches multiple table names: %s",
+                          table_name, matches);
+        free(matches);
     }
+    sset_destroy(&best_matches);
     return error;
 }
 
@@ -1489,6 +1511,7 @@ cmd_add(struct ctl_context *ctx)
         ctx->error = ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
                                              ctx->symtab);
         if (ctx->error) {
+            ovsdb_datum_destroy(&old, &column->type);
             return;
         }
         ovsdb_datum_union(&old, &add, type, false);
@@ -1500,6 +1523,7 @@ cmd_add(struct ctl_context *ctx)
                   old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_max);
+        ovsdb_datum_destroy(&old, &column->type);
         return;
     }
     ovsdb_idl_txn_verify(row, column);
@@ -1581,10 +1605,12 @@ cmd_remove(struct ctl_context *ctx)
                                                      ctx->argv[i],
                                                      ctx->symtab);
                 if (ctx->error) {
+                    ovsdb_datum_destroy(&old, &column->type);
                     return;
                 }
             } else {
                 ctx->error = error;
+                ovsdb_datum_destroy(&old, &column->type);
                 return;
             }
         }
@@ -1596,6 +1622,7 @@ cmd_remove(struct ctl_context *ctx)
                   "table %s but the minimum number is %u", old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_min);
+        ovsdb_datum_destroy(&old, &column->type);
         return;
     }
     ovsdb_idl_txn_verify(row, column);
@@ -1793,6 +1820,11 @@ cmd_destroy(struct ctl_context *ctx)
     if (delete_all && !must_exist) {
         ctl_error(ctx, "--all and --if-exists should not be specified "
                   "together");
+        return;
+    }
+
+    if (!delete_all && ctx->argc == 2) {
+        VLOG_WARN("either --all or records argument should be specified");
         return;
     }
 

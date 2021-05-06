@@ -17,6 +17,10 @@
 
 #include "ovsdb.h"
 
+#if HAVE_DECL_MALLOC_TRIM
+#include <malloc.h>
+#endif
+
 #include "column.h"
 #include "file.h"
 #include "monitor.h"
@@ -414,7 +418,7 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
     db->storage = storage;
     ovs_list_init(&db->monitors);
     ovs_list_init(&db->triggers);
-    db->run_triggers = false;
+    db->run_triggers_now = db->run_triggers = false;
 
     shash_init(&db->tables);
     if (schema) {
@@ -502,6 +506,10 @@ ovsdb_get_memory_usage(const struct ovsdb *db, struct simap *usage)
     }
 
     simap_increase(usage, "cells", cells);
+
+    if (db->storage) {
+        ovsdb_storage_get_memory_usage(db->storage, usage);
+    }
 }
 
 struct ovsdb_table *
@@ -511,7 +519,7 @@ ovsdb_get_table(const struct ovsdb *db, const char *name)
 }
 
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_snapshot(struct ovsdb *db)
+ovsdb_snapshot(struct ovsdb *db, bool trim_memory OVS_UNUSED)
 {
     if (!db->storage) {
         return NULL;
@@ -523,6 +531,12 @@ ovsdb_snapshot(struct ovsdb *db)
                                                              schema, data);
     json_destroy(schema);
     json_destroy(data);
+
+#if HAVE_DECL_MALLOC_TRIM
+    if (!error && trim_memory) {
+        malloc_trim(0);
+    }
+#endif
     return error;
 }
 

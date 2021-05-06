@@ -21,8 +21,6 @@ import ovs.poller
 import ovs.socket_util
 import ovs.vlog
 
-import six
-
 try:
     from OpenSSL import SSL
 except ImportError:
@@ -86,7 +84,7 @@ class Stream(object):
 
     @staticmethod
     def _find_method(name):
-        for method, cls in six.iteritems(Stream._SOCKET_METHODS):
+        for method, cls in Stream._SOCKET_METHODS.items():
             if name.startswith(method):
                 return cls
         return None
@@ -133,6 +131,10 @@ class Stream(object):
     # in <netinet/ip.h> is used.
     IPTOS_PREC_INTERNETCONTROL = 0xc0
     DSCP_DEFAULT = IPTOS_PREC_INTERNETCONTROL >> 2
+
+    @staticmethod
+    def check_connection_completion(sock):
+        return ovs.socket_util.check_connection_completion(sock)
 
     @staticmethod
     def open(name, dscp=DSCP_DEFAULT):
@@ -191,7 +193,7 @@ class Stream(object):
         if error:
             return error, None
         else:
-            err = ovs.socket_util.check_connection_completion(sock)
+            err = cls.check_connection_completion(sock)
             if err == errno.EAGAIN or err == errno.EINPROGRESS:
                 status = errno.EAGAIN
                 err = 0
@@ -263,7 +265,7 @@ class Stream(object):
 
     def __scs_connecting(self):
         if self.socket is not None:
-            retval = ovs.socket_util.check_connection_completion(self.socket)
+            retval = self.check_connection_completion(self.socket)
             assert retval != errno.EINPROGRESS
         elif sys.platform == 'win32':
             if self.retry_connect:
@@ -401,7 +403,7 @@ class Stream(object):
             return 0
 
         # We must have bytes for sending.
-        if isinstance(buf, six.text_type):
+        if isinstance(buf, str):
             buf = buf.encode('utf-8')
 
         if sys.platform == 'win32' and self.socket is None:
@@ -763,6 +765,13 @@ Stream.register_method("tcp", TCPStream)
 
 
 class SSLStream(Stream):
+    @staticmethod
+    def check_connection_completion(sock):
+        try:
+            return Stream.check_connection_completion(sock)
+        except SSL.SysCallError as e:
+            return ovs.socket_util.get_exception_errno(e)
+
     @staticmethod
     def needs_probes():
         return True

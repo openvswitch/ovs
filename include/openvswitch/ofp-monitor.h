@@ -22,6 +22,7 @@
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-protocol.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/type-props.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,7 @@ extern "C" {
 
 struct ofputil_table_map;
 
+#define OFP_FLOW_REMOVED_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 const char *ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason,
                                               char *reasonbuf, size_t bufsize);
 

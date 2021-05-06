@@ -257,7 +257,7 @@ vlog_get_level(const struct vlog_module *module,
 }
 
 static void
-update_min_level(struct vlog_module *module) OVS_REQUIRES(&log_file_mutex)
+update_min_level(struct vlog_module *module) OVS_REQUIRES(log_file_mutex)
 {
     enum vlog_destination destination;
 
@@ -395,11 +395,11 @@ vlog_set_log_file(const char *file_name)
     /* Close old log file, if any, and install new one. */
     ovs_mutex_lock(&log_file_mutex);
     if (log_fd >= 0) {
-        free(log_file_name);
         close(log_fd);
         async_append_destroy(log_writer);
     }
 
+    free(log_file_name);
     log_file_name = xstrdup(new_log_file_name);
     log_fd = new_log_fd;
     if (log_async) {
@@ -610,6 +610,21 @@ vlog_set_syslog_target(const char *target)
     }
     syslog_fd = new_fd;
     ovs_rwlock_unlock(&pattern_rwlock);
+}
+
+/*
+ * This function writes directly to log file without using async writer or
+ * taking a lock.  Caller must hold 'log_file_mutex' or be sure that it's
+ * not necessary.  Could be used in exceptional cases like dumping of backtrace
+ * on fatal signals.
+ */
+void
+vlog_direct_write_to_log_file_unsafe(const char *s)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    if (log_fd >= 0) {
+        ignore(write(log_fd, s, strlen(s)));
+    }
 }
 
 /* Returns 'false' if 'facility' is not a valid string. If 'facility'
@@ -1088,10 +1103,17 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 {
     bool log_to_console = module->levels[VLF_CONSOLE] >= level;
     bool log_to_syslog = module->levels[VLF_SYSLOG] >= level;
-    bool log_to_file;
+    bool log_to_file = module->levels[VLF_FILE]  >= level;
+
+    if (!(log_to_console || log_to_syslog || log_to_file)) {
+        /* fast path - all logging levels specify no logging, no
+         * need to hog the log mutex
+         */
+        return;
+    }
 
     ovs_mutex_lock(&log_file_mutex);
-    log_to_file = module->levels[VLF_FILE] >= level && log_fd >= 0;
+    log_to_file &= (log_fd >= 0);
     ovs_mutex_unlock(&log_file_mutex);
     if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;

@@ -15,9 +15,13 @@
 # limitations under the License.
 
 # This script is intended to be used on the following kernels.
-#   - 3.10.0 major revision 327 (RHEL 7.2)
-#   - 3.10.0 major revision 693 (RHEL 7.4)
-#   - 3.10.0 major revision 957 (RHEL 7.6)
+#   - 3.10.0 major revision 327  (RHEL 7.2)
+#   - 3.10.0 major revision 693  (RHEL 7.4)
+#   - 3.10.0 major revision 957  (RHEL 7.6)
+#   - 3.10.0 major revision 1062 (RHEL 7.7)
+#   - 3.10.0 major revision 1101 (RHEL 7.8 Beta)
+#   - 3.10.0 major revision 1127 (RHEL 7.8 GA)
+#   - 3.10.0 major revision 1160 (RHEL 7.9)
 #   - 4.4.x,  x >= 73           (SLES 12 SP3)
 #   - 4.12.x, x >= 14           (SLES 12 SP4).
 # It is packaged in the openvswitch kmod RPM and run in the post-install
@@ -80,13 +84,43 @@ if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
         comp_ver=36
         ver_offset=4
         installed_ver="$minor_rev"
+    elif [ "$major_rev" = "514" ]; then
+#        echo "rhel73"
+        comp_ver=26
+        ver_offset=4
+        installed_ver="$minor_rev"
     elif [ "$major_rev" = "693" ]; then
 #        echo "rhel74"
         comp_ver=11
         ver_offset=4
         installed_ver="$minor_rev"
+    elif [ "$major_rev" = "862" ]; then
+#        echo "rhel75"
+        comp_ver=20
+        ver_offset=4
+        installed_ver="$minor_rev"
     elif [ "$major_rev" = "957" ]; then
 #        echo "rhel76"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1062" ]; then
+#        echo "rhel77"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1101" ]; then
+#        echo "rhel78"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1127" ]; then
+#        echo "rhel78"
+        comp_ver=10
+        ver_offset=4
+        installed_ver="$minor_rev"
+    elif [ "$major_rev" = "1160" ]; then
+#        echo "rhel79"
         comp_ver=10
         ver_offset=4
         installed_ver="$minor_rev"
@@ -101,15 +135,15 @@ elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ]; then
 elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
     if [ "$mainline_patch" -ge "14" ]; then
 #        echo "sles12sp4"
-        comp_ver=14
+        comp_ver=1
         ver_offset=2
         installed_ver="$mainline_patch"
     fi
 fi
 
 if [ X"$ver_offset" = X ]; then
-    echo "This script is not intended to run on kernel $(uname -r)"
-    exit 1
+#    echo "This script is not intended to run on kernel $(uname -r)"
+    exit 0
 fi
 
 #IFS='.\|-' read -r -a version_nums <<<"${current_kernel}"
@@ -121,6 +155,16 @@ kmod_versions=()
 kversion=$(rpm -ql ${rpmname} | grep '\.ko$' | \
            sed -n -e 's/^\/lib\/modules\/\(.*\)\/extra\/.*$/\1/p' | \
            sort | uniq)
+
+IFS='.\|-' read installed_major installed_minor installed_patch \
+    installed_major_rev installed_minor_rev installed_extra <<<"${kversion}"
+
+if [ "$installed_major_rev" -lt "$major_rev" ]; then
+    echo "Not installing RPM with major revision $installed_major_rev" \
+         "to kernel with greater major revision $major_rev.  Exiting"
+    exit 1
+fi
+
 for kv in $kversion; do
     IFS='.\|-' read -r -a kv_nums <<<"${kv}"
     kmod_versions+=(${kv_nums[$ver_offset]})
@@ -141,7 +185,7 @@ fi
 #$kmod_high_ver"
 
 found_match=false
-for kname in `ls -d /lib/modules/*`
+for kname in $kversion;
 do
     IFS='.\|-' read -r -a pkg_ver_nums <<<"${kname}"
     pkg_ver=${pkg_ver_nums[$ver_offset]}
@@ -168,14 +212,14 @@ if [ "$found_match" = "false" ]; then
     exit 1
 fi
 
-if [ "$requested_kernel" != "/lib/modules/$current_kernel" ]; then
+if [ "$requested_kernel" != "$current_kernel" ]; then
     if [ ! -d /lib/modules/$current_kernel/weak-updates/openvswitch ]; then
         mkdir -p /lib/modules/$current_kernel/weak-updates
         mkdir -p /lib/modules/$current_kernel/weak-updates/openvswitch
     fi
     for m in openvswitch vport-gre vport-stt vport-geneve \
         vport-lisp vport-vxlan; do
-        ln -f -s $requested_kernel/extra/openvswitch/$m.ko \
+        ln -f -s /lib/modules/$requested_kernel/extra/openvswitch/$m.ko \
             /lib/modules/$current_kernel/weak-updates/openvswitch/$m.ko
     done
 else

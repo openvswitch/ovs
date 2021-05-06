@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-PTHREAD_TEMP_DIR=`echo "$(PTHREAD_LDFLAGS)" | sed 's|^.\(.*\).$:\1||'`
 windows_installer: all
 #Userspace files needed for the installer
 	cp -f $(top_srcdir)/datapath-windows/misc/OVS.psm1 windows/ovs-windows-installer/Services/OVS.psm1
@@ -27,14 +26,18 @@ windows_installer: all
 	cp -f $(top_srcdir)/ovsdb/ovsdb-tool.pdb windows/ovs-windows-installer/Symbols/
 #Third party files needed by the installer
 	cp -f $(PTHREAD_WIN32_DIR_DLL_WIN_FORM)/*.dll windows/ovs-windows-installer/Binaries/
-	cp -f "/c/Program Files (x86)/Common Files/Merge Modules/Microsoft_VC120_CRT_x86.msm" windows/ovs-windows-installer/Redist/Microsoft_VC120_CRT_x86.msm
+	cp -f "/c/Program Files (x86)/Common Files/Merge Modules/Microsoft_VC140_CRT_x86.msm" windows/ovs-windows-installer/Redist/Microsoft_VC140_CRT_x86.msm
+	cp -f "/c/Program Files (x86)/Common Files/Merge Modules/Microsoft_VC140_CRT_x64.msm" windows/ovs-windows-installer/Redist/Microsoft_VC140_CRT_x64.msm
 #Forwarding extension files needed for the installer
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win8/ovsext.cat
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win8/ovsext.inf
-	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/OVSExt.sys windows/ovs-windows-installer/Driver/Win8/OVSExt.sys
+	cp -f $(top_srcdir)/datapath-windows/x64/Win8$(VSTUDIO_CONFIG)/package/OVSExt.sys windows/ovs-windows-installer/Driver/Win8/ovsext.sys
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win8.1/ovsext.cat
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win8.1/ovsext.inf
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.sys windows/ovs-windows-installer/Driver/Win8.1/ovsext.sys
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win10/ovsext.cat
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win10/ovsext.inf
+	cp -f $(top_srcdir)/datapath-windows/x64/Win10$(VSTUDIO_CONFIG)/package/ovsext.sys windows/ovs-windows-installer/Driver/Win10/ovsext.sys
 	MSBuild.exe windows/ovs-windows-installer.sln //nologo //target:Build //p:Configuration="Release" //p:Version="$(PACKAGE_VERSION)" //p:Platform=$(PLATFORM)
 
 EXTRA_DIST += \

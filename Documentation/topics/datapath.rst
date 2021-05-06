@@ -261,5 +261,5 @@ Implement the headers and codes for compatibility with older kernel in
 function should be prefixed with ``rpl_``.  Otherwise, the function should be
 prefixed with ``ovs_``.  For special case when it is not possible to follow
 this rule (e.g., the ``pskb_expand_head()`` function), the function name must
-be added to ``linux/compat/build-aux/export-check-whitelist``, otherwise, the
+be added to ``linux/compat/build-aux/export-check-allowlist``, otherwise, the
 compilation check ``check-export-symbol`` will fail.

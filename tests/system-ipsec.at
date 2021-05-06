@@ -1,0 +1,405 @@
+AT_BANNER(IPsec)
+
+dnl IPSEC_SETUP_UNDERLAY()
+dnl
+dnl Configure anything required in the underlay network
+m4_define([IPSEC_SETUP_UNDERLAY],
+      [AT_CHECK([cp ${abs_top_srcdir}/vswitchd/vswitch.ovsschema vswitch.ovsschema])
+      dnl Set up the underlay switch
+      AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])])
+
+dnl IPSEC_ADD_NODE([namespace], [device], [address], [peer address]))
+dnl
+dnl Creates a dummy host that acts as an IPsec endpoint. Creates host in
+dnl 'namespace' and attaches a veth 'device' to 'namespace' to act as the host
+dnl NIC. Assigns 'address' to 'device' and adds the other end of veth 'device' to
+dnl 'br0' which is an OVS bridge in the default namespace acting as an underlay
+dnl switch. Sets the default gateway of 'namespace' to 'peer address'.
+dnl
+dnl Starts all daemons in 'namespace' that are required for IPsec
+m4_define([IPSEC_ADD_NODE],
+  [ADD_NAMESPACES($1)
+  dnl Disable DAD. We know we wont get duplicates on this underlay network.
+  NS_EXEC([$1], [sysctl -w net.ipv6.conf.all.accept_dad=0])
+  NS_EXEC([$1], [sysctl -w net.ipv6.conf.default.accept_dad=0])
+  ADD_VETH($2, $1, br0, $3/24)
+  NS_EXEC([$1], [ip route add default via $4 dev $2])
+  mkdir -p $ovs_base/$1
+  touch $ovs_base/$1/.conf.db.~lock~
+  NS_EXEC([$1], [ovsdb-tool create $ovs_base/$1/conf.db \
+                $abs_top_srcdir/vswitchd/vswitch.ovsschema], [0], [], [stderr])
+
+  dnl Start ovsdb-server.
+  NS_EXEC([$1],[ovsdb-server $ovs_base/$1/conf.db --detach --no-chdir \
+        --log-file=$ovs_base/$1/ovsdb.log --pidfile=$ovs_base/$1/ovsdb.pid \
+        --remote=punix:$OVS_RUNDIR/$1/db.sock], [0], [], [stderr])
+  on_exit "kill `cat $ovs_base/$1/ovsdb.pid`"
+  NS_EXEC([$1], [ovs-vsctl --no-wait init])
+
+  dnl Start ovs-vswitchd.
+  NS_EXEC([$1], [ovs-vswitchd unix:${OVS_RUNDIR}/$1/db.sock --detach \
+        --no-chdir --pidfile=$ovs_base/$1/vswitchd.pid \
+        --unixctl=$ovs_base/$1/vswitchd.ctl \
+        --log-file=$ovs_base/$1/vswitchd.log -vvconn -vofproto_dpif -vunixctl],\
+        [0], [], [stderr])
+  on_exit "kill_ovs_vswitchd `cat $ovs_base/$1/vswitchd.pid`"
+
+  dnl Start pluto
+  mkdir -p $ovs_base/$1/ipsec.d
+  touch $ovs_base/$1/ipsec.conf
+  touch $ovs_base/$1/secrets
+  ipsec initnss --nssdir $ovs_base/$1/ipsec.d
+  NS_CHECK_EXEC([$1], [ipsec pluto --config $ovs_base/$1/ipsec.conf \
+        --ipsecdir $ovs_base/$1 --nssdir $ovs_base/$1/ipsec.d \
+        --logfile $ovs_base/$1/pluto.log --secretsfile $ovs_base/$1/secrets \
+        --rundir $ovs_base/$1], [0], [], [stderr])
+  on_exit "kill `cat $ovs_base/$1/pluto.pid`"
+
+  dnl Start ovs-monitor-ipsec
+  NS_CHECK_EXEC([$1], [ovs-monitor-ipsec unix:${OVS_RUNDIR}/$1/db.sock\
+        --pidfile=${OVS_RUNDIR}/$1/ovs-monitor-ipsec.pid --ike-daemon=libreswan\
+        --ipsec-conf=$ovs_base/$1/ipsec.conf --ipsec-d=$ovs_base/$1/ipsec.d \
+        --ipsec-secrets=$ovs_base/$1/secrets \
+        --log-file=$ovs_base/$1/ovs-monitor-ipsec.log \
+        --ipsec-ctl=$ovs_base/$1/pluto.ctl \
+        --no-restart-ike-daemon --detach ], [0], [], [stderr])
+  on_exit "kill `cat $ovs_base/$1/ovs-monitor-ipsec.pid`"
+
+  dnl Set up OVS bridge
+  NS_EXEC([$1], [ovs-vsctl --db unix:$ovs_base/$1/db.sock add-br br-ipsec])]
+)
+m4_define([IPSEC_ADD_NODE_LEFT], [IPSEC_ADD_NODE(left, p0, $1, $2)])
+m4_define([IPSEC_ADD_NODE_RIGHT], [IPSEC_ADD_NODE(right, p1, $1, $2)])
+
+dnl OVS_VSCTL([namespace], [sub-command])
+dnl
+dnl Runs `ovs-vsctl 'sub-command'` in 'namespace'
+m4_define([OVS_VSCTL],
+      [[ip netns exec $1 ovs-vsctl --db unix:$ovs_base/$1/db.sock $2 ]])
+m4_define([OVS_VSCTL_LEFT], [OVS_VSCTL(left, $1)])
+m4_define([OVS_VSCTL_RIGHT], [OVS_VSCTL(right, $1)])
+
+dnl IPSEC_ADD_TUNNEL([namespace], [type], [options]])
+dnl
+dnl Creates a tunnel of type 'type' in namespace 'namespace' using 'options'
+m4_define([IPSEC_ADD_TUNNEL],
+      [OVS_VSCTL([$1], [add-port br-ipsec tun -- set Interface tun type=$2 $3])
+      dnl Wait for all expected connections to be loaded into Libreswan.
+      dnl GRE creates 1 connection, all others create 2.
+      m4_if($2, [gre],
+            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 1])],
+            [OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED($1)` -eq 2])])
+      ])
+m4_define([IPSEC_ADD_TUNNEL_LEFT], [IPSEC_ADD_TUNNEL(left, $1, $2)])
+m4_define([IPSEC_ADD_TUNNEL_RIGHT], [IPSEC_ADD_TUNNEL(right, $1, $2)])
+
+dnl CHECK_LIBRESWAN()
+dnl
+dnl Check if necessary Libreswan dependencies are available on the test machine
+m4_define([CHECK_LIBRESWAN],
+      [dnl Skip tests if system has not been set up for Libreswan
+      AT_SKIP_IF([!(ipsec --version | grep Libreswan)])
+      AT_SKIP_IF([test ! -x $(which certutil)])
+      AT_SKIP_IF([test ! -x $(which pk12util)])
+      AT_SKIP_IF([test ! -x $(which openssl)])
+      dnl If '$ovs_base' is too long, the following Libreswan issue will trigger
+      dnl so we check that it is not too long and skip test if it is.
+      dnl https://github.com/libreswan/libreswan/issues/428
+      AT_SKIP_IF([test "${#ovs_base}" -gt "90" ])])
+
+dnl IPSEC_STATUS_LOADED([])
+dnl
+dnl Get number of loaded connections from ipsec status
+m4_define([IPSEC_STATUS_LOADED], [ipsec status --rundir $ovs_base/$1 | \
+           grep "Total IPsec connections" | \
+           sed 's/[[0-9]]* Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\1/m'])
+
+dnl IPSEC_STATUS_ACTIVE([])
+dnl
+dnl Get number of active connections from ipsec status
+m4_define([IPSEC_STATUS_ACTIVE], [ipsec status --rundir $ovs_base/$1 | \
+           grep "Total IPsec connections" | \
+           sed 's/[[0-9]]* Total IPsec connections: loaded \([[0-2]]\), active \([[0-2]]\).*/\2/m'])
+
+dnl CHECK_ESP_TRAFFIC()
+dnl
+dnl Checks for connectivity between nodes and that the underlay traffic is ESP.
+m4_define([CHECK_ESP_TRAFFIC],
+      [dnl Add test interfaces for pinging
+      NS_EXEC([left], [ip addr add 192.0.0.1/24 dev br-ipsec])
+      NS_EXEC([left], [ip link set dev br-ipsec up])
+
+      NS_EXEC([right], [ip addr add 192.0.0.2/24 dev br-ipsec])
+      NS_EXEC([right], [ip link set dev br-ipsec up])
+
+      dnl Capture any underlay esp packets
+      tcpdump -l -nn -i ovs-p0 esp > $ovs_base/left/tcpdump.log &
+      on_exit "kill $!"
+      tcpdump -l -nn -i ovs-p1 esp > $ovs_base/right/tcpdump.log &
+      on_exit "kill $!"
+
+      dnl Wait for all loaded connections to be active
+      OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq `IPSEC_STATUS_ACTIVE(left)`])
+      OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq `IPSEC_STATUS_ACTIVE(right)`])
+
+      dnl Ping over IPsec tunnel
+      NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.3 -w 2 192.0.0.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+      NS_CHECK_EXEC([right], [ping -q -c 3 -i 0.3 -w 2 192.0.0.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+      dnl Check for esp traffic
+      dnl Note: Geneve tests may not work on older kernels due to CVE-2020-25645
+      dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+      AT_CHECK([cat $ovs_base/left/tcpdump.log | grep ESP], [0], [stdout], [stderr])
+      AT_CHECK([cat $ovs_base/right/tcpdump.log | grep ESP], [0], [stdout], [stderr])])
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, defaultroute, psk)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, localip, psk)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve psk])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 \
+                      options:local_ip=10.1.1.1 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 \
+                       options:local_ip=10.1.1.2 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, defaultroute, self-signed)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve self-signed])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Create and set self-signed certs
+ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log req -u left
+ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log req -u right
+ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log self-sign left
+ovs-pki -b -d ${ovs_base} -l ${ovs_base}/ovs-pki.log self-sign right
+OVS_VSCTL_LEFT(set Open_vSwitch . \
+      other_config:certificate=${ovs_base}/left-cert.pem \
+      other_config:private_key=${ovs_base}/left-privkey.pem)
+OVS_VSCTL_RIGHT(set Open_vSwitch . \
+      other_config:certificate=${ovs_base}/right-cert.pem \
+      other_config:private_key=${ovs_base}/right-privkey.pem)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 \
+                      options:remote_cert=${ovs_base}/right-cert.pem])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 \
+                       options:remote_cert=${ovs_base}/left-cert.pem])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, geneve, defaultroute, ca-signed)])
+AT_KEYWORDS([ipsec libreswan ipv4 geneve ca-signed])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Create and set ca-signed certs
+ovs-pki --force -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log init
+ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log req+sign -u left
+ovs-pki -b --dir=${ovs_base} -l ${ovs_base}/ovs-pki.log req+sign -u right
+OVS_VSCTL_LEFT(set Open_vSwitch . \
+      other_config:ca_cert=${ovs_base}/switchca/cacert.pem \
+      other_config:certificate=${ovs_base}/left-cert.pem \
+      other_config:private_key=${ovs_base}/left-privkey.pem)
+OVS_VSCTL_RIGHT(set Open_vSwitch . \
+      other_config:ca_cert=${ovs_base}/switchca/cacert.pem \
+      other_config:certificate=${ovs_base}/right-cert.pem \
+      other_config:private_key=${ovs_base}/right-privkey.pem)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=10.1.1.2 options:remote_name=right])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=10.1.1.1 options:remote_name=left])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, gre, defaultroute, psk)])
+AT_KEYWORDS([ipsec libreswan ipv4 gre psk])
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([gre],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([gre],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv4, vxlan, defaultroute, psk)])
+AT_KEYWORDS([ipsec libreswan ipv4, vxlan psk])
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(10.1.1.1, 10.1.1.2)
+IPSEC_ADD_NODE_RIGHT(10.1.1.2, 10.1.1.1)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=10.1.1.2 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=10.1.1.1 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv6, vxlan, defaultroute, psk)])
+AT_KEYWORDS([ipsec libreswan ipv6 vxlan psk])
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
+IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=fd01::102 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=fd01::101 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv6, vxlan, localip, psk)])
+AT_KEYWORDS([ipsec libreswan ipv6 vxlan psk])
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
+IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([vxlan],
+                      [options:remote_ip=fd01::102 \
+                      options:local_ip=fd01::101 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([vxlan],
+                       [options:remote_ip=fd01::101 \
+                       options:local_ip=fd01::102 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([IPsec -- Libreswan (ipv6, geneve, defaultroute, psk)])
+AT_KEYWORDS([ipsec libreswan ipv6 geneve psk])
+dnl Note: Geneve test may not work on older kernels due to CVE-2020-25645
+dnl https://bugzilla.redhat.com/show_bug.cgi?id=1883988
+
+CHECK_LIBRESWAN()
+OVS_TRAFFIC_VSWITCHD_START()
+IPSEC_SETUP_UNDERLAY()
+
+dnl Set up dummy hosts
+IPSEC_ADD_NODE_LEFT(fd01::101, fd01::102)
+IPSEC_ADD_NODE_RIGHT(fd01::102, fd01::101)
+
+dnl Set up IPsec tunnel on 'left' host
+IPSEC_ADD_TUNNEL_LEFT([geneve],
+                      [options:remote_ip=fd01::102 options:psk=swordfish])
+
+dnl Set up IPsec tunnel on 'right' host
+IPSEC_ADD_TUNNEL_RIGHT([geneve],
+                       [options:remote_ip=fd01::101 options:psk=swordfish])
+CHECK_ESP_TRAFFIC
+
+OVS_TRAFFIC_VSWITCHD_STOP()
+AT_CLEANUP

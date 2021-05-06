@@ -12,19 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
-import codecs
 import getopt
 import sys
 
 import ovs.json
 
-import six
-
 
 def print_json(json):
-    if isinstance(json, six.string_types):
+    if isinstance(json, str):
         print("error: %s" % json)
         return False
     else:
@@ -58,12 +53,6 @@ def parse_multiple(stream):
 
 def main(argv):
     argv0 = argv[0]
-
-    # When this is used with Python 3, the program produces no output.
-    if six.PY2:
-        # Make stdout and stderr UTF-8, even if they are redirected to a file.
-        sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
-        sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
 
     try:
         options, args = getopt.gnu_getopt(argv[1:], '', ['multiple'])

@@ -74,8 +74,8 @@ Two Physical Hosts
 The environment assumes the use of two hosts, named `host1` and `host2`. We
 only detail the configuration of `host1` but a similar configuration can be
 used for `host2`. Both hosts should be configured with Open vSwitch (with or
-without the DPDK datapath), QEMU/KVM and suitable VM images. Open vSwitch
-should be running before proceeding.
+without DPDK), QEMU/KVM and suitable VM images. Open vSwitch should be running
+before proceeding.
 
 Configuration Steps
 -------------------
@@ -172,7 +172,7 @@ Once complete, check the cached routes using ovs-appctl command::
 
 If the tunnel route is missing, adding it now::
 
-    $ ovs-appctl ovs/route/add 172.168.1.1/24 br-eth1
+    $ ovs-appctl ovs/route/add 172.168.1.1/24 br-phy
 
 Repeat these steps if necessary for `host2`, but using ``192.168.1.1`` and
 ``172.168.1.2`` for the VM and tunnel interface IP addresses, respectively.

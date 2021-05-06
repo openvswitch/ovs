@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # Copyright (c) 2009, 2010, 2011, 2012, 2015, 2017 Nicira, Inc.
 #

@@ -192,9 +192,8 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
             sizeof(struct dp_packet) -
             offsetof(struct dp_packet, l2_pad_size));
 
-#ifdef DPDK_NETDEV
-    new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
-#endif
+    *dp_packet_ol_flags_ptr(new_buffer) = *dp_packet_ol_flags_ptr(buffer);
+    *dp_packet_ol_flags_ptr(new_buffer) &= DP_PACKET_OL_SUPPORTED_MASK;
 
     if (dp_packet_rss_valid(buffer)) {
         dp_packet_set_rss_hash(new_buffer, dp_packet_get_rss_hash(buffer));
@@ -242,8 +241,8 @@ dp_packet_copy__(struct dp_packet *b, uint8_t *new_base,
 
 /* Reallocates 'b' so that it has exactly 'new_headroom' and 'new_tailroom'
  * bytes of headroom and tailroom, respectively. */
-static void
-dp_packet_resize__(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
+void
+dp_packet_resize(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
 {
     void *new_base, *new_data;
     size_t new_allocated;
@@ -296,7 +295,7 @@ void
 dp_packet_prealloc_tailroom(struct dp_packet *b, size_t size)
 {
     if (size > dp_packet_tailroom(b)) {
-        dp_packet_resize__(b, dp_packet_headroom(b), MAX(size, 64));
+        dp_packet_resize(b, dp_packet_headroom(b), MAX(size, 64));
     }
 }
 
@@ -307,7 +306,7 @@ void
 dp_packet_prealloc_headroom(struct dp_packet *b, size_t size)
 {
     if (size > dp_packet_headroom(b)) {
-        dp_packet_resize__(b, MAX(size, 64), dp_packet_tailroom(b));
+        dp_packet_resize(b, MAX(size, 64), dp_packet_tailroom(b));
     }
 }
 

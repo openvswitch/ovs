@@ -49,7 +49,7 @@
 
 #include "openvswitch/types.h"
 #include <stdint.h>
-#ifdef RTE_EXEC_ENV_BSDAPP
+#ifdef RTE_EXEC_ENV_FREEBSD
 #include <sys/endian.h>
 #else
 #include <endian.h>
@@ -127,9 +127,9 @@
 #define RTE_BE16(v) (OVS_FORCE rte_be16_t)(RTE_STATIC_BSWAP16(v))
 #define RTE_BE32(v) (OVS_FORCE rte_be32_t)(RTE_STATIC_BSWAP32(v))
 #define RTE_BE64(v) (OVS_FORCE rte_be64_t)(RTE_STATIC_BSWAP64(v))
-#define RTE_LE16(v) (OVS_FORCE rte_be16_t)(v)
-#define RTE_LE32(v) (OVS_FORCE rte_be32_t)(v)
-#define RTE_LE64(v) (OVS_FORCE rte_be64_t)(v)
+#define RTE_LE16(v) (OVS_FORCE rte_le16_t)(v)
+#define RTE_LE32(v) (OVS_FORCE rte_le32_t)(v)
+#define RTE_LE64(v) (OVS_FORCE rte_le64_t)(v)
 #else
 #error Unsupported endianness.
 #endif

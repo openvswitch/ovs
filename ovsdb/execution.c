@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2017 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -329,16 +329,30 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     struct ovsdb_row *row = NULL;
-    const struct json *uuid_name, *row_json;
+    const struct json *uuid_json, *uuid_name, *row_json;
     struct ovsdb_error *error;
     struct uuid row_uuid;
 
     table = parse_table(x, parser, "table");
+    uuid_json = ovsdb_parser_member(parser, "uuid", OP_STRING | OP_OPTIONAL);
     uuid_name = ovsdb_parser_member(parser, "uuid-name", OP_ID | OP_OPTIONAL);
     row_json = ovsdb_parser_member(parser, "row", OP_OBJECT);
     error = ovsdb_parser_get_error(parser);
     if (error) {
         return error;
+    }
+
+    if (uuid_json) {
+        if (!uuid_from_string(&row_uuid, json_string(uuid_json))) {
+            return ovsdb_syntax_error(uuid_json, NULL, "bad uuid");
+        }
+
+        if (!ovsdb_txn_may_create_row(table, &row_uuid)) {
+            return ovsdb_syntax_error(uuid_json, "duplicate uuid",
+                                      "This UUID would duplicate a UUID "
+                                      "already present within the table or "
+                                      "deleted within the same transaction.");
+        }
     }
 
     if (uuid_name) {
@@ -350,9 +364,13 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                                       "This \"uuid-name\" appeared on an "
                                       "earlier \"insert\" operation.");
         }
-        row_uuid = symbol->uuid;
+        if (uuid_json) {
+            symbol->uuid = row_uuid;
+        } else {
+            row_uuid = symbol->uuid;
+        }
         symbol->created = true;
-    } else {
+    } else if (!uuid_json) {
         uuid_generate(&row_uuid);
     }
 
@@ -562,7 +580,6 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     const struct json *mutations_json;
     struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_mutation_set mutations = OVSDB_MUTATION_SET_INITIALIZER;
-    struct ovsdb_row *row = NULL;
     struct mutate_row_cbdata mr;
     struct ovsdb_error *error;
 
@@ -595,7 +612,6 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         json_object_put(result, "count", json_integer_create(mr.n_matches));
     }
 
-    ovsdb_row_destroy(row);
     ovsdb_mutation_set_destroy(&mutations);
     ovsdb_condition_destroy(&condition);
 
@@ -696,7 +712,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     long long int timeout_msec = 0;
     size_t i;
 
-    timeout = ovsdb_parser_member(parser, "timeout", OP_NUMBER | OP_OPTIONAL);
+    timeout = ovsdb_parser_member(parser, "timeout", OP_INTEGER | OP_OPTIONAL);
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
     columns_json = ovsdb_parser_member(parser, "columns",
                                        OP_ARRAY | OP_OPTIONAL);
@@ -714,7 +730,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     }
     if (!error) {
         if (timeout) {
-            timeout_msec = MIN(LLONG_MAX, json_real(timeout));
+            timeout_msec = json_integer(timeout);
             if (timeout_msec < 0) {
                 error = ovsdb_syntax_error(timeout, NULL,
                                            "timeout must be nonnegative");

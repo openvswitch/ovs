@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -967,7 +967,7 @@ ovsdb_txn_complete(struct ovsdb_txn *txn)
 {
     if (!ovsdb_txn_is_empty(txn)) {
 
-        txn->db->run_triggers = true;
+        txn->db->run_triggers_now = txn->db->run_triggers = true;
         ovsdb_monitors_commit(txn->db, txn);
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
@@ -1287,6 +1287,26 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
     }
 }
 
+/* Returns true if 'row_uuid' may be used as the UUID for a newly created row
+ * in 'table' (that is, that it is unique within 'table'), false otherwise. */
+bool
+ovsdb_txn_may_create_row(const struct ovsdb_table *table,
+                         const struct uuid *row_uuid)
+{
+    /* If a row 'row_uuid' currently exists, disallow creating a duplicate. */
+    if (ovsdb_table_get_row(table, row_uuid)) {
+        return false;
+    }
+
+    /* If a row 'row_uuid' previously existed in this transaction, disallow
+     * creating a new row with the same UUID. */
+    if (find_txn_row(table, row_uuid)) {
+        return false;
+    }
+
+    return true;
+}
+
 void
 ovsdb_txn_add_comment(struct ovsdb_txn *txn, const char *s)
 {
@@ -1416,9 +1436,9 @@ ovsdb_txn_history_run(struct ovsdb *db)
 }
 
 void
-ovsdb_txn_history_init(struct ovsdb *db)
+ovsdb_txn_history_init(struct ovsdb *db, bool need_txn_history)
 {
-    db->need_txn_history = true;
+    db->need_txn_history = need_txn_history;
     db->n_txn_history = 0;
     ovs_list_init(&db->txn_history);
 }

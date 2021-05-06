@@ -43,8 +43,11 @@ void sset_clone(struct sset *, const struct sset *);
 void sset_swap(struct sset *, struct sset *);
 void sset_moved(struct sset *);
 
+/* String parsing and formatting. */
 void sset_from_delimited_string(struct sset *, const char *s,
                                 const char *delimiters);
+char *sset_join(const struct sset *,
+                const char *delimiter, const char *terminator);
 
 /* Count. */
 bool sset_is_empty(const struct sset *);

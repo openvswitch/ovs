@@ -506,6 +506,34 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_TUN_ERSPAN_HWID,
 
+    /* "tun_gtpu_flags".
+     *
+     * GTP-U tunnel flags.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_ET_GTPU_FLAGS(15) since v2.13.
+     */
+    MFF_TUN_GTPU_FLAGS,
+
+    /* "tun_gtpu_msgtype".
+     *
+     * GTP-U tunnel message type.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_ET_GTPU_MSGTYPE(16) since v2.13.
+     */
+    MFF_TUN_GTPU_MSGTYPE,
+
 #if TUN_METADATA_NUM_OPTS == 64
     /* "tun_metadata<N>".
      *
@@ -824,7 +852,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_nw_proto".
      *
      * The "protocol" byte in the IPv4 or IPv6 header for the original
-     * direction conntrack tuple, or of the master conntrack entry, if the
+     * direction conntrack tuple, or of the parent conntrack entry, if the
      * current connection is a related connection.
      *
      * The value is initially zero and populated by the CT action.  The value
@@ -845,7 +873,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_nw_src".
      *
      * IPv4 source address of the original direction tuple of the conntrack
-     * entry, or of the master conntrack entry, if the current connection is a
+     * entry, or of the parent conntrack entry, if the current connection is a
      * related connection.
      *
      * The value is populated by the CT action.
@@ -864,7 +892,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_nw_dst".
      *
      * IPv4 destination address of the original direction tuple of the
-     * conntrack entry, or of the master conntrack entry, if the current
+     * conntrack entry, or of the parent conntrack entry, if the current
      * connection is a related connection.
      *
      * The value is populated by the CT action.
@@ -883,7 +911,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_ipv6_src".
      *
      * IPv6 source address of the original direction tuple of the conntrack
-     * entry, or of the master conntrack entry, if the current connection is a
+     * entry, or of the parent conntrack entry, if the current connection is a
      * related connection.
      *
      * The value is populated by the CT action.
@@ -902,7 +930,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_ipv6_dst".
      *
      * IPv6 destination address of the original direction tuple of the
-     * conntrack entry, or of the master conntrack entry, if the current
+     * conntrack entry, or of the parent conntrack entry, if the current
      * connection is a related connection.
      *
      * The value is populated by the CT action.
@@ -921,7 +949,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_tp_src".
      *
      * Transport layer source port of the original direction tuple of the
-     * conntrack entry, or of the master conntrack entry, if the current
+     * conntrack entry, or of the parent conntrack entry, if the current
      * connection is a related connection.
      *
      * The value is populated by the CT action.
@@ -939,7 +967,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_tp_dst".
      *
      * Transport layer destination port of the original direction tuple of the
-     * conntrack entry, or of the master conntrack entry, if the current
+     * conntrack entry, or of the parent conntrack entry, if the current
      * connection is a related connection.
      *
      * The value is populated by the CT action.
@@ -1943,6 +1971,9 @@ struct mf_bitmap {
 
 bool mf_bitmap_is_superset(const struct mf_bitmap *super,
                            const struct mf_bitmap *sub);
+struct mf_bitmap mf_bitmap_and(struct mf_bitmap, struct mf_bitmap);
+struct mf_bitmap mf_bitmap_or(struct mf_bitmap, struct mf_bitmap);
+struct mf_bitmap mf_bitmap_not(struct mf_bitmap);
 
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGn cases. */

@@ -830,7 +830,7 @@ OvsCreateAndAddPackets(PVOID userData,
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
     while (nb) {
         elem = OvsCreateQueueNlPacket(userData, userDataLen,
-                                    cmd, vport, key, nbl, nb,
+                                    cmd, vport, key, NULL, nbl, nb,
                                     isRecv, hdrInfo);
         if (elem) {
             InsertTailList(list, &elem->link);
@@ -1013,6 +1013,7 @@ OvsCreateQueueNlPacket(PVOID userData,
                        UINT32 cmd,
                        POVS_VPORT_ENTRY vport,
                        OvsFlowKey *key,
+                       OvsIPv4TunnelKey *tunnelKey,
                        PNET_BUFFER_LIST nbl,
                        PNET_BUFFER nb,
                        BOOLEAN isRecv,
@@ -1025,7 +1026,6 @@ OvsCreateQueueNlPacket(PVOID userData,
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
     PNDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo = NULL;
     PVOID vlanTag;
-    OvsIPv4TunnelKey *tunnelKey = (OvsIPv4TunnelKey *)&key->tunKey;
     UINT32 pid;
     UINT32 nlMsgSize;
     NL_BUFFER nlBuf;
@@ -1127,7 +1127,13 @@ OvsCreateQueueNlPacket(PVOID userData,
         }
     }
 
-    /* XXX must send OVS_PACKET_ATTR_EGRESS_TUN_KEY if set by vswtchd */
+    /* Set OVS_PACKET_ATTR_EGRESS_TUN_KEY attribute */
+    if (tunnelKey) {
+        if (MapFlowTunKeyToNlKey(&nlBuf, tunnelKey,
+                                 OVS_PACKET_ATTR_EGRESS_TUN_KEY) != STATUS_SUCCESS) {
+            goto fail;
+        }
+    }
     if (userData){
         if (!NlMsgPutTailUnspec(&nlBuf, OVS_PACKET_ATTR_USERDATA,
                                 userData, (UINT16)userDataLen)) {

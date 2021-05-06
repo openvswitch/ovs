@@ -107,6 +107,7 @@ struct netdev_tunnel_config {
     bool out_key_flow;
     ovs_be64 out_key;
 
+    ovs_be16 payload_ethertype;
     ovs_be16 dst_port;
 
     bool ip_src_flow;
@@ -179,6 +180,8 @@ bool netdev_mtu_is_user_config(struct netdev *);
 int netdev_get_ifindex(const struct netdev *);
 int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
 enum netdev_pt_mode netdev_get_pt_mode(const struct netdev *);
+void netdev_set_dpif_type(struct netdev *, const char *);
+const char *netdev_get_dpif_type(const struct netdev *);
 
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);

@@ -31,20 +31,17 @@ you need at least the following packages.
 - automake
 - libtool-base
 - gmake
-- python27
-- py27-six
-- py27-xml
+- python37
 
 Some components have additional requirements. Refer to :doc:`general` for more
 information.
 
-Assuming you are running NetBSD/amd64 6.1.2, you can download and install
+Assuming you are running NetBSD/amd64 7.0.2, you can download and install
 pre-built binary packages as the following::
 
     $ PKG_PATH=http://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/7.0.2/All/
     $ export PKG_PATH
-    $ pkg_add automake libtool-base gmake python27 py27-six py27-xml \
-        pkg_alternatives
+    $ pkg_add automake libtool-base gmake python37 pkg_alternatives
 
 .. note::
   You might get some warnings about minor version mismatch. These can be safely

@@ -85,6 +85,8 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
  * assigned to OBJECT. */
 #ifdef __GNUC__
 #define OVS_TYPEOF(OBJECT) typeof(OBJECT)
+#elif defined (__cplusplus)
+#define OVS_TYPEOF(OBJECT) decltype(OBJECT)
 #else
 #define OVS_TYPEOF(OBJECT) void *
 #endif

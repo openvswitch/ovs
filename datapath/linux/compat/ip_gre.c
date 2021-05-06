@@ -623,7 +623,7 @@ static const struct gre_protocol ipgre_protocol = {
 	.err_handler = __gre_err,
 };
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[],
 				 struct netlink_ext_ack *extack)
 #else
@@ -646,7 +646,7 @@ static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[])
 	return 0;
 }
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[],
 			      struct netlink_ext_ack *extack)
 #else
@@ -672,7 +672,7 @@ static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
 	}
 
 out:
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	return ipgre_tunnel_validate(tb, data, NULL);
 #else
 	return ipgre_tunnel_validate(tb, data);
@@ -707,7 +707,7 @@ enum {
 
 #define RPL_IFLA_GRE_MAX (IFLA_GRE_ERSPAN_HWID + 1)
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 static int erspan_validate(struct nlattr *tb[], struct nlattr *data[],
 			   struct netlink_ext_ack *extack)
 #else
@@ -720,7 +720,7 @@ static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
 	if (!data)
 		return 0;
 
-#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+#ifdef HAVE_RTNLOP_VALIDATE_WITH_EXTACK
 	ret = ipgre_tap_validate(tb, data, NULL);
 #else
 	ret = ipgre_tap_validate(tb, data);
@@ -922,124 +922,6 @@ static int erspan_tunnel_init(struct net_device *dev)
 	return ip_tunnel_init(dev);
 }
 
-static int ipgre_header(struct sk_buff *skb, struct net_device *dev,
-			unsigned short type,
-			const void *daddr, const void *saddr, unsigned int len)
-{
-	struct ip_tunnel *t = netdev_priv(dev);
-	struct iphdr *iph;
-	struct gre_base_hdr *greh;
-
-	iph = (struct iphdr *)__skb_push(skb, t->hlen + sizeof(*iph));
-	greh = (struct gre_base_hdr *)(iph+1);
-	greh->flags = gre_tnl_flags_to_gre_flags(t->parms.o_flags);
-	greh->protocol = htons(type);
-
-	memcpy(iph, &t->parms.iph, sizeof(struct iphdr));
-
-	/* Set the source hardware address. */
-	if (saddr)
-		memcpy(&iph->saddr, saddr, 4);
-	if (daddr)
-		memcpy(&iph->daddr, daddr, 4);
-	if (iph->daddr)
-		return t->hlen + sizeof(*iph);
-
-	return -(t->hlen + sizeof(*iph));
-}
-
-static int ipgre_header_parse(const struct sk_buff *skb, unsigned char *haddr)
-{
-	const struct iphdr *iph = (const struct iphdr *) skb_mac_header(skb);
-	memcpy(haddr, &iph->saddr, 4);
-	return 4;
-}
-
-static const struct header_ops ipgre_header_ops = {
-	.create	= ipgre_header,
-	.parse	= ipgre_header_parse,
-};
-
-static int ipgre_tunnel_init(struct net_device *dev)
-{
-	struct ip_tunnel *tunnel = netdev_priv(dev);
-	struct iphdr *iph = &tunnel->parms.iph;
-
-	__gre_tunnel_init(dev);
-
-	memcpy(dev->dev_addr, &iph->saddr, 4);
-	memcpy(dev->broadcast, &iph->daddr, 4);
-
-	dev->flags		= IFF_NOARP;
-	netif_keep_dst(dev);
-	dev->addr_len		= 4;
-
-	if (!tunnel->collect_md) {
-		dev->header_ops = &ipgre_header_ops;
-	}
-
-	return ip_tunnel_init(dev);
-}
-
-static netdev_tx_t ipgre_xmit(struct sk_buff *skb,
-			      struct net_device *dev)
-{
-	struct ip_tunnel *tunnel = netdev_priv(dev);
-	const struct iphdr *tnl_params;
-
-	if (tunnel->collect_md) {
-		gre_fb_xmit(skb);
-		return NETDEV_TX_OK;
-	}
-
-	if (dev->header_ops) {
-		/* Need space for new headers */
-		if (skb_cow_head(skb, dev->needed_headroom -
-				      (tunnel->hlen + sizeof(struct iphdr))))
-			goto free_skb;
-
-		tnl_params = (const struct iphdr *)skb->data;
-
-		/* Pull skb since ip_tunnel_xmit() needs skb->data pointing
-		 * to gre header.
-		 */
-		skb_pull(skb, tunnel->hlen + sizeof(struct iphdr));
-		skb_reset_mac_header(skb);
-	} else {
-		if (skb_cow_head(skb, dev->needed_headroom))
-			goto free_skb;
-
-		tnl_params = &tunnel->parms.iph;
-	}
-
-	if (gre_handle_offloads(skb, !!(tunnel->parms.o_flags & TUNNEL_CSUM)))
-		goto free_skb;
-
-	__gre_xmit(skb, dev, tnl_params, skb->protocol);
-	return NETDEV_TX_OK;
-
-free_skb:
-	kfree_skb(skb);
-	dev->stats.tx_dropped++;
-	return NETDEV_TX_OK;
-}
-
-static const struct net_device_ops ipgre_netdev_ops = {
-	.ndo_init		= ipgre_tunnel_init,
-	.ndo_uninit		= rpl_ip_tunnel_uninit,
-	.ndo_start_xmit		= ipgre_xmit,
-#ifdef	HAVE_RHEL7_MAX_MTU
-	.ndo_size		= sizeof(struct net_device_ops),
-	.extended.ndo_change_mtu = ip_tunnel_change_mtu,
-#else
-	.ndo_change_mtu		= ip_tunnel_change_mtu,
-#endif
-	.ndo_get_stats64	= ip_tunnel_get_stats64,
-#ifdef HAVE_GET_LINK_NET
-	.ndo_get_iflink		= ip_tunnel_get_iflink,
-#endif
-};
-
 static const struct net_device_ops gre_tap_netdev_ops = {
 	.ndo_init		= gre_tap_init,
 	.ndo_uninit		= rpl_ip_tunnel_uninit,
@@ -1099,6 +981,9 @@ static void erspan_setup(struct net_device *dev)
 
 	eth_hw_addr_random(dev);
 	ether_setup(dev);
+#ifdef HAVE_NET_DEVICE_MAX_MTU
+	dev->max_mtu = 0;
+#endif
 	dev->netdev_ops = &erspan_netdev_ops;
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
@@ -1211,8 +1096,8 @@ static const struct nla_policy ipgre_policy[RPL_IFLA_GRE_MAX + 1] = {
 	[IFLA_GRE_OFLAGS]	= { .type = NLA_U16 },
 	[IFLA_GRE_IKEY]		= { .type = NLA_U32 },
 	[IFLA_GRE_OKEY]		= { .type = NLA_U32 },
-	[IFLA_GRE_LOCAL]	= { .len = FIELD_SIZEOF(struct iphdr, saddr) },
-	[IFLA_GRE_REMOTE]	= { .len = FIELD_SIZEOF(struct iphdr, daddr) },
+	[IFLA_GRE_LOCAL]	= { .len = sizeof_field(struct iphdr, saddr) },
+	[IFLA_GRE_REMOTE]	= { .len = sizeof_field(struct iphdr, daddr) },
 	[IFLA_GRE_TTL]		= { .type = NLA_U8 },
 	[IFLA_GRE_TOS]		= { .type = NLA_U8 },
 	[IFLA_GRE_PMTUDISC]	= { .type = NLA_U8 },

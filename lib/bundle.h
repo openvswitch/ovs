@@ -40,11 +40,11 @@ struct ofputil_port_map;
  *
  * See lib/ofp-actions.c for NXAST_BUNDLE specification. */
 
-#define BUNDLE_MAX_SLAVES 2048
+#define BUNDLE_MAX_MEMBERS 2048
 
 ofp_port_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         struct flow_wildcards *wc,
-                        bool (*slave_enabled)(ofp_port_t ofp_port, void *aux),
+                        bool (*member_enabled)(ofp_port_t ofp_port, void *aux),
                         void *aux);
 enum ofperr bundle_check(const struct ofpact_bundle *, ofp_port_t max_ports,
                          const struct match *);

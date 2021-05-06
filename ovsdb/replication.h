@@ -39,13 +39,15 @@ struct ovsdb;
  *   replication_get_last_error() should be call within the main loop
  *   whenever OVSDB server runs in the backup mode.
  *
- *  - set_blacklist_tables(), get_blacklist_tables(),
- *    disconnect_active_server() and replication_usage() are support functions
- *    used mainly by uinxctl commands.
+ * - set_excluded_tables(), get_excluded_tables(), disconnect_active_server()
+ *   and replication_usage() are support functions used mainly by unixctl
+ *   commands.
  */
 
+#define REPLICATION_DEFAULT_PROBE_INTERVAL 60000
+
 void replication_init(const char *sync_from, const char *exclude_tables,
-                      const struct uuid *server);
+                      const struct uuid *server, int probe_interval);
 void replication_run(void);
 void replication_wait(void);
 void replication_destroy(void);
@@ -54,10 +56,11 @@ void replication_add_local_db(const char *databse, struct ovsdb *db);
 bool replication_is_alive(void);
 int replication_get_last_error(void);
 char *replication_status(void);
+void replication_set_probe_interval(int);
 
-char *set_blacklist_tables(const char *blacklist, bool dryrun)
+char *set_excluded_tables(const char *excluded, bool dryrun)
     OVS_WARN_UNUSED_RESULT;
-char *get_blacklist_tables(void) OVS_WARN_UNUSED_RESULT;
+char *get_excluded_tables(void) OVS_WARN_UNUSED_RESULT;
 void disconnect_active_server(void);
 
 #endif /* ovsdb/replication.h */

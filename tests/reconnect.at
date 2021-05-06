@@ -2,28 +2,19 @@ AT_BANNER([reconnect library])
 
 m4_define([__RECONNECT_CHECK],
   [AT_SETUP([$1])
-   $2
    AT_KEYWORDS([reconnect])
-   AT_DATA([input], [$3])
-   AT_CHECK([$4], [0], [$5])
+   AT_DATA([input], [$2])
+   AT_CHECK([$3], [0], [$4])
    AT_CLEANUP])
 
 m4_define([RECONNECT_CHECK],
   [__RECONNECT_CHECK(
      [$1 - C],
-     [],
      [$2],
      [ovstest test-reconnect < input],
      [$3])
    __RECONNECT_CHECK(
-     [$1 - Python2],
-     [AT_SKIP_IF([test $HAVE_PYTHON2 = no])],
-     [$2],
-     [$PYTHON2 $srcdir/test-reconnect.py < input],
-     [$3])
-   __RECONNECT_CHECK(
      [$1 - Python3],
-     [AT_SKIP_IF([test $HAVE_PYTHON3 = no])],
      [$2],
      [$PYTHON3 $srcdir/test-reconnect.py < input],
      [$3])])
@@ -47,7 +38,12 @@ RECONNECT_CHECK([quick connect, idle disconnect],
 run
 connected
 
-# Send inactivity probe.
+# Try timeout without noting that we tried to receive.
+# (This does nothing since we never timeout in this case.)
+timeout
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
 timeout
 run
 
@@ -70,7 +66,13 @@ connected
   connected
   last connected 0 ms ago, connected 0 ms total
 
-# Send inactivity probe.
+# Try timeout without noting that we tried to receive.
+# (This does nothing since we never timeout in this case.)
+timeout
+  no timeout
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
 timeout
   advance 5000 ms
 
@@ -108,7 +110,12 @@ advance 500
 run
 connected
 
-# Send inactivity probe.
+# Try timeout without noting that we tried to receive.
+# (This does nothing since we never timeout in this case.)
+timeout
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
 timeout
 run
 
@@ -140,7 +147,13 @@ connected
   connected
   last connected 0 ms ago, connected 0 ms total
 
-# Send inactivity probe.
+# Try timeout without noting that we tried to receive.
+# (This does nothing since we never timeout in this case.)
+timeout
+  no timeout
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
 timeout
   advance 5000 ms
 
@@ -366,7 +379,8 @@ connect-failed
 
 ######################################################################
 RECONNECT_CHECK([connections with no data preserve backoff],
-  [enable
+  [receive-attempted LLONG_MAX
+enable
 
 # First connect, then idle timeout kills connection.
 run
@@ -406,6 +420,7 @@ disconnected
 # Back off for 4000 ms.
 timeout
 ], [### t=1000 ###
+receive-attempted LLONG_MAX
 enable
   in BACKOFF for 0 ms (0 ms backoff)
 
@@ -1092,7 +1107,8 @@ timeout
 
 ######################################################################
 RECONNECT_CHECK([max-tries of 1 honored],
-  [set-max-tries 1
+  [receive-attempted LLONG_MAX
+set-max-tries 1
 enable
 
 # Connection succeeds.
@@ -1109,6 +1125,7 @@ run
 disconnected
 ],
   [### t=1000 ###
+receive-attempted LLONG_MAX
 set-max-tries 1
   1 tries left
 enable
@@ -1194,6 +1211,8 @@ activity
 
 # Connection times out.
 timeout
+receive-attempted LLONG_MAX
+timeout
 run
 timeout
 run
@@ -1252,6 +1271,9 @@ activity
   created 1000, last activity 3000, last connected 2000
 
 # Connection times out.
+timeout
+  no timeout
+receive-attempted LLONG_MAX
 timeout
   advance 5000 ms
 

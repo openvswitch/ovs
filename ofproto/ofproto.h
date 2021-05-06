@@ -234,6 +234,7 @@ struct ofproto_controller {
                                  * be negotiated for a session. */
 
     /* OpenFlow packet-in rate-limiting. */
+    int max_pktq_size;          /* Maximum number of packet-in to be queued. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
     int burst_limit;            /* Limit on accumulating packet credits. */
 
@@ -308,6 +309,8 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 
 #define OFPROTO_FLOW_LIMIT_DEFAULT 200000
 #define OFPROTO_MAX_IDLE_DEFAULT 10000 /* ms */
+#define OFPROTO_MAX_REVALIDATOR_DEFAULT 500 /* ms */
+#define OFPROTO_MIN_REVALIDATE_PPS_DEFAULT 5
 
 const char *ofproto_port_open_type(const struct ofproto *,
                                    const char *port_type);
@@ -335,6 +338,8 @@ void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_bundle_idle_timeout(unsigned timeout);
 void ofproto_set_flow_limit(unsigned limit);
 void ofproto_set_max_idle(unsigned max_idle);
+void ofproto_set_max_revalidator(unsigned max_revalidator);
+void ofproto_set_min_revalidate_pps(unsigned min_revalidate_pps);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);
@@ -346,6 +351,7 @@ void ofproto_set_threads(int n_handlers, int n_revalidators);
 void ofproto_type_set_config(const char *type,
                              const struct smap *other_config);
 void ofproto_set_dp_desc(struct ofproto *, const char *dp_desc);
+void ofproto_set_serial_desc(struct ofproto *p, const char *serial_desc);
 int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
@@ -362,6 +368,13 @@ int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 int ofproto_set_rstp(struct ofproto *, const struct ofproto_rstp_settings *);
 int ofproto_get_rstp_status(struct ofproto *, struct ofproto_rstp_status *);
 void ofproto_set_vlan_limit(int vlan_limit);
+void ofproto_ct_set_zone_timeout_policy(const char *datapath_type,
+                                        uint16_t zone,
+                                        struct simap *timeout_policy);
+void ofproto_ct_del_zone_timeout_policy(const char *datapath_type,
+                                        uint16_t zone);
+void ofproto_get_datapath_cap(const char *datapath_type,
+                              struct smap *dp_cap);
 
 /* Configuration of ports. */
 void ofproto_port_unregister(struct ofproto *, ofp_port_t ofp_port);
@@ -375,7 +388,8 @@ bool ofproto_port_bfd_status_changed(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_get_bfd_status(struct ofproto *, ofp_port_t ofp_port,
                                 struct smap *);
 int ofproto_port_is_lacp_current(struct ofproto *, ofp_port_t ofp_port);
-int ofproto_port_get_lacp_stats(const struct ofport *, struct lacp_slave_stats *);
+int ofproto_port_get_lacp_stats(const struct ofport *,
+                                struct lacp_member_stats *);
 int ofproto_port_set_stp(struct ofproto *, ofp_port_t ofp_port,
                          const struct ofproto_port_stp_settings *);
 int ofproto_port_get_stp_status(struct ofproto *, ofp_port_t ofp_port,
@@ -428,8 +442,8 @@ enum port_priority_tags_mode {
 struct ofproto_bundle_settings {
     char *name;                 /* For use in log messages. */
 
-    ofp_port_t *slaves;         /* OpenFlow port numbers for slaves. */
-    size_t n_slaves;
+    ofp_port_t *members;        /* OpenFlow port numbers for members. */
+    size_t n_members;
 
     enum port_vlan_mode vlan_mode; /* Selects mode for vlan and trunks */
     uint16_t qinq_ethtype;
@@ -439,10 +453,10 @@ struct ofproto_bundle_settings {
     enum port_priority_tags_mode use_priority_tags;
                                 /* Use 802.1p tag for frames in VLAN 0? */
 
-    struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
+    struct bond_settings *bond; /* Must be nonnull iff if n_members > 1. */
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
-    struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */
+    struct lacp_member_settings *lacp_members; /* Array of n_members elements. */
 
     bool protected;             /* Protected port mode */
 };
@@ -531,7 +545,7 @@ void ofproto_configure_table(struct ofproto *, int table_id,
 /* Configuration querying. */
 bool ofproto_has_snoops(const struct ofproto *);
 void ofproto_get_snoops(const struct ofproto *, struct sset *);
-void ofproto_get_all_flows(struct ofproto *p, struct ds *);
+void ofproto_get_all_flows(struct ofproto *p, struct ds *, bool);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
 

@@ -590,6 +590,8 @@ open_vconn__(const char *name, enum open_target target,
     } else if (!open_vconn_socket(socket_name, vconnp)) {
         /* Fall Through. */
     } else {
+        free(bridge_path);
+        free(socket_name);
         ovs_fatal(0, "%s is not a bridge or a socket", name);
     }
 
@@ -1724,6 +1726,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 
         ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
+        minimatch_destroy(&fm->match);
     }
 
     bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
@@ -2284,6 +2287,14 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
                                                &usable_protocols);
             if (error) {
                 ovs_fatal(0, "%s", error);
+            }
+
+            if (!(usable_protocols & allowed_protocols)) {
+                char *allowed_s =
+                                ofputil_protocols_to_string(allowed_protocols);
+                char *usable_s = ofputil_protocols_to_string(usable_protocols);
+                ovs_fatal(0, "none of the usable flow formats (%s) is among "
+                         "the allowed flow formats (%s)", usable_s, allowed_s);
             }
 
             msg = ofpbuf_new(0);
@@ -4009,6 +4020,7 @@ ofctl_meter_mod__(const char *bridge, const char *str, int command)
     enum ofputil_protocol usable_protocols;
     enum ofp_version version;
 
+    memset(&mm, 0, sizeof mm);
     if (str) {
         char *error;
         error = parse_ofp_meter_mod_str(&mm, str, command, &usable_protocols);
@@ -4019,7 +4031,6 @@ ofctl_meter_mod__(const char *bridge, const char *str, int command)
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.command = command;
         mm.meter.meter_id = OFPM13_ALL;
-        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
@@ -4039,6 +4050,7 @@ ofctl_meter_request__(const char *bridge, const char *str,
     enum ofputil_protocol protocol;
     enum ofp_version version;
 
+    memset(&mm, 0, sizeof mm);
     if (str) {
         char *error;
         error = parse_ofp_meter_mod_str(&mm, str, -1, &usable_protocols);
@@ -4048,7 +4060,6 @@ ofctl_meter_request__(const char *bridge, const char *str,
     } else {
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.meter.meter_id = OFPM13_ALL;
-        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);

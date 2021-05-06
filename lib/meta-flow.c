@@ -391,6 +391,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_NSH_C3:
     case MFF_NSH_C4:
         return !wc->masks.nsh.context[mf->id - MFF_NSH_C1];
+    case MFF_TUN_GTPU_FLAGS:
+        return !wc->masks.tunnel.gtpu_flags;
+    case MFF_TUN_GTPU_MSGTYPE:
+        return !wc->masks.tunnel.gtpu_msgtype;
 
     case MFF_N_IDS:
     default:
@@ -530,6 +534,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_ERSPAN_VER:
     case MFF_TUN_ERSPAN_DIR:
     case MFF_TUN_ERSPAN_HWID:
+    case MFF_TUN_GTPU_FLAGS:
+    case MFF_TUN_GTPU_MSGTYPE:
     CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
@@ -710,6 +716,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_ERSPAN_HWID:
         value->u8 = flow->tunnel.erspan_hwid;
+        break;
+    case MFF_TUN_GTPU_FLAGS:
+        value->u8 = flow->tunnel.gtpu_flags;
+        break;
+    case MFF_TUN_GTPU_MSGTYPE:
+        value->u8 = flow->tunnel.gtpu_msgtype;
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_read(&flow->tunnel, mf, value);
@@ -1041,6 +1053,12 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_TUN_ERSPAN_HWID:
         match_set_tun_erspan_hwid(match, value->u8);
+        break;
+    case MFF_TUN_GTPU_FLAGS:
+        match_set_tun_gtpu_flags(match, value->u8);
+        break;
+    case MFF_TUN_GTPU_MSGTYPE:
+        match_set_tun_gtpu_msgtype(match, value->u8);
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, value, NULL, match, err_str);
@@ -1459,6 +1477,12 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_TUN_ERSPAN_HWID:
         flow->tunnel.erspan_hwid = value->u8;
         break;
+    case MFF_TUN_GTPU_FLAGS:
+        flow->tunnel.gtpu_flags = value->u8;
+        break;
+    case MFF_TUN_GTPU_MSGTYPE:
+        flow->tunnel.gtpu_msgtype = value->u8;
+        break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_write(&flow->tunnel, mf, value);
         break;
@@ -1780,6 +1804,8 @@ mf_is_pipeline_field(const struct mf_field *mf)
     case MFF_TUN_ERSPAN_IDX:
     case MFF_TUN_ERSPAN_DIR:
     case MFF_TUN_ERSPAN_HWID:
+    case MFF_TUN_GTPU_FLAGS:
+    case MFF_TUN_GTPU_MSGTYPE:
     CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
@@ -1969,6 +1995,12 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         break;
     case MFF_TUN_ERSPAN_HWID:
         match_set_tun_erspan_hwid_masked(match, 0, 0);
+        break;
+    case MFF_TUN_GTPU_FLAGS:
+        match_set_tun_gtpu_flags_masked(match, 0, 0);
+        break;
+    case MFF_TUN_GTPU_MSGTYPE:
+        match_set_tun_gtpu_msgtype_masked(match, 0, 0);
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, NULL, NULL, match, err_str);
@@ -2296,12 +2328,6 @@ mf_set(const struct mf_field *mf,
     switch (mf->id) {
     case MFF_CT_ZONE:
     case MFF_CT_NW_PROTO:
-    case MFF_CT_NW_SRC:
-    case MFF_CT_NW_DST:
-    case MFF_CT_IPV6_SRC:
-    case MFF_CT_IPV6_DST:
-    case MFF_CT_TP_SRC:
-    case MFF_CT_TP_DST:
     case MFF_RECIRC_ID:
     case MFF_PACKET_TYPE:
     case MFF_CONJ_ID:
@@ -2377,6 +2403,12 @@ mf_set(const struct mf_field *mf,
     case MFF_TUN_ERSPAN_HWID:
         match_set_tun_erspan_hwid_masked(match, value->u8, mask->u8);
         break;
+    case MFF_TUN_GTPU_FLAGS:
+        match_set_tun_gtpu_flags_masked(match, value->u8, mask->u8);
+        break;
+    case MFF_TUN_GTPU_MSGTYPE:
+        match_set_tun_gtpu_msgtype_masked(match, value->u8, mask->u8);
+        break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, value, mask, match, err_str);
         break;
@@ -2417,6 +2449,30 @@ mf_set(const struct mf_field *mf,
     case MFF_CT_LABEL:
         match_set_ct_label_masked(match, ntoh128(value->be128),
                                   ntoh128(mask->be128));
+        break;
+
+    case MFF_CT_NW_SRC:
+        match_set_ct_nw_src_masked(match, value->be32, mask->be32);
+        break;
+
+    case MFF_CT_NW_DST:
+        match_set_ct_nw_dst_masked(match, value->be32, mask->be32);
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        match_set_ct_ipv6_src_masked(match, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_CT_IPV6_DST:
+        match_set_ct_ipv6_dst_masked(match, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_CT_TP_SRC:
+        match_set_ct_tp_src_masked(match, value->be16, mask->be16);
+        break;
+
+    case MFF_CT_TP_DST:
+        match_set_ct_tp_dst_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_ETH_DST:
@@ -3580,4 +3636,28 @@ mf_bitmap_is_superset(const struct mf_bitmap *super,
                       const struct mf_bitmap *sub)
 {
     return bitmap_is_superset(super->bm, sub->bm, MFF_N_IDS);
+}
+
+/* Returns the bitwise-and of 'a' and 'b'. */
+struct mf_bitmap
+mf_bitmap_and(struct mf_bitmap a, struct mf_bitmap b)
+{
+    bitmap_and(a.bm, b.bm, MFF_N_IDS);
+    return a;
+}
+
+/* Returns the bitwise-or of 'a' and 'b'. */
+struct mf_bitmap
+mf_bitmap_or(struct mf_bitmap a, struct mf_bitmap b)
+{
+    bitmap_or(a.bm, b.bm, MFF_N_IDS);
+    return a;
+}
+
+/* Returns the bitwise-not of 'x'. */
+struct mf_bitmap
+mf_bitmap_not(struct mf_bitmap x)
+{
+    bitmap_not(x.bm, MFF_N_IDS);
+    return x;
 }

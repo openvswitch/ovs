@@ -223,6 +223,7 @@ struct raft_install_snapshot_request {
     uint64_t last_term;         /* Term of last_index. */
     struct uuid last_eid;       /* Last entry ID. */
     struct json *last_servers;
+    uint64_t election_timer;
 
     /* Data. */
     struct json *data;

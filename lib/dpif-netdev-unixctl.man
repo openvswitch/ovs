@@ -217,3 +217,12 @@ with port names, which this thread polls.
 .
 .IP "\fBdpif-netdev/pmd-rxq-rebalance\fR [\fIdp\fR]"
 Reassigns rxqs to pmds in the datapath \fIdp\fR based on their current usage.
+.
+.IP "\fBdpif-netdev/bond-show\fR [\fIdp\fR]"
+When "other_config:lb-output-action" is set to "true", the userspace datapath
+handles the load balancing of bonds directly instead of depending on flow
+recirculation (only in balance-tcp mode).
+
+When this is the case, the above command prints the load-balancing information
+of the bonds configured in datapath \fIdp\fR showing the interface associated
+with each bucket (hash).

@@ -85,3 +85,53 @@ OVS_VSWITCHD_STOP(["/dummy@br0: port_del failed/d
 /dummy@br0: failed to add vif1.0 as port/d
 /Dropped 1 log messages in last/d"])
 AT_CLEANUP
+
+AT_SETUP([dpctl - add/mod/del-flows])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0])
+AT_DATA([flows.txt], [dnl
+in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234) 2
+])
+AT_CHECK([ovs-appctl dpctl/add-flows dummy@br0 flows.txt], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+AT_DATA([flows.txt], [dnl
+in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234) 3
+])
+AT_CHECK([ovs-appctl dpctl/mod-flows dummy@br0 flows.txt], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:3
+])
+AT_DATA([flows.txt], [dnl
+in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234)
+])
+AT_CHECK([ovs-appctl dpctl/del-flows dummy@br0 flows.txt], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
+])
+AT_DATA([flows.txt], [dnl
+add in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234) 2
+add in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:03),eth_type(0x1234) 2
+add in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:04),eth_type(0x1234) 2
+modify in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234) 1
+delete in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:03),eth_type(0x1234)
+])
+AT_CHECK([ovs-appctl dpctl/add-flows dummy@br0 flows.txt], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:1
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:04),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+AT_CHECK([ovs-appctl dpctl/del-flows dummy@br0], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
+])
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

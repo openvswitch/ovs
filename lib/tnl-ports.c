@@ -30,7 +30,6 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
-#include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
 
@@ -176,6 +175,9 @@ tnl_type_to_nw_proto(const char type[])
         return IPPROTO_GRE;
     }
     if (!strcmp(type, "vxlan")) {
+        return IPPROTO_UDP;
+    }
+    if (!strcmp(type, "gtpu")) {
         return IPPROTO_UDP;
     }
     return 0;

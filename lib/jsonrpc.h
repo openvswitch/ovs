@@ -51,6 +51,9 @@ void jsonrpc_wait(struct jsonrpc *);
 
 int jsonrpc_get_status(const struct jsonrpc *);
 size_t jsonrpc_get_backlog(const struct jsonrpc *);
+void jsonrpc_set_backlog_threshold(struct jsonrpc *, size_t max_n_msgs,
+                                                     size_t max_backlog_bytes);
+
 unsigned int jsonrpc_get_received_bytes(const struct jsonrpc *);
 const char *jsonrpc_get_name(const struct jsonrpc *);
 
@@ -140,6 +143,9 @@ void jsonrpc_session_set_probe_interval(struct jsonrpc_session *,
                                         int probe_interval);
 void jsonrpc_session_set_dscp(struct jsonrpc_session *,
                               uint8_t dscp);
+void jsonrpc_session_set_backlog_threshold(struct jsonrpc_session *,
+                                           size_t max_n_msgs,
+                                           size_t max_backlog_bytes);
 const char *jsonrpc_session_get_id(const struct jsonrpc_session *);
 
 #endif /* jsonrpc.h */

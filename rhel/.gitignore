@@ -4,5 +4,4 @@ kmod-openvswitch-rhel6.spec
 openvswitch-kmod-fedora.spec
 openvswitch.spec
 openvswitch-fedora.spec
-ovn-fedora.spec
 usr_lib_systemd_system_ovs-vswitchd.service

@@ -42,7 +42,8 @@ struct netdev_flow_api {
      *
      * On success returns 0 and allocates data, on failure returns
      * positive errno. */
-    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump);
+    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump,
+                            bool terse);
     int (*flow_dump_destroy)(struct netdev_flow_dump *);
 
     /* Returns true if there are more flows to dump.
@@ -82,6 +83,10 @@ struct netdev_flow_api {
     int (*flow_del)(struct netdev *, const ovs_u128 *ufid,
                     struct dpif_flow_stats *);
 
+    /* Get the number of flows offloaded to netdev.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_get_n_flows)(struct netdev *, uint64_t *n_flows);
+
     /* Initializies the netdev flow api.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*init_flow_api)(struct netdev *);
@@ -89,6 +94,7 @@ struct netdev_flow_api {
 
 int netdev_register_flow_api_provider(const struct netdev_flow_api *);
 int netdev_unregister_flow_api_provider(const char *type);
+bool netdev_flow_api_equals(const struct netdev *, const struct netdev *);
 
 #ifdef __linux__
 extern const struct netdev_flow_api netdev_offload_tc;

@@ -116,42 +116,67 @@ out_of_memory(void)
 }
 
 void *
-xcalloc(size_t count, size_t size)
+xcalloc__(size_t count, size_t size)
 {
     void *p = count && size ? calloc(count, size) : malloc(1);
-    COVERAGE_INC(util_xalloc);
     if (p == NULL) {
         out_of_memory();
     }
     return p;
+}
+
+void *
+xzalloc__(size_t size)
+{
+    return xcalloc__(1, size);
+}
+
+void *
+xmalloc__(size_t size)
+{
+    void *p = malloc(size ? size : 1);
+    if (p == NULL) {
+        out_of_memory();
+    }
+    return p;
+}
+
+void *
+xrealloc__(void *p, size_t size)
+{
+    p = realloc(p, size ? size : 1);
+    if (p == NULL) {
+        out_of_memory();
+    }
+    return p;
+}
+
+void *
+xcalloc(size_t count, size_t size)
+{
+    COVERAGE_INC(util_xalloc);
+    return xcalloc__(count, size);
 }
 
 void *
 xzalloc(size_t size)
 {
-    return xcalloc(1, size);
+    COVERAGE_INC(util_xalloc);
+    return xzalloc__(size);
 }
 
 void *
 xmalloc(size_t size)
 {
-    void *p = malloc(size ? size : 1);
     COVERAGE_INC(util_xalloc);
-    if (p == NULL) {
-        out_of_memory();
-    }
-    return p;
+    return xmalloc__(size);
 }
 
 void *
 xrealloc(void *p, size_t size)
 {
-    p = realloc(p, size ? size : 1);
     COVERAGE_INC(util_xalloc);
-    if (p == NULL) {
-        out_of_memory();
-    }
-    return p;
+    return xrealloc__(p, size);
 }
 
 void *
@@ -1393,6 +1418,19 @@ bool
 is_all_ones(const void *p, size_t n)
 {
     return is_all_byte(p, n, 0xff);
+}
+
+/* *dst |= *src for 'n' bytes. */
+void
+or_bytes(void *dst_, const void *src_, size_t n)
+{
+    const uint8_t *src = src_;
+    uint8_t *dst = dst_;
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        *dst++ |= *src++;
+    }
 }
 
 /* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'

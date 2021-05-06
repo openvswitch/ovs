@@ -342,6 +342,10 @@ static void
 name_table_change(const struct rtnetlink_change *change,
                   void *aux OVS_UNUSED)
 {
+    if (change && change->irrelevant) {
+        return;
+    }
+
     /* Changes to interface status can cause routing table changes that some
      * versions of the linux kernel do not advertise for some reason. */
     route_table_valid = false;

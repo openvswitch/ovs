@@ -79,9 +79,9 @@ struct registered_dpif_class {
     int refcount;
 };
 static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
-static struct sset dpif_blacklist = SSET_INITIALIZER(&dpif_blacklist);
+static struct sset dpif_disallowed = SSET_INITIALIZER(&dpif_disallowed);
 
-/* Protects 'dpif_classes', including the refcount, and 'dpif_blacklist'. */
+/* Protects 'dpif_classes', including the refcount, and 'dpif_disallowed'. */
 static struct ovs_mutex dpif_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Rate limit for individual messages going to or from the datapath, output at
@@ -134,8 +134,8 @@ dp_register_provider__(const struct dpif_class *new_class)
     struct registered_dpif_class *registered_class;
     int error;
 
-    if (sset_contains(&dpif_blacklist, new_class->type)) {
-        VLOG_DBG("attempted to register blacklisted provider: %s",
+    if (sset_contains(&dpif_disallowed, new_class->type)) {
+        VLOG_DBG("attempted to register disallowed provider: %s",
                  new_class->type);
         return EINVAL;
     }
@@ -219,13 +219,13 @@ dp_unregister_provider(const char *type)
     return error;
 }
 
-/* Blacklists a provider.  Causes future calls of dp_register_provider() with
+/* Disallows a provider.  Causes future calls of dp_register_provider() with
  * a dpif_class which implements 'type' to fail. */
 void
-dp_blacklist_provider(const char *type)
+dp_disallow_provider(const char *type)
 {
     ovs_mutex_lock(&dpif_mutex);
-    sset_add(&dpif_blacklist, type);
+    sset_add(&dpif_disallowed, type);
     ovs_mutex_unlock(&dpif_mutex);
 }
 
@@ -347,6 +347,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
     error = registered_class->dpif_class->open(registered_class->dpif_class,
                                                name, create, &dpif);
     if (!error) {
+        const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
         struct dpif_port_dump port_dump;
         struct dpif_port dpif_port;
 
@@ -363,7 +364,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
             err = netdev_open(dpif_port.name, dpif_port.type, &netdev);
 
             if (!err) {
-                netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+                netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open netdev %s type %s: %s",
@@ -427,14 +428,15 @@ dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
 
 static void
 dpif_remove_netdev_ports(struct dpif *dpif) {
-        struct dpif_port_dump port_dump;
-        struct dpif_port dpif_port;
+    const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
+    struct dpif_port_dump port_dump;
+    struct dpif_port dpif_port;
 
-        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-            if (!dpif_is_tap_port(dpif_port.type)) {
-                netdev_ports_remove(dpif_port.port_no, dpif->dpif_class);
-            }
+    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+        if (!dpif_is_tap_port(dpif_port.type)) {
+            netdev_ports_remove(dpif_port.port_no, dpif_type_str);
         }
+    }
 }
 
 /* Closes and frees the connection to 'dpif'.  Does not destroy the datapath
@@ -543,6 +545,15 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     return error;
 }
 
+int
+dpif_set_features(struct dpif *dpif, uint32_t new_features)
+{
+    int error = dpif->dpif_class->set_features(dpif, new_features);
+
+    log_operation(dpif, "set_features", error);
+    return error;
+}
+
 const char *
 dpif_port_open_type(const char *datapath_type, const char *port_type)
 {
@@ -588,12 +599,13 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
 
         if (!dpif_is_tap_port(netdev_get_type(netdev))) {
 
+            const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
             struct dpif_port dpif_port;
 
             dpif_port.type = CONST_CAST(char *, netdev_get_type(netdev));
             dpif_port.name = CONST_CAST(char *, netdev_name);
             dpif_port.port_no = port_no;
-            netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+            netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
         }
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
@@ -625,7 +637,7 @@ dpif_port_del(struct dpif *dpif, odp_port_t port_no, bool local_delete)
         }
     }
 
-    netdev_ports_remove(port_no, dpif->dpif_class);
+    netdev_ports_remove(port_no, dpif_normalize_type(dpif_type(dpif)));
     return error;
 }
 
@@ -904,22 +916,6 @@ dpif_flow_stats_format(const struct dpif_flow_stats *stats, struct ds *s)
     }
 }
 
-/* Places the hash of the 'key_len' bytes starting at 'key' into '*hash'. */
-void
-dpif_flow_hash(const struct dpif *dpif OVS_UNUSED,
-               const void *key, size_t key_len, ovs_u128 *hash)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    static uint32_t secret;
-
-    if (ovsthread_once_start(&once)) {
-        secret = random_uint32();
-        ovsthread_once_done(&once);
-    }
-    hash_bytes128(key, key_len, secret, hash);
-    uuid_set_bits_v4((struct uuid *)hash);
-}
-
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
  * positive errno value.  */
 int
@@ -1177,6 +1173,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 
     case OVS_ACTION_ATTR_CT:
     case OVS_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_LB_OUTPUT:
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
     case OVS_ACTION_ATTR_TUNNEL_POP:
     case OVS_ACTION_ATTR_USERSPACE:
@@ -1227,6 +1224,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         struct dp_packet *clone = NULL;
         uint32_t cutlen = dp_packet_get_cutlen(packet);
         if (cutlen && (type == OVS_ACTION_ATTR_OUTPUT
+                        || type == OVS_ACTION_ATTR_LB_OUTPUT
                         || type == OVS_ACTION_ATTR_TUNNEL_PUSH
                         || type == OVS_ACTION_ATTR_TUNNEL_POP
                         || type == OVS_ACTION_ATTR_USERSPACE)) {
@@ -1242,6 +1240,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         execute.needs_help = false;
         execute.probe = false;
         execute.mtu = 0;
+        execute.hash = 0;
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &this_module, &execute,
                             true, aux->error);
@@ -1274,6 +1273,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_CT_CLEAR:
     case OVS_ACTION_ATTR_UNSPEC:
     case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+    case OVS_ACTION_ATTR_DROP:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
@@ -1879,6 +1879,22 @@ dpif_supports_tnl_push_pop(const struct dpif *dpif)
     return dpif_is_netdev(dpif);
 }
 
+bool
+dpif_supports_explicit_drop_action(const struct dpif *dpif)
+{
+    return dpif_is_netdev(dpif);
+}
+
+bool
+dpif_supports_lb_output_action(const struct dpif *dpif)
+{
+    /*
+     * Balance-tcp optimization is currently supported in netdev
+     * datapath only.
+     */
+    return dpif_is_netdev(dpif);
+}
+
 /* Meters */
 void
 dpif_meter_get_features(const struct dpif *dpif,
@@ -1975,4 +1991,54 @@ dpif_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
         }
     }
     return error;
+}
+
+int
+dpif_bond_add(struct dpif *dpif, uint32_t bond_id, odp_port_t *member_map)
+{
+    return dpif->dpif_class->bond_del
+           ? dpif->dpif_class->bond_add(dpif, bond_id, member_map)
+           : EOPNOTSUPP;
+}
+
+int
+dpif_bond_del(struct dpif *dpif, uint32_t bond_id)
+{
+    return dpif->dpif_class->bond_del
+           ? dpif->dpif_class->bond_del(dpif, bond_id)
+           : EOPNOTSUPP;
+}
+
+int
+dpif_bond_stats_get(struct dpif *dpif, uint32_t bond_id,
+                    uint64_t *n_bytes)
+{
+    memset(n_bytes, 0, BOND_BUCKETS * sizeof *n_bytes);
+
+    return dpif->dpif_class->bond_stats_get
+           ? dpif->dpif_class->bond_stats_get(dpif, bond_id, n_bytes)
+           : EOPNOTSUPP;
+}
+
+int
+dpif_get_n_offloaded_flows(struct dpif *dpif, uint64_t *n_flows)
+{
+    const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
+    struct dpif_port_dump port_dump;
+    struct dpif_port dpif_port;
+    int ret, n_devs = 0;
+    uint64_t nflows;
+
+    *n_flows = 0;
+    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+        ret = netdev_ports_get_n_flows(dpif_type_str, dpif_port.port_no,
+                                       &nflows);
+        if (!ret) {
+            *n_flows += nflows;
+        } else if (ret == EOPNOTSUPP) {
+            continue;
+        }
+        n_devs++;
+    }
+    return n_devs ? 0 : EOPNOTSUPP;
 }

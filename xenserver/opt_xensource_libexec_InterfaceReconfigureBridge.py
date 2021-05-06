@@ -65,7 +65,7 @@ def load_bonding_driver():
         f = open(sysfs_bonding_masters, "w")
         f.write("-bond0")
         f.close()
-    except IOError, e:
+    except IOError as e:
         log("Failed to load bonding driver: %s" % e)
 
 def bonding_driver_loaded():
@@ -92,7 +92,7 @@ def __create_bond_device(name):
             f = open(sysfs_bonding_masters, "w")
             f.write("+" + name)
             f.close()
-        except IOError, e:
+        except IOError as e:
             log("Failed to create %s: %s" % (name, e))
 
 def create_bond_device(pif):
@@ -114,7 +114,7 @@ def __destroy_bond_device(name):
                 f.write("-" + name)
                 f.close()
                 retries = 0
-            except IOError, e:
+            except IOError as e:
                 time.sleep(0.5)
     else:
         log("bond master %s does not exist, not destroying" % name)
@@ -355,8 +355,8 @@ def _configure_bond_interface(pif):
 
     # override defaults with values from other-config whose keys being with "bond-"
     oc = pifrec['other_config']
-    overrides = filter(lambda (key,val): key.startswith("bond-"), oc.items())
-    overrides = map(lambda (key,val): (key[5:], val), overrides)
+    overrides = filter(lambda key,val: key.startswith("bond-"), oc.items())
+    overrides = map(lambda key,val: (key[5:], val), overrides)
     bond_options.update(overrides)
 
     # write the bond options to ifcfg-bondX

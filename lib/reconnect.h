@@ -83,6 +83,7 @@ void reconnect_connected(struct reconnect *, long long int now);
 void reconnect_connect_failed(struct reconnect *, long long int now,
                               int error);
 void reconnect_activity(struct reconnect *, long long int now);
+void reconnect_receive_attempted(struct reconnect *, long long int now);
 
 enum reconnect_action {
     RECONNECT_CONNECT = 1,

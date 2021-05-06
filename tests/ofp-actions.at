@@ -80,11 +80,11 @@ ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
 
-# actions=bundle(eth_src,0,hrw,ofport,slaves:4,8)
+# actions=bundle(eth_src,0,hrw,ofport,members:4,8)
 ffff 0028 00002320 000c 0001 0000 0000 00000002 0002 0000 00000000 00000000 dnl
 0004 0008 00000000
 
-# actions=bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[],slaves:4,8)
+# actions=bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[],members:4,8)
 ffff 0028 00002320 000d 0001 0000 0000 00000002 0002 001f 00010004 00000000 dnl
 0004 0008 00000000
 
@@ -316,6 +316,9 @@ ffff 0018 00002320 0031 05dc 000000010004000000000000
 # actions=check_pkt_larger(1000)->NXM_NX_XXREG1[4]
 ffff 0018 00002320 0031 03e8 00040001e010000000000000
 
+# actions=delete_field:tun_metadata10
+ffff 0018 00002320 0032 00 01 64 7c 00 00 00 00 000000000000
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
@@ -441,11 +444,11 @@ ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
 
-# actions=bundle(eth_src,0,hrw,ofport,slaves:4,8)
+# actions=bundle(eth_src,0,hrw,ofport,members:4,8)
 ffff 0028 00002320 000c 0001 0000 0000 00000002 0002 0000 00000000 00000000 dnl
 0004 0008 00000000
 
-# actions=bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[],slaves:4,8)
+# actions=bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[],members:4,8)
 ffff 0028 00002320 000d 0001 0000 0000 00000002 0002 001f 00010004 00000000 dnl
 0004 0008 00000000
 
@@ -766,6 +769,17 @@ dnl Check OpenFlow v1.3.4 Conformance Test: 430.510.
 & 00000010  00 00 00 10 00 00 00 01-
 0019 0010 80000807 000102030405 000000000010 00000001
 
+dnl Check NSH encap (experimenter extension).
+# actions=encap(nsh(md_type=1))
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 000000
+
+dnl NSH encap with non-zero padding.
+# actions=encap(nsh(md_type=1))
+# 21: 12 -> 00
+# 22: 34 -> 00
+# 23: 56 -> 00
+ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 123456
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
@@ -944,17 +958,17 @@ bad_action 'enqueue:asdf:123' 'asdf: enqueue to unknown port'
 # bundle
 bad_action 'bundle:123' '123: not enough arguments to bundle action'
 bad_action 'bundle(symmetric_l4,60,hrw,ofport,ports:1,2,3,4,5)' \
-  "symmetric_l4,60,hrw,ofport,ports:1,2,3,4,5: missing slave delimiter, expected \`slaves' got \`ports'"
-bad_action 'bundle(symmetric_l4,60,hrw,ofport,slaves:xyzzy,2,3,4,5)' \
+  "symmetric_l4,60,hrw,ofport,ports:1,2,3,4,5: missing member delimiter, expected \`members', got \`ports'"
+bad_action 'bundle(symmetric_l4,60,hrw,ofport,members:xyzzy,2,3,4,5)' \
   'xyzzy: bad port number'
-bad_action 'bundle(asymmetric_l4,60,hrw,ofport,slaves:1,2,3,4,5)' \
-  "asymmetric_l4,60,hrw,ofport,slaves:1,2,3,4,5: unknown fields \`asymmetric_l4'"
-bad_action 'bundle(symmetric_l4,60,hrt,ofport,slaves:1,2,3,4,5)' \
-  "symmetric_l4,60,hrt,ofport,slaves:1,2,3,4,5: unknown algorithm \`hrt'"
-bad_action 'bundle(symmetric_l4,60,hrw,odpport,slaves:1,2,3,4,5)' \
-  "symmetric_l4,60,hrw,odpport,slaves:1,2,3,4,5: unknown slave_type \`odpport'"
-bad_action 'bundle_load(symmetric_l4,60,hrw,ofport,actset_output,slaves:1,2,3,4,5)' \
-  "symmetric_l4,60,hrw,ofport,actset_output,slaves:1,2,3,4,5: experimenter OXM field 'actset_output' not supported"
+bad_action 'bundle(asymmetric_l4,60,hrw,ofport,members:1,2,3,4,5)' \
+  "asymmetric_l4,60,hrw,ofport,members:1,2,3,4,5: unknown fields \`asymmetric_l4'"
+bad_action 'bundle(symmetric_l4,60,hrt,ofport,members:1,2,3,4,5)' \
+  "symmetric_l4,60,hrt,ofport,members:1,2,3,4,5: unknown algorithm \`hrt'"
+bad_action 'bundle(symmetric_l4,60,hrw,odpport,members:1,2,3,4,5)' \
+  "symmetric_l4,60,hrw,odpport,members:1,2,3,4,5: unknown member_type \`odpport'"
+bad_action 'bundle_load(symmetric_l4,60,hrw,ofport,actset_output,members:1,2,3,4,5)' \
+  "symmetric_l4,60,hrw,ofport,actset_output,members:1,2,3,4,5: experimenter OXM field 'actset_output' not supported"
 
 # mod_vlan_vid
 bad_action 'mod_vlan_vid:6000' '6000: not a valid VLAN VID'

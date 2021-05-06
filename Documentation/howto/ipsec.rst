@@ -162,7 +162,7 @@ undesirable situation.
    `ipsec_skb_mark`. By setting the ipsec_skb_mark as 0/1, OVS IPsec prevents
    all unencrypted tunnel packets leaving the host since the default skb_mark
    value for tunnel packets are 0. This affects all OVS tunnels including those
-   without IPsec being set up. You can install OpenFlow rules to whitelist
+   without IPsec being set up. You can install OpenFlow rules to enable
    those non-IPsec tunnels by setting the skb_mark of the tunnel traffic as
    non-zero value.
 

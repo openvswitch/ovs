@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2017 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,9 @@ struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
 void ovsdb_txn_row_insert(struct ovsdb_txn *, struct ovsdb_row *);
 void ovsdb_txn_row_delete(struct ovsdb_txn *, const struct ovsdb_row *);
 
+bool ovsdb_txn_may_create_row(const struct ovsdb_table *,
+                              const struct uuid *row_uuid);
+
 typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
                                    const struct ovsdb_row *new,
                                    const unsigned long int *changed,
@@ -63,7 +66,7 @@ void ovsdb_txn_for_each_change(const struct ovsdb_txn *,
 void ovsdb_txn_add_comment(struct ovsdb_txn *, const char *);
 const char *ovsdb_txn_get_comment(const struct ovsdb_txn *);
 void ovsdb_txn_history_run(struct ovsdb *);
-void ovsdb_txn_history_init(struct ovsdb *);
+void ovsdb_txn_history_init(struct ovsdb *, bool need_txn_history);
 void ovsdb_txn_history_destroy(struct ovsdb *);
 
 #endif /* ovsdb/transaction.h */

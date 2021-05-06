@@ -316,9 +316,9 @@ monitor request, <table-updates2> will contain any matched rows by old
 condition and not matched by the new condition.
 
 Changes according to the new conditions are automatically sent to the client
-using the ``update2`` monitor notification.  An update, if any, as a result of
-a condition change, will be sent to the client before the reply to the
-``monitor_cond_change`` request.
+using the ``update2`` or ``update3`` monitor notification depending on the
+monitor method.  An update, if any, as a result of a condition change, will
+be sent to the client before the reply to the ``monitor_cond_change`` request.
 
 4.1.14 Update2 notification
 ---------------------------
@@ -545,6 +545,15 @@ and real types.
 condition can be either a 3-element JSON array as described in the RFC or a
 boolean value. In case of an empty array an implicit true boolean value will be
 considered.
+
+5.2.1 Insert
+------------
+
+As an extension, Open vSwitch 2.13 and later allow an optional ``uuid`` member
+to specify the UUID for the new row.  The specified UUID must be unique within
+the table when it is inserted and not the UUID of a row previously deleted
+within the transaction.  If the UUID violates these rules, then the operation
+fails with a ``duplicate uuid`` error.
 
 5.2.6 Wait, 5.2.7 Commit, 5.2.9 Comment
 ---------------------------------------

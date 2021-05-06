@@ -39,7 +39,7 @@ class VSwitchService:
     def version(self):
         try:
             output = ShellPipe(["service", self.name, "version"]).Stdout()
-        except StandardError, e:
+        except StandardError as e:
             XSLogError("vswitch version retrieval error: " + str(e))
             return "<unknown>"
         for line in output:
@@ -50,7 +50,7 @@ class VSwitchService:
     def status(self):
         try:
             output = ShellPipe(["service", self.name, "status"]).Stdout()
-        except StandardError, e:
+        except StandardError as e:
             XSLogError("vswitch status retrieval error: " + str(e))
             return "<unknown>"
         if len(output) == 0:
@@ -69,7 +69,7 @@ class VSwitchService:
     def restart(self):
         try:
             ShellPipe(["service", self.name, "restart"]).Call()
-        except StandardError, e:
+        except StandardError as e:
             XSLogError("vswitch restart error: " + str(e))
 
     @classmethod
@@ -88,7 +88,7 @@ class VSwitchConfig:
         try:
             arg = [vsctl, "-vconsole:off"] + action.split()
             output = ShellPipe(arg).Stdout()
-        except StandardError, e:
+        except StandardError as e:
             XSLogError("config retrieval error: " + str(e))
             return "<unknown>"
 
@@ -189,7 +189,7 @@ class VSwitchControllerDialogue(Dialogue):
             try:
                 self.SetController(self.controller)
                 Layout.Inst().PushDialogue(InfoDialogue(Lang("Setting controller successful")))
-            except Exception, e:
+            except Exception as e:
                 Layout.Inst().PushDialogue(InfoDialogue(Lang("Setting controller failed")))
 
             self.ChangeState("INITIAL")
@@ -213,7 +213,7 @@ class VSwitchControllerDialogue(Dialogue):
         try:
             self.SetController(None)
             Layout.Inst().PushDialogue(InfoDialogue(Lang("Controller deletion successful")))
-        except Exception, e:
+        except Exception as e:
             Layout.Inst().PushDialogue(InfoDialogue(Lang("Controller deletion failed")))
 
     def syncController(self):
@@ -222,7 +222,7 @@ class VSwitchControllerDialogue(Dialogue):
         try:
             Task.Sync(lambda s: self._updateThisServer(s))
             Layout.Inst().PushDialogue(InfoDialogue(Lang("Resyncing controller config successful")))
-        except Exception, e:
+        except Exception as e:
             Layout.Inst().PushDialogue(InfoDialogue(Lang("Resyncing controller config failed")))
 
     def SetController(self, ip):

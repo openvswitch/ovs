@@ -33,6 +33,9 @@ datapath. These are referred to as *QoS* and *Rate Limiting*, respectively.
 QoS (Egress Policing)
 ---------------------
 
+Single Queue Policer
+~~~~~~~~~~~~~~~~~~~~
+
 Assuming you have a :doc:`vhost-user port <vhost-user>` transmitting traffic
 consisting of packets of size 64 bytes, the following command would limit the
 egress transmission rate of the port to ~1,000,000 packets per second::
@@ -48,6 +51,48 @@ To examine the QoS configuration of the port, run::
 To clear the QoS configuration from the port and ovsdb, run::
 
     $ ovs-vsctl destroy QoS vhost-user0 -- clear Port vhost-user0 qos
+
+
+Multi Queue Policer
+~~~~~~~~~~~~~~~~~~~
+
+In addition to the egress-policer OVS-DPDK also has support for a RFC
+4115's Two-Rate, Three-Color marker meter. It's a two-level hierarchical
+policer which first does a color-blind marking of the traffic at the queue
+level, followed by a color-aware marking at the port level. At the end
+traffic marked as Green or Yellow is forwarded, Red is dropped. For
+details on how traffic is marked, see RFC 4115.
+
+This egress policer can be used to limit traffic at different rated
+based on the queues the traffic is in. In addition, it can also be used
+to prioritize certain traffic over others at a port level.
+
+For example, the following configuration will limit the traffic rate at a
+port level to a maximum of 2000 packets a second (64 bytes IPv4 packets).
+1000pps as CIR (Committed Information Rate) and 1000pps as EIR (Excess
+Information Rate). CIR and EIR are measured in bytes without Ethernet header.
+As a result, 1000pps means (64-byte - 14-byte) * 1000 = 50,000 in the
+configuration below. High priority traffic is routed to queue 10, which marks
+all traffic as CIR, i.e. Green. All low priority traffic, queue 20, is
+marked as EIR, i.e. Yellow::
+
+    $ ovs-vsctl --timeout=5 set port dpdk1 qos=@myqos -- \
+        --id=@myqos create qos type=trtcm-policer \
+        other-config:cir=50000 other-config:cbs=2048 \
+        other-config:eir=50000 other-config:ebs=2048  \
+        queues:10=@dpdk1Q10 queues:20=@dpdk1Q20 -- \
+         --id=@dpdk1Q10 create queue \
+          other-config:cir=100000 other-config:cbs=2048 \
+          other-config:eir=0 other-config:ebs=0 -- \
+         --id=@dpdk1Q20 create queue \
+           other-config:cir=0 other-config:cbs=0 \
+           other-config:eir=50000 other-config:ebs=2048
+
+This configuration accomplishes that the high priority traffic has a
+guaranteed bandwidth egressing the ports at CIR (1000pps), but it can also
+use the EIR, so a total of 2000pps at max. These additional 1000pps is
+shared with the low priority traffic. The low priority traffic can use at
+maximum 1000pps.
 
 Refer to ``vswitch.xml`` for more details on egress policer.
 

@@ -77,7 +77,7 @@ for d in 0 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/packets.*actions:1/actions:1/' | strip_used | strip_ufid | sort], [0], [dnl
-flow-dump from non-dpdk interfaces:
+flow-dump from the main thread:
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8847),mpls(label=22/0xfffff,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:54, used:0.0s, actions:pop_mpls(eth_type=0x800),recirc(0x3)
 recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=0.0.0.0,dst=0.0.0.0,proto=0,frag=no), actions:100
 ])

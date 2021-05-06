@@ -2,26 +2,27 @@ freebsd_build_task:
 
   freebsd_instance:
     matrix:
-      image: freebsd-12-0-release-amd64
-      image: freebsd-11-2-release-amd64
+      image_family: freebsd-12-2-snap
+      image_family: freebsd-11-4-snap
     cpu: 4
     memory: 8G
 
   env:
     DEPENDENCIES: automake libtool gmake gcc wget openssl
-                  python py27-six py27-sphinx py27-openssl
-                  python3 py36-six py36-openssl
+                  python3 py37-openssl py37-sphinx
     matrix:
       COMPILER: gcc
       COMPILER: clang
 
   prepare_script:
     - sysctl -w kern.coredump=0
+    - pkg update -f
     - pkg install -y ${DEPENDENCIES}
 
   configure_script:
     - ./boot.sh
-    - ./configure CC=${COMPILER} MAKE=gmake OVS_CFLAGS='-Wall' --enable-Werror
+    - ./configure CC=${COMPILER} CFLAGS="-g -O2 -Wall"
+                  MAKE=gmake --enable-Werror
                   || { cat config.log; exit 1; }
 
   build_script:

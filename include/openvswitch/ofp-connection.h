@@ -69,10 +69,10 @@ enum ofputil_async_msg_type {
 const char *ofputil_async_msg_type_to_string(enum ofputil_async_msg_type);
 
 struct ofputil_async_cfg {
-    uint32_t master[OAM_N_TYPES];
-    uint32_t slave[OAM_N_TYPES];
+    uint32_t primary[OAM_N_TYPES];
+    uint32_t secondary[OAM_N_TYPES];
 };
-#define OFPUTIL_ASYNC_CFG_INIT (struct ofputil_async_cfg) { .master[0] = 0 }
+#define OFPUTIL_ASYNC_CFG_INIT (struct ofputil_async_cfg) { .primary[0] = 0 }
 
 enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
                                             bool loose,

@@ -628,6 +628,7 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
     event.upcallPid = vport->upcallPid;
     RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
     event.type = OVS_EVENT_LINK_DOWN;
+    OvsPostVportEvent(&event);
 
     /*
      * Delete the port from the hash tables accessible to userspace. After this
@@ -635,13 +636,18 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
      */
     if (OvsIsRealExternalVport(vport)) {
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-        OvsPostVportEvent(&event);
     }
 
     if (isInternalPort) {
         OvsUnBindVportWithIpHelper(vport, switchContext);
-        OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, TRUE);
-        OvsPostVportEvent(&event);
+        /*
+         * Don't delete the port from the hash tables here for internal port
+         * because the internal port cannot be recreated in HvCreateNic(). It
+         * only can be created in HvCreatePort() by issuing
+         * OID_SWITCH_PORT_CREATE. We should wait extensible switch interface
+         * to issue OID_SWITCH_PORT_TEARDOWN and OID_SWITCH_PORT_DELETE to
+         * delete the internal port.
+         */
     }
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 

@@ -16,7 +16,7 @@ ccflags-y += -include $(builddir)/kcompat.h
 # These include directories have to go before -I$(KSRC)/include.
 # NOSTDINC_FLAGS just happens to be a variable that goes in the
 # right place, even though it's conceptually incorrect.
-NOSTDINC_FLAGS += -I$(top_srcdir)/include -I$(srcdir)/compat -I$(srcdir)/compat/include
+NOSTDINC_FLAGS += -include $(builddir)/kcompat.h -I$(top_srcdir)/include -I$(srcdir)/compat -I$(srcdir)/compat/include
 
 obj-m := $(subst _,-,$(patsubst %,%.o,$(build_modules)))
 

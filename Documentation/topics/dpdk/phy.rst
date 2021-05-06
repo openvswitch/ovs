@@ -117,7 +117,7 @@ tool::
 
 For more information, refer to the `DPDK documentation <dpdk-drivers>`__.
 
-.. _dpdk-drivers: http://dpdk.org/doc/guides/linux_gsg/linux_drivers.html
+.. _dpdk-drivers: https://doc.dpdk.org/guides-20.11/linux_gsg/linux_drivers.html
 
 .. _dpdk-phy-multiqueue:
 
@@ -125,11 +125,11 @@ Multiqueue
 ----------
 
 Poll Mode Driver (PMD) threads are the threads that do the heavy lifting for
-the DPDK datapath. Correct configuration of PMD threads and the Rx queues they
-utilize is a requirement in order to deliver the high-performance possible with
-DPDK acceleration. It is possible to configure multiple Rx queues for ``dpdk``
-ports, thus ensuring this is not a bottleneck for performance. For information
-on configuring PMD threads, refer to :doc:`pmd`.
+userspace switching. Correct configuration of PMD threads and the Rx
+queues they utilize is a requirement in order to deliver the high-performance
+possible with DPDK acceleration. It is possible to configure multiple Rx queues
+for ``dpdk`` ports, thus ensuring this is not a bottleneck for performance. For
+information on configuring PMD threads, refer to :doc:`pmd`.
 
 .. _dpdk-phy-flow-control:
 
@@ -215,9 +215,36 @@ If the log is not seen then the port can be detached like so::
     to be an example of this behavior; check the driver documentation if this
     is suspected.
 
-For more information please refer to the `DPDK Port Hotplug Framework`__.
+Hotplugging with IGB_UIO
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-__ http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug
+.. important::
+
+   As of DPDK v20.11 IGB_UIO has been deprecated and is no longer built as
+   part of the default DPDK library. Below is intended for those who wish
+   to use IGB_UIO outside of the standard DPDK build from v20.11 onwards.
+
+As of DPDK v19.11, default igb_uio hotplugging behavior changed from
+previous DPDK versions.
+
+From DPDK v19.11 onwards, if no device is bound to igb_uio when OVS is
+launched then the IOVA mode may be set to virtual addressing for DPDK.
+This is incompatible for hotplugging with igb_uio.
+
+To hotplug a port with igb_uio in this case, DPDK must be configured to use
+physical addressing for IOVA mode. For more information regarding IOVA modes
+in DPDK please refer to the `DPDK IOVA Mode Detection`__.
+
+__ https://doc.dpdk.org/guides-20.11/prog_guide/env_abstraction_layer.html#iova-mode-detection
+
+To configure OVS DPDK to use physical addressing for IOVA::
+
+    $ ovs-vsctl --no-wait set Open_vSwitch . \
+        other_config:dpdk-extra="--iova-mode=pa"
+
+.. note::
+
+   Changing IOVA mode requires restarting the ovs-vswitchd application.
 
 .. _representors:
 
@@ -240,7 +267,7 @@ Representors are multi devices created on top of one PF.
 
 For more information, refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-18.11/prog_guide/switch_representation.html
+__ https://doc.dpdk.org/guides-20.11/prog_guide/switch_representation.html
 
 Prior to port representors there was a one-to-one relationship between the PF
 and the eth device. With port representors the relationship becomes one PF to
@@ -358,11 +385,64 @@ an eth device whose mac address is ``00:11:22:33:44:55``::
     $ ovs-vsctl add-port br0 dpdk-mac -- set Interface dpdk-mac type=dpdk \
        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55"
 
+Representor specific configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In some topologies, a VF must be configured before being assigned to a
+guest (VM) machine.  This configuration is done through VF-specific fields
+in the ``options`` column of the ``Interface`` table.
+
+.. important::
+
+   Some DPDK port use `bifurcated drivers <bifurcated-drivers>`__,
+   which means that a kernel netdevice remains when Open vSwitch is stopped.
+
+   In such case, any configuration applied to a VF would remain set on the
+   kernel netdevice, and be inherited from it when Open vSwitch is restarted,
+   even if the options described in this section are unset from Open vSwitch.
+
+.. _bifurcated-drivers: https://doc.dpdk.org/guides-20.11/linux_gsg/linux_drivers.html#bifurcated-driver
+
+- Configure the VF MAC address::
+
+    $ ovs-vsctl set Interface dpdk-rep0 options:dpdk-vf-mac=00:11:22:33:44:55
+
+The requested MAC address is assigned to the port and is listed as part of
+its options::
+
+    $ ovs-appctl dpctl/show
+    [...]
+      port 3: dpdk-rep0 (dpdk: configured_rx_queues=1, ..., dpdk-vf-mac=00:11:22:33:44:55, ...)
+
+    $ ovs-vsctl show
+    [...]
+            Port dpdk-rep0
+                Interface dpdk-rep0
+                    type: dpdk
+                    options: {dpdk-devargs="<representor devargs>", dpdk-vf-mac="00:11:22:33:44:55"}
+
+    $ ovs-vsctl get Interface dpdk-rep0 status
+    {dpdk-vf-mac="00:11:22:33:44:55", ...}
+
+    $ ovs-vsctl list Interface dpdk-rep0 | grep 'mac_in_use\|options'
+    mac_in_use          : "00:11:22:33:44:55"
+    options             : {dpdk-devargs="<representor devargs>", dpdk-vf-mac="00:11:22:33:44:55"}
+
+The value listed as ``dpdk-vf-mac`` is only a request from the user and is
+possibly not yet applied.
+
+When the requested configuration is successfully applied to the port,
+this MAC address is then also shown in the column ``mac_in_use`` of
+the ``Interface`` table.  On failure however, ``mac_in_use`` will keep its
+previous value, which will thus differ from ``dpdk-vf-mac``.
+
 Jumbo Frames
 ------------
 
 DPDK physical ports can be configured to use Jumbo Frames. For more
 information, refer to :doc:`jumbo-frames`.
+
+.. _lsc-detection:
 
 Link State Change (LSC) detection configuration
 -----------------------------------------------

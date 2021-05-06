@@ -20,8 +20,6 @@ import ovs.db.parser
 import ovs.ovsuuid
 from ovs.db import error
 
-import six
-
 
 class AtomicType(object):
     def __init__(self, name, default, python_types):
@@ -39,7 +37,7 @@ class AtomicType(object):
 
     @staticmethod
     def from_json(json):
-        if not isinstance(json, six.string_types):
+        if not isinstance(json, str):
             raise error.Error("atomic-type expected", json)
         else:
             return AtomicType.from_string(json)
@@ -57,15 +55,15 @@ class AtomicType(object):
         return ovs.db.data.Atom(self, self.default)
 
 
-REAL_PYTHON_TYPES = list(six.integer_types)
+REAL_PYTHON_TYPES = [int]
 REAL_PYTHON_TYPES.extend([float])
 REAL_PYTHON_TYPES = tuple(REAL_PYTHON_TYPES)
 
 VoidType = AtomicType("void", None, ())
-IntegerType = AtomicType("integer", 0, six.integer_types)
+IntegerType = AtomicType("integer", 0, (int,))
 RealType = AtomicType("real", 0.0, REAL_PYTHON_TYPES)
 BooleanType = AtomicType("boolean", False, (bool,))
-StringType = AtomicType("string", "", six.string_types)
+StringType = AtomicType("string", "", (str,))
 UuidType = AtomicType("uuid", ovs.ovsuuid.zero(), (uuid.UUID,))
 
 ATOMIC_TYPES = [VoidType, IntegerType, RealType, BooleanType, StringType,
@@ -155,7 +153,7 @@ class BaseType(object):
 
     @staticmethod
     def __parse_uint(parser, name, default):
-        value = parser.get_optional(name, six.integer_types)
+        value = parser.get_optional(name, (int,))
         if value is None:
             value = default
         else:
@@ -167,12 +165,11 @@ class BaseType(object):
 
     @staticmethod
     def from_json(json):
-        if isinstance(json, six.string_types):
+        if isinstance(json, str):
             return BaseType(AtomicType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
-        atomic_type = AtomicType.from_json(parser.get("type",
-                                                      six.string_types))
+        atomic_type = AtomicType.from_json(parser.get("type", (str,)))
 
         base = BaseType(atomic_type)
 
@@ -181,8 +178,8 @@ class BaseType(object):
             base.enum = ovs.db.data.Datum.from_json(
                     BaseType.get_enum_type(base.type), enum)
         elif base.type == IntegerType:
-            base.min = parser.get_optional("minInteger", six.integer_types)
-            base.max = parser.get_optional("maxInteger", six.integer_types)
+            base.min = parser.get_optional("minInteger", (int,))
+            base.max = parser.get_optional("maxInteger", (int,))
             if (base.min is not None and base.max is not None
                     and base.min > base.max):
                 raise error.Error("minInteger exceeds maxInteger", json)
@@ -202,7 +199,7 @@ class BaseType(object):
             base.ref_table_name = parser.get_optional("refTable", ['id'])
             if base.ref_table_name:
                 base.ref_type = parser.get_optional("refType",
-                                                    six.string_types,
+                                                    (str,),
                                                    "strong")
                 if base.ref_type not in ['strong', 'weak']:
                     raise error.Error('refType must be "strong" or "weak" '
@@ -520,16 +517,16 @@ class Type(object):
 
     @staticmethod
     def from_json(json):
-        if isinstance(json, six.string_types):
+        if isinstance(json, str):
             return Type(BaseType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
-        _types = list(six.string_types)
+        _types = [str]
         _types.extend([dict])
         key_json = parser.get("key", _types)
         value_json = parser.get_optional("value", _types)
         min_json = parser.get_optional("min", [int])
-        _types = list(six.string_types)
+        _types = [str]
         _types.extend([int])
         max_json = parser.get_optional("max", _types)
         parser.finish()
@@ -594,7 +591,16 @@ class Type(object):
             if self.value:
                 return "map of %s%s-%s pairs" % (quantity, keyName, valueName)
             else:
-                if keyName.endswith('s'):
+                # Extract the last word from 'keyName' so we can make it
+                # plural.  For linguistic analysis, turn it into English
+                # without formatting so that we don't consider any prefix or
+                # suffix added by escapeLiteral.
+                plainKeyName = (self.key.toEnglish(returnUnchanged)
+                                .rpartition(' ')[2].lower())
+
+                if plainKeyName == 'chassis':
+                    plural = keyName
+                elif plainKeyName.endswith('s'):
                     plural = keyName + "es"
                 else:
                     plural = keyName + "s"

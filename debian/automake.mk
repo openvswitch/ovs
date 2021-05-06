@@ -52,30 +52,8 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.init \
 	debian/openvswitch-vtep.install \
 	debian/openvswitch-vtep.manpages \
-	debian/ovn-central.dirs \
-	debian/ovn-central.init \
-	debian/ovn-central.install \
-	debian/ovn-central.manpages \
-	debian/ovn-central.postinst \
-	debian/ovn-central.postrm \
-	debian/ovn-central.template \
-	debian/ovn-controller-vtep.init \
-	debian/ovn-controller-vtep.install \
-	debian/ovn-controller-vtep.manpages \
-	debian/ovn-common.install \
-	debian/ovn-common.manpages \
-	debian/ovn-common.postinst \
-	debian/ovn-common.postrm \
-	debian/ovn-docker.install \
-	debian/ovn-host.dirs \
-	debian/ovn-host.init \
-	debian/ovn-host.install \
-	debian/ovn-host.manpages \
-	debian/ovn-host.postinst \
-	debian/ovn-host.postrm \
-	debian/ovn-host.template \
-	debian/python-openvswitch.dirs \
-	debian/python-openvswitch.install \
+	debian/python3-openvswitch.dirs \
+	debian/python3-openvswitch.install \
 	debian/rules \
 	debian/rules.modules \
 	debian/ifupdown.sh \

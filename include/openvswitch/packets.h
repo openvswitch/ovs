@@ -43,7 +43,9 @@ struct flow_tnl {
     uint32_t erspan_idx;
     uint8_t erspan_dir;
     uint8_t erspan_hwid;
-    uint8_t pad1[6];     /* Pad to 64 bits. */
+    uint8_t gtpu_flags;
+    uint8_t gtpu_msgtype;
+    uint8_t pad1[4];     /* Pad to 64 bits. */
     struct tun_metadata metadata;
 };
 

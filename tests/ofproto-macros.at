@@ -131,7 +131,8 @@ strip_duration () {
 # Strips 'ufid:...' from output, to make it easier to compare.
 # (ufids are random.)
 strip_ufid () {
-    sed 's/ufid:[[-0-9a-f]]* //'
+    sed 's/mega_ufid:[[-0-9a-f]]* //
+    s/ufid:[[-0-9a-f]]* //'
 }
 m4_divert_pop([PREPARE_TESTS])
 
@@ -214,7 +215,7 @@ check_logs () {
 
     # We most notably ignore 'Broken pipe' warnings.  These often and
     # intermittently appear in ovsdb-server.log, because *ctl commands
-    # (e.g. ovs-vsctl, ovn-nbctl) exit right after committing a change to the
+    # (e.g. ovs-vsctl) exit right after committing a change to the
     # database.  However, in reaction, some daemon may immediately update the
     # database, and this later update may cause database sending update back to
     # *ctl command if *ctl has not exited yet.  If *ctl command exits before
@@ -249,7 +250,7 @@ add_of_br () {
     local br=br$brnum
     local dpid=fedcba987654321$brnum
     local mac=aa:55:aa:55:00:0$brnum
-    ovs-vsctl --timeout=20 \
+    ovs-vsctl \
         -- add-br $br \
         -- set bridge $br datapath-type=dummy \
                           fail-mode=secure \
@@ -303,11 +304,11 @@ add_pmd_of_ports () {
 
 m4_divert_pop([PREPARE_TESTS])
 
-# OVS_VSWITCHD_STOP([WHITELIST])
+# OVS_VSWITCHD_STOP([ALLOWLIST])
 #
 # Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
 # for messages with severity WARN or higher and signaling an error if any
-# is present.  The optional WHITELIST may contain shell-quoted "sed"
+# is present.  The optional ALLOWLIST may contain shell-quoted "sed"
 # commands to delete any warnings that are actually expected, e.g.:
 #
 #   OVS_VSWITCHD_STOP(["/expected error/d"])

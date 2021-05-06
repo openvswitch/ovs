@@ -408,7 +408,7 @@ int ovs_vport_get_options(const struct vport *vport, struct sk_buff *skb)
 	if (!vport->ops->get_options)
 		return 0;
 
-	nla = nla_nest_start(skb, OVS_VPORT_ATTR_OPTIONS);
+	nla = nla_nest_start_noflag(skb, OVS_VPORT_ATTR_OPTIONS);
 	if (!nla)
 		return -EMSGSIZE;
 
@@ -507,8 +507,9 @@ u32 ovs_vport_find_upcall_portid(const struct vport *vport, struct sk_buff *skb)
 
 	ids = rcu_dereference(vport->upcall_portids);
 
-	if (ids->n_ids == 1 && ids->ids[0] == 0)
-		return 0;
+	/* If there is only one portid, select it in the fast-path. */
+	if (ids->n_ids == 1)
+		return ids->ids[0];
 
 	hash = skb_get_hash(skb);
 	ids_index = hash - ids->n_ids * reciprocal_divide(hash, ids->rn_ids);

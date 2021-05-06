@@ -1,7 +1,7 @@
 ovsdb/ovsdb-client.1
 ovsdb/ovsdb-tool.1
 utilities/bugtool/ovs-bugtool.8
-utilities/ovs-appctl.8
+debian/tmp/usr/share/man/man8/ovs-appctl.8
 utilities/ovs-ofctl.8
-utilities/ovs-parse-backtrace.8
-utilities/ovs-pki.8
+debian/tmp/usr/share/man/man8/ovs-parse-backtrace.8
+debian/tmp/usr/share/man/man8/ovs-pki.8
