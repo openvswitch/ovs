@@ -174,6 +174,7 @@ void raft_command_wait(const struct raft_command *);
 bool raft_grew_lots(const struct raft *);
 uint64_t raft_get_log_length(const struct raft *);
 bool raft_may_snapshot(const struct raft *);
+void raft_notify_snapshot_recommended(struct raft *);
 struct ovsdb_error *raft_store_snapshot(struct raft *,
                                         const struct json *new_snapshot)
     OVS_WARN_UNUSED_RESULT;
