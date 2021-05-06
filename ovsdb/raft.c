@@ -4139,7 +4139,22 @@ raft_may_snapshot(const struct raft *raft)
             && !raft->leaving
             && !raft->left
             && !raft->failed
+            && raft->role != RAFT_LEADER
             && raft->last_applied >= raft->log_start);
+}
+
+/* Prepares for soon snapshotting. */
+void
+raft_notify_snapshot_recommended(struct raft *raft)
+{
+    if (raft->role == RAFT_LEADER) {
+        /* Leader is about to write database snapshot to the disk and this
+         * might take significant amount of time.  Stepping back from the
+         * leadership to keep the cluster functional during this process.  */
+        VLOG_INFO("Transferring leadership to write a snapshot.");
+        raft_transfer_leadership(raft, "preparing to write snapshot");
+        raft_become_follower(raft);
+    }
 }
 
 /* Replaces the log for 'raft', up to the last log entry read, by
