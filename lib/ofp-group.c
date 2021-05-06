@@ -64,7 +64,7 @@ ofputil_group_from_string(const char *s, uint32_t *group_idp)
 void
 ofputil_format_group(uint32_t group_id, struct ds *s)
 {
-    char name[MAX_GROUP_NAME_LEN];
+    char name[MAX_GROUP_NAME_LEN + 1];
 
     ofputil_group_to_string(group_id, name, sizeof name);
     ds_put_cstr(s, name);
