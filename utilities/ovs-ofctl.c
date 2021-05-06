@@ -5041,7 +5041,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "add-group", "switch group",
       1, 2, ofctl_add_group, OVS_RW },
     { "add-groups", "switch file",
-      1, 2, ofctl_add_groups, OVS_RW },
+      2, 2, ofctl_add_groups, OVS_RW },
     { "mod-group", "switch group",
       1, 2, ofctl_mod_group, OVS_RW },
     { "del-groups", "switch [group]",
