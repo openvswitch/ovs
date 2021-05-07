@@ -903,8 +903,27 @@ ovsdb_cs_db_set_condition(struct ovsdb_cs_db *db, const char *table,
     }
 
     /* Conditions will be up to date when we receive replies for already
-     * requested and new conditions, if any. */
-    return db->cond_seqno + (t->new_cond ? 1 : 0) + (t->req_cond ? 1 : 0);
+     * requested and new conditions, if any.  This includes condition change
+     * requests for other tables too.
+     */
+    if (t->new_cond) {
+        /* New condition will be sent out after all already requested ones
+         * are acked.
+         */
+        bool any_req_cond = false;
+        HMAP_FOR_EACH (t, hmap_node, &db->tables) {
+            if (t->req_cond) {
+                any_req_cond = true;
+                break;
+            }
+        }
+        return db->cond_seqno + any_req_cond + 1;
+    } else {
+        /* Already requested conditions should be up to date at
+         * db->cond_seqno + 1 while acked conditions are already up to date.
+         */
+        return db->cond_seqno + !!t->req_cond;
+    }
 }
 
 /* Sets the replication condition for 'tc' in 'cs' to 'condition' and arranges
