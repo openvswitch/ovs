@@ -112,6 +112,12 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
+    - name: fix up /etc/hosts
+      # https://github.com/actions/virtual-environments/issues/3353
+      run:  |
+        cat /etc/hosts
+        sudo sed -i "/don't remove this line/d" /etc/hosts || true
+
     - name: create ci signature file for the dpdk cache key
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
       # This will collect most of DPDK related lines, so hash will be different
