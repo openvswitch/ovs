@@ -9,6 +9,7 @@ Post-v2.15.0
    - Userspace datapath:
      * Auto load balancing of PMDs now partially supports cross-NUMA polling
        cases, e.g if all PMD threads are running on the same NUMA node.
+     * Userspace datapath now supports up to 2^18 meters.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.

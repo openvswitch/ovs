@@ -99,9 +99,8 @@ DEFINE_STATIC_PER_THREAD_DATA(uint32_t, recirc_depth, 0)
 #define DEFAULT_TX_FLUSH_INTERVAL 0
 
 /* Configuration parameters. */
-enum { MAX_METERS = 65536 };    /* Maximum number of meters. */
+enum { MAX_METERS = 1 << 18 };  /* Maximum number of meters. */
 enum { MAX_BANDS = 8 };         /* Maximum number of bands / meter. */
-enum { N_METER_LOCKS = 64 };    /* Maximum number of meters. */
 
 COVERAGE_DEFINE(datapath_drop_meter);
 COVERAGE_DEFINE(datapath_drop_upcall_error);
@@ -287,6 +286,9 @@ struct dp_meter_band {
 };
 
 struct dp_meter {
+    struct cmap_node node;
+    struct ovs_mutex lock;
+    uint32_t id;
     uint16_t flags;
     uint16_t n_bands;
     uint32_t max_delta_t;
@@ -339,8 +341,8 @@ struct dp_netdev {
     atomic_uint32_t tx_flush_interval;
 
     /* Meters. */
-    struct ovs_mutex meter_locks[N_METER_LOCKS];
-    struct dp_meter *meters[MAX_METERS]; /* Meter bands. */
+    struct ovs_mutex meters_lock;
+    struct cmap meters OVS_GUARDED;
 
     /* Probability of EMC insertions is a factor of 'emc_insert_min'.*/
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE) atomic_uint32_t emc_insert_min;
@@ -391,19 +393,6 @@ struct dp_netdev {
     struct ovs_mutex bond_mutex; /* Protects updates of 'tx_bonds'. */
     struct cmap tx_bonds; /* Contains 'struct tx_bond'. */
 };
-
-static void meter_lock(const struct dp_netdev *dp, uint32_t meter_id)
-    OVS_ACQUIRES(dp->meter_locks[meter_id % N_METER_LOCKS])
-{
-    ovs_mutex_lock(&dp->meter_locks[meter_id % N_METER_LOCKS]);
-}
-
-static void meter_unlock(const struct dp_netdev *dp, uint32_t meter_id)
-    OVS_RELEASES(dp->meter_locks[meter_id % N_METER_LOCKS])
-{
-    ovs_mutex_unlock(&dp->meter_locks[meter_id % N_METER_LOCKS]);
-}
-
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t)
@@ -1747,6 +1736,64 @@ choose_port(struct dp_netdev *dp, const char *name)
     return ODPP_NONE;
 }
 
+static uint32_t
+dp_meter_hash(uint32_t meter_id)
+{
+    /* In the ofproto-dpif layer, we use the id-pool to alloc meter id
+     * orderly (e.g. 1, 2, ... N.), which provides a better hash
+     * distribution.  Use them directly instead of hash_xxx function for
+     * achieving high-performance. */
+    return meter_id;
+}
+
+static void
+dp_netdev_meter_destroy(struct dp_netdev *dp)
+{
+    struct dp_meter *m;
+
+    ovs_mutex_lock(&dp->meters_lock);
+    CMAP_FOR_EACH (m, node, &dp->meters) {
+        cmap_remove(&dp->meters, &m->node, dp_meter_hash(m->id));
+        ovsrcu_postpone(free, m);
+    }
+
+    cmap_destroy(&dp->meters);
+    ovs_mutex_unlock(&dp->meters_lock);
+    ovs_mutex_destroy(&dp->meters_lock);
+}
+
+static struct dp_meter *
+dp_meter_lookup(struct cmap *meters, uint32_t meter_id)
+{
+    uint32_t hash = dp_meter_hash(meter_id);
+    struct dp_meter *m;
+
+    CMAP_FOR_EACH_WITH_HASH (m, node, hash, meters) {
+        if (m->id == meter_id) {
+            return m;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+dp_meter_detach_free(struct cmap *meters, uint32_t meter_id)
+{
+    struct dp_meter *m = dp_meter_lookup(meters, meter_id);
+
+    if (m) {
+        cmap_remove(meters, &m->node, dp_meter_hash(meter_id));
+        ovsrcu_postpone(free, m);
+    }
+}
+
+static void
+dp_meter_attach(struct cmap *meters, struct dp_meter *meter)
+{
+    cmap_insert(meters, &meter->node, dp_meter_hash(meter->id));
+}
+
 static int
 create_dp_netdev(const char *name, const struct dpif_class *class,
                  struct dp_netdev **dpp)
@@ -1783,9 +1830,9 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->reconfigure_seq = seq_create();
     dp->last_reconfigure_seq = seq_read(dp->reconfigure_seq);
 
-    for (int i = 0; i < N_METER_LOCKS; ++i) {
-        ovs_mutex_init_adaptive(&dp->meter_locks[i]);
-    }
+    /* Init meter resources. */
+    cmap_init(&dp->meters);
+    ovs_mutex_init(&dp->meters_lock);
 
     /* Disable upcalls by default. */
     dp_netdev_disable_upcall(dp);
@@ -1874,16 +1921,6 @@ dp_netdev_destroy_upcall_lock(struct dp_netdev *dp)
     fat_rwlock_destroy(&dp->upcall_rwlock);
 }
 
-static void
-dp_delete_meter(struct dp_netdev *dp, uint32_t meter_id)
-    OVS_REQUIRES(dp->meter_locks[meter_id % N_METER_LOCKS])
-{
-    if (dp->meters[meter_id]) {
-        free(dp->meters[meter_id]);
-        dp->meters[meter_id] = NULL;
-    }
-}
-
 static uint32_t
 hash_bond_id(uint32_t bond_id)
 {
@@ -1938,16 +1975,7 @@ dp_netdev_free(struct dp_netdev *dp)
     /* Upcalls must be disabled at this point */
     dp_netdev_destroy_upcall_lock(dp);
 
-    int i;
-
-    for (i = 0; i < MAX_METERS; ++i) {
-        meter_lock(dp, i);
-        dp_delete_meter(dp, i);
-        meter_unlock(dp, i);
-    }
-    for (i = 0; i < N_METER_LOCKS; ++i) {
-        ovs_mutex_destroy(&dp->meter_locks[i]);
-    }
+    dp_netdev_meter_destroy(dp);
 
     free(dp->pmd_cmask);
     free(CONST_CAST(char *, dp->name));
@@ -6174,10 +6202,9 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
         return;
     }
 
-    meter_lock(dp, meter_id);
-    meter = dp->meters[meter_id];
+    meter = dp_meter_lookup(&dp->meters, meter_id);
     if (!meter) {
-        goto out;
+        return;
     }
 
     /* Initialize as negative values. */
@@ -6185,6 +6212,7 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     /* Initialize as zeroes. */
     memset(exceeded_rate, 0, cnt * sizeof *exceeded_rate);
 
+    ovs_mutex_lock(&meter->lock);
     /* All packets will hit the meter at the same time. */
     long_delta_t = now / 1000 - meter->used / 1000; /* msec */
 
@@ -6300,8 +6328,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
             dp_packet_batch_refill(packets_, packet, j);
         }
     }
- out:
-    meter_unlock(dp, meter_id);
+
+    ovs_mutex_unlock(&meter->lock);
 }
 
 /* Meter set/get/del processing is still single-threaded. */
@@ -6343,6 +6371,8 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
     meter->n_bands = config->n_bands;
     meter->max_delta_t = 0;
     meter->used = time_usec();
+    meter->id = mid;
+    ovs_mutex_init_adaptive(&meter->lock);
 
     /* set up bands */
     for (i = 0; i < config->n_bands; ++i) {
@@ -6366,10 +6396,12 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
         }
     }
 
-    meter_lock(dp, mid);
-    dp_delete_meter(dp, mid); /* Free existing meter, if any */
-    dp->meters[mid] = meter;
-    meter_unlock(dp, mid);
+    ovs_mutex_lock(&dp->meters_lock);
+
+    dp_meter_detach_free(&dp->meters, mid); /* Free existing meter, if any. */
+    dp_meter_attach(&dp->meters, meter);
+
+    ovs_mutex_unlock(&dp->meters_lock);
 
     return 0;
 }
@@ -6379,22 +6411,23 @@ dpif_netdev_meter_get(const struct dpif *dpif,
                       ofproto_meter_id meter_id_,
                       struct ofputil_meter_stats *stats, uint16_t n_bands)
 {
-    const struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev *dp = get_dp_netdev(dpif);
     uint32_t meter_id = meter_id_.uint32;
-    int retval = 0;
+    const struct dp_meter *meter;
 
     if (meter_id >= MAX_METERS) {
         return EFBIG;
     }
 
-    meter_lock(dp, meter_id);
-    const struct dp_meter *meter = dp->meters[meter_id];
+    meter = dp_meter_lookup(&dp->meters, meter_id);
     if (!meter) {
-        retval = ENOENT;
-        goto done;
+        return ENOENT;
     }
+
     if (stats) {
         int i = 0;
+
+        ovs_mutex_lock(&meter->lock);
 
         stats->packet_in_count = meter->packet_count;
         stats->byte_in_count = meter->byte_count;
@@ -6404,12 +6437,11 @@ dpif_netdev_meter_get(const struct dpif *dpif,
             stats->bands[i].byte_count = meter->bands[i].byte_count;
         }
 
+        ovs_mutex_unlock(&meter->lock);
         stats->n_bands = i;
     }
 
-done:
-    meter_unlock(dp, meter_id);
-    return retval;
+    return 0;
 }
 
 static int
@@ -6424,9 +6456,9 @@ dpif_netdev_meter_del(struct dpif *dpif,
     if (!error) {
         uint32_t meter_id = meter_id_.uint32;
 
-        meter_lock(dp, meter_id);
-        dp_delete_meter(dp, meter_id);
-        meter_unlock(dp, meter_id);
+        ovs_mutex_lock(&dp->meters_lock);
+        dp_meter_detach_free(&dp->meters, meter_id);
+        ovs_mutex_unlock(&dp->meters_lock);
     }
     return error;
 }
