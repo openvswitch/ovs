@@ -1236,11 +1236,7 @@ def flows_script(args):
 
     if (args.flowFiles is None):
         logging.info("reading flows from stdin")
-        ihdl = os.fdopen(sys.stdin.fileno(), 'r', 0)
-        try:
-            flow_db = flows_read(ihdl, flow_db)
-        finally:
-            ihdl.close()
+        flow_db = flows_read(sys.stdin, flow_db)
     else:
         for flowFile in args.flowFiles:
             logging.info("reading flows from %s", flowFile)
