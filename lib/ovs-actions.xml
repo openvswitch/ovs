@@ -509,7 +509,8 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
         <dd>
           Subjects the packet to the device's normal L2/L3 processing.  This
           action is not implemented by all OpenFlow switches, and each switch
-          implements it differently.
+          implements it differently.  The section ``The OVS Normal Pipeline''
+          below documents the OVS implementation.
         </dd>
 
         <dt><code>flood</code></dt>
@@ -582,7 +583,6 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
         OpenFlow allows switches to reject such actions.
       </p>
 
-      <!-- XXX output to normal details -->
       <!-- XXX output to patch ports details -->
 
       <h3>Output to the Input Port</h3>
@@ -663,6 +663,305 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
         OpenFlow extension introduced in Open vSwitch 2.6.
       </conformance>
     </action>
+
+    <h2>The OVS Normal Pipeline</h2>
+
+    <p>
+      This section documents how Open vSwitch implements output to the
+      <code>normal</code> port.  The OpenFlow specification places no
+      requirements on how this port works, so all of this documentation is
+      specific to Open vSwitch.
+    </p>
+
+    <p>
+      Open vSwitch uses the <code>Open_vSwitch</code> database, detailed in
+      <code>ovs-vswitchd.conf.db</code>(5), to determine the details of the
+      normal pipeline.
+    </p>
+
+    <p>
+      The normal pipeline executes the following ingress stages for each
+      packet.  Each stage either accepts the packet, in which case the packet
+      goes on to the next stage, or drops the packet, which terminates the
+      pipeline.  The result of the ingress stages is a set of output ports,
+      which is the empty set if some ingress stage drops the packet:
+    </p>
+
+    <ol>
+      <li>
+        <p>
+          <b>Input port lookup</b>: Looks up the OpenFlow
+          <code>in_port</code> field's value to the corresponding
+          <code>Port</code> and <code>Interface</code> record in the database.
+        </p>
+
+        <p>
+          The <code>in_port</code> is normally the OpenFlow port that the
+          packet was received on.  If <code>set_field</code> or another actions
+          changes the <code>in_port</code>, the updated value is honored.
+          Accept the packet if the lookup succeeds, which it normally will.  If
+          the lookup fails, for example because <code>in_port</code> was
+          changed to an unknown value, drop the packet.
+        </p>
+      </li>
+
+      <li>
+        <b>Drop malformed packet</b>: If the packet is malformed enough that it
+        contains only part of an 802.1Q header, then drop the packet with an
+        error.
+      </li>
+
+      <li>
+        <b>Drop packets sent to a port reserved for mirroring:</b> If the
+        packet was received on a port that is configured as the output port for
+        a mirror (that is, it is the <code>output_port</code> in some
+        <code>Mirror</code> record), then drop the packet.
+      </li>
+
+      <li>
+        <p>
+          <b>VLAN input processing:</b> This stage determines what VLAN the
+          packet is in.  It also verifies that this VLAN is valid for the port;
+          if not, drop the packet.  How the VLAN is determined and which ones
+          are valid vary based on the <code>vlan-mode</code> in the input
+          port's <code>Port</code> record:
+        </p>
+
+        <dl>
+          <dt><code>trunk</code></dt>
+          <dd>
+            The packet is in the VLAN specified in its 802.1Q header, or in
+            VLAN 0 if there is no 802.1Q header.  The <code>trunks</code>
+            column in the <code>Port</code> record lists the valid VLANs; if it
+            is empty, all VLANs are valid.
+          </dd>
+
+          <dt><code>access</code></dt>
+          <dd>
+            The packet is in the VLAN specified in the <code>tag</code> column
+            of its <code>Port</code> record.  The packet must not have an
+            802.1Q header with a nonzero VLAN ID; if it does, drop the packet.
+          </dd>
+
+          <dt><code>native-tagged</code></dt>
+          <dt><code>native-untagged</code></dt>
+          <dd>
+            Same as <code>trunk</code> except that the VLAN of a packet without
+            an 802.1Q header is not necessarily zero; instead, it is taken from
+            the <code>tag</code> column.
+          </dd>
+
+          <dt><code>dot1q-tunnel</code></dt>
+          <dd>
+            The packet is in the VLAN specified in the <code>tag</code> column
+            of its <code>Port</code> record, which is a QinQ service VLAN with
+            the Ethertype specified by the <code>Port</code>'s
+            <code>other_config</code> : <code>qinq-ethtype</code>.  If the
+            packet has an 802.1Q header, then it specifies the customer VLAN.
+            The <code>cvlans</code> column specifies the valid customer VLANs;
+            if it is empty, all customer VLANs are valid.
+          </dd>
+        </dl>
+      </li>
+
+      <li>
+        <b>Drop reserved multicast addresses:</b> If the packet is addressed to
+        a reserved Ethernet multicast address and the <code>Bridge</code>
+        record does not have <code>other_config</code> :
+        <code>forward-bpdu</code> set to <code>true</code>, drop the packet.
+      </li>
+
+      <li>
+        <p>
+          <b>LACP bond admissibility:</b> This step applies only if the input
+          port is a member of a bond (a <code>Port</code> with more than one
+          <code>Interface</code>) and that bond is configured to use LACP.
+          Otherwise, skip to the next step.
+        </p>
+
+        <p>
+          The behavior here depends on the state of LACP negotiation:
+        </p>
+
+        <ul>
+          <li>
+            If LACP has been negotiated with the peer, accept the packet if the
+            bond member is enabled (i.e. carrier is up and it hasn't been
+            administratively disabled).  Otherwise, drop the packet.
+          </li>
+
+          <li>
+            If LACP negotiation is incomplete, then drop the packet.  There is
+            one exception: if fallback to active-backup mode is enabled,
+            continue with the next step, pretending that the active-backup
+            balancing mode is in use.
+          </li>
+        </ul>
+      </li>
+
+      <li>
+        <p>
+          <b>Non-LACP bond admissibility:</b> This step applies if the input
+          port is a member of a bond without LACP configured, or if a LACP bond
+          falls back to active-backup as described in the previous step.  If
+          neither of these applies, skip to the next step.
+        </p>
+
+        <p>
+          If the packet is an Ethernet multicast or broadcast, and not received
+          on the bond's active member, drop the packet.
+        </p>
+
+        <p>
+          The remaining behavior depends on the bond's balancing mode:
+        </p>
+
+        <dl>
+          <dt>L4 (aka TCP balancing)</dt>
+          <dd>
+            Drop the packet (this balancing mode is only supported with LACP).
+          </dd>
+
+          <dt>Active-backup</dt>
+          <dd>
+            Accept the packet only if it was received on the active member.
+          </dd>
+
+          <dt>SLB (Source Load Balancing)</dt>
+          <dd>
+            Drop the packet if the bridge has not learned the packet's source
+            address (in its VLAN) on the port that received it.  Otherwise,
+            accept the packet unless it is a gratuitous ARP.  Otherwise,
+            accept the packet if the MAC entry we found is ARP-locked.
+            Otherwise, drop the packet.  (See the ``SLB Bonding'' section in
+            the OVS bonding document for more information and a rationale.)
+          </dd>
+        </dl>
+      </li>
+
+      <li>
+        <p>
+          <b>Learn source MAC:</b> If the source Ethernet address is not a
+          multicast address, then insert a mapping from packet's source
+          Ethernet address and VLAN to the input port in the bridge's MAC
+          learning table.  (This is skipped if the packet's VLAN is listed in
+          the switch's <code>Bridge</code> record in the
+          <code>flood_vlans</code> column, since there is no use for MAC
+          learning when all packets are flooded.)
+        </p>
+
+        <p>
+          When learning happens on a non-bond port, if the packet is a
+          gratuitous ARP, the entry is marked as ARP-locked.  The lock expires
+          after 5 seconds.  (See the ``SLB Bonding'' section in the OVS bonding
+          document for more information and a rationale.)
+        </p>
+      </li>
+
+      <li>
+        <b>IP multicast path:</b> If multicast snooping is enabled on the
+        bridge, and the packet is an Ethernet multicast but not an Ethernet
+        broadcast, and the packet is an IP packet, then the packet takes a
+        special processing path.  This path is not yet documented here.  <!--
+        XXX document multicast processing -->
+      </li>
+
+      <li>
+        <p>
+          <b>Output port set:</b> Search the MAC learning table for the port
+          corresponding to the packet's Ethernet destination and VLAN.  If the
+          search finds an entry, the output port set is just the learned
+          port.  Otherwise (including the case where the packet is an Ethernet
+          multicast or in <code>flood_vlans</code>), the output port set is all
+          of the ports in the bridge that belong to the packet's VLAN, except
+          for any ports that were disabled for flooding via OpenFlow or that
+          are configured in a <code>Mirror</code> record as a mirror
+          destination port.
+        </p>
+      </li>
+    </ol>
+
+    <p>
+      The following egress stages execute once for each element in the set of
+      output ports.  They execute (conceptually) in parallel, so that a
+      decision or action taken for a given output port has no effect on those
+      for another one:
+    </p>
+
+    <ol>
+      <li>
+        <b>Drop loopback:</b> If the output port is the same as the input port,
+        drop the packet.
+      </li>
+
+      <li>
+        <p>
+          <b>VLAN output processing:</b> This stage adjusts the packet to
+          represent the VLAN in the correct way for the output port.  Its
+          behavior varies based on the <code>vlan-mode</code> in the output
+          port's <code>Port</code> record:
+        </p>
+
+        <dl>
+          <dt><code>trunk</code></dt>
+          <dt><code>native-tagged</code></dt>
+          <dt><code>native-untagged</code></dt>
+          <dd>
+            If the packet is in VLAN 0 (for <code>native-untagged</code>, if
+            the packet is in the native VLAN) drops any 802.1Q header.
+            Otherwise, ensures that there is an 802.1Q header designating the
+            VLAN.
+          </dd>
+
+          <dt><code>access</code></dt>
+          <dd>
+            Remove any 802.1Q header that was present.
+          </dd>
+
+          <dt><code>dot1q-tunnel</code></dt>
+          <dd>
+            Ensures that the packet has an outer 802.1Q header with the QinQ
+            Ethertype and the specified configured tag, and an inner 802.1Q
+            header with the packet's VLAN.
+          </dd>
+        </dl>
+      </li>
+
+      <li>
+        <b>VLAN priority tag processing:</b> If VLAN output processing
+        discarded the 802.1Q headers, but priority tags are enabled with
+        <code>other_config</code> : <code>priority-tags</code> in the output
+        port's <code>Port</code> record, then a priority-only tag is added
+        (perhaps only if the priority would be nonzero, depending on the
+        configuration).
+      </li>
+
+      <li>
+        <p>
+          <b>Bond member choice:</b> If the output port is a bond, the code
+          chooses a particular member.  This step is skipped for non-bonded
+          ports.
+        </p>
+
+        <p>
+          If the bond is configured to use LACP, but LACP negotiation is
+          incomplete, then normally the packet is dropped.  The exception is
+          that if fallback to active-backup mode is enabled, the egress
+          pipeline continues choosing a bond member as if active-backup mode
+          was in use.
+        </p>
+
+        <p>
+          For active-backup mode, the output member is the active member.
+          Other modes hash appropriate header fields and use the hash value to
+          choose one of the enabled members.
+        </p>
+      </li>
+
+      <li>
+        <b>Output:</b> The pipeline sends the packet to the output port.
+      </li>
+    </ol>
 
     <action name="CONTROLLER">
       <h2>The <code>controller</code> action</h2>
