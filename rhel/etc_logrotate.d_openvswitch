@@ -13,8 +13,8 @@
     missingok
     postrotate
         # Tell Open vSwitch daemons to reopen their log files
-        if [ -d /var/run/openvswitch ]; then
-            for ctl in /var/run/openvswitch/*.ctl; do
+        if [ -d /run/openvswitch ]; then
+            for ctl in /run/openvswitch/*.ctl; do
                 ovs-appctl -t "$ctl" vlog/reopen 2>/dev/null || :
             done
         fi
