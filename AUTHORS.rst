@@ -409,10 +409,11 @@ Venkata Anil Kommaddi              vkommadi@redhat.com
 Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
 Volkan Atlı                        volkan.atli@b-ulltech.com
-wangqianyu                         wang.qianyu@zte.com.cn
 Wang Li                            wangli39@baidu.com
 Wang Sheng-Hui                     shhuiw@gmail.com
+Wang Yibo                          bobxxwang@126.com
 Wang Zhike                         wangzhike@jd.com
+wangqianyu                         wang.qianyu@zte.com.cn
 Wei Li                             liw@dtdream.com
 Wei Yongjun                        yjwei@cn.fujitsu.com
 Wenyu Zhang                        wenyuz@vmware.com
