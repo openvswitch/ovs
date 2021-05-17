@@ -2979,6 +2979,50 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     return 0;
 }
 
+static bool
+cmp_tc_flower_match_action(const struct tc_flower *a,
+                           const struct tc_flower *b)
+{
+    if (memcmp(&a->mask, &b->mask, sizeof a->mask)) {
+        VLOG_DBG_RL(&error_rl, "tc flower compare failed mask compare");
+        return false;
+    }
+
+    /* We can not memcmp() the key as some keys might be set while the mask
+     * is not.*/
+
+    for (int i = 0; i < sizeof a->key; i++) {
+        uint8_t mask = ((uint8_t *)&a->mask)[i];
+        uint8_t key_a = ((uint8_t *)&a->key)[i] & mask;
+        uint8_t key_b = ((uint8_t *)&b->key)[i] & mask;
+
+        if (key_a != key_b) {
+            VLOG_DBG_RL(&error_rl, "tc flower compare failed key compare at "
+                        "%d", i);
+            return false;
+        }
+    }
+
+    /* Compare the actions. */
+    const struct tc_action *action_a = a->actions;
+    const struct tc_action *action_b = b->actions;
+
+    if (a->action_count != b->action_count) {
+        VLOG_DBG_RL(&error_rl, "tc flower compare failed action length check");
+        return false;
+    }
+
+    for (int i = 0; i < a->action_count; i++, action_a++, action_b++) {
+        if (memcmp(action_a, action_b, sizeof *action_a)) {
+            VLOG_DBG_RL(&error_rl, "tc flower compare failed action compare "
+                        "for %d", i);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 int
 tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 {
@@ -3010,6 +3054,21 @@ tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 
         id->prio = tc_get_major(tc->tcm_info);
         id->handle = tc->tcm_handle;
+
+        if (id->prio != TC_RESERVED_PRIORITY_POLICE) {
+            struct tc_flower flower_out;
+            struct tcf_id id_out;
+            int ret;
+
+            ret = parse_netlink_to_tc_flower(reply, &id_out, &flower_out,
+                                             false);
+
+            if (ret || !cmp_tc_flower_match_action(flower, &flower_out)) {
+                VLOG_WARN_RL(&error_rl, "Kernel flower acknowledgment does "
+                             "not match request!  Set dpif_netlink to dbg to "
+                             "see which rule caused this error.");
+            }
+        }
         ofpbuf_delete(reply);
     }
 
