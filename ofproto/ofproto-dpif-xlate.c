@@ -6549,6 +6549,8 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                  * Delay generating pop_eth to the next commit. */
                 flow->packet_type = htonl(PACKET_TYPE(OFPHTN_ETHERTYPE,
                                                       ntohs(flow->dl_type)));
+                flow->dl_src = eth_addr_zero;
+                flow->dl_dst = eth_addr_zero;
                 ctx->wc->masks.dl_type = OVS_BE16_MAX;
             }
             return false;
