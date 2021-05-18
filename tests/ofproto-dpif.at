@@ -10708,6 +10708,31 @@ dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 in_port=2 (via action) data_len=106 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:553
 ])
+
+dnl The next test verifies that ct_clear at the datapath only gets executed
+dnl if conntrack information is present.
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=ct_clear,ct_clear,ct_clear,p2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=p1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 ip actions=ct_clear,ct(table=1)
+table=1 in_port=1 actions=ct_clear,ct_clear,goto_table:2
+table=2 in_port=1 actions=ct_clear,p2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=p1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2'], [0], [stdout])
+AT_CHECK([grep Datapath stdout | sed 's/recirc(.*)/recirc(X)/'], [0],
+  [Datapath actions: ct,recirc(X)
+Datapath actions: ct_clear,2
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
