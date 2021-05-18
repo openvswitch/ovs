@@ -7181,7 +7181,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CT_CLEAR:
-            compose_ct_clear_action(ctx);
+            if (ctx->conntracked) {
+                compose_ct_clear_action(ctx);
+            }
             break;
 
         case OFPACT_NAT:
