@@ -1004,11 +1004,20 @@ bad_action 'dec_ttl(,)' 'dec_ttl_cnt_ids: expected at least one controller id.'
 # set_mpls_label
 bad_action 'set_mpls_label' 'set_mpls_label: expected label.'
 
+# set_mpls_label oversized
+bad_action 'set_mpls_label(0x100000)' '0x100000: not a valid MPLS label'
+
 # set_mpls_tc
 bad_action 'set_mpls_tc' 'set_mpls_tc: expected tc.'
 
+# set_mpls_tc oversized
+bad_action 'set_mpls_tc(8)' '8: not a valid MPLS TC'
+
 # set_mpls_ttl
 bad_action 'set_mpls_ttl' 'set_mpls_ttl: expected ttl.'
+
+# set_mpls_ttl oversized
+bad_action 'set_mpls_ttl(256)' 'invalid MPLS TTL "256"'
 
 # fin_timeout
 bad_action 'fin_timeout(foo=bar)' "invalid key 'foo' in 'fin_timeout' argument"
