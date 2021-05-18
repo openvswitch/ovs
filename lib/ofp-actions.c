@@ -3777,11 +3777,22 @@ parse_SET_MPLS_LABEL(char *arg, const struct ofpact_parse_params *pp)
 {
     struct ofpact_mpls_label *mpls_label
         = ofpact_put_SET_MPLS_LABEL(pp->ofpacts);
+    uint32_t label;
+    char *error;
+
     if (*arg == '\0') {
         return xstrdup("set_mpls_label: expected label.");
     }
 
-    mpls_label->label = htonl(atoi(arg));
+    error = str_to_u32(arg, &label);
+    if (error) {
+        return error;
+    }
+
+    if (label & ~0xfffff) {
+        return xasprintf("%s: not a valid MPLS label", arg);
+    }
+    mpls_label->label = htonl(label);
     return NULL;
 }
 
@@ -3837,12 +3848,22 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_SET_MPLS_TC(char *arg, const struct ofpact_parse_params *pp)
 {
     struct ofpact_mpls_tc *mpls_tc = ofpact_put_SET_MPLS_TC(pp->ofpacts);
+    uint8_t tc;
+    char *error;
 
     if (*arg == '\0') {
         return xstrdup("set_mpls_tc: expected tc.");
     }
 
-    mpls_tc->tc = atoi(arg);
+    error = str_to_u8(arg, "MPLS TC", &tc);
+    if (error) {
+        return error;
+    }
+
+    if (tc & ~7) {
+        return xasprintf("%s: not a valid MPLS TC", arg);
+    }
+    mpls_tc->tc = tc;
     return NULL;
 }
 
@@ -3850,7 +3871,7 @@ static void
 format_SET_MPLS_TC(const struct ofpact_mpls_tc *a,
                    const struct ofpact_format_params *fp)
 {
-    ds_put_format(fp->s, "%sset_mpls_ttl(%s%"PRIu8"%s)%s",
+    ds_put_format(fp->s, "%sset_mpls_tc(%s%"PRIu8"%s)%s",
                   colors.paren, colors.end, a->tc,
                   colors.paren, colors.end);
 }
@@ -3889,12 +3910,18 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_SET_MPLS_TTL(char *arg, const struct ofpact_parse_params *pp)
 {
     struct ofpact_mpls_ttl *mpls_ttl = ofpact_put_SET_MPLS_TTL(pp->ofpacts);
+    uint8_t ttl;
+    char *error;
 
     if (*arg == '\0') {
         return xstrdup("set_mpls_ttl: expected ttl.");
     }
 
-    mpls_ttl->ttl = atoi(arg);
+    error = str_to_u8(arg, "MPLS TTL", &ttl);
+    if (error) {
+        return error;
+    }
+    mpls_ttl->ttl = ttl;
     return NULL;
 }
 
