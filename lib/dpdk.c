@@ -25,6 +25,7 @@
 #include <rte_cpuflags.h>
 #include <rte_errno.h>
 #include <rte_log.h>
+#include <rte_malloc.h>
 #include <rte_memzone.h>
 #include <rte_version.h>
 
@@ -356,6 +357,12 @@ dpdk_unixctl_log_set(struct unixctl_conn *conn, int argc, const char *argv[],
     unixctl_command_reply(conn, NULL);
 }
 
+static void
+malloc_dump_stats_wrapper(FILE *stream)
+{
+    rte_malloc_dump_stats(stream, NULL);
+}
+
 static bool
 dpdk_init__(const struct smap *ovs_other_config)
 {
@@ -525,6 +532,9 @@ dpdk_init__(const struct smap *ovs_other_config)
                              dpdk_unixctl_mem_stream, rte_log_dump);
     unixctl_command_register("dpdk/log-set", "{level | pattern:level}", 0,
                              INT_MAX, dpdk_unixctl_log_set, NULL);
+    unixctl_command_register("dpdk/get-malloc-stats", "", 0, 0,
+                             dpdk_unixctl_mem_stream,
+                             malloc_dump_stats_wrapper);
 
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
