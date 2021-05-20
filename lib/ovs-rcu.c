@@ -47,7 +47,6 @@ struct ovsrcu_cbset {
 struct ovsrcu_perthread {
     struct ovs_list list_node;  /* In global list. */
 
-    struct ovs_mutex mutex;
     uint64_t seqno;
     struct ovsrcu_cbset *cbset;
     char name[16];              /* This thread's name. */
@@ -84,7 +83,6 @@ ovsrcu_perthread_get(void)
         const char *name = get_subprogram_name();
 
         perthread = xmalloc(sizeof *perthread);
-        ovs_mutex_init(&perthread->mutex);
         perthread->seqno = seq_read(global_seqno);
         perthread->cbset = NULL;
         ovs_strlcpy(perthread->name, name[0] ? name : "main",
@@ -406,7 +404,6 @@ ovsrcu_unregister__(struct ovsrcu_perthread *perthread)
     ovs_list_remove(&perthread->list_node);
     ovs_mutex_unlock(&ovsrcu_threads_mutex);
 
-    ovs_mutex_destroy(&perthread->mutex);
     free(perthread);
 
     seq_change(global_seqno);
