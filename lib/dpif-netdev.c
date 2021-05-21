@@ -4169,7 +4169,6 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     }
 
     dp_packet_batch_init_packet(&pp, execute->packet);
-    pp.do_not_steal = true;
     dp_netdev_execute_actions(pmd, &pp, false, execute->flow,
                               execute->actions, execute->actions_len);
     dp_netdev_pmd_flush_output_packets(pmd, true);
