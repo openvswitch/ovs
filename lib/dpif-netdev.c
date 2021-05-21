@@ -7418,7 +7418,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)
-        struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     struct netdev_flow_key *missed_keys[PKT_ARRAY_SIZE];
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     size_t n_batches;
