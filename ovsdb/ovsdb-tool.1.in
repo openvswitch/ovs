@@ -10,7 +10,7 @@ ovsdb\-tool \- Open vSwitch database management utility
 .IP "Database Creation Commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate \fR[\fIdb\fR [\fIschema\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate\-cluster \fIdb contents address\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-\-election\-timer=\fIms\fR] \fBcreate\-cluster \fIdb contents address\fR
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-\-cid=\fIuuid\fR] \fBjoin\-cluster\fI db name local remote\fR...
 .IP "Version Management Commands:"
@@ -89,7 +89,7 @@ format, as specified in the OVSDB specification.  The new database is
 initially empty.  (You can use \fBcp\fR to copy a database including
 both its schema and data.)
 .
-.IP "\fBcreate\-cluster\fI db contents local"
+.IP "[\fB\-\-election\-timer=\fIms\fR] \fBcreate\-cluster\fI db contents local"
 Use this command to initialize the first server in a high-availability
 cluster of 3 (or more) database servers, e.g. for a database in an
 environment that cannot tolerate a single point of failure.  It creates
@@ -108,6 +108,12 @@ file that contains either an OVSDB schema in JSON format or a
 standalone OVSDB database.  If it is a schema file, the new database
 will initially be empty, with the given schema.  If it is a database
 file, the new database will have the same schema and contents.
+.IP
+Leader election will be initiated by a follower if there is no heartbeat
+received from the cluster leader within the specified election timer.
+The default leader election timer is 1000 miliseconds. To use a different value
+when creating the database, specify \fB\-\-election\-timer=\fIms\fR, where
+\fIms\fR is a value in miliseconds between 100 and 600000 inclusive.
 .
 .IP "[\fB\-\-cid=\fIuuid\fR] \fBjoin\-cluster\fI db name local remote\fR..."
 Use this command to initialize each server after the first one in an

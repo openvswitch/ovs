@@ -80,7 +80,8 @@ struct sset;
 struct ovsdb_error *raft_create_cluster(const char *file_name,
                                         const char *name,
                                         const char *local_address,
-                                        const struct json *snapshot)
+                                        const struct json *snapshot,
+                                        const uint64_t election_timer)
     OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *raft_join_cluster(const char *file_name, const char *name,
                                       const char *local_address,
@@ -115,6 +116,9 @@ const struct uuid *raft_get_sid(const struct raft *);
 bool raft_is_connected(const struct raft *);
 bool raft_is_leader(const struct raft *);
 void raft_get_memory_usage(const struct raft *, struct simap *usage);
+
+/* Parameter validation */
+struct ovsdb_error *raft_validate_election_timer(const uint64_t ms);
 
 /* Joining a cluster. */
 bool raft_is_joining(const struct raft *);

@@ -201,6 +201,8 @@ struct raft {
 
 #define ELECTION_BASE_MSEC 1000
 #define ELECTION_RANGE_MSEC 1000
+#define ELECTION_MIN_MSEC 100
+#define ELECTION_MAX_MSEC 600000
     /* The election timeout base value for leader election, in milliseconds.
      * It can be set by unixctl cluster/change-election-timer. Default value is
      * ELECTION_BASE_MSEC. */
@@ -446,16 +448,29 @@ raft_alloc(void)
  * This only creates the on-disk file.  Use raft_open() to start operating the
  * new server.
  *
+ * The optional election_timer argument, when greater than zero, sets the given
+ * leader election timer for the new cluster, in miliseconds. If non-zero, it
+ * must be between 100 and 600000 inclusive.
+ *
  * Returns null if successful, otherwise an ovsdb_error describing the
  * problem. */
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 raft_create_cluster(const char *file_name, const char *name,
-                    const char *local_address, const struct json *data)
+                    const char *local_address, const struct json *data,
+                    const uint64_t election_timer)
 {
     /* Parse and verify validity of the local address. */
     struct ovsdb_error *error = raft_address_validate(local_address);
     if (error) {
         return error;
+    }
+
+    /* Validate optional election timer */
+    if (election_timer > 0) {
+        error = raft_validate_election_timer(election_timer);
+        if (error) {
+            return error;
+        }
     }
 
     /* Create log file. */
@@ -467,6 +482,8 @@ raft_create_cluster(const char *file_name, const char *name,
     }
 
     /* Write log file. */
+    const uint64_t term = 1;
+    uint64_t index = 1;
     struct raft_header h = {
         .sid = uuid_random(),
         .cid = uuid_random(),
@@ -474,9 +491,9 @@ raft_create_cluster(const char *file_name, const char *name,
         .local_address = xstrdup(local_address),
         .joining = false,
         .remote_addresses = SSET_INITIALIZER(&h.remote_addresses),
-        .snap_index = 1,
+        .snap_index = index++,
         .snap = {
-            .term = 1,
+            .term = term,
             .data = json_nullable_clone(data),
             .eid = uuid_random(),
             .servers = json_object_create(),
@@ -487,11 +504,33 @@ raft_create_cluster(const char *file_name, const char *name,
                      json_string_create(local_address));
     error = ovsdb_log_write_and_free(log, raft_header_to_json(&h));
     raft_header_uninit(&h);
-    if (!error) {
-        error = ovsdb_log_commit_block(log);
+    if (error) {
+        goto error;
     }
-    ovsdb_log_close(log);
 
+    if (election_timer > 0) {
+        struct raft_record r = {
+            .type = RAFT_REC_ENTRY,
+            .term = term,
+            .entry = {
+                .index = index,
+                .data = NULL,
+                .servers = NULL,
+                .election_timer = election_timer,
+                .eid = UUID_ZERO,
+            },
+        };
+        error = ovsdb_log_write_and_free(log, raft_record_to_json(&r));
+        raft_record_uninit(&r);
+        if (error) {
+            goto error;
+        }
+    }
+
+    error = ovsdb_log_commit_block(log);
+
+error:
+    ovsdb_log_close(log);
     return error;
 }
 
@@ -1076,6 +1115,21 @@ raft_get_memory_usage(const struct raft *raft, struct simap *usage)
     simap_increase(usage, "raft-backlog-kB", backlog / 1000);
     simap_increase(usage, "raft-connections", cnt);
     simap_increase(usage, "raft-log", raft->log_end - raft->log_start);
+}
+
+/* Returns an error if the election timer (in miliseconds) is out of bounds.
+ * Values smaller than 100ms or bigger than 10min don't make sense.
+ */
+struct ovsdb_error *
+raft_validate_election_timer(const uint64_t ms)
+{
+    /* Validate optional election timer */
+    if (ms < ELECTION_MIN_MSEC || ms > ELECTION_MAX_MSEC) {
+        return ovsdb_error(NULL, "election timer must be between %d and "
+                           "%d, in msec.", ELECTION_MIN_MSEC,
+                           ELECTION_MAX_MSEC);
+    }
+    return NULL;
 }
 
 /* Returns true if 'raft' has completed joining its cluster, has not left or

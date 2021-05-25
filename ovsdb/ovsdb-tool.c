@@ -58,6 +58,9 @@ static const char *rbac_role;
 /* --cid: Cluster ID for "join-cluster" command. */
 static struct uuid cid;
 
+/* --election-timer: Election timer for "create-cluster" command. */
+static uint64_t election_timer;
+
 static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
@@ -85,12 +88,14 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_RBAC_ROLE = UCHAR_MAX + 1,
-        OPT_CID
+        OPT_CID,
+        OPT_ELECTION_TIMER,
     };
     static const struct option long_options[] = {
         {"more", no_argument, NULL, 'm'},
         {"rbac-role", required_argument, NULL, OPT_RBAC_ROLE},
         {"cid", required_argument, NULL, OPT_CID},
+        {"election-timer", required_argument, NULL, OPT_ELECTION_TIMER},
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
@@ -100,6 +105,7 @@ parse_options(int argc, char *argv[])
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
+        struct ovsdb_error *error;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -119,6 +125,14 @@ parse_options(int argc, char *argv[])
         case OPT_CID:
             if (!uuid_from_string(&cid, optarg) || uuid_is_zero(&cid)) {
                 ovs_fatal(0, "%s: not a valid UUID", optarg);
+            }
+            break;
+
+        case OPT_ELECTION_TIMER:
+            election_timer = atoll(optarg);
+            error = raft_validate_election_timer(election_timer);
+            if (error) {
+                ovs_fatal(0, "%s", ovsdb_error_to_string_free(error));
             }
             break;
 
@@ -153,7 +167,7 @@ usage(void)
     printf("%s: Open vSwitch database management utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
            "  create [DB [SCHEMA]]    create DB with the given SCHEMA\n"
-           "  create-cluster DB CONTENTS LOCAL\n"
+           "  [--election-timer=ms] create-cluster DB CONTENTS LOCAL\n"
            "    create clustered DB with given CONTENTS and LOCAL address\n"
            "  [--cid=UUID] join-cluster DB NAME LOCAL REMOTE...\n"
            "    join clustered DB with given NAME and LOCAL and REMOTE addrs\n"
@@ -303,7 +317,7 @@ do_create_cluster(struct ovs_cmdl_context *ctx)
     /* Create database file. */
     struct json *snapshot = json_array_create_2(schema_json, data);
     check_ovsdb_error(raft_create_cluster(db_file_name, schema->name,
-                                          local, snapshot));
+                                          local, snapshot, election_timer));
     ovsdb_schema_destroy(schema);
     json_destroy(snapshot);
 }
