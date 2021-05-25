@@ -1666,7 +1666,7 @@ for <var>i</var> in [1,<var>n_members</var>]:
 
     <action name="CT">
       <h2>The <code>ct</code> action</h2>
-      <syntax><code>ct(<var>argument</var></code>]...<code>)</code></syntax>
+      <syntax><code>ct(</code>[<code><var>argument</var></code>]...<code>)</code></syntax>
       <syntax><code>ct(commit</code>[<code>, <var>argument</var></code>]...<code>)</code></syntax>
 
       <p>
