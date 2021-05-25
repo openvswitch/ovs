@@ -974,7 +974,7 @@ ofproto_ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
     datapath_type = ofproto_normalize_type(datapath_type);
     const struct ofproto_class *class = ofproto_class_find__(datapath_type);
 
-    if (class->ct_set_zone_timeout_policy) {
+    if (class && class->ct_set_zone_timeout_policy) {
         class->ct_set_zone_timeout_policy(datapath_type, zone_id,
                                           timeout_policy);
     }
@@ -986,7 +986,7 @@ ofproto_ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
     datapath_type = ofproto_normalize_type(datapath_type);
     const struct ofproto_class *class = ofproto_class_find__(datapath_type);
 
-    if (class->ct_del_zone_timeout_policy) {
+    if (class && class->ct_del_zone_timeout_policy) {
         class->ct_del_zone_timeout_policy(datapath_type, zone_id);
     }
 
