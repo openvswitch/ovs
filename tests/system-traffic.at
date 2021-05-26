@@ -2561,7 +2561,7 @@ priority=10,arp,action=normal
 
 dnl Only allow non-fragmented messages and 1st fragments of each message
 priority=100,in_port=1,icmp,ip_frag=no,action=ct(commit,zone=9),2
-priority=100,in_port=1,icmp,ip_frag=firstaction=ct(commit,zone=9),2
+priority=100,in_port=1,icmp,ip_frag=first,action=ct(commit,zone=9),2
 priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
 priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
