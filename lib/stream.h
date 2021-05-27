@@ -94,4 +94,16 @@ enum stream_content_type {
 void stream_report_content(const void *, ssize_t, enum stream_content_type,
                            struct vlog_module *, const char *stream_name);
 
+
+/* Stream replay helpers. */
+void stream_replay_open_wfd(struct stream *, int open_result,
+                            const char *name);
+void pstream_replay_open_wfd(struct pstream *, int listen_result,
+                             const char *name);
+void stream_replay_close_wfd(struct stream *);
+void pstream_replay_close_wfd(struct pstream *);
+void stream_replay_write(struct stream *, const void *, int, bool is_read);
+void pstream_replay_write_accept(struct pstream *, const struct stream *,
+                                 int accept_result);
+
 #endif /* stream.h */

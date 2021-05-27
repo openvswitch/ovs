@@ -312,6 +312,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
+	lib/stream-replay.c \
 	lib/stream-ssl.h \
 	lib/stream-tcp.c \
 	lib/stream.c \

@@ -33,6 +33,7 @@
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "ovs-replay.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
@@ -184,7 +185,11 @@ stream_lookup_class(const char *name, const struct stream_class **classp)
         const struct stream_class *class = stream_classes[i];
         if (strlen(class->name) == prefix_len
             && !memcmp(class->name, name, prefix_len)) {
-            *classp = class;
+            if (ovs_replay_get_state() == OVS_REPLAY_READ) {
+                *classp = &replay_stream_class;
+            } else {
+                *classp = class;
+            }
             return 0;
         }
     }
@@ -227,6 +232,8 @@ stream_open(const char *name, struct stream **streamp, uint8_t dscp)
     suffix_copy = xstrdup(strchr(name, ':') + 1);
     error = class->open(name, suffix_copy, &stream, dscp);
     free(suffix_copy);
+
+    stream_replay_open_wfd(stream, error, name);
     if (error) {
         goto error;
     }
@@ -295,6 +302,7 @@ stream_close(struct stream *stream)
     if (stream != NULL) {
         char *name = stream->name;
         char *peer_id = stream->peer_id;
+        stream_replay_close_wfd(stream);
         (stream->class->close)(stream);
         free(name);
         free(peer_id);
@@ -367,9 +375,13 @@ int
 stream_recv(struct stream *stream, void *buffer, size_t n)
 {
     int retval = stream_connect(stream);
-    return (retval ? -retval
-            : n == 0 ? 0
-            : (stream->class->recv)(stream, buffer, n));
+
+    retval = retval ? -retval
+             : n == 0 ? 0
+             : (stream->class->recv)(stream, buffer, n);
+
+    stream_replay_write(stream, buffer, retval, true);
+    return retval;
 }
 
 /* Tries to send up to 'n' bytes of 'buffer' on 'stream', and returns:
@@ -385,9 +397,12 @@ int
 stream_send(struct stream *stream, const void *buffer, size_t n)
 {
     int retval = stream_connect(stream);
-    return (retval ? -retval
-            : n == 0 ? 0
-            : (stream->class->send)(stream, buffer, n));
+    retval = retval ? -retval
+             : n == 0 ? 0
+             : (stream->class->send)(stream, buffer, n);
+
+    stream_replay_write(stream, buffer, retval, false);
+    return retval;
 }
 
 /* Allows 'stream' to perform maintenance activities, such as flushing
@@ -482,7 +497,11 @@ pstream_lookup_class(const char *name, const struct pstream_class **classp)
         const struct pstream_class *class = pstream_classes[i];
         if (strlen(class->name) == prefix_len
             && !memcmp(class->name, name, prefix_len)) {
-            *classp = class;
+            if (ovs_replay_get_state() == OVS_REPLAY_READ) {
+                *classp = &preplay_pstream_class;
+            } else {
+                *classp = class;
+            }
             return 0;
         }
     }
@@ -544,6 +563,8 @@ pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
     suffix_copy = xstrdup(strchr(name, ':') + 1);
     error = class->listen(name, suffix_copy, &pstream, dscp);
     free(suffix_copy);
+
+    pstream_replay_open_wfd(pstream, error, name);
     if (error) {
         goto error;
     }
@@ -571,6 +592,7 @@ pstream_close(struct pstream *pstream)
 {
     if (pstream != NULL) {
         char *name = pstream->name;
+        pstream_replay_close_wfd(pstream);
         (pstream->class->close)(pstream);
         free(name);
     }
@@ -588,9 +610,12 @@ pstream_accept(struct pstream *pstream, struct stream **new_stream)
     int retval = (pstream->class->accept)(pstream, new_stream);
     if (retval) {
         *new_stream = NULL;
+        pstream_replay_write_accept(pstream, NULL, retval);
     } else {
         ovs_assert((*new_stream)->state != SCS_CONNECTING
                    || (*new_stream)->class->connect);
+        pstream_replay_write_accept(pstream, *new_stream, 0);
+        stream_replay_open_wfd(*new_stream, 0, (*new_stream)->name);
     }
     return retval;
 }
