@@ -44,6 +44,8 @@
 %define _rundir /run
 %endif
 
+%{!?release_number:%define release_number 1}
+
 Name: openvswitch
 Summary: Open vSwitch
 Group: System Environment/Daemons
@@ -54,7 +56,7 @@ Version: @VERSION@
 # lib/sflow*.[ch] files are SISSL
 # datapath/ is GPLv2 (although not built into any of the binary packages)
 License: ASL 2.0 and LGPLv2+ and SISSL
-Release: 1%{?dist}
+Release: %{release_number}%{?dist}
 Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 
 BuildRequires: gcc gcc-c++
