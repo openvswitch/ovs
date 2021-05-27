@@ -38,6 +38,7 @@
 #include "jsonrpc.h"
 #include "lib/table.h"
 #include "log.h"
+#include "ovs-replay.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -307,6 +308,7 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS,
         TABLE_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
+        OVS_REPLAY_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"help", no_argument, NULL, 'h'},
@@ -325,6 +327,7 @@ parse_options(int argc, char *argv[])
         STREAM_SSL_LONG_OPTIONS,
 #endif
         TABLE_LONG_OPTIONS,
+        OVS_REPLAY_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -352,6 +355,7 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
         STREAM_SSL_OPTION_HANDLERS
+        OVS_REPLAY_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
@@ -467,6 +471,7 @@ usage(void)
     printf("  --timestamp                 timestamp \"monitor\" output");
     daemon_usage();
     vlog_usage();
+    ovs_replay_usage();
     printf("\nOther options:\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");

@@ -195,3 +195,92 @@ _uuid,name,number
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+AT_SETUP([ovsdb-client record/replay])
+AT_KEYWORDS([ovsdb client record replay])
+
+on_exit 'kill `cat *.pid`'
+
+dnl Create a database.
+ordinal_schema > schema
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema])
+
+dnl Start the database server.
+AT_CHECK([ovsdb-server -vfile -vvlog:off --detach --no-chdir --pidfile dnl
+                       --log-file --remote=punix:db.sock db], [0])
+AT_CAPTURE_FILE([ovsdb-server.log])
+
+dnl Start a monitor on the 'ordinals' db with recording enabled.
+AT_CHECK([mkdir replay_dir])
+AT_CHECK([ovsdb-client --record=./replay_dir                      dnl
+            -vfile -vvlog:off --detach --no-chdir                 dnl
+            --pidfile --log-file=monitor.log                      dnl
+            --db-change-aware --no-headings                       dnl
+            monitor unix:db.sock                                  dnl
+            ordinals ordinals number name                         dnl
+              > monitor.stdout 2> monitor.stderr])
+AT_CAPTURE_FILE([monitor.log])
+
+dnl Put some data in the database.
+AT_CHECK(
+  [[for txn in 'transact zero 0' \
+               'transact two 2' \
+               'transact four 4'
+    do
+      set -- $txn
+      ovsdb-client $1 '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$2'", "number": '$3'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+    done | uuidfilt]], [0],
+[[[{"uuid":["uuid","<0>"]},{}]
+[{"uuid":["uuid","<1>"]},{}]
+[{"uuid":["uuid","<2>"]},{}]
+]], [ignore])
+
+AT_CHECK([ovsdb-client -f csv dump | sort -t, -k 3 | uuidfilt], [0], [dnl
+ordinals table
+<0>,zero,0
+<1>,two,2
+<2>,four,4
+_uuid,name,number
+])
+
+dnl Stopping the server.
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+dnl ovsdb-client should exit by itself after disconnection form the server.
+OVS_WAIT_WHILE([test -e ovsdb-client.pid])
+
+dnl Starting replay.
+AT_CHECK([ovsdb-client --replay=./replay_dir                      dnl
+            -vfile -vvlog:off --detach --no-chdir                 dnl
+            --pidfile --log-file=monitor-replay.log               dnl
+            --db-change-aware --no-headings                       dnl
+            monitor unix:db.sock                                  dnl
+            ordinals ordinals number name                         dnl
+              > monitor-replay.stdout 2> monitor-replay.stderr])
+
+dnl Waiting for client to exit the same way as it exited during recording.
+OVS_WAIT_WHILE([test -e ovsdb-client.pid])
+
+AT_CHECK([diff monitor.stdout monitor-replay.stdout])
+AT_CHECK([diff monitor.stderr monitor-replay.stderr])
+
+dnl Stripping out timestamps, PIDs and poll_loop warnings from the log.
+dnl Also stripping socket_util errors as sockets are not used in replay.
+m4_define([CLEAN_LOG_FILE],
+  [sed 's/[[0-9\-]]*T[[0-9:\.]]*Z|[[0-9]]*\(|.*$\)/\1/g' $1 | dnl
+   sed '/|poll_loop|/d' |   dnl
+   sed '/|socket_util|/d' | dnl
+   sed 's/[[0-9]]*\.ctl/<cleared>\.ctl/g'> $2])
+
+CLEAN_LOG_FILE([monitor.log], [monitor.log.clear])
+CLEAN_LOG_FILE([monitor-replay.log], [monitor-replay.log.clear])
+
+AT_CHECK([diff monitor.log.clear monitor-replay.log.clear])
+
+AT_CLEANUP
