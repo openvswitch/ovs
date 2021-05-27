@@ -48,6 +48,7 @@ OVS
    dpdk/index
    windows
    language-bindings
+   record-replay
    testing
    tracing
    userspace-tso

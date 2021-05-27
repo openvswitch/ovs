@@ -1,5 +1,9 @@
 Post-v2.15.0
 ---------------------
+   - OVSDB:
+     * New command line options --record/--replay for ovsdb-server and
+       ovsdb-client to record and replay all the incoming transactions,
+       monitors, etc.  More datails in Documentation/topics/record-replay.rst.
    - In ovs-vsctl and vtep-ctl, the "find" command now accept new
      operators {in} and {not-in}.
    - Userspace datapath:

@@ -54,6 +54,7 @@ DOC_SOURCE = \
 	Documentation/topics/ovs-extensions.rst \
 	Documentation/topics/ovsdb-replication.rst \
 	Documentation/topics/porting.rst \
+	Documentation/topics/record-replay.rst \
 	Documentation/topics/tracing.rst \
 	Documentation/topics/userspace-tso.rst \
 	Documentation/topics/windows.rst \
