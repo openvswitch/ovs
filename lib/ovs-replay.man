@@ -1,0 +1,16 @@
+.IP "\fB\-\-record[=\fIdirectory\fR]"
+Sets the process in "recording" mode, in which it will record all the
+connections, data from streams (Unix domain and network sockets) and some other
+important necessary bits, so they could be replayed later.
+Recorded data is stored in replay files in specified \fIdirectory\fR.
+If \fIdirectory\fR does not begin with \fB/\fR, it is interpreted as relative
+to \fB@RUNDIR@\fR.  If \fIdirectory\fR is not specified, \fB@RUNDIR@\fR will
+be used.
+.
+.IP "\fB\-\-replay[=\fIdirectory\fR]"
+Sets the process in "replay" mode, in which it will read information about
+connections, data from streams (Unix domain and network sockets) and some
+other necessary bits directly from replay files instead of using real sockets.
+Replay files from the \fIdirectory\fR will be used.  If \fIdirectory\fR does
+not begin with \fB/\fR, it is interpreted as relative to \fB@RUNDIR@\fR.
+If \fIdirectory\fR is not specified, \fB@RUNDIR@\fR will be used.

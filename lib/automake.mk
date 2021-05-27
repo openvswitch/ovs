@@ -236,6 +236,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-numa.h \
 	lib/ovs-rcu.c \
 	lib/ovs-rcu.h \
+	lib/ovs-replay.c \
+	lib/ovs-replay.h \
 	lib/ovs-router.h \
 	lib/ovs-router.c \
 	lib/ovs-thread.c \
@@ -532,6 +534,7 @@ EXTRA_DIST += \
 	lib/daemon.xml \
 	lib/dirs.c.in \
 	lib/db-ctl-base.xml \
+	lib/ovs-replay.xml \
 	lib/ssl.xml \
 	lib/ssl-bootstrap.xml \
 	lib/ssl-peer-ca-cert.xml \
@@ -554,6 +557,8 @@ MAN_FRAGMENTS += \
 	lib/dpif-netdev-unixctl.man \
 	lib/ofp-version.man \
 	lib/ovs.tmac \
+	lib/ovs-replay.man \
+	lib/ovs-replay-syn.man \
 	lib/service.man \
 	lib/service-syn.man \
 	lib/ssl-bootstrap.man \

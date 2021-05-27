@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>--record</code>[<code>=</code><var>directory</var>]</dt>
+  <dd>
+    <p>
+      Sets the process in "recording" mode, in which it will record all the
+      connections, data from streams (Unix domain and network sockets) and some
+      other necessary bits, so they could be replayed later.
+    </p>
+    <p>
+      Recorded data is stored in replay files in specified
+      <var>directory</var>.  If <var>directory</var> does not begin with
+      <code>/<code>, it is interpreted as relative to <code>@RUNDIR@</code>.
+      If <var>directory</var> is not specified, <code>@RUNDIR@</code> will
+      be used.
+    </p>
+  </dd>
+
+  <dt><code>--replay</code>[<code>=</code><var>directory</var>]</dt>
+  <dd>
+    <p>
+      Sets the process in "replay" mode, in which it will read information
+      about connections, data from streams (Unix domain and network sockets)
+      and some other necessary bits directly from replay files instead of using
+      real sockets.
+    </p>
+    <p>
+      Replay files from the <var>directory</var> will be used.
+      If <var>directory</var> does not begin with <code>/<code>, it is
+      interpreted as relative to <code>@RUNDIR@</code>.  If
+      <var>directory</var> is not specified, <code>@RUNDIR@</code> will be
+      used.
+    </p>
+  </dd>
+</dl>
