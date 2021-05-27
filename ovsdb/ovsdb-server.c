@@ -36,6 +36,7 @@
 #include "openvswitch/list.h"
 #include "memory.h"
 #include "monitor.h"
+#include "ovs-replay.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-types.h"
@@ -1797,6 +1798,7 @@ parse_options(int argc, char *argv[],
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
+        OVS_REPLAY_OPTION_ENUMS,
     };
 
     static const struct option long_options[] = {
@@ -1812,6 +1814,7 @@ parse_options(int argc, char *argv[],
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         STREAM_SSL_LONG_OPTIONS,
+        OVS_REPLAY_LONG_OPTIONS,
         {"sync-from",   required_argument, NULL, OPT_SYNC_FROM},
         {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
         {"active", no_argument, NULL, OPT_ACTIVE},
@@ -1887,6 +1890,8 @@ parse_options(int argc, char *argv[],
             stream_ssl_set_peer_ca_cert_file(optarg);
             break;
 
+        OVS_REPLAY_OPTION_HANDLERS
+
         case OPT_SYNC_FROM:
             *sync_from = xstrdup(optarg);
             break;
@@ -1945,6 +1950,7 @@ usage(void)
     daemon_usage();
     vlog_usage();
     replication_usage();
+    ovs_replay_usage();
     printf("\nOther options:\n"
            "  --run COMMAND           run COMMAND as subprocess then exit\n"
            "  --unixctl=SOCKET        override default control socket name\n"

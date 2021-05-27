@@ -24,6 +24,7 @@ ovsdb\-server \- Open vSwitch database server
 .so lib/ssl-peer-ca-cert-syn.man
 .so lib/ssl-connect-syn.man
 .so lib/unixctl-syn.man
+.so lib/ovs-replay-syn.man
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
@@ -188,6 +189,7 @@ one row in \fItable\fR.)
 .so lib/ssl-connect.man
 .SS "Other Options"
 .so lib/unixctl.man
+.so lib/ovs-replay.man
 .so lib/common.man
 .SH "RUNTIME MANAGEMENT COMMANDS"
 \fBovs\-appctl\fR(8) can send commands to a running
