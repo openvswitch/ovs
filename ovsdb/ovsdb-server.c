@@ -258,8 +258,10 @@ main_loop(struct server_config *config,
             }
         }
 
-        /* update Manager status(es) every 2.5 seconds */
-        if (time_msec() >= status_timer) {
+        /* update Manager status(es) every 2.5 seconds.  Don't update if we're
+         * recording or performing replay. */
+        if (status_timer == LLONG_MIN ||
+             (!ovs_replay_is_active() && time_msec() >= status_timer)) {
             status_timer = time_msec() + 2500;
             update_remote_status(jsonrpc, remotes, all_dbs);
         }
@@ -285,7 +287,9 @@ main_loop(struct server_config *config,
         if (*exiting) {
             poll_immediate_wake();
         }
-        poll_timer_wait_until(status_timer);
+        if (!ovs_replay_is_active()) {
+            poll_timer_wait_until(status_timer);
+        }
         poll_block();
         if (should_service_stop()) {
             *exiting = true;
