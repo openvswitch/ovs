@@ -82,6 +82,6 @@ struct ovsdb_error *ovsdb_table_execute_delete(struct ovsdb_txn *txn,
 struct ovsdb_error *ovsdb_table_execute_update(struct ovsdb_txn *txn,
                                                const struct uuid *row_uuid,
                                                struct ovsdb_table *table,
-                                               struct json *new);
+                                               struct json *new, bool xor);
 
 #endif /* ovsdb/table.h */

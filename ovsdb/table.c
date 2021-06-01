@@ -384,7 +384,8 @@ ovsdb_table_execute_delete(struct ovsdb_txn *txn, const struct uuid *row_uuid,
 
 struct ovsdb_error *
 ovsdb_table_execute_update(struct ovsdb_txn *txn, const struct uuid *row_uuid,
-                           struct ovsdb_table *table, struct json *json_row)
+                           struct ovsdb_table *table, struct json *json_row,
+                           bool xor)
 {
     const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
     if (!row) {
@@ -399,9 +400,9 @@ ovsdb_table_execute_update(struct ovsdb_txn *txn, const struct uuid *row_uuid,
     struct ovsdb_error *error = ovsdb_row_from_json(update, json_row,
                                                     NULL, &columns);
 
-    if (!error && !ovsdb_row_equal_columns(row, update, &columns)) {
-        ovsdb_row_update_columns(ovsdb_txn_row_modify(txn, row),
-                                 update, &columns);
+    if (!error && (xor || !ovsdb_row_equal_columns(row, update, &columns))) {
+        error = ovsdb_row_update_columns(ovsdb_txn_row_modify(txn, row),
+                                         update, &columns, xor);
     }
 
     ovsdb_column_set_destroy(&columns);

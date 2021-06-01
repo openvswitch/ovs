@@ -82,8 +82,10 @@ bool ovsdb_row_equal_columns(const struct ovsdb_row *,
 int ovsdb_row_compare_columns_3way(const struct ovsdb_row *,
                                    const struct ovsdb_row *,
                                    const struct ovsdb_column_set *);
-void ovsdb_row_update_columns(struct ovsdb_row *, const struct ovsdb_row *,
-                              const struct ovsdb_column_set *);
+struct ovsdb_error *ovsdb_row_update_columns(struct ovsdb_row *,
+                                             const struct ovsdb_row *,
+                                             const struct ovsdb_column_set *,
+                                             bool xor);
 void ovsdb_row_columns_to_string(const struct ovsdb_row *,
                                  const struct ovsdb_column_set *, struct ds *);
 struct ovsdb_error *ovsdb_row_from_json(struct ovsdb_row *,

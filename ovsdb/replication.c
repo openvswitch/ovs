@@ -677,7 +677,7 @@ process_table_update(struct json *table_update, const char *table_name,
         struct ovsdb_error *error;
         error = (!new ? ovsdb_table_execute_delete(txn, &uuid, table)
                  : !old ? ovsdb_table_execute_insert(txn, &uuid, table, new)
-                 : ovsdb_table_execute_update(txn, &uuid, table, new));
+                 : ovsdb_table_execute_update(txn, &uuid, table, new, false));
         if (error) {
             if (!strcmp(ovsdb_error_get_tag(error), "consistency violation")) {
                 ovsdb_error_assert(error);

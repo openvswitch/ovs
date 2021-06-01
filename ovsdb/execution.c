@@ -483,8 +483,9 @@ update_row_cb(const struct ovsdb_row *row, void *ur_)
 
     ur->n_matches++;
     if (!ovsdb_row_equal_columns(row, ur->row, ur->columns)) {
-        ovsdb_row_update_columns(ovsdb_txn_row_modify(ur->txn, row),
-                                 ur->row, ur->columns);
+        ovsdb_error_assert(ovsdb_row_update_columns(
+                               ovsdb_txn_row_modify(ur->txn, row),
+                               ur->row, ur->columns, false));
     }
 
     return true;
