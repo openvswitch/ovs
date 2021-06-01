@@ -548,8 +548,8 @@ AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 # msys on Windows does not convert the path style automatically.
 # So, do that forcefully with a 'pwd -W' (called through pwd() function).
 PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
-AT_SKIP_IF([expr "$PKIDIR" : ".*[       '\"
-\\]"])
+AT_SKIP_IF([expr "$PKIDIR" : ".*[[       '\"
+\\]]"])
 AT_DATA([schema],
   [[{"name": "mydb",
      "tables": {
