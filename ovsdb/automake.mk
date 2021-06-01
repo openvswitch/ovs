@@ -34,6 +34,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/rbac.h \
 	ovsdb/replication.c \
 	ovsdb/replication.h \
+	ovsdb/relay.c \
+	ovsdb/relay.h \
 	ovsdb/row.c \
 	ovsdb/row.h \
 	ovsdb/server.c \

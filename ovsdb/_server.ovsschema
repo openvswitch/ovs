@@ -1,13 +1,14 @@
 {"name": "_Server",
- "version": "1.1.0",
- "cksum": "3236486585 698",
+ "version": "1.2.0",
+ "cksum": "3009684573 744",
  "tables": {
    "Database": {
      "columns": {
        "name": {"type": "string"},
        "model": {
          "type": {"key": {"type": "string",
-                          "enum": ["set", ["standalone", "clustered"]]}}},
+                          "enum": ["set",
+                                     ["standalone", "clustered", "relay"]]}}},
        "connected": {"type": "boolean"},
        "leader": {"type": "boolean"},
        "schema": {

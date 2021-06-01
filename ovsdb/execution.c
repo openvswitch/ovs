@@ -196,6 +196,11 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
                                     "%s operation not allowed on "
                                     "table in reserved database %s",
                                     op_name, db->schema->name);
+            } else if (db->is_relay) {
+                error = ovsdb_error("not allowed",
+                                    "%s operation not allowed when "
+                                    "database server is in relay mode",
+                                    op_name);
             }
         }
         if (error) {

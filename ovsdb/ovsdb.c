@@ -421,6 +421,8 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
     ovs_list_init(&db->triggers);
     db->run_triggers_now = db->run_triggers = false;
 
+    db->is_relay = false;
+
     shash_init(&db->tables);
     if (schema) {
         SHASH_FOR_EACH (node, &schema->tables) {

@@ -91,6 +91,9 @@ struct ovsdb {
     bool need_txn_history;     /* Need to maintain history of transactions. */
     unsigned int n_txn_history; /* Current number of history transactions. */
     struct ovs_list txn_history; /* Contains "struct ovsdb_txn_history_node. */
+
+    /* Relay mode. */
+    bool is_relay;
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *, struct ovsdb_storage *);

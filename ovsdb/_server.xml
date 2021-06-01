@@ -60,12 +60,15 @@
 
     <column name="model">
       The storage model: <code>standalone</code> for a standalone or
-      active-backup database, <code>clustered</code> for a clustered database.
+      active-backup database, <code>clustered</code> for a clustered database,
+      <code>relay</code> for a relay database.
     </column>
 
     <column name="schema">
       The database schema, as a JSON string.  In the case of a clustered
-      database, this is empty until it finishes joining its cluster.
+      database, this is empty until it finishes joining its cluster.  In the
+      case of a relay database, this is empty until it connects to the relay
+      source.
     </column>
 
     <group title="Clustered Databases">
@@ -85,20 +88,21 @@
 
       <column name="leader">
         True if the database is the leader in its cluster.  For a standalone or
-        active-backup database, this is always true.
+        active-backup database, this is always true.  For a relay database,
+        this is always false.
       </column>
 
       <column name="cid">
         The cluster ID for this database, which is the same for all of the
-        servers that host this particular clustered database.  For a standalone
-        or active-backup database, this is empty.
+        servers that host this particular clustered database.  For a
+        standalone, active-backup or relay database, this is empty.
       </column>
 
       <column name="sid">
         The server ID for this database, different for each server that hosts a
         particular clustered database.  A server that hosts more than one
         clustered database will have a different <code>sid</code> in each one.
-        For a standalone or active-backup database, this is empty.
+        For a standalone, active-backup or relay database, this is empty.
       </column>
 
       <column name="index">
@@ -112,7 +116,7 @@
         </p>
 
         <p>
-          For a standalone or active-backup database, this is empty.
+          For a standalone, active-backup or relay database, this is empty.
         </p>
       </column>
     </group>
