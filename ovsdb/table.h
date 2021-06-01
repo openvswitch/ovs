@@ -23,6 +23,7 @@
 
 struct json;
 struct uuid;
+struct ovsdb_txn;
 
 /* Schema for a database table. */
 struct ovsdb_table_schema {
@@ -69,5 +70,18 @@ void ovsdb_table_destroy(struct ovsdb_table *);
 
 const struct ovsdb_row *ovsdb_table_get_row(const struct ovsdb_table *,
                                             const struct uuid *);
+
+/* Below functions adds row modification for ovsdb table to the transaction. */
+struct ovsdb_error *ovsdb_table_execute_insert(struct ovsdb_txn *txn,
+                                               const struct uuid *row_uuid,
+                                               struct ovsdb_table *table,
+                                               struct json *new);
+struct ovsdb_error *ovsdb_table_execute_delete(struct ovsdb_txn *txn,
+                                               const struct uuid *row_uuid,
+                                               struct ovsdb_table *table);
+struct ovsdb_error *ovsdb_table_execute_update(struct ovsdb_txn *txn,
+                                               const struct uuid *row_uuid,
+                                               struct ovsdb_table *table,
+                                               struct json *new);
 
 #endif /* ovsdb/table.h */
