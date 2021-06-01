@@ -45,6 +45,8 @@ struct ovsdb_storage {
     struct ovsdb_log *log;
     struct raft *raft;
 
+    char *unbacked_name; /* Name of the unbacked storage. */
+
     /* All kinds of storage. */
     struct ovsdb_error *error;  /* If nonnull, a permanent error. */
     long long next_snapshot_min; /* Earliest time to take next snapshot. */
@@ -121,12 +123,14 @@ ovsdb_storage_open_standalone(const char *filename, bool rw)
 }
 
 /* Creates and returns new storage without any backing.  Nothing will be read
- * from the storage, and writes are discarded. */
+ * from the storage, and writes are discarded.  If 'name' is nonnull, it will
+ * be used as a storage name. */
 struct ovsdb_storage *
-ovsdb_storage_create_unbacked(void)
+ovsdb_storage_create_unbacked(const char *name)
 {
     struct ovsdb_storage *storage = xzalloc(sizeof *storage);
     schedule_next_snapshot(storage, false);
+    storage->unbacked_name = nullable_xstrdup(name);
     return storage;
 }
 
@@ -137,6 +141,7 @@ ovsdb_storage_close(struct ovsdb_storage *storage)
         ovsdb_log_close(storage->log);
         raft_close(storage->raft);
         ovsdb_error_destroy(storage->error);
+        free(storage->unbacked_name);
         free(storage);
     }
 }
@@ -230,7 +235,9 @@ ovsdb_storage_wait(struct ovsdb_storage *storage)
 const char *
 ovsdb_storage_get_name(const struct ovsdb_storage *storage)
 {
-    return storage->raft ? raft_get_name(storage->raft) : NULL;
+    return storage->unbacked_name ? storage->unbacked_name
+           : storage->raft ? raft_get_name(storage->raft)
+           : NULL;
 }
 
 /* Attempts to read a log record from 'storage'.
