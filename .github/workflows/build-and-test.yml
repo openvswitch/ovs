@@ -228,3 +228,81 @@ jobs:
       with:
         name: logs-osx-clang---disable-ssl
         path: config.log
+
+  build-windows:
+    name: windows ${{ join(matrix.*, ' ') }}
+    env:
+      OPTS: --prefix=C:/openvswitch/usr --localstatedir=C:/openvswitch/var --sysconfdir=C:/openvswitch/etc ${{ matrix.opts }}
+      TESTSUITE: ${{ matrix.testsuite }}
+    
+    # linking on latest VS 2019 don't work, most propably due to a VS 2019 issue since VS 16.10
+    runs-on: windows-2016
+    timeout-minutes: 60
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win8        
+          - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win8.1            
+          - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win10
+            testsuite: 1-5
+    defaults:
+      run:
+         shell: msys2 {0}         
+         
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: install msys 
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: base-devel git mingw-w64-ucrt-x86_64-toolchain
+      - name: set up python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'  
+
+      # pypiwin32 has to be installed with a Windows python version therefore
+      # this step will configure python first on Windows and exports
+      # its location for MSYS bash.  
+      - name: configure python in Windows cmdline
+        shell: cmd
+        run: |
+            python -m pip install --upgrade pip
+            pip install pypiwin32
+            echo export pythonLocation="%pythonLocation%" > %RUNNER_TEMP%\msys\msys64\home\%USERNAME%\.pythonenv.sh
+            echo export PYTHONPATH="%pythonLocation%\Lib;%pythonLocation%\DLLs;%pythonLocation%\Lib\lib-tk" >> %RUNNER_TEMP%\msys\msys64\home\%USERNAME%\.pythonenv.sh
+            echo ".pythonenv.sh was generated in %RUNNER_TEMP%\msys\msys64\home\%USERNAME%"
+      - name: generate Visual Studio environment  
+        shell: cmd
+        run: |
+          powershell -c ./build-aux/envdiff.ps1          
+          @call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat"          
+          powershell -c ./build-aux/envdiff.ps1 > %RUNNER_TEMP%\msys\msys64\home\%USERNAME%\.visualstudio.sh
+          echo ".visualstudio.sh was generated in %RUNNER_TEMP%\msys\msys64\home\%USERNAME%"
+      - name: configure python for MSYS 
+        run:  | 
+          source ~/.pythonenv.sh
+          echo "using python from path $pythonLocation"
+          mv /ucrt64/bin/python /ucrt64/bin/python_off
+          mv /ucrt64/bin/python3 /ucrt64/bin/python3_off          
+          ln -s "$pythonLocation\python" /ucrt64/bin/python3      
+      - name: prepare
+        run:  | 
+          source ~/.visualstudio.sh 
+          ./.ci/windows-prepare.sh
+      - name: build
+        run:  | 
+          source ~/.visualstudio.sh 
+          source ~/.pythonenv.sh
+          echo $PYTHONPATH
+          ./.ci/windows-build.sh
+      - name: upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v2
+        with:
+          name: logs-windows-msvc---disable-ssl
+          path: config.log
