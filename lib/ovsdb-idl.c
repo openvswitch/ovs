@@ -429,9 +429,15 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             break;
 
         case OVSDB_CS_EVENT_TYPE_LOCKED:
-            /* If the client couldn't run a transaction because it didn't have
-             * the lock, this will encourage it to try again. */
-            idl->change_seqno++;
+            if (ovsdb_cs_may_send_transaction(idl->cs)) {
+                /* If the client couldn't run a transaction because it didn't
+                 * have the lock, this will encourage it to try again. */
+                idl->change_seqno++;
+            } else {
+                /* We're setting up a session, so don't signal that the
+                 * database changed.  Finalizing the session will increment
+                 * change_seqno anyhow. */
+            }
             break;
 
         case OVSDB_CS_EVENT_TYPE_UPDATE:
