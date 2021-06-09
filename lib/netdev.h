@@ -289,7 +289,8 @@ struct netdev_queue_stats {
 };
 
 int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
-                        uint32_t kbits_burst);
+                        uint32_t kbits_burst, uint32_t kpkts_rate,
+                        uint32_t kpkts_burst);
 
 int netdev_get_qos_types(const struct netdev *, struct sset *types);
 int netdev_get_qos_capabilities(const struct netdev *,

@@ -4895,8 +4895,10 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
     }
 
     netdev_set_policing(iface->netdev,
-                        MIN(UINT32_MAX, iface->cfg->ingress_policing_rate),
-                        MIN(UINT32_MAX, iface->cfg->ingress_policing_burst));
+                MIN(UINT32_MAX, iface->cfg->ingress_policing_rate),
+                MIN(UINT32_MAX, iface->cfg->ingress_policing_burst),
+                MIN(UINT32_MAX, iface->cfg->ingress_policing_kpkts_rate),
+                MIN(UINT32_MAX, iface->cfg->ingress_policing_kpkts_burst));
 
     ofpbuf_uninit(&queues_buf);
 }

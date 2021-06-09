@@ -209,10 +209,10 @@ dnl Configure Linux tc compat.
 AC_DEFUN([OVS_CHECK_LINUX_TC], [
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
-        int x = TCA_FLOWER_KEY_CT_FLAGS_REPLY;
+        int x = TCA_POLICE_PKTRATE64;
     ])],
-    [AC_DEFINE([HAVE_TCA_FLOWER_KEY_CT_FLAGS_REPLY], [1],
-               [Define to 1 if TCA_FLOWER_KEY_CT_FLAGS_REPLY is available.])])
+    [AC_DEFINE([HAVE_TCA_POLICE_PKTRATE64], [1],
+               [Define to 1 if TCA_POLICE_PKTRATE64 is available.])])
 
   AC_CHECK_MEMBERS([struct tcf_t.firstuse], [], [], [#include <linux/pkt_cls.h>])
 

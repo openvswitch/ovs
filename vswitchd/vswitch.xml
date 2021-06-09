@@ -3654,8 +3654,18 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         table="Queue"/> tables).
       </p>
       <p>
-        Policing is currently implemented on Linux and OVS with DPDK. Both
-        implementations use a simple ``token bucket'' approach:
+        Policing settings can be set with byte rate or packet rate, and they
+        can be configured together, in which case they take effect together,
+        that means the smaller speed limit of them is in effect.
+      </p>
+      <p>
+        Currently, byte rate policing is implemented on Linux and OVS with
+        DPDK, while packet rate policing is only implemented on Linux.  Both
+        Linux and OVS DPDK implementations use a simple ``token bucket''
+        approach.
+      </p>
+      <p>
+        Byte rate policing:
       </p>
       <ul>
         <li>
@@ -3671,6 +3681,26 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <li>
           Whenever it is not full, the bucket is refilled with tokens at the
           rate specified by <ref column="ingress_policing_rate"/>.
+        </li>
+      </ul>
+      <p>
+        Packet rate policing:
+      </p>
+      <ul>
+        <li>
+          The size of the bucket corresponds to <ref
+          column="ingress_policing_kpkts_burst"/>.  Initially the bucket is
+          full.
+        </li>
+        <li>
+          Whenever a packet is received, it will consume one token from the
+          current bucket.  If the token is available in the bucket, it's
+          removed and the packet is forwarded.  Otherwise, the packet is
+          dropped.
+        </li>
+        <li>
+          Whenever it is not full, the bucket is refilled with tokens at the
+          rate specified by <ref column="ingress_policing_kpkts_rate"/>.
         </li>
       </ul>
       <p>
@@ -3698,6 +3728,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
+      <column name="ingress_policing_kpkts_rate">
+        <p>
+          Maximum rate for data received on this interface, in kpps (1 kpps is
+          1000 pps).  Data received faster than this rate is dropped.  Set to
+          <code>0</code> (the default) to disable policing.
+        </p>
+      </column>
+
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
         default burst size if set to <code>0</code> is 8000 kbit.  This value
@@ -3712,6 +3750,23 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           closer to achieving the full rate.
         </p>
       </column>
+
+      <column name="ingress_policing_kpkts_burst">
+        <p>
+          Maximum burst size for data received on this interface, in kpkts (1
+          kpkts is 1000 packets).  The default burst size if set to
+          <code>0</code> is 16 kpkts.  This value has no effect if
+          <ref column="ingress_policing_kpkts_rate"/> is <code>0</code>.
+        </p>
+        <p>
+          Specifying a larger burst size lets the algorithm be more forgiving,
+          which is important for protocols like TCP that react severely to
+          dropped packets.  Specifying a value that is numerically at least as
+          large as 80% of <ref column="ingress_policing_kpkts_rate"/> helps TCP
+          come closer to achieving the full rate.
+        </p>
+      </column>
+
     </group>
 
     <group title="Bidirectional Forwarding Detection (BFD)">

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "8.2.0",
- "cksum": "1076640191 26427",
+ "version": "8.3.0",
+ "cksum": "3781850481 26690",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -240,6 +240,12 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 0}}},
        "ingress_policing_burst": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0}}},
+       "ingress_policing_kpkts_rate": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0}}},
+       "ingress_policing_kpkts_burst": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0}}},
        "mac_in_use": {

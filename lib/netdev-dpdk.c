@@ -3389,7 +3389,9 @@ netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
 
 static int
 netdev_dpdk_set_policing(struct netdev* netdev, uint32_t policer_rate,
-                         uint32_t policer_burst)
+                         uint32_t policer_burst,
+                         uint32_t policer_kpkts_rate OVS_UNUSED,
+                         uint32_t policer_kpkts_burst OVS_UNUSED)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct ingress_policer *policer;

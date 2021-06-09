@@ -75,8 +75,10 @@ struct netdev_linux {
     int mtu;
     unsigned int ifi_flags;
     long long int carrier_resets;
-    uint32_t kbits_rate;        /* Policing data. */
+    uint32_t kbits_rate;        /* Policing data - kbps */
     uint32_t kbits_burst;
+    uint32_t kpkts_rate;        /* Policing data - kpps */
+    uint32_t kpkts_burst;
     int vport_stats_error;      /* Cached error code from vport_get_stats().
                                    0 or an errno value. */
     int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU
