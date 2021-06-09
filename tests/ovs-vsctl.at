@@ -1687,3 +1687,26 @@ ingress_policing_rate: 100
 ])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([set ingress policing(kpkts) test])
+
+AT_SETUP([set ingress_policing_kpkts_rate and ingress_policing_kpkts_burst])
+AT_KEYWORDS([ingress_policing_kpkts])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [add-br a],
+   [add-port a a1],
+   [set interface a1 ingress_policing_kpkts_rate=100],
+   [set interface a1 ingress_policing_kpkts_burst=10],
+   [--columns=ingress_policing_kpkts_burst,ingress_policing_kpkts_rate list interface a1])],
+   [0],
+   [
+
+
+
+ingress_policing_kpkts_burst: 10
+ingress_policing_kpkts_rate: 100
+])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP

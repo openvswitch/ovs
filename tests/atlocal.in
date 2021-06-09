@@ -159,9 +159,6 @@ find_command()
 # Set HAVE_NC
 find_command nc
 
-# Set HAVE_TC
-find_command tc
-
 # Determine correct netcat option to quit on stdin EOF
 if nc --version 2>&1 | grep -q nmap.org; then
     # Nmap netcat
@@ -169,6 +166,20 @@ if nc --version 2>&1 | grep -q nmap.org; then
 else
     # BSD netcat
     NC_EOF_OPT="-q 1 -w 5"
+fi
+
+# Set HAVE_TC
+find_command tc
+
+# When HAVE_TC=yes, check if the current tc supports adding pps filter
+SUPPORT_TC_INGRESS_PPS="no"
+if test $HAVE_TC="yes"; then
+    ip link add veth0 type veth peer name veth1
+    tc qdisc add dev veth0 handle ffff: ingress
+    if tc filter add dev veth0 parent ffff: u32 match u32 0 0 police pkts_rate 100 pkts_burst 10; then
+        SUPPORT_TC_INGRESS_PPS="yes"
+    fi
+    ip link del veth0
 fi
 
 # Set HAVE_TCPDUMP
