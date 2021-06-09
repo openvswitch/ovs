@@ -71,20 +71,21 @@
       source.
     </column>
 
+    <column name="connected">
+      True if the database is connected to its storage.  A standalone database
+      is always connected.  A clustered database is connected if the server is
+      in contact with a majority of its cluster.  A relay database is connected
+      if the server is in contact with the relay source, i.e. is connected to
+      the server it syncs from.  An unconnected database cannot be modified and
+      its data might be unavailable or stale.
+    </column>
+
     <group title="Clustered Databases">
       <p>
         These columns are most interesting and in some cases only relevant for
         clustered databases, that is, those where the <ref column="model"/>
         column is <code>clustered</code>.
       </p>
-
-      <column name="connected">
-        True if the database is connected to its storage.  A standalone or
-        active-backup database is always connected.  A clustered database is
-        connected if the server is in contact with a majority of its cluster.
-        An unconnected database cannot be modified and its data might be
-        unavailable or stale.
-      </column>
 
       <column name="leader">
         True if the database is the leader in its cluster.  For a standalone or

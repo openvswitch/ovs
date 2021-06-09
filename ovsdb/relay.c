@@ -31,6 +31,7 @@
 #include "ovsdb-error.h"
 #include "row.h"
 #include "table.h"
+#include "timeval.h"
 #include "transaction.h"
 #include "transaction-forward.h"
 #include "util.h"
@@ -47,7 +48,35 @@ struct relay_ctx {
     struct ovsdb_schema *new_schema;
     schema_change_callback schema_change_cb;
     void *schema_change_aux;
+
+    long long int last_connected;
 };
+
+#define RELAY_MAX_RECONNECTION_MS 30000
+
+/* Reports if the database is connected to the relay source and functional,
+ * i.e. it actively monitors the source and is able to forward transactions. */
+bool
+ovsdb_relay_is_connected(struct ovsdb *db)
+{
+    struct relay_ctx *ctx = shash_find_data(&relay_dbs, db->name);
+
+    if (!ctx || !ovsdb_cs_is_alive(ctx->cs)) {
+        return false;
+    }
+
+    if (ovsdb_cs_may_send_transaction(ctx->cs)) {
+        return true;
+    }
+
+    /* Trying to avoid connection state flapping by delaying report for
+     * upper layer and giving ovsdb-cs some time to reconnect. */
+    if (time_msec() - ctx->last_connected < RELAY_MAX_RECONNECTION_MS) {
+        return true;
+    }
+
+    return false;
+}
 
 static struct json *
 ovsdb_relay_compose_monitor_request(const struct json *schema_json, void *ctx_)
@@ -119,6 +148,7 @@ ovsdb_relay_add_db(struct ovsdb *db, const char *remote,
     ctx->schema_change_aux = schema_change_aux;
     ctx->db = db;
     ctx->cs = ovsdb_cs_create(db->name, 3, &relay_cs_ops, ctx);
+    ctx->last_connected = 0;
     shash_add(&relay_dbs, db->name, ctx);
     ovsdb_cs_set_leader_only(ctx->cs, false);
     ovsdb_cs_set_remote(ctx->cs, remote, true);
@@ -305,6 +335,10 @@ ovsdb_relay_run(void)
 
         ovsdb_txn_forward_run(ctx->db, ctx->cs);
         ovsdb_cs_run(ctx->cs, &events);
+
+        if (ovsdb_cs_may_send_transaction(ctx->cs)) {
+            ctx->last_connected = time_msec();
+        }
 
         struct ovsdb_cs_event *event;
         LIST_FOR_EACH_POP (event, list_node, &events) {

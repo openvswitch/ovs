@@ -17,6 +17,8 @@
 #ifndef OVSDB_RELAY_H
 #define OVSDB_RELAY_H 1
 
+#include <stdbool.h>
+
 struct json;
 struct ovsdb;
 struct ovsdb_schema;
@@ -30,5 +32,7 @@ void ovsdb_relay_add_db(struct ovsdb *, const char *remote,
 void ovsdb_relay_del_db(struct ovsdb *);
 void ovsdb_relay_run(void);
 void ovsdb_relay_wait(void);
+
+bool ovsdb_relay_is_connected(struct ovsdb *);
 
 #endif /* OVSDB_RELAY_H */

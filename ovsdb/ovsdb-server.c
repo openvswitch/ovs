@@ -1194,7 +1194,8 @@ update_database_status(struct ovsdb_row *row, struct db *db)
     ovsdb_util_write_string_column(row, "model",
         db->db->is_relay ? "relay" : ovsdb_storage_get_model(db->db->storage));
     ovsdb_util_write_bool_column(row, "connected",
-                                 ovsdb_storage_is_connected(db->db->storage));
+        db->db->is_relay ? ovsdb_relay_is_connected(db->db)
+                         : ovsdb_storage_is_connected(db->db->storage));
     ovsdb_util_write_bool_column(row, "leader",
         db->db->is_relay ? false : ovsdb_storage_is_leader(db->db->storage));
     ovsdb_util_write_uuid_column(row, "cid",
