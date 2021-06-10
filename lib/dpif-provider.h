@@ -81,6 +81,7 @@ struct ct_dpif_dump_state;
 struct ct_dpif_entry;
 struct ct_dpif_tuple;
 struct ct_dpif_timeout_policy;
+enum ct_features;
 
 /* 'dpif_ipf_proto_status' and 'dpif_ipf_status' are presently in
  * sync with 'ipf_proto_status' and 'ipf_status', but more
@@ -561,6 +562,10 @@ struct dpif_class {
     int (*ct_get_timeout_policy_name)(struct dpif *, uint32_t tp_id,
                                       uint16_t dl_type, uint8_t nw_proto,
                                       char **tp_name, bool *is_generic);
+
+    /* Stores the conntrack features supported by 'dpif' into features.
+     * The value is a bitmap of CONNTRACK_F_* bits. */
+    int (*ct_get_features)(struct dpif *, enum ct_features *features);
 
     /* IP Fragmentation. */
 

@@ -32,6 +32,9 @@ Post-v2.15.0
    - ovsdb-tool:
      * New option '--election-timer' to the 'create-cluster' command to set the
        leader election timer during cluster creation.
+   - OVS now reports the datapath capability 'ct_zero_snat', which reflects
+     whether the SNAT with all-zero IP address is supported.
+     See ovs-vswitchd.conf.db(5) for details.
 
 
 v2.15.0 - 15 Feb 2021

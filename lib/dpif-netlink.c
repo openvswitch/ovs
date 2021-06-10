@@ -3165,6 +3165,20 @@ dpif_netlink_ct_get_timeout_policy_name(struct dpif *dpif OVS_UNUSED,
     return 0;
 }
 
+static int
+dpif_netlink_ct_get_features(struct dpif *dpif OVS_UNUSED,
+                             enum ct_features *features)
+{
+    if (features != NULL) {
+#ifndef _WIN32
+        *features = CONNTRACK_F_ZERO_SNAT;
+#else
+        *features = 0;
+#endif
+    }
+    return 0;
+}
+
 #define CT_DPIF_NL_TP_TCP_MAPPINGS                              \
     CT_DPIF_NL_TP_MAPPING(TCP, TCP, SYN_SENT, SYN_SENT)         \
     CT_DPIF_NL_TP_MAPPING(TCP, TCP, SYN_RECV, SYN_RECV)         \
@@ -4007,6 +4021,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_ct_timeout_policy_dump_next,
     dpif_netlink_ct_timeout_policy_dump_done,
     dpif_netlink_ct_get_timeout_policy_name,
+    dpif_netlink_ct_get_features,
     NULL,                       /* ipf_set_enabled */
     NULL,                       /* ipf_set_min_frag */
     NULL,                       /* ipf_set_max_nfrags */

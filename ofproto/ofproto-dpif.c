@@ -1389,6 +1389,24 @@ check_ct_timeout_policy(struct dpif_backer *backer)
     return !error;
 }
 
+/* Tests whether 'backer''s datapath supports the all-zero SNAT case. */
+static bool
+dpif_supports_ct_zero_snat(struct dpif_backer *backer)
+{
+    enum ct_features features;
+    bool supported = false;
+
+    if (!ct_dpif_get_features(backer->dpif, &features)) {
+        if (features & CONNTRACK_F_ZERO_SNAT) {
+            supported = true;
+        }
+    }
+    VLOG_INFO("%s: Datapath %s ct_zero_snat",
+              dpif_name(backer->dpif), (supported) ? "supports"
+                                                   : "does not support");
+    return supported;
+}
+
 /* Tests whether 'backer''s datapath supports the
  * OVS_ACTION_ATTR_CHECK_PKT_LEN action. */
 static bool
@@ -1588,8 +1606,9 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.ct_timeout = check_ct_timeout_policy(backer);
     backer->rt_support.explicit_drop_action =
         dpif_supports_explicit_drop_action(backer->dpif);
-    backer->rt_support.lb_output_action=
+    backer->rt_support.lb_output_action =
         dpif_supports_lb_output_action(backer->dpif);
+    backer->rt_support.ct_zero_snat = dpif_supports_ct_zero_snat(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -5605,6 +5624,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "explicit_drop_action",
              s.explicit_drop_action ? "true" :"false");
     smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
+    smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
