@@ -3,6 +3,9 @@ v2.14.3 - xx xxx xxxx
    - DPDK:
      * OVS validated with DPDK 19.11.8. It is recommended to use this version
        until further releases.
+   - OVS now reports the datapath capability 'ct_zero_snat', which reflects
+     whether the SNAT with all-zero IP address is supported.
+     See ovs-vswitchd.conf.db(5) for details.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
