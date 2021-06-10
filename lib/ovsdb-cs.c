@@ -1914,8 +1914,8 @@ ovsdb_cs_check_server_db__(struct ovsdb_cs *cs)
     bool ok = false;
     const char *model = server_column_get_string(db_row, COL_MODEL, "");
     const char *schema = server_column_get_string(db_row, COL_SCHEMA, NULL);
+    bool connected = server_column_get_bool(db_row, COL_CONNECTED, false);
     if (!strcmp(model, "clustered")) {
-        bool connected = server_column_get_bool(db_row, COL_CONNECTED, false);
         bool leader = server_column_get_bool(db_row, COL_LEADER, false);
         uint64_t index = server_column_get_int(db_row, COL_INDEX, 0);
 
@@ -1933,6 +1933,19 @@ ovsdb_cs_check_server_db__(struct ovsdb_cs *cs)
                       "trying another server", server_name);
         } else {
             cs->min_index = index;
+            ok = true;
+        }
+    } else if (!strcmp(model, "relay")) {
+        if (!schema) {
+            VLOG_INFO("%s: relay database server has not yet connected to the "
+                      "relay source; trying another server", server_name);
+        } else if (!connected) {
+            VLOG_INFO("%s: relay database server is disconnected from the "
+                      "relay source; trying another server", server_name);
+        } else if (cs->leader_only) {
+            VLOG_INFO("%s: relay database server cannot be a leader; "
+                      "trying another server", server_name);
+        } else {
             ok = true;
         }
     } else {

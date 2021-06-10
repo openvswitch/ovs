@@ -38,6 +38,7 @@ OVSDB_UPDATE = 0
 OVSDB_UPDATE2 = 1
 
 CLUSTERED = "clustered"
+RELAY = "relay"
 
 
 Notice = collections.namedtuple('Notice', ('event', 'row', 'updates'))
@@ -798,6 +799,21 @@ class Idl(object):
                               'trying another server' % session_name)
                     return False
                 self._min_index = database.index[0]
+        elif database.model == RELAY:
+            if not database.schema:
+                vlog.info('%s: relay database server has not yet connected '
+                          'to the relay source; trying another server'
+                          % session_name)
+                return False
+            if not database.connected:
+                vlog.info('%s: relay database server is disconnected '
+                          'from the relay source; trying another server'
+                          % session_name)
+                return False
+            if self.leader_only:
+                vlog.info('%s: relay database server cannot be a leader; '
+                          'trying another server' % session_name)
+                return False
 
         return True
 

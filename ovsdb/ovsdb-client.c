@@ -716,7 +716,7 @@ should_stay_connected(const char *server, const char *database,
         return false;
     }
 
-    if (strcmp(parse_string_column(row, "model"), "clustered")) {
+    if (!strcmp(parse_string_column(row, "model"), "standalone")) {
         /* Always accept standalone databases. */
         return true;
     }
