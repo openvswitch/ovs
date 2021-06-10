@@ -651,7 +651,7 @@ def do_idl(schema_file, remote, *commands):
         commands = commands[1:]
     else:
         schema_helper.register_all()
-    idl = ovs.db.idl.Idl(remote, schema_helper)
+    idl = ovs.db.idl.Idl(remote, schema_helper, leader_only=False)
     if "simple3" in idl.tables:
         idl.index_create("simple3", "simple3_by_name")
 
