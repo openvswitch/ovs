@@ -3965,8 +3965,10 @@ bridge_configure_remotes(struct bridge *br,
         *oc = (struct ofproto_controller) {
             .type = get_controller_ofconn_type(c->target, c->type),
             .max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8,
-            .probe_interval = (c->inactivity_probe
-                               ? *c->inactivity_probe / 1000 : 5),
+            .probe_interval = (!c->inactivity_probe ? 5
+                               : !*c->inactivity_probe ? 0
+                               : *c->inactivity_probe < 1000 ? 1
+                               : *c->inactivity_probe / 1000),
             .band = ((!c->connection_mode
                       || !strcmp(c->connection_mode, "in-band"))
                      && !disable_in_band
