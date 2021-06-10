@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
     for key, value in options:
         if key in ['-h', '--help']:
-            usage()
+            usage(sys.argv[0])
         elif key in ['-V', '--version']:
             print('ipfix-gen-entities (Open vSwitch)')
         else:
