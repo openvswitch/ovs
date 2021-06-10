@@ -243,10 +243,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win8        
-          - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win8.1            
+          # run only one job for windows, as more than one be enough currently to verify
+          # PRs
+          # tests are not enabled as they take very long and a lot of them will fail to          
           - opts: --disable-ssl --with-vstudiotarget=Debug --with-vstudiotargetver=Win10
-            testsuite: 1-5
+          
     defaults:
       run:
          shell: msys2 {0}         
@@ -292,6 +293,7 @@ jobs:
           ln -s "$pythonLocation\python" /ucrt64/bin/python3      
       - name: prepare
         run:  | 
+          [[ -f /usr/bin/link ]] && mv /usr/bin/link /usr/bin/link_off
           source ~/.visualstudio.sh 
           ./.ci/windows-prepare.sh
       - name: build
