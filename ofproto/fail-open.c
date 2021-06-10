@@ -180,7 +180,7 @@ fail_open_run(struct fail_open *fo)
     int disconn_secs = connmgr_failure_duration(fo->connmgr);
 
     /* Enter fail-open mode if 'fo' is not in it but should be.  */
-    if (disconn_secs >= trigger_duration(fo)) {
+    if (disconn_secs > 0 && disconn_secs >= trigger_duration(fo)) {
         if (!fail_open_is_active(fo)) {
             VLOG_WARN("Could not connect to controller (or switch failed "
                       "controller's post-connection admission control "
