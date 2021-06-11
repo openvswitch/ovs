@@ -121,13 +121,14 @@ schema checksum from a schema or database file, respectively.
 Service Models
 ==============
 
-OVSDB supports three service models for databases: **standalone**,
-**active-backup**, and **clustered**.  The service models provide different
-compromises among consistency, availability, and partition tolerance.  They
-also differ in the number of servers required and in terms of performance.  The
-standalone and active-backup database service models share one on-disk format,
-and clustered databases use a different format, but the OVSDB programs work
-with both formats.  ``ovsdb(5)`` documents these file formats.
+OVSDB supports four service models for databases: **standalone**,
+**active-backup**, **relay** and **clustered**.  The service models provide
+different compromises among consistency, availability, and partition tolerance.
+They also differ in the number of servers required and in terms of performance.
+The standalone and active-backup database service models share one on-disk
+format, and clustered databases use a different format, but the OVSDB programs
+work with both formats.  ``ovsdb(5)`` documents these file formats.  Relay
+databases have no on-disk storage.
 
 RFC 7047, which specifies the OVSDB protocol, does not mandate or specify
 any particular service model.
@@ -406,6 +407,50 @@ following consequences:
   that the client previously read.  The OVSDB client library in Open vSwitch
   uses this feature to avoid servers with stale data.
 
+Relay Service Model
+-------------------
+
+A **relay** database is a way to scale out read-mostly access to the
+existing database working in any service model including relay.
+
+Relay database creates and maintains an OVSDB connection with another OVSDB
+server.  It uses this connection to maintain an in-memory copy of the remote
+database (a.k.a. the ``relay source``) keeping the copy up-to-date as the
+database content changes on the relay source in the real time.
+
+The purpose of relay server is to scale out the number of database clients.
+Read-only transactions and monitor requests are fully handled by the relay
+server itself.  For the transactions that request database modifications,
+relay works as a proxy between the client and the relay source, i.e. it
+forwards transactions and replies between them.
+
+Compared to the clustered and active-backup models, relay service model
+provides read and write access to the database similarly to a clustered
+database (and even more scalable), but with generally insignificant performance
+overhead of an active-backup model.  At the same time it doesn't increase
+availability that needs to be covered by the service model of the relay source.
+
+Relay database has no on-disk storage and therefore cannot be converted to
+any other service model.
+
+If there is already a database started in any service model, to start a relay
+database server use ``ovsdb-server relay:<DB_NAME>:<relay source>``, where
+``<DB_NAME>`` is the database name as specified in the schema of the database
+that existing server runs, and ``<relay source>`` is an OVSDB connection method
+(see `Connection Methods`_ below) that connects to the existing database
+server.  ``<relay source>`` could contain a comma-separated list of connection
+methods, e.g. to connect to any server of the clustered database.
+Multiple relay servers could be started for the same relay source.
+
+Since the way relays handle read and write transactions is very similar
+to the clustered model where "cluster" means "set of relay servers connected
+to the same relay source", "follower" means "relay server" and the "leader"
+means "relay source", same consistency consequences as for the clustered
+model applies to relay as well (See `Understanding Cluster Consistency`_
+above).
+
+Open vSwitch 2.16 introduced support for relay service model.
+
 Database Replication
 ====================
 
@@ -414,7 +459,8 @@ Replication, in this context, means to make, and keep up-to-date, a read-only
 copy of the contents of a database (the ``replica``).  One use of replication
 is to keep an up-to-date backup of a database.  A replica used solely for
 backup would not need to support clients of its own.  A set of replicas that do
-serve clients could be used to scale out read access to the primary database.
+serve clients could be used to scale out read access to the primary database,
+however `Relay Service Model`_ is more suitable for that purpose.
 
 A database replica is set up in the same way as a backup server in an
 active-backup pair, with the difference that the replica is never promoted to

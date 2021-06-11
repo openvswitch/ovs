@@ -7,6 +7,9 @@ Post-v2.15.0
        limits in addition to the previously configurable byte rate settings.
        This is not supported in the userspace datapath yet.
    - OVSDB:
+     * Introduced new database service model - "relay".  Targeted to scale out
+       read-mostly access (ovn-controller) to existing databases.
+       For more information: ovsdb(7) and Documentation/topics/ovsdb-relay.rst
      * New command line options --record/--replay for ovsdb-server and
        ovsdb-client to record and replay all the incoming transactions,
        monitors, etc.  More datails in Documentation/topics/record-replay.rst.
