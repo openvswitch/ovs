@@ -2643,6 +2643,10 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
 
         retval = parse_odp_action(&context, s, actions);
 
+        if (retval >= 0 && nl_attr_oversized(actions->size - NLA_HDRLEN)) {
+            retval = -E2BIG;
+        }
+
         if (retval < 0 || !strchr(delimiters, s[retval])) {
             actions->size = old_size;
             return -retval;

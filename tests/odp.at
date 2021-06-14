@@ -435,6 +435,20 @@ odp_actions_from_string: error
 ])
 AT_CLEANUP
 
+AT_SETUP([OVS datapath actions parsing and formatting - actions too long])
+dnl Actions should fit in a single netlink message.
+dnl Empty set(encap()) takes 8 bytes to encode.  So, 8192 of them is too much,
+dnl but 8191 still fits.
+actions=$(printf 'set(encap()),%.0s' $(seq 8190))
+echo "${actions}set(encap())" > actions.txt
+echo "${actions}set(encap()),set(encap())" >> actions.txt
+
+AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0], [dnl
+`cat actions.txt | head -1`
+odp_actions_from_string: error
+])
+AT_CLEANUP
+
 AT_SETUP([OVS datapath keys parsing and formatting - 33 nested encap ])
 AT_DATA([odp-in.txt], [dnl
 encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap()))))))))))))))))))))))))))))))))
