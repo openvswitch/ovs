@@ -293,6 +293,11 @@ conntrack_init(void)
     static struct ovsthread_once setup_l4_once = OVSTHREAD_ONCE_INITIALIZER;
     struct conntrack *ct = xzalloc(sizeof *ct);
 
+    /* This value can be used during init (e.g. timeout_policy_init()),
+     * set it first to ensure it is available.
+     */
+    ct->hash_basis = random_uint32();
+
     ovs_rwlock_init(&ct->resources_lock);
     ovs_rwlock_wrlock(&ct->resources_lock);
     hmap_init(&ct->alg_expectations);
@@ -310,7 +315,6 @@ conntrack_init(void)
     timeout_policy_init(ct);
     ovs_mutex_unlock(&ct->ct_lock);
 
-    ct->hash_basis = random_uint32();
     atomic_count_init(&ct->n_conn, 0);
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
     atomic_init(&ct->tcp_seq_chk, true);
