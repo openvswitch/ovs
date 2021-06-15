@@ -411,6 +411,7 @@ Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
 Volkan Atlı                        volkan.atli@b-ulltech.com
 Wang Li                            wangli39@baidu.com
+Wang Liang                         wangliangrt@didiglobal.com
 Wang Sheng-Hui                     shhuiw@gmail.com
 Wang Yibo                          bobxxwang@126.com
 Wang Zhike                         wangzhike@jd.com
