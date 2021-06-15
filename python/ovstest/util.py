@@ -26,8 +26,6 @@ import socket
 import struct
 import subprocess
 
-import exceptions
-
 import xmlrpc.client
 
 
@@ -88,7 +86,7 @@ def start_process(args):
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
         return (p.returncode, out, err)
-    except exceptions.OSError:
+    except OSError:
         return (-1, None, None)
 
 
