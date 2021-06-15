@@ -15,7 +15,7 @@
 """
 vswitch module allows its callers to interact with OVS DB.
 """
-import util
+from . import util
 
 
 def ovs_vsctl_add_bridge(bridge):

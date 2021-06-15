@@ -70,7 +70,7 @@ result.  Expected usage is for ovs-appctl backtrace to be piped in.""")
         if os.path.exists(debug):
             binary = debug
 
-    print "Binary: %s\n" % binary
+    print("Binary: %s\n" % binary)
 
     stdin = sys.stdin.read()
 
@@ -88,15 +88,15 @@ result.  Expected usage is for ovs-appctl backtrace to be piped in.""")
     for lines, count in traces:
         longest = max(len(l) for l in lines)
 
-        print "Backtrace Count: %d" % count
+        print("Backtrace Count: %d" % count)
         for line in lines:
             match = re.search(r'\[(0x.*)]', line)
             if match:
-                print "%s %s" % (line.ljust(longest),
-                                 addr2line(binary, match.group(1)))
+                print("%s %s" % (line.ljust(longest),
+                                 addr2line(binary, match.group(1))))
             else:
-                print line
-        print
+                print(line)
+        print()
 
 
 if __name__ == "__main__":
