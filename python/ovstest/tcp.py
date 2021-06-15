@@ -21,7 +21,7 @@ import time
 from twisted.internet import interfaces
 from twisted.internet.protocol import ClientFactory, Factory, Protocol
 
-from zope.interface import implements
+from zope.interface.declarations import implementer
 
 
 class TcpListenerConnection(Protocol):
@@ -55,8 +55,8 @@ class TcpListenerFactory(Factory):
         return str(self.stats)
 
 
+@implementer(interfaces.IPushProducer)
 class Producer(object):
-    implements(interfaces.IPushProducer)
     """
     This producer class generates infinite byte stream for a specified time
     duration

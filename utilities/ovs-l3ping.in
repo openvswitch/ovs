@@ -19,7 +19,7 @@ achieved by tunneling the control connection inside the tunnel itself.
 """
 
 import socket
-import xmlrpclib
+import xmlrpc.client
 
 import ovstest.args as args
 import ovstest.tests as tests
@@ -64,13 +64,13 @@ if __name__ == '__main__':
             ps = get_packet_sizes(me, he, args.client[0])
             tests.do_direct_tests(me, he, bandwidth, interval, ps)
     except KeyboardInterrupt:
-        print "Terminating"
-    except xmlrpclib.Fault:
-        print "Couldn't contact peer"
+        print("Terminating")
+    except xmlrpc.client.Fault:
+        print("Couldn't contact peer")
     except socket.error:
-        print "Couldn't contact peer"
-    except xmlrpclib.ProtocolError:
-        print "XMLRPC control channel was abruptly terminated"
+        print("Couldn't contact peer")
+    except xmlrpc.client.ProtocolError:
+        print("XMLRPC control channel was abruptly terminated")
     finally:
         if local_server is not None:
             local_server.terminate()

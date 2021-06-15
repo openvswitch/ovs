@@ -7,8 +7,6 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-from __future__ import print_function
-
 import getopt
 import re
 import sys
