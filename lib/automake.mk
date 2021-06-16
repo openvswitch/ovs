@@ -528,7 +528,6 @@ pkgconfig_DATA += \
 	lib/libsflow.pc
 
 EXTRA_DIST += \
-	lib/dh1024.pem \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
 	lib/common.xml \

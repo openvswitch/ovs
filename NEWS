@@ -1,5 +1,7 @@
 Post-v2.15.0
 ---------------------
+   - Removed support for 1024-bit Diffie-Hellman key exchange, which is now
+     considered unsafe.
    - Ingress Policing:
      * Rate limiting configuration now supports setting packet-per-second
        limits in addition to the previously configurable byte rate settings.

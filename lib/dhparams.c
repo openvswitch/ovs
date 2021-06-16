@@ -18,50 +18,6 @@ my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
     return DH_set0_pqg(dh, p, NULL, g);
 #endif
 }
-#ifndef HEADER_DH_H
-# include <openssl/dh.h>
-#endif
-
-DH *get_dh1024(void)
-{
-    static unsigned char dhp_1024[] = {
-        0xF4, 0x88, 0xFD, 0x58, 0x4E, 0x49, 0xDB, 0xCD, 0x20, 0xB4,
-        0x9D, 0xE4, 0x91, 0x07, 0x36, 0x6B, 0x33, 0x6C, 0x38, 0x0D,
-        0x45, 0x1D, 0x0F, 0x7C, 0x88, 0xB3, 0x1C, 0x7C, 0x5B, 0x2D,
-        0x8E, 0xF6, 0xF3, 0xC9, 0x23, 0xC0, 0x43, 0xF0, 0xA5, 0x5B,
-        0x18, 0x8D, 0x8E, 0xBB, 0x55, 0x8C, 0xB8, 0x5D, 0x38, 0xD3,
-        0x34, 0xFD, 0x7C, 0x17, 0x57, 0x43, 0xA3, 0x1D, 0x18, 0x6C,
-        0xDE, 0x33, 0x21, 0x2C, 0xB5, 0x2A, 0xFF, 0x3C, 0xE1, 0xB1,
-        0x29, 0x40, 0x18, 0x11, 0x8D, 0x7C, 0x84, 0xA7, 0x0A, 0x72,
-        0xD6, 0x86, 0xC4, 0x03, 0x19, 0xC8, 0x07, 0x29, 0x7A, 0xCA,
-        0x95, 0x0C, 0xD9, 0x96, 0x9F, 0xAB, 0xD0, 0x0A, 0x50, 0x9B,
-        0x02, 0x46, 0xD3, 0x08, 0x3D, 0x66, 0xA4, 0x5D, 0x41, 0x9F,
-        0x9C, 0x7C, 0xBD, 0x89, 0x4B, 0x22, 0x19, 0x26, 0xBA, 0xAB,
-        0xA2, 0x5E, 0xC3, 0x55, 0xE9, 0x2F, 0x78, 0xC7
-    };
-    static unsigned char dhg_1024[] = {
-        0x02
-    };
-    DH *dh = DH_new();
-    BIGNUM *dhp_bn, *dhg_bn;
-
-    if (dh == NULL)
-        return NULL;
-    dhp_bn = BN_bin2bn(dhp_1024, sizeof (dhp_1024), NULL);
-    dhg_bn = BN_bin2bn(dhg_1024, sizeof (dhg_1024), NULL);
-    if (dhp_bn == NULL || dhg_bn == NULL
-            || !my_DH_set0_pqg(dh, dhp_bn, NULL, dhg_bn)) {
-        DH_free(dh);
-        BN_free(dhp_bn);
-        BN_free(dhg_bn);
-        return NULL;
-    }
-    return dh;
-}
-#ifndef HEADER_DH_H
-# include <openssl/dh.h>
-#endif
-
 DH *get_dh2048(void)
 {
     static unsigned char dhp_2048[] = {
@@ -96,25 +52,21 @@ DH *get_dh2048(void)
         0x02
     };
     DH *dh = DH_new();
-    BIGNUM *dhp_bn, *dhg_bn;
+    BIGNUM *p, *g;
 
     if (dh == NULL)
         return NULL;
-    dhp_bn = BN_bin2bn(dhp_2048, sizeof (dhp_2048), NULL);
-    dhg_bn = BN_bin2bn(dhg_2048, sizeof (dhg_2048), NULL);
-    if (dhp_bn == NULL || dhg_bn == NULL
-            || !my_DH_set0_pqg(dh, dhp_bn, NULL, dhg_bn)) {
+    p = BN_bin2bn(dhp_2048, sizeof(dhp_2048), NULL);
+    g = BN_bin2bn(dhg_2048, sizeof(dhg_2048), NULL);
+    if (p == NULL || g == NULL
+            || !my_DH_set0_pqg(dh, p, NULL, g)) {
         DH_free(dh);
-        BN_free(dhp_bn);
-        BN_free(dhg_bn);
+        BN_free(p);
+        BN_free(g);
         return NULL;
     }
     return dh;
 }
-#ifndef HEADER_DH_H
-# include <openssl/dh.h>
-#endif
-
 DH *get_dh4096(void)
 {
     static unsigned char dhp_4096[] = {
@@ -175,17 +127,17 @@ DH *get_dh4096(void)
         0x02
     };
     DH *dh = DH_new();
-    BIGNUM *dhp_bn, *dhg_bn;
+    BIGNUM *p, *g;
 
     if (dh == NULL)
         return NULL;
-    dhp_bn = BN_bin2bn(dhp_4096, sizeof (dhp_4096), NULL);
-    dhg_bn = BN_bin2bn(dhg_4096, sizeof (dhg_4096), NULL);
-    if (dhp_bn == NULL || dhg_bn == NULL
-            || !my_DH_set0_pqg(dh, dhp_bn, NULL, dhg_bn)) {
+    p = BN_bin2bn(dhp_4096, sizeof(dhp_4096), NULL);
+    g = BN_bin2bn(dhg_4096, sizeof(dhg_4096), NULL);
+    if (p == NULL || g == NULL
+            || !my_DH_set0_pqg(dh, p, NULL, g)) {
         DH_free(dh);
-        BN_free(dhp_bn);
-        BN_free(dhg_bn);
+        BN_free(p);
+        BN_free(g);
         return NULL;
     }
     return dh;
