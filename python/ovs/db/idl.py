@@ -246,6 +246,7 @@ class Idl(object):
         i = 0
         while i < 50:
             i += 1
+            previous_change_seqno = self.change_seqno
             if not self._session.is_connected():
                 break
 
@@ -274,7 +275,7 @@ class Idl(object):
                 if msg.params[0] == str(self.server_monitor_uuid):
                     self.__parse_update(msg.params[1], OVSDB_UPDATE,
                                         tables=self.server_tables)
-                    self.change_seqno = initial_change_seqno
+                    self.change_seqno = previous_change_seqno
                     if not self.__check_server_db():
                         self.force_reconnect()
                         break
@@ -317,7 +318,7 @@ class Idl(object):
                         self.__error()
                         break
                     else:
-                        self.change_seqno = initial_change_seqno
+                        self.change_seqno = previous_change_seqno
                         self.__send_monitor_request()
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
                   and self._server_monitor_request_id is not None
@@ -327,7 +328,7 @@ class Idl(object):
                     self._server_monitor_request_id = None
                     self.__parse_update(msg.result, OVSDB_UPDATE,
                                         tables=self.server_tables)
-                    self.change_seqno = initial_change_seqno
+                    self.change_seqno = previous_change_seqno
                     if self.__check_server_db():
                         self.__send_monitor_request()
                         self.__send_db_change_aware()
@@ -341,7 +342,7 @@ class Idl(object):
                         self.__error()
                         break
                     else:
-                        self.change_seqno = initial_change_seqno
+                        self.change_seqno = previous_change_seqno
                         self.__send_monitor_request()
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
                   and self._db_change_aware_request_id is not None
@@ -377,7 +378,7 @@ class Idl(object):
                     self.force_reconnect()
                     break
                 else:
-                    self.change_seqno = initial_change_seqno
+                    self.change_seqno = previous_change_seqno
                     self.__send_monitor_request()
             elif (msg.type in (ovs.jsonrpc.Message.T_ERROR,
                                ovs.jsonrpc.Message.T_REPLY)
