@@ -1144,4 +1144,10 @@ bad_action 'apply_actions' 'apply_actions is the default instruction'
 bad_action 'xyzzy' 'unknown action xyzzy'
 bad_action 'drop,3' '"drop" must not be accompanied by any other action or instruction'
 
+# Too many actions
+writes=$(printf 'write_actions(%.0s' $(seq 100))
+bad_action "${writes}" 'Action nested too deeply'
+outputs=$(printf '1,%.0s' $(seq 4096))
+bad_action "${outputs}" 'input too big'
+
 AT_CLEANUP

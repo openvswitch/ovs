@@ -9326,6 +9326,7 @@ static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
                 bool allow_instructions, enum ofpact_type outer_action)
 {
+    uint32_t orig_size = pp->ofpacts->size;
     char *key, *value;
     bool drop = false;
     char *pos;
@@ -9369,6 +9370,9 @@ ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
         }
         if (error) {
             return error;
+        }
+        if (pp->ofpacts->size - orig_size > UINT16_MAX) {
+            return xasprintf("input too big");
         }
     }
 
