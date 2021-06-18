@@ -3305,6 +3305,46 @@ NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 Fragmentation + NAT])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+CHECK_CONNTRACK()
+
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 secure -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.2.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.2.1.2/24")
+
+dnl Create a dummy route for NAT
+NS_CHECK_EXEC([at_ns1], [ip addr add 10.1.1.2/32 dev lo])
+NS_CHECK_EXEC([at_ns0], [ip route add 10.1.1.0/24 via 10.2.1.2])
+NS_CHECK_EXEC([at_ns1], [ip route add 10.1.1.0/24 via 10.2.1.1])
+
+dnl Solely for debugging when things go wrong
+NS_EXEC([at_ns0], [tcpdump -l -n -xx -U -i p0 -w p0.pcap >tcpdump.out 2>/dev/null &])
+NS_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 -w p1.pcap >tcpdump.out 2>/dev/null &])
+
+AT_DATA([flows.txt], [dnl
+table=0,arp,actions=normal
+table=0,ct_state=-trk,ip,in_port=ovs-p0, actions=ct(table=1, nat)
+table=0,ct_state=-trk,ip,in_port=ovs-p1, actions=ct(table=1, nat)
+table=1,ct_state=+trk+new,ip,in_port=ovs-p0, actions=ct(commit, nat(src=10.1.1.1)),ovs-p1
+table=1,ct_state=+trk+est,ip,in_port=ovs-p0, actions=ovs-p1
+table=1,ct_state=+trk+est,ip,in_port=ovs-p1, actions=ovs-p0
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Check connectivity
+NS_CHECK_EXEC([at_ns0], [ping -c 1 10.1.1.2 -M dont -s 4500 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - resubmit to ct multiple times])
 CHECK_CONNTRACK()
 
