@@ -1149,52 +1149,56 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
          * NETDEV_MAX_BURST. */
         DP_PACKET_BATCH_REFILL_FOR_EACH (pb_idx, pb_cnt, pkt, pb) {
             if (rp && pkt == rp->list->reass_execute_ctx) {
-                for (int i = 0; i <= rp->list->last_inuse_idx; i++) {
-                    rp->list->frag_list[i].pkt->md.ct_label = pkt->md.ct_label;
-                    rp->list->frag_list[i].pkt->md.ct_mark = pkt->md.ct_mark;
-                    rp->list->frag_list[i].pkt->md.ct_state = pkt->md.ct_state;
-                    rp->list->frag_list[i].pkt->md.ct_zone = pkt->md.ct_zone;
-                    rp->list->frag_list[i].pkt->md.ct_orig_tuple_ipv6 =
-                        pkt->md.ct_orig_tuple_ipv6;
-                    if (pkt->md.ct_orig_tuple_ipv6) {
-                        rp->list->frag_list[i].pkt->md.ct_orig_tuple.ipv6 =
-                            pkt->md.ct_orig_tuple.ipv6;
-                    } else {
-                        rp->list->frag_list[i].pkt->md.ct_orig_tuple.ipv4  =
-                            pkt->md.ct_orig_tuple.ipv4;
-                    }
-                }
-
                 const struct ipf_frag *frag_0 = &rp->list->frag_list[0];
                 void *l4_frag = dp_packet_l4(frag_0->pkt);
                 void *l4_reass = dp_packet_l4(pkt);
                 memcpy(l4_frag, l4_reass, dp_packet_l4_size(frag_0->pkt));
 
-                if (v6) {
-                    struct ovs_16aligned_ip6_hdr *l3_frag
-                        = dp_packet_l3(frag_0->pkt);
-                    struct ovs_16aligned_ip6_hdr *l3_reass = dp_packet_l3(pkt);
-                    l3_frag->ip6_src = l3_reass->ip6_src;
-                    l3_frag->ip6_dst = l3_reass->ip6_dst;
-                } else {
-                    struct ip_header *l3_frag = dp_packet_l3(frag_0->pkt);
-                    struct ip_header *l3_reass = dp_packet_l3(pkt);
-                    if (!dp_packet_hwol_is_ipv4(frag_0->pkt)) {
-                        ovs_be32 reass_ip =
-                            get_16aligned_be32(&l3_reass->ip_src);
-                        ovs_be32 frag_ip =
-                            get_16aligned_be32(&l3_frag->ip_src);
+                for (int i = 0; i <= rp->list->last_inuse_idx; i++) {
+                    const struct ipf_frag *frag_i = &rp->list->frag_list[i];
 
-                        l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
-                                                         frag_ip, reass_ip);
-                        reass_ip = get_16aligned_be32(&l3_reass->ip_dst);
-                        frag_ip = get_16aligned_be32(&l3_frag->ip_dst);
-                        l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
-                                                         frag_ip, reass_ip);
+                    frag_i->pkt->md.ct_label = pkt->md.ct_label;
+                    frag_i->pkt->md.ct_mark = pkt->md.ct_mark;
+                    frag_i->pkt->md.ct_state = pkt->md.ct_state;
+                    frag_i->pkt->md.ct_zone = pkt->md.ct_zone;
+                    frag_i->pkt->md.ct_orig_tuple_ipv6 =
+                        pkt->md.ct_orig_tuple_ipv6;
+                    if (pkt->md.ct_orig_tuple_ipv6) {
+                        frag_i->pkt->md.ct_orig_tuple.ipv6 =
+                            pkt->md.ct_orig_tuple.ipv6;
+                    } else {
+                        frag_i->pkt->md.ct_orig_tuple.ipv4 =
+                            pkt->md.ct_orig_tuple.ipv4;
                     }
+                    if (v6) {
+                        struct ovs_16aligned_ip6_hdr *l3_frag
+                            = dp_packet_l3(frag_i->pkt);
+                        struct ovs_16aligned_ip6_hdr *l3_reass
+                            = dp_packet_l3(pkt);
+                        l3_frag->ip6_src = l3_reass->ip6_src;
+                        l3_frag->ip6_dst = l3_reass->ip6_dst;
+                    } else {
+                        struct ip_header *l3_frag = dp_packet_l3(frag_i->pkt);
+                        struct ip_header *l3_reass = dp_packet_l3(pkt);
+                        if (!dp_packet_hwol_is_ipv4(frag_i->pkt)) {
+                            ovs_be32 reass_ip =
+                                get_16aligned_be32(&l3_reass->ip_src);
+                            ovs_be32 frag_ip =
+                                get_16aligned_be32(&l3_frag->ip_src);
 
-                    l3_frag->ip_src = l3_reass->ip_src;
-                    l3_frag->ip_dst = l3_reass->ip_dst;
+                            l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
+                                                             frag_ip,
+                                                             reass_ip);
+                            reass_ip = get_16aligned_be32(&l3_reass->ip_dst);
+                            frag_ip = get_16aligned_be32(&l3_frag->ip_dst);
+                            l3_frag->ip_csum = recalc_csum32(l3_frag->ip_csum,
+                                                             frag_ip,
+                                                             reass_ip);
+                        }
+
+                        l3_frag->ip_src = l3_reass->ip_src;
+                        l3_frag->ip_dst = l3_reass->ip_dst;
+                    }
                 }
 
                 ipf_completed_list_add(&ipf->frag_complete_list, rp->list);
