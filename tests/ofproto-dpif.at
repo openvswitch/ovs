@@ -8212,6 +8212,34 @@ AT_CHECK([sed -n 's/=[[0-9]][[0-9]]\(\.[[0-9]][[0-9]]*\)\{0,1\}s/=?s/p' stdout],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+
+AT_SETUP([ofproto-dpif - patch ports - meter (clone)])
+
+OVS_VSWITCHD_START(
+  [add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 -- \
+   add-port br0 p1 -- set Interface p1 type=patch \
+                                       options:peer=p2 ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p2 -- set Interface p2 type=patch \
+                                       options:peer=p1 -- \
+   add-port br1 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br1 'meter=1 pktps stats bands=type=drop rate=2'])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,ip,actions=2,1])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br1 in_port=1,ip,actions=meter:1,3])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=10.1.1.22,dst=10.0.0.3,proto=6,tos=0,ttl=64,frag=no),tcp(src=53295,dst=8080)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: clone(meter(0),3),1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([ofproto-dpif -- megaflows])
 
