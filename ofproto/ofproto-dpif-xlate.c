@@ -460,7 +460,7 @@ static void xlate_commit_actions(struct xlate_ctx *ctx);
 
 static void
 patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
-                  struct xport *out_dev);
+                  struct xport *out_dev, bool is_last_action);
 
 static void
 ctx_trigger_freeze(struct xlate_ctx *ctx)
@@ -3597,7 +3597,7 @@ propagate_tunnel_data_to_flow(struct xlate_ctx *ctx, struct eth_addr dmac,
 static int
 native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
                      const struct flow *flow, odp_port_t tunnel_odp_port,
-                     bool truncate)
+                     bool truncate, bool is_last_action)
 {
     struct netdev_tnl_build_header_params tnl_params;
     struct ovs_action_push_tnl tnl_push_data;
@@ -3727,7 +3727,7 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
         entry->tunnel_hdr.hdr_size = tnl_push_data.header_len;
         entry->tunnel_hdr.operation = ADD;
 
-        patch_port_output(ctx, xport, out_dev);
+        patch_port_output(ctx, xport, out_dev, is_last_action);
 
         /* Similar to the stats update in revalidation, the x_cache entries
          * are populated by the previous translation are used to update the
@@ -3821,7 +3821,7 @@ xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, co
  */
 static void
 patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
-                  struct xport *out_dev)
+                  struct xport *out_dev, bool is_last_action)
 {
     struct flow *flow = &ctx->xin->flow;
     struct flow old_flow = ctx->xin->flow;
@@ -3863,8 +3863,9 @@ patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
     if (!process_special(ctx, out_dev) && may_receive(out_dev, ctx)) {
         if (xport_stp_forward_state(out_dev) &&
             xport_rstp_forward_state(out_dev)) {
+
             xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true,
-                               false, true, clone_xlate_actions);
+                               false, is_last_action, clone_xlate_actions);
             if (!ctx->freezing) {
                 xlate_action_set(ctx);
             }
@@ -3879,7 +3880,7 @@ patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
             mirror_mask_t old_mirrors2 = ctx->mirrors;
 
             xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true,
-                               false, true, clone_xlate_actions);
+                               false, is_last_action, clone_xlate_actions);
             ctx->mirrors = old_mirrors2;
             ctx->base_flow = old_base_flow;
             ctx->odp_actions->size = old_size;
@@ -4120,7 +4121,7 @@ terminate_native_tunnel(struct xlate_ctx *ctx, struct flow *flow,
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp,
-                        bool is_last_action OVS_UNUSED, bool truncate)
+                        bool is_last_action, bool truncate)
 {
     const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = ctx->wc;
@@ -4157,7 +4158,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
        if (truncate) {
            xlate_report_error(ctx, "Cannot truncate output to patch port");
        }
-       patch_port_output(ctx, xport, xport->peer);
+       patch_port_output(ctx, xport, xport->peer, is_last_action);
        return;
     }
 
@@ -4252,7 +4253,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                            xr->recirc_id);
         } else if (is_native_tunnel) {
             /* Output to native tunnel port. */
-            native_tunnel_output(ctx, xport, flow, odp_port, truncate);
+            native_tunnel_output(ctx, xport, flow, odp_port, truncate,
+                                 is_last_action);
             flow->tunnel = flow_tnl; /* Restore tunnel metadata */
 
         } else if (terminate_native_tunnel(ctx, flow, wc,
@@ -6773,7 +6775,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         const struct ofpact_set_field *set_field;
         const struct mf_field *mf;
         bool last = is_last_action && ofpact_last(a, ofpacts, ofpacts_len)
-                    && ctx->action_set.size;
+                    && !ctx->action_set.size;
 
         if (ctx->error) {
             break;
@@ -7176,11 +7178,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CHECK_PKT_LARGER: {
-            if (last) {
-                /* If this is last action, then there is no need to
-                 * translate the action. */
-                break;
-            }
             const struct ofpact *remaining_acts = ofpact_next(a);
             size_t remaining_acts_len = ofpact_remaining_len(remaining_acts,
                                                              ofpacts,
