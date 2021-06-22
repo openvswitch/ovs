@@ -130,22 +130,63 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
     }
 }
 
+static int
+compare_numa_node_list(const void *a_, const void *b_)
+{
+    int a = *(const int *) a_;
+    int b = *(const int *) b_;
+
+    if (a < b) {
+        return -1;
+    }
+    if (a > b) {
+        return 1;
+    }
+    return 0;
+}
+
 static char *
 construct_dpdk_socket_mem(void)
 {
     const char *def_value = "1024";
-    int numa, numa_nodes = ovs_numa_get_n_numas();
     struct ds dpdk_socket_mem = DS_EMPTY_INITIALIZER;
 
-    if (numa_nodes == 0 || numa_nodes == OVS_NUMA_UNSPEC) {
-        numa_nodes = 1;
-    }
+    /* Build a list of all numa nodes with at least one core. */
+    struct ovs_numa_dump *dump = ovs_numa_dump_n_cores_per_numa(1);
+    size_t n_numa_nodes = hmap_count(&dump->numas);
+    int *numa_node_list = xcalloc(n_numa_nodes, sizeof *numa_node_list);
 
-    ds_put_cstr(&dpdk_socket_mem, def_value);
-    for (numa = 1; numa < numa_nodes; ++numa) {
-        ds_put_format(&dpdk_socket_mem, ",%s", def_value);
-    }
+    const struct ovs_numa_info_numa *node;
+    int k = 0, last_node = 0;
 
+    FOR_EACH_NUMA_ON_DUMP(node, dump) {
+        if (k >= n_numa_nodes) {
+            break;
+        }
+        numa_node_list[k++] = node->numa_id;
+    }
+    qsort(numa_node_list, k, sizeof *numa_node_list, compare_numa_node_list);
+
+    for (int i = 0; i < n_numa_nodes; i++) {
+        while (numa_node_list[i] > last_node &&
+               numa_node_list[i] != OVS_NUMA_UNSPEC &&
+               numa_node_list[i] <= MAX_NUMA_NODES) {
+            if (last_node == 0) {
+                ds_put_format(&dpdk_socket_mem, "%s", "0");
+            } else {
+                ds_put_format(&dpdk_socket_mem, ",%s", "0");
+            }
+            last_node++;
+        }
+        if (numa_node_list[i] == 0) {
+            ds_put_format(&dpdk_socket_mem, "%s", def_value);
+        } else {
+            ds_put_format(&dpdk_socket_mem, ",%s", def_value);
+        }
+        last_node++;
+    }
+    free(numa_node_list);
+    ovs_numa_dump_destroy(dump);
     return ds_cstr(&dpdk_socket_mem);
 }
 

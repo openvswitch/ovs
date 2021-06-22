@@ -98,7 +98,7 @@ m4_define([DPIF_NETDEV_DUMMY_IFACE],
                      fail-mode=secure -- \
       add-port br1 p2 -- set interface p2 type=$1 options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
       add-port br1 p8 -- set interface p8 ofport_request=8 type=$1 --], [], [],
-      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,8,8,8,8"], [])])
    AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
