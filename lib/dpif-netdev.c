@@ -2727,8 +2727,7 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
     info.flow_mark = mark;
 
     port = netdev_ports_get(in_port, dpif_type_str);
-    if (!port || netdev_vport_is_vport_class(port->netdev_class)) {
-        netdev_close(port);
+    if (!port) {
         goto err_free;
     }
     /* Taking a global 'port_mutex' to fulfill thread safety restrictions for
