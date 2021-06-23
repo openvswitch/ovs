@@ -20,6 +20,8 @@ Post-v2.15.0
      * New debug appctl command 'dpdk/get-malloc-stats'.
      * Add hardware offload support for tunnel pop action (experimental).
        Available only if DPDK experimantal APIs enabled during the build.
+     * Add hardware offload support for VXLAN flows (experimental).
+       Available only if DPDK experimantal APIs enabled during the build.
    - ovsdb-tool:
      * New option '--election-timer' to the 'create-cluster' command to set the
        leader election timer during cluster creation.
