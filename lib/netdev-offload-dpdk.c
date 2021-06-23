@@ -1588,6 +1588,155 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
     return 0;
 }
 
+struct get_vport_netdev_aux {
+    struct rte_flow_tunnel *tunnel;
+    odp_port_t *odp_port;
+    struct netdev *vport;
+};
+
+static bool
+get_vxlan_netdev_cb(struct netdev *netdev,
+                    odp_port_t odp_port,
+                    void *aux_)
+{
+    const struct netdev_tunnel_config *tnl_cfg;
+    struct get_vport_netdev_aux *aux = aux_;
+
+    if (strcmp(netdev_get_type(netdev), "vxlan")) {
+        return false;
+    }
+
+    tnl_cfg = netdev_get_tunnel_config(netdev);
+    if (!tnl_cfg) {
+        VLOG_ERR_RL(&rl, "Cannot get a tunnel config for netdev %s",
+                    netdev_get_name(netdev));
+        return false;
+    }
+
+    if (tnl_cfg->dst_port == aux->tunnel->tp_dst) {
+        /* Found the netdev. Store the results and stop the traversing. */
+        aux->vport = netdev_ref(netdev);
+        *aux->odp_port = odp_port;
+        return true;
+    }
+
+    return false;
+}
+
+static struct netdev *
+get_vxlan_netdev(const char *dpif_type,
+                 struct rte_flow_tunnel *tunnel,
+                 odp_port_t *odp_port)
+{
+    struct get_vport_netdev_aux aux = {
+        .tunnel = tunnel,
+        .odp_port = odp_port,
+        .vport = NULL,
+    };
+
+    netdev_ports_traverse(dpif_type, get_vxlan_netdev_cb, &aux);
+    return aux.vport;
+}
+
+static struct netdev *
+get_vport_netdev(const char *dpif_type,
+                 struct rte_flow_tunnel *tunnel,
+                 odp_port_t *odp_port)
+{
+    if (tunnel->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
+        return get_vxlan_netdev(dpif_type, tunnel, odp_port);
+    }
+
+    OVS_NOT_REACHED();
+}
+
+static int
+netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
+                                           struct dp_packet *packet)
+{
+    struct rte_flow_restore_info rte_restore_info;
+    struct rte_flow_tunnel *rte_tnl;
+    struct netdev *vport_netdev;
+    struct pkt_metadata *md;
+    struct flow_tnl *md_tnl;
+    odp_port_t vport_odp;
+    int ret = 0;
+
+    if (netdev_dpdk_rte_flow_get_restore_info(netdev, packet,
+                                              &rte_restore_info, NULL)) {
+        /* This function is called for every packet, and in most cases there
+         * will be no restore info from the HW, thus error is expected.
+         */
+        return 0;
+    }
+
+    if (!(rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_TUNNEL)) {
+        return EOPNOTSUPP;
+    }
+
+    rte_tnl = &rte_restore_info.tunnel;
+    vport_netdev = get_vport_netdev(netdev->dpif_type, rte_tnl,
+                                    &vport_odp);
+    if (!vport_netdev) {
+        VLOG_WARN_RL(&rl, "Could not find vport netdev");
+        return EOPNOTSUPP;
+    }
+
+    md = &packet->md;
+    /* For tunnel recovery (RTE_FLOW_RESTORE_INFO_TUNNEL), it is possible
+     * to have the packet to still be encapsulated, or not.  This is reflected
+     * by the RTE_FLOW_RESTORE_INFO_ENCAPSULATED flag.
+     * In the case it is on, the packet is still encapsulated, and we do
+     * the pop in SW.
+     * In the case it is off, the packet is already decapsulated by HW, and
+     * the tunnel info is provided in the tunnel struct.  For this case we
+     * take it to OVS metadata.
+     */
+    if (rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_ENCAPSULATED) {
+        if (!vport_netdev->netdev_class ||
+            !vport_netdev->netdev_class->pop_header) {
+            VLOG_ERR_RL(&rl, "vport nedtdev=%s with no pop_header method",
+                        netdev_get_name(vport_netdev));
+            ret = EOPNOTSUPP;
+            goto close_vport_netdev;
+        }
+        parse_tcp_flags(packet);
+        if (vport_netdev->netdev_class->pop_header(packet) == NULL) {
+            /* If there is an error with popping the header, the packet is
+             * freed. In this case it should not continue SW processing.
+             */
+            ret = EINVAL;
+            goto close_vport_netdev;
+        }
+    } else {
+        md_tnl = &md->tunnel;
+        if (rte_tnl->is_ipv6) {
+            memcpy(&md_tnl->ipv6_src, &rte_tnl->ipv6.src_addr,
+                   sizeof md_tnl->ipv6_src);
+            memcpy(&md_tnl->ipv6_dst, &rte_tnl->ipv6.dst_addr,
+                   sizeof md_tnl->ipv6_dst);
+        } else {
+            md_tnl->ip_src = rte_tnl->ipv4.src_addr;
+            md_tnl->ip_dst = rte_tnl->ipv4.dst_addr;
+        }
+        md_tnl->tun_id = htonll(rte_tnl->tun_id);
+        md_tnl->flags = rte_tnl->tun_flags;
+        md_tnl->ip_tos = rte_tnl->tos;
+        md_tnl->ip_ttl = rte_tnl->ttl;
+        md_tnl->tp_src = rte_tnl->tp_src;
+    }
+    /* Change the in_port to the vport's one, in order to continue packet
+     * processing in SW.
+     */
+    md->in_port.odp_port = vport_odp;
+    dp_packet_reset_offload(packet);
+
+close_vport_netdev:
+    netdev_close(vport_netdev);
+
+    return ret;
+}
+
 const struct netdev_flow_api netdev_offload_dpdk = {
     .type = "dpdk_flow_api",
     .flow_put = netdev_offload_dpdk_flow_put,
@@ -1595,4 +1744,5 @@ const struct netdev_flow_api netdev_offload_dpdk = {
     .init_flow_api = netdev_offload_dpdk_init_flow_api,
     .flow_get = netdev_offload_dpdk_flow_get,
     .flow_flush = netdev_offload_dpdk_flow_flush,
+    .hw_miss_packet_recover = netdev_offload_dpdk_hw_miss_packet_recover,
 };
