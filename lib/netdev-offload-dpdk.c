@@ -31,7 +31,7 @@
 #include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_offload_dpdk);
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(100, 5);
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
 /* Thread-safety
  * =============
