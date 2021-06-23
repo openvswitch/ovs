@@ -1337,19 +1337,21 @@ dpif_netdev_subtable_lookup_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc,
+dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
                                 const char *argv[], void *aux OVS_UNUSED)
 {
     /* This function requires 2 parameters (argv[1] and argv[2]) to execute.
      *   argv[1] is subtable name
      *   argv[2] is priority
-     *   argv[3] is the datapath name (optional if only 1 datapath exists)
      */
     const char *func_name = argv[1];
 
     errno = 0;
     char *err_char;
     uint32_t new_prio = strtoul(argv[2], &err_char, 10);
+    uint32_t lookup_dpcls_changed = 0;
+    uint32_t lookup_subtable_changed = 0;
+    struct shash_node *node;
     if (errno != 0 || new_prio > UINT8_MAX) {
         unixctl_command_reply_error(conn,
             "error converting priority, use integer in range 0-255\n");
@@ -1363,58 +1365,42 @@ dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc,
         return;
     }
 
-    /* argv[3] is optional datapath instance. If no datapath name is provided
-     * and only one datapath exists, the one existing datapath is reprobed.
-     */
     ovs_mutex_lock(&dp_netdev_mutex);
-    struct dp_netdev *dp = NULL;
+    SHASH_FOR_EACH (node, &dp_netdevs) {
+        struct dp_netdev *dp = node->data;
 
-    if (argc == 4) {
-        dp = shash_find_data(&dp_netdevs, argv[3]);
-    } else if (shash_count(&dp_netdevs) == 1) {
-        dp = shash_first(&dp_netdevs)->data;
-    }
+        /* Get PMD threads list, required to get DPCLS instances. */
+        size_t n;
+        struct dp_netdev_pmd_thread **pmd_list;
+        sorted_poll_thread_list(dp, &pmd_list, &n);
 
-    if (!dp) {
-        ovs_mutex_unlock(&dp_netdev_mutex);
-        unixctl_command_reply_error(conn,
-                                    "please specify an existing datapath");
-        return;
-    }
+        /* take port mutex as HMAP iters over them. */
+        ovs_mutex_lock(&dp->port_mutex);
 
-    /* Get PMD threads list, required to get DPCLS instances. */
-    size_t n;
-    uint32_t lookup_dpcls_changed = 0;
-    uint32_t lookup_subtable_changed = 0;
-    struct dp_netdev_pmd_thread **pmd_list;
-    sorted_poll_thread_list(dp, &pmd_list, &n);
-
-    /* take port mutex as HMAP iters over them. */
-    ovs_mutex_lock(&dp->port_mutex);
-
-    for (size_t i = 0; i < n; i++) {
-        struct dp_netdev_pmd_thread *pmd = pmd_list[i];
-        if (pmd->core_id == NON_PMD_CORE_ID) {
-            continue;
-        }
-
-        struct dp_netdev_port *port = NULL;
-        HMAP_FOR_EACH (port, node, &dp->ports) {
-            odp_port_t in_port = port->port_no;
-            struct dpcls *cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
-            if (!cls) {
+        for (size_t i = 0; i < n; i++) {
+            struct dp_netdev_pmd_thread *pmd = pmd_list[i];
+            if (pmd->core_id == NON_PMD_CORE_ID) {
                 continue;
             }
-            uint32_t subtbl_changes = dpcls_subtable_lookup_reprobe(cls);
-            if (subtbl_changes) {
-                lookup_dpcls_changed++;
-                lookup_subtable_changed += subtbl_changes;
+
+            struct dp_netdev_port *port = NULL;
+            HMAP_FOR_EACH (port, node, &dp->ports) {
+                odp_port_t in_port = port->port_no;
+                struct dpcls *cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
+                if (!cls) {
+                    continue;
+                }
+                uint32_t subtbl_changes = dpcls_subtable_lookup_reprobe(cls);
+                if (subtbl_changes) {
+                    lookup_dpcls_changed++;
+                    lookup_subtable_changed += subtbl_changes;
+                }
             }
         }
-    }
 
-    /* release port mutex before netdev mutex. */
-    ovs_mutex_unlock(&dp->port_mutex);
+        /* release port mutex before netdev mutex. */
+        ovs_mutex_unlock(&dp->port_mutex);
+    }
     ovs_mutex_unlock(&dp_netdev_mutex);
 
     struct ds reply = DS_EMPTY_INITIALIZER;
@@ -1643,8 +1629,8 @@ dpif_netdev_init(void)
                              0, 1, dpif_netdev_bond_show,
                              NULL);
     unixctl_command_register("dpif-netdev/subtable-lookup-prio-set",
-                             "[lookup_func] [prio] [dp]",
-                             2, 3, dpif_netdev_subtable_lookup_set,
+                             "[lookup_func] [prio]",
+                             2, 2, dpif_netdev_subtable_lookup_set,
                              NULL);
     unixctl_command_register("dpif-netdev/subtable-lookup-prio-get", "",
                              0, 0, dpif_netdev_subtable_lookup_get,
