@@ -5291,6 +5291,118 @@ netdev_dpdk_rte_flow_query_count(struct netdev *netdev,
     return ret;
 }
 
+#ifdef ALLOW_EXPERIMENTAL_API
+
+int
+netdev_dpdk_rte_flow_tunnel_decap_set(struct netdev *netdev,
+                                      struct rte_flow_tunnel *tunnel,
+                                      struct rte_flow_action **actions,
+                                      uint32_t *num_of_actions,
+                                      struct rte_flow_error *error)
+{
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_tunnel_decap_set(dev->port_id, tunnel, actions,
+                                    num_of_actions, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+int
+netdev_dpdk_rte_flow_tunnel_match(struct netdev *netdev,
+                                  struct rte_flow_tunnel *tunnel,
+                                  struct rte_flow_item **items,
+                                  uint32_t *num_of_items,
+                                  struct rte_flow_error *error)
+{
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_tunnel_match(dev->port_id, tunnel, items, num_of_items,
+                                error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+int
+netdev_dpdk_rte_flow_get_restore_info(struct netdev *netdev,
+                                      struct dp_packet *p,
+                                      struct rte_flow_restore_info *info,
+                                      struct rte_flow_error *error)
+{
+    struct rte_mbuf *m = (struct rte_mbuf *) p;
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_get_restore_info(dev->port_id, m, info, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+int
+netdev_dpdk_rte_flow_tunnel_action_decap_release(
+    struct netdev *netdev,
+    struct rte_flow_action *actions,
+    uint32_t num_of_actions,
+    struct rte_flow_error *error)
+{
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_tunnel_action_decap_release(dev->port_id, actions,
+                                               num_of_actions, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+int
+netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *netdev,
+                                         struct rte_flow_item *items,
+                                         uint32_t num_of_items,
+                                         struct rte_flow_error *error)
+{
+    struct netdev_dpdk *dev;
+    int ret;
+
+    if (!is_dpdk_class(netdev->netdev_class)) {
+        return -1;
+    }
+
+    dev = netdev_dpdk_cast(netdev);
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_tunnel_item_release(dev->port_id, items, num_of_items,
+                                       error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+#endif /* ALLOW_EXPERIMENTAL_API */
+
 #define NETDEV_DPDK_CLASS_COMMON                            \
     .is_pmd = true,                                         \
     .alloc = netdev_dpdk_alloc,                             \
