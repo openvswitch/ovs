@@ -458,6 +458,24 @@ netdev_ports_flow_flush(const char *dpif_type)
     ovs_rwlock_unlock(&netdev_hmap_rwlock);
 }
 
+void
+netdev_ports_traverse(const char *dpif_type,
+                      bool (*cb)(struct netdev *, odp_port_t, void *),
+                      void *aux)
+{
+    struct port_to_netdev_data *data;
+
+    ovs_rwlock_rdlock(&netdev_hmap_rwlock);
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
+        if (netdev_get_dpif_type(data->netdev) == dpif_type) {
+            if (cb(data->netdev, data->dpif_port.port_no, aux)) {
+                break;
+            }
+        }
+    }
+    ovs_rwlock_unlock(&netdev_hmap_rwlock);
+}
+
 struct netdev_flow_dump **
 netdev_ports_flow_dump_create(const char *dpif_type, int *ports, bool terse)
 {

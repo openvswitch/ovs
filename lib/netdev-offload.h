@@ -113,6 +113,14 @@ struct netdev *netdev_ports_get(odp_port_t port, const char *dpif_type);
 int netdev_ports_remove(odp_port_t port, const char *dpif_type);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);
 
+/* For each of the ports with dpif_type, call cb with the netdev and port
+ * number of the port, and an opaque user argument.
+ * The returned value is used to continue traversing upon false or stop if
+ * true.
+ */
+void netdev_ports_traverse(const char *dpif_type,
+                           bool (*cb)(struct netdev *, odp_port_t, void *),
+                           void *aux);
 struct netdev_flow_dump **netdev_ports_flow_dump_create(
                                         const char *dpif_type,
                                         int *ports,
