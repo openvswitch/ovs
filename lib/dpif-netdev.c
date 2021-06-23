@@ -421,6 +421,7 @@ struct dp_flow_offload_item {
     struct match match;
     struct nlattr *actions;
     size_t actions_len;
+    odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 
     struct ovs_list node;
 };
@@ -2725,11 +2726,13 @@ dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
         }
     }
     info.flow_mark = mark;
+    info.orig_in_port = offload->orig_in_port;
 
     port = netdev_ports_get(in_port, dpif_type_str);
     if (!port) {
         goto err_free;
     }
+
     /* Taking a global 'port_mutex' to fulfill thread safety restrictions for
      * the netdev-offload-dpdk module. */
     ovs_mutex_lock(&pmd->dp->port_mutex);
@@ -2827,7 +2830,8 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
 static void
 queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
                       struct dp_netdev_flow *flow, struct match *match,
-                      const struct nlattr *actions, size_t actions_len)
+                      const struct nlattr *actions, size_t actions_len,
+                      odp_port_t orig_in_port)
 {
     struct dp_flow_offload_item *offload;
     int op;
@@ -2853,6 +2857,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
     offload->actions = xmalloc(actions_len);
     memcpy(offload->actions, actions, actions_len);
     offload->actions_len = actions_len;
+    offload->orig_in_port = orig_in_port;
 
     dp_netdev_append_flow_offload(offload);
 }
@@ -3654,7 +3659,8 @@ dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
 static struct dp_netdev_flow *
 dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                    struct match *match, const ovs_u128 *ufid,
-                   const struct nlattr *actions, size_t actions_len)
+                   const struct nlattr *actions, size_t actions_len,
+                   odp_port_t orig_in_port)
     OVS_REQUIRES(pmd->flow_mutex)
 {
     struct ds extra_info = DS_EMPTY_INITIALIZER;
@@ -3720,7 +3726,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
 
-    queue_netdev_flow_put(pmd, flow, match, actions, actions_len);
+    queue_netdev_flow_put(pmd, flow, match, actions, actions_len,
+                          orig_in_port);
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG((&upcall_rl)))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -3791,7 +3798,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
             dp_netdev_flow_add(pmd, match, ufid, put->actions,
-                               put->actions_len);
+                               put->actions_len, ODPP_NONE);
         } else {
             error = ENOENT;
         }
@@ -3807,7 +3814,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
             ovsrcu_set(&netdev_flow->actions, new_actions);
 
             queue_netdev_flow_put(pmd, netdev_flow, match,
-                                  put->actions, put->actions_len);
+                                  put->actions, put->actions_len, ODPP_NONE);
 
             if (stats) {
                 get_dpif_flow_status(pmd->dp, netdev_flow, stats, NULL);
@@ -7285,6 +7292,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
     ovs_u128 ufid;
     int error;
     uint64_t cycles = cycles_counter_update(&pmd->perf_stats);
+    odp_port_t orig_in_port = packet->md.orig_in_port;
 
     match.tun_md.valid = false;
     miniflow_expand(&key->mf, &match.flow);
@@ -7334,7 +7342,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
         if (OVS_LIKELY(!netdev_flow)) {
             netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
                                              add_actions->data,
-                                             add_actions->size);
+                                             add_actions->size, orig_in_port);
         }
         ovs_mutex_unlock(&pmd->flow_mutex);
         uint32_t hash = dp_netdev_flow_hash(&netdev_flow->ufid);
