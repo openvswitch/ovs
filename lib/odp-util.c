@@ -6077,6 +6077,15 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
         }
 
         retval = parse_odp_key_mask_attr(&context, s, key, mask);
+
+        if (retval >= 0) {
+            if (nl_attr_oversized(key->size - NLA_HDRLEN)) {
+                retval = -E2BIG;
+            } else if (mask && nl_attr_oversized(mask->size - NLA_HDRLEN)) {
+                retval = -E2BIG;
+            }
+        }
+
         if (retval < 0) {
             if (errorp) {
                 *errorp = xasprintf("syntax error at %s", s);
