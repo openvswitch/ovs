@@ -495,15 +495,21 @@ create_cluster () {
     DB_FILE="$1"
     DB_SCHEMA="$2"
     LOCAL_ADDR="$3"
+    ELECTION_TIMER_MS="$4"
+
+    election_timer_arg=
+    if [ -n "$ELECTION_TIMER_MS" ]; then
+      election_timer_arg="--election-timer=$ELECTION_TIMER_MS"
+    fi
 
     if test ! -e "$DB_FILE"; then
-        action "Creating cluster database $DB_FILE" ovsdb_tool create-cluster "$DB_FILE" "$DB_SCHEMA" "$LOCAL_ADDR"
+        action "Creating cluster database $DB_FILE" ovsdb_tool $election_timer_arg create-cluster "$DB_FILE" "$DB_SCHEMA" "$LOCAL_ADDR"
     elif ovsdb_tool db-is-standalone "$DB_FILE"; then
         # Convert standalone database to clustered.
         backup_db || return 1
         rm -f "$DB_FILE"
         action "Creating cluster database $DB_FILE from existing one" \
-               ovsdb_tool create-cluster "$DB_FILE" "$backup" "$LOCAL_ADDR"
+               ovsdb_tool $election_timer_arg create-cluster "$DB_FILE" "$backup" "$LOCAL_ADDR"
     fi
 }
 
