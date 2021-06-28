@@ -7151,6 +7151,8 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     struct dp_packet *packet;
     const size_t cnt = dp_packet_batch_size(packets_);
     uint32_t cur_min = pmd->ctx.emc_insert_min;
+    const uint32_t recirc_depth = *recirc_depth_get();
+    const bool netdev_flow_api = netdev_is_flow_api_enabled();
     int i;
     uint16_t tcp_flags;
     bool smc_enable_db;
@@ -7182,7 +7184,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
             pkt_metadata_init(&packet->md, port_no);
         }
 
-        if (netdev_is_flow_api_enabled() && *recirc_depth_get() == 0) {
+        if (netdev_flow_api && recirc_depth == 0) {
             if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, port_no, packet, &flow))) {
                 /* Packet restoration failed and it was dropped, do not
                  * continue processing.
