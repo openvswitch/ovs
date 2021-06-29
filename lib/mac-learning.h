@@ -57,6 +57,11 @@
  * list starting from the LRU end, deleting each entry that has been idle too
  * long.
  *
+ * Fourth, a mac entry can be configured statically via API or appctl commands.
+ * Static entries are programmed to have an age of MAC_ENTRY_AGE_STATIC_ENTRY.
+ * Age of static entries will not be updated by a receiving packet as part of
+ * regular packet processing.
+ *
  * Finally, the number of MAC learning table entries has a configurable maximum
  * size to prevent memory exhaustion.  When a new entry must be inserted but
  * the table is already full, the implementation uses an eviction strategy
@@ -93,6 +98,9 @@ struct mac_learning;
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
 #define MAC_ENTRY_DEFAULT_IDLE_TIME 300
+
+/* Age value to represent a static entry. */
+#define MAC_ENTRY_AGE_STATIC_ENTRY INT_MAX
 
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
  * relearning based on a reflection from a bond member. */
@@ -156,6 +164,7 @@ struct mac_learning {
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
     size_t max_entries;         /* Max number of learned MACs. */
+    size_t static_entries;      /* Current number of static MAC entries. */
     struct ovs_refcount ref_cnt;
     struct ovs_rwlock rwlock;
     bool need_revalidate;
@@ -217,6 +226,14 @@ struct mac_entry *mac_learning_insert(struct mac_learning *ml,
 bool mac_learning_update(struct mac_learning *ml, struct eth_addr src,
                          int vlan, bool is_gratuitous_arp, bool is_bond,
                          void *in_port)
+    OVS_EXCLUDED(ml->rwlock);
+bool mac_learning_add_static_entry(struct mac_learning *ml,
+                                   const struct eth_addr src,
+                                   uint16_t vlan, void *in_port)
+    OVS_EXCLUDED(ml->rwlock);
+bool mac_learning_del_static_entry(struct mac_learning *ml,
+                                   const struct eth_addr src,
+                                   uint16_t vlan)
     OVS_EXCLUDED(ml->rwlock);
 
 /* Lookup. */

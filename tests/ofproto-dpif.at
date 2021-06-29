@@ -6753,6 +6753,105 @@ PORTNAME
         portName=p2
 ])])
 
+AT_SETUP([ofproto-dpif - static-mac add/del/flush])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+add_of_ports br0 1 2
+
+dnl Generate some dynamic fdb entries on some ports.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:01)], [-generate], [100,2])
+OFPROTO_TRACE([ovs-dummy], [in_port(2),eth(src=50:54:00:00:00:02)], [-generate], [100,1])
+
+dnl Add some static mac entries.
+AT_CHECK([ovs-appctl fdb/add br0 p1 0 50:54:00:00:01:01])
+AT_CHECK([ovs-appctl fdb/add br0 p2 0 50:54:00:00:02:02])
+
+dnl Check initial fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    1     0  50:54:00:00:00:01
+    1     0  50:54:00:00:01:01  static
+    2     0  50:54:00:00:00:02
+    2     0  50:54:00:00:02:02  static
+])
+
+dnl Remove static mac entry.
+AT_CHECK([ovs-appctl fdb/del br0 0 50:54:00:00:01:01])
+
+dnl Check that entry is removed.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | grep "50:54:00:00:01:01"], [1], [dnl
+])
+
+# Add some more cache and static entries, to test out flush operation
+for i in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    ovs-appctl ofproto/trace ovs-dummy "in_port(1),eth(src=50:54:00:00:0$i:ff)" -generate
+    ovs-appctl fdb/add br0 p2 0 50:54:00:0$i:00:ff
+done
+
+for i in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    ovs-appctl fdb/add br0 p2 0 50:54:00:0$i:00:ff
+done
+
+dnl Flush mac entries, only dynamic ones should be evicted.
+AT_CHECK([ovs-appctl fdb/flush br0], [0], [dnl
+table successfully flushed
+])
+
+dnl Count number of static entries remaining.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/stats-show br0 | grep static], [0], [dnl
+  Current static MAC entries in the table : 17
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - static-mac mac moves])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+add_of_ports br0 1 2
+
+dnl Generate a dynamic entry.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:00)], [-generate], [100,2])
+
+dnl Convert dynamically learnt dl_src to a static-mac.
+AT_CHECK([ovs-appctl fdb/add br0 p1 0 50:54:00:00:00:00], [0], [dnl
+Overriding already existing dynamic entry on 1
+])
+
+dnl Check fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    1     0  50:54:00:00:00:00  static
+])
+
+dnl Move the static mac to different port.
+AT_CHECK([ovs-appctl fdb/add br0 p2 0 50:54:00:00:00:00], [0], [dnl
+Overriding already existing static entry on 1
+])
+
+dnl Check fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl static-mac should not be converted to a dynamic one when a packet with same dl_src
+dnl arrives on any port of the switch.
+dnl Packet arriving on p1.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:00)], [-generate], [100,2])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl Packet arriving on p2.
+OFPROTO_TRACE([ovs-dummy], [in_port(2),eth(src=50:54:00:00:00:00)], [-generate], [100,1])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl Check mac_move coverage counter mac_learning_static_none_move.
+AT_CHECK([ovs-appctl coverage/read-counter mac_learning_static_none_move], [0], [dnl
+1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - basic truncate action])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 4 5

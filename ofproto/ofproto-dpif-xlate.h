@@ -225,6 +225,11 @@ int xlate_send_packet(const struct ofport_dpif *, bool oam, struct dp_packet *);
 void xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
                                ofp_port_t in_port, struct eth_addr dl_src,
                                int vlan, bool is_grat_arp);
+bool xlate_add_static_mac_entry(const struct ofproto_dpif *,
+                                ofp_port_t in_port,
+                                struct eth_addr dl_src, int vlan);
+bool xlate_delete_static_mac_entry(const struct ofproto_dpif *,
+                                   struct eth_addr dl_src, int vlan);
 
 void xlate_set_support(const struct ofproto_dpif *,
                        const struct dpif_backer_support *);

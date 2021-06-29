@@ -7993,26 +7993,58 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
                                         ofpacts.data, ofpacts.size, packet);
 }
 
+/* Get xbundle for a ofp_port in a ofproto datapath. */
+static struct xbundle*
+ofp_port_to_xbundle(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge;
+
+    xbridge = xbridge_lookup(xcfg, ofproto);
+    if (!xbridge) {
+        return NULL;
+    }
+
+    return lookup_input_bundle__(xbridge, ofp_port, NULL);
+}
+
 void
 xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
                           ofp_port_t in_port, struct eth_addr dl_src,
                           int vlan, bool is_grat_arp)
 {
-    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    struct xbridge *xbridge;
-    struct xbundle *xbundle;
+    struct xbundle *xbundle = NULL;
 
-    xbridge = xbridge_lookup(xcfg, ofproto);
-    if (!xbridge) {
-        return;
-    }
-
-    xbundle = lookup_input_bundle__(xbridge, in_port, NULL);
+    xbundle = ofp_port_to_xbundle(ofproto, in_port);
     if (!xbundle) {
         return;
     }
 
-    update_learning_table__(xbridge, xbundle, dl_src, vlan, is_grat_arp);
+    update_learning_table__(xbundle->xbridge,
+                            xbundle, dl_src, vlan, is_grat_arp);
+}
+
+bool
+xlate_add_static_mac_entry(const struct ofproto_dpif *ofproto,
+                           ofp_port_t in_port,
+                           struct eth_addr dl_src, int vlan)
+{
+    struct xbundle *xbundle = ofp_port_to_xbundle(ofproto, in_port);
+
+    /* Return here if xbundle is NULL. */
+    if (!xbundle || (xbundle == &ofpp_none_bundle)) {
+        return false;
+    }
+
+    return mac_learning_add_static_entry(ofproto->ml, dl_src, vlan,
+                                         xbundle->ofbundle);
+}
+
+bool
+xlate_delete_static_mac_entry(const struct ofproto_dpif *ofproto,
+                              struct eth_addr dl_src, int vlan)
+{
+    return mac_learning_del_static_entry(ofproto->ml, dl_src, vlan);
 }
 
 void
