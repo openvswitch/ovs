@@ -952,6 +952,19 @@ jsonrpc_session_steal(struct jsonrpc_session *s)
     return rpc;
 }
 
+void
+jsonrpc_session_replace(struct jsonrpc_session *s, struct jsonrpc *rpc)
+{
+    if (s->rpc) {
+        jsonrpc_close(s->rpc);
+    }
+    s->rpc = rpc;
+    if (s->rpc) {
+        reconnect_set_name(s->reconnect, jsonrpc_get_name(s->rpc));
+        reconnect_connected(s->reconnect, time_msec());
+    }
+}
+
 static void
 jsonrpc_session_disconnect(struct jsonrpc_session *s)
 {

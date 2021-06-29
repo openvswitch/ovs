@@ -50,6 +50,7 @@ void svec_shuffle(struct svec *);
 void svec_diff(const struct svec *a, const struct svec *b,
                struct svec *a_only, struct svec *both, struct svec *b_only);
 bool svec_contains(const struct svec *, const char *);
+bool svec_contains_unsorted(const struct svec *, const char *);
 size_t svec_find(const struct svec *, const char *);
 bool svec_is_sorted(const struct svec *);
 bool svec_is_unique(const struct svec *);

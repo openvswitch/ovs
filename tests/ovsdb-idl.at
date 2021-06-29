@@ -2282,3 +2282,27 @@ OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
 008: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 009: done
 ]])
+
+dnl This test checks that IDL keeps the existing connection to the server if
+dnl it's still on a list of remotes after update.
+OVSDB_CHECK_IDL_C([simple idl, initially empty, set remotes],
+  [],
+  [['set-remote unix:socket' \
+    '+set-remote unix:bad_socket,unix:socket' \
+    '+set-remote unix:bad_socket' \
+    '+set-remote unix:socket' \
+    'set-remote unix:bad_socket,unix:socket' \
+    '+set-remote unix:socket' \
+    '+reconnect']],
+  [[000: empty
+001: new remotes: unix:socket, is connected: true
+002: new remotes: unix:bad_socket,unix:socket, is connected: true
+003: new remotes: unix:bad_socket, is connected: false
+004: new remotes: unix:socket, is connected: false
+005: empty
+006: new remotes: unix:bad_socket,unix:socket, is connected: true
+007: new remotes: unix:socket, is connected: true
+008: reconnect
+009: empty
+010: done
+]])

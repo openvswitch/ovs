@@ -660,7 +660,8 @@ ovsdb_cs_wait(struct ovsdb_cs *cs)
 
 /* Network connection. */
 
-/* Changes the remote and creates a new session.
+/* Changes the remote and creates a new session.  Keeps existing connection
+ * if current remote is still valid.
  *
  * If 'retry' is true, the connection to the remote will automatically retry
  * when it fails.  If 'retry' is false, the connection is one-time. */
@@ -670,9 +671,12 @@ ovsdb_cs_set_remote(struct ovsdb_cs *cs, const char *remote, bool retry)
     if (cs
         && ((remote != NULL) != (cs->remote != NULL)
             || (remote && cs->remote && strcmp(remote, cs->remote)))) {
+        struct jsonrpc *rpc = NULL;
+
         /* Close the old session, if any. */
         if (cs->session) {
-            jsonrpc_session_close(cs->session);
+            /* Save the current open connection and close the session. */
+            rpc = jsonrpc_session_steal(cs->session);
             cs->session = NULL;
 
             free(cs->remote);
@@ -682,17 +686,30 @@ ovsdb_cs_set_remote(struct ovsdb_cs *cs, const char *remote, bool retry)
         /* Open new session, if any. */
         if (remote) {
             struct svec remotes = SVEC_EMPTY_INITIALIZER;
+            struct uuid old_cid = cs->cid;
+
             ovsdb_session_parse_remote(remote, &remotes, &cs->cid);
             if (cs->shuffle_remotes) {
                 svec_shuffle(&remotes);
             }
             cs->session = jsonrpc_session_open_multiple(&remotes, retry);
+
+            /* Use old connection, if cluster id didn't change and the remote
+             * is still on the list, to avoid unnecessary re-connection. */
+            if (rpc && uuid_equals(&old_cid, &cs->cid)
+                && svec_contains_unsorted(&remotes, jsonrpc_get_name(rpc))) {
+                jsonrpc_session_replace(cs->session, rpc);
+                cs->state_seqno = jsonrpc_session_get_seqno(cs->session);
+                rpc = NULL;
+            } else {
+                cs->state_seqno = UINT_MAX;
+            }
+
             svec_destroy(&remotes);
-
-            cs->state_seqno = UINT_MAX;
-
             cs->remote = xstrdup(remote);
         }
+
+        jsonrpc_close(rpc);
     }
 }
 

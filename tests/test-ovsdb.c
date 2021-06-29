@@ -2621,6 +2621,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     setvbuf(stdout, NULL, _IONBF, 0);
 
     symtab = ovsdb_symbol_table_create();
+    const char remote_s[] = "set-remote ";
     const char cond_s[] = "condition ";
     if (ctx->argc > 2 && strstr(ctx->argv[2], cond_s)) {
         update_conditions(idl, ctx->argv[2] + strlen(cond_s));
@@ -2664,6 +2665,11 @@ do_idl(struct ovs_cmdl_context *ctx)
         if (!strcmp(arg, "reconnect")) {
             print_and_log("%03d: reconnect", step++);
             ovsdb_idl_force_reconnect(idl);
+        }  else if (!strncmp(arg, remote_s, strlen(remote_s))) {
+            ovsdb_idl_set_remote(idl, arg + strlen(remote_s), true);
+            print_and_log("%03d: new remotes: %s, is connected: %s", step++,
+                          arg + strlen(remote_s),
+                          ovsdb_idl_is_connected(idl) ? "true" : "false");
         }  else if (!strncmp(arg, cond_s, strlen(cond_s))) {
             update_conditions(idl, arg + strlen(cond_s));
             print_and_log("%03d: change conditions", step++);
