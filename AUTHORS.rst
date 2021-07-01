@@ -308,6 +308,7 @@ Or Gerlitz                         ogerlitz@mellanox.com
 Ori Shoshan                        ori.shoshan@guardicore.com
 Padmanabhan Krishnan               kprad1@yahoo.com
 Panu Matilainen                    pmatilai@redhat.com
+Paolo Valerio                      pvalerio@redhat.com
 Paraneetharan Chandrasekaran       paraneetharanc@gmail.com
 Paul Boca                          pboca@cloudbasesolutions.com
 Paul Fazzone                       pfazzone@vmware.com
