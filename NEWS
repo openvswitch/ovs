@@ -1,5 +1,6 @@
-v2.15.1 - xx xxx xxxx
+v2.15.1 - 01 Jul 2021
 ---------------------
+   - Bug fixes
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
