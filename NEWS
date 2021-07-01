@@ -13,6 +13,11 @@ Post-v2.15.0
      * New command line options --record/--replay for ovsdb-server and
        ovsdb-client to record and replay all the incoming transactions,
        monitors, etc.  More datails in Documentation/topics/record-replay.rst.
+     * The Python Idl class now has a cooperative_yield() method that can be
+       overridden by an application that uses eventlet / gevent / asyncio with
+       the desired yield method (e.g. {eventlet,gevent,asyncio}.sleep(0)) to
+       prevent the application from being blocked for a long time while
+       processing database updates.
    - In ovs-vsctl and vtep-ctl, the "find" command now accept new
      operators {in} and {not-in}.
    - Userspace datapath:
