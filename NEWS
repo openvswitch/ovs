@@ -1,5 +1,9 @@
 Post-v2.15.0
 ---------------------
+   - Ingress Policing:
+     * Rate limiting configuration now supports setting packet-per-second
+       limits in addition to the previously configurable byte rate settings.
+       This is not supported in the userspace datapath yet.
    - OVSDB:
      * New command line options --record/--replay for ovsdb-server and
        ovsdb-client to record and replay all the incoming transactions,
