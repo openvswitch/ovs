@@ -1779,7 +1779,20 @@ raft_accept_vote(struct raft *raft, struct raft_server *s,
 static void
 raft_start_election(struct raft *raft, bool leadership_transfer)
 {
+    struct raft_conn *conn = NULL;
+    int count = 0;
+
     if (raft->leaving) {
+        return;
+    }
+    LIST_FOR_EACH (conn, list_node, &raft->conns) {
+        bool connected = jsonrpc_session_is_connected(conn->js);
+        if (connected && !conn->incoming) {
+            count++;
+        }
+    }
+    if (count < hmap_count(&raft->servers) / 2) {
+        VLOG_INFO("ignore start election due to too few conns");
         return;
     }
 
@@ -2761,7 +2774,9 @@ raft_receive_term__(struct raft *raft, const struct raft_rpc_common *common,
             /* Failed to update the term to 'term'. */
             return false;
         }
-        raft_become_follower(raft);
+        if (raft->role != RAFT_LEADER) {
+            raft_become_follower(raft);
+        }    
     } else if (term < raft->term) {
         char buf[SID_LEN + 1];
         VLOG_INFO("rejecting term %"PRIu64" < current term %"PRIu64" received "
