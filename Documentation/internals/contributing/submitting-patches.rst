@@ -295,10 +295,10 @@ Examples of common tags follow.
 
   See ``Bug:``.
 
-``Fixes: 63bc9fb1c69f (“packets: Reorder CS_* flags to remove gap.”)``
+``Fixes: 63bc9fb1c69f ("packets: Reorder CS_* flags to remove gap.")``
 
   If you would like to record which commit introduced a bug being fixed,
-  you may do that with a “Fixes” header.  This assists in determining
+  you may do that with a "Fixes" header.  This assists in determining
   which OVS releases have the bug, so the patch can be applied to all
   affected versions.  The easiest way to generate the header in the
   proper format is with this git command.  This command also CCs the

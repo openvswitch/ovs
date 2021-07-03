@@ -3,7 +3,7 @@ The Linux Foundation Open vSwitch Project Charter
 
 Effective August 9, 2016
 
-1. Mission of Open vSwitch Project (“OVS”).
+1. Mission of Open vSwitch Project ("OVS").
 
    The mission of OVS is to:
 
@@ -17,7 +17,7 @@ Effective August 9, 2016
       neutral home for community assets, infrastructure, meetings,
       events and collaborative discussions.
 
-2. Technical Steering Committee (“TSC”)
+2. Technical Steering Committee ("TSC")
 
    a. A TSC shall be composed of the Committers for OVS. The list of Committers
       on the TSC are available at :doc:`/internals/maintainers`.
@@ -29,7 +29,7 @@ Effective August 9, 2016
          to the OVS codebase.
 
       ii. Committers: Contributors who have the ability to commit
-          directly to a project’s main branch or repository on an OVS
+          directly to a project's main branch or repository on an OVS
           project.
 
    c. Participation in as a Contributor and/or Committer is open to
@@ -54,7 +54,7 @@ Effective August 9, 2016
       i. coordinating the technical direction of OVS;
 
       ii. approving project proposals (including, but not limited to,
-          incubation, deprecation and changes to a project’s charter
+          incubation, deprecation and changes to a project's charter
           or scope);
 
       iii. creating sub-committees or working groups to focus on
@@ -138,8 +138,8 @@ Effective August 9, 2016
 
    c. A General & Administrative (G&A) fee will be applied by the
       Linux Foundation to funds raised to cover Finance, Accounting,
-      and operations.  The G&A fee shall equal 9% of OVS’s first
-      $1,000,000 of gross receipts and 6% of OVS’s gross receipts over
+      and operations.  The G&A fee shall equal 9% of OVS's first
+      $1,000,000 of gross receipts and 6% of OVS's gross receipts over
       $1,000,000.
 
    d. Under no circumstances shall The Linux Foundation be expected or
@@ -187,7 +187,7 @@ Effective August 9, 2016
    d. For any new project source code, if an alternative inbound or
       outbound license is required for compliance with the license for
       a leveraged open source project (e.g. GPLv2 for Linux kernel) or
-      is otherwise required to achieve OVS’s mission, the TSC may
+      is otherwise required to achieve OVS's mission, the TSC may
       approve the use of an alternative license for specific inbound
       or outbound contributions on an exception basis. Any exceptions
       must be approved by a majority vote of the entire TSC and must

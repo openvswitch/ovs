@@ -38,7 +38,7 @@ the overall design.
 Background Info
 ---------------
 
-Microsoft’s hypervisor solution - Hyper-V [1]_ implements a virtual switch
+Microsoft's hypervisor solution - Hyper-V [1]_ implements a virtual switch
 that is extensible and provides opportunities for other vendors to implement
 functional extensions [2]_. The extensions need to be implemented as NDIS
 drivers that bind within the extensible switch driver stack provided. The
@@ -294,7 +294,7 @@ Port Management
 As explained above, we hook onto the management callback functions in the NDIS
 interface to know when a port is added/connected to the Hyper-V switch. We use
 these callbacks to initialize the port related data structures in OVS. Also,
-some of the ports are tunnel ports that don’t exist on the Hyper-V switch and
+some of the ports are tunnel ports that don't exist on the Hyper-V switch and
 get added from OVS userspace.
 
 In order to identify a Hyper-V port, we use the value of 'FriendlyName' field
