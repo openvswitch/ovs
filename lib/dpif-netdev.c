@@ -7513,12 +7513,12 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
-     * recirculation. When a packet matching flow ‘j’ happens to be
+     * recirculation. When a packet matching flow 'j' happens to be
      * recirculated, the nested call to dp_netdev_input__() could potentially
      * classify the packet as matching another flow - say 'k'. It could happen
      * that in the previous call to dp_netdev_input__() that same flow 'k' had
      * already its own batches[k] still waiting to be served.  So if its
-     * ‘batch’ member is not reset, the recirculated packet would be wrongly
+     * 'batch' member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     for (i = 0; i < n_batches; i++) {
         batches[i].flow->batch = NULL;

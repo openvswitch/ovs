@@ -1981,7 +1981,7 @@ raft_run(struct raft *raft)
              * follower.
              *
              * Raft paper section 6.2: Leaders: A server might be in the leader
-             * state, but if it isn’t the current leader, it could be
+             * state, but if it isn't the current leader, it could be
              * needlessly delaying client requests. For example, suppose a
              * leader is partitioned from the rest of the cluster, but it can
              * still communicate with a particular client. Without additional
@@ -1989,7 +1989,7 @@ raft_run(struct raft *raft)
              * being unable to replicate a log entry to any other servers.
              * Meanwhile, there might be another leader of a newer term that is
              * able to communicate with a majority of the cluster and would be
-             * able to commit the client’s request. Thus, a leader in Raft
+             * able to commit the client's request. Thus, a leader in Raft
              * steps down if an election timeout elapses without a successful
              * round of heartbeats to a majority of its cluster; this allows
              * clients to retry their requests with another server.  */
@@ -2733,8 +2733,8 @@ raft_become_leader(struct raft *raft)
      *     which those are.  To find out, it needs to commit an entry from its
      *     term.  Raft handles this by having each leader commit a blank no-op
      *     entry into the log at the start of its term.  As soon as this no-op
-     *     entry is committed, the leader’s commit index will be at least as
-     *     large as any other servers’ during its term.
+     *     entry is committed, the leader's commit index will be at least as
+     *     large as any other servers' during its term.
      */
     raft_command_unref(raft_command_execute__(raft, NULL, NULL, 0, NULL,
                                               NULL));
@@ -2750,7 +2750,7 @@ raft_receive_term__(struct raft *raft, const struct raft_rpc_common *common,
     /* Section 3.3 says:
      *
      *     Current terms are exchanged whenever servers communicate; if one
-     *     server’s current term is smaller than the other’s, then it updates
+     *     server's current term is smaller than the other's, then it updates
      *     its current term to the larger value.  If a candidate or leader
      *     discovers that its term is out of date, it immediately reverts to
      *     follower state.  If a server receives a request with a stale term
@@ -3130,8 +3130,8 @@ raft_update_leader(struct raft *raft, const struct uuid *sid)
     if (raft->role == RAFT_CANDIDATE) {
         /* Section 3.4: While waiting for votes, a candidate may
          * receive an AppendEntries RPC from another server claiming to
-         * be leader. If the leader’s term (included in its RPC) is at
-         * least as large as the candidate’s current term, then the
+         * be leader. If the leader's term (included in its RPC) is at
+         * least as large as the candidate's current term, then the
          * candidate recognizes the leader as legitimate and returns to
          * follower state. */
         raft->role = RAFT_FOLLOWER;
@@ -3145,7 +3145,7 @@ raft_handle_append_request(struct raft *raft,
 {
     /* We do not check whether the server that sent the request is part of the
      * cluster.  As section 4.1 says, "A server accepts AppendEntries requests
-     * from a leader that is not part of the server’s latest configuration.
+     * from a leader that is not part of the server's latest configuration.
      * Otherwise, a new server could never be added to the cluster (it would
      * never accept any log entries preceding the configuration entry that adds
      * the server)." */
@@ -3492,7 +3492,7 @@ raft_handle_append_reply(struct raft *raft,
          * more quickly, including those described in Chapter 3. The simplest
          * approach to solving this particular problem of adding a new server,
          * however, is to have followers return the length of their logs in the
-         * AppendEntries response; this allows the leader to cap the follower’s
+         * AppendEntries response; this allows the leader to cap the follower's
          * nextIndex accordingly." */
         s->next_index = (s->next_index > 0
                          ? MIN(s->next_index - 1, rpy->log_end)
@@ -3557,8 +3557,8 @@ raft_should_suppress_disruptive_server(struct raft *raft,
      *    election without waiting an election timeout.  In that case,
      *    RequestVote messages should be processed by other servers even when
      *    they believe a current cluster leader exists.  Those RequestVote
-     *    requests can include a special flag to indicate this behavior (“I
-     *    have permission to disrupt the leader--it told me to!”).
+     *    requests can include a special flag to indicate this behavior ("I
+     *    have permission to disrupt the leader--it told me to!").
      *
      * This clearly describes how the followers should act, but not the leader.
      * We just ignore vote requests that arrive at a current leader.  This
@@ -3613,7 +3613,7 @@ raft_handle_vote_request__(struct raft *raft,
     }
 
     /* Section 3.6.1: "The RequestVote RPC implements this restriction: the RPC
-     * includes information about the candidate’s log, and the voter denies its
+     * includes information about the candidate's log, and the voter denies its
      * vote if its own log is more up-to-date than that of the candidate.  Raft
      * determines which of two logs is more up-to-date by comparing the index
      * and term of the last entries in the logs.  If the logs have last entries

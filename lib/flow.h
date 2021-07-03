@@ -595,20 +595,20 @@ struct mf_for_each_in_map_aux {
     size_t unit;             /* Current 64-bit unit of the flowmaps
                                 being processed. */
     struct flowmap fmap;     /* Remaining 1-bits corresponding to the
-                                64-bit words in ‘values’ */
+                                64-bit words in 'values' */
     struct flowmap map;      /* Remaining 1-bits corresponding to the
                                 64-bit words of interest. */
     const uint64_t *values;  /* 64-bit words corresponding to the
-                                1-bits in ‘fmap’. */
+                                1-bits in 'fmap'. */
 };
 
-/* Get the data from ‘aux->values’ corresponding to the next lowest 1-bit
- * in ‘aux->map’, given that ‘aux->values’ points to an array of 64-bit
- * words corresponding to the 1-bits in ‘aux->fmap’, starting from the
+/* Get the data from 'aux->values' corresponding to the next lowest 1-bit
+ * in 'aux->map', given that 'aux->values' points to an array of 64-bit
+ * words corresponding to the 1-bits in 'aux->fmap', starting from the
  * rightmost 1-bit.
  *
- * Returns ’true’ if the traversal is incomplete, ‘false’ otherwise.
- * ‘aux’ is prepared for the next iteration after each call.
+ * Returns 'true' if the traversal is incomplete, 'false' otherwise.
+ * 'aux' is prepared for the next iteration after each call.
  *
  * This is used to traverse through, for example, the values in a miniflow
  * representation of a flow key selected by non-zero 64-bit words in a
@@ -634,12 +634,12 @@ mf_get_next_in_map(struct mf_for_each_in_map_aux *aux,
     *map -= rm1bit;
     fmap = &aux->fmap.bits[aux->unit];
 
-    /* If the rightmost 1-bit found from the current unit in ‘aux->map’
-     * (‘rm1bit’) is also present in ‘aux->fmap’, store the corresponding
-     * value from ‘aux->values’ to ‘*value', otherwise store 0. */
+    /* If the rightmost 1-bit found from the current unit in 'aux->map'
+     * ('rm1bit') is also present in 'aux->fmap', store the corresponding
+     * value from 'aux->values' to '*value', otherwise store 0. */
     if (OVS_LIKELY(*fmap & rm1bit)) {
-        /* Skip all 64-bit words in ‘values’ preceding the one corresponding
-         * to ‘rm1bit’. */
+        /* Skip all 64-bit words in 'values' preceding the one corresponding
+         * to 'rm1bit'. */
         map_t trash = *fmap & (rm1bit - 1);
 
         /* Avoid resetting 'fmap' and calling count_1bits() when trash is
