@@ -105,6 +105,13 @@ ovs_prefetch_range(const void *start, size_t size)
 
 #define OVS_NOT_REACHED() abort()
 
+/* Joins two token expanding the arguments if they are macros.
+ *
+ * For token concatenation the circumlocution is needed for the
+ * expansion. */
+#define OVS_JOIN2(X, Y) X##Y
+#define OVS_JOIN(X, Y) OVS_JOIN2(X, Y)
+
 /* Use "%"PRIuSIZE to format size_t with printf(). */
 #ifdef _WIN32
 #define PRIdSIZE "Id"
