@@ -1882,12 +1882,12 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
                     " flow destroy %d ufid " UUID_FMT,
                     netdev_get_name(netdev), netdev_get_name(physdev),
                     (intptr_t) rte_flow,
-                    netdev_dpdk_get_port_id(netdev),
+                    netdev_dpdk_get_port_id(physdev),
                     UUID_ARGS((struct uuid *) ufid));
     } else {
         VLOG_ERR("Failed flow: %s/%s: flow destroy %d ufid " UUID_FMT,
                  netdev_get_name(netdev), netdev_get_name(physdev),
-                 netdev_dpdk_get_port_id(netdev),
+                 netdev_dpdk_get_port_id(physdev),
                  UUID_ARGS((struct uuid *) ufid));
     }
 
