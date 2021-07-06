@@ -44,6 +44,7 @@ VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
 COVERAGE_DEFINE(conntrack_long_cleanup);
+COVERAGE_DEFINE(conntrack_lookup_natted_miss);
 
 struct conn_lookup_ctx {
     struct conn_key key;
@@ -1270,6 +1271,34 @@ process_one_fast(uint16_t zone, const uint32_t *setmark,
 }
 
 static void
+initial_conn_lookup(struct conntrack *ct, struct conn_lookup_ctx *ctx,
+                    long long now, bool natted)
+{
+    if (natted) {
+        /* If the packet has been already natted (e.g. a previous
+         * action took place), retrieve it performing a lookup of its
+         * reverse key. */
+        conn_key_reverse(&ctx->key);
+    }
+
+    conn_key_lookup(ct, &ctx->key, ctx->hash, now, &ctx->conn, &ctx->reply);
+
+    if (natted) {
+        if (OVS_LIKELY(ctx->conn)) {
+            ctx->reply = !ctx->reply;
+            ctx->key = ctx->reply ? ctx->conn->rev_key : ctx->conn->key;
+            ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
+        } else {
+            /* A lookup failure does not necessarily imply that an
+             * error occurred, it may simply indicate that a conn got
+             * removed during the recirculation. */
+            COVERAGE_INC(conntrack_lookup_natted_miss);
+            conn_key_reverse(&ctx->key);
+        }
+    }
+}
+
+static void
 process_one(struct conntrack *ct, struct dp_packet *pkt,
             struct conn_lookup_ctx *ctx, uint16_t zone,
             bool force, bool commit, long long now, const uint32_t *setmark,
@@ -1283,7 +1312,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     }
 
     bool create_new_conn = false;
-    conn_key_lookup(ct, &ctx->key, ctx->hash, now, &ctx->conn, &ctx->reply);
+    initial_conn_lookup(ct, ctx, now, !!(pkt->md.ct_state &
+                                         (CS_SRC_NAT | CS_DST_NAT)));
     struct conn *conn = ctx->conn;
 
     /* Delete found entry if in wrong direction. 'force' implies commit. */

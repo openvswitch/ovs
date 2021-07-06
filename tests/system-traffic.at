@@ -4498,6 +4498,41 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - DNAT with additional SNAT])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+NS_CHECK_EXEC([at_ns0], [ip route add 172.1.1.0/24 via 10.1.1.2])
+
+OVS_START_L7([at_ns1], [http])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=30,in_port=1,ip,nw_dst=172.1.1.2,actions=ct(commit,nat(dst=10.1.1.2:80),table=1)
+table=0,priority=20,in_port=2,ip,actions=ct(nat),1
+table=0,priority=10,arp,actions=NORMAL
+table=0,priority=1,actions=drop
+dnl Be sure all ct() actions but src nat are executed
+table=1,ip,actions=ct(commit,nat(src=10.1.1.240),exec(set_field:0xac->ct_mark,set_field:0xac->ct_label),table=2)
+table=2,in_port=1,ip,ct_mark=0xac,ct_label=0xac,actions=2
+])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [wget http://172.1.1.2:8080 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl - make sure only dst nat has been performed
+AT_CHECK([ovs-appctl dpctl/dump-conntrack |  FORMAT_CT(10.1.1.240)], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=172.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=172,labels=0xac,protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - more complex DNAT])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
