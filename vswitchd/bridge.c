@@ -3019,9 +3019,9 @@ ofp12_controller_role_to_str(enum ofp12_controller_role role)
     case OFPCR12_ROLE_EQUAL:
         return "other";
     case OFPCR12_ROLE_PRIMARY:
-        return "primary";
+        return "master";
     case OFPCR12_ROLE_SECONDARY:
-        return "secondary";
+        return "slave";
     case OFPCR12_ROLE_NOCHANGE:
     default:
         return NULL;
