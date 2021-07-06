@@ -8315,6 +8315,16 @@ dpif_netdev_ct_del_limits(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
+dpif_netdev_ct_get_features(struct dpif *dpif OVS_UNUSED,
+                            enum ct_features *features)
+{
+    if (features != NULL) {
+        *features = CONNTRACK_F_ZERO_SNAT;
+    }
+    return 0;
+}
+
+static int
 dpif_netdev_ct_set_timeout_policy(struct dpif *dpif,
                                   const struct ct_dpif_timeout_policy *dpif_tp)
 {
@@ -8579,7 +8589,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* ct_timeout_policy_dump_next */
     NULL,                       /* ct_timeout_policy_dump_done */
     dpif_netdev_ct_get_timeout_policy_name,
-    NULL,                       /* ct_get_features */
+    dpif_netdev_ct_get_features,
     dpif_netdev_ipf_set_enabled,
     dpif_netdev_ipf_set_min_frag,
     dpif_netdev_ipf_set_max_nfrags,
