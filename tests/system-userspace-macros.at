@@ -99,12 +99,10 @@ m4_define([CHECK_CONNTRACK_NAT])
 # CHECK_CONNTRACK_ZEROIP_SNAT()
 #
 # Perform requirements checks for running conntrack all-zero IP SNAT tests.
-# The userspace datapath does not support all-zero IP SNAT.
+# The userspace datapath always supports all-zero IP SNAT, so no check is
+# needed.
 #
-m4_define([CHECK_CONNTRACK_ZEROIP_SNAT],
-[
-    AT_SKIP_IF([:])
-])
+m4_define([CHECK_CONNTRACK_ZEROIP_SNAT])
 
 # CHECK_CONNTRACK_TIMEOUT()
 #
