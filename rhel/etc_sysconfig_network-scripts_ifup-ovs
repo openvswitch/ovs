@@ -171,7 +171,7 @@ case "$TYPE" in
                 ovs-vsctl -t ${TIMEOUT} \
                         -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
                         -- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
-                        -- set Interface "$DEVICE" type=dpdk ${OVS_EXTRA+-- $OVS_EXTRA}
+                        -- set Interface "$DEVICE" type=dpdk options:dpdk-devargs=$OVS_PCI ${OVS_EXTRA+-- $OVS_EXTRA}
                 BRIDGE_MAC=$(get_hwaddr $OVS_BRIDGE)
                 # The bridge may change its MAC to be the lower one among all its
                 # ports. If that happens, bridge configuration (e.g. routes) will
