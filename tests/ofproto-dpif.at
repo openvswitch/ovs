@@ -5568,7 +5568,8 @@ dnl
 dnl EXTRA_SETUP is an optional list of extra commands to run after setting up
 dnl both bridges, e.g. to configure mirrors or patch ports.
 m4_define([CHECK_CONTINUATION], [dnl
-    AT_SETUP([ofproto-dpif - continuation - $1])
+  m4_foreach([monitor_version], [[OpenFlow10], [OpenFlow13]], [dnl
+    AT_SETUP([ofproto-dpif - continuation - $1 - monitor_version])
     AT_KEYWORDS([continuations pause resume])
     OVS_VSWITCHD_START
 
@@ -5587,10 +5588,10 @@ m4_define([CHECK_CONTINUATION], [dnl
        add_of_ports --pcap br1 `seq m4_eval([$2 + 1]) m4_eval([$2 + $3])`])
 
     AT_CAPTURE_FILE([ofctl_monitor0.log])
-    AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
+    AT_CHECK([ovs-ofctl -O monitor_version monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
     m4_if([$3], [0], [],
       [AT_CAPTURE_FILE([ofctl_monitor1.log])
-       AT_CHECK([ovs-ofctl monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl1.pid 2> ofctl_monitor1.log])])
+       AT_CHECK([ovs-ofctl -O monitor_version monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl1.pid 2> ofctl_monitor1.log])])
 
     actions0='$4'
     actions1='$5'
@@ -5614,9 +5615,19 @@ m4_define([CHECK_CONTINUATION], [dnl
         AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 
         # Wait for the expected number of packets to show up.
-        n_packets=`expr $n_packets + $2 - 1 + $3`
-        echo "waiting for $n_packets packets..."
-        OVS_WAIT_UNTIL([test $n_packets = `ovs-ofctl parse-pcap p*-tx.pcap | wc -l`])
+        n_packets=$(expr $n_packets + 1)
+        nports=m4_eval([$2 + $3])
+        echo "waiting for $n_packets packets on p2 through p$nports..."
+        OVS_WAIT_UNTIL([
+            ok=true
+            for i in $(seq 2 $nports); do
+                n=$(ovs-ofctl parse-pcap p$i-tx.pcap | wc -l)
+                printf "%d " $n
+                if test $n_packets != $n; then ok=false; fi
+            done
+            echo
+            $ok
+        ])
 
         # Wait for the expected number of NXT_RESUMEs to be logged.
         n_resumes=$(expr $n_resumes + $(echo "$actions0 $actions1" | count_matches pause) )
@@ -5651,6 +5662,7 @@ m4_define([CHECK_CONTINUATION], [dnl
     done
     OVS_VSWITCHD_STOP
     AT_CLEANUP
+  ])
 ])
 
 # Check that pause at the end of the pipeline works OK.
@@ -5679,6 +5691,22 @@ CHECK_CONTINUATION([resubmit], [10], [0],
 CHECK_CONTINUATION([action set], [3], [0],
   [in_port=1 actions=1 pause resubmit(,1) pause 2
    table=1 actions=write_actions(3)])
+
+# Check that goto_table instructions following pause work as expected.
+CHECK_CONTINUATION([goto_table], [6], [0],
+  [table=0 in_port=1 actions=pause 2 pause goto_table:1
+   table=1 in_port=1 actions=pause 3 pause goto_table:2
+   table=2 in_port=1 actions=pause 4 pause goto_table:3
+   table=3 in_port=1 actions=pause 5 pause goto_table:4
+   table=4 in_port=1 actions=pause 6 pause])
+
+# Check that write_metadata instructions following pause work as expected.
+CHECK_CONTINUATION([write_metadata], [6], [0],
+  [table=0 in_port=1             actions=pause 2 pause write_metadata:1/1 goto_table:1
+   table=1 in_port=1 metadata=1  actions=pause 3 pause write_metadata:2/2 goto_table:2
+   table=2 in_port=1 metadata=3  actions=pause 4 pause write_metadata:4/4 goto_table:3
+   table=3 in_port=1 metadata=7  actions=pause 5 pause write_metadata:8/8 goto_table:4
+   table=4 in_port=1 metadata=15 actions=pause 6 pause])
 
 # Check that metadata and the stack used by push and pop is preserved
 # across pause/resume.

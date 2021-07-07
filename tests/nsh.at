@@ -368,8 +368,8 @@ bridge("br0")
 -------------
     thaw
             Resuming from table 0
-        Restoring actions: goto_table:2
-    goto_table:2
+        Restoring actions: resubmit(,2)
+    resubmit(,2)
  2. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344, priority 32768
     decap()
 
