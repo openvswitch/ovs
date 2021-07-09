@@ -17,7 +17,6 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
-#include "dpif-netdev-private.h"
 #include "dpif-netdev-lookup.h"
 
 #include "bitmap.h"

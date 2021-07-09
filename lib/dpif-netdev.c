@@ -17,6 +17,7 @@
 #include <config.h>
 #include "dpif-netdev.h"
 #include "dpif-netdev-private.h"
+#include "dpif-netdev-private-dfc.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -142,90 +143,6 @@ static struct odp_support dp_netdev_support = {
     .ct_orig_tuple6 = true,
 };
 
-/* EMC cache and SMC cache compose the datapath flow cache (DFC)
- *
- * Exact match cache for frequently used flows
- *
- * The cache uses a 32-bit hash of the packet (which can be the RSS hash) to
- * search its entries for a miniflow that matches exactly the miniflow of the
- * packet. It stores the 'dpcls_rule' (rule) that matches the miniflow.
- *
- * A cache entry holds a reference to its 'dp_netdev_flow'.
- *
- * A miniflow with a given hash can be in one of EM_FLOW_HASH_SEGS different
- * entries. The 32-bit hash is split into EM_FLOW_HASH_SEGS values (each of
- * them is EM_FLOW_HASH_SHIFT bits wide and the remainder is thrown away). Each
- * value is the index of a cache entry where the miniflow could be.
- *
- *
- * Signature match cache (SMC)
- *
- * This cache stores a 16-bit signature for each flow without storing keys, and
- * stores the corresponding 16-bit flow_table index to the 'dp_netdev_flow'.
- * Each flow thus occupies 32bit which is much more memory efficient than EMC.
- * SMC uses a set-associative design that each bucket contains
- * SMC_ENTRY_PER_BUCKET number of entries.
- * Since 16-bit flow_table index is used, if there are more than 2^16
- * dp_netdev_flow, SMC will miss them that cannot be indexed by a 16-bit value.
- *
- *
- * Thread-safety
- * =============
- *
- * Each pmd_thread has its own private exact match cache.
- * If dp_netdev_input is not called from a pmd thread, a mutex is used.
- */
-
-#define EM_FLOW_HASH_SHIFT 13
-#define EM_FLOW_HASH_ENTRIES (1u << EM_FLOW_HASH_SHIFT)
-#define EM_FLOW_HASH_MASK (EM_FLOW_HASH_ENTRIES - 1)
-#define EM_FLOW_HASH_SEGS 2
-
-/* SMC uses a set-associative design. A bucket contains a set of entries that
- * a flow item can occupy. For now, it uses one hash function rather than two
- * as for the EMC design. */
-#define SMC_ENTRY_PER_BUCKET 4
-#define SMC_ENTRIES (1u << 20)
-#define SMC_BUCKET_CNT (SMC_ENTRIES / SMC_ENTRY_PER_BUCKET)
-#define SMC_MASK (SMC_BUCKET_CNT - 1)
-
-/* Default EMC insert probability is 1 / DEFAULT_EM_FLOW_INSERT_INV_PROB */
-#define DEFAULT_EM_FLOW_INSERT_INV_PROB 100
-#define DEFAULT_EM_FLOW_INSERT_MIN (UINT32_MAX /                     \
-                                    DEFAULT_EM_FLOW_INSERT_INV_PROB)
-
-struct emc_entry {
-    struct dp_netdev_flow *flow;
-    struct netdev_flow_key key;   /* key.hash used for emc hash value. */
-};
-
-struct emc_cache {
-    struct emc_entry entries[EM_FLOW_HASH_ENTRIES];
-    int sweep_idx;                /* For emc_cache_slow_sweep(). */
-};
-
-struct smc_bucket {
-    uint16_t sig[SMC_ENTRY_PER_BUCKET];
-    uint16_t flow_idx[SMC_ENTRY_PER_BUCKET];
-};
-
-/* Signature match cache, differentiate from EMC cache */
-struct smc_cache {
-    struct smc_bucket buckets[SMC_BUCKET_CNT];
-};
-
-struct dfc_cache {
-    struct emc_cache emc_cache;
-    struct smc_cache smc_cache;
-};
-
-/* Iterate in the exact match cache through every entry that might contain a
- * miniflow with hash 'HASH'. */
-#define EMC_FOR_EACH_POS_WITH_HASH(EMC, CURRENT_ENTRY, HASH)                 \
-    for (uint32_t i__ = 0, srch_hash__ = (HASH);                             \
-         (CURRENT_ENTRY) = &(EMC)->entries[srch_hash__ & EM_FLOW_HASH_MASK], \
-         i__ < EM_FLOW_HASH_SEGS;                                            \
-         i__++, srch_hash__ >>= EM_FLOW_HASH_SHIFT)
 
 /* Simple non-wildcarding single-priority classifier. */
 
@@ -478,118 +395,9 @@ struct dp_netdev_port {
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
 };
 
-/* Contained by struct dp_netdev_flow's 'stats' member.  */
-struct dp_netdev_flow_stats {
-    atomic_llong used;             /* Last used time, in monotonic msecs. */
-    atomic_ullong packet_count;    /* Number of packets matched. */
-    atomic_ullong byte_count;      /* Number of bytes matched. */
-    atomic_uint16_t tcp_flags;     /* Bitwise-OR of seen tcp_flags values. */
-};
-
-/* Contained by struct dp_netdev_flow's 'last_attrs' member.  */
-struct dp_netdev_flow_attrs {
-    atomic_bool offloaded;         /* True if flow is offloaded to HW. */
-    ATOMIC(const char *) dp_layer; /* DP layer the flow is handled in. */
-};
-
-/* A flow in 'dp_netdev_pmd_thread's 'flow_table'.
- *
- *
- * Thread-safety
- * =============
- *
- * Except near the beginning or ending of its lifespan, rule 'rule' belongs to
- * its pmd thread's classifier.  The text below calls this classifier 'cls'.
- *
- * Motivation
- * ----------
- *
- * The thread safety rules described here for "struct dp_netdev_flow" are
- * motivated by two goals:
- *
- *    - Prevent threads that read members of "struct dp_netdev_flow" from
- *      reading bad data due to changes by some thread concurrently modifying
- *      those members.
- *
- *    - Prevent two threads making changes to members of a given "struct
- *      dp_netdev_flow" from interfering with each other.
- *
- *
- * Rules
- * -----
- *
- * A flow 'flow' may be accessed without a risk of being freed during an RCU
- * grace period.  Code that needs to hold onto a flow for a while
- * should try incrementing 'flow->ref_cnt' with dp_netdev_flow_ref().
- *
- * 'flow->ref_cnt' protects 'flow' from being freed.  It doesn't protect the
- * flow from being deleted from 'cls' and it doesn't protect members of 'flow'
- * from modification.
- *
- * Some members, marked 'const', are immutable.  Accessing other members
- * requires synchronization, as noted in more detail below.
- */
-struct dp_netdev_flow {
-    const struct flow flow;      /* Unmasked flow that created this entry. */
-    /* Hash table index by unmasked flow. */
-    const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
-                                 /* 'flow_table'. */
-    const struct cmap_node mark_node; /* In owning flow_mark's mark_to_flow */
-    const ovs_u128 ufid;         /* Unique flow identifier. */
-    const ovs_u128 mega_ufid;    /* Unique mega flow identifier. */
-    const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
-                                 /* flow. */
-
-    /* Number of references.
-     * The classifier owns one reference.
-     * Any thread trying to keep a rule from being freed should hold its own
-     * reference. */
-    struct ovs_refcount ref_cnt;
-
-    bool dead;
-    uint32_t mark;               /* Unique flow mark assigned to a flow */
-
-    /* Statistics. */
-    struct dp_netdev_flow_stats stats;
-
-    /* Statistics and attributes received from the netdev offload provider. */
-    atomic_int netdev_flow_get_result;
-    struct dp_netdev_flow_stats last_stats;
-    struct dp_netdev_flow_attrs last_attrs;
-
-    /* Actions. */
-    OVSRCU_TYPE(struct dp_netdev_actions *) actions;
-
-    /* While processing a group of input packets, the datapath uses the next
-     * member to store a pointer to the output batch for the flow.  It is
-     * reset after the batch has been sent out (See dp_netdev_queue_batches(),
-     * packet_batch_per_flow_init() and packet_batch_per_flow_execute()). */
-    struct packet_batch_per_flow *batch;
-
-    /* Packet classification. */
-    char *dp_extra_info;         /* String to return in a flow dump/get. */
-    struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
-    /* 'cr' must be the last member. */
-};
-
-static void dp_netdev_flow_unref(struct dp_netdev_flow *);
 static bool dp_netdev_flow_ref(struct dp_netdev_flow *);
 static int dpif_netdev_flow_from_nlattrs(const struct nlattr *, uint32_t,
                                          struct flow *, bool);
-
-/* A set of datapath actions within a "struct dp_netdev_flow".
- *
- *
- * Thread-safety
- * =============
- *
- * A struct dp_netdev_actions 'actions' is protected with RCU. */
-struct dp_netdev_actions {
-    /* These members are immutable: they do not change during the struct's
-     * lifetime.  */
-    unsigned int size;          /* Size of 'actions', in bytes. */
-    struct nlattr actions[];    /* Sequence of OVS_ACTION_ATTR_* attributes. */
-};
 
 struct dp_netdev_actions *dp_netdev_actions_create(const struct nlattr *,
                                                    size_t);
@@ -635,171 +443,6 @@ struct tx_bond {
     struct cmap_node node;
     uint32_t bond_id;
     struct member_entry member_buckets[BOND_BUCKETS];
-};
-
-/* A set of properties for the current processing loop that is not directly
- * associated with the pmd thread itself, but with the packets being
- * processed or the short-term system configuration (for example, time).
- * Contained by struct dp_netdev_pmd_thread's 'ctx' member. */
-struct dp_netdev_pmd_thread_ctx {
-    /* Latest measured time. See 'pmd_thread_ctx_time_update()'. */
-    long long now;
-    /* RX queue from which last packet was received. */
-    struct dp_netdev_rxq *last_rxq;
-    /* EMC insertion probability context for the current processing cycle. */
-    uint32_t emc_insert_min;
-};
-
-/* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
- * the performance overhead of interrupt processing.  Therefore netdev can
- * not implement rx-wait for these devices.  dpif-netdev needs to poll
- * these device to check for recv buffer.  pmd-thread does polling for
- * devices assigned to itself.
- *
- * DPDK used PMD for accessing NIC.
- *
- * Note, instance with cpu core id NON_PMD_CORE_ID will be reserved for
- * I/O of all non-pmd threads.  There will be no actual thread created
- * for the instance.
- *
- * Each struct has its own flow cache and classifier per managed ingress port.
- * For packets received on ingress port, a look up is done on corresponding PMD
- * thread's flow cache and in case of a miss, lookup is performed in the
- * corresponding classifier of port.  Packets are executed with the found
- * actions in either case.
- * */
-struct dp_netdev_pmd_thread {
-    struct dp_netdev *dp;
-    struct ovs_refcount ref_cnt;    /* Every reference must be refcount'ed. */
-    struct cmap_node node;          /* In 'dp->poll_threads'. */
-
-    /* Per thread exact-match cache.  Note, the instance for cpu core
-     * NON_PMD_CORE_ID can be accessed by multiple threads, and thusly
-     * need to be protected by 'non_pmd_mutex'.  Every other instance
-     * will only be accessed by its own pmd thread. */
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct dfc_cache flow_cache;
-
-    /* Flow-Table and classifiers
-     *
-     * Writers of 'flow_table' must take the 'flow_mutex'.  Corresponding
-     * changes to 'classifiers' must be made while still holding the
-     * 'flow_mutex'.
-     */
-    struct ovs_mutex flow_mutex;
-    struct cmap flow_table OVS_GUARDED; /* Flow table. */
-
-    /* One classifier per in_port polled by the pmd */
-    struct cmap classifiers;
-    /* Periodically sort subtable vectors according to hit frequencies */
-    long long int next_optimization;
-    /* End of the next time interval for which processing cycles
-       are stored for each polled rxq. */
-    long long int rxq_next_cycle_store;
-
-    /* Last interval timestamp. */
-    uint64_t intrvl_tsc_prev;
-    /* Last interval cycles. */
-    atomic_ullong intrvl_cycles;
-
-    /* Current context of the PMD thread. */
-    struct dp_netdev_pmd_thread_ctx ctx;
-
-    struct seq *reload_seq;
-    uint64_t last_reload_seq;
-
-    /* These are atomic variables used as a synchronization and configuration
-     * points for thread reload/exit.
-     *
-     * 'reload' atomic is the main one and it's used as a memory
-     * synchronization point for all other knobs and data.
-     *
-     * For a thread that requests PMD reload:
-     *
-     *   * All changes that should be visible to the PMD thread must be made
-     *     before setting the 'reload'.  These changes could use any memory
-     *     ordering model including 'relaxed'.
-     *   * Setting the 'reload' atomic should occur in the same thread where
-     *     all other PMD configuration options updated.
-     *   * Setting the 'reload' atomic should be done with 'release' memory
-     *     ordering model or stricter.  This will guarantee that all previous
-     *     changes (including non-atomic and 'relaxed') will be visible to
-     *     the PMD thread.
-     *   * To check that reload is done, thread should poll the 'reload' atomic
-     *     to become 'false'.  Polling should be done with 'acquire' memory
-     *     ordering model or stricter.  This ensures that PMD thread completed
-     *     the reload process.
-     *
-     * For the PMD thread:
-     *
-     *   * PMD thread should read 'reload' atomic with 'acquire' memory
-     *     ordering model or stricter.  This will guarantee that all changes
-     *     made before setting the 'reload' in the requesting thread will be
-     *     visible to the PMD thread.
-     *   * All other configuration data could be read with any memory
-     *     ordering model (including non-atomic and 'relaxed') but *only after*
-     *     reading the 'reload' atomic set to 'true'.
-     *   * When the PMD reload done, PMD should (optionally) set all the below
-     *     knobs except the 'reload' to their default ('false') values and
-     *     (mandatory), as the last step, set the 'reload' to 'false' using
-     *     'release' memory ordering model or stricter.  This will inform the
-     *     requesting thread that PMD has completed a reload cycle.
-     */
-    atomic_bool reload;             /* Do we need to reload ports? */
-    atomic_bool wait_for_reload;    /* Can we busy wait for the next reload? */
-    atomic_bool reload_tx_qid;      /* Do we need to reload static_tx_qid? */
-    atomic_bool exit;               /* For terminating the pmd thread. */
-
-    pthread_t thread;
-    unsigned core_id;               /* CPU core id of this pmd thread. */
-    int numa_id;                    /* numa node id of this pmd thread. */
-    bool isolated;
-
-    /* Queue id used by this pmd thread to send packets on all netdevs if
-     * XPS disabled for this netdev. All static_tx_qid's are unique and less
-     * than 'cmap_count(dp->poll_threads)'. */
-    uint32_t static_tx_qid;
-
-    /* Number of filled output batches. */
-    int n_output_batches;
-
-    struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
-    /* List of rx queues to poll. */
-    struct hmap poll_list OVS_GUARDED;
-    /* Map of 'tx_port's used for transmission.  Written by the main thread,
-     * read by the pmd thread. */
-    struct hmap tx_ports OVS_GUARDED;
-
-    struct ovs_mutex bond_mutex;    /* Protects updates of 'tx_bonds'. */
-    /* Map of 'tx_bond's used for transmission.  Written by the main thread
-     * and read by the pmd thread. */
-    struct cmap tx_bonds;
-
-    /* These are thread-local copies of 'tx_ports'.  One contains only tunnel
-     * ports (that support push_tunnel/pop_tunnel), the other contains ports
-     * with at least one txq (that support send).  A port can be in both.
-     *
-     * There are two separate maps to make sure that we don't try to execute
-     * OUTPUT on a device which has 0 txqs or PUSH/POP on a non-tunnel device.
-     *
-     * The instances for cpu core NON_PMD_CORE_ID can be accessed by multiple
-     * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
-     * other instance will only be accessed by its own pmd thread. */
-    struct hmap tnl_port_cache;
-    struct hmap send_port_cache;
-
-    /* Keep track of detailed PMD performance statistics. */
-    struct pmd_perf_stats perf_stats;
-
-    /* Stats from previous iteration used by automatic pmd
-     * load balance logic. */
-    uint64_t prev_stats[PMD_N_STATS];
-    atomic_count pmd_overloaded;
-
-    /* Set to true if the pmd thread needs to be reloaded. */
-    bool need_reload;
-
-    /* Next time when PMD should try RCU quiescing. */
-    long long next_rcu_quiesce;
 };
 
 /* Interface to netdev-based datapath. */
@@ -906,89 +549,11 @@ static inline struct dpcls *
 dp_netdev_pmd_lookup_dpcls(struct dp_netdev_pmd_thread *pmd,
                            odp_port_t in_port);
 
-static inline bool emc_entry_alive(struct emc_entry *ce);
-static void emc_clear_entry(struct emc_entry *ce);
-static void smc_clear_entry(struct smc_bucket *b, int idx);
-
 static void dp_netdev_request_reconfigure(struct dp_netdev *dp);
 static inline bool
 pmd_perf_metrics_enabled(const struct dp_netdev_pmd_thread *pmd);
 static void queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
                                   struct dp_netdev_flow *flow);
-
-static void
-emc_cache_init(struct emc_cache *flow_cache)
-{
-    int i;
-
-    flow_cache->sweep_idx = 0;
-    for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
-        flow_cache->entries[i].flow = NULL;
-        flow_cache->entries[i].key.hash = 0;
-        flow_cache->entries[i].key.len = sizeof(struct miniflow);
-        flowmap_init(&flow_cache->entries[i].key.mf.map);
-    }
-}
-
-static void
-smc_cache_init(struct smc_cache *smc_cache)
-{
-    int i, j;
-    for (i = 0; i < SMC_BUCKET_CNT; i++) {
-        for (j = 0; j < SMC_ENTRY_PER_BUCKET; j++) {
-            smc_cache->buckets[i].flow_idx[j] = UINT16_MAX;
-        }
-    }
-}
-
-static void
-dfc_cache_init(struct dfc_cache *flow_cache)
-{
-    emc_cache_init(&flow_cache->emc_cache);
-    smc_cache_init(&flow_cache->smc_cache);
-}
-
-static void
-emc_cache_uninit(struct emc_cache *flow_cache)
-{
-    int i;
-
-    for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
-        emc_clear_entry(&flow_cache->entries[i]);
-    }
-}
-
-static void
-smc_cache_uninit(struct smc_cache *smc)
-{
-    int i, j;
-
-    for (i = 0; i < SMC_BUCKET_CNT; i++) {
-        for (j = 0; j < SMC_ENTRY_PER_BUCKET; j++) {
-            smc_clear_entry(&(smc->buckets[i]), j);
-        }
-    }
-}
-
-static void
-dfc_cache_uninit(struct dfc_cache *flow_cache)
-{
-    smc_cache_uninit(&flow_cache->smc_cache);
-    emc_cache_uninit(&flow_cache->emc_cache);
-}
-
-/* Check and clear dead flow references slowly (one entry at each
- * invocation).  */
-static void
-emc_cache_slow_sweep(struct emc_cache *flow_cache)
-{
-    struct emc_entry *entry = &flow_cache->entries[flow_cache->sweep_idx];
-
-    if (!emc_entry_alive(entry)) {
-        emc_clear_entry(entry);
-    }
-    flow_cache->sweep_idx = (flow_cache->sweep_idx + 1) & EM_FLOW_HASH_MASK;
-}
 
 /* Updates the time in PMD threads context and should be called in three cases:
  *
@@ -2363,17 +1928,11 @@ dp_netdev_flow_free(struct dp_netdev_flow *flow)
     free(flow);
 }
 
-static void dp_netdev_flow_unref(struct dp_netdev_flow *flow)
+void dp_netdev_flow_unref(struct dp_netdev_flow *flow)
 {
     if (ovs_refcount_unref_relaxed(&flow->ref_cnt) == 1) {
         ovsrcu_postpone(dp_netdev_flow_free, flow);
     }
-}
-
-static uint32_t
-dp_netdev_flow_hash(const ovs_u128 *ufid)
-{
-    return ufid->u32[0];
 }
 
 static inline struct dpcls *
@@ -2995,30 +2554,12 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  *   single memcmp().
  * - These functions can be inlined by the compiler. */
 
-/* Given the number of bits set in miniflow's maps, returns the size of the
- * 'netdev_flow_key.mf' */
-static inline size_t
-netdev_flow_key_size(size_t flow_u64s)
-{
-    return sizeof(struct miniflow) + MINIFLOW_VALUES_SIZE(flow_u64s);
-}
-
 static inline bool
 netdev_flow_key_equal(const struct netdev_flow_key *a,
                       const struct netdev_flow_key *b)
 {
     /* 'b->len' may be not set yet. */
     return a->hash == b->hash && !memcmp(&a->mf, &b->mf, a->len);
-}
-
-/* Used to compare 'netdev_flow_key' in the exact match cache to a miniflow.
- * The maps are compared bitwise, so both 'key->mf' and 'mf' must have been
- * generated by miniflow_extract. */
-static inline bool
-netdev_flow_key_equal_mf(const struct netdev_flow_key *key,
-                         const struct miniflow *mf)
-{
-    return !memcmp(&key->mf, mf, key->len);
 }
 
 static inline void
@@ -3087,21 +2628,6 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
-static inline bool
-emc_entry_alive(struct emc_entry *ce)
-{
-    return ce->flow && !ce->flow->dead;
-}
-
-static void
-emc_clear_entry(struct emc_entry *ce)
-{
-    if (ce->flow) {
-        dp_netdev_flow_unref(ce->flow);
-        ce->flow = NULL;
-    }
-}
-
 static inline void
 emc_change_entry(struct emc_entry *ce, struct dp_netdev_flow *flow,
                  const struct netdev_flow_key *key)
@@ -3167,24 +2693,6 @@ emc_probabilistic_insert(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
-static inline struct dp_netdev_flow *
-emc_lookup(struct emc_cache *cache, const struct netdev_flow_key *key)
-{
-    struct emc_entry *current_entry;
-
-    EMC_FOR_EACH_POS_WITH_HASH(cache, current_entry, key->hash) {
-        if (current_entry->key.hash == key->hash
-            && emc_entry_alive(current_entry)
-            && netdev_flow_key_equal_mf(&current_entry->key, &key->mf)) {
-
-            /* We found the entry with the 'key->mf' miniflow */
-            return current_entry->flow;
-        }
-    }
-
-    return NULL;
-}
-
 static inline const struct cmap_node *
 smc_entry_get(struct dp_netdev_pmd_thread *pmd, const uint32_t hash)
 {
@@ -3203,12 +2711,6 @@ smc_entry_get(struct dp_netdev_pmd_thread *pmd, const uint32_t hash)
         return cmap_find_by_index(&pmd->flow_table, index);
     }
     return NULL;
-}
-
-static void
-smc_clear_entry(struct smc_bucket *b, int idx)
-{
-    b->flow_idx[idx] = UINT16_MAX;
 }
 
 /* Insert the flow_table index into SMC. Insertion may fail when 1) SMC is
@@ -6899,22 +6401,6 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 }
 
 static inline uint32_t
-dpif_netdev_packet_get_rss_hash_orig_pkt(struct dp_packet *packet,
-                                const struct miniflow *mf)
-{
-    uint32_t hash;
-
-    if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
-        hash = dp_packet_get_rss_hash(packet);
-    } else {
-        hash = miniflow_hash_5tuple(mf, 0);
-        dp_packet_set_rss_hash(packet, hash);
-    }
-
-    return hash;
-}
-
-static inline uint32_t
 dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
                                 const struct miniflow *mf)
 {
@@ -8774,7 +8260,7 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     subtable->mf_bits_set_unit0 = unit0;
     subtable->mf_bits_set_unit1 = unit1;
     subtable->mf_masks = xmalloc(sizeof(uint64_t) * (unit0 + unit1));
-    netdev_flow_key_gen_masks(mask, subtable->mf_masks, unit0, unit1);
+    dpcls_flow_key_gen_masks(mask, subtable->mf_masks, unit0, unit1);
 
     /* Get the preferred subtable search function for this (u0,u1) subtable.
      * The function is guaranteed to always return a valid implementation, and
@@ -8949,11 +8435,10 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
     }
 }
 
-/* Inner loop for mask generation of a unit, see netdev_flow_key_gen_masks. */
+/* Inner loop for mask generation of a unit, see dpcls_flow_key_gen_masks. */
 static inline void
-netdev_flow_key_gen_mask_unit(uint64_t iter,
-                              const uint64_t count,
-                              uint64_t *mf_masks)
+dpcls_flow_key_gen_mask_unit(uint64_t iter, const uint64_t count,
+                             uint64_t *mf_masks)
 {
     int i;
     for (i = 0; i < count; i++) {
@@ -8974,16 +8459,16 @@ netdev_flow_key_gen_mask_unit(uint64_t iter,
  * @param mf_bits_unit0 Number of bits set in unit0 of the miniflow
  */
 void
-netdev_flow_key_gen_masks(const struct netdev_flow_key *tbl,
-                          uint64_t *mf_masks,
-                          const uint32_t mf_bits_u0,
-                          const uint32_t mf_bits_u1)
+dpcls_flow_key_gen_masks(const struct netdev_flow_key *tbl,
+                         uint64_t *mf_masks,
+                         const uint32_t mf_bits_u0,
+                         const uint32_t mf_bits_u1)
 {
     uint64_t iter_u0 = tbl->mf.map.bits[0];
     uint64_t iter_u1 = tbl->mf.map.bits[1];
 
-    netdev_flow_key_gen_mask_unit(iter_u0, mf_bits_u0, &mf_masks[0]);
-    netdev_flow_key_gen_mask_unit(iter_u1, mf_bits_u1, &mf_masks[mf_bits_u0]);
+    dpcls_flow_key_gen_mask_unit(iter_u0, mf_bits_u0, &mf_masks[0]);
+    dpcls_flow_key_gen_mask_unit(iter_u1, mf_bits_u1, &mf_masks[mf_bits_u0]);
 }
 
 /* Returns true if 'target' satisfies 'key' in 'mask', that is, if each 1-bit

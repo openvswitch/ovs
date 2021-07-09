@@ -21,7 +21,6 @@
 
 #include "dpif-netdev.h"
 #include "dpif-netdev-lookup.h"
-#include "dpif-netdev-private.h"
 #include "cmap.h"
 #include "flow.h"
 #include "pvector.h"

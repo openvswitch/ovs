@@ -20,6 +20,7 @@ Post-v2.15.0
      * Added all-zero IP SNAT handling to conntrack. In case of collision,
        using ct(src=0.0.0.0), the source port will be replaced with another
        non-colliding port in the ephemeral range (1024, 65535).
+     * Refactor lib/dpif-netdev.c to multiple header files.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
