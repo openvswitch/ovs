@@ -4286,8 +4286,9 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                 }
             }
         }
+
         /* Process packet batch. */
-        dp_netdev_input(pmd, &batch, port_no);
+        pmd->netdev_input_func(pmd, &batch, port_no);
 
         /* Assign processing cycles to rx queue. */
         cycles = cycle_timer_stop(&pmd->perf_stats, &timer);
@@ -6088,6 +6089,10 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     hmap_init(&pmd->tnl_port_cache);
     hmap_init(&pmd->send_port_cache);
     cmap_init(&pmd->tx_bonds);
+
+    /* Initialize the DPIF function pointer to the default scalar version. */
+    pmd->netdev_input_func = dp_netdev_input;
+
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {

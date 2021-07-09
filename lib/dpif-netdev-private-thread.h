@@ -47,6 +47,13 @@ struct dp_netdev_pmd_thread_ctx {
     uint32_t emc_insert_min;
 };
 
+/* Forward declaration for typedef. */
+struct dp_netdev_pmd_thread;
+
+typedef void (*dp_netdev_input_func)(struct dp_netdev_pmd_thread *pmd,
+                                     struct dp_packet_batch *packets,
+                                     odp_port_t port_no);
+
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
  * the performance overhead of interrupt processing.  Therefore netdev can
  * not implement rx-wait for these devices.  dpif-netdev needs to poll
@@ -100,6 +107,9 @@ struct dp_netdev_pmd_thread {
 
     /* Current context of the PMD thread. */
     struct dp_netdev_pmd_thread_ctx ctx;
+
+    /* Function pointer to call for dp_netdev_input() functionality. */
+    ATOMIC(dp_netdev_input_func) netdev_input_func;
 
     struct seq *reload_seq;
     uint64_t last_reload_seq;
