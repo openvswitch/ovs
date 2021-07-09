@@ -56,6 +56,7 @@ Andrew Evans
 Andrew Beekhof                     abeekhof@redhat.com
 Andrew Kampjes                     a.kampjes@gmail.com
 Andrew Lambeth                     alambeth@vmware.com
+Andrew Rybchenko                   andrew.rybchenko@oktetlabs.ru
 Andre McCurdy                      armccurdy@gmail.com
 Andy Hill                          hillad@gmail.com
 Andy Southgate                     andy.southgate@citrix.com
