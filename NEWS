@@ -26,6 +26,7 @@ Post-v2.15.0
      * Add commands to get and set the dpif implementations.
      * Add a partial HWOL PMD statistic counting hits similar to existing
        EMC/SMC/DPCLS stats.
+     * Enable AVX512 optimized DPCLS to search subtables with larger miniflows.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
