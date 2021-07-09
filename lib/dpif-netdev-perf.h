@@ -56,6 +56,7 @@ extern "C" {
 /* Set of counter types maintained in pmd_perf_stats. */
 
 enum pmd_stat_type {
+    PMD_STAT_PHWOL_HIT,     /* Packets that had a partial HWOL hit (phwol). */
     PMD_STAT_EXACT_HIT,     /* Packets that had an exact match (emc). */
     PMD_STAT_SMC_HIT,       /* Packets that had a sig match hit (SMC). */
     PMD_STAT_MASKED_HIT,    /* Packets that matched in the flow table. */

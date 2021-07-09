@@ -127,6 +127,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
 
     uint32_t emc_hits = 0;
     uint32_t smc_hits = 0;
+    uint32_t phwol_hits = 0;
 
     /* A 1 bit in this mask indicates a hit, so no DPCLS lookup on the pkt. */
     uint32_t hwol_emc_smc_hitmask = 0;
@@ -178,6 +179,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                 rules[i] = &f->cr;
                 pkt_meta[i].tcp_flags = parse_tcp_flags(packet);
                 pkt_meta[i].bytes = dp_packet_size(packet);
+                phwol_hits++;
                 hwol_emc_smc_hitmask |= (1 << i);
                 continue;
             }
@@ -286,6 +288,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
 
     /* At this point we don't return error anymore, so commit stats here. */
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_RECV, batch_size);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, phwol_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, emc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SMC_HIT, smc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_HIT,

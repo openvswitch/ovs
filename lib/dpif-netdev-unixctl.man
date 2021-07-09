@@ -135,6 +135,7 @@ pmd thread numa_id 0 core_id 1:
   - busy iterations:        86009  ( 84.1 % of used cycles)
   Rx packets:             2399607  (2381 Kpps, 848 cycles/pkt)
   Datapath passes:        3599415  (1.50 passes/pkt)
+  - PHWOL hits:                 0  (  0.0 %)
   - EMC hits:              336472  (  9.3 %)
   - SMC hits:                   0  ( 0.0 %)
   - Megaflow hits:        3262943  ( 90.7 %, 1.00 subtbl lookups/hit)

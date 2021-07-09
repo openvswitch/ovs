@@ -646,6 +646,7 @@ pmd_info_show_stats(struct ds *reply,
                   "  packets received: %"PRIu64"\n"
                   "  packet recirculations: %"PRIu64"\n"
                   "  avg. datapath passes per packet: %.02f\n"
+                  "  phwol hits: %"PRIu64"\n"
                   "  emc hits: %"PRIu64"\n"
                   "  smc hits: %"PRIu64"\n"
                   "  megaflow hits: %"PRIu64"\n"
@@ -654,7 +655,8 @@ pmd_info_show_stats(struct ds *reply,
                   "  miss with failed upcall: %"PRIu64"\n"
                   "  avg. packets per output batch: %.02f\n",
                   total_packets, stats[PMD_STAT_RECIRC],
-                  passes_per_pkt, stats[PMD_STAT_EXACT_HIT],
+                  passes_per_pkt, stats[PMD_STAT_PHWOL_HIT],
+                  stats[PMD_STAT_EXACT_HIT],
                   stats[PMD_STAT_SMC_HIT],
                   stats[PMD_STAT_MASKED_HIT], lookups_per_hit,
                   stats[PMD_STAT_MISS], stats[PMD_STAT_LOST],
@@ -1683,6 +1685,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         stats->n_flows += cmap_count(&pmd->flow_table);
         pmd_perf_read_counters(&pmd->perf_stats, pmd_stats);
+        stats->n_hit += pmd_stats[PMD_STAT_PHWOL_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_EXACT_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_SMC_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_MASKED_HIT];
@@ -6805,7 +6808,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                bool md_is_valid, odp_port_t port_no)
 {
     struct netdev_flow_key *key = &keys[0];
-    size_t n_missed = 0, n_emc_hit = 0;
+    size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0;
     struct dfc_cache *cache = &pmd->flow_cache;
     struct dp_packet *packet;
     const size_t cnt = dp_packet_batch_size(packets_);
@@ -6852,6 +6855,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
             }
             if (OVS_LIKELY(flow)) {
                 tcp_flags = parse_tcp_flags(packet);
+                n_phwol_hit++;
                 if (OVS_LIKELY(batch_enable)) {
                     dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
                                             n_batches);
@@ -6914,6 +6918,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     /* Count of packets which are not flow batched. */
     *n_flows = map_cnt;
 
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, n_phwol_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, n_emc_hit);
 
     if (!smc_enable_db) {
