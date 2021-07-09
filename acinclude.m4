@@ -30,6 +30,21 @@ AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
   fi
 ])
 
+dnl Set OVS DPIF default implementation at configure time for running the unit
+dnl tests on the whole codebase without modifying tests per DPIF impl
+AC_DEFUN([OVS_CHECK_DPIF_AVX512_DEFAULT], [
+  AC_ARG_ENABLE([dpif-default-avx512],
+                [AC_HELP_STRING([--enable-dpif-default-avx512], [Enable DPIF AVX512 implementation as default.])],
+                [dpifavx512=yes],[dpifavx512=no])
+  AC_MSG_CHECKING([whether DPIF AVX512 is default implementation])
+  if test "$dpifavx512" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    OVS_CFLAGS="$OVS_CFLAGS -DDPIF_AVX512_DEFAULT"
+    AC_MSG_RESULT([yes])
+  fi
+])
+
 dnl OVS_ENABLE_WERROR
 AC_DEFUN([OVS_ENABLE_WERROR],
   [AC_ARG_ENABLE(

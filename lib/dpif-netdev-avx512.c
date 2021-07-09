@@ -24,6 +24,7 @@
 #include "dpif-netdev-perf.h"
 #include "dpif-netdev-private.h"
 
+#include <errno.h>
 #include <immintrin.h>
 
 #include "dp-packet.h"
@@ -56,6 +57,19 @@ struct dpif_userdata {
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)
         struct pkt_flow_meta pkt_meta[NETDEV_MAX_BURST];
 };
+
+int32_t
+dp_netdev_input_outer_avx512_probe(void)
+{
+    bool avx512f_available = dpdk_get_cpu_has_isa("x86_64", "avx512f");
+    bool bmi2_available = dpdk_get_cpu_has_isa("x86_64", "bmi2");
+
+    if (!avx512f_available || !bmi2_available) {
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
 
 int32_t
 dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,

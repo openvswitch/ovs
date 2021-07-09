@@ -214,3 +214,37 @@ implementation ::
 
 Compile OVS in debug mode to have `ovs_assert` statements error out if
 there is a mis-match in the DPCLS lookup implementation.
+
+Datapath Interface Performance
+------------------------------
+
+The datapath interface (DPIF) or dp_netdev_input() is responsible for taking
+packets through the major components of the userspace datapath; such as
+miniflow_extract, EMC, SMC and DPCLS lookups, and a lot of the performance
+stats associated with the datapath.
+
+Just like with the SIMD DPCLS feature above, SIMD can be applied to the DPIF to
+improve performance.
+
+By default, dpif_scalar is used. The DPIF implementation can be selected by
+name ::
+
+    $ ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512
+    DPIF implementation set to dpif_avx512.
+
+    $ ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar
+    DPIF implementation set to dpif_scalar.
+
+Running Unit Tests with AVX512 DPIF
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Since the AVX512 DPIF is disabled by default, a compile time option is
+available in order to test it with the OVS unit test suite. When building with
+a CPU that supports AVX512, use the following configure option ::
+
+    $ ./configure --enable-dpif-default-avx512
+
+The following line should be seen in the configure output when the above option
+is used ::
+
+    checking whether DPIF AVX512 is default implementation... yes

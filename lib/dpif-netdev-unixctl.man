@@ -226,3 +226,6 @@ recirculation (only in balance-tcp mode).
 When this is the case, the above command prints the load-balancing information
 of the bonds configured in datapath \fIdp\fR showing the interface associated
 with each bucket (hash).
+.
+.IP "\fBdpif-netdev/dpif-impl-set\fR \fIdpif_impl\fR"
+Sets the DPIF to be used to \fIdpif_impl\fR. By default "dpif_scalar" is used.
