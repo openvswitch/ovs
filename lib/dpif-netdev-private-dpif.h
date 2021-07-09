@@ -22,6 +22,7 @@
 /* Forward declarations to avoid including files. */
 struct dp_netdev_pmd_thread;
 struct dp_packet_batch;
+struct ds;
 
 /* Typedef for DPIF functions.
  * Returns whether all packets were processed successfully.
@@ -47,6 +48,11 @@ struct dpif_netdev_impl_info_t {
     /* Name used to select this DPIF implementation. */
     const char *name;
 };
+
+/* This function returns all available implementations to the caller. */
+void
+dp_netdev_impl_get(struct ds *reply, struct dp_netdev_pmd_thread **pmd_list,
+                   size_t n);
 
 /* Returns the default DPIF which is first ./configure selected, but can be
  * overridden at runtime. */

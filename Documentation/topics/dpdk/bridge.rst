@@ -226,6 +226,14 @@ stats associated with the datapath.
 Just like with the SIMD DPCLS feature above, SIMD can be applied to the DPIF to
 improve performance.
 
+OVS provides multiple implementations of the DPIF. The available
+implementations can be listed with the following command ::
+
+    $ ovs-appctl dpif-netdev/dpif-impl-get
+    Available DPIF implementations:
+      dpif_scalar (pmds: none)
+      dpif_avx512 (pmds: 1,2,6,7)
+
 By default, dpif_scalar is used. The DPIF implementation can be selected by
 name ::
 
