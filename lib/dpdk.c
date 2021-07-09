@@ -665,13 +665,33 @@ print_dpdk_version(void)
     puts(rte_version());
 }
 
+/* Avoid calling rte_cpu_get_flag_enabled() excessively, by caching the
+ * result of the call for each CPU flag in a static variable. To avoid
+ * allocating large numbers of static variables, use a uint8 as a bitfield.
+ * Note the macro must only return if the ISA check is done and available.
+ */
+#define ISA_CHECK_DONE_BIT (1 << 0)
+#define ISA_AVAILABLE_BIT  (1 << 1)
+
 #define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
     do {                                                                \
         if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
-            int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);        \
-            VLOG_DBG("CPU flag %s, available %s\n", name_str,           \
-                      has_isa ? "yes" : "no");                          \
-            return true;                                                \
+            static uint8_t isa_check_##RTE_CPUFLAG;                     \
+            int check = isa_check_##RTE_CPUFLAG & ISA_CHECK_DONE_BIT;   \
+            if (OVS_UNLIKELY(!check)) {                                 \
+                int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);    \
+                VLOG_DBG("CPU flag %s, available %s\n",                 \
+                         name_str, has_isa ? "yes" : "no");             \
+                isa_check_##RTE_CPUFLAG = ISA_CHECK_DONE_BIT;           \
+                if (has_isa) {                                          \
+                    isa_check_##RTE_CPUFLAG |= ISA_AVAILABLE_BIT;       \
+                }                                                       \
+            }                                                           \
+            if (isa_check_##RTE_CPUFLAG & ISA_AVAILABLE_BIT) {          \
+                return true;                                            \
+            } else {                                                    \
+                return false;                                           \
+            }                                                           \
         }                                                               \
     } while (0)
 
