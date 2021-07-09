@@ -314,6 +314,9 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
         return avx512_lookup_impl(subtable, keys_map, keys, rules, U0, U1);   \
     }                                                                         \
 
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 4)
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 1)
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(5, 3)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(5, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 0)
@@ -346,6 +349,9 @@ dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
         return NULL;
     }
 
+    CHECK_LOOKUP_FUNCTION(9, 4);
+    CHECK_LOOKUP_FUNCTION(9, 1);
+    CHECK_LOOKUP_FUNCTION(5, 3);
     CHECK_LOOKUP_FUNCTION(5, 1);
     CHECK_LOOKUP_FUNCTION(4, 1);
     CHECK_LOOKUP_FUNCTION(4, 0);
