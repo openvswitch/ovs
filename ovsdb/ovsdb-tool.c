@@ -1508,12 +1508,16 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
                 if (!must_equal || raft_entry_equals(ae, be)) {
                     continue;
                 }
-                char *as = json_to_string(raft_entry_to_json(ae), JSSF_SORT);
-                char *bs = json_to_string(raft_entry_to_json(be), JSSF_SORT);
+                struct json *jae = raft_entry_to_json(ae);
+                struct json *jbe = raft_entry_to_json(be);
+                char *as = json_to_string(jae, JSSF_SORT);
+                char *bs = json_to_string(jbe, JSSF_SORT);
                 ovs_fatal(0, "log entries with index %"PRIu64" differ:\n"
                           "%s has %s\n"
                           "%s has %s",
                           idx, a->filename, as, b->filename, bs);
+                json_destroy(jae);
+                json_destroy(jbe);
             }
         }
     }
