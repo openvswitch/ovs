@@ -53,6 +53,15 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif_lookup_avx512_gather);
 
+
+/* Wrapper function required to enable ISA. */
+static inline __m512i
+__attribute__((__target__("avx512vpopcntdq")))
+_mm512_popcnt_epi64_wrapper(__m512i v_in)
+{
+    return _mm512_popcnt_epi64(v_in);
+}
+
 static inline __m512i
 _mm512_popcnt_epi64_manual(__m512i v_in)
 {
@@ -131,6 +140,7 @@ netdev_rule_matches_key(const struct dpcls_rule *rule,
  *   pkt_mf_u0_pop: population count of bits in u0 of the packet.
  *   zero_mask: bitmask of lanes to zero as packet doesn't have mf bits set.
  *   u64_lanes_mask: bitmask of lanes to process.
+ *   use_vpop: compile-time constant indicating if VPOPCNT instruction allowed.
  */
 static inline ALWAYS_INLINE __m512i
 avx512_blocks_gather(__m512i v_u0,
@@ -141,7 +151,8 @@ avx512_blocks_gather(__m512i v_u0,
                      __mmask64 u1_bcast_msk,
                      const uint64_t pkt_mf_u0_pop,
                      __mmask64 zero_mask,
-                     __mmask64 u64_lanes_mask)
+                     __mmask64 u64_lanes_mask,
+                     const uint32_t use_vpop)
 {
         /* Suggest to compiler to load tbl blocks ahead of gather(). */
         __m512i v_tbl_blocks = _mm512_maskz_loadu_epi64(u64_lanes_mask,
@@ -155,8 +166,15 @@ avx512_blocks_gather(__m512i v_u0,
                                                       tbl_mf_masks);
         __m512i v_masks = _mm512_and_si512(v_pkt_bits, v_tbl_masks);
 
-        /* Manual AVX512 popcount for u64 lanes. */
-        __m512i v_popcnts = _mm512_popcnt_epi64_manual(v_masks);
+        /* Calculate AVX512 popcount for u64 lanes using the native instruction
+         * if available, or using emulation if not available.
+         */
+        __m512i v_popcnts;
+        if (use_vpop) {
+            v_popcnts = _mm512_popcnt_epi64_wrapper(v_masks);
+        } else {
+            v_popcnts = _mm512_popcnt_epi64_manual(v_masks);
+        }
 
         /* Add popcounts and offset for u1 bits. */
         __m512i v_idx_u0_offset = _mm512_maskz_set1_epi64(u1_bcast_msk,
@@ -181,7 +199,8 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                    const struct netdev_flow_key *keys[],
                    struct dpcls_rule **rules,
                    const uint32_t bit_count_u0,
-                   const uint32_t bit_count_u1)
+                   const uint32_t bit_count_u1,
+                   const uint32_t use_vpop)
 {
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)uint64_t block_cache[BLOCKS_CACHE_SIZE];
     uint32_t hashes[NETDEV_MAX_BURST];
@@ -233,7 +252,8 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                                                 u1_bcast_mask,
                                                 pkt_mf_u0_pop,
                                                 zero_mask,
-                                                bit_count_total_mask);
+                                                bit_count_total_mask,
+                                                use_vpop);
         _mm512_storeu_si512(&block_cache[i * MF_BLOCKS_PER_PACKET], v_blocks);
 
         if (bit_count_total > 8) {
@@ -254,7 +274,8 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                                                     u1_bcast_mask_gt8,
                                                     pkt_mf_u0_pop,
                                                     zero_mask_gt8,
-                                                    bit_count_gt8_mask);
+                                                    bit_count_gt8_mask,
+                                                    use_vpop);
             _mm512_storeu_si512(&block_cache[(i * MF_BLOCKS_PER_PACKET) + 8],
                                 v_blocks_gt8);
         }
@@ -303,7 +324,11 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
     return found_map;
 }
 
-/* Expand out specialized functions with U0 and U1 bit attributes. */
+/* Expand out specialized functions with U0 and U1 bit attributes. As the
+ * AVX512 vpopcnt instruction is not supported on all AVX512 capable CPUs,
+ * create two functions for each miniflow signature. This allows the runtime
+ * CPU detection in probe() to select the ideal implementation.
+ */
 #define DECLARE_OPTIMIZED_LOOKUP_FUNCTION(U0, U1)                             \
     static uint32_t                                                           \
     dpcls_avx512_gather_mf_##U0##_##U1(struct dpcls_subtable *subtable,       \
@@ -311,7 +336,20 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                                        const struct netdev_flow_key *keys[],  \
                                        struct dpcls_rule **rules)             \
     {                                                                         \
-        return avx512_lookup_impl(subtable, keys_map, keys, rules, U0, U1);   \
+        const uint32_t use_vpop = 0;                                          \
+        return avx512_lookup_impl(subtable, keys_map, keys, rules,            \
+                                  U0, U1, use_vpop);                          \
+    }                                                                         \
+                                                                              \
+    static uint32_t __attribute__((__target__("avx512vpopcntdq")))            \
+    dpcls_avx512_gather_mf_##U0##_##U1##_vpop(struct dpcls_subtable *subtable,\
+                                       uint32_t keys_map,                     \
+                                       const struct netdev_flow_key *keys[],  \
+                                       struct dpcls_rule **rules)             \
+    {                                                                         \
+        const uint32_t use_vpop = 1;                                          \
+        return avx512_lookup_impl(subtable, keys_map, keys, rules,            \
+                                  U0, U1, use_vpop);                          \
     }                                                                         \
 
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 4)
@@ -321,11 +359,18 @@ DECLARE_OPTIMIZED_LOOKUP_FUNCTION(5, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 0)
 
-/* Check if a specialized function is valid for the required subtable. */
-#define CHECK_LOOKUP_FUNCTION(U0, U1)                                         \
+/* Check if a specialized function is valid for the required subtable.
+ * The use_vpop variable is used to decide if the VPOPCNT instruction can be
+ * used or not.
+ */
+#define CHECK_LOOKUP_FUNCTION(U0, U1, use_vpop)                               \
     ovs_assert((U0 + U1) <= (NUM_U64_IN_ZMM_REG * 2));                        \
     if (!f && u0_bits == U0 && u1_bits == U1) {                               \
-        f = dpcls_avx512_gather_mf_##U0##_##U1;                               \
+        if (use_vpop) {                                                       \
+            f = dpcls_avx512_gather_mf_##U0##_##U1##_vpop;                    \
+        } else {                                                              \
+            f = dpcls_avx512_gather_mf_##U0##_##U1;                           \
+        }                                                                     \
     }
 
 static uint32_t
@@ -333,9 +378,11 @@ dpcls_avx512_gather_mf_any(struct dpcls_subtable *subtable, uint32_t keys_map,
                            const struct netdev_flow_key *keys[],
                            struct dpcls_rule **rules)
 {
+    const uint32_t use_vpop = 0;
     return avx512_lookup_impl(subtable, keys_map, keys, rules,
                               subtable->mf_bits_set_unit0,
-                              subtable->mf_bits_set_unit1);
+                              subtable->mf_bits_set_unit1,
+                              use_vpop);
 }
 
 dpcls_subtable_lookup_func
@@ -349,12 +396,14 @@ dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
         return NULL;
     }
 
-    CHECK_LOOKUP_FUNCTION(9, 4);
-    CHECK_LOOKUP_FUNCTION(9, 1);
-    CHECK_LOOKUP_FUNCTION(5, 3);
-    CHECK_LOOKUP_FUNCTION(5, 1);
-    CHECK_LOOKUP_FUNCTION(4, 1);
-    CHECK_LOOKUP_FUNCTION(4, 0);
+    int use_vpop = dpdk_get_cpu_has_isa("x86_64", "avx512vpopcntdq");
+
+    CHECK_LOOKUP_FUNCTION(9, 4, use_vpop);
+    CHECK_LOOKUP_FUNCTION(9, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(5, 3, use_vpop);
+    CHECK_LOOKUP_FUNCTION(5, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(4, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(4, 0, use_vpop);
 
     /* Check if the _any looping version of the code can perform this miniflow
      * lookup. Performance gain may be less pronounced due to non-specialized
