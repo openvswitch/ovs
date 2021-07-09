@@ -33,6 +33,7 @@ extern "C" {
 /* Forward declaration for lookup_func typedef. */
 struct dpcls_subtable;
 struct dpcls_rule;
+struct dpcls;
 
 /* Must be public as it is instantiated in subtable struct below. */
 struct netdev_flow_key {
@@ -120,6 +121,12 @@ dpif_netdev_packet_get_rss_hash_orig_pkt(struct dp_packet *packet,
 
     return hash;
 }
+
+/* Allow other implementations to call dpcls_lookup() for subtable search. */
+bool
+dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
+             struct dpcls_rule **rules, const size_t cnt,
+             int *num_lookups_p);
 
 #ifdef  __cplusplus
 }

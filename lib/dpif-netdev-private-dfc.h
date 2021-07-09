@@ -81,6 +81,14 @@ extern "C" {
 #define DEFAULT_EM_FLOW_INSERT_MIN (UINT32_MAX /                     \
                                     DEFAULT_EM_FLOW_INSERT_INV_PROB)
 
+/* Forward declaration for SMC function prototype that requires access to
+ * 'struct dp_netdev_pmd_thread'. */
+struct dp_netdev_pmd_thread;
+
+/* Forward declaration for EMC and SMC batch insert function prototypes that
+ * require access to 'struct dpcls_rule'. */
+struct dpcls_rule;
+
 struct emc_entry {
     struct dp_netdev_flow *flow;
     struct netdev_flow_key key;   /* key.hash used for emc hash value. */
@@ -156,6 +164,23 @@ emc_lookup(struct emc_cache *cache, const struct netdev_flow_key *key)
     return NULL;
 }
 
+/* Insert a batch of keys/flows into the EMC and SMC caches. */
+void
+emc_probabilistic_insert_batch(struct dp_netdev_pmd_thread *pmd,
+                               const struct netdev_flow_key *keys,
+                               struct dpcls_rule **rules,
+                               uint32_t emc_insert_mask);
+
+void
+smc_insert_batch(struct dp_netdev_pmd_thread *pmd,
+                               const struct netdev_flow_key *keys,
+                               struct dpcls_rule **rules,
+                               uint32_t smc_insert_mask);
+
+struct dp_netdev_flow *
+smc_lookup_single(struct dp_netdev_pmd_thread *pmd,
+                  struct dp_packet *packet,
+                  struct netdev_flow_key *key);
 
 #ifdef  __cplusplus
 }

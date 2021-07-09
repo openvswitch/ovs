@@ -33,11 +33,13 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512f \
 	-mavx512bw \
 	-mavx512dq \
+	-mbmi \
 	-mbmi2 \
 	-fPIC \
 	$(AM_CFLAGS)
 lib_libopenvswitchavx512_la_SOURCES = \
-	lib/dpif-netdev-lookup-avx512-gather.c
+	lib/dpif-netdev-lookup-avx512-gather.c \
+	lib/dpif-netdev-avx512.c
 lib_libopenvswitchavx512_la_LDFLAGS = \
 	-static
 endif
@@ -114,6 +116,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dpif-netdev-private-dfc.c \
 	lib/dpif-netdev-private-dfc.h \
 	lib/dpif-netdev-private-dpcls.h \
+	lib/dpif-netdev-private-dpif.h \
 	lib/dpif-netdev-private-flow.h \
 	lib/dpif-netdev-private-thread.h \
 	lib/dpif-netdev-private.h \
