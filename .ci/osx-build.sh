@@ -5,6 +5,21 @@ set -o errexit
 CFLAGS="-Werror $CFLAGS"
 EXTRA_OPTS=""
 
+on_exit() {
+    if [ $? = 0 ]; then
+        exit
+    fi
+    FILES_TO_PRINT="config.log"
+    FILES_TO_PRINT="$FILES_TO_PRINT */_build/sub/tests/testsuite.log"
+
+    for pr_file in $FILES_TO_PRINT; do
+        cat "$pr_file" 2>/dev/null
+    done
+}
+# We capture the error logs as artifacts in Github Actions, no need to dump
+# them via a EXIT handler.
+[ -n "$GITHUB_WORKFLOW" ] || trap on_exit EXIT
+
 function configure_ovs()
 {
     ./boot.sh && ./configure $*
@@ -13,20 +28,13 @@ function configure_ovs()
 configure_ovs $EXTRA_OPTS $*
 
 if [ "$CC" = "clang" ]; then
-    set make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
+    make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 else
-    set make CFLAGS="$CFLAGS $BUILD_ENV"
+    make CFLAGS="$CFLAGS $BUILD_ENV"
 fi
-if ! "$@"; then
-    cat config.log
-    exit 1
-fi
+
 if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
-    if ! make distcheck RECHECK=yes; then
-        # testsuite.log is necessary for debugging.
-        cat */_build/sub/tests/testsuite.log
-        exit 1
-    fi
+    make distcheck RECHECK=yes
 fi
 
 exit 0
