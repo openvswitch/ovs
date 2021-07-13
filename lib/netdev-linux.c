@@ -2635,7 +2635,9 @@ nl_msg_put_act_police(struct ofpbuf *request, struct tc_police police,
     size_t offset, act_offset;
     uint32_t prio = 0;
     /* used for PPS, set rate as 0 to act as a single action */
-    struct tc_police null_police = {0};
+    struct tc_police null_police;
+
+    memset(&null_police, 0, sizeof null_police);
 
     if (police.rate.rate) {
         nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset);
