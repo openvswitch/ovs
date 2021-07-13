@@ -342,6 +342,22 @@ AT_CHECK([test `egrep 'in_port\(6\)' br1_flows.txt |wc -l` -gt 3])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# SEND_TCP_BOND_PKTS([p_name], [p_ofport], [packet_len])
+#
+# Sends 256 packets to port 'p_name' with different TCP destination ports.
+m4_define([SEND_TCP_BOND_PKTS],
+   [
+    len_cmd=""
+    if test -n "$3"; then
+        len_cmd=" --len $3"
+    fi
+    for i in `seq 0 255`; do
+        pkt="in_port($2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
+        ovs-appctl netdev-dummy/receive $1 $pkt$len_cmd
+    done
+   ]
+)
+
 AT_SETUP([ofproto-dpif - balance-tcp bonding])
 # Create br0 with members bond0(p1, p2, p3) and p7,
 #    and br1 with members bond1(p4, p5, p6) and p8.
@@ -377,13 +393,7 @@ ovs-appctl lacp/show > lacp.txt
 ovs-appctl bond/show > bond.txt
 # Check that lb_output is not enabled by default.
 AT_CHECK([grep -q '^lb_output action: disabled' bond.txt])
-(
-for i in `seq 0 255` ;
-    do
-    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
-    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
-    done
-)
+AT_CHECK([SEND_TCP_BOND_PKTS([p7], [7])])
 ovs-appctl time/warp 300 100
 AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
@@ -400,13 +410,7 @@ OVS_WAIT_UNTIL([ovs-appctl bond/show | grep -q '^lb_output action: enabled'])
 ovs-appctl time/warp 10000 500
 ovs-appctl revalidator/wait
 OVS_WAIT_WHILE([ovs-appctl dpif/dump-flows br1 | grep -q tcp])
-(
-for i in $(seq 256) ;
-    do
-    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
-    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
-    done
-)
+AT_CHECK([SEND_TCP_BOND_PKTS([p7], [7])])
 ovs-appctl time/warp 300 100
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 | grep tcp > br1_flows.txt])
@@ -422,6 +426,78 @@ OVS_WAIT_UNTIL([test -z "$(ovs-appctl dpif-netdev/bond-show)"])
 
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
+
+# Make sure that rebalancing works after link state changes.
+AT_SETUP([ofproto-dpif - balance-tcp bonding rebalance after link state changes])
+# Create br0 with interfaces bond0(p1, p2) and p5,
+#    and br1 with interfaces bond1(p3, p4) and p6.
+#    bond0 <-> bond1
+# Send some traffic, set link state down and up for p2,
+# send big amount of traffic to trigger rebalancing and
+# make sure that some hashes rebalanced.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 mtu_request=65535 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 mtu_request=65535 -- \
+   add-port br0 p5 -- set interface p5 ofport_request=5 type=dummy mtu_request=65535 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p3 p4 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 --\
+   set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 mtu_request=65535 -- \
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 mtu_request=65535 -- \
+   add-port br1 p6 -- set interface p6 ofport_request=6 type=dummy mtu_request=65535 --])
+AT_CHECK([ovs-appctl vlog/set bond:dbg])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+], [])
+OVS_WAIT_WHILE([ovs-appctl bond/show | grep "may_enable: false"])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 2000 200
+
+# Send some traffic to distribute all the hashes between ports.
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+
+# Wait for rebalancing for per-hash stats accounting.
+ovs-appctl time/warp 1000 100
+
+# Check that p2 handles some hashes.
+ovs-appctl bond/show > bond1.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond1.txt | grep 'hash'], [0], [ignore])
+
+# Move p2 down to force all hashes move to p1
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 down], 0, [OK
+])
+
+ovs-appctl time/warp 200 100
+# Check that all hashes moved form p2
+ovs-appctl bond/show > bond2.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond2.txt | grep 'hash'], [1], [ignore])
+
+# Move p2 up
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 up], 0, [OK
+])
+
+# Send some packets to trigger rebalancing.
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+
+# Wait for rebalancing
+ovs-appctl time/warp 1000 100
+
+# Check that some hashes was shifted to p2
+ovs-appctl bond/show > bond3.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond3.txt | grep 'hash'], [0], [ignore])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
 
 # Makes sure recirculation does not change the way packet is handled.
 AT_SETUP([ofproto-dpif - balance-tcp bonding, different recirc flow ])
