@@ -182,6 +182,40 @@ chosen, and the 2nd occurance of that priority is not used. Put in logical
 terms, a subtable is chosen if its priority is greater than the previous
 best candidate.
 
+Optimizing Specific Subtable Search
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+During the packet classification, the datapath can use specialized
+lookup tables to optimize the search. However, not all situations
+are optimized. If you see a message like the following one in the OVS
+logs, it means that there is no specialized implementation available
+for the current networking traffic. In this case, OVS will continue
+to process the traffic normally using a more generic lookup table."
+
+"Using non-specialized AVX512 lookup for subtable (4,1) and possibly others."
+
+(Note that the numbers 4 and 1 will likely be different in your logs)
+
+Additional specialized lookups can be added to OVS if the user
+provides that log message along with the command output as show
+below to the OVS mailing list. Note that the numbers in the log
+message ("subtable (X,Y)") need to match with the numbers in
+the provided command output ("dp-extra-info:miniflow_bits(X,Y)").
+
+"ovs-appctl dpctl/dump-flows -m", which results in output like this:
+
+    ufid:82770b5d-ca38-44ff-8283-74ba36bd1ca5, skb_priority(0/0),skb_mark(0/0)
+    ,ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),
+    dp_hash(0/0),in_port(pcap0),packet_type(ns=0,id=0),eth(src=00:00:00:00:00:
+    00/00:00:00:00:00:00,dst=ff:ff:ff:ff:ff:ff/00:00:00:00:00:00),eth_type(
+    0x8100),vlan(vid=1,pcp=0),encap(eth_type(0x0800),ipv4(src=127.0.0.1/0.0.0.0
+    ,dst=127.0.0.1/0.0.0.0,proto=17/0,tos=0/0,ttl=64/0,frag=no),udp(src=53/0,
+    dst=53/0)), packets:77072681, bytes:3545343326, used:0.000s, dp:ovs,
+    actions:vhostuserclient0, dp-extra-info:miniflow_bits(4,1)
+
+Please send an email to the OVS mailing list ovs-dev@openvswitch.org with
+the output of the "dp-extra-info:miniflow_bits(4,1)" values.
+
 CPU ISA Testing and Validation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

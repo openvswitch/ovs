@@ -411,8 +411,8 @@ dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
      */
     if (!f && (u0_bits + u1_bits) < (NUM_U64_IN_ZMM_REG * 2)) {
         f = dpcls_avx512_gather_mf_any;
-        VLOG_INFO("Using avx512_gather_mf_any for subtable (%d,%d)\n",
-                  u0_bits, u1_bits);
+        VLOG_INFO_ONCE("Using non-specialized AVX512 lookup for subtable"
+                       " (%d,%d) and possibly others.", u0_bits, u1_bits);
     }
 
     return f;
