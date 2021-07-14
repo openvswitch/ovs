@@ -635,8 +635,6 @@ add_db(struct server_config *config, struct db *db)
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 open_db(struct server_config *config, const char *filename)
 {
-    struct db *db;
-
     /* If we know that the file is already open, return a good error message.
      * Otherwise, if the file is open, we'll fail later on with a harder to
      * interpret file locking error. */
@@ -651,9 +649,6 @@ open_db(struct server_config *config, const char *filename)
         return error;
     }
 
-    db = xzalloc(sizeof *db);
-    db->filename = xstrdup(filename);
-
     struct ovsdb_schema *schema;
     if (ovsdb_storage_is_clustered(storage)) {
         schema = NULL;
@@ -666,6 +661,9 @@ open_db(struct server_config *config, const char *filename)
         }
         ovs_assert(schema && !txn_json);
     }
+
+    struct db *db = xzalloc(sizeof *db);
+    db->filename = xstrdup(filename);
     db->db = ovsdb_create(schema, storage);
     ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db);
 
