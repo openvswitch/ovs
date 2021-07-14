@@ -78,12 +78,20 @@ add_port () {
                 ADDRESS=`expr X"$1" : 'X[^=]*=\(.*\)'`
                 shift
                 ;;
+            --ipaddressv6=*)
+                ADDRESSV6=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
             --macaddress=*)
                 MACADDRESS=`expr X"$1" : 'X[^=]*=\(.*\)'`
                 shift
                 ;;
             --gateway=*)
                 GATEWAY=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
+            --gatewayv6=*)
+                GATEWAYV6=`expr X"$1" : 'X[^=]*=\(.*\)'`
                 shift
                 ;;
             --mtu=*)
@@ -149,12 +157,20 @@ add_port () {
         ip netns exec "$PID" ip addr add "$ADDRESS" dev "$INTERFACE"
     fi
 
+    if [ -n "$ADDRESSV6" ]; then
+        ip netns exec "$PID" ip addr add "$ADDRESSV6" dev "$INTERFACE"
+    fi
+
     if [ -n "$MACADDRESS" ]; then
         ip netns exec "$PID" ip link set dev "$INTERFACE" address "$MACADDRESS"
     fi
 
     if [ -n "$GATEWAY" ]; then
         ip netns exec "$PID" ip route add default via "$GATEWAY"
+    fi
+
+    if [ -n "$GATEWAYV6" ]; then
+        ip netns exec "$PID" ip -6 route add default via "$GATEWAYV6"
     fi
 }
 
@@ -222,17 +238,16 @@ ${UTIL}: Performs integration of Open vSwitch with Docker.
 usage: ${UTIL} COMMAND
 
 Commands:
-  add-port BRIDGE INTERFACE CONTAINER [--ipaddress="ADDRESS"]
-                    [--gateway=GATEWAY] [--macaddress="MACADDRESS"]
+  add-port BRIDGE INTERFACE CONTAINER [--ipaddress="ADDRESS"] [--ipaddressv6="ADDRESSV6"]
+                    [--gateway=GATEWAY] [--gatewayv6=GATEWAYV6] [--macaddress="MACADDRESS"]
                     [--mtu=MTU]
                     Adds INTERFACE inside CONTAINER and connects it as a port
                     in Open vSwitch BRIDGE. Optionally, sets ADDRESS on
                     INTERFACE. ADDRESS can include a '/' to represent network
-                    prefix length. Optionally, sets a GATEWAY, MACADDRESS
+                    prefix length. Optionally, sets a ADRESSV6, GATEWAY, GATEWAYV6, MACADDRESS
                     and MTU.  e.g.:
                     ${UTIL} add-port br-int eth1 c474a0e2830e
-                    --ipaddress=192.168.1.2/24 --gateway=192.168.1.1
-                    --macaddress="a2:c3:0d:49:7f:f8" --mtu=1450
+                    --ipaddress=192.168.1.2/24 --gateway=192.168.1.1 --ipaddressv6=fe80:d3fa::2/64 --gatewayv6=fe80:d3fa::1 --macaddress="a2:c3:0d:49:7f:f8" --mtu=1450
   del-port BRIDGE INTERFACE CONTAINER
                     Deletes INTERFACE inside CONTAINER and removes its
                     connection to Open vSwitch BRIDGE. e.g.:
