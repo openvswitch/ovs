@@ -115,7 +115,9 @@ COVERAGE_DEFINE(datapath_drop_invalid_port);
 COVERAGE_DEFINE(datapath_drop_invalid_bond);
 COVERAGE_DEFINE(datapath_drop_invalid_tnl_port);
 COVERAGE_DEFINE(datapath_drop_rx_invalid_packet);
+#ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
 COVERAGE_DEFINE(datapath_drop_hw_miss_recover);
+#endif
 
 /* Protects against changes to 'dp_netdevs'. */
 struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
@@ -6983,13 +6985,14 @@ static struct tx_port * pmd_send_port_cache_lookup(
 
 inline int
 dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
-                  odp_port_t port_no,
+                  odp_port_t port_no OVS_UNUSED,
                   struct dp_packet *packet,
                   struct dp_netdev_flow **flow)
 {
-    struct tx_port *p;
+    struct tx_port *p OVS_UNUSED;
     uint32_t mark;
 
+#ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
     /* Restore the packet if HW processing was terminated before completion. */
     p = pmd_send_port_cache_lookup(pmd, port_no);
     if (OVS_LIKELY(p)) {
@@ -7000,6 +7003,7 @@ dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
             return -1;
         }
     }
+#endif
 
     /* If no mark, no flow to find. */
     if (!dp_packet_has_flow_mark(packet, &mark)) {
