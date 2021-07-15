@@ -405,26 +405,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
 
-    if (!args_contains(&args, "--legacy-mem")
-        && !args_contains(&args, "--socket-limit")) {
-        const char *arg;
-        size_t i;
-
-        SVEC_FOR_EACH (i, arg, &args) {
-            if (!strcmp(arg, "--socket-mem")) {
-                break;
-            }
-        }
-        if (i < args.n - 1) {
-            svec_add(&args, "--socket-limit");
-            svec_add(&args, args.names[i + 1]);
-            VLOG_INFO("Using default value for '--socket-limit'. OVS will no "
-                      "longer provide a default for this argument starting "
-                      "from 2.17 release. DPDK defaults will be used "
-                      "instead.");
-        }
-    }
-
     if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
         auto_determine = false;
     }
