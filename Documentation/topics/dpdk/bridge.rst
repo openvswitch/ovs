@@ -256,3 +256,149 @@ The following line should be seen in the configure output when the above option
 is used ::
 
     checking whether DPIF AVX512 is default implementation... yes
+
+Miniflow Extract
+----------------
+
+Miniflow extract (MFEX) performs parsing of the raw packets and extracts the
+important header information into a compressed miniflow. This miniflow is
+composed of bits and blocks where the bits signify which blocks are set or
+have values where as the blocks hold the metadata, ip, udp, vlan, etc. These
+values are used by the datapath for switching decisions later. The Optimized
+miniflow extract is traffic specific to speed up the lookup, whereas the
+scalar works for ALL traffic patterns
+
+Most modern CPUs have SIMD capabilities. These SIMD instructions are able
+to process a vector rather than act on one variable. OVS provides multiple
+implementations of miniflow extract. This allows the user to take advantage
+of SIMD instructions like AVX512 to gain additional performance.
+
+A list of implementations can be obtained by the following command. The
+command also shows whether the CPU supports each implementation ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-get
+        Available Optimized Miniflow Extracts:
+            autovalidator (available: True, pmds: none)
+            scalar (available: True, pmds: 1,15)
+            study (available: True, pmds: none)
+
+An implementation can be selected manually by the following command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set [-pmd core_id] [name]
+                                                 [study_cnt]
+
+The above command has two optional parameters: study_cnt and core_id.
+The core_id sets a particular miniflow extract function to a specific
+pmd thread on the core. The third parameter study_cnt, which is specific
+to study and ignored by other implementations, means how many packets
+are needed to choose the best implementation.
+
+Also user can select the study implementation which studies the traffic for
+a specific number of packets by applying all available implementations of
+miniflow extract and then chooses the one with the most optimal result for
+that traffic pattern. The user can optionally provide an packet count
+[study_cnt] parameter which is the minimum number of packets that OVS must
+study before choosing an optimal implementation. If no packet count is
+provided, then the default value, 128 is chosen. Also, as there is no
+synchronization point between threads, one PMD thread might still be running
+a previous round, and can now decide on earlier data.
+
+The per packet count is a global value, and parallel study executions with
+differing packet counts will use the most recent count value provided by user.
+
+Study can be selected with packet count by the following command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set study 1024
+
+Study can be selected with packet count and explicit PMD selection
+by the following command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 study 1024
+
+In the above command the first parameter is the CORE ID of the PMD
+thread and this can also be used to explicitly set the miniflow
+extraction function pointer on different PMD threads.
+
+Scalar can be selected on core 3 by the following command where
+study count should not be provided for any implementation other
+than study ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 scalar
+
+Miniflow Extract Validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As multiple versions of miniflow extract can co-exist, each with different
+CPU ISA optimizations, it is important to validate that they all give the
+exact same results. To easily test all miniflow implementations, an
+``autovalidator`` implementation of the miniflow exists. This implementation
+runs all other available miniflow extract implementations, and verifies that
+the results are identical.
+
+Running the OVS unit tests with the autovalidator enabled ensures all
+implementations provide the same results.
+
+To set the Miniflow autovalidator, use this command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
+
+A compile time option is available in order to test it with the OVS unit
+test suite. Use the following configure option ::
+
+    $ ./configure --enable-mfex-default-autovalidator
+
+Unit Test Miniflow Extract
+++++++++++++++++++++++++++
+
+Unit test can also be used to test the workflow mentioned above by running
+the following test-case in tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Autovalidator
+
+The unit test uses mulitple traffic type to test the correctness of the
+implementaions.
+
+The MFEX commands can also be tested for negative and positive cases to
+verify that the MFEX set command does not allow for incorrect parameters.
+A user can directly run the following configuration test case in
+tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Configuration
+
+Running Fuzzy test with Autovalidator
++++++++++++++++++++++++++++++++++++++
+
+Fuzzy tests can also be done on miniflow extract with the help of
+auto-validator and Scapy. The steps below describes the steps to
+reproduce the setup with IP being fuzzed to generate packets.
+
+Scapy is used to create fuzzy IP packets and save them into a PCAP ::
+
+    pkt = fuzz(Ether()/IP()/TCP())
+
+Set the miniflow extract to autovalidator using ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
+
+OVS is configured to receive the generated packets ::
+
+    $ ovs-vsctl add-port br0 pcap0 -- \
+        set Interface pcap0 type=dpdk options:dpdk-devargs=net_pcap0
+        "rx_pcap=fuzzy.pcap"
+
+With this workflow, the autovalidator will ensure that all MFEX
+implementations are classifying each packet in exactly the same way.
+If an optimized MFEX implementation causes a different miniflow to be
+generated, the autovalidator has ovs_assert and logging statements that
+will inform about the issue.
+
+Unit Fuzzy test with Autovalidator
++++++++++++++++++++++++++++++++++++++
+
+Unit test can also be used to test the workflow mentioned above by running
+the following test-case in tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Autovalidator Fuzzy

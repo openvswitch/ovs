@@ -32,6 +32,17 @@ Post-v2.15.0
      * Enable the AVX512 DPCLS implementation to use VPOPCNT instruction if the
        CPU supports it. This enhances performance by using the native vpopcount
        instructions, instead of the emulated version of vpopcount.
+     * Add command line option to switch between MFEX function pointers.
+     * Add miniflow extract auto-validator function to compare different
+       miniflow extract implementations against default implementation.
+     * Add study function to miniflow function table which studies packet
+       and automatically chooses the best miniflow implementation for that
+       traffic.
+     * Add build time configure command to enable auto-validatior as default
+       miniflow implementation at build time.
+     * Cache results for CPU ISA checks, reduces overhead on repeated lookups.
+     * Add AVX512 based optimized miniflow extract function for traffic type
+       IPv4/UDP, IPv4/TCP, Vlan/IPv4/UDP and Vlan/Ipv4/TCP.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.

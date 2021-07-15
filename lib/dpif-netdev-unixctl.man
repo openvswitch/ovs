@@ -16,6 +16,9 @@ packet lookups performed by the datapath. Beware that a recirculated packet
 experiences one additional lookup per recirculation, so there may be
 more lookups than forwarded packets in the datapath.
 
+The MFEX Opt hits displays the number of packets that are processed by the
+optimized miniflow extract implementations.
+
 Cycles are counted using the TSC or similar facilities (when available on
 the platform). The duration of one cycle depends on the processing platform.
 
@@ -136,6 +139,7 @@ pmd thread numa_id 0 core_id 1:
   Rx packets:             2399607  (2381 Kpps, 848 cycles/pkt)
   Datapath passes:        3599415  (1.50 passes/pkt)
   - PHWOL hits:                 0  (  0.0 %)
+  - MFEX Opt hits:        3570133  ( 99.2 %)
   - EMC hits:              336472  (  9.3 %)
   - SMC hits:                   0  ( 0.0 %)
   - Megaflow hits:        3262943  ( 90.7 %, 1.00 subtbl lookups/hit)

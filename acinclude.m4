@@ -14,6 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl Set OVS MFEX Autovalidator as default miniflow extract at compile time?
+dnl This enables automatically running all unit tests with all MFEX
+dnl implementations.
+AC_DEFUN([OVS_CHECK_MFEX_AUTOVALIDATOR], [
+  AC_ARG_ENABLE([mfex-default-autovalidator],
+                [AC_HELP_STRING([--enable-mfex-default-autovalidator], [Enable MFEX autovalidator as default miniflow_extract implementation.])],
+                [autovalidator=yes],[autovalidator=no])
+  AC_MSG_CHECKING([whether MFEX Autovalidator is default implementation])
+  if test "$autovalidator" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    OVS_CFLAGS="$OVS_CFLAGS -DMFEX_AUTOVALIDATOR_DEFAULT"
+    AC_MSG_RESULT([yes])
+  fi
+])
+
 dnl Set OVS DPCLS Autovalidator as default subtable search at compile time?
 dnl This enables automatically running all unit tests with all DPCLS
 dnl implementations.
