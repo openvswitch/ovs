@@ -136,6 +136,13 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
 
 #define PATTERN_ETHERTYPE_MASK PATTERN_ETHERTYPE_GEN(0xFF, 0xFF)
 #define PATTERN_ETHERTYPE_IPV4 PATTERN_ETHERTYPE_GEN(0x08, 0x00)
+#define PATTERN_ETHERTYPE_DT1Q PATTERN_ETHERTYPE_GEN(0x81, 0x00)
+
+/* VLAN (Dot1Q) patterns and masks. */
+#define PATTERN_DT1Q_MASK                                               \
+  0x00, 0x00, 0xFF, 0xFF,
+#define PATTERN_DT1Q_IPV4                                               \
+  0x00, 0x00, 0x08, 0x00,
 
 /* Generator for checking IPv4 ver, ihl, and proto */
 #define PATTERN_IPV4_GEN(VER_IHL, FLAG_OFF_B0, FLAG_OFF_B1, PROTO) \
@@ -161,6 +168,29 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
   34, 35, 36, 37, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* UDP */   \
   NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused. */
 
+/* TCP shuffle: tcp_ctl bits require mask/processing, not included here. */
+#define PATTERN_IPV4_TCP_SHUFFLE \
+   0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, NU, NU, /* Ether */ \
+  26, 27, 28, 29, 30, 31, 32, 33, NU, NU, NU, NU, 20, 15, 22, 23, /* IPv4 */  \
+  NU, NU, NU, NU, NU, NU, NU, NU, 34, 35, 36, 37, NU, NU, NU, NU, /* TCP */   \
+  NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused. */
+
+#define PATTERN_DT1Q_IPV4_UDP_SHUFFLE                                         \
+  /* Ether (2 blocks): Note that *VLAN* type is written here. */              \
+  0,  1,  2,  3,  4,  5,  6,  7, 8,  9, 10, 11, 16, 17,  0,  0,               \
+  /* VLAN (1 block): Note that the *EtherHdr->Type* is written here. */       \
+  12, 13, 14, 15, 0, 0, 0, 0,                                                 \
+  30, 31, 32, 33, 34, 35, 36, 37, 0, 0, 0, 0, 24, 19, 26, 27,     /* IPv4 */  \
+  38, 39, 40, 41, NU, NU, NU, NU, /* UDP */
+
+#define PATTERN_DT1Q_IPV4_TCP_SHUFFLE                                         \
+  /* Ether (2 blocks): Note that *VLAN* type is written here. */              \
+  0,  1,  2,  3,  4,  5,  6,  7, 8,  9, 10, 11, 16, 17,  0,  0,               \
+  /* VLAN (1 block): Note that the *EtherHdr->Type* is written here. */       \
+  12, 13, 14, 15, 0, 0, 0, 0,                                                 \
+  30, 31, 32, 33, 34, 35, 36, 37, 0, 0, 0, 0, 24, 19, 26, 27,     /* IPv4 */  \
+  NU, NU, NU, NU, NU, NU, NU, NU, 38, 39, 40, 41, NU, NU, NU, NU, /* TCP */   \
+  NU, NU, NU, NU, NU, NU, NU, NU, /* Unused. */
 
 /* Generation of K-mask bitmask values, to zero out data in result. Note that
  * these correspond 1:1 to the above "*_SHUFFLE" values, and bit used must be
@@ -170,12 +200,22 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
  * Note the ULL suffix allows shifting by 32 or more without integer overflow.
  */
 #define KMASK_ETHER     0x1FFFULL
+#define KMASK_DT1Q      0x0FULL
 #define KMASK_IPV4      0xF0FFULL
 #define KMASK_UDP       0x000FULL
+#define KMASK_TCP       0x0F00ULL
 
 #define PATTERN_IPV4_UDP_KMASK \
     (KMASK_ETHER | (KMASK_IPV4 << 16) | (KMASK_UDP << 32))
 
+#define PATTERN_IPV4_TCP_KMASK \
+    (KMASK_ETHER | (KMASK_IPV4 << 16) | (KMASK_TCP << 32))
+
+#define PATTERN_DT1Q_IPV4_UDP_KMASK \
+    (KMASK_ETHER | (KMASK_DT1Q << 16) | (KMASK_IPV4 << 24) | (KMASK_UDP << 40))
+
+#define PATTERN_DT1Q_IPV4_TCP_KMASK \
+    (KMASK_ETHER | (KMASK_DT1Q << 16) | (KMASK_IPV4 << 24) | (KMASK_TCP << 40))
 
 /* This union allows initializing static data as u8, but easily loading it
  * into AVX512 registers too. The union ensures proper alignment for the zmm.
@@ -252,6 +292,9 @@ BUILD_ASSERT_DECL(FLOW_WC_SEQ == 42);
 
 enum MFEX_PROFILES {
     PROFILE_ETH_IPV4_UDP,
+    PROFILE_ETH_IPV4_TCP,
+    PROFILE_ETH_VLAN_IPV4_UDP,
+    PROFILE_ETH_VLAN_IPV4_TCP,
     PROFILE_COUNT,
 };
 
@@ -275,6 +318,56 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
         .dp_pkt_min_size = 42,
     },
+
+    [PROFILE_ETH_IPV4_TCP] = {
+        .probe_mask.u8_data = { PATTERN_ETHERTYPE_MASK PATTERN_IPV4_MASK },
+        .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV4 PATTERN_IPV4_TCP},
+
+        .store_shuf.u8_data = { PATTERN_IPV4_TCP_SHUFFLE },
+        .store_kmsk = PATTERN_IPV4_TCP_KMASK,
+
+        .mf_bits = { 0x18a0000000000000, 0x0000000000044401},
+        .dp_pkt_offs = {
+            0, UINT16_MAX, 14, 34,
+        },
+        .dp_pkt_min_size = 54,
+    },
+
+    [PROFILE_ETH_VLAN_IPV4_UDP] = {
+        .probe_mask.u8_data = {
+            PATTERN_ETHERTYPE_MASK PATTERN_DT1Q_MASK PATTERN_IPV4_MASK
+        },
+        .probe_data.u8_data = {
+            PATTERN_ETHERTYPE_DT1Q PATTERN_DT1Q_IPV4 PATTERN_IPV4_UDP
+        },
+
+        .store_shuf.u8_data = { PATTERN_DT1Q_IPV4_UDP_SHUFFLE },
+        .store_kmsk = PATTERN_DT1Q_IPV4_UDP_KMASK,
+
+        .mf_bits = { 0x38a0000000000000, 0x0000000000040401},
+        .dp_pkt_offs = {
+            14, UINT16_MAX, 18, 38,
+        },
+        .dp_pkt_min_size = 46,
+    },
+
+    [PROFILE_ETH_VLAN_IPV4_TCP] = {
+        .probe_mask.u8_data = {
+            PATTERN_ETHERTYPE_MASK PATTERN_DT1Q_MASK PATTERN_IPV4_MASK
+        },
+        .probe_data.u8_data = {
+            PATTERN_ETHERTYPE_DT1Q PATTERN_DT1Q_IPV4 PATTERN_IPV4_TCP
+        },
+
+        .store_shuf.u8_data = { PATTERN_DT1Q_IPV4_TCP_SHUFFLE },
+        .store_kmsk = PATTERN_DT1Q_IPV4_TCP_KMASK,
+
+        .mf_bits = { 0x38a0000000000000, 0x0000000000044401},
+        .dp_pkt_offs = {
+            14, UINT16_MAX, 18, 38,
+        },
+        .dp_pkt_min_size = 46,
+    },
 };
 
 
@@ -291,6 +384,25 @@ mfex_ipv4_set_l2_pad_size(struct dp_packet *pkt, struct ip_header *nh,
         }
         dp_packet_set_l2_pad_size(pkt, len_from_ipv4 - tot_len);
         return 0;
+}
+
+/* Fixup the VLAN CFI and PCP, reading the PCP from the input to this function,
+ * and storing the output CFI bit bitwise-OR-ed with the PCP to miniflow.
+ */
+static void
+mfex_vlan_pcp(const uint8_t vlan_pcp, uint64_t *block)
+{
+    /* Bitwise-OR in the CFI flag, keeping other data the same. */
+    uint8_t *cfi_byte = (uint8_t *) block;
+    cfi_byte[2] = 0x10 | vlan_pcp;
+}
+
+static void
+mfex_handle_tcp_flags(const struct tcp_header *tcp, uint64_t *block)
+{
+    uint16_t ctl = (OVS_FORCE uint16_t) TCP_FLAGS_BE16(tcp->tcp_ctl);
+    uint64_t ctl_u64 = ctl;
+    *block = ctl_u64 << 32;
 }
 
 /* Generic loop to process any mfex profile. This code is specialized into
@@ -381,6 +493,43 @@ mfex_avx512_process(struct dp_packet_batch *packets,
             ovs_assert(0); /* avoid compiler warning on missing ENUM */
             break;
 
+        case PROFILE_ETH_VLAN_IPV4_TCP: {
+                mfex_vlan_pcp(pkt[14], &keys[i].buf[4]);
+
+                uint32_t size_from_ipv4 = size - VLAN_ETH_HEADER_LEN;
+                struct ip_header *nh = (void *)&pkt[VLAN_ETH_HEADER_LEN];
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                    continue;
+                }
+
+                /* Process TCP flags, and store to blocks. */
+                const struct tcp_header *tcp = (void *)&pkt[38];
+                mfex_handle_tcp_flags(tcp, &blocks[7]);
+            } break;
+
+        case PROFILE_ETH_VLAN_IPV4_UDP: {
+                mfex_vlan_pcp(pkt[14], &keys[i].buf[4]);
+
+                uint32_t size_from_ipv4 = size - VLAN_ETH_HEADER_LEN;
+                struct ip_header *nh = (void *)&pkt[VLAN_ETH_HEADER_LEN];
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                    continue;
+                }
+            } break;
+
+        case PROFILE_ETH_IPV4_TCP: {
+                /* Process TCP flags, and store to blocks. */
+                const struct tcp_header *tcp = (void *)&pkt[34];
+                mfex_handle_tcp_flags(tcp, &blocks[6]);
+
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv4 = size - sizeof(struct eth_header);
+                struct ip_header *nh = (void *)&pkt[sizeof(struct eth_header)];
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                    continue;
+                }
+            } break;
+
         case PROFILE_ETH_IPV4_UDP: {
                 /* Handle dynamic l2_pad_size. */
                 uint32_t size_from_ipv4 = size - sizeof(struct eth_header);
@@ -432,6 +581,9 @@ mfex_avx512_##name(struct dp_packet_batch *packets,                     \
  * as required.
  */
 DECLARE_MFEX_FUNC(ip_udp, PROFILE_ETH_IPV4_UDP)
+DECLARE_MFEX_FUNC(ip_tcp, PROFILE_ETH_IPV4_TCP)
+DECLARE_MFEX_FUNC(dot1q_ip_udp, PROFILE_ETH_VLAN_IPV4_UDP)
+DECLARE_MFEX_FUNC(dot1q_ip_tcp, PROFILE_ETH_VLAN_IPV4_TCP)
 
 
 static int32_t

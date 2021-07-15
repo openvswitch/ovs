@@ -84,6 +84,12 @@ enum dpif_miniflow_extract_impl_idx {
 #if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
     MFEX_IMPL_VMBI_IPv4_UDP,
     MFEX_IMPL_IPv4_UDP,
+    MFEX_IMPL_VMBI_IPv4_TCP,
+    MFEX_IMPL_IPv4_TCP,
+    MFEX_IMPL_VMBI_DOT1Q_IPv4_UDP,
+    MFEX_IMPL_DOT1Q_IPv4_UDP,
+    MFEX_IMPL_VMBI_DOT1Q_IPv4_TCP,
+    MFEX_IMPL_DOT1Q_IPv4_TCP,
 #endif
     MFEX_IMPL_MAX
 };
@@ -188,6 +194,10 @@ int32_t mfex_avx512_vbmi_probe(void);
                         *pmd_handle);                                       \
 
 DECLARE_AVX512_MFEX_PROTOTYPE(ip_udp);
+DECLARE_AVX512_MFEX_PROTOTYPE(ip_tcp);
+DECLARE_AVX512_MFEX_PROTOTYPE(dot1q_ip_udp);
+DECLARE_AVX512_MFEX_PROTOTYPE(dot1q_ip_tcp);
+
 #endif /* __x86_64__ */
 
 #endif /* MFEX_AVX512_EXTRACT */

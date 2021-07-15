@@ -64,6 +64,36 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
         .probe = mfex_avx512_probe,
         .extract_func = mfex_avx512_ip_udp,
         .name = "avx512_ipv4_udp", },
+
+    [MFEX_IMPL_VMBI_IPv4_TCP] = {
+        .probe = mfex_avx512_vbmi_probe,
+        .extract_func = mfex_avx512_vbmi_ip_tcp,
+        .name = "avx512_vbmi_ipv4_tcp", },
+
+    [MFEX_IMPL_IPv4_TCP] = {
+        .probe = mfex_avx512_probe,
+        .extract_func = mfex_avx512_ip_tcp,
+        .name = "avx512_ipv4_tcp", },
+
+    [MFEX_IMPL_VMBI_DOT1Q_IPv4_UDP] = {
+        .probe = mfex_avx512_vbmi_probe,
+        .extract_func = mfex_avx512_vbmi_dot1q_ip_udp,
+        .name = "avx512_vbmi_dot1q_ipv4_udp", },
+
+    [MFEX_IMPL_DOT1Q_IPv4_UDP] = {
+        .probe = mfex_avx512_probe,
+        .extract_func = mfex_avx512_dot1q_ip_udp,
+        .name = "avx512_dot1q_ipv4_udp", },
+
+    [MFEX_IMPL_VMBI_DOT1Q_IPv4_TCP] = {
+        .probe = mfex_avx512_vbmi_probe,
+        .extract_func = mfex_avx512_vbmi_dot1q_ip_tcp,
+        .name = "avx512_vbmi_dot1q_ipv4_tcp", },
+
+    [MFEX_IMPL_DOT1Q_IPv4_TCP] = {
+        .probe = mfex_avx512_probe,
+        .extract_func = mfex_avx512_dot1q_ip_tcp,
+        .name = "avx512_dot1q_ipv4_tcp", },
 #endif
 };
 
