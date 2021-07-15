@@ -346,3 +346,59 @@ A compile time option is available in order to test it with the OVS unit
 test suite. Use the following configure option ::
 
     $ ./configure --enable-mfex-default-autovalidator
+
+Unit Test Miniflow Extract
+++++++++++++++++++++++++++
+
+Unit test can also be used to test the workflow mentioned above by running
+the following test-case in tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Autovalidator
+
+The unit test uses mulitple traffic type to test the correctness of the
+implementaions.
+
+The MFEX commands can also be tested for negative and positive cases to
+verify that the MFEX set command does not allow for incorrect parameters.
+A user can directly run the following configuration test case in
+tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Configuration
+
+Running Fuzzy test with Autovalidator
++++++++++++++++++++++++++++++++++++++
+
+Fuzzy tests can also be done on miniflow extract with the help of
+auto-validator and Scapy. The steps below describes the steps to
+reproduce the setup with IP being fuzzed to generate packets.
+
+Scapy is used to create fuzzy IP packets and save them into a PCAP ::
+
+    pkt = fuzz(Ether()/IP()/TCP())
+
+Set the miniflow extract to autovalidator using ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
+
+OVS is configured to receive the generated packets ::
+
+    $ ovs-vsctl add-port br0 pcap0 -- \
+        set Interface pcap0 type=dpdk options:dpdk-devargs=net_pcap0
+        "rx_pcap=fuzzy.pcap"
+
+With this workflow, the autovalidator will ensure that all MFEX
+implementations are classifying each packet in exactly the same way.
+If an optimized MFEX implementation causes a different miniflow to be
+generated, the autovalidator has ovs_assert and logging statements that
+will inform about the issue.
+
+Unit Fuzzy test with Autovalidator
++++++++++++++++++++++++++++++++++++++
+
+Unit test can also be used to test the workflow mentioned above by running
+the following test-case in tests/system-dpdk.at ::
+
+    make check-dpdk TESTSUITEFLAGS='-k MFEX'
+    OVS-DPDK - MFEX Autovalidator Fuzzy

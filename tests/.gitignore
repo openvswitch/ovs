@@ -11,6 +11,7 @@
 /ovsdb-cluster-testsuite
 /ovsdb-cluster-testsuite.dir/
 /ovsdb-cluster-testsuite.log
+/pcap/
 /pki/
 /system-afxdp-testsuite
 /system-afxdp-testsuite.dir/
