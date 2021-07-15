@@ -217,6 +217,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         int found_opts = 0, scan, found_pos = -1;
         const char *found_value;
         struct dpdk_exclusive_options_map *popt = &excl_opts[i];
+        bool using_default = false;
 
         for (scan = 0; scan < MAX_DPDK_EXCL_OPTS
                  && popt->ovs_dpdk_options[scan]; ++scan) {
@@ -233,6 +234,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
             if (popt->default_option) {
                 found_pos = popt->default_option;
                 found_value = popt->default_value;
+                using_default = true;
             } else {
                 continue;
             }
@@ -245,6 +247,12 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         }
 
         if (!args_contains(args, popt->eal_dpdk_options[found_pos])) {
+            if (using_default) {
+                VLOG_INFO("Using default value for '%s'. OVS will no longer "
+                          "provide a default for this argument starting "
+                          "from 2.17 release. DPDK defaults will be used "
+                          "instead.", popt->eal_dpdk_options[found_pos]);
+            }
             svec_add(args, popt->eal_dpdk_options[found_pos]);
             svec_add(args, found_value);
         } else {
@@ -482,6 +490,10 @@ dpdk_init__(const struct smap *ovs_other_config)
         if (i < args.n - 1) {
             svec_add(&args, "--socket-limit");
             svec_add(&args, args.names[i + 1]);
+            VLOG_INFO("Using default value for '--socket-limit'. OVS will no "
+                      "longer provide a default for this argument starting "
+                      "from 2.17 release. DPDK defaults will be used "
+                      "instead.");
         }
     }
 

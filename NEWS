@@ -63,6 +63,8 @@ Post-v2.15.0
        Available only if DPDK experimantal APIs enabled during the build.
      * Add hardware offload support for VXLAN flows (experimental).
        Available only if DPDK experimantal APIs enabled during the build.
+     * EAL options --socket-mem and --socket-limit to have default values
+       removed with 2.17 release. Logging added to alert users.
    - ovsdb-tool:
      * New option '--election-timer' to the 'create-cluster' command to set the
        leader election timer during cluster creation.
