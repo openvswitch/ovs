@@ -38,6 +38,11 @@ static ATOMIC(miniflow_extract_func) default_mfex_func;
  */
 static struct dpif_miniflow_extract_impl mfex_impls[] = {
 
+    [MFEX_IMPL_AUTOVALIDATOR] = {
+        .probe = NULL,
+        .extract_func = dpif_miniflow_extract_autovalidator,
+        .name = "autovalidator", },
+
     [MFEX_IMPL_SCALAR] = {
         .probe = NULL,
         .extract_func = NULL,
@@ -159,4 +164,149 @@ dp_mfex_impl_get_by_name(const char *name, miniflow_extract_func *out_func)
     }
 
     return -ENOENT;
+}
+
+uint32_t
+dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
+                                    struct netdev_flow_key *keys,
+                                    uint32_t keys_size, odp_port_t in_port,
+                                    struct dp_netdev_pmd_thread *pmd_handle)
+{
+    const size_t cnt = dp_packet_batch_size(packets);
+    uint16_t good_l2_5_ofs[NETDEV_MAX_BURST];
+    uint16_t good_l3_ofs[NETDEV_MAX_BURST];
+    uint16_t good_l4_ofs[NETDEV_MAX_BURST];
+    uint16_t good_l2_pad_size[NETDEV_MAX_BURST];
+    struct dp_packet *packet;
+    struct dp_netdev_pmd_thread *pmd = pmd_handle;
+    struct netdev_flow_key test_keys[NETDEV_MAX_BURST];
+
+    if (keys_size < cnt) {
+        miniflow_extract_func default_func = NULL;
+        atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
+        atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
+        VLOG_ERR("Invalid key size supplied, Key_size: %d less than"
+                 "batch_size:  %" PRIuSIZE"\n", keys_size, cnt);
+        VLOG_ERR("Autovalidatior is disabled.\n");
+        return 0;
+    }
+
+    /* Run scalar miniflow_extract to get default result. */
+    DP_PACKET_BATCH_FOR_EACH (i, packet, packets) {
+        pkt_metadata_init(&packet->md, in_port);
+        miniflow_extract(packet, &keys[i].mf);
+
+        /* Store known good metadata to compare with optimized metadata. */
+        good_l2_5_ofs[i] = packet->l2_5_ofs;
+        good_l3_ofs[i] = packet->l3_ofs;
+        good_l4_ofs[i] = packet->l4_ofs;
+        good_l2_pad_size[i] = packet->l2_pad_size;
+    }
+
+    uint32_t batch_failed = 0;
+    /* Iterate through each version of miniflow implementations. */
+    for (int j = MFEX_IMPL_START_IDX; j < MFEX_IMPL_MAX; j++) {
+        if (!mfex_impls[j].available) {
+            continue;
+        }
+        /* Reset keys and offsets before each implementation. */
+        memset(test_keys, 0, keys_size * sizeof(struct netdev_flow_key));
+        DP_PACKET_BATCH_FOR_EACH (i, packet, packets) {
+            dp_packet_reset_offsets(packet);
+        }
+        /* Call optimized miniflow for each batch of packet. */
+        uint32_t hit_mask = mfex_impls[j].extract_func(packets, test_keys,
+                                                       keys_size, in_port,
+                                                       pmd_handle);
+
+        /* Do a miniflow compare for bits, blocks and offsets for all the
+         * classified packets in the hitmask marked by set bits. */
+        while (hit_mask) {
+            /* Index for the set bit. */
+            uint32_t i = raw_ctz(hit_mask);
+            /* Set the index in hitmask to Zero. */
+            hit_mask &= (hit_mask - 1);
+
+            uint32_t failed = 0;
+
+            struct ds log_msg = DS_EMPTY_INITIALIZER;
+            ds_put_format(&log_msg, "MFEX autovalidator pkt %d\n", i);
+
+            /* Check miniflow bits are equal. */
+            if ((keys[i].mf.map.bits[0] != test_keys[i].mf.map.bits[0]) ||
+                (keys[i].mf.map.bits[1] != test_keys[i].mf.map.bits[1])) {
+                ds_put_format(&log_msg, "Autovalidation map failed\n"
+                              "Good 0x%llx 0x%llx\tTest 0x%llx"
+                              " 0x%llx\n", keys[i].mf.map.bits[0],
+                              keys[i].mf.map.bits[1],
+                              test_keys[i].mf.map.bits[0],
+                              test_keys[i].mf.map.bits[1]);
+                failed = 1;
+            }
+
+            if (!miniflow_equal(&keys[i].mf, &test_keys[i].mf)) {
+                uint32_t block_cnt = miniflow_n_values(&keys[i].mf);
+                ds_put_format(&log_msg, "Autovalidation blocks failed\n"
+                              "nGood hex:\n");
+                ds_put_hex_dump(&log_msg, &keys[i].buf, block_cnt * 8, 0,
+                                false);
+                ds_put_format(&log_msg, "Test hex:\n");
+                ds_put_hex_dump(&log_msg, &test_keys[i].buf, block_cnt * 8, 0,
+                                false);
+                failed = 1;
+            }
+
+            packet = packets->packets[i];
+            if ((packet->l2_pad_size != good_l2_pad_size[i]) ||
+                    (packet->l2_5_ofs != good_l2_5_ofs[i]) ||
+                    (packet->l3_ofs != good_l3_ofs[i]) ||
+                    (packet->l4_ofs != good_l4_ofs[i])) {
+                ds_put_format(&log_msg, "Autovalidation packet offsets failed"
+                              "\n");
+                ds_put_format(&log_msg, "Good offsets: l2_pad_size %u,"
+                              " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                              good_l2_pad_size[i], good_l2_5_ofs[i],
+                              good_l3_ofs[i], good_l4_ofs[i]);
+                ds_put_format(&log_msg, "  Test offsets: l2_pad_size %u,"
+                              " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                              packet->l2_pad_size, packet->l2_5_ofs,
+                              packet->l3_ofs, packet->l4_ofs);
+                failed = 1;
+            }
+
+            if (failed) {
+                VLOG_ERR("Autovalidation for %s failed in pkt %d,"
+                         " disabling.", mfex_impls[j].name, i);
+                VLOG_ERR("Autovalidation failure details:\n%s",
+                         ds_cstr(&log_msg));
+                batch_failed = 1;
+            }
+            ds_destroy(&log_msg);
+        }
+    }
+
+    /* Having dumped the debug info for the batch, disable autovalidator. */
+    if (batch_failed) {
+        miniflow_extract_func default_func = NULL;
+        atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
+        atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
+    }
+
+    /* Preserve packet correctness by storing back the good offsets in
+     * packets back. */
+    DP_PACKET_BATCH_FOR_EACH (i, packet, packets) {
+        packet->l2_5_ofs = good_l2_5_ofs[i];
+        packet->l3_ofs = good_l3_ofs[i];
+        packet->l4_ofs = good_l4_ofs[i];
+        packet->l2_pad_size = good_l2_pad_size[i];
+    }
+
+    /* Returning zero implies no packets were hit by autovalidation. This
+     * simplifies unit-tests as changing --enable-mfex-default-autovalidator
+     * would pass/fail. By always returning zero, autovalidator is a little
+     * slower, but we gain consistency in testing. The auto-validator is only
+     * meant to test different implementaions against a batch of packets
+     * without incrementing hit counters.
+     */
+    return 0;
 }

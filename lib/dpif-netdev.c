@@ -1136,8 +1136,8 @@ dpif_miniflow_extract_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_put_format(&reply, "Miniflow Extract implementation set to %s",
                   mfex_name);
     const char *reply_str = ds_cstr(&reply);
-    unixctl_command_reply(conn, reply_str);
     VLOG_INFO("%s", reply_str);
+    unixctl_command_reply(conn, reply_str);
     ds_destroy(&reply);
 }
 
