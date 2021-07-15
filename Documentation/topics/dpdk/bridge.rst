@@ -256,3 +256,54 @@ The following line should be seen in the configure output when the above option
 is used ::
 
     checking whether DPIF AVX512 is default implementation... yes
+
+Miniflow Extract
+----------------
+
+Miniflow extract (MFEX) performs parsing of the raw packets and extracts the
+important header information into a compressed miniflow. This miniflow is
+composed of bits and blocks where the bits signify which blocks are set or
+have values where as the blocks hold the metadata, ip, udp, vlan, etc. These
+values are used by the datapath for switching decisions later. The Optimized
+miniflow extract is traffic specific to speed up the lookup, whereas the
+scalar works for ALL traffic patterns
+
+Most modern CPUs have SIMD capabilities. These SIMD instructions are able
+to process a vector rather than act on one variable. OVS provides multiple
+implementations of miniflow extract. This allows the user to take advantage
+of SIMD instructions like AVX512 to gain additional performance.
+
+A list of implementations can be obtained by the following command. The
+command also shows whether the CPU supports each implementation ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-get
+        Available Optimized Miniflow Extracts:
+            autovalidator (available: True, pmds: none)
+            scalar (available: True, pmds: 1,15)
+            study (available: True, pmds: none)
+
+An implementation can be selected manually by the following command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set study
+
+Also user can select the study implementation which studies the traffic for
+a specific number of packets by applying all available implementations of
+miniflow extract and then chooses the one with the most optimal result for
+that traffic pattern.
+
+Miniflow Extract Validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As multiple versions of miniflow extract can co-exist, each with different
+CPU ISA optimizations, it is important to validate that they all give the
+exact same results. To easily test all miniflow implementations, an
+``autovalidator`` implementation of the miniflow exists. This implementation
+runs all other available miniflow extract implementations, and verifies that
+the results are identical.
+
+Running the OVS unit tests with the autovalidator enabled ensures all
+implementations provide the same results.
+
+To set the Miniflow autovalidator, use this command ::
+
+    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
