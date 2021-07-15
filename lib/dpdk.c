@@ -706,6 +706,8 @@ dpdk_get_cpu_has_isa(const char *arch, const char *feature)
 #if __x86_64__
     /* CPU flags only defined for the architecture that support it. */
     CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
+    CHECK_CPU_FEATURE(feature, "avx512bw", RTE_CPUFLAG_AVX512BW);
+    CHECK_CPU_FEATURE(feature, "avx512vbmi", RTE_CPUFLAG_AVX512VBMI);
     CHECK_CPU_FEATURE(feature, "avx512vpopcntdq", RTE_CPUFLAG_AVX512VPOPCNTDQ);
     CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
 #endif

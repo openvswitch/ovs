@@ -43,6 +43,7 @@ Post-v2.15.0
        traffic.
      * Add build time configure command to enable auto-validatior as default
        miniflow implementation at build time.
+     * Cache results for CPU ISA checks, reduces overhead on repeated lookups.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
