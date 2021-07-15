@@ -60,7 +60,11 @@ void
 dpif_miniflow_extract_init(void)
 {
     atomic_uintptr_t *mfex_func = (void *)&default_mfex_func;
+#ifdef MFEX_AUTOVALIDATOR_DEFAULT
+    int mfex_idx = MFEX_IMPL_AUTOVALIDATOR;
+#else
     int mfex_idx = MFEX_IMPL_SCALAR;
+#endif
 
     /* Call probe on each impl, and cache the result. */
     for (int i = 0; i < MFEX_IMPL_MAX; i++) {
