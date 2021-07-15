@@ -35,6 +35,7 @@ Post-v2.15.0
      * Enable the AVX512 DPCLS implementation to use VPOPCNT instruction if the
        CPU supports it. This enhances performance by using the native vpopcount
        instructions, instead of the emulated version of vpopcount.
+     * Add command line option to switch between MFEX function pointers.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
