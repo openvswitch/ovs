@@ -25,7 +25,7 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif_mfex_extract_study);
 
-static atomic_uint32_t mfex_study_pkts_count = 0;
+static atomic_uint32_t mfex_study_pkts_count = MFEX_MAX_PKT_COUNT;
 
 /* Struct to hold miniflow study stats. */
 struct study_stats {
@@ -46,6 +46,25 @@ mfex_study_get_study_stats_ptr(void)
         study_stats_set_unsafe(stats);
     }
     return stats;
+}
+
+int
+mfex_set_study_pkt_cnt(uint32_t pkt_cmp_count, const char *name)
+{
+    struct dpif_miniflow_extract_impl *miniflow_funcs;
+    miniflow_funcs = dpif_mfex_impl_info_get();
+
+    /* If the packet count is set and implementation called is study then
+     * set packet counter to requested number else return -EINVAL.
+     */
+    if ((strcmp(miniflow_funcs[MFEX_IMPL_STUDY].name, name) == 0) &&
+        (pkt_cmp_count != 0)) {
+
+        atomic_store_relaxed(&mfex_study_pkts_count, pkt_cmp_count);
+        return 0;
+    }
+
+    return -EINVAL;
 }
 
 uint32_t
@@ -86,7 +105,10 @@ mfex_study_traffic(struct dp_packet_batch *packets,
     /* Choose the best implementation after a minimum packets have been
      * processed.
      */
-    if (stats->pkt_count >= MFEX_MAX_PKT_COUNT) {
+    uint32_t study_cnt_pkts;
+    atomic_read_relaxed(&mfex_study_pkts_count, &study_cnt_pkts);
+
+    if (stats->pkt_count >= study_cnt_pkts) {
         uint32_t best_func_index = MFEX_IMPL_START_IDX;
         uint32_t max_hits = 0;
         for (int i = MFEX_IMPL_START_IDX; i < MFEX_IMPL_MAX; i++) {
