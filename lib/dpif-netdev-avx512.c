@@ -310,8 +310,11 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
     }
 
     /* At this point we don't return error anymore, so commit stats here. */
+    uint32_t mfex_hit_cnt = __builtin_popcountll(mf_mask);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_RECV, batch_size);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, phwol_hits);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MFEX_OPT_HIT,
+                            mfex_hit_cnt);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, emc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SMC_HIT, smc_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_HIT,
