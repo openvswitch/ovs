@@ -81,6 +81,10 @@ enum dpif_miniflow_extract_impl_idx {
     MFEX_IMPL_AUTOVALIDATOR,
     MFEX_IMPL_SCALAR,
     MFEX_IMPL_STUDY,
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+    MFEX_IMPL_VMBI_IPv4_UDP,
+    MFEX_IMPL_IPv4_UDP,
+#endif
     MFEX_IMPL_MAX
 };
 
@@ -89,8 +93,14 @@ extern struct ovs_mutex dp_netdev_mutex;
 /* Define a index which points to the first traffic optimized MFEX
  * option from the enum list else holds max value.
  */
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+
+#define MFEX_IMPL_START_IDX MFEX_IMPL_VMBI_IPv4_UDP
+#else
 
 #define MFEX_IMPL_START_IDX MFEX_IMPL_MAX
+
+#endif
 
 /* Max count of packets to be compared. */
 #define MFEX_MAX_PKT_COUNT (128)
@@ -159,5 +169,25 @@ mfex_study_traffic(struct dp_packet_batch *packets,
  */
 int
 mfex_set_study_pkt_cnt(uint32_t pkt_cmp_count, const char *name);
+
+/* AVX512 MFEX Probe and Implementations functions. */
+#ifdef __x86_64__
+int32_t mfex_avx512_probe(void);
+int32_t mfex_avx512_vbmi_probe(void);
+
+#define DECLARE_AVX512_MFEX_PROTOTYPE(name)                                 \
+    uint32_t                                                                \
+    mfex_avx512_vbmi_##name(struct dp_packet_batch *packets,                \
+                            struct netdev_flow_key *keys, uint32_t keys_size,\
+                            odp_port_t in_port, struct dp_netdev_pmd_thread \
+                            *pmd_handle);                                   \
+    uint32_t                                                                \
+    mfex_avx512_##name(struct dp_packet_batch *packets,                     \
+                        struct netdev_flow_key *keys, uint32_t keys_size,   \
+                        odp_port_t in_port, struct dp_netdev_pmd_thread     \
+                        *pmd_handle);                                       \
+
+DECLARE_AVX512_MFEX_PROTOTYPE(ip_udp);
+#endif /* __x86_64__ */
 
 #endif /* MFEX_AVX512_EXTRACT */
