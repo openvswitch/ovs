@@ -80,6 +80,7 @@ struct dpif_miniflow_extract_impl {
 enum dpif_miniflow_extract_impl_idx {
     MFEX_IMPL_AUTOVALIDATOR,
     MFEX_IMPL_SCALAR,
+    MFEX_IMPL_STUDY,
     MFEX_IMPL_MAX
 };
 
@@ -90,6 +91,9 @@ extern struct ovs_mutex dp_netdev_mutex;
  */
 
 #define MFEX_IMPL_START_IDX MFEX_IMPL_MAX
+
+/* Max count of packets to be compared. */
+#define MFEX_MAX_PKT_COUNT (128)
 
 /* This function returns all available implementations to the caller. The
  * quantity of implementations is returned by the int return value.
@@ -111,6 +115,9 @@ miniflow_extract_func dp_mfex_impl_get_default(void);
 /* Overrides the default MFEX with the user set MFEX. */
 int dp_mfex_impl_set_default_by_name(const char *name);
 
+/* Retrieve the array of miniflow implementations for iteration. */
+struct dpif_miniflow_extract_impl *
+dpif_mfex_impl_info_get(void);
 
 /* Initializes the available miniflow extract implementations by probing for
  * the CPU ISA requirements. As the runtime available CPU ISA does not change
@@ -131,5 +138,17 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *batch,
                                     struct netdev_flow_key *keys,
                                     uint32_t keys_size, odp_port_t in_port,
                                     struct dp_netdev_pmd_thread *pmd_handle);
+
+/* Retrieve the number of packets by studying packets using different miniflow
+ * implementations to choose the best implementation using the maximum hitmask
+ * count.
+ * On error, returns a zero for no packets.
+ * On success, returns mask of the packets hit.
+ */
+uint32_t
+mfex_study_traffic(struct dp_packet_batch *packets,
+                   struct netdev_flow_key *keys,
+                   uint32_t keys_size, odp_port_t in_port,
+                   struct dp_netdev_pmd_thread *pmd_handle);
 
 #endif /* MFEX_AVX512_EXTRACT */

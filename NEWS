@@ -38,6 +38,9 @@ Post-v2.15.0
      * Add command line option to switch between MFEX function pointers.
      * Add miniflow extract auto-validator function to compare different
        miniflow extract implementations against default implementation.
+     * Add study function to miniflow function table which studies packet
+       and automatically chooses the best miniflow implementation for that
+       traffic.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.
