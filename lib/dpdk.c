@@ -130,74 +130,12 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
     }
 }
 
-static int
-compare_numa_node_list(const void *a_, const void *b_)
-{
-    int a = *(const int *) a_;
-    int b = *(const int *) b_;
-
-    if (a < b) {
-        return -1;
-    }
-    if (a > b) {
-        return 1;
-    }
-    return 0;
-}
-
-static char *
-construct_dpdk_socket_mem(void)
-{
-    const char *def_value = "1024";
-    struct ds dpdk_socket_mem = DS_EMPTY_INITIALIZER;
-
-    /* Build a list of all numa nodes with at least one core. */
-    struct ovs_numa_dump *dump = ovs_numa_dump_n_cores_per_numa(1);
-    size_t n_numa_nodes = hmap_count(&dump->numas);
-    int *numa_node_list = xcalloc(n_numa_nodes, sizeof *numa_node_list);
-
-    const struct ovs_numa_info_numa *node;
-    int k = 0, last_node = 0;
-
-    FOR_EACH_NUMA_ON_DUMP(node, dump) {
-        if (k >= n_numa_nodes) {
-            break;
-        }
-        numa_node_list[k++] = node->numa_id;
-    }
-    qsort(numa_node_list, k, sizeof *numa_node_list, compare_numa_node_list);
-
-    for (int i = 0; i < n_numa_nodes; i++) {
-        while (numa_node_list[i] > last_node &&
-               numa_node_list[i] != OVS_NUMA_UNSPEC &&
-               numa_node_list[i] <= MAX_NUMA_NODES) {
-            if (last_node == 0) {
-                ds_put_format(&dpdk_socket_mem, "%s", "0");
-            } else {
-                ds_put_format(&dpdk_socket_mem, ",%s", "0");
-            }
-            last_node++;
-        }
-        if (numa_node_list[i] == 0) {
-            ds_put_format(&dpdk_socket_mem, "%s", def_value);
-        } else {
-            ds_put_format(&dpdk_socket_mem, ",%s", def_value);
-        }
-        last_node++;
-    }
-    free(numa_node_list);
-    ovs_numa_dump_destroy(dump);
-    return ds_cstr(&dpdk_socket_mem);
-}
-
 #define MAX_DPDK_EXCL_OPTS 10
 
 static void
 construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                              struct svec *args)
 {
-    char *default_dpdk_socket_mem = construct_dpdk_socket_mem();
-
     struct dpdk_exclusive_options_map {
         const char *category;
         const char *ovs_dpdk_options[MAX_DPDK_EXCL_OPTS];
@@ -208,7 +146,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         {"memory type",
          {"dpdk-alloc-mem", "dpdk-socket-mem", NULL,},
          {"-m",             "--socket-mem",    NULL,},
-         default_dpdk_socket_mem, 1
+         NULL, 0
         },
     };
 
@@ -217,7 +155,6 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         int found_opts = 0, scan, found_pos = -1;
         const char *found_value;
         struct dpdk_exclusive_options_map *popt = &excl_opts[i];
-        bool using_default = false;
 
         for (scan = 0; scan < MAX_DPDK_EXCL_OPTS
                  && popt->ovs_dpdk_options[scan]; ++scan) {
@@ -234,7 +171,6 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
             if (popt->default_option) {
                 found_pos = popt->default_option;
                 found_value = popt->default_value;
-                using_default = true;
             } else {
                 continue;
             }
@@ -247,12 +183,6 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         }
 
         if (!args_contains(args, popt->eal_dpdk_options[found_pos])) {
-            if (using_default) {
-                VLOG_INFO("Using default value for '%s'. OVS will no longer "
-                          "provide a default for this argument starting "
-                          "from 2.17 release. DPDK defaults will be used "
-                          "instead.", popt->eal_dpdk_options[found_pos]);
-            }
             svec_add(args, popt->eal_dpdk_options[found_pos]);
             svec_add(args, found_value);
         } else {
@@ -260,8 +190,6 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                       "dpdk-extra config", popt->eal_dpdk_options[found_pos]);
         }
     }
-
-    free(default_dpdk_socket_mem);
 }
 
 static void

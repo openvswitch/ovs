@@ -362,12 +362,14 @@
           preallocate 2048MB and socket 3 (no value given) to preallocate 0MB.
         </p>
         <p>
-          If dpdk-socket-mem and dpdk-alloc-mem are not specified, dpdk-socket-mem
-          will be used and the default value is 1024 for each numa node. If
-          dpdk-socket-mem and dpdk-alloc-mem are specified at same time,
-          dpdk-socket-mem will be used as default. With the 2.17 release,
-          dpdk-socket-mem will no longer be used by default. DPDK defaults will
-          be used instead.
+          If <ref column="other_config" key="dpdk-socket-mem"/> and
+          <ref column="other_config" key="dpdk-alloc-mem"/> are not specified,
+          neither will be used and there will be no default value for each numa
+          node.  DPDK defaults will be used instead.
+          If <ref column="other_config" key="dpdk-socket-mem"/> and
+          <ref column="other_config" key="dpdk-alloc-mem"/> are specified at
+          the same time, <ref column="other_config" key="dpdk-socket-mem"/>
+          will be used as default.
           Changing this value requires restarting the daemon.
         </p>
       </column>
@@ -389,9 +391,7 @@
           <ref column="other_config" key="dpdk-extra"/>. If none of the above
           options specified or <code>--legacy-mem</code> provided in
           <ref column="other_config" key="dpdk-extra"/>, limits will not be
-          applied.
-          With the 2.17 release, the OVS default value will no longer be
-          provided, and DPDK defaults will be used instead.
+          applied. There is no default value from OVS.
           Changing this value requires restarting the daemon.
         </p>
       </column>
