@@ -4753,140 +4753,6 @@ port_reconfigure(struct dp_netdev_port *port)
     return 0;
 }
 
-struct rr_numa_list {
-    struct hmap numas;  /* Contains 'struct rr_numa' */
-};
-
-struct rr_numa {
-    struct hmap_node node;
-
-    int numa_id;
-
-    /* Non isolated pmds on numa node 'numa_id' */
-    struct dp_netdev_pmd_thread **pmds;
-    int n_pmds;
-
-    int cur_index;
-    bool idx_inc;
-};
-
-static size_t
-rr_numa_list_count(struct rr_numa_list *rr)
-{
-    return hmap_count(&rr->numas);
-}
-
-static struct rr_numa *
-rr_numa_list_lookup(struct rr_numa_list *rr, int numa_id)
-{
-    struct rr_numa *numa;
-
-    HMAP_FOR_EACH_WITH_HASH (numa, node, hash_int(numa_id, 0), &rr->numas) {
-        if (numa->numa_id == numa_id) {
-            return numa;
-        }
-    }
-
-    return NULL;
-}
-
-/* Returns the next node in numa list following 'numa' in round-robin fashion.
- * Returns first node if 'numa' is a null pointer or the last node in 'rr'.
- * Returns NULL if 'rr' numa list is empty. */
-static struct rr_numa *
-rr_numa_list_next(struct rr_numa_list *rr, const struct rr_numa *numa)
-{
-    struct hmap_node *node = NULL;
-
-    if (numa) {
-        node = hmap_next(&rr->numas, &numa->node);
-    }
-    if (!node) {
-        node = hmap_first(&rr->numas);
-    }
-
-    return (node) ? CONTAINER_OF(node, struct rr_numa, node) : NULL;
-}
-
-static void
-rr_numa_list_populate(struct dp_netdev *dp, struct rr_numa_list *rr)
-{
-    struct dp_netdev_pmd_thread *pmd;
-    struct rr_numa *numa;
-
-    hmap_init(&rr->numas);
-
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        if (pmd->core_id == NON_PMD_CORE_ID || pmd->isolated) {
-            continue;
-        }
-
-        numa = rr_numa_list_lookup(rr, pmd->numa_id);
-        if (!numa) {
-            numa = xzalloc(sizeof *numa);
-            numa->numa_id = pmd->numa_id;
-            hmap_insert(&rr->numas, &numa->node, hash_int(pmd->numa_id, 0));
-        }
-        numa->n_pmds++;
-        numa->pmds = xrealloc(numa->pmds, numa->n_pmds * sizeof *numa->pmds);
-        numa->pmds[numa->n_pmds - 1] = pmd;
-        /* At least one pmd so initialise curr_idx and idx_inc. */
-        numa->cur_index = 0;
-        numa->idx_inc = true;
-    }
-}
-
-/*
- * Returns the next pmd from the numa node.
- *
- * If 'updown' is 'true' it will alternate between selecting the next pmd in
- * either an up or down walk, switching between up/down when the first or last
- * core is reached. e.g. 1,2,3,3,2,1,1,2...
- *
- * If 'updown' is 'false' it will select the next pmd wrapping around when last
- * core reached. e.g. 1,2,3,1,2,3,1,2...
- */
-static struct dp_netdev_pmd_thread *
-rr_numa_get_pmd(struct rr_numa *numa, bool updown)
-{
-    int numa_idx = numa->cur_index;
-
-    if (numa->idx_inc == true) {
-        /* Incrementing through list of pmds. */
-        if (numa->cur_index == numa->n_pmds-1) {
-            /* Reached the last pmd. */
-            if (updown) {
-                numa->idx_inc = false;
-            } else {
-                numa->cur_index = 0;
-            }
-        } else {
-            numa->cur_index++;
-        }
-    } else {
-        /* Decrementing through list of pmds. */
-        if (numa->cur_index == 0) {
-            /* Reached the first pmd. */
-            numa->idx_inc = true;
-        } else {
-            numa->cur_index--;
-        }
-    }
-    return numa->pmds[numa_idx];
-}
-
-static void
-rr_numa_list_destroy(struct rr_numa_list *rr)
-{
-    struct rr_numa *numa;
-
-    HMAP_FOR_EACH_POP (numa, node, &rr->numas) {
-        free(numa->pmds);
-        free(numa);
-    }
-    hmap_destroy(&rr->numas);
-}
-
 struct sched_numa_list {
     struct hmap numas;  /* Contains 'struct sched_numa'. */
 };
@@ -5048,6 +4914,39 @@ sched_pmd_add_rxq(struct sched_pmd *sched_pmd, struct dp_netdev_rxq *rxq,
 }
 
 static void
+sched_numa_list_assignments(struct sched_numa_list *numa_list,
+                            struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    struct dp_netdev_port *port;
+
+    /* For each port. */
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        if (!netdev_is_pmd(port->netdev)) {
+            continue;
+        }
+        /* For each rxq on the port. */
+        for (unsigned qid = 0; qid < port->n_rxq; qid++) {
+            struct dp_netdev_rxq *rxq = &port->rxqs[qid];
+            struct sched_pmd *sched_pmd;
+            uint64_t proc_cycles = 0;
+
+            for (int i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
+                proc_cycles  += dp_netdev_rxq_get_intrvl_cycles(rxq, i);
+            }
+
+            sched_pmd = sched_pmd_find_by_pmd(numa_list, rxq->pmd);
+            if (sched_pmd) {
+                if (rxq->core_id != OVS_CORE_UNSPEC) {
+                    sched_pmd->isolated = true;
+                }
+                sched_pmd_add_rxq(sched_pmd, rxq, proc_cycles);
+            }
+        }
+    }
+}
+
+static void
 sched_numa_list_put_in_place(struct sched_numa_list *numa_list)
 {
     struct sched_numa *numa;
@@ -5068,6 +4967,33 @@ sched_numa_list_put_in_place(struct sched_numa_list *numa_list)
             }
         }
     }
+}
+
+static bool
+sched_numa_list_cross_numa_polling(struct sched_numa_list *numa_list)
+{
+    struct sched_numa *numa;
+
+    /* For each numa */
+    HMAP_FOR_EACH (numa, node, &numa_list->numas) {
+        /* For each pmd */
+        for (int i = 0; i < numa->n_pmds; i++) {
+            struct sched_pmd *sched_pmd;
+
+            sched_pmd = &numa->pmds[i];
+            /* For each rxq. */
+            for (unsigned k = 0; k < sched_pmd->n_rxq; k++) {
+                struct dp_netdev_rxq *rxq = sched_pmd->rxqs[k];
+
+                if (!sched_pmd->isolated &&
+                    rxq->pmd->numa_id !=
+                        netdev_get_numa_id(rxq->port->netdev)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 static unsigned
@@ -5372,6 +5298,105 @@ rxq_scheduling(struct dp_netdev *dp) OVS_REQUIRES(dp->port_mutex)
     sched_numa_list_put_in_place(&numa_list);
 
     sched_numa_list_free_entries(&numa_list);
+}
+
+static uint64_t variance(uint64_t a[], int n);
+
+static uint64_t
+sched_numa_list_variance(struct sched_numa_list *numa_list)
+{
+    struct sched_numa *numa;
+    uint64_t *percent_busy = NULL;
+    unsigned total_pmds = 0;
+    int n_proc = 0;
+    uint64_t var;
+
+    HMAP_FOR_EACH (numa, node, &numa_list->numas) {
+        total_pmds += numa->n_pmds;
+        percent_busy = xrealloc(percent_busy,
+                                total_pmds * sizeof *percent_busy);
+
+        for (unsigned i = 0; i < numa->n_pmds; i++) {
+            struct sched_pmd *sched_pmd;
+            uint64_t total_cycles = 0;
+
+            sched_pmd = &numa->pmds[i];
+            /* Exclude isolated PMDs from variance calculations. */
+            if (sched_pmd->isolated == true) {
+                continue;
+            }
+            /* Get the total pmd cycles for an interval. */
+            atomic_read_relaxed(&sched_pmd->pmd->intrvl_cycles, &total_cycles);
+
+            if (total_cycles) {
+                /* Estimate the cycles to cover all intervals. */
+                total_cycles *= PMD_RXQ_INTERVAL_MAX;
+                percent_busy[n_proc++] = (sched_pmd->pmd_proc_cycles * 100)
+                                             / total_cycles;
+            } else {
+                percent_busy[n_proc++] = 0;
+            }
+        }
+    }
+    var = variance(percent_busy, n_proc);
+    free(percent_busy);
+    return var;
+}
+
+static bool
+pmd_rebalance_dry_run(struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    struct sched_numa_list numa_list_cur;
+    struct sched_numa_list numa_list_est;
+    bool thresh_met = false;
+    uint64_t current_var, estimate_var;
+    uint64_t improvement = 0;
+
+    VLOG_DBG("PMD auto load balance performing dry run.");
+
+    /* Populate current assignments. */
+    sched_numa_list_populate(&numa_list_cur, dp);
+    sched_numa_list_assignments(&numa_list_cur, dp);
+
+    /* Populate estimated assignments. */
+    sched_numa_list_populate(&numa_list_est, dp);
+    sched_numa_list_schedule(&numa_list_est, dp,
+                             dp->pmd_rxq_assign_type, VLL_DBG);
+
+    /* Check if cross-numa polling, there is only one numa with PMDs. */
+    if (!sched_numa_list_cross_numa_polling(&numa_list_est) ||
+            sched_numa_list_count(&numa_list_est) == 1) {
+
+        /* Calculate variances. */
+        current_var = sched_numa_list_variance(&numa_list_cur);
+        estimate_var = sched_numa_list_variance(&numa_list_est);
+
+        if (estimate_var < current_var) {
+             improvement = ((current_var - estimate_var) * 100) / current_var;
+        }
+        VLOG_DBG("Current variance %"PRIu64" Estimated variance %"PRIu64".",
+                 current_var, estimate_var);
+        VLOG_DBG("Variance improvement %"PRIu64"%%.", improvement);
+
+        if (improvement >= dp->pmd_alb.rebalance_improve_thresh) {
+            thresh_met = true;
+            VLOG_DBG("PMD load variance improvement threshold %u%% "
+                     "is met.", dp->pmd_alb.rebalance_improve_thresh);
+        } else {
+            VLOG_DBG("PMD load variance improvement threshold "
+                     "%u%% is not met.",
+                      dp->pmd_alb.rebalance_improve_thresh);
+        }
+    } else {
+        VLOG_DBG("PMD auto load balance detected cross-numa polling with "
+                 "multiple numa nodes. Unable to accurately estimate.");
+    }
+
+    sched_numa_list_free_entries(&numa_list_cur);
+    sched_numa_list_free_entries(&numa_list_est);
+
+    return thresh_met;
 }
 
 static void
@@ -5755,217 +5780,6 @@ variance(uint64_t a[], int n)
     return (sqDiff ? (sqDiff / n) : 0);
 }
 
-
-/* Returns the variance in the PMDs usage as part of dry run of rxqs
- * assignment to PMDs. */
-static bool
-get_dry_run_variance(struct dp_netdev *dp, uint32_t *core_list,
-                     uint32_t num_pmds, uint64_t *predicted_variance)
-    OVS_REQUIRES(dp->port_mutex)
-{
-    struct dp_netdev_port *port;
-    struct dp_netdev_pmd_thread *pmd;
-    struct dp_netdev_rxq **rxqs = NULL;
-    struct rr_numa *numa = NULL;
-    struct rr_numa_list rr;
-    int n_rxqs = 0;
-    bool ret = false;
-    uint64_t *pmd_usage;
-
-    if (!predicted_variance) {
-        return ret;
-    }
-
-    pmd_usage = xcalloc(num_pmds, sizeof(uint64_t));
-
-    HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (!netdev_is_pmd(port->netdev)) {
-            continue;
-        }
-
-        for (int qid = 0; qid < port->n_rxq; qid++) {
-            struct dp_netdev_rxq *q = &port->rxqs[qid];
-            uint64_t cycle_hist = 0;
-
-            if (q->pmd->isolated) {
-                continue;
-            }
-
-            if (n_rxqs == 0) {
-                rxqs = xmalloc(sizeof *rxqs);
-            } else {
-                rxqs = xrealloc(rxqs, sizeof *rxqs * (n_rxqs + 1));
-            }
-
-            /* Sum the queue intervals and store the cycle history. */
-            for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
-                cycle_hist += dp_netdev_rxq_get_intrvl_cycles(q, i);
-            }
-            dp_netdev_rxq_set_cycles(q, RXQ_CYCLES_PROC_HIST,
-                                         cycle_hist);
-            /* Store the queue. */
-            rxqs[n_rxqs++] = q;
-        }
-    }
-    if (n_rxqs > 1) {
-        /* Sort the queues in order of the processing cycles
-         * they consumed during their last pmd interval. */
-        qsort(rxqs, n_rxqs, sizeof *rxqs, compare_rxq_cycles);
-    }
-    rr_numa_list_populate(dp, &rr);
-
-    for (int i = 0; i < n_rxqs; i++) {
-        int numa_id = netdev_get_numa_id(rxqs[i]->port->netdev);
-        numa = rr_numa_list_lookup(&rr, numa_id);
-        /* If there is no available pmd on the local numa but there is only one
-         * numa for cross-numa polling, we can estimate the dry run. */
-        if (!numa && rr_numa_list_count(&rr) == 1) {
-            numa = rr_numa_list_next(&rr, NULL);
-        }
-        if (!numa) {
-            VLOG_DBG("PMD auto lb dry run: "
-                     "There's no available (non-isolated) PMD thread on NUMA "
-                     "node %d for port '%s' and there are PMD threads on more "
-                     "than one NUMA node available for cross-NUMA polling. "
-                     "Aborting.", numa_id, netdev_rxq_get_name(rxqs[i]->rx));
-            goto cleanup;
-        }
-
-        pmd = rr_numa_get_pmd(numa, true);
-        VLOG_DBG("PMD auto lb dry run. Predicted: Core %d on numa node %d "
-                  "to be assigned port \'%s\' rx queue %d "
-                  "(measured processing cycles %"PRIu64").",
-                  pmd->core_id, numa_id,
-                  netdev_rxq_get_name(rxqs[i]->rx),
-                  netdev_rxq_get_queue_id(rxqs[i]->rx),
-                  dp_netdev_rxq_get_cycles(rxqs[i], RXQ_CYCLES_PROC_HIST));
-
-        for (int id = 0; id < num_pmds; id++) {
-            if (pmd->core_id == core_list[id]) {
-                /* Add the processing cycles of rxq to pmd polling it. */
-                pmd_usage[id] += dp_netdev_rxq_get_cycles(rxqs[i],
-                                        RXQ_CYCLES_PROC_HIST);
-            }
-        }
-    }
-
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        uint64_t total_cycles = 0;
-
-        if ((pmd->core_id == NON_PMD_CORE_ID) || pmd->isolated) {
-            continue;
-        }
-
-        /* Get the total pmd cycles for an interval. */
-        atomic_read_relaxed(&pmd->intrvl_cycles, &total_cycles);
-        /* Estimate the cycles to cover all intervals. */
-        total_cycles *= PMD_RXQ_INTERVAL_MAX;
-        for (int id = 0; id < num_pmds; id++) {
-            if (pmd->core_id == core_list[id]) {
-                if (pmd_usage[id]) {
-                    pmd_usage[id] = (pmd_usage[id] * 100) / total_cycles;
-                }
-                VLOG_DBG("PMD auto lb dry run. Predicted: Core %d, "
-                         "usage %"PRIu64"", pmd->core_id, pmd_usage[id]);
-            }
-        }
-    }
-    *predicted_variance = variance(pmd_usage, num_pmds);
-    ret = true;
-
-cleanup:
-    rr_numa_list_destroy(&rr);
-    free(rxqs);
-    free(pmd_usage);
-    return ret;
-}
-
-/* Does the dry run of Rxq assignment to PMDs and returns true if it gives
- * better distribution of load on PMDs. */
-static bool
-pmd_rebalance_dry_run(struct dp_netdev *dp)
-    OVS_REQUIRES(dp->port_mutex)
-{
-    struct dp_netdev_pmd_thread *pmd;
-    uint64_t *curr_pmd_usage;
-
-    uint64_t curr_variance;
-    uint64_t new_variance;
-    uint64_t improvement = 0;
-    uint32_t num_pmds;
-    uint32_t *pmd_corelist;
-    struct rxq_poll *poll;
-    bool ret;
-
-    num_pmds = cmap_count(&dp->poll_threads);
-
-    if (num_pmds > 1) {
-        curr_pmd_usage = xcalloc(num_pmds, sizeof(uint64_t));
-        pmd_corelist = xcalloc(num_pmds, sizeof(uint32_t));
-    } else {
-        return false;
-    }
-
-    num_pmds = 0;
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        uint64_t total_cycles = 0;
-        uint64_t total_proc = 0;
-
-        if ((pmd->core_id == NON_PMD_CORE_ID) || pmd->isolated) {
-            continue;
-        }
-
-        /* Get the total pmd cycles for an interval. */
-        atomic_read_relaxed(&pmd->intrvl_cycles, &total_cycles);
-        /* Estimate the cycles to cover all intervals. */
-        total_cycles *= PMD_RXQ_INTERVAL_MAX;
-
-        ovs_mutex_lock(&pmd->port_mutex);
-        HMAP_FOR_EACH (poll, node, &pmd->poll_list) {
-            for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
-                total_proc += dp_netdev_rxq_get_intrvl_cycles(poll->rxq, i);
-            }
-        }
-        ovs_mutex_unlock(&pmd->port_mutex);
-
-        if (total_proc) {
-            curr_pmd_usage[num_pmds] = (total_proc * 100) / total_cycles;
-        }
-
-        VLOG_DBG("PMD auto lb dry run. Current: Core %d, usage %"PRIu64"",
-                  pmd->core_id, curr_pmd_usage[num_pmds]);
-
-        if (atomic_count_get(&pmd->pmd_overloaded)) {
-            atomic_count_set(&pmd->pmd_overloaded, 0);
-        }
-
-        pmd_corelist[num_pmds] = pmd->core_id;
-        num_pmds++;
-    }
-
-    curr_variance = variance(curr_pmd_usage, num_pmds);
-    ret = get_dry_run_variance(dp, pmd_corelist, num_pmds, &new_variance);
-
-    if (ret) {
-        VLOG_DBG("PMD auto lb dry run. Current PMD variance: %"PRIu64","
-                  " Predicted PMD variance: %"PRIu64"",
-                  curr_variance, new_variance);
-
-        if (new_variance < curr_variance) {
-            improvement =
-                ((curr_variance - new_variance) * 100) / curr_variance;
-        }
-        if (improvement < dp->pmd_alb.rebalance_improve_thresh) {
-            ret = false;
-        }
-    }
-
-    free(curr_pmd_usage);
-    free(pmd_corelist);
-    return ret;
-}
-
-
 /* Return true if needs to revalidate datapath flows. */
 static bool
 dpif_netdev_run(struct dpif *dpif)
@@ -6043,8 +5857,8 @@ dpif_netdev_run(struct dpif *dpif)
                 !dp_netdev_is_reconf_required(dp) &&
                 !ports_require_restart(dp) &&
                 pmd_rebalance_dry_run(dp)) {
-                VLOG_INFO("PMD auto lb dry run."
-                          " requesting datapath reconfigure.");
+                VLOG_INFO("PMD auto load balance dry run. "
+                          "Requesting datapath reconfigure.");
                 dp_netdev_request_reconfigure(dp);
             }
         }
