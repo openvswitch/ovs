@@ -51,6 +51,8 @@ Post-v2.15.0
      * Cache results for CPU ISA checks, reduces overhead on repeated lookups.
      * Add AVX512 based optimized miniflow extract function for traffic type
        IPv4/UDP, IPv4/TCP, Vlan/IPv4/UDP and Vlan/Ipv4/TCP.
+     * Added new 'group' option to pmd-rxq-assign. This will assign rxq to pmds
+       purely based on rxq and pmd load.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.

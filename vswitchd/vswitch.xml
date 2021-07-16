@@ -523,7 +523,7 @@
 
       <column name="other_config" key="pmd-rxq-assign"
               type='{"type": "string",
-                     "enum": ["set", ["cycles", "roundrobin"]]}'>
+                     "enum": ["set", ["cycles", "roundrobin", "group"]]}'>
         <p>
           Specifies how RX queues will be automatically assigned to CPU cores.
           Options:
@@ -533,6 +533,9 @@
             before being assigned to CPU cores.</dd>
             <dt><code>roundrobin</code></dt>
             <dd>Rxqs will be round-robined across CPU cores.</dd>
+            <dt><code>group</code></dt>
+            <dd>Rxqs will be sorted by order of measured processing cycles
+            before being assigned to CPU cores with lowest estimated load.</dd>
           </dl>
         </p>
         <p>

@@ -136,6 +136,32 @@ The Rx queues will be assigned to the cores in the following order::
     Core 7: Q4 (70%) | Q5 (10%)
     Core 8: Q3 (60%) | Q0 (30%)
 
+``group`` assignment is similar to ``cycles`` in that the Rxqs will be
+ordered by their measured processing cycles before being assigned to PMDs.
+It differs from ``cycles`` in that it uses a running estimate of the cycles
+that will be on each PMD to select the PMD with the lowest load for each Rxq.
+
+This means that there can be a group of low traffic Rxqs on one PMD, while a
+high traffic Rxq may have a PMD to itself. Where ``cycles`` kept as close to
+the same number of Rxqs per PMD as possible, with ``group`` this restriction is
+removed for a better balance of the workload across PMDs.
+
+For example, where there are five Rx queues and three cores - 3, 7, and 8 -
+available and the measured usage of core cycles per Rx queue over the last
+interval is seen to be:
+
+- Queue #0: 10%
+- Queue #1: 80%
+- Queue #3: 50%
+- Queue #4: 70%
+- Queue #5: 10%
+
+The Rx queues will be assigned to the cores in the following order::
+
+    Core 3: Q1 (80%) |
+    Core 7: Q4 (70%) |
+    Core 8: Q3 (50%) | Q0 (10%) | Q5 (10%)
+
 Alternatively, ``roundrobin`` assignment can be used, where the Rxqs are
 assigned to PMDs in a round-robined fashion. This algorithm was used by
 default prior to OVS 2.9. For example, given the following ports and queues:
