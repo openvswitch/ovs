@@ -4817,6 +4817,30 @@ sched_numa_list_lookup(struct sched_numa_list *numa_list, int numa_id)
     return NULL;
 }
 
+static int
+compare_sched_pmd_list(const void *a_, const void *b_)
+{
+    struct sched_pmd *a, *b;
+
+    a = (struct sched_pmd *) a_;
+    b = (struct sched_pmd *) b_;
+
+    return compare_poll_thread_list(&a->pmd, &b->pmd);
+}
+
+static void
+sort_numa_list_pmds(struct sched_numa_list *numa_list)
+{
+    struct sched_numa *numa;
+
+    HMAP_FOR_EACH (numa, node, &numa_list->numas) {
+        if (numa->n_pmds > 1) {
+            qsort(numa->pmds, numa->n_pmds, sizeof *numa->pmds,
+                  compare_sched_pmd_list);
+        }
+    }
+}
+
 /* Populate numas and pmds on those numas. */
 static void
 sched_numa_list_populate(struct sched_numa_list *numa_list,
@@ -4855,6 +4879,7 @@ sched_numa_list_populate(struct sched_numa_list *numa_list,
         numa->rr_cur_index = 0;
         numa->rr_idx_inc = true;
     }
+    sort_numa_list_pmds(numa_list);
 }
 
 static void
