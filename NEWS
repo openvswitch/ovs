@@ -53,6 +53,9 @@ Post-v2.15.0
        IPv4/UDP, IPv4/TCP, Vlan/IPv4/UDP and Vlan/Ipv4/TCP.
      * Added new 'group' option to pmd-rxq-assign. This will assign rxq to pmds
        purely based on rxq and pmd load.
+     * Add new 'pmd-rxq-isolate' option that can be set to 'false' in order
+       that pmd cores which are pinned with rxqs using 'pmd-rxq-affinity'
+       are available for assigning other non-pinned rxqs.
    - ovs-ctl:
      * New option '--no-record-hostname' to disable hostname configuration
        in ovsdb on startup.

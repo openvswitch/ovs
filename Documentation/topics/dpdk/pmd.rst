@@ -101,8 +101,13 @@ like so:
 - Queue #2 not pinned
 - Queue #3 pinned to core 8
 
-PMD threads on cores where Rx queues are *pinned* will become *isolated*. This
-means that this thread will only poll the *pinned* Rx queues.
+PMD threads on cores where Rx queues are *pinned* will become *isolated* by
+default. This means that this thread will only poll the *pinned* Rx queues.
+
+If using ``pmd-rxq-assign=group`` PMD threads with *pinned* Rxqs can be
+*non-isolated* by setting::
+
+  $ ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-isolate=false
 
 .. warning::
 

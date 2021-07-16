@@ -548,6 +548,25 @@
         </p>
       </column>
 
+      <column name="other_config" key="pmd-rxq-isolate"
+              type='{"type": "boolean"}'>
+        <p>
+          Specifies if a CPU core will be isolated after being pinned with
+          an Rx queue.
+        <p/>
+          Set this value to <code>false</code> to non-isolate a CPU core after
+          it is pinned with an Rxq using <code>pmd-rxq-affinity</code>. This
+          will allow OVS to assign other Rxqs to that CPU core.
+        </p>
+        <p>
+          The default value is <code>true</code>.
+        </p>
+        <p>
+          This can only be <code>false</code> when <code>pmd-rxq-assign</code>
+          is set to <code>group</code>.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>

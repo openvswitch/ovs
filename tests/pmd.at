@@ -612,6 +612,16 @@ p1 2 0 2
 p1 3 0 1
 ])
 
+# Check they are pinned when those pmds are available again
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1fe])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
 AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])
 
 dnl We removed the rxq-affinity request.  dpif-netdev should assign queues
@@ -624,6 +634,7 @@ p1 2
 p1 3
 ])
 
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6])
 AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity='0:1'])
 
 dnl We explicitly requested core 1 for queue 0.  Core 1 becomes isolated and
@@ -637,6 +648,100 @@ p1 3 0 2
 
 OVS_VSWITCHD_STOP(["/cannot be pinned with port/d"])
 AT_CLEANUP
+
+AT_SETUP([PMD - rxq affinity - non-isolate])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0,0,0,0,0,0,0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1fe])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=4 other_config:pmd-rxq-affinity="0:3,1:7,2:2,3:8"])
+
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
+# change rxq assignment algorithm
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
+# try to pin & non-isolate
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-isolate=false])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "pmd-rxq-affinity does not isolate PMD core"])
+
+# should not impact - all rxqs are still pinned
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
+# remove some pinning - see if non-isolate pmd are used for ovs rxq assignment of other rxqs
+AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity='0:1'])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6])
+
+dnl We explicitly requested core 1 for queue 0.  Core 1 is not isolated so it is
+dnl use for other rxqs.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+p1 2 0 1
+p1 3 0 2
+])
+
+# change to algorithm that does not support pin & non-isolate
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "pmd-rxq-isolate can only be set false when using pmd-rxq-assign=group"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "pmd-rxq-affinity isolates PMD core"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using cycles algorithm"])
+
+dnl We explicitly requested core 1 for queue 0.  Core 1 becomes isolated and
+dnl every other queue goes to core 2.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+p1 2 0 2
+p1 3 0 2
+])
+
+# change rxq assignment algorithm to one that support pin & non-isolate
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "pmd-rxq-affinity does not isolate PMD core"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using group algorithm"])
+
+#dnl We explicitly requested core 1 for queue 0.  Core 1 becomes isolated and
+#dnl every other queue goes to core 2.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+p1 2 0 1
+p1 3 0 2
+])
+
+OVS_VSWITCHD_STOP(["/cannot be pinned with port/d
+/pmd-rxq-isolate can only be set false when using pmd-rxq-assign=group/d"])
+AT_CLEANUP
+
 
 AT_SETUP([PMD - rxq affinity - NUMA])
 OVS_VSWITCHD_START(
