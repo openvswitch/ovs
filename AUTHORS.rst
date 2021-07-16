@@ -33,6 +33,7 @@ Name                               Email
 ================================== ===============================================
 Aaron Conole                       aconole@redhat.com
 Aaron Rosen                        arosen@clemson.edu
+Adrian Guzowski                    adrian.guzowski@exatel.pl
 Adrian Moreno                      amorenoz@redhat.com
 Aidan Shribman                     aidan.shribman@gmail.com
 Alan Pevec                         alan.pevec@redhat.com
