@@ -280,6 +280,7 @@ type).
 .
 .so lib/dpdk-unixctl.man
 .so lib/dpif-netdev-unixctl.man
+.so lib/dpif-netlink-unixctl.man
 .so lib/netdev-dpdk-unixctl.man
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man

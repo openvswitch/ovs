@@ -337,26 +337,28 @@ struct dpif_class {
      * updating flows as necessary if it does this. */
     int (*recv_set)(struct dpif *dpif, bool enable);
 
-    /* Refreshes the poll loops and Netlink sockets associated to each port,
-     * when the number of upcall handlers (upcall receiving thread) is changed
-     * to 'n_handlers' and receiving packets for 'dpif' is enabled by
+    /* Attempts to refresh the poll loops and Netlink sockets used for handling
+     * upcalls when the number of upcall handlers (upcall receiving thread) is
+     * changed to 'n_handlers' and receiving packets for 'dpif' is enabled by
      * recv_set().
      *
-     * Since multiple upcall handlers can read upcalls simultaneously from
-     * 'dpif', each port can have multiple Netlink sockets, one per upcall
-     * handler.  So, handlers_set() is responsible for the following tasks:
+     * A dpif implementation may choose to ignore 'n_handlers' while returning
+     * success.
      *
-     *    When receiving upcall is enabled, extends or creates the
-     *    configuration to support:
-     *
-     *        - 'n_handlers' Netlink sockets for each port.
-     *
-     *        - 'n_handlers' poll loops, one for each upcall handler.
-     *
-     *        - registering the Netlink sockets for the same upcall handler to
-     *          the corresponding poll loop.
-     * */
+     * The method for distribution of upcalls between handler threads is
+     * specific to the dpif implementation.
+     */
     int (*handlers_set)(struct dpif *dpif, uint32_t n_handlers);
+
+    /* Queries 'dpif' to see if a certain number of handlers are required by
+     * the implementation.
+     *
+     * If a certain number of handlers are required, returns 'true' and sets
+     * 'n_handlers' to that number of handler threads.
+     *
+     * If not, returns 'false'.
+     */
+    bool (*number_handlers_required)(struct dpif *dpif, uint32_t *n_handlers);
 
     /* Pass custom configuration options to the datapath.  The implementation
      * might postpone applying the changes until run() is called. */

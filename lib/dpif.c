@@ -1489,6 +1489,22 @@ dpif_handlers_set(struct dpif *dpif, uint32_t n_handlers)
     return error;
 }
 
+/* Checks if a certain number of handlers are required.
+ *
+ * If a certain number of handlers are required, returns 'true' and sets
+ * 'n_handlers' to that number of handler threads.
+ *
+ * If not, returns 'false'
+ */
+bool
+dpif_number_handlers_required(struct dpif *dpif, uint32_t *n_handlers)
+{
+    if (dpif->dpif_class->number_handlers_required) {
+        return dpif->dpif_class->number_handlers_required(dpif, n_handlers);
+    }
+    return false;
+}
+
 void
 dpif_register_dp_purge_cb(struct dpif *dpif, dp_purge_callback *cb, void *aux)
 {

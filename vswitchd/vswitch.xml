@@ -570,9 +570,9 @@
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of threads for software datapaths to use for
-          handling new flows.  The default the number of online CPU cores minus
-          the number of revalidators.
+          Attempts to specify the number of threads for software datapaths to
+          use for handling new flows.  Some datapaths may choose to ignore
+          this and it will be set to a sensible option for the datapath type.
         </p>
         <p>
           This configuration is per datapath.  If you have more than one
@@ -586,12 +586,17 @@
       <column name="other_config" key="n-revalidator-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of threads for software datapaths to use for
-          revalidating flows in the datapath.  Typically, there is a direct
-          correlation between the number of revalidator threads, and the number
-          of flows allowed in the datapath.  The default is the number of cpu
-          cores divided by four plus one.  If <code>n-handler-threads</code> is
-          set, the default changes to the number of cpu cores minus the number
+          Attempts to specify the number of threads for software datapaths to
+          use for revalidating flows in the datapath.  Some datapaths may
+          choose to ignore this and will set to a sensible option for the
+          datapath type.
+        </p>
+        <p>
+          Typically, there is a direct correlation between the
+          number of revalidator threads, and the number of flows allowed in the
+          datapath.  The default is the number of cpu cores divided by four
+          plus one.  If <code>n-handler-threads</code> is set, the default
+          changes to the number of cpu cores minus the number
           of handler threads.
         </p>
         <p>

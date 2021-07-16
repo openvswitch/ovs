@@ -80,6 +80,12 @@ Post-v2.15.0
      * Added ability to add and delete static mac entries using:
        'ovs-appctl fdb/add <bridge> <port> <vlan> <mac>'
        'ovs-appctl fdb/del <bridge> <vlan> <mac>'
+   - Linux datapath:
+     * ovs-vswitchd will configure the kernel module using per-cpu dispatch
+       mode (if available). This changes the way upcalls are delivered to user
+       space in order to resolve a number of issues with per-vport dispatch.
+     * New vswitchd unixctl command `dpif-netlink/dispatch-mode` will return
+       the current dispatch mode for each datapath.
 
 
 v2.15.0 - 15 Feb 2021

@@ -84,6 +84,9 @@ enum { MAX_PORTS = USHRT_MAX };
 #define EPOLLEXCLUSIVE (1u << 28)
 #endif
 
+/* This PID is not used by the kernel datapath when using dispatch per CPU,
+ * but it is required to be set (not zero). */
+#define DPIF_NETLINK_PER_CPU_PID UINT32_MAX
 struct dpif_netlink_dp {
     /* Generic Netlink header. */
     uint8_t cmd;
@@ -98,6 +101,8 @@ struct dpif_netlink_dp {
     const struct ovs_dp_stats *stats;  /* OVS_DP_ATTR_STATS. */
     const struct ovs_dp_megaflow_stats *megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
+    const uint32_t *upcall_pids;       /* OVS_DP_ATTR_PER_CPU_PIDS */
+    uint32_t n_upcall_pids;
 };
 
 static void dpif_netlink_dp_init(struct dpif_netlink_dp *);
@@ -112,6 +117,10 @@ static int dpif_netlink_dp_get(const struct dpif *,
                                struct ofpbuf **bufp);
 static int
 dpif_netlink_set_features(struct dpif *dpif_, uint32_t new_features);
+
+static void
+dpif_netlink_unixctl_dispatch_mode(struct unixctl_conn *conn, int argc,
+                                   const char *argv[], void *aux);
 
 struct dpif_netlink_flow {
     /* Generic Netlink header. */
@@ -178,10 +187,15 @@ struct dpif_windows_vport_sock {
 #endif
 
 struct dpif_handler {
+    /* per-vport dispatch mode. */
     struct epoll_event *epoll_events;
     int epoll_fd;                 /* epoll fd that includes channel socks. */
     int n_events;                 /* Num events returned by epoll_wait(). */
     int event_offset;             /* Offset into 'epoll_events'. */
+
+    /* per-cpu dispatch mode. */
+    struct nl_sock *sock;         /* Each handler thread holds one netlink
+                                     socket. */
 
 #ifdef _WIN32
     /* Pool of sockets. */
@@ -201,6 +215,8 @@ struct dpif_netlink {
     struct fat_rwlock upcall_lock;
     struct dpif_handler *handlers;
     uint32_t n_handlers;           /* Num of upcall handlers. */
+
+    /* Per-vport dispatch mode. */
     struct dpif_channel *channels; /* Array of channels for each port. */
     int uc_array_size;             /* Size of 'handler->channels' and */
                                    /* 'handler->epoll_events'. */
@@ -241,8 +257,12 @@ static int open_dpif(const struct dpif_netlink_dp *, struct dpif **);
 static uint32_t dpif_netlink_port_get_pid(const struct dpif *,
                                           odp_port_t port_no);
 static void dpif_netlink_handler_uninit(struct dpif_handler *handler);
-static int dpif_netlink_refresh_channels(struct dpif_netlink *,
-                                         uint32_t n_handlers);
+static int dpif_netlink_refresh_handlers_vport_dispatch(struct dpif_netlink *,
+                                                        uint32_t n_handlers);
+static void destroy_all_channels(struct dpif_netlink *);
+static int dpif_netlink_refresh_handlers_cpu_dispatch(struct dpif_netlink *);
+static void destroy_all_handlers(struct dpif_netlink *);
+
 static void dpif_netlink_vport_to_ofpbuf(const struct dpif_netlink_vport *,
                                          struct ofpbuf *);
 static int dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *,
@@ -292,6 +312,11 @@ dpif_netlink_cast(const struct dpif *dpif)
 {
     dpif_assert_class(dpif, &dpif_netlink_class);
     return CONTAINER_OF(dpif, struct dpif_netlink, dpif);
+}
+
+static inline bool
+dpif_netlink_upcall_per_cpu(const struct dpif_netlink *dpif) {
+    return !!((dpif)->user_features & OVS_DP_F_DISPATCH_UPCALL_PER_CPU);
 }
 
 static int
@@ -357,9 +382,30 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         dp_request.cmd = OVS_DP_CMD_SET;
     }
 
+    /* The Open vSwitch kernel module has two modes for dispatching upcalls:
+     * per-vport and per-cpu.
+     *
+     * When dispatching upcalls per-vport, the kernel will
+     * send the upcall via a Netlink socket that has been selected based on the
+     * vport that received the packet that is causing the upcall.
+     *
+     * When dispatching upcall per-cpu, the kernel will send the upcall via
+     * a Netlink socket that has been selected based on the cpu that received
+     * the packet that is causing the upcall.
+     *
+     * First we test to see if the kernel module supports per-cpu dispatching
+     * (the preferred method). If it does not support per-cpu dispatching, we
+     * fall back to the per-vport dispatch mode.
+     */
     dp_request.user_features |= OVS_DP_F_UNALIGNED;
-    dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+    dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
+    dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
     error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+    if (error) {
+        dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+        dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+        error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+    }
     if (error) {
         return error;
     }
@@ -367,6 +413,12 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     error = open_dpif(&dp, dpifp);
     dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
     ofpbuf_delete(buf);
+
+    if (create) {
+        VLOG_INFO("Datapath dispatch mode: %s",
+                  dpif_netlink_upcall_per_cpu(dpif_netlink_cast(*dpifp)) ?
+                  "per-cpu" : "per-vport");
+    }
 
     return error;
 }
@@ -610,6 +662,24 @@ destroy_all_channels(struct dpif_netlink *dpif)
 }
 
 static void
+destroy_all_handlers(struct dpif_netlink *dpif)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    int i = 0;
+
+    if (!dpif->handlers) {
+        return;
+    }
+    for (i = 0; i < dpif->n_handlers; i++) {
+        struct dpif_handler *handler = &dpif->handlers[i];
+        close_nl_sock(handler->sock);
+    }
+    free(dpif->handlers);
+    dpif->handlers = NULL;
+    dpif->n_handlers = 0;
+}
+
+static void
 dpif_netlink_close(struct dpif *dpif_)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
@@ -617,7 +687,11 @@ dpif_netlink_close(struct dpif *dpif_)
     nl_sock_destroy(dpif->port_notifier);
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
-    destroy_all_channels(dpif);
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        destroy_all_handlers(dpif);
+    } else {
+        destroy_all_channels(dpif);
+    }
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     fat_rwlock_destroy(&dpif->upcall_lock);
@@ -641,11 +715,14 @@ dpif_netlink_run(struct dpif *dpif_)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
 
-    if (dpif->refresh_channels) {
-        dpif->refresh_channels = false;
-        fat_rwlock_wrlock(&dpif->upcall_lock);
-        dpif_netlink_refresh_channels(dpif, dpif->n_handlers);
-        fat_rwlock_unlock(&dpif->upcall_lock);
+    if (!dpif_netlink_upcall_per_cpu(dpif)) {
+        if (dpif->refresh_channels) {
+            dpif->refresh_channels = false;
+            fat_rwlock_wrlock(&dpif->upcall_lock);
+            dpif_netlink_refresh_handlers_vport_dispatch(dpif,
+                                                         dpif->n_handlers);
+            fat_rwlock_unlock(&dpif->upcall_lock);
+        }
     }
     return false;
 }
@@ -677,6 +754,41 @@ dpif_netlink_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
             stats->n_mask_hit = UINT64_MAX;
         }
         ofpbuf_delete(buf);
+    }
+    return error;
+}
+
+static int
+dpif_netlink_set_handler_pids(struct dpif *dpif_, const uint32_t *upcall_pids,
+                              uint32_t n_upcall_pids)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct dpif_netlink_dp request, reply;
+    struct ofpbuf *bufp;
+    int error;
+    int n_cores;
+
+    n_cores = count_cpu_cores();
+    ovs_assert(n_cores == n_upcall_pids);
+    VLOG_DBG("Dispatch mode(per-cpu): Number of CPUs is %d", n_cores);
+
+    dpif_netlink_dp_init(&request);
+    request.cmd = OVS_DP_CMD_SET;
+    request.name = dpif_->base_name;
+    request.dp_ifindex = dpif->dp_ifindex;
+    request.user_features = dpif->user_features |
+                            OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+
+    request.upcall_pids = upcall_pids;
+    request.n_upcall_pids = n_cores;
+
+    error = dpif_netlink_dp_transact(&request, &reply, &bufp);
+    if (!error) {
+        dpif->user_features = reply.user_features;
+        ofpbuf_delete(bufp);
+        if (!dpif_netlink_upcall_per_cpu(dpif)) {
+            return -EOPNOTSUPP;
+        }
     }
     return error;
 }
@@ -741,7 +853,7 @@ get_vport_type(const struct dpif_netlink_vport *vport)
         return "erspan";
 
     case OVS_VPORT_TYPE_IP6ERSPAN:
-        return "ip6erspan"; 
+        return "ip6erspan";
 
     case OVS_VPORT_TYPE_IP6GRE:
         return "ip6gre";
@@ -807,10 +919,16 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     uint32_t upcall_pids = 0;
     int error = 0;
 
-    if (dpif->handlers) {
-        error = create_nl_sock(dpif, &sock);
-        if (error) {
-            return error;
+    /* per-cpu dispatch mode does not require a socket per vport. */
+    if (!dpif_netlink_upcall_per_cpu(dpif)) {
+        if (dpif->handlers) {
+            error = create_nl_sock(dpif, &sock);
+            if (error) {
+                return error;
+            }
+        }
+        if (sock) {
+            upcall_pids = nl_sock_pid(sock);
         }
     }
 
@@ -821,9 +939,6 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     request.name = name;
 
     request.port_no = *port_nop;
-    if (sock) {
-        upcall_pids = nl_sock_pid(sock);
-    }
     request.n_upcall_pids = 1;
     request.upcall_pids = &upcall_pids;
 
@@ -845,19 +960,21 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
         goto exit;
     }
 
-    error = vport_add_channel(dpif, *port_nop, sock);
-    if (error) {
-        VLOG_INFO("%s: could not add channel for port %s",
-                    dpif_name(&dpif->dpif), name);
+    if (!dpif_netlink_upcall_per_cpu(dpif)) {
+        error = vport_add_channel(dpif, *port_nop, sock);
+        if (error) {
+            VLOG_INFO("%s: could not add channel for port %s",
+                        dpif_name(&dpif->dpif), name);
 
-        /* Delete the port. */
-        dpif_netlink_vport_init(&request);
-        request.cmd = OVS_VPORT_CMD_DEL;
-        request.dp_ifindex = dpif->dp_ifindex;
-        request.port_no = *port_nop;
-        dpif_netlink_vport_transact(&request, NULL, NULL);
-        close_nl_sock(sock);
-        goto exit;
+            /* Delete the port. */
+            dpif_netlink_vport_init(&request);
+            request.cmd = OVS_VPORT_CMD_DEL;
+            request.dp_ifindex = dpif->dp_ifindex;
+            request.port_no = *port_nop;
+            dpif_netlink_vport_transact(&request, NULL, NULL);
+            close_nl_sock(sock);
+            goto exit;
+        }
     }
 
 exit:
@@ -1114,6 +1231,16 @@ dpif_netlink_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     uint32_t ret;
+
+    /* In per-cpu dispatch mode, vports do not have an associated PID */
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        /* In per-cpu dispatch mode, this will be ignored as kernel space will
+         * select the PID before sending to user space. We set to
+         * DPIF_NETLINK_PER_CPU_PID as 0 is rejected by kernel space as an
+         * invalid PID.
+         */
+        return DPIF_NETLINK_PER_CPU_PID;
+    }
 
     fat_rwlock_rdlock(&dpif->upcall_lock);
     ret = dpif_netlink_port_get_pid__(dpif, port_no);
@@ -2326,12 +2453,51 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
 }
 #endif
 
+static int
+dpif_netlink_refresh_handlers_cpu_dispatch(struct dpif_netlink *dpif)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    int handler_id;
+    int error = 0;
+    uint32_t n_handlers;
+    uint32_t *upcall_pids;
+
+    n_handlers = count_cpu_cores();
+    if (dpif->n_handlers != n_handlers) {
+        VLOG_DBG("Dispatch mode(per-cpu): initializing %d handlers",
+                   n_handlers);
+        destroy_all_handlers(dpif);
+        upcall_pids = xzalloc(n_handlers * sizeof *upcall_pids);
+        dpif->handlers = xzalloc(n_handlers * sizeof *dpif->handlers);
+        for (handler_id = 0; handler_id < n_handlers; handler_id++) {
+            struct dpif_handler *handler = &dpif->handlers[handler_id];
+            error = create_nl_sock(dpif, &handler->sock);
+            if (error) {
+                VLOG_ERR("Dispatch mode(per-cpu): Cannot create socket for"
+                         "handler %d", handler_id);
+                continue;
+            }
+            upcall_pids[handler_id] = nl_sock_pid(handler->sock);
+            VLOG_DBG("Dispatch mode(per-cpu): "
+                      "handler %d has Netlink PID of %u",
+                      handler_id, upcall_pids[handler_id]);
+        }
+
+        dpif->n_handlers = n_handlers;
+        error = dpif_netlink_set_handler_pids(&dpif->dpif, upcall_pids,
+                                              n_handlers);
+        free(upcall_pids);
+    }
+    return error;
+}
+
 /* Synchronizes 'channels' in 'dpif->handlers'  with the set of vports
  * currently in 'dpif' in the kernel, by adding a new set of channels for
  * any kernel vport that lacks one and deleting any channels that have no
  * backing kernel vports. */
 static int
-dpif_netlink_refresh_channels(struct dpif_netlink *dpif, uint32_t n_handlers)
+dpif_netlink_refresh_handlers_vport_dispatch(struct dpif_netlink *dpif,
+                                             uint32_t n_handlers)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
     unsigned long int *keep_channels;
@@ -2458,7 +2624,7 @@ dpif_netlink_refresh_channels(struct dpif_netlink *dpif, uint32_t n_handlers)
 }
 
 static int
-dpif_netlink_recv_set__(struct dpif_netlink *dpif, bool enable)
+dpif_netlink_recv_set_vport_dispatch(struct dpif_netlink *dpif, bool enable)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
     if ((dpif->handlers != NULL) == enable) {
@@ -2467,7 +2633,21 @@ dpif_netlink_recv_set__(struct dpif_netlink *dpif, bool enable)
         destroy_all_channels(dpif);
         return 0;
     } else {
-        return dpif_netlink_refresh_channels(dpif, 1);
+        return dpif_netlink_refresh_handlers_vport_dispatch(dpif, 1);
+    }
+}
+
+static int
+dpif_netlink_recv_set_cpu_dispatch(struct dpif_netlink *dpif, bool enable)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    if ((dpif->handlers != NULL) == enable) {
+        return 0;
+    } else if (!enable) {
+        destroy_all_handlers(dpif);
+        return 0;
+    } else {
+        return dpif_netlink_refresh_handlers_cpu_dispatch(dpif);
     }
 }
 
@@ -2478,7 +2658,11 @@ dpif_netlink_recv_set(struct dpif *dpif_, bool enable)
     int error;
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
-    error = dpif_netlink_recv_set__(dpif, enable);
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        error = dpif_netlink_recv_set_cpu_dispatch(dpif, enable);
+    } else {
+        error = dpif_netlink_recv_set_vport_dispatch(dpif, enable);
+    }
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     return error;
@@ -2500,11 +2684,29 @@ dpif_netlink_handlers_set(struct dpif *dpif_, uint32_t n_handlers)
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
     if (dpif->handlers) {
-        error = dpif_netlink_refresh_channels(dpif, n_handlers);
+        if (dpif_netlink_upcall_per_cpu(dpif)) {
+            error = dpif_netlink_refresh_handlers_cpu_dispatch(dpif);
+        } else {
+            error = dpif_netlink_refresh_handlers_vport_dispatch(dpif,
+                                                                 n_handlers);
+        }
     }
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     return error;
+}
+
+static bool
+dpif_netlink_number_handlers_required(struct dpif *dpif_, uint32_t *n_handlers)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        *n_handlers = count_cpu_cores();
+        return true;
+    }
+
+    return false;
 }
 
 static int
@@ -2669,8 +2871,59 @@ dpif_netlink_recv_windows(struct dpif_netlink *dpif, uint32_t handler_id,
 }
 #else
 static int
-dpif_netlink_recv__(struct dpif_netlink *dpif, uint32_t handler_id,
-                    struct dpif_upcall *upcall, struct ofpbuf *buf)
+dpif_netlink_recv_cpu_dispatch(struct dpif_netlink *dpif, uint32_t handler_id,
+                               struct dpif_upcall *upcall, struct ofpbuf *buf)
+    OVS_REQ_RDLOCK(dpif->upcall_lock)
+{
+    struct dpif_handler *handler;
+    int read_tries = 0;
+
+    if (!dpif->handlers || handler_id >= dpif->n_handlers) {
+        return EAGAIN;
+    }
+
+    handler = &dpif->handlers[handler_id];
+
+    for (;;) {
+        int dp_ifindex;
+        int error;
+
+        if (++read_tries > 50) {
+            return EAGAIN;
+        }
+        error = nl_sock_recv(handler->sock, buf, NULL, false);
+        if (error == ENOBUFS) {
+            /* ENOBUFS typically means that we've received so many
+             * packets that the buffer overflowed.  Try again
+             * immediately because there's almost certainly a packet
+             * waiting for us. */
+            report_loss(dpif, NULL, 0, handler_id);
+            continue;
+        }
+
+        if (error) {
+            if (error == EAGAIN) {
+                break;
+            }
+            return error;
+        }
+
+        error = parse_odp_packet(buf, upcall, &dp_ifindex);
+        if (!error && dp_ifindex == dpif->dp_ifindex) {
+            return 0;
+        } else if (error) {
+            return error;
+        }
+    }
+
+    return EAGAIN;
+}
+
+static int
+dpif_netlink_recv_vport_dispatch(struct dpif_netlink *dpif,
+                                 uint32_t handler_id,
+                                 struct dpif_upcall *upcall,
+                                 struct ofpbuf *buf)
     OVS_REQ_RDLOCK(dpif->upcall_lock)
 {
     struct dpif_handler *handler;
@@ -2755,18 +3008,23 @@ dpif_netlink_recv(struct dpif *dpif_, uint32_t handler_id,
 #ifdef _WIN32
     error = dpif_netlink_recv_windows(dpif, handler_id, upcall, buf);
 #else
-    error = dpif_netlink_recv__(dpif, handler_id, upcall, buf);
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        error = dpif_netlink_recv_cpu_dispatch(dpif, handler_id, upcall, buf);
+    } else {
+        error = dpif_netlink_recv_vport_dispatch(dpif,
+                                                 handler_id, upcall, buf);
+    }
 #endif
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     return error;
 }
 
+#ifdef _WIN32
 static void
-dpif_netlink_recv_wait__(struct dpif_netlink *dpif, uint32_t handler_id)
+dpif_netlink_recv_wait_windows(struct dpif_netlink *dpif, uint32_t handler_id)
     OVS_REQ_RDLOCK(dpif->upcall_lock)
 {
-#ifdef _WIN32
     uint32_t i;
     struct dpif_windows_vport_sock *sock_pool =
         dpif->handlers[handler_id].vport_sock_pool;
@@ -2779,14 +3037,33 @@ dpif_netlink_recv_wait__(struct dpif_netlink *dpif, uint32_t handler_id)
     for (i = 0; i < VPORT_SOCK_POOL_SIZE; i++) {
         nl_sock_wait(sock_pool[i].nl_sock, POLLIN);
     }
+}
 #else
+
+static void
+dpif_netlink_recv_wait_vport_dispatch(struct dpif_netlink *dpif,
+                                      uint32_t handler_id)
+    OVS_REQ_RDLOCK(dpif->upcall_lock)
+{
     if (dpif->handlers && handler_id < dpif->n_handlers) {
         struct dpif_handler *handler = &dpif->handlers[handler_id];
 
         poll_fd_wait(handler->epoll_fd, POLLIN);
     }
-#endif
 }
+
+static void
+dpif_netlink_recv_wait_cpu_dispatch(struct dpif_netlink *dpif,
+                                    uint32_t handler_id)
+    OVS_REQ_RDLOCK(dpif->upcall_lock)
+{
+    if (dpif->handlers && handler_id < dpif->n_handlers) {
+        struct dpif_handler *handler = &dpif->handlers[handler_id];
+
+        poll_fd_wait(nl_sock_fd(handler->sock), POLLIN);
+    }
+}
+#endif
 
 static void
 dpif_netlink_recv_wait(struct dpif *dpif_, uint32_t handler_id)
@@ -2794,12 +3071,20 @@ dpif_netlink_recv_wait(struct dpif *dpif_, uint32_t handler_id)
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
 
     fat_rwlock_rdlock(&dpif->upcall_lock);
-    dpif_netlink_recv_wait__(dpif, handler_id);
+#ifdef _WIN32
+    dpif_netlink_recv_wait_windows(dpif, handler_id);
+#else
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        dpif_netlink_recv_wait_cpu_dispatch(dpif, handler_id);
+    } else {
+        dpif_netlink_recv_wait_vport_dispatch(dpif, handler_id);
+    }
+#endif
     fat_rwlock_unlock(&dpif->upcall_lock);
 }
 
 static void
-dpif_netlink_recv_purge__(struct dpif_netlink *dpif)
+dpif_netlink_recv_purge_vport_dispatch(struct dpif_netlink *dpif)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
     if (dpif->handlers) {
@@ -2816,12 +3101,30 @@ dpif_netlink_recv_purge__(struct dpif_netlink *dpif)
 }
 
 static void
+dpif_netlink_recv_purge_cpu_dispatch(struct dpif_netlink *dpif)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    int handler_id;
+
+    if (dpif->handlers) {
+        for (handler_id = 0; handler_id < dpif->n_handlers; handler_id++) {
+            struct dpif_handler *handler = &dpif->handlers[handler_id];
+            nl_sock_drain(handler->sock);
+        }
+    }
+}
+
+static void
 dpif_netlink_recv_purge(struct dpif *dpif_)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
-    dpif_netlink_recv_purge__(dpif);
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        dpif_netlink_recv_purge_cpu_dispatch(dpif);
+    } else {
+        dpif_netlink_recv_purge_vport_dispatch(dpif);
+    }
     fat_rwlock_unlock(&dpif->upcall_lock);
 }
 
@@ -3992,6 +4295,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_operate,
     dpif_netlink_recv_set,
     dpif_netlink_handlers_set,
+    dpif_netlink_number_handlers_required,
     NULL,                       /* set_config */
     dpif_netlink_queue_to_priority,
     dpif_netlink_recv,
@@ -4079,6 +4383,9 @@ dpif_netlink_init(void)
         }
 
         ovs_tunnels_out_of_tree = dpif_netlink_rtnl_probe_oot_tunnels();
+
+        unixctl_command_register("dpif-netlink/dispatch-mode", "", 0, 0,
+                                 dpif_netlink_unixctl_dispatch_mode, NULL);
 
         ovsthread_once_done(&once);
     }
@@ -4354,6 +4661,11 @@ dpif_netlink_dp_to_ofpbuf(const struct dpif_netlink_dp *dp, struct ofpbuf *buf)
 
     if (dp->user_features) {
         nl_msg_put_u32(buf, OVS_DP_ATTR_USER_FEATURES, dp->user_features);
+    }
+
+    if (dp->upcall_pids) {
+        nl_msg_put_unspec(buf, OVS_DP_ATTR_PER_CPU_PIDS, dp->upcall_pids,
+                          sizeof *dp->upcall_pids * dp->n_upcall_pids);
     }
 
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
@@ -4675,13 +4987,58 @@ report_loss(struct dpif_netlink *dpif, struct dpif_channel *ch, uint32_t ch_idx,
         return;
     }
 
-    ds_init(&s);
-    if (ch->last_poll != LLONG_MIN) {
-        ds_put_format(&s, " (last polled %lld ms ago)",
-                      time_msec() - ch->last_poll);
+    if (dpif_netlink_upcall_per_cpu(dpif)) {
+        VLOG_WARN("%s: lost packet on handler %u",
+                  dpif_name(&dpif->dpif), handler_id);
+    } else {
+        ds_init(&s);
+        if (ch->last_poll != LLONG_MIN) {
+            ds_put_format(&s, " (last polled %lld ms ago)",
+                        time_msec() - ch->last_poll);
+        }
+
+        VLOG_WARN("%s: lost packet on port channel %u of handler %u%s",
+                  dpif_name(&dpif->dpif), ch_idx, handler_id, ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
+static void
+dpif_netlink_unixctl_dispatch_mode(struct unixctl_conn *conn,
+                                   int argc OVS_UNUSED,
+                                   const char *argv[] OVS_UNUSED,
+                                   void *aux OVS_UNUSED)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+    struct nl_dump dump;
+    uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
+    struct ofpbuf msg, buf;
+    int error;
+
+    error = dpif_netlink_init();
+    if (error) {
+        return;
     }
 
-    VLOG_WARN("%s: lost packet on port channel %u of handler %u%s",
-              dpif_name(&dpif->dpif), ch_idx, handler_id, ds_cstr(&s));
-    ds_destroy(&s);
+    ofpbuf_use_stub(&buf, reply_stub, sizeof reply_stub);
+    dpif_netlink_dp_dump_start(&dump);
+    while (nl_dump_next(&dump, &msg, &buf)) {
+        struct dpif_netlink_dp dp;
+        if (!dpif_netlink_dp_from_ofpbuf(&dp, &msg)) {
+            ds_put_format(&reply, "%s: ", dp.name);
+            if (dp.user_features & OVS_DP_F_DISPATCH_UPCALL_PER_CPU) {
+                ds_put_format(&reply, "per-cpu dispatch mode");
+            } else {
+                ds_put_format(&reply, "per-vport dispatch mode");
+            }
+            ds_put_format(&reply, "\n");
+        }
+    }
+    ofpbuf_uninit(&buf);
+    error = nl_dump_done(&dump);
+    if (!error) {
+        unixctl_command_reply(conn, ds_cstr(&reply));
+    }
+
+    ds_destroy(&reply);
 }

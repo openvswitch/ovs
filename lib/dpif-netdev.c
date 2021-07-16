@@ -8738,6 +8738,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_operate,
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
+    NULL,                       /* number_handlers_required */
     dpif_netdev_set_config,
     dpif_netdev_queue_to_priority,
     NULL,                       /* recv */
