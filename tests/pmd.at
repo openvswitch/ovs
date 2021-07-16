@@ -617,7 +617,7 @@ p1 2 0 2
 p1 3 0 2
 ])
 
-OVS_VSWITCHD_STOP(["/dpif_netdev|WARN|There is no PMD thread on core/d"])
+OVS_VSWITCHD_STOP(["/cannot be pinned with port/d"])
 AT_CLEANUP
 
 AT_SETUP([PMD - rxq affinity - NUMA])
