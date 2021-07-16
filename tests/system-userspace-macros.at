@@ -96,6 +96,16 @@ m4_define([CHECK_CONNTRACK_FRAG_OVERLAP])
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
+# CHECK_CONNTRACK_ZEROIP_SNAT()
+#
+# Perform requirements checks for running conntrack all-zero IP SNAT tests.
+# The userspace datapath does not support all-zero IP SNAT.
+#
+m4_define([CHECK_CONNTRACK_ZEROIP_SNAT],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CONNTRACK_TIMEOUT()
 #
 # Perform requirements checks for running conntrack customized timeout tests.

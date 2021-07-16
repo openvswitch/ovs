@@ -1817,6 +1817,16 @@ for <var>i</var> in [1,<var>n_slaves</var>]:
           </p>
 
           <p>
+            For SNAT, there is a special case when the <code>src</code> IP
+            address is configured as all 0's, i.e.,
+            <code>nat(src=0.0.0.0)</code>. In this case, when a source port
+            collision is detected during the commit, the source port will be
+            translated to an ephemeral port. If there is no collision, no SNAT
+            is performed. Note that this is currently only implemented in the
+            Linux kernel datapath.
+          </p>
+
+          <p>
             Open vSwitch 2.6 introduced <code>nat</code>.  Linux 4.6 was the
             earliest upstream kernel that implemented <code>ct</code> support for
             <code>nat</code>.

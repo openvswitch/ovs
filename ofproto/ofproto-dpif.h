@@ -202,7 +202,10 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(bool, ct_timeout, "Conntrack timeout policy")        \
                                                                             \
     /* True if the datapath supports explicit drop action. */               \
-    DPIF_SUPPORT_FIELD(bool, explicit_drop_action, "Explicit Drop action")
+    DPIF_SUPPORT_FIELD(bool, explicit_drop_action, "Explicit Drop action")  \
+                                                                            \
+    /* True if the datapath supports all-zero IP SNAT. */                   \
+    DPIF_SUPPORT_FIELD(bool, ct_zero_snat, "Conntrack all-zero IP SNAT")
 
 
 /* Stores the various features which the corresponding backer supports. */

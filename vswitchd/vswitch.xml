@@ -5978,6 +5978,15 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         True if the datapath supports OVS_ACTION_ATTR_DROP.  If false,
         explicit drop action will not be sent to the datapath.
       </column>
+      <column name="capabilities" key="ct_zero_snat"
+              type='{"type": "boolean"}'>
+        True if the datapath supports all-zero SNAT. This is a special case
+        if the <code>src</code> IP address is configured as all 0's, i.e.,
+        <code>nat(src=0.0.0.0)</code>. In this case, when a source port
+        collision is detected during the commit, the source port will be
+        translated to an ephemeral port. If there is no collision, no SNAT
+        is performed.
+      </column>
     </group>
 
     <group title="Common Columns">
