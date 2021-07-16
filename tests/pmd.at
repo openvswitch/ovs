@@ -73,6 +73,7 @@ AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0],
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
@@ -111,6 +112,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP
@@ -142,6 +144,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
@@ -190,6 +193,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP
@@ -221,6 +225,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 # Force cross-numa polling
@@ -285,6 +290,7 @@ pmd thread numa_id 1 core_id 1:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 pmd thread numa_id 0 core_id 2:
   isolated : false
 ])
@@ -306,6 +312,7 @@ pmd thread numa_id 1 core_id 1:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 pmd thread numa_id 0 core_id 2:
   isolated : false
 ])
@@ -325,6 +332,7 @@ pmd thread numa_id 1 core_id 1:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 pmd thread numa_id 0 core_id 2:
   isolated : false
 ])
@@ -345,6 +353,7 @@ pmd thread numa_id 1 core_id 0:
   port: p0                queue-id:  5 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  6 (enabled)   pmd usage: NOT AVAIL
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
+  overhead: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP

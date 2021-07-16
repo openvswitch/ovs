@@ -195,6 +195,11 @@ queue::
    due to traffic pattern or reconfig changes, will take one minute to be fully
    reflected in the stats.
 
+.. versionchanged:: 2.16.0
+
+   A ``overhead`` statistics is shown per PMD: it represents the number of
+   cycles inherently consumed by the OVS PMD processing loop.
+
 Rx queue to PMD assignment takes place whenever there are configuration changes
 or can be triggered by using::
 

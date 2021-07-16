@@ -99,12 +99,17 @@ struct dp_netdev_pmd_thread {
     long long int next_optimization;
     /* End of the next time interval for which processing cycles
        are stored for each polled rxq. */
-    long long int rxq_next_cycle_store;
+    long long int next_cycle_store;
 
     /* Last interval timestamp. */
     uint64_t intrvl_tsc_prev;
     /* Last interval cycles. */
     atomic_ullong intrvl_cycles;
+
+    /* Write index for 'busy_cycles_intrvl'. */
+    unsigned int intrvl_idx;
+    /* Busy cycles in last PMD_INTERVAL_MAX intervals. */
+    atomic_ullong *busy_cycles_intrvl;
 
     /* Current context of the PMD thread. */
     struct dp_netdev_pmd_thread_ctx ctx;
