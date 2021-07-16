@@ -4676,7 +4676,7 @@ report_loss(struct dpif_netlink *dpif, struct dpif_channel *ch, uint32_t ch_idx,
                       time_msec() - ch->last_poll);
     }
 
-    VLOG_WARN("%s: lost packet on port channel %u of handler %u",
-              dpif_name(&dpif->dpif), ch_idx, handler_id);
+    VLOG_WARN("%s: lost packet on port channel %u of handler %u%s",
+              dpif_name(&dpif->dpif), ch_idx, handler_id, ds_cstr(&s));
     ds_destroy(&s);
 }
