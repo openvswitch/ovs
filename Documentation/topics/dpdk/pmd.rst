@@ -107,9 +107,9 @@ means that this thread will only poll the *pinned* Rx queues.
 .. warning::
 
    If there are no *non-isolated* PMD threads, *non-pinned* RX queues will not
-   be polled. Also, if the provided ``<core-id>`` is not available (e.g. the
-   ``<core-id>`` is not in ``pmd-cpu-mask``), the RX queue will not be polled
-   by any PMD thread.
+   be polled. If the provided ``<core-id>`` is not available (e.g. the
+   ``<core-id>`` is not in ``pmd-cpu-mask``), the RX queue will be assigned to
+   a *non-isolated* PMD, that will remain *non-isolated*.
 
 If ``pmd-rxq-affinity`` is not set for Rx queues, they will be assigned to PMDs
 (cores) automatically.

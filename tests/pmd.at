@@ -589,9 +589,12 @@ p1 3 0 8
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6])
 
 dnl We removed the cores requested by some queues from pmd-cpu-mask.
-dnl Those queues will not be polled.
+dnl Those queues will be polled by remaining non-isolated pmds.
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 1
 p1 2 0 2
+p1 3 0 1
 ])
 
 AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])

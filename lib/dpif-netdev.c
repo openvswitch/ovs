@@ -5205,11 +5205,14 @@ sched_numa_list_schedule(struct sched_numa_list *numa_list,
                     VLOG(level == VLL_DBG ? VLL_DBG : VLL_WARN,
                             "Core %2u cannot be pinned with "
                             "port \'%s\' rx queue %d. Use pmd-cpu-mask to "
-                            "enable a pmd on core %u.",
+                            "enable a pmd on core %u. An alternative core "
+                            "will be assigned.",
                             rxq->core_id,
                             netdev_rxq_get_name(rxq->rx),
                             netdev_rxq_get_queue_id(rxq->rx),
                             rxq->core_id);
+                    rxqs = xrealloc(rxqs, (n_rxqs + 1) * sizeof *rxqs);
+                    rxqs[n_rxqs++] = rxq;
                     continue;
                 }
                 /* Mark PMD as isolated if not done already. */
