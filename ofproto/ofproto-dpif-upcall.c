@@ -129,10 +129,10 @@ struct udpif {
     struct dpif_backer *backer;        /* Opaque dpif_backer pointer. */
 
     struct handler *handlers;          /* Upcall handlers. */
-    size_t n_handlers;
+    uint32_t n_handlers;
 
     struct revalidator *revalidators;  /* Flow revalidators. */
-    size_t n_revalidators;
+    uint32_t n_revalidators;
 
     struct latch exit_latch;           /* Tells child threads to exit. */
 
@@ -335,8 +335,8 @@ static int process_upcall(struct udpif *, struct upcall *,
                           struct ofpbuf *odp_actions, struct flow_wildcards *);
 static void handle_upcalls(struct udpif *, struct upcall *, size_t n_upcalls);
 static void udpif_stop_threads(struct udpif *, bool delete_flows);
-static void udpif_start_threads(struct udpif *, size_t n_handlers,
-                                size_t n_revalidators);
+static void udpif_start_threads(struct udpif *, uint32_t n_handlers,
+                                uint32_t n_revalidators);
 static void udpif_pause_revalidators(struct udpif *);
 static void udpif_resume_revalidators(struct udpif *);
 static void *udpif_upcall_handler(void *);
@@ -562,8 +562,8 @@ udpif_stop_threads(struct udpif *udpif, bool delete_flows)
 
 /* Starts the handler and revalidator threads. */
 static void
-udpif_start_threads(struct udpif *udpif, size_t n_handlers_,
-                    size_t n_revalidators_)
+udpif_start_threads(struct udpif *udpif, uint32_t n_handlers_,
+                    uint32_t n_revalidators_)
 {
     if (udpif && n_handlers_ && n_revalidators_) {
         /* Creating a thread can take a significant amount of time on some
@@ -632,8 +632,8 @@ udpif_resume_revalidators(struct udpif *udpif)
  * datapath handle must have packet reception enabled before starting
  * threads. */
 void
-udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
-                  size_t n_revalidators_)
+udpif_set_threads(struct udpif *udpif, uint32_t n_handlers_,
+                  uint32_t n_revalidators_)
 {
     ovs_assert(udpif);
     ovs_assert(n_handlers_ && n_revalidators_);
@@ -691,8 +691,8 @@ udpif_get_memory_usage(struct udpif *udpif, struct simap *usage)
 void
 udpif_flush(struct udpif *udpif)
 {
-    size_t n_handlers_ = udpif->n_handlers;
-    size_t n_revalidators_ = udpif->n_revalidators;
+    uint32_t n_handlers_ = udpif->n_handlers;
+    uint32_t n_revalidators_ = udpif->n_revalidators;
 
     udpif_stop_threads(udpif, true);
     dpif_flow_flush(udpif->dpif);

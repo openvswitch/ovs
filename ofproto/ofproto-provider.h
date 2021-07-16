@@ -534,7 +534,7 @@ extern unsigned ofproto_min_revalidate_pps;
 
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
-extern size_t n_handlers, n_revalidators;
+extern uint32_t n_handlers, n_revalidators;
 
 static inline struct rule *rule_from_cls_rule(const struct cls_rule *);
 

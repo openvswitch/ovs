@@ -309,7 +309,7 @@ unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
 unsigned ofproto_min_revalidate_pps = OFPROTO_MIN_REVALIDATE_PPS_DEFAULT;
 
-size_t n_handlers, n_revalidators;
+uint32_t n_handlers, n_revalidators;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
