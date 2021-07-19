@@ -133,7 +133,8 @@ following:
 - A kernel build directory corresponding to the Linux kernel image the module
   is to run on. Under Debian and Ubuntu, for example, each linux-image package
   containing a kernel binary has a corresponding linux-headers package with
-  the required build infrastructure.
+  the required build infrastructure, so the name of the package correspoing
+  with your running kernel is ``linux-headers-$(uname -r)``.
 
 If you are working from a Git tree or snapshot (instead of from a distribution
 tarball), or if you modify the Open vSwitch build system or the database
@@ -385,14 +386,14 @@ Building
 2. Consider running the testsuite. Refer to :doc:`/topics/testing` for
    instructions.
 
-3. Run ``make install`` to install the executables and manpages into the
+3. Run ``sudo make install`` to install the executables and manpages into the
    running system, by default under ``/usr/local``::
 
-       $ make install
+       $ sudo make install
 
 5. If you built kernel modules, you may install them, e.g.::
 
-       $ make modules_install
+       $ sudo make modules_install
 
    It is possible that you already had a Open vSwitch kernel module installed
    on your machine that came from upstream Linux (in a different directory). To
@@ -402,12 +403,12 @@ Building
    following snippet of code achieves the same::
 
        $ config_file="/etc/depmod.d/openvswitch.conf"
-       $ for module in datapath/linux/*.ko; do
+       $ sudo for module in datapath/linux/*.ko; do
          modname="$(basename ${module})"
          echo "override ${modname%.ko} * extra" >> "$config_file"
          echo "override ${modname%.ko} * weak-updates" >> "$config_file"
          done
-       $ depmod -a
+       $ sudo depmod -a
 
    Finally, load the kernel modules that you need. e.g.::
 
@@ -450,18 +451,18 @@ utility is located in '$(pkgdatadir)/scripts', and defaults to
 '/usr/local/share/openvswitch/scripts'.  An example after install might be::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
-    $ ovs-ctl start
+    $ sudo ovs-ctl start
 
 Additionally, the ovs-ctl script allows starting / stopping the daemons
 individually using specific options.  To start just the ovsdb-server::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
-    $ ovs-ctl --no-ovs-vswitchd start
+    $ sudo ovs-ctl --no-ovs-vswitchd start
 
 Likewise, to start just the ovs-vswitchd::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
-    $ ovs-ctl --no-ovsdb-server start
+    $ sudo ovs-ctl --no-ovsdb-server start
 
 Refer to ovs-ctl(8) for more information on ovs-ctl.
 
@@ -472,15 +473,15 @@ machine on which Open vSwitch is installed should run its own copy of
 ovsdb-server. Before ovsdb-server itself can be started, configure a
 database that it can use::
 
-       $ mkdir -p /usr/local/etc/openvswitch
-       $ ovsdb-tool create /usr/local/etc/openvswitch/conf.db \
+       $ sudo mkdir -p /usr/local/etc/openvswitch
+       $ sudo ovsdb-tool create /usr/local/etc/openvswitch/conf.db \
            vswitchd/vswitch.ovsschema
 
 Configure ovsdb-server to use database created above, to listen on a Unix
 domain socket, to connect to any managers specified in the database itself, and
 to use the SSL configuration in the database::
 
-    $ mkdir -p /usr/local/var/run/openvswitch
+    $ sudo mkdir -p /usr/local/var/run/openvswitch
     $ ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
         --remote=db:Open_vSwitch,Open_vSwitch,manager_options \
         --private-key=db:Open_vSwitch,SSL,private_key \
@@ -496,12 +497,12 @@ Initialize the database using ovs-vsctl. This is only necessary the first time
 after you create the database with ovsdb-tool, though running it at any time is
 harmless::
 
-    $ ovs-vsctl --no-wait init
+    $ sudo ovs-vsctl --no-wait init
 
 Start the main Open vSwitch daemon, telling it to connect to the same Unix
 domain socket::
 
-    $ ovs-vswitchd --pidfile --detach --log-file
+    $ sudo ovs-vswitchd --pidfile --detach --log-file
 
 Starting OVS in container
 -------------------------
@@ -559,9 +560,9 @@ At this point you can use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named ``br0`` and add ports ``eth0``
 and ``vif1.0`` to it::
 
-    $ ovs-vsctl add-br br0
-    $ ovs-vsctl add-port br0 eth0
-    $ ovs-vsctl add-port br0 vif1.0
+    $ sudo ovs-vsctl add-br br0
+    $ sudo ovs-vsctl add-port br0 eth0
+    $ sudo ovs-vsctl add-port br0 vif1.0
 
 Refer to ovs-vsctl(8) for more details. You may also wish to refer to
 :doc:`/topics/testing` for information on more generic testing of OVS.
@@ -583,7 +584,7 @@ upgrade the database schema:
 
 1. Stop the Open vSwitch daemons, e.g.::
 
-       $ kill `cd /usr/local/var/run/openvswitch && cat ovsdb-server.pid ovs-vswitchd.pid`
+       $ sudo killall -9 ovsdb-server ovs-vswitchd
 
 2. Install the new Open vSwitch release by using the same configure options as
    was used for installing the previous version. If you do not use the same
@@ -599,7 +600,7 @@ upgrade the database schema:
    -  If you want to preserve the contents of your database, back it up first,
       then use ``ovsdb-tool convert`` to upgrade it, e.g.::
 
-          $ ovsdb-tool convert /usr/local/etc/openvswitch/conf.db \
+          $ sudo ovsdb-tool convert /usr/local/etc/openvswitch/conf.db \
               vswitchd/vswitch.ovsschema
 
 4. Start the Open vSwitch daemons as described under `Starting`_ above.
