@@ -263,7 +263,7 @@ dnl --------------------------------------------------------------------------
 dnl Add standard DPDK PHY port
 AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
 AT_KEYWORDS([dpdk])
-AT_SKIP_IF([! pip3 list | grep scapy], [], [])
+AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
 AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py $srcdir], [], [stdout])
 OVS_DPDK_START()
 
