@@ -50,7 +50,7 @@ An integrator sets the columns in the database by talking to the ovsdb-server
 daemon.  A few of the columns can be set during startup by calling the ovs-ctl
 tool from inside the startup scripts.  The ``xenserver/etc_init.d_openvswitch``
 script provides examples of its use, and the ovs-ctl(8) manpage contains
-complete documentation.  At runtime, ovs-vsctl can be be used to set columns in
+complete documentation.  At runtime, ovs-vsctl can be used to set columns in
 the database.  The script ``xenserver/etc_xensource_scripts_vif`` contains
 examples of its use, and ovs-vsctl(8) manpage contains complete documentation.
 

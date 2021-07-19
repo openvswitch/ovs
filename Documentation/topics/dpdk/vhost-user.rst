@@ -524,8 +524,8 @@ introduced in QEMU 2.7.0 / libvirt 2.3.0::
       <address type='pci' domain='0x0000' bus='0x00' slot='0x10' function='0x0'/>
   </interface>
 
-The guest application will also need need to provide enough descriptors. For
-example with ``testpmd`` the command line argument can be used::
+The guest application will also need to provide enough descriptors.
+For example with ``testpmd`` the command line argument can be used::
 
  --rxd=1024 --txd=1024
 

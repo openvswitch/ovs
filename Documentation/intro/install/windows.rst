@@ -311,8 +311,8 @@ NIC named 'Ethernet 1' is:
    You can obtain the list of physical NICs on the host using 'Get-NetAdapter'
    command.
 
-In the properties of any switch, you should should now see "Open vSwitch
-Extension" under 'Extensions'.  Click the check box to enable the extension.
+In the properties of any switch, you should now see "Open vSwitch Extension"
+under 'Extensions'.  Click the check box to enable the extension.
 An alternative way to do the same is to run the following command:
 
 ::
@@ -729,7 +729,7 @@ Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
 
 .. note::
 
-   Any patch ports created between br-int and br-pif MUST be be deleted prior
+   Any patch ports created between br-int and br-pif MUST be deleted prior
    to adding tunnels.
 
 Windows Services
