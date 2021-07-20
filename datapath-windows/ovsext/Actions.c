@@ -1550,9 +1550,21 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
         if (tcpHdr) {
             portField = &tcpHdr->dest;
             checkField = &tcpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.TcpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.TcpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.TcpChecksumFailed);
         } else if (udpHdr) {
             portField = &udpHdr->dest;
             checkField = &udpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.UdpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
+        }
+
+       if (l4Offload) {
+            *checkField = IPPseudoChecksum(&ipHdr->saddr, &newAddr,
+                tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
+                ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
         }
     }
 
