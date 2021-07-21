@@ -2227,11 +2227,29 @@ m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
 OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL connects to leader], 3, ['remote'])
 OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL reconnects to leader], 3, ['remote' '+remotestop' 'remote'])
 
-# same as OVSDB_CHECK_IDL but uses C IDL implementation with tcp
-# with multiple remotes.
+# OVSDB_CHECK_CLUSTER_IDL_C(TITLE, N_SERVERS, [PRE-IDL-TXN], TRANSACTIONS,
+#                           OUTPUT, [KEYWORDS], [FILTER], [LOG_FILTER])
+#
+# Creates a clustered database with a schema derived from idltest.ovsidl, runs
+# each PRE-IDL-TXN (if any), starts N_SERVERS ovsdb-server instances in RAFT,
+# on that database, and runs "test-ovsdb idl" passing each of the TRANSACTIONS
+# along.
+#
+# Checks that the overall output is OUTPUT.  Before comparison, the
+# output is sorted (using "sort") and UUIDs in the output are replaced
+# by markers of the form <N> where N is a number.  The first unique
+# UUID is replaced by <0>, the next by <1>, and so on.  If a given
+# UUID appears more than once it is always replaced by the same
+# marker.  If FILTER is supplied then the output is also filtered
+# through the specified program.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+#
+# If LOG_FILTER is provided, checks that the contents of LOG_FILTER
+# are not matched by grep in the test-ovsdb logs.
 m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
   [AT_SETUP([$1 - C - tcp])
-   AT_KEYWORDS([ovsdb server idl positive tcp socket $5])
+   AT_KEYWORDS([ovsdb server idl tcp $6])
    m4_define([LPBK],[127.0.0.1])
    OVSDB_CLUSTER_START_IDLTEST([$2], ["ptcp:0:"LPBK])
    PARSE_LISTENING_PORT([s1.log], [TCP_PORT_1])
@@ -2242,10 +2260,35 @@ m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
    m4_if([$3], [], [],
      [AT_CHECK([ovsdb-client transact $remotes $3], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl tcp:LPBK:$TCP_PORT_1 $4],
-            [0], [stdout], [ignore])
+            [0], [stdout], [stderr])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
             [0], [$5])
+   m4_ifval([$8], [AT_CHECK([grep '$8' stderr], [1])], [], [])
    AT_CLEANUP])
+
+# Same as OVSDB_CHECK_CLUSTER_IDL_C but uses the Python IDL implementation.
+m4_define([OVSDB_CHECK_CLUSTER_IDL_PY],
+  [AT_SETUP([$1 - Python3 - tcp])
+   AT_KEYWORDS([ovsdb server idl tcp $6])
+   m4_define([LPBK],[127.0.0.1])
+   OVSDB_CLUSTER_START_IDLTEST([$2], ["ptcp:0:"LPBK])
+   PARSE_LISTENING_PORT([s1.log], [TCP_PORT_1])
+   PARSE_LISTENING_PORT([s2.log], [TCP_PORT_2])
+   PARSE_LISTENING_PORT([s3.log], [TCP_PORT_3])
+   remotes=tcp:LPBK:$TCP_PORT_1,tcp:LPBK:$TCP_PORT_2,tcp:LPBK:$TCP_PORT_3
+
+   m4_if([$3], [], [],
+     [AT_CHECK([ovsdb-client transact $remotes $3], [0], [ignore], [ignore])])
+   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py -t10 idl $srcdir/idltest.ovsschema tcp:LPBK:$TCP_PORT_1 $4],
+            [0], [stdout], [stderr])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
+            [0], [$5])
+   m4_if([$8], [AT_CHECK([grep '$8' stderr], [1])], [], [])
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_CLUSTER_IDL],
+  [OVSDB_CHECK_CLUSTER_IDL_C($@)
+   OVSDB_CHECK_CLUSTER_IDL_PY($@)])
 
 # Checks that monitor_cond_since works fine when disconnects happen
 # with cond_change requests in flight (i.e., IDL is properly updated).
@@ -2282,3 +2325,26 @@ OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
 008: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 009: done
 ]])
+
+dnl This test checks that forceful reconnects triggered by the IDL
+dnl happen immediately (they should not use backoff).
+OVSDB_CHECK_CLUSTER_IDL([simple idl, initially empty, force reconnect],
+  3,
+  [],
+  [['+reconnect' \
+    'reconnect' \
+    'reconnect' \
+    'reconnect']],
+  [[000: reconnect
+001: empty
+002: reconnect
+003: empty
+004: reconnect
+005: empty
+006: reconnect
+007: empty
+008: done
+]],
+[],
+[],
+reconnect.*waiting .* seconds before reconnect)

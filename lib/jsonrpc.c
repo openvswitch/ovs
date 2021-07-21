@@ -1261,6 +1261,24 @@ jsonrpc_session_force_reconnect(struct jsonrpc_session *s)
     reconnect_force_reconnect(s->reconnect, time_msec());
 }
 
+/* Resets the reconnect backoff for 's' by allowing as many free tries as the
+ * number of configured remotes.  This is to be used by upper layers before
+ * calling jsonrpc_session_force_reconnect() if backoff is undesirable.
+ */
+void
+jsonrpc_session_reset_backoff(struct jsonrpc_session *s)
+{
+    unsigned int free_tries = s->remotes.n;
+
+    if (jsonrpc_session_is_connected(s)) {
+        /* The extra free try will be consumed when the current remote
+         * is disconnected.
+         */
+        free_tries++;
+    }
+    reconnect_set_backoff_free_tries(s->reconnect, free_tries);
+}
+
 /* Sets 'max_backoff' as the maximum time, in milliseconds, to wait after a
  * connection attempt fails before attempting to connect again. */
 void
