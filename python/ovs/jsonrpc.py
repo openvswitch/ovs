@@ -612,5 +612,18 @@ class Session(object):
     def force_reconnect(self):
         self.reconnect.force_reconnect(ovs.timeval.msec())
 
+    def reset_backoff(self):
+        """ Resets the reconnect backoff by allowing as many free tries as the
+        number of configured remotes.  This is to be used by upper layers
+        before calling force_reconnect() if backoff is undesirable."""
+        free_tries = len(self.remotes)
+
+        if self.is_connected():
+            # The extra free try will be consumed when the current remote
+            # is disconnected.
+            free_tries += 1
+
+        self.reconnect.set_backoff_free_tries(free_tries)
+
     def get_num_of_remotes(self):
         return len(self.remotes)

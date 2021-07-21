@@ -102,6 +102,7 @@ class Idl(object):
     IDL_S_SERVER_MONITOR_REQUESTED = 2
     IDL_S_DATA_MONITOR_REQUESTED = 3
     IDL_S_DATA_MONITOR_COND_REQUESTED = 4
+    IDL_S_MONITORING = 5
 
     def __init__(self, remote, schema_helper, probe_interval=None,
                  leader_only=True):
@@ -295,6 +296,7 @@ class Idl(object):
                     else:
                         assert self.state == self.IDL_S_DATA_MONITOR_REQUESTED
                         self.__parse_update(msg.result, OVSDB_UPDATE)
+                    self.state = self.IDL_S_MONITORING
 
                 except error.Error as e:
                     vlog.err("%s: parse error in received schema: %s"
@@ -442,6 +444,15 @@ class Idl(object):
     def force_reconnect(self):
         """Forces the IDL to drop its connection to the database and reconnect.
         In the meantime, the contents of the IDL will not change."""
+        if self.state == self.IDL_S_MONITORING:
+            # The IDL was in MONITORING state, so we either had data
+            # inconsistency on this server, or it stopped being the cluster
+            # leader, or the user requested to re-connect.  Avoiding backoff
+            # in these cases, as we need to re-connect as soon as possible.
+            # Connections that are not in MONITORING state should have their
+            # backoff to avoid constant flood of re-connection attempts in
+            # case there is no suitable database server.
+            self._session.reset_backoff()
         self._session.force_reconnect()
 
     def session_name(self):
