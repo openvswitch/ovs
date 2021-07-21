@@ -729,6 +729,16 @@ void
 ovsdb_cs_force_reconnect(struct ovsdb_cs *cs)
 {
     if (cs->session) {
+        if (cs->state == CS_S_MONITORING) {
+            /* The ovsdb-cs was in MONITORING state, so we either had data
+             * inconsistency on this server, or it stopped being the cluster
+             * leader, or the user requested to re-connect.  Avoiding backoff
+             * in these cases, as we need to re-connect as soon as possible.
+             * Connections that are not in MONITORING state should have their
+             * backoff to avoid constant flood of re-connection attempts in
+             * case there is no suitable database server. */
+            jsonrpc_session_reset_backoff(cs->session);
+        }
         jsonrpc_session_force_reconnect(cs->session);
     }
 }

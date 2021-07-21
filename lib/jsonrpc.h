@@ -137,6 +137,7 @@ void jsonrpc_session_get_reconnect_stats(const struct jsonrpc_session *,
 
 void jsonrpc_session_enable_reconnect(struct jsonrpc_session *);
 void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
+void jsonrpc_session_reset_backoff(struct jsonrpc_session *);
 
 void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
                                      int max_backoff);
