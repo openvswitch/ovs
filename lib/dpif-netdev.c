@@ -3078,11 +3078,9 @@ smc_insert(struct dp_netdev_pmd_thread *pmd,
     struct smc_bucket *bucket = &smc_cache->buckets[key->hash & SMC_MASK];
     uint16_t index;
     uint32_t cmap_index;
-    bool smc_enable_db;
     int i;
 
-    atomic_read_relaxed(&pmd->dp->smc_enable_db, &smc_enable_db);
-    if (!smc_enable_db) {
+    if (!pmd->ctx.smc_enable_db) {
         return;
     }
 
@@ -5915,6 +5913,9 @@ dpif_netdev_run(struct dpif *dpif)
     non_pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
     if (non_pmd) {
         ovs_mutex_lock(&dp->non_pmd_mutex);
+
+        atomic_read_relaxed(&dp->smc_enable_db, &non_pmd->ctx.smc_enable_db);
+
         HMAP_FOR_EACH (port, node, &dp->ports) {
             if (!netdev_is_pmd(port->netdev)) {
                 int i;
@@ -5925,8 +5926,6 @@ dpif_netdev_run(struct dpif *dpif)
                 } else {
                     non_pmd->ctx.emc_insert_min = 0;
                 }
-
-                non_pmd->ctx.smc_enable_db = dp->smc_enable_db;
 
                 for (i = 0; i < port->n_rxq; i++) {
 
@@ -6190,6 +6189,8 @@ reload:
 
         pmd_perf_start_iteration(s);
 
+        atomic_read_relaxed(&pmd->dp->smc_enable_db, &pmd->ctx.smc_enable_db);
+
         for (i = 0; i < poll_cnt; i++) {
 
             if (!poll_list[i].rxq_enabled) {
@@ -6202,8 +6203,6 @@ reload:
             } else {
                 pmd->ctx.emc_insert_min = 0;
             }
-
-            pmd->ctx.smc_enable_db = pmd->dp->smc_enable_db;
 
             process_packets =
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq,
@@ -7328,11 +7327,9 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     const bool netdev_flow_api = netdev_is_flow_api_enabled();
     int i;
     uint16_t tcp_flags;
-    bool smc_enable_db;
     size_t map_cnt = 0;
     bool batch_enable = true;
 
-    atomic_read_relaxed(&pmd->dp->smc_enable_db, &smc_enable_db);
     pmd_perf_update_counter(&pmd->perf_stats,
                             md_is_valid ? PMD_STAT_RECIRC : PMD_STAT_RECV,
                             cnt);
@@ -7434,7 +7431,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                             n_mfex_opt_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, n_emc_hit);
 
-    if (!smc_enable_db) {
+    if (!pmd->ctx.smc_enable_db) {
         return dp_packet_batch_size(packets_);
     }
 
