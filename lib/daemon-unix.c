@@ -284,6 +284,7 @@ fork_and_wait_for_startup(int *fdp, pid_t *child_pid)
                     VLOG_ERR("fork child died before signaling startup (%s)",
                              status_msg);
                     ret = -1;
+                    free(status_msg);
                 }
             } else if (retval < 0) {
                 VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
