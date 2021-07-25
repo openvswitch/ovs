@@ -503,8 +503,11 @@ dump_flow_action(struct ds *s, struct ds *s_extra,
 
         ds_put_format(s, "set_ipv6_%s ", dirstr);
         if (set_ipv6) {
+            struct in6_addr addr;
+
             ds_put_cstr(s, "ipv6_addr ");
-            ipv6_format_addr((struct in6_addr *) &set_ipv6->ipv6_addr, s);
+            memcpy(&addr, set_ipv6->ipv6_addr, sizeof addr);
+            ipv6_format_addr(&addr, s);
             ds_put_cstr(s, " ");
         }
         ds_put_cstr(s, "/ ");
