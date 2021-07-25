@@ -362,8 +362,11 @@ dump_vxlan_encap(struct ds *s, const struct rte_flow_item *items)
     ds_put_format(s, "set vxlan ip-version %s ",
                   ipv4 ? "ipv4" : ipv6 ? "ipv6" : "ERR");
     if (vxlan) {
-        ds_put_format(s, "vni %"PRIu32" ",
-                      ntohl(*(ovs_be32 *) vxlan->vni) >> 8);
+        ovs_be32 vni;
+
+        vni = get_unaligned_be32(ALIGNED_CAST(ovs_be32 *,
+                                              vxlan->vni));
+        ds_put_format(s, "vni %"PRIu32" ", ntohl(vni) >> 8);
     }
     if (udp) {
         ds_put_format(s, "udp-src %"PRIu16" udp-dst %"PRIu16" ",
