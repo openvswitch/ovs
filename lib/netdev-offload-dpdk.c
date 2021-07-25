@@ -375,15 +375,19 @@ dump_flow_pattern(struct ds *s,
     } else if (item->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
         const struct rte_flow_item_vxlan *vxlan_spec = item->spec;
         const struct rte_flow_item_vxlan *vxlan_mask = item->mask;
+        ovs_be32 spec_vni, mask_vni;
 
         ds_put_cstr(s, "vxlan ");
         if (vxlan_spec) {
             if (!vxlan_mask) {
                 vxlan_mask = &rte_flow_item_vxlan_mask;
             }
+            spec_vni = get_unaligned_be32(ALIGNED_CAST(ovs_be32 *,
+                                                       vxlan_spec->vni));
+            mask_vni = get_unaligned_be32(ALIGNED_CAST(ovs_be32 *,
+                                                       vxlan_mask->vni));
             DUMP_PATTERN_ITEM(vxlan_mask->vni, "vni", "%"PRIu32,
-                              ntohl(*(ovs_be32 *) vxlan_spec->vni) >> 8,
-                              ntohl(*(ovs_be32 *) vxlan_mask->vni) >> 8);
+                              ntohl(spec_vni) >> 8, ntohl(mask_vni) >> 8);
         }
         ds_put_cstr(s, "/ ");
     } else {
@@ -417,8 +421,11 @@ dump_vxlan_encap(struct ds *s, const struct rte_flow_item *items)
     ds_put_format(s, "set vxlan ip-version %s ",
                   ipv4 ? "ipv4" : ipv6 ? "ipv6" : "ERR");
     if (vxlan) {
-        ds_put_format(s, "vni %"PRIu32" ",
-                      ntohl(*(ovs_be32 *) vxlan->vni) >> 8);
+        ovs_be32 vni;
+
+        vni = get_unaligned_be32(ALIGNED_CAST(ovs_be32 *,
+                                              vxlan->vni));
+        ds_put_format(s, "vni %"PRIu32" ", ntohl(vni) >> 8);
     }
     if (udp) {
         ds_put_format(s, "udp-src %"PRIu16" udp-dst %"PRIu16" ",
@@ -1002,9 +1009,9 @@ parse_vxlan_match(struct flow_patterns *patterns,
     vx_spec = xzalloc(sizeof *vx_spec);
     vx_mask = xzalloc(sizeof *vx_mask);
 
-    put_unaligned_be32((ovs_be32 *) vx_spec->vni,
+    put_unaligned_be32(ALIGNED_CAST(ovs_be32 *, vx_spec->vni),
                        htonl(ntohll(match->flow.tunnel.tun_id) << 8));
-    put_unaligned_be32((ovs_be32 *) vx_mask->vni,
+    put_unaligned_be32(ALIGNED_CAST(ovs_be32 *, vx_mask->vni),
                        htonl(ntohll(match->wc.masks.tunnel.tun_id) << 8));
 
     consumed_masks->tunnel.tun_id = 0;
