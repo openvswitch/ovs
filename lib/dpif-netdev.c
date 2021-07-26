@@ -2556,18 +2556,6 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
     return ret;
 }
 
-static void
-flow_mark_flush(struct dp_netdev_pmd_thread *pmd)
-{
-    struct dp_netdev_flow *flow;
-
-    CMAP_FOR_EACH (flow, mark_node, &flow_mark.mark_to_flow) {
-        if (flow->pmd_id == pmd->core_id) {
-            queue_netdev_flow_del(pmd, flow);
-        }
-    }
-}
-
 static struct dp_netdev_flow *
 mark_to_flow_find(const struct dp_netdev_pmd_thread *pmd,
                   const uint32_t mark)
@@ -5140,7 +5128,6 @@ reload_affected_pmds(struct dp_netdev *dp)
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         if (pmd->need_reload) {
-            flow_mark_flush(pmd);
             dp_netdev_reload_pmd__(pmd);
         }
     }
