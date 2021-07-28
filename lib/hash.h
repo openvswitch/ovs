@@ -235,7 +235,7 @@ hash_words_inline(const uint32_t p_[], size_t n_words, uint32_t basis)
 /* A simpler version for 64-bit data.
  * 'n_words' is the count of 64-bit words, basis is 64 bits. */
 static inline uint32_t
-hash_words64_inline(const uint64_t p[], size_t n_words, uint32_t basis)
+hash_words64_inline(const uint64_t *p, size_t n_words, uint32_t basis)
 {
     uint64_t hash1 = basis;
     uint64_t hash2 = 0;
@@ -284,14 +284,14 @@ static inline uint32_t hash_pointer(const void *p, uint32_t basis)
 }
 #endif
 
-uint32_t hash_words__(const uint32_t p[], size_t n_words, uint32_t basis);
-uint32_t hash_words64__(const uint64_t p[], size_t n_words, uint32_t basis);
+uint32_t hash_words__(const uint32_t *p, size_t n_words, uint32_t basis);
+uint32_t hash_words64__(const uint64_t *p, size_t n_words, uint32_t basis);
 
 /* Inline the larger hash functions only when 'n_words' is known to be
  * compile-time constant. */
 #if __GNUC__ >= 4
 static inline uint32_t
-hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
+hash_words(const uint32_t *p, size_t n_words, uint32_t basis)
 {
     if (__builtin_constant_p(n_words)) {
         return hash_words_inline(p, n_words, basis);
@@ -301,7 +301,7 @@ hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
 }
 
 static inline uint32_t
-hash_words64(const uint64_t p[], size_t n_words, uint32_t basis)
+hash_words64(const uint64_t *p, size_t n_words, uint32_t basis)
 {
     if (__builtin_constant_p(n_words)) {
         return hash_words64_inline(p, n_words, basis);
@@ -313,26 +313,26 @@ hash_words64(const uint64_t p[], size_t n_words, uint32_t basis)
 #else
 
 static inline uint32_t
-hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
+hash_words(const uint32_t *p, size_t n_words, uint32_t basis)
 {
     return hash_words__(p, n_words, basis);
 }
 
 static inline uint32_t
-hash_words64(const uint64_t p[], size_t n_words, uint32_t basis)
+hash_words64(const uint64_t *p, size_t n_words, uint32_t basis)
 {
     return hash_words64__(p, n_words, basis);
 }
 #endif
 
 static inline uint32_t
-hash_bytes32(const uint32_t p[], size_t n_bytes, uint32_t basis)
+hash_bytes32(const uint32_t *p, size_t n_bytes, uint32_t basis)
 {
     return hash_words(p, n_bytes / 4, basis);
 }
 
 static inline uint32_t
-hash_bytes64(const uint64_t p[], size_t n_bytes, uint32_t basis)
+hash_bytes64(const uint64_t *p, size_t n_bytes, uint32_t basis)
 {
     return hash_words64(p, n_bytes / 8, basis);
 }
