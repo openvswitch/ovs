@@ -61,13 +61,13 @@ hash_double(double x, uint32_t basis)
 }
 
 uint32_t
-hash_words__(const uint32_t p[], size_t n_words, uint32_t basis)
+hash_words__(const uint32_t *p, size_t n_words, uint32_t basis)
 {
     return hash_words_inline(p, n_words, basis);
 }
 
 uint32_t
-hash_words64__(const uint64_t p[], size_t n_words, uint32_t basis)
+hash_words64__(const uint64_t *p, size_t n_words, uint32_t basis)
 {
     return hash_words64_inline(p, n_words, basis);
 }
