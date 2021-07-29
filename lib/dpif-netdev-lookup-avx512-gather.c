@@ -53,15 +53,6 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif_lookup_avx512_gather);
 
-
-/* Wrapper function required to enable ISA. */
-static inline __m512i
-__attribute__((__target__("avx512vpopcntdq")))
-_mm512_popcnt_epi64_wrapper(__m512i v_in)
-{
-    return _mm512_popcnt_epi64(v_in);
-}
-
 static inline __m512i
 _mm512_popcnt_epi64_manual(__m512i v_in)
 {
@@ -83,6 +74,23 @@ _mm512_popcnt_epi64_manual(__m512i v_in)
     __m512i v_u8_pop = _mm512_add_epi8(v_lo_pop, v_hi_pop);
 
     return _mm512_sad_epu8(v_u8_pop, _mm512_setzero_si512());
+}
+
+/* Wrapper function required to enable ISA. First enable the ISA via the
+ * attribute target for this function, then check if the compiler actually
+ * #defines the ISA itself. If the ISA is not #define-ed by the compiler it
+ * indicates the compiler is too old or is not capable of compiling the
+ * requested ISA level, so fallback to the integer manual implementation.
+ */
+static inline __m512i
+__attribute__((__target__("avx512vpopcntdq")))
+_mm512_popcnt_epi64_wrapper(__m512i v_in)
+{
+#ifdef __AVX512VPOPCNTDQ__
+    return _mm512_popcnt_epi64(v_in);
+#else
+    return _mm512_popcnt_epi64_manual(v_in);
+#endif
 }
 
 static inline uint64_t
