@@ -1981,6 +1981,111 @@ tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - zones from other field])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(zone=5,table=0)
+priority=100,in_port=1,tcp,ct_state=+trk,action=ct(commit,zone=NXM_NX_CT_ZONE[]),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=5)
+priority=100,in_port=2,ct_state=+trk,ct_zone=5,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_START_L7([at_ns1], [http])
+
+dnl HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,dnl
+orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),dnl
+reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),dnl
+zone=5,protoinfo=(state=<cleared>)
+])
+
+dnl This is to test when the zoneid is set by a field variable like
+dnl NXM_NX_CT_ZONE, the OVS xlate should generate a megaflow with a form of
+dnl "ct_zone(5), ...  actions: ct(commit, zone=5)".  The match "ct_zone(5)"
+dnl is needed as if we changes the zoneid into 15 in the following, the old
+dnl "ct_zone(5), ... actions: ct(commit, zone=5)" megaflow will not get hit,
+dnl and OVS will generate a new megaflow with the match "ct_zone(0xf)".
+dnl This will make sure that the new packets are committing to zoneid 15
+dnl rather than old 5.
+AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
+              | grep "+trk" | grep -q "ct_zone(0x5)" ], [0], [])
+
+AT_CHECK([ovs-ofctl mod-flows br0 dnl
+            'priority=100,ct_state=-trk,tcp,in_port="ovs-p0" actions=ct(table=0,zone=15)'])
+
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
+              | grep "+trk" | grep -q "ct_zone(0xf)" ], [0], [])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - zones from other field, more tests])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(zone=5,table=0,commit,exec(load:0xffff0005->NXM_NX_CT_LABEL[[0..31]]))
+priority=100,in_port=1,tcp,ct_state=+trk,action=ct(commit,zone=NXM_NX_CT_LABEL[[0..15]]),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=5)
+priority=100,in_port=2,ct_state=+trk,ct_zone=5,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_START_L7([at_ns1], [http])
+
+dnl HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,dnl
+orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),dnl
+reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),dnl
+zone=5,labels=0xffff0005,protoinfo=(state=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
+              | grep "+trk" | sed 's/0xffff0005\/0xffff/0x5\/0xffff/' dnl
+              | grep -q "ct_label(0x5/0xffff)" ], [0], [])
+
+AT_CHECK([ovs-ofctl mod-flows br0 'priority=100,ct_state=-trk,tcp,in_port="ovs-p0" actions=ct(table=0,zone=15,commit,exec(load:0xffff000f->NXM_NX_CT_LABEL[[0..31]]))'])
+
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
+              | grep "+trk" | sed 's/0xffff000f\/0xffff/0xf\/0xffff/' dnl
+              | grep -q "ct_label(0xf/0xffff)" ], [0], [])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - multiple bridges])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START(
