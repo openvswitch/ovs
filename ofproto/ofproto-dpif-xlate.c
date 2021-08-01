@@ -6177,11 +6177,32 @@ static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
                          bool is_last_action)
 {
+    uint16_t zone;
+    if (ofc->zone_src.field) {
+        union mf_subvalue value;
+        memset(&value, 0xff, sizeof(value));
+
+        zone = mf_get_subfield(&ofc->zone_src, &ctx->xin->flow);
+        if (ctx->xin->frozen_state) {
+            /* If the upcall is a resume of a recirculation, we only need to
+             * unwildcard the fields that are not in the frozen_metadata, as
+             * when the rules update, OVS will generate a new recirc_id,
+             * which will invalidate the megaflow with old the recirc_id.
+             */
+            if (!mf_is_frozen_metadata(ofc->zone_src.field)) {
+                mf_write_subfield_flow(&ofc->zone_src, &value,
+                                       &ctx->wc->masks);
+            }
+        } else {
+            mf_write_subfield_flow(&ofc->zone_src, &value, &ctx->wc->masks);
+        }
+    } else {
+        zone = ofc->zone_imm;
+    }
+
+    size_t ct_offset;
     ovs_u128 old_ct_label_mask = ctx->wc->masks.ct_label;
     uint32_t old_ct_mark_mask = ctx->wc->masks.ct_mark;
-    size_t ct_offset;
-    uint16_t zone;
-
     /* Ensure that any prior actions are applied before composing the new
      * conntrack action. */
     xlate_commit_actions(ctx);
@@ -6193,11 +6214,6 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
     do_xlate_actions(ofc->actions, ofpact_ct_get_action_len(ofc), ctx,
                      is_last_action, false);
 
-    if (ofc->zone_src.field) {
-        zone = mf_get_subfield(&ofc->zone_src, &ctx->xin->flow);
-    } else {
-        zone = ofc->zone_imm;
-    }
 
     ct_offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CT);
     if (ofc->flags & NX_CT_F_COMMIT) {
