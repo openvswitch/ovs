@@ -1765,6 +1765,19 @@ mf_is_tun_metadata(const struct mf_field *mf)
 }
 
 bool
+mf_is_frozen_metadata(const struct mf_field *mf)
+{
+    if (mf->id >= MFF_TUN_ID && mf->id <= MFF_IN_PORT_OXM) {
+        return true;
+    }
+
+    if (mf->id >= MFF_REG0 && mf->id < MFF_ETH_SRC) {
+        return true;
+    }
+    return false;
+}
+
+bool
 mf_is_pipeline_field(const struct mf_field *mf)
 {
     switch (mf->id) {
