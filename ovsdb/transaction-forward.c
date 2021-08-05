@@ -52,6 +52,7 @@ ovsdb_txn_forward_create(struct ovsdb *db, const struct jsonrpc_msg *request)
     COVERAGE_INC(txn_forward_create);
     txn_fwd->request = jsonrpc_msg_clone(request);
     ovs_list_push_back(&db->txn_forward_new, &txn_fwd->new_node);
+    hmap_node_nullify(&txn_fwd->sent_node);
 
     return txn_fwd;
 }
