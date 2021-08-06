@@ -472,6 +472,12 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
 
+    AC_CHECK_DECL([MAP_HUGE_SHIFT], [
+      AC_DEFINE([DPDK_IN_MEMORY_SUPPORTED], [1], [If MAP_HUGE_SHIFT is
+                 defined, anonymous memory mapping is supported by the
+                 kernel, and --in-memory can be used.])
+    ], [], [[#include <sys/mman.h>]])
+
     # DPDK uses dlopen to load plugins.
     OVS_FIND_DEPENDENCY([dlopen], [dl], [libdl])
 

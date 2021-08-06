@@ -405,6 +405,13 @@ dpdk_init__(const struct smap *ovs_other_config)
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
 
+#ifdef DPDK_IN_MEMORY_SUPPORTED
+    if (!args_contains(&args, "--in-memory") &&
+            !args_contains(&args, "--legacy-mem")) {
+        svec_add(&args, "--in-memory");
+    }
+#endif
+
     if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
         auto_determine = false;
     }
