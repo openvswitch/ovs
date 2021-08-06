@@ -155,6 +155,7 @@ endif
 
 # rST formatted manpages under Documentation/ref.
 RST_MANPAGES = \
+	ovs-actions.7.rst \
 	ovs-appctl.8.rst \
 	ovs-ctl.8.rst \
 	ovs-l3ping.8.rst \

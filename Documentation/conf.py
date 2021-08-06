@@ -48,7 +48,7 @@ master_doc = 'contents'
 
 # General information about the project.
 project = u'Open vSwitch'
-copyright = u'2016, The Open vSwitch Development Community'
+copyright = u'2016-2021, The Open vSwitch Development Community'
 author = u'The Open vSwitch Development Community'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -114,6 +114,8 @@ html_static_path = ['_static']
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 _man_pages = [
+    ('ovs-actions.7',
+     u'OpenFlow actions and instructions with Open vSwitch extensions'),
     ('ovs-appctl.8',
      u'utility for configuring running Open vSwitch daemons'),
     ('ovs-ctl.8',

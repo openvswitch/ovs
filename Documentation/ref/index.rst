@@ -39,6 +39,7 @@ time:
 .. toctree::
    :maxdepth: 3
 
+   ovs-actions.7
    ovs-appctl.8
    ovs-ctl.8
    ovs-l3ping.8
@@ -57,10 +58,6 @@ The remainder are still in roff format can be found below:
 
 .. list-table::
 
-   * - ovs-actions(7)
-     - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.pdf>`__
-     - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.html>`__
-     - `(plain text) <http://www.openvswitch.org/support/dist-docs/ovs-actions.7.txt>`__
    * - ovs-bugtool(8)
      - `(pdf) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.pdf>`__
      - `(html) <http://www.openvswitch.org/support/dist-docs/ovs-bugtool.8.html>`__

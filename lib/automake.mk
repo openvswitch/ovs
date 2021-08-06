@@ -667,12 +667,3 @@ lib/ovs-fields.7: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/met
             $(srcdir)/lib/meta-flow.xml > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 EXTRA_DIST += lib/meta-flow.xml
-
-man_MANS += lib/ovs-actions.7
-CLEANFILES += lib/ovs-actions.7
-lib/ovs-actions.7: $(srcdir)/build-aux/extract-ofp-actions lib/ovs-actions.xml
-	$(AM_V_GEN)PYTHONIOENCODING=utf8 $(run_python) $< \
-            --ovs-version=$(VERSION) ovs-actions \
-            $(srcdir)/lib/ovs-actions.xml > $@.tmp
-	$(AM_V_at)mv $@.tmp $@
-EXTRA_DIST += lib/ovs-actions.xml
