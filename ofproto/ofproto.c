@@ -797,6 +797,27 @@ ofproto_set_threads(int n_handlers_, int n_revalidators_)
 }
 
 void
+ofproto_set_mfr_desc(struct ofproto *p, const char *mfr_desc)
+{
+    free(p->mfr_desc);
+    p->mfr_desc = nullable_xstrdup(mfr_desc);
+}
+
+void
+ofproto_set_hw_desc(struct ofproto *p, const char* hw_desc)
+{
+    free(p->hw_desc);
+    p->hw_desc = nullable_xstrdup(hw_desc);
+}
+
+void
+ofproto_set_sw_desc(struct ofproto *p, const char* sw_desc)
+{
+    free(p->sw_desc);
+    p->sw_desc = nullable_xstrdup(sw_desc);
+}
+
+void
 ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
 {
     free(p->dp_desc);

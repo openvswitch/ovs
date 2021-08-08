@@ -287,8 +287,7 @@ static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_ipfix(struct bridge *);
 static void bridge_configure_spanning_tree(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
-static void bridge_configure_dp_desc(struct bridge *);
-static void bridge_configure_serial_desc(struct bridge *);
+static void bridge_configure_ofp_desc(struct bridge *);
 static void bridge_configure_aa(struct bridge *);
 static void bridge_aa_refresh_queued(struct bridge *);
 static bool bridge_aa_need_refresh(struct bridge *);
@@ -942,8 +941,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_ipfix(br);
         bridge_configure_spanning_tree(br);
         bridge_configure_tables(br);
-        bridge_configure_dp_desc(br);
-        bridge_configure_serial_desc(br);
+        bridge_configure_ofp_desc(br);
         bridge_configure_aa(br);
     }
     free(managers);
@@ -4123,17 +4121,23 @@ bridge_configure_tables(struct bridge *br)
 }
 
 static void
-bridge_configure_dp_desc(struct bridge *br)
+bridge_configure_ofp_desc(struct bridge *br)
 {
-    ofproto_set_dp_desc(br->ofproto,
-                        smap_get(&br->cfg->other_config, "dp-desc"));
-}
-
-static void
-bridge_configure_serial_desc(struct bridge *br)
-{
+    // Manufacturer description
+    ofproto_set_mfr_desc(br->ofproto,
+                         smap_get(&br->cfg->other_config, "mfr-desc"));
+    // Hardware description
+    ofproto_set_hw_desc(br->ofproto,
+                        smap_get(&br->cfg->other_config, "hw-desc"));
+    // Software description
+    ofproto_set_sw_desc(br->ofproto,
+                        smap_get(&br->cfg->other_config, "sw-desc"));
+    // Serial number
     ofproto_set_serial_desc(br->ofproto,
                         smap_get(&br->cfg->other_config, "dp-sn"));
+    // DP description
+    ofproto_set_dp_desc(br->ofproto,
+                        smap_get(&br->cfg->other_config, "dp-desc"));
 }
 
 static struct aa_mapping *

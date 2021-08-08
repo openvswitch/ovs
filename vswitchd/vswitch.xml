@@ -1309,6 +1309,27 @@
         prefix or be exactly 16 hex digits long.  May not be all-zero.
       </column>
 
+      <column name="other_config" key="mfr-desc">
+        Manufacturer description. Defaults to "Nicira, Inc.".
+        The value is returned by the switch as a part of reply to OFPMP_DESC
+        request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
+        the ofp_desc structure to contaion "NULL terminated ASCII strings".
+      </column>
+
+      <column name="other_config" key="hw-desc">
+        Hardware description. Defaults to "Open vSwitch".
+        The value is returned by the switch as a part of reply to OFPMP_DESC
+        request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
+        the ofp_desc structure to contaion "NULL terminated ASCII strings".
+      </column>
+
+      <column name="other_config" key="sw-desc">
+        Software description. Defaults to the current Open vSwitch version.
+        The value is returned by the switch as a part of reply to OFPMP_DESC
+        request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
+        the ofp_desc structure to contaion "NULL terminated ASCII strings".
+      </column>
+
       <column name="other_config" key="dp-desc">
         Human readable description of datapath.  It is a maximum 256
         byte-long free-form string to describe the datapath for
