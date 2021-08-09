@@ -2638,6 +2638,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 if (!released && flower->tunnel) {
                     act_offset = nl_msg_start_nested(request, act_index++);
                     nl_msg_put_act_tunnel_key_release(request);
+                    nl_msg_put_act_flags(request);
                     nl_msg_end_nested(request, act_offset);
                     released = true;
                 }
