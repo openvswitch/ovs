@@ -249,6 +249,7 @@ Leif Madsen                        lmadsen@redhat.com
 Leo Alterman
 Li RongQing                        lirongqing@baidu.com
 Lian-min Wang                      liang-min.wang@intel.com
+Lin Huang                          linhuang@ruijie.com.cn
 Liu Chang                          liuchang@cmss.chinamobile.com
 Lilijun                            jerry.lilijun@huawei.com
 Lili Huang                         huanglili.huang@huawei.com
