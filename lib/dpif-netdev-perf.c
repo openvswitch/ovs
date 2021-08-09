@@ -232,10 +232,10 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
     uint64_t busy_iter = tot_iter >= idle_iter ? tot_iter - idle_iter : 0;
 
     ds_put_format(str,
-            "  Iterations:        %12"PRIu64"  (%.2f us/it)\n"
-            "  - Used TSC cycles: %12"PRIu64"  (%5.1f %% of total cycles)\n"
-            "  - idle iterations: %12"PRIu64"  (%5.1f %% of used cycles)\n"
-            "  - busy iterations: %12"PRIu64"  (%5.1f %% of used cycles)\n",
+            "  Iterations:         %12"PRIu64"  (%.2f us/it)\n"
+            "  - Used TSC cycles:  %12"PRIu64"  (%5.1f %% of total cycles)\n"
+            "  - idle iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n"
+            "  - busy iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n",
             tot_iter, tot_cycles * us_per_cycle / tot_iter,
             tot_cycles, 100.0 * (tot_cycles / duration) / tsc_hz,
             idle_iter,
@@ -244,16 +244,17 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles);
     if (rx_packets > 0) {
         ds_put_format(str,
-            "  Rx packets:        %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
-            "  Datapath passes:   %12"PRIu64"  (%.2f passes/pkt)\n"
-            "  - PHWOL hits:      %12"PRIu64"  (%5.1f %%)\n"
-            "  - MFEX Opt hits:   %12"PRIu64"  (%5.1f %%)\n"
-            "  - EMC hits:        %12"PRIu64"  (%5.1f %%)\n"
-            "  - SMC hits:        %12"PRIu64"  (%5.1f %%)\n"
-            "  - Megaflow hits:   %12"PRIu64"  (%5.1f %%, %.2f "
-                                                "subtbl lookups/hit)\n"
-            "  - Upcalls:         %12"PRIu64"  (%5.1f %%, %.1f us/upcall)\n"
-            "  - Lost upcalls:    %12"PRIu64"  (%5.1f %%)\n",
+            "  Rx packets:         %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
+            "  Datapath passes:    %12"PRIu64"  (%.2f passes/pkt)\n"
+            "  - PHWOL hits:       %12"PRIu64"  (%5.1f %%)\n"
+            "  - MFEX Opt hits:    %12"PRIu64"  (%5.1f %%)\n"
+            "  - Simple Match hits:%12"PRIu64"  (%5.1f %%)\n"
+            "  - EMC hits:         %12"PRIu64"  (%5.1f %%)\n"
+            "  - SMC hits:         %12"PRIu64"  (%5.1f %%)\n"
+            "  - Megaflow hits:    %12"PRIu64"  (%5.1f %%, %.2f "
+                                                 "subtbl lookups/hit)\n"
+            "  - Upcalls:          %12"PRIu64"  (%5.1f %%, %.1f us/upcall)\n"
+            "  - Lost upcalls:     %12"PRIu64"  (%5.1f %%)\n",
             rx_packets, (rx_packets / duration) / 1000,
             1.0 * stats[PMD_CYCLES_ITER_BUSY] / rx_packets,
             passes, rx_packets ? 1.0 * passes / rx_packets : 0,
@@ -261,6 +262,8 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             100.0 * stats[PMD_STAT_PHWOL_HIT] / passes,
             stats[PMD_STAT_MFEX_OPT_HIT],
             100.0 * stats[PMD_STAT_MFEX_OPT_HIT] / passes,
+            stats[PMD_STAT_SIMPLE_HIT],
+            100.0 * stats[PMD_STAT_SIMPLE_HIT] / passes,
             stats[PMD_STAT_EXACT_HIT],
             100.0 * stats[PMD_STAT_EXACT_HIT] / passes,
             stats[PMD_STAT_SMC_HIT],
@@ -275,16 +278,18 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             stats[PMD_STAT_LOST],
             100.0 * stats[PMD_STAT_LOST] / passes);
     } else {
-        ds_put_format(str, "  Rx packets:        %12d\n", 0);
+        ds_put_format(str,
+            "  Rx packets:         %12d\n", 0);
     }
     if (tx_packets > 0) {
         ds_put_format(str,
-            "  Tx packets:        %12"PRIu64"  (%.0f Kpps)\n"
-            "  Tx batches:        %12"PRIu64"  (%.2f pkts/batch)\n",
+            "  Tx packets:         %12"PRIu64"  (%.0f Kpps)\n"
+            "  Tx batches:         %12"PRIu64"  (%.2f pkts/batch)\n",
             tx_packets, (tx_packets / duration) / 1000,
             tx_batches, 1.0 * tx_packets / tx_batches);
     } else {
-        ds_put_format(str, "  Tx packets:        %12d\n\n", 0);
+        ds_put_format(str,
+            "  Tx packets:         %12d\n\n", 0);
     }
 }
 

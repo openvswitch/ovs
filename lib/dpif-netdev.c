@@ -35,6 +35,7 @@
 #include <unistd.h>
 
 #include "bitmap.h"
+#include "ccmap.h"
 #include "cmap.h"
 #include "conntrack.h"
 #include "conntrack-tp.h"
@@ -560,6 +561,20 @@ pmd_perf_metrics_enabled(const struct dp_netdev_pmd_thread *pmd);
 static void queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
                                   struct dp_netdev_flow *flow);
 
+static void dp_netdev_simple_match_insert(struct dp_netdev_pmd_thread *pmd,
+                                          struct dp_netdev_flow *flow)
+    OVS_REQUIRES(pmd->flow_mutex);
+static void dp_netdev_simple_match_remove(struct dp_netdev_pmd_thread *pmd,
+                                          struct dp_netdev_flow *flow)
+    OVS_REQUIRES(pmd->flow_mutex);
+
+static bool dp_netdev_flow_is_simple_match(const struct match *);
+static bool dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *,
+                                           odp_port_t in_port);
+static struct dp_netdev_flow *dp_netdev_simple_match_lookup(
+    const struct dp_netdev_pmd_thread *,
+    odp_port_t in_port, ovs_be16 dp_type, uint8_t nw_frag, ovs_be16 vlan_tci);
+
 /* Updates the time in PMD threads context and should be called in three cases:
  *
  *     1. PMD structure initialization:
@@ -659,6 +674,7 @@ pmd_info_show_stats(struct ds *reply,
                   "  avg. datapath passes per packet: %.02f\n"
                   "  phwol hits: %"PRIu64"\n"
                   "  mfex opt hits: %"PRIu64"\n"
+                  "  simple match hits: %"PRIu64"\n"
                   "  emc hits: %"PRIu64"\n"
                   "  smc hits: %"PRIu64"\n"
                   "  megaflow hits: %"PRIu64"\n"
@@ -668,8 +684,11 @@ pmd_info_show_stats(struct ds *reply,
                   "  avg. packets per output batch: %.02f\n",
                   total_packets, stats[PMD_STAT_RECIRC],
                   passes_per_pkt, stats[PMD_STAT_PHWOL_HIT],
-                  stats[PMD_STAT_MFEX_OPT_HIT], stats[PMD_STAT_EXACT_HIT],
-                  stats[PMD_STAT_SMC_HIT], stats[PMD_STAT_MASKED_HIT],
+                  stats[PMD_STAT_MFEX_OPT_HIT],
+                  stats[PMD_STAT_SIMPLE_HIT],
+                  stats[PMD_STAT_EXACT_HIT],
+                  stats[PMD_STAT_SMC_HIT],
+                  stats[PMD_STAT_MASKED_HIT],
                   lookups_per_hit, stats[PMD_STAT_MISS], stats[PMD_STAT_LOST],
                   packets_per_batch);
 
@@ -1956,6 +1975,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
         stats->n_flows += cmap_count(&pmd->flow_table);
         pmd_perf_read_counters(&pmd->perf_stats, pmd_stats);
         stats->n_hit += pmd_stats[PMD_STAT_PHWOL_HIT];
+        stats->n_hit += pmd_stats[PMD_STAT_SIMPLE_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_EXACT_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_SMC_HIT];
         stats->n_hit += pmd_stats[PMD_STAT_MASKED_HIT];
@@ -2824,7 +2844,9 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
     ovs_assert(cls != NULL);
     dpcls_remove(cls, &flow->cr);
+    dp_netdev_simple_match_remove(pmd, flow);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
+    ccmap_dec(&pmd->n_flows, odp_to_u32(in_port));
     if (flow->mark != INVALID_FLOW_MARK) {
         queue_netdev_flow_del(pmd, flow);
     }
@@ -3580,6 +3602,177 @@ dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
     odp_flow_key_hash(&masked_flow, sizeof masked_flow, mega_ufid);
 }
 
+static uint64_t
+dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
+                            uint8_t nw_frag, ovs_be16 vlan_tci)
+{
+    /* Simple Match Mark:
+     *
+     * BE:
+     * +-----------------+-------------++---------+---+-----------+
+     * |     in_port     |   dl_type   || nw_frag |CFI|  VID(12)  |
+     * +-----------------+-------------++---------+---+-----------+
+     * 0                 32          47 49         51  52     63
+     *
+     * LE:
+     * +-----------------+-------------+------++-------+---+------+
+     * |     in_port     |   dl_type   |VID(8)||nw_frag|CFI|VID(4)|
+     * +-----------------+-------------+------++-------+---+------+
+     * 0                 32          47 48  55  57   59 60  61   63
+     *
+     *         Big Endian              Little Endian
+     * in_port : 32 bits [ 0..31]  in_port : 32 bits [ 0..31]
+     * dl_type : 16 bits [32..47]  dl_type : 16 bits [32..47]
+     * <empty> :  1 bit  [48..48]  vlan VID:  8 bits [48..55]
+     * nw_frag :  2 bits [49..50]  <empty> :  1 bit  [56..56]
+     * vlan CFI:  1 bit  [51..51]  nw_frag :  2 bits [57..59]
+     * vlan VID: 12 bits [52..63]  vlan CFI:  1 bit  [60..60]
+     *                             vlan VID:  4 bits [61..63]
+     *
+     * Layout is different for LE and BE in order to save a couple of
+     * network to host translations.
+     * */
+    return ((uint64_t) odp_to_u32(in_port) << 32)
+           | ((OVS_FORCE uint32_t) dl_type << 16)
+#if WORDS_BIGENDIAN
+           | (((uint16_t) nw_frag & FLOW_NW_FRAG_MASK) << VLAN_PCP_SHIFT)
+#else
+           | ((nw_frag & FLOW_NW_FRAG_MASK) << (VLAN_PCP_SHIFT - 8))
+#endif
+           | (OVS_FORCE uint16_t) (vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI));
+}
+
+static struct dp_netdev_flow *
+dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
+                              odp_port_t in_port, ovs_be16 dl_type,
+                              uint8_t nw_frag, ovs_be16 vlan_tci)
+{
+    uint64_t mark = dp_netdev_simple_match_mark(in_port, dl_type,
+                                                nw_frag, vlan_tci);
+    uint32_t hash = hash_uint64(mark);
+    struct dp_netdev_flow *flow;
+    bool found = false;
+
+    CMAP_FOR_EACH_WITH_HASH (flow, simple_match_node,
+                             hash, &pmd->simple_match_table) {
+        if (flow->simple_match_mark == mark) {
+            found = true;
+            break;
+        }
+    }
+    return found ? flow : NULL;
+}
+
+static bool
+dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *pmd,
+                               odp_port_t in_port)
+{
+    return ccmap_find(&pmd->n_flows, odp_to_u32(in_port))
+           == ccmap_find(&pmd->n_simple_flows, odp_to_u32(in_port));
+}
+
+static void
+dp_netdev_simple_match_insert(struct dp_netdev_pmd_thread *pmd,
+                              struct dp_netdev_flow *dp_flow)
+    OVS_REQUIRES(pmd->flow_mutex)
+{
+    odp_port_t in_port = dp_flow->flow.in_port.odp_port;
+    ovs_be16 vlan_tci = dp_flow->flow.vlans[0].tci;
+    ovs_be16 dl_type = dp_flow->flow.dl_type;
+    uint8_t nw_frag = dp_flow->flow.nw_frag;
+
+    if (!dp_netdev_flow_ref(dp_flow)) {
+        return;
+    }
+
+    /* Avoid double insertion.  Should not happen in practice. */
+    dp_netdev_simple_match_remove(pmd, dp_flow);
+
+    uint64_t mark = dp_netdev_simple_match_mark(in_port, dl_type,
+                                                nw_frag, vlan_tci);
+    uint32_t hash = hash_uint64(mark);
+
+    dp_flow->simple_match_mark = mark;
+    cmap_insert(&pmd->simple_match_table,
+                CONST_CAST(struct cmap_node *, &dp_flow->simple_match_node),
+                hash);
+    ccmap_inc(&pmd->n_simple_flows, odp_to_u32(in_port));
+
+    VLOG_DBG("Simple match insert: "
+             "core_id(%d),in_port(%"PRIu32"),mark(0x%016"PRIx64").",
+             pmd->core_id, in_port, mark);
+}
+
+static void
+dp_netdev_simple_match_remove(struct dp_netdev_pmd_thread *pmd,
+                               struct dp_netdev_flow *dp_flow)
+    OVS_REQUIRES(pmd->flow_mutex)
+{
+    odp_port_t in_port = dp_flow->flow.in_port.odp_port;
+    ovs_be16 vlan_tci = dp_flow->flow.vlans[0].tci;
+    ovs_be16 dl_type = dp_flow->flow.dl_type;
+    uint8_t nw_frag = dp_flow->flow.nw_frag;
+    struct dp_netdev_flow *flow;
+    uint64_t mark = dp_netdev_simple_match_mark(in_port, dl_type,
+                                                nw_frag, vlan_tci);
+    uint32_t hash = hash_uint64(mark);
+
+    flow = dp_netdev_simple_match_lookup(pmd, in_port, dl_type,
+                                         nw_frag, vlan_tci);
+    if (flow == dp_flow) {
+        VLOG_DBG("Simple match remove: "
+                 "core_id(%d),in_port(%"PRIu32"),mark(0x%016"PRIx64").",
+                 pmd->core_id, in_port, mark);
+        cmap_remove(&pmd->simple_match_table,
+                    CONST_CAST(struct cmap_node *, &flow->simple_match_node),
+                    hash);
+        ccmap_dec(&pmd->n_simple_flows, odp_to_u32(in_port));
+        dp_netdev_flow_unref(flow);
+    }
+}
+
+static bool
+dp_netdev_flow_is_simple_match(const struct match *match)
+{
+    const struct flow *flow = &match->flow;
+    const struct flow_wildcards *wc = &match->wc;
+
+    if (flow->recirc_id || flow->packet_type != htonl(PT_ETH)) {
+        return false;
+    }
+
+    /* Check that flow matches only minimal set of fields that always set.
+     * Also checking that VLAN VID+CFI is an exact match, because these
+     * are not mandatory and could be masked. */
+    struct flow_wildcards *minimal = xmalloc(sizeof *minimal);
+    ovs_be16 vlan_tci_mask = htons(VLAN_VID_MASK | VLAN_CFI);
+
+    flow_wildcards_init_catchall(minimal);
+    /* 'dpif-netdev' always has following in exact match:
+     *   - recirc_id                   <-- recirc_id == 0 checked on input.
+     *   - in_port                     <-- Will be checked on input.
+     *   - packet_type                 <-- Assuming all packets are PT_ETH.
+     *   - dl_type                     <-- Need to match with.
+     *   - vlan_tci                    <-- Need to match with.
+     *   - and nw_frag for ip packets. <-- Need to match with.
+     */
+    WC_MASK_FIELD(minimal, recirc_id);
+    WC_MASK_FIELD(minimal, in_port);
+    WC_MASK_FIELD(minimal, packet_type);
+    WC_MASK_FIELD(minimal, dl_type);
+    WC_MASK_FIELD_MASK(minimal, vlans[0].tci, vlan_tci_mask);
+    WC_MASK_FIELD_MASK(minimal, nw_frag, FLOW_NW_FRAG_MASK);
+
+    if (flow_wildcards_has_extra(minimal, wc)
+        || wc->masks.vlans[0].tci != vlan_tci_mask) {
+        free(minimal);
+        return false;
+    }
+    free(minimal);
+
+    return true;
+}
+
 static struct dp_netdev_flow *
 dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                    struct match *match, const ovs_u128 *ufid,
@@ -3649,6 +3842,11 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
+    ccmap_inc(&pmd->n_flows, odp_to_u32(in_port));
+
+    if (dp_netdev_flow_is_simple_match(match)) {
+        dp_netdev_simple_match_insert(pmd, flow);
+    }
 
     queue_netdev_flow_put(pmd, flow, match, actions, actions_len,
                           orig_in_port, DP_NETDEV_FLOW_OFFLOAD_OP_ADD);
@@ -3774,7 +3972,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
      * Netlink and struct flow representations, we have to do the same
      * here.  This must be in sync with 'match' in handle_packet_upcall(). */
     if (!match.wc.masks.vlans[0].tci) {
-        match.wc.masks.vlans[0].tci = htons(0xffff);
+        match.wc.masks.vlans[0].tci = htons(VLAN_VID_MASK | VLAN_CFI);
     }
 
     /* Must produce a netdev_flow_key for lookup.
@@ -6771,6 +6969,9 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     ovs_mutex_init(&pmd->bond_mutex);
     cmap_init(&pmd->flow_table);
     cmap_init(&pmd->classifiers);
+    cmap_init(&pmd->simple_match_table);
+    ccmap_init(&pmd->n_flows);
+    ccmap_init(&pmd->n_simple_flows);
     pmd->ctx.last_rxq = NULL;
     pmd_thread_ctx_time_update(pmd);
     pmd->next_optimization = pmd->ctx.now + DPCLS_OPTIMIZATION_INTERVAL;
@@ -6824,6 +7025,9 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     }
     cmap_destroy(&pmd->classifiers);
     cmap_destroy(&pmd->flow_table);
+    cmap_destroy(&pmd->simple_match_table);
+    ccmap_destroy(&pmd->n_flows);
+    ccmap_destroy(&pmd->n_simple_flows);
     ovs_mutex_destroy(&pmd->flow_mutex);
     seq_destroy(pmd->reload_seq);
     ovs_mutex_destroy(&pmd->port_mutex);
@@ -7351,6 +7555,33 @@ dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
     return 0;
 }
 
+/* Enqueues already classified packet into per-flow batches or the flow map,
+ * depending on the fact if batching enabled. */
+static inline void
+dfc_processing_enqueue_classified_packet(struct dp_packet *packet,
+                                         struct dp_netdev_flow *flow,
+                                         uint16_t tcp_flags,
+                                         bool batch_enable,
+                                         struct packet_batch_per_flow *batches,
+                                         size_t *n_batches,
+                                         struct dp_packet_flow_map *flow_map,
+                                         size_t *map_cnt)
+
+{
+    if (OVS_LIKELY(batch_enable)) {
+        dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
+                                n_batches);
+    } else {
+        /* Flow batching should be performed only after fast-path
+         * processing is also completed for packets with emc miss
+         * or else it will result in reordering of packets with
+         * same datapath flows. */
+        packet_enqueue_to_flow_map(packet, flow, tcp_flags,
+                                   flow_map, (*map_cnt)++);
+    }
+
+}
+
 /* Try to process all ('cnt') the 'packets' using only the datapath flow cache
  * 'pmd->flow_cache'. If a flow is not found for a packet 'packets[i]', the
  * miniflow is copied into 'keys' and the packet pointer is moved at the
@@ -7376,25 +7607,32 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                size_t *n_flows, uint8_t *index_map,
                bool md_is_valid, odp_port_t port_no)
 {
-    struct netdev_flow_key *key = &keys[0];
-    size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0,  n_mfex_opt_hit = 0;
-    struct dfc_cache *cache = &pmd->flow_cache;
-    struct dp_packet *packet;
-    const size_t cnt = dp_packet_batch_size(packets_);
-    uint32_t cur_min = pmd->ctx.emc_insert_min;
-    const uint32_t recirc_depth = *recirc_depth_get();
     const bool netdev_flow_api = netdev_is_flow_api_enabled();
-    int i;
-    uint16_t tcp_flags;
+    const uint32_t recirc_depth = *recirc_depth_get();
+    const size_t cnt = dp_packet_batch_size(packets_);
+    size_t n_missed = 0, n_emc_hit = 0, n_phwol_hit = 0;
+    size_t n_mfex_opt_hit = 0, n_simple_hit = 0;
+    struct dfc_cache *cache = &pmd->flow_cache;
+    struct netdev_flow_key *key = &keys[0];
+    struct dp_packet *packet;
     size_t map_cnt = 0;
     bool batch_enable = true;
+
+    const bool simple_match_enabled =
+        !md_is_valid && dp_netdev_simple_match_enabled(pmd, port_no);
+    /* 'simple_match_table' is a full flow table.  If the flow is not there,
+     * upcall is required, and there is no chance to find a match in caches. */
+    const bool smc_enable_db = !simple_match_enabled && pmd->ctx.smc_enable_db;
+    const uint32_t cur_min = simple_match_enabled
+                             ? 0 : pmd->ctx.emc_insert_min;
 
     pmd_perf_update_counter(&pmd->perf_stats,
                             md_is_valid ? PMD_STAT_RECIRC : PMD_STAT_RECV,
                             cnt);
-
+    int i;
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, cnt, packet, packets_) {
-        struct dp_netdev_flow *flow;
+        struct dp_netdev_flow *flow = NULL;
+        uint16_t tcp_flags;
 
         if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
             dp_packet_delete(packet);
@@ -7421,19 +7659,27 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
             if (OVS_LIKELY(flow)) {
-                tcp_flags = parse_tcp_flags(packet);
+                tcp_flags = parse_tcp_flags(packet, NULL, NULL, NULL);
                 n_phwol_hit++;
-                if (OVS_LIKELY(batch_enable)) {
-                    dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
-                                            n_batches);
-                } else {
-                    /* Flow batching should be performed only after fast-path
-                     * processing is also completed for packets with emc miss
-                     * or else it will result in reordering of packets with
-                     * same datapath flows. */
-                    packet_enqueue_to_flow_map(packet, flow, tcp_flags,
-                                               flow_map, map_cnt++);
-                }
+                dfc_processing_enqueue_classified_packet(
+                        packet, flow, tcp_flags, batch_enable,
+                        batches, n_batches, flow_map, &map_cnt);
+                continue;
+            }
+        }
+
+        if (!flow && simple_match_enabled) {
+            ovs_be16 dl_type = 0, vlan_tci = 0;
+            uint8_t nw_frag = 0;
+
+            tcp_flags = parse_tcp_flags(packet, &dl_type, &nw_frag, &vlan_tci);
+            flow = dp_netdev_simple_match_lookup(pmd, port_no, dl_type,
+                                                 nw_frag, vlan_tci);
+            if (OVS_LIKELY(flow)) {
+                n_simple_hit++;
+                dfc_processing_enqueue_classified_packet(
+                        packet, flow, tcp_flags, batch_enable,
+                        batches, n_batches, flow_map, &map_cnt);
                 continue;
             }
         }
@@ -7450,17 +7696,9 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
         if (OVS_LIKELY(flow)) {
             tcp_flags = miniflow_get_tcp_flags(&key->mf);
             n_emc_hit++;
-            if (OVS_LIKELY(batch_enable)) {
-                dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
-                                        n_batches);
-            } else {
-                /* Flow batching should be performed only after fast-path
-                 * processing is also completed for packets with emc miss
-                 * or else it will result in reordering of packets with
-                 * same datapath flows. */
-                packet_enqueue_to_flow_map(packet, flow, tcp_flags,
-                                           flow_map, map_cnt++);
-            }
+            dfc_processing_enqueue_classified_packet(
+                    packet, flow, tcp_flags, batch_enable,
+                    batches, n_batches, flow_map, &map_cnt);
         } else {
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array. */
@@ -7488,9 +7726,11 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, n_phwol_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MFEX_OPT_HIT,
                             n_mfex_opt_hit);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SIMPLE_HIT,
+                            n_simple_hit);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, n_emc_hit);
 
-    if (!pmd->ctx.smc_enable_db) {
+    if (!smc_enable_db) {
         return dp_packet_batch_size(packets_);
     }
 
@@ -7539,7 +7779,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
      * Netlink and struct flow representations, we have to do the same
      * here.  This must be in sync with 'match' in dpif_netdev_flow_put(). */
     if (!match.wc.masks.vlans[0].tci) {
-        match.wc.masks.vlans[0].tci = htons(0xffff);
+        match.wc.masks.vlans[0].tci = htons(VLAN_VID_MASK | VLAN_CFI);
     }
 
     /* We can't allow the packet batching in the next loop to execute

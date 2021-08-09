@@ -2434,7 +2434,7 @@ netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
             ret = EOPNOTSUPP;
             goto close_vport_netdev;
         }
-        parse_tcp_flags(packet);
+        parse_tcp_flags(packet, NULL, NULL, NULL);
         if (vport_netdev->netdev_class->pop_header(packet) == NULL) {
             /* If there is an error with popping the header, the packet is
              * freed. In this case it should not continue SW processing.

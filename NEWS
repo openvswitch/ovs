@@ -1,5 +1,8 @@
 Post-v2.16.0
 ---------------------
+   - Userspace datapath:
+     * Optimized flow lookups for datapath flows with simple match criteria.
+       See 'Simple Match Lookup' in Documentation/topics/dpdk/bridge.rst.
    - DPDK:
      * EAL argument --socket-mem is no longer configured by default upon
        start-up.  If dpdk-socket-mem and dpdk-alloc-mem are not specified,

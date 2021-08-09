@@ -81,6 +81,30 @@ using the following command::
 
     $ ovs-vsctl get Interface <iface> statistics
 
+Simple Match Lookup
+-------------------
+
+There are cases where users might want simple forwarding or drop rules for all
+packets received from a specific port, e.g ::
+
+    in_port=1,actions=2
+    in_port=2,actions=IN_PORT
+    in_port=3,vlan_tci=0x1234/0x1fff,actions=drop
+    in_port=4,actions=push_vlan:0x8100,set_field:4196->vlan_vid,output:3
+
+There are also cases where complex OpenFlow rules can be simplified down to
+datapath flows with very simple match criteria.
+
+In theory, for very simple forwarding, OVS doesn't need to parse packets at all
+in order to follow these rules.  In practice, due to various implementation
+constraints, userspace datapath has to match at least on a small set of packet
+fileds.  Some matching criteria (for example, ingress port) are not related to
+the packet itself and others (for example, VLAN tag or Ethernet type) can be
+extracted without fully parsing the packet.  This allows OVS to significantly
+speed up packet forwarding for these flows with simple match criteria.
+Statistics on the number of packets matched in this way can be found in a
+`simple match hits` counter of `ovs-appctl dpif-netdev/pmd-stats-show` command.
+
 EMC Insertion Probability
 -------------------------
 

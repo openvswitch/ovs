@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ccmap.h"
 #include "cmap.h"
 
 #include "dpif-netdev-private-dfc.h"
@@ -86,12 +87,18 @@ struct dp_netdev_pmd_thread {
 
     /* Flow-Table and classifiers
      *
-     * Writers of 'flow_table' must take the 'flow_mutex'.  Corresponding
-     * changes to 'classifiers' must be made while still holding the
-     * 'flow_mutex'.
+     * Writers of 'flow_table'/'simple_match_table' and their n* ccmap's must
+     * take the 'flow_mutex'.  Corresponding changes to 'classifiers' must be
+     * made while still holding the 'flow_mutex'.
      */
     struct ovs_mutex flow_mutex;
     struct cmap flow_table OVS_GUARDED; /* Flow table. */
+    struct cmap simple_match_table OVS_GUARDED; /* Flow table with simple
+                                                   match flows only. */
+    /* Number of flows in the 'flow_table' per in_port. */
+    struct ccmap n_flows OVS_GUARDED;
+    /* Number of flows in the 'simple_match_table' per in_port. */
+    struct ccmap n_simple_flows OVS_GUARDED;
 
     /* One classifier per in_port polled by the pmd */
     struct cmap classifiers;

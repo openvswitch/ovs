@@ -198,7 +198,8 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                 if (mfex_hit) {
                     pkt_meta[i].tcp_flags = miniflow_get_tcp_flags(&key->mf);
                 } else {
-                    pkt_meta[i].tcp_flags = parse_tcp_flags(packet);
+                    pkt_meta[i].tcp_flags = parse_tcp_flags(packet,
+                                                            NULL, NULL, NULL);
                 }
 
                 pkt_meta[i].bytes = dp_packet_size(packet);

@@ -192,7 +192,7 @@ skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc
    ovs-appctl revalidator/wait
    # Dump the datapath flow to see that it goes to p2 ("actions:2").
    AT_CHECK([ovs-appctl dpif/dump-flows br0], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(frag=no)), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5/0x0),encap(eth_type(0x0800),ipv4(frag=no)), packets:0, bytes:0, used:never, actions:2
 ])
 
    # Delete the flows, then add new flows that would not match the same
@@ -210,7 +210,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:
    ovs-appctl revalidator/wait
    # Dump the datapath flow to see that it goes to p1 ("actions:IN_PORT").
    AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:64, used:0.0s, actions:1
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5/0x0),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:64, used:0.0s, actions:1
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -428,7 +428,7 @@ skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc
    # Check that flow successfully offloaded.
    OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
    AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, mark: 1
+p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000/0x1fff,nw_frag=no, mark: 1
 ])
    # Check that datapath flow installed successfully.
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
@@ -439,7 +439,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 
    # Check for succesfull packet matching with installed offloaded flow.
    AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000,nw_frag=no with mark: 1
+p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000/0x1fff,nw_frag=no with mark: 1
 ])
 
    ovs-appctl revalidator/wait
@@ -495,11 +495,11 @@ packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type
    # Check that flow successfully offloaded.
    OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
    AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: flow put[[create]]: flow match: recirc_id=0,eth,udp,in_port=1,dl_vlan=99,dl_vlan_pcp=7,nw_src=127.0.0.1,nw_frag=no,tp_dst=82, mark: 1
+p1: flow put[[create]]: flow match: recirc_id=0,eth,udp,in_port=1,dl_vlan=99,nw_src=127.0.0.1,nw_frag=no,tp_dst=82, mark: 1
 ])
    # Check that datapath flow installed successfully.
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), actions: <del>
 ])
    # Inject the same packet again.
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
@@ -507,13 +507,13 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=
    # Check for succesfull packet matching with installed offloaded flow.
    AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
 p1: packet: udp,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82 dnl
-matches with flow: recirc_id=0,eth,udp,dl_vlan=99,dl_vlan_pcp=7,nw_src=127.0.0.1,nw_frag=no,tp_dst=82 with mark: 1
+matches with flow: recirc_id=0,eth,udp,dl_vlan=99,nw_src=127.0.0.1,nw_frag=no,tp_dst=82 with mark: 1
 ])
 
    ovs-appctl revalidator/wait
    # Dump the datapath flow to see that actions was executed for a packet.
    AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x0800),ipv4(src=127.0.0.1,proto=17,frag=no),udp(dst=82)), dnl
 packets:1, bytes:64, used:0.0s, actions:set(ipv4(src=192.168.0.7)),set(udp(dst=3773)),1
 ])
 
