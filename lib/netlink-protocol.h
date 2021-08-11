@@ -186,4 +186,23 @@ enum {
 #define CTRL_ATTR_MCAST_GRP_MAX (__CTRL_ATTR_MCAST_GRP_MAX - 1)
 #endif /* CTRL_ATTR_MCAST_GRP_MAX */
 
+#ifndef NETLINK_EXT_ACK
+
+#define NETLINK_CAP_ACK         10
+#define NETLINK_EXT_ACK         11
+
+/* ACK message flags. */
+#define NLM_F_CAPPED            0x100
+#define NLM_F_ACK_TLVS          0x200
+
+enum {
+    NLMSGERR_ATTR_UNUSED,
+    NLMSGERR_ATTR_MSG,
+    NLMSGERR_ATTR_OFFS,
+    __NLMSGERR_ATTR_MAX,
+    NLMSGERR_ATTR_MAX = __NLMSGERR_ATTR_MAX - 1
+};
+
+#endif /* NLM_F_ACK_TLVS */
+
 #endif /* netlink-protocol.h */

@@ -45,7 +45,7 @@ struct nlattr;
 /* Accessing headers and data. */
 struct nlmsghdr *nl_msg_nlmsghdr(const struct ofpbuf *);
 struct genlmsghdr *nl_msg_genlmsghdr(const struct ofpbuf *);
-bool nl_msg_nlmsgerr(const struct ofpbuf *, int *error);
+bool nl_msg_nlmsgerr(const struct ofpbuf *, int *error, const char **attr_msg);
 void nl_msg_reserve(struct ofpbuf *, size_t);
 
 /* Appending and prepending headers and raw data. */
