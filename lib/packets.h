@@ -1492,7 +1492,7 @@ BUILD_ASSERT_DECL(sizeof(struct vxlanhdr) == 8);
 
 /* Fields in struct vxlanhdr.vx_gpe.flags */
 #define VXLAN_GPE_FLAGS_VER     0x30    /* Version. */
-#define VLXAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
+#define VXLAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
 #define VXLAN_GPE_FLAGS_O       0x01    /* OAM Bit. */
 
 /* VXLAN-GPE header flags. */
