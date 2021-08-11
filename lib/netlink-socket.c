@@ -917,7 +917,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
             }
             if (txn->error) {
                 VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
-                            error, ovs_strerror(txn->error));
+                            txn->error, ovs_strerror(txn->error));
             }
         } else {
             txn->error = 0;
