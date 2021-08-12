@@ -1400,6 +1400,7 @@ dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         /* release port mutex before netdev mutex. */
         ovs_mutex_unlock(&dp->port_mutex);
+        free(pmd_list);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
 
