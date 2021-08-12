@@ -460,6 +460,10 @@ ds_chomp(struct ds *ds, int c)
 void
 ds_clone(struct ds *dst, struct ds *source)
 {
+    if (!source->allocated) {
+        ds_init(dst);
+        return;
+    }
     dst->length = source->length;
     dst->allocated = dst->length;
     dst->string = xmalloc(dst->allocated + 1);
