@@ -1025,6 +1025,7 @@ dpif_netdev_impl_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
          * thread. */
         sorted_poll_thread_list(dp, &pmd_list, &n);
         dp_netdev_impl_get(&reply, pmd_list, n);
+        free(pmd_list);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
     unixctl_command_reply(conn, ds_cstr(&reply));
@@ -1079,6 +1080,8 @@ dpif_netdev_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
             atomic_uintptr_t *pmd_func = (void *) &pmd->netdev_input_func;
             atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
         };
+
+        free(pmd_list);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
 
@@ -1109,6 +1112,7 @@ dpif_miniflow_extract_impl_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
          * thread. */
         sorted_poll_thread_list(dp, &pmd_list, &n);
         dp_mfex_impl_get(&reply, pmd_list, n);
+        free(pmd_list);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
     unixctl_command_reply(conn, ds_cstr(&reply));
@@ -1266,6 +1270,8 @@ dpif_miniflow_extract_impl_set(struct unixctl_conn *conn, int argc,
             atomic_uintptr_t *pmd_func = (void *) &pmd->miniflow_extract_opt;
             atomic_store_relaxed(pmd_func, (uintptr_t) mfex_func);
         };
+
+        free(pmd_list);
     }
 
     ovs_mutex_unlock(&dp_netdev_mutex);
