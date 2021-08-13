@@ -791,6 +791,7 @@ free_flow_patterns(struct flow_patterns *patterns)
     free(patterns->items);
     patterns->items = NULL;
     patterns->cnt = 0;
+    ds_destroy(&patterns->s_tnl);
 }
 
 static void
@@ -1324,7 +1325,11 @@ netdev_offload_dpdk_mark_rss(struct flow_patterns *patterns,
                              struct netdev *netdev,
                              uint32_t flow_mark)
 {
-    struct flow_actions actions = { .actions = NULL, .cnt = 0 };
+    struct flow_actions actions = {
+        .actions = NULL,
+        .cnt = 0,
+        .s_tnl = DS_EMPTY_INITIALIZER,
+    };
     const struct rte_flow_attr flow_attr = {
         .group = 0,
         .priority = 0,
@@ -1809,7 +1814,11 @@ netdev_offload_dpdk_actions(struct netdev *netdev,
                             size_t actions_len)
 {
     const struct rte_flow_attr flow_attr = { .ingress = 1, .transfer = 1 };
-    struct flow_actions actions = { .actions = NULL, .cnt = 0 };
+    struct flow_actions actions = {
+        .actions = NULL,
+        .cnt = 0,
+        .s_tnl = DS_EMPTY_INITIALIZER,
+    };
     struct rte_flow *flow = NULL;
     struct rte_flow_error error;
     int ret;
@@ -1833,7 +1842,11 @@ netdev_offload_dpdk_add_flow(struct netdev *netdev,
                              const ovs_u128 *ufid,
                              struct offload_info *info)
 {
-    struct flow_patterns patterns = { .items = NULL, .cnt = 0 };
+    struct flow_patterns patterns = {
+        .items = NULL,
+        .cnt = 0,
+        .s_tnl = DS_EMPTY_INITIALIZER,
+    };
     struct ufid_to_rte_flow_data *flows_data = NULL;
     bool actions_offloaded = true;
     struct rte_flow *flow;
