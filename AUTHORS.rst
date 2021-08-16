@@ -418,6 +418,7 @@ Valient Gough                      vgough@pobox.com
 Venkata Anil Kommaddi              vkommadi@redhat.com
 Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
+Vlad Buslov                        vladbu@nvidia.com
 Volkan Atlı                        volkan.atli@b-ulltech.com
 Wang Li                            wangli39@baidu.com
 Wang Liang                         wangliangrt@didiglobal.com
