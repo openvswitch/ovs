@@ -1180,7 +1180,6 @@ dpif_miniflow_extract_impl_set(struct unixctl_conn *conn, int argc,
         } else {
             ds_put_format(&reply, "Error: unknown argument %s.\n", argv[1]);
             goto error;
-            break;
         }
     }
 
