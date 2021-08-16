@@ -9695,6 +9695,26 @@ OFPST_TABLE reply (OF1.3) (xid=0x2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif packet-out table meter drop])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 'in_port=1 action=meter:1,output:2'])
+
+ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000400080000 actions=resubmit(,0)"
+ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000400080000 actions=resubmit(,0)"
+
+# Check that vswitchd hasn't crashed by dumping the meter added above
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br0 | ofctl_strip], [0], [dnl
+OFPST_METER_CONFIG reply (OF1.3):
+meter=1 pktps bands=
+type=drop rate=1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - ICMPv6])
 OVS_VSWITCHD_START
 add_of_ports br0 1
