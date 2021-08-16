@@ -199,6 +199,7 @@ struct dp_packet *dp_packet_clone_data_with_headroom(const void *, size_t,
 void dp_packet_resize(struct dp_packet *b, size_t new_headroom,
                       size_t new_tailroom);
 static inline void dp_packet_delete(struct dp_packet *);
+static inline void dp_packet_swap(struct dp_packet *, struct dp_packet *);
 
 static inline void *dp_packet_at(const struct dp_packet *, size_t offset,
                                  size_t size);
@@ -254,6 +255,18 @@ dp_packet_delete(struct dp_packet *b)
         dp_packet_uninit(b);
         free(b);
     }
+}
+
+/* Swaps content of two packets. */
+static inline void
+dp_packet_swap(struct dp_packet *a, struct dp_packet *b)
+{
+    ovs_assert(a->source == DPBUF_MALLOC || a->source == DPBUF_STUB);
+    ovs_assert(b->source == DPBUF_MALLOC || b->source == DPBUF_STUB);
+    struct dp_packet c = *a;
+
+    *a = *b;
+    *b = c;
 }
 
 /* If 'b' contains at least 'offset + size' bytes of data, returns a pointer to
