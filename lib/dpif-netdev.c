@@ -4147,7 +4147,10 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
                                flow_hash_5tuple(execute->flow, 0));
     }
 
-    dp_packet_batch_init_packet(&pp, execute->packet);
+    /* Making a copy because the packet might be stolen during the execution
+     * and caller might still need it.  */
+    struct dp_packet *packet_clone = dp_packet_clone(execute->packet);
+    dp_packet_batch_init_packet(&pp, packet_clone);
     dp_netdev_execute_actions(pmd, &pp, false, execute->flow,
                               execute->actions, execute->actions_len);
     dp_netdev_pmd_flush_output_packets(pmd, true);
@@ -4155,6 +4158,14 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_unlock(&dp->non_pmd_mutex);
         dp_netdev_pmd_unref(pmd);
+    }
+
+    if (dp_packet_batch_size(&pp)) {
+        /* Packet wasn't dropped during the execution.  Swapping content with
+         * the original packet, because the caller might expect actions to
+         * modify it. */
+        dp_packet_swap(execute->packet, packet_clone);
+        dp_packet_delete_batch(&pp, true);
     }
 
     return 0;

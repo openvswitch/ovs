@@ -595,6 +595,62 @@ OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep 50540000000a5054000000091235 | wc 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel_push_pop - packet_out debug_slow])
+
+OVS_VSWITCHD_START(
+    [add-port br0 p0 dnl
+     -- set Interface p0 type=dummy ofport_request=1 dnl
+                         other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy])
+AT_CHECK([ovs-vsctl add-port int-br t2 dnl
+          -- set Interface t2 type=geneve options:remote_ip=1.1.2.92 dnl
+                              options:key=123 ofport_request=2])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl This ARP reply from p0 has two effects:
+dnl 1. The ARP cache will learn that 1.1.2.92 is at f8:bc:12:44:34:b6.
+dnl 2. The br0 mac learning will learn that f8:bc:12:44:34:b6 is on p0.
+AT_CHECK([
+  ovs-appctl netdev-dummy/receive p0 dnl
+      'recirc_id(0),in_port(2),dnl
+       eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),dnl
+       arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'
+])
+
+AT_CHECK([ovs-vsctl -- set Interface p0 options:tx_pcap=p0.pcap])
+
+packet=50540000000a505400000009123
+encap=f8bc124434b6aa55aa5500000800450000320000400040113406010102580101025c83a917c1001e00000000655800007b00
+
+dnl Output to tunnel from a int-br internal port.
+dnl Checking that the packet arrived and it was correctly encapsulated.
+AT_CHECK([ovs-ofctl add-flow int-br "in_port=LOCAL,actions=debug_slow,output:2"])
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep "${encap}${packet}4" | wc -l` -ge 1])
+dnl Sending again to exercise the non-miss upcall path.
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep "${encap}${packet}4" | wc -l` -ge 2])
+
+dnl Output to tunnel from the controller.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out int-br CONTROLLER "debug_slow,output:2" "${packet}5"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep "${encap}${packet}5" | wc -l` -ge 1])
+
+dnl Datapath actions should not have tunnel push action.
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -q tnl_push], [1])
+dnl There should be slow_path action instead.
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -q 'slow_path(action)'], [0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel_push_pop - underlay bridge match])
 
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
