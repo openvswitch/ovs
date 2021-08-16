@@ -1242,11 +1242,6 @@ parse_flow_match(struct netdev *netdev,
         proto = spec->hdr.next_proto_id &
                 mask->hdr.next_proto_id;
     }
-    /* If fragmented, then don't HW accelerate - for now. */
-    if (match->wc.masks.nw_frag & match->flow.nw_frag) {
-        return -1;
-    }
-    consumed_masks->nw_frag = 0;
 
     /* IP v6 */
     if (match->flow.dl_type == htons(ETH_TYPE_IPV6)) {

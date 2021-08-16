@@ -8,6 +8,8 @@ Post-v2.16.0
        by default.  'other_config:dpdk-socket-limit' can be set equal to
        the 'other_config:dpdk-socket-mem' to preserve the legacy memory
        limiting behavior.
+     * Add hardware offload support for matching IPv4/IPv6 frag types
+       (experimental).
 
 
 v2.16.0 - 16 Aug 2021
