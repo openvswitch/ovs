@@ -370,6 +370,8 @@ dump_flow_pattern(struct ds *s,
 
         ds_put_cstr(s, "ipv6 ");
         if (ipv6_spec) {
+            uint8_t has_frag_ext_mask;
+
             if (!ipv6_mask) {
                 ipv6_mask = &rte_flow_item_ipv6_mask;
             }
@@ -397,6 +399,37 @@ dump_flow_pattern(struct ds *s,
                               "hop", "%"PRIu8,
                               ipv6_spec->hdr.hop_limits,
                               ipv6_mask->hdr.hop_limits, 0);
+            has_frag_ext_mask = ipv6_mask->has_frag_ext ? UINT8_MAX : 0;
+            DUMP_PATTERN_ITEM(has_frag_ext_mask, false, "has_frag_ext",
+                              "%"PRIu8, ipv6_spec->has_frag_ext,
+                              ipv6_mask->has_frag_ext, 0);
+        }
+        ds_put_cstr(s, "/ ");
+    } else if (item->type == RTE_FLOW_ITEM_TYPE_IPV6_FRAG_EXT) {
+        const struct rte_flow_item_ipv6_frag_ext *ipv6_frag_spec = item->spec;
+        const struct rte_flow_item_ipv6_frag_ext *ipv6_frag_mask = item->mask;
+        const struct rte_flow_item_ipv6_frag_ext *ipv6_frag_last = item->last;
+        const struct rte_flow_item_ipv6_frag_ext ipv6_frag_def = {
+            .hdr.next_header = 0, .hdr.frag_data = 0};
+
+        ds_put_cstr(s, "ipv6_frag_ext ");
+        if (ipv6_frag_spec) {
+            if (!ipv6_frag_mask) {
+                ipv6_frag_mask = &ipv6_frag_def;
+            }
+            if (!ipv6_frag_last) {
+                ipv6_frag_last = &ipv6_frag_def;
+            }
+            DUMP_PATTERN_ITEM(ipv6_frag_mask->hdr.next_header, item->last,
+                              "next_hdr", "%"PRIu8,
+                              ipv6_frag_spec->hdr.next_header,
+                              ipv6_frag_mask->hdr.next_header,
+                              ipv6_frag_last->hdr.next_header);
+            DUMP_PATTERN_ITEM(ipv6_frag_mask->hdr.frag_data, item->last,
+                              "frag_data", "0x%"PRIx16,
+                              ntohs(ipv6_frag_spec->hdr.frag_data),
+                              ntohs(ipv6_frag_mask->hdr.frag_data),
+                              ntohs(ipv6_frag_last->hdr.frag_data));
         }
         ds_put_cstr(s, "/ ");
     } else if (item->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
@@ -1230,6 +1263,10 @@ parse_flow_match(struct netdev *netdev,
                sizeof spec->hdr.src_addr);
         memcpy(spec->hdr.dst_addr, &match->flow.ipv6_dst,
                sizeof spec->hdr.dst_addr);
+        if ((match->wc.masks.nw_frag & FLOW_NW_FRAG_ANY)
+            && (match->flow.nw_frag & FLOW_NW_FRAG_ANY)) {
+            spec->has_frag_ext = 1;
+        }
 
         mask->hdr.proto = match->wc.masks.nw_proto;
         mask->hdr.hop_limits = match->wc.masks.nw_ttl;
@@ -1240,7 +1277,6 @@ parse_flow_match(struct netdev *netdev,
         memcpy(mask->hdr.dst_addr, &match->wc.masks.ipv6_dst,
                sizeof mask->hdr.dst_addr);
 
-        consumed_masks->nw_proto = 0;
         consumed_masks->nw_ttl = 0;
         consumed_masks->nw_tos = 0;
         memset(&consumed_masks->ipv6_src, 0, sizeof consumed_masks->ipv6_src);
@@ -1250,6 +1286,51 @@ parse_flow_match(struct netdev *netdev,
 
         /* Save proto for L4 protocol setup. */
         proto = spec->hdr.proto & mask->hdr.proto;
+
+        if (spec->has_frag_ext) {
+            struct rte_flow_item_ipv6_frag_ext *frag_spec, *frag_mask,
+                *frag_last = NULL;
+
+            frag_spec = xzalloc(sizeof *frag_spec);
+            frag_mask = xzalloc(sizeof *frag_mask);
+
+            if (match->wc.masks.nw_frag & FLOW_NW_FRAG_LATER) {
+                if (!(match->flow.nw_frag & FLOW_NW_FRAG_LATER)) {
+                    /* frag=first. */
+                    frag_spec->hdr.frag_data = htons(RTE_IPV6_EHDR_MF_MASK);
+                    frag_mask->hdr.frag_data = htons(RTE_IPV6_EHDR_MF_MASK |
+                                                     RTE_IPV6_EHDR_FO_MASK);
+                    /* Move the proto match to the extension item. */
+                    frag_spec->hdr.next_header = match->flow.nw_proto;
+                    frag_mask->hdr.next_header = match->wc.masks.nw_proto;
+                    spec->hdr.proto = 0;
+                    mask->hdr.proto = 0;
+                } else {
+                    /* frag=later. */
+                    frag_last = xzalloc(sizeof *frag_last);
+                    frag_spec->hdr.frag_data =
+                        htons(1 << RTE_IPV6_EHDR_FO_SHIFT);
+                    frag_mask->hdr.frag_data = htons(RTE_IPV6_EHDR_FO_MASK);
+                    frag_last->hdr.frag_data = htons(RTE_IPV6_EHDR_FO_MASK);
+                    /* There can't be a proto for later frags. */
+                    spec->hdr.proto = 0;
+                    mask->hdr.proto = 0;
+                }
+            } else {
+                VLOG_WARN_RL(&rl, "Unknown IPv6 frag (0x%x/0x%x)",
+                             match->flow.nw_frag, match->wc.masks.nw_frag);
+                return -1;
+            }
+
+            add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_IPV6_FRAG_EXT,
+                             frag_spec, frag_mask, frag_last);
+        }
+        if (match->wc.masks.nw_frag) {
+            /* frag=no is indicated by spec->has_frag_ext=0. */
+            mask->has_frag_ext = 1;
+            consumed_masks->nw_frag = 0;
+        }
+        consumed_masks->nw_proto = 0;
     }
 
     if (proto != IPPROTO_ICMP && proto != IPPROTO_UDP  &&
