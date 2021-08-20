@@ -168,6 +168,14 @@ struct eth_addr {
     };
 };
 
+/* Similar to struct eth_addr, for Infiniband LL addresses. */
+struct ib_addr {
+    union {
+        uint8_t ia[20];
+        ovs_be16 be16[10];
+    };
+};
+
 /* Ethernet address constant, e.g. ETH_ADDR_C(01,23,45,67,89,ab) is
  * 01:23:45:67:89:ab. */
 #define ETH_ADDR_C(A,B,C,D,E,F) \

@@ -254,3 +254,7 @@ AT_SETUP([stopwatch module])
 AT_CHECK([ovstest test-stopwatch], [0], [......
 ], [ignore])
 AT_CLEANUP
+
+AT_SETUP([netlink policy])
+AT_CHECK([ovstest test-netlink-policy ll_addr], [0])
+AT_CLEANUP

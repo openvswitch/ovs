@@ -741,6 +741,20 @@ nl_attr_get_nested(const struct nlattr *nla, struct ofpbuf *nested)
     ofpbuf_use_const(nested, nl_attr_get(nla), nl_attr_get_size(nla));
 }
 
+/* Returns the Ethernet Address value in 'nla''s payload. */
+struct eth_addr
+nl_attr_get_eth_addr(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, struct eth_addr);
+}
+
+/* Returns the Infiniband LL Address value in 'nla''s payload. */
+struct ib_addr
+nl_attr_get_ib_addr(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, struct ib_addr);
+}
+
 /* Default minimum payload size for each type of attribute. */
 static size_t
 min_attr_len(enum nl_attr_type type)
@@ -757,6 +771,7 @@ min_attr_len(enum nl_attr_type type)
     case NL_A_FLAG: return 0;
     case NL_A_IPV6: return 16;
     case NL_A_NESTED: return 0;
+    case NL_A_LL_ADDR: return 6; /* ETH_ALEN */
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }
@@ -777,6 +792,7 @@ max_attr_len(enum nl_attr_type type)
     case NL_A_FLAG: return SIZE_MAX;
     case NL_A_IPV6: return 16;
     case NL_A_NESTED: return SIZE_MAX;
+    case NL_A_LL_ADDR: return 20; /* INFINIBAND_ALEN */
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
 }
