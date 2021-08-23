@@ -318,7 +318,7 @@ ovsdb_convert(const struct ovsdb *src, const struct ovsdb_schema *new_schema,
               struct ovsdb **dstp)
 {
     struct ovsdb *dst = ovsdb_create(ovsdb_schema_clone(new_schema),
-                                     ovsdb_storage_create_unbacked());
+                                     ovsdb_storage_create_unbacked(NULL));
     struct ovsdb_txn *txn = ovsdb_txn_create(dst);
     struct ovsdb_error *error = NULL;
 

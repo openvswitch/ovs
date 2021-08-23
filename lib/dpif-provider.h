@@ -81,6 +81,7 @@ struct ct_dpif_dump_state;
 struct ct_dpif_entry;
 struct ct_dpif_tuple;
 struct ct_dpif_timeout_policy;
+enum ct_features;
 
 /* 'dpif_ipf_proto_status' and 'dpif_ipf_status' are presently in
  * sync with 'ipf_proto_status' and 'ipf_status', but more
@@ -336,26 +337,28 @@ struct dpif_class {
      * updating flows as necessary if it does this. */
     int (*recv_set)(struct dpif *dpif, bool enable);
 
-    /* Refreshes the poll loops and Netlink sockets associated to each port,
-     * when the number of upcall handlers (upcall receiving thread) is changed
-     * to 'n_handlers' and receiving packets for 'dpif' is enabled by
+    /* Attempts to refresh the poll loops and Netlink sockets used for handling
+     * upcalls when the number of upcall handlers (upcall receiving thread) is
+     * changed to 'n_handlers' and receiving packets for 'dpif' is enabled by
      * recv_set().
      *
-     * Since multiple upcall handlers can read upcalls simultaneously from
-     * 'dpif', each port can have multiple Netlink sockets, one per upcall
-     * handler.  So, handlers_set() is responsible for the following tasks:
+     * A dpif implementation may choose to ignore 'n_handlers' while returning
+     * success.
      *
-     *    When receiving upcall is enabled, extends or creates the
-     *    configuration to support:
-     *
-     *        - 'n_handlers' Netlink sockets for each port.
-     *
-     *        - 'n_handlers' poll loops, one for each upcall handler.
-     *
-     *        - registering the Netlink sockets for the same upcall handler to
-     *          the corresponding poll loop.
-     * */
+     * The method for distribution of upcalls between handler threads is
+     * specific to the dpif implementation.
+     */
     int (*handlers_set)(struct dpif *dpif, uint32_t n_handlers);
+
+    /* Queries 'dpif' to see if a certain number of handlers are required by
+     * the implementation.
+     *
+     * If a certain number of handlers are required, returns 'true' and sets
+     * 'n_handlers' to that number of handler threads.
+     *
+     * If not, returns 'false'.
+     */
+    bool (*number_handlers_required)(struct dpif *dpif, uint32_t *n_handlers);
 
     /* Pass custom configuration options to the datapath.  The implementation
      * might postpone applying the changes until run() is called. */
@@ -561,6 +564,10 @@ struct dpif_class {
     int (*ct_get_timeout_policy_name)(struct dpif *, uint32_t tp_id,
                                       uint16_t dl_type, uint8_t nw_proto,
                                       char **tp_name, bool *is_generic);
+
+    /* Stores the conntrack features supported by 'dpif' into features.
+     * The value is a bitmap of CONNTRACK_F_* bits. */
+    int (*ct_get_features)(struct dpif *, enum ct_features *features);
 
     /* IP Fragmentation. */
 

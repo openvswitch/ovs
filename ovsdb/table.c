@@ -25,6 +25,7 @@
 #include "ovsdb-parser.h"
 #include "ovsdb-types.h"
 #include "row.h"
+#include "transaction.h"
 
 static void
 add_column(struct ovsdb_table_schema *ts, struct ovsdb_column *column)
@@ -338,4 +339,73 @@ ovsdb_table_get_row(const struct ovsdb_table *table, const struct uuid *uuid)
     }
 
     return NULL;
+}
+
+struct ovsdb_error *
+ovsdb_table_execute_insert(struct ovsdb_txn *txn, const struct uuid *row_uuid,
+                           struct ovsdb_table *table, struct json *json_row)
+{
+    const struct ovsdb_row *old_row = ovsdb_table_get_row(table, row_uuid);
+    if (old_row) {
+        return ovsdb_error(
+                    "consistency violation",
+                    "cannot delete missing row "UUID_FMT" from table %s",
+                    UUID_ARGS(row_uuid), table->schema->name);
+    }
+
+    struct ovsdb_row *row = ovsdb_row_create(table);
+
+    struct ovsdb_error *error = ovsdb_row_from_json(row, json_row, NULL, NULL);
+    if (!error) {
+        *ovsdb_row_get_uuid_rw(row) = *row_uuid;
+        ovsdb_txn_row_insert(txn, row);
+    } else {
+        ovsdb_row_destroy(row);
+    }
+
+    return error;
+}
+
+struct ovsdb_error *
+ovsdb_table_execute_delete(struct ovsdb_txn *txn, const struct uuid *row_uuid,
+                           struct ovsdb_table *table)
+{
+    const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
+    if (!row) {
+        return ovsdb_error(
+                    "consistency violation",
+                    "cannot delete missing row "UUID_FMT" from table %s",
+                    UUID_ARGS(row_uuid), table->schema->name);
+    }
+
+    ovsdb_txn_row_delete(txn, row);
+    return NULL;
+}
+
+struct ovsdb_error *
+ovsdb_table_execute_update(struct ovsdb_txn *txn, const struct uuid *row_uuid,
+                           struct ovsdb_table *table, struct json *json_row,
+                           bool xor)
+{
+    const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
+    if (!row) {
+        return ovsdb_error(
+                    "consistency violation",
+                    "cannot modify missing row "UUID_FMT" from table %s",
+                    UUID_ARGS(row_uuid), table->schema->name);
+    }
+
+    struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
+    struct ovsdb_row *update = ovsdb_row_create(table);
+    struct ovsdb_error *error = ovsdb_row_from_json(update, json_row,
+                                                    NULL, &columns);
+
+    if (!error && (xor || !ovsdb_row_equal_columns(row, update, &columns))) {
+        error = ovsdb_row_update_columns(ovsdb_txn_row_modify(txn, row),
+                                         update, &columns, xor);
+    }
+
+    ovsdb_column_set_destroy(&columns);
+    ovsdb_row_destroy(update);
+    return error;
 }

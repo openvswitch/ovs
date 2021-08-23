@@ -5974,14 +5974,36 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
             }
             break;
 
+        /* From an OpenFlow point of view, goto_table and write_metadata are
+         * instructions, not actions.  This means that to use them, we'd have
+         * to reformulate the actions as instructions, which is possible, and
+         * we'd have slot them into the frozen actions in a specific order,
+         * which doesn't seem practical.  Instead, we translate these
+         * instructions into equivalent actions. */
+        case OFPACT_GOTO_TABLE: {
+            struct ofpact_resubmit *resubmit
+                = ofpact_put_RESUBMIT(&ctx->frozen_actions);
+            resubmit->in_port = OFPP_IN_PORT;
+            resubmit->table_id = ofpact_get_GOTO_TABLE(a)->table_id;
+            resubmit->with_ct_orig = false;
+        }
+            continue;
+        case OFPACT_WRITE_METADATA: {
+            const struct ofpact_metadata *md = ofpact_get_WRITE_METADATA(a);
+            const struct mf_field *mf = mf_from_id(MFF_METADATA);
+            ovs_assert(mf->n_bytes == sizeof md->metadata);
+            ovs_assert(mf->n_bytes == sizeof md->mask);
+            ofpact_put_set_field(&ctx->frozen_actions, mf,
+                                 &md->metadata, &md->mask);
+        }
+            continue;
+
         case OFPACT_SET_TUNNEL:
         case OFPACT_REG_MOVE:
         case OFPACT_SET_FIELD:
         case OFPACT_STACK_PUSH:
         case OFPACT_STACK_POP:
         case OFPACT_LEARN:
-        case OFPACT_WRITE_METADATA:
-        case OFPACT_GOTO_TABLE:
         case OFPACT_ENQUEUE:
         case OFPACT_SET_VLAN_VID:
         case OFPACT_SET_VLAN_PCP:
@@ -6549,6 +6571,8 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                  * Delay generating pop_eth to the next commit. */
                 flow->packet_type = htonl(PACKET_TYPE(OFPHTN_ETHERTYPE,
                                                       ntohs(flow->dl_type)));
+                flow->dl_src = eth_addr_zero;
+                flow->dl_dst = eth_addr_zero;
                 ctx->wc->masks.dl_type = OVS_BE16_MAX;
             }
             return false;
@@ -6909,15 +6933,20 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
             break;
 
+        /* Freezing complicates resubmit and goto_table.  Some action in the
+         * flow entry found by resubmit might trigger freezing.  If that
+         * happens, then we do not want to execute the resubmit or goto_table
+         * again after during thawing, so we want to skip back to the head of
+         * the loop to avoid that, only adding any actions that follow the
+         * resubmit to the frozen actions.
+         */
         case OFPACT_RESUBMIT:
-            /* Freezing complicates resubmit.  Some action in the flow
-             * entry found by resubmit might trigger freezing.  If that
-             * happens, then we do not want to execute the resubmit again after
-             * during thawing, so we want to skip back to the head of the loop
-             * to avoid that, only adding any actions that follow the resubmit
-             * to the frozen actions.
-             */
             xlate_ofpact_resubmit(ctx, ofpact_get_RESUBMIT(a), last);
+            continue;
+        case OFPACT_GOTO_TABLE:
+            xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
+                               ofpact_get_GOTO_TABLE(a)->table_id,
+                               true, true, false, last, do_xlate_actions);
             continue;
 
         case OFPACT_SET_TUNNEL:
@@ -7087,17 +7116,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             xlate_meter_action(ctx, ofpact_get_METER(a));
             break;
 
-        case OFPACT_GOTO_TABLE: {
-            struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
-
-            ovs_assert(ctx->table_id < ogt->table_id);
-
-            xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
-                               ogt->table_id, true, true, false, last,
-                               do_xlate_actions);
-            break;
-        }
-
         case OFPACT_SAMPLE:
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
             break;
@@ -7127,7 +7145,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CT_CLEAR:
-            compose_ct_clear_action(ctx);
+            if (ctx->conntracked) {
+                compose_ct_clear_action(ctx);
+            }
             break;
 
         case OFPACT_NAT:
@@ -7989,26 +8009,58 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
                                         ofpacts.data, ofpacts.size, packet);
 }
 
+/* Get xbundle for a ofp_port in a ofproto datapath. */
+static struct xbundle*
+ofp_port_to_xbundle(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge;
+
+    xbridge = xbridge_lookup(xcfg, ofproto);
+    if (!xbridge) {
+        return NULL;
+    }
+
+    return lookup_input_bundle__(xbridge, ofp_port, NULL);
+}
+
 void
 xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
                           ofp_port_t in_port, struct eth_addr dl_src,
                           int vlan, bool is_grat_arp)
 {
-    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    struct xbridge *xbridge;
-    struct xbundle *xbundle;
+    struct xbundle *xbundle = NULL;
 
-    xbridge = xbridge_lookup(xcfg, ofproto);
-    if (!xbridge) {
-        return;
-    }
-
-    xbundle = lookup_input_bundle__(xbridge, in_port, NULL);
+    xbundle = ofp_port_to_xbundle(ofproto, in_port);
     if (!xbundle) {
         return;
     }
 
-    update_learning_table__(xbridge, xbundle, dl_src, vlan, is_grat_arp);
+    update_learning_table__(xbundle->xbridge,
+                            xbundle, dl_src, vlan, is_grat_arp);
+}
+
+bool
+xlate_add_static_mac_entry(const struct ofproto_dpif *ofproto,
+                           ofp_port_t in_port,
+                           struct eth_addr dl_src, int vlan)
+{
+    struct xbundle *xbundle = ofp_port_to_xbundle(ofproto, in_port);
+
+    /* Return here if xbundle is NULL. */
+    if (!xbundle || (xbundle == &ofpp_none_bundle)) {
+        return false;
+    }
+
+    return mac_learning_add_static_entry(ofproto->ml, dl_src, vlan,
+                                         xbundle->ofbundle);
+}
+
+bool
+xlate_delete_static_mac_entry(const struct ofproto_dpif *ofproto,
+                              struct eth_addr dl_src, int vlan)
+{
+    return mac_learning_del_static_entry(ofproto->ml, dl_src, vlan);
 }
 
 void

@@ -38,6 +38,7 @@
 #include "jsonrpc.h"
 #include "lib/table.h"
 #include "log.h"
+#include "ovs-replay.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -307,6 +308,7 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS,
         TABLE_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
+        OVS_REPLAY_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"help", no_argument, NULL, 'h'},
@@ -325,6 +327,7 @@ parse_options(int argc, char *argv[])
         STREAM_SSL_LONG_OPTIONS,
 #endif
         TABLE_LONG_OPTIONS,
+        OVS_REPLAY_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -352,6 +355,7 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
         STREAM_SSL_OPTION_HANDLERS
+        OVS_REPLAY_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
@@ -467,6 +471,7 @@ usage(void)
     printf("  --timestamp                 timestamp \"monitor\" output");
     daemon_usage();
     vlog_usage();
+    ovs_replay_usage();
     printf("\nOther options:\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
@@ -711,7 +716,7 @@ should_stay_connected(const char *server, const char *database,
         return false;
     }
 
-    if (strcmp(parse_string_column(row, "model"), "clustered")) {
+    if (!strcmp(parse_string_column(row, "model"), "standalone")) {
         /* Always accept standalone databases. */
         return true;
     }
@@ -1664,14 +1669,15 @@ static void
 do_needs_conversion(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
                     int argc OVS_UNUSED, char *argv[])
 {
+    const char *schema_file_name = argv[argc - 1];
     struct ovsdb_schema *schema1;
-    check_ovsdb_error(ovsdb_schema_from_file(argv[0], &schema1));
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema1));
 
     char *database = schema1->name;
     open_rpc(1, NEED_DATABASE, argc, argv, &rpc, &database);
 
     if (is_database_clustered(rpc, database)) {
-        ovsdb_schema_persist_ephemeral_columns(schema1, argv[0]);
+        ovsdb_schema_persist_ephemeral_columns(schema1, schema_file_name);
     }
 
     struct ovsdb_schema *schema2 = fetch_schema(rpc, schema1->name);

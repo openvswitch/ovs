@@ -485,8 +485,10 @@ static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
                                                   int type,
                                                   unsigned int flags,
                                                   struct ofpbuf *);
-static int tc_add_policer(struct netdev *,
-                          uint32_t kbits_rate, uint32_t kbits_burst);
+
+static int tc_add_policer(struct netdev *, uint32_t kbits_rate,
+                          uint32_t kbits_burst, uint32_t kpkts_rate,
+                          uint32_t kpkts_burst);
 
 static int tc_parse_qdisc(const struct ofpbuf *, const char **kind,
                           struct nlattr **options);
@@ -672,7 +674,9 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
             uint32_t block_id;
             int error = 0;
 
-            if_indextoname(change->master_ifindex, master_name);
+            if (!if_indextoname(change->master_ifindex, master_name)) {
+                return;
+            }
             master_netdev = netdev_from_name(master_name);
             if (!master_netdev) {
                 return;
@@ -742,7 +746,7 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
         if (!error) {
             struct rtnetlink_change change;
 
-            if (rtnetlink_parse(&buf, &change)) {
+            if (rtnetlink_parse(&buf, &change) && !change.irrelevant) {
                 struct netdev *netdev_ = NULL;
                 char dev_name[IFNAMSIZ];
 
@@ -1255,21 +1259,21 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
      * aux_buf is allocated so that it can be prepended to TSO buffer. */
     std_len = virtio_net_hdr_size + VLAN_ETH_HEADER_LEN + mtu;
     for (i = 0; i < NETDEV_MAX_BURST; i++) {
-         buffers[i] = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
-         iovs[i][IOV_PACKET].iov_base = dp_packet_data(buffers[i]);
-         iovs[i][IOV_PACKET].iov_len = std_len;
-         if (iovlen == IOV_TSO_SIZE) {
-             iovs[i][IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
-             iovs[i][IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
-         }
+        buffers[i] = dp_packet_new_with_headroom(std_len, DP_NETDEV_HEADROOM);
+        iovs[i][IOV_PACKET].iov_base = dp_packet_data(buffers[i]);
+        iovs[i][IOV_PACKET].iov_len = std_len;
+        if (iovlen == IOV_TSO_SIZE) {
+            iovs[i][IOV_AUXBUF].iov_base = dp_packet_data(rx->aux_bufs[i]);
+            iovs[i][IOV_AUXBUF].iov_len = dp_packet_tailroom(rx->aux_bufs[i]);
+        }
 
-         mmsgs[i].msg_hdr.msg_name = NULL;
-         mmsgs[i].msg_hdr.msg_namelen = 0;
-         mmsgs[i].msg_hdr.msg_iov = iovs[i];
-         mmsgs[i].msg_hdr.msg_iovlen = iovlen;
-         mmsgs[i].msg_hdr.msg_control = &cmsg_buffers[i];
-         mmsgs[i].msg_hdr.msg_controllen = sizeof cmsg_buffers[i];
-         mmsgs[i].msg_hdr.msg_flags = 0;
+        mmsgs[i].msg_hdr.msg_name = NULL;
+        mmsgs[i].msg_hdr.msg_namelen = 0;
+        mmsgs[i].msg_hdr.msg_iov = iovs[i];
+        mmsgs[i].msg_hdr.msg_iovlen = iovlen;
+        mmsgs[i].msg_hdr.msg_control = &cmsg_buffers[i];
+        mmsgs[i].msg_hdr.msg_controllen = sizeof cmsg_buffers[i];
+        mmsgs[i].msg_hdr.msg_flags = 0;
     }
 
     do {
@@ -1288,14 +1292,28 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
     for (i = 0; i < retval; i++) {
         struct dp_packet *pkt;
 
-        if (mmsgs[i].msg_len < ETH_HEADER_LEN) {
+        if (mmsgs[i].msg_hdr.msg_flags & MSG_TRUNC
+            || mmsgs[i].msg_len < ETH_HEADER_LEN) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
+            /* The rx->aux_bufs[i] will be re-used next time. */
             dp_packet_delete(buffers[i]);
             netdev->rx_dropped += 1;
-            VLOG_WARN_RL(&rl, "%s: Dropped packet: less than ether hdr size",
-                         netdev_get_name(netdev_));
+            if (mmsgs[i].msg_hdr.msg_flags & MSG_TRUNC) {
+                /* Data is truncated, so the packet is corrupted, and needs
+                 * to be dropped. This can happen if TSO/GRO is enabled in
+                 * the kernel, but not in userspace, i.e. there is no dp
+                 * buffer to store the full packet. */
+                VLOG_WARN_RL(&rl,
+                             "%s: Dropped packet: Too big. GRO/TSO enabled?",
+                             netdev_get_name(netdev_));
+            } else {
+                VLOG_WARN_RL(&rl,
+                             "%s: Dropped packet: less than ether hdr size",
+                             netdev_get_name(netdev_));
+            }
+
             continue;
         }
 
@@ -2572,7 +2590,7 @@ exit:
 static struct tc_police
 tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
 {
-    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 64;
+    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8;
     unsigned int bps = ((uint64_t) kbits_rate * 1000) / 8;
     struct tc_police police;
     struct tc_ratespec rate;
@@ -2593,24 +2611,64 @@ tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
 }
 
 static void
-nl_msg_put_act_police(struct ofpbuf *request, struct tc_police police)
+nl_msg_act_police_start_nest(struct ofpbuf *request, uint32_t prio,
+                             size_t *offset, size_t *act_offset)
 {
-    size_t offset;
-
+    *act_offset = nl_msg_start_nested(request, prio);
     nl_msg_put_string(request, TCA_ACT_KIND, "police");
-    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
-    nl_msg_put_unspec(request, TCA_POLICE_TBF, &police, sizeof police);
-    tc_put_rtab(request, TCA_POLICE_RATE, &police.rate);
-    nl_msg_put_u32(request, TCA_POLICE_RESULT, TC_ACT_UNSPEC);
+    *offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
+}
+
+static void
+nl_msg_act_police_end_nest(struct ofpbuf *request, size_t offset,
+                           size_t act_offset)
+{
+    nl_msg_put_u32(request, TCA_POLICE_RESULT, TC_ACT_PIPE);
     nl_msg_end_nested(request, offset);
+    nl_msg_end_nested(request, act_offset);
+}
+
+static void
+nl_msg_put_act_police(struct ofpbuf *request, struct tc_police police,
+                      uint32_t kpkts_rate, uint32_t kpkts_burst)
+{
+    size_t offset, act_offset;
+    uint32_t prio = 0;
+    /* used for PPS, set rate as 0 to act as a single action */
+    struct tc_police null_police;
+
+    memset(&null_police, 0, sizeof null_police);
+
+    if (police.rate.rate) {
+        nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset);
+        tc_put_rtab(request, TCA_POLICE_RATE, &police.rate);
+        nl_msg_put_unspec(request, TCA_POLICE_TBF, &police, sizeof police);
+        nl_msg_act_police_end_nest(request, offset, act_offset);
+    }
+    if (kpkts_rate) {
+        unsigned int pkt_burst_ticks, pps_rate, size;
+        nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset);
+        pps_rate = kpkts_rate * 1000;
+        size = MIN(UINT32_MAX / 1000, kpkts_burst) * 1000;
+        /* Here tc_bytes_to_ticks is used to convert packets rather than bytes
+           to ticks. */
+        pkt_burst_ticks = tc_bytes_to_ticks(pps_rate, size);
+        nl_msg_put_u64(request, TCA_POLICE_PKTRATE64, (uint64_t) pps_rate);
+        nl_msg_put_u64(request, TCA_POLICE_PKTBURST64,
+                       (uint64_t) pkt_burst_ticks);
+        nl_msg_put_unspec(request, TCA_POLICE_TBF, &null_police,
+                          sizeof null_police);
+        nl_msg_act_police_end_nest(request, offset, act_offset);
+    }
 }
 
 static int
 tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
-                        uint32_t kbits_burst)
+                        uint32_t kbits_burst, uint32_t kpkts_rate,
+                        uint32_t kpkts_burst)
 {
     uint16_t eth_type = (OVS_FORCE uint16_t) htons(ETH_P_ALL);
-    size_t basic_offset, action_offset, inner_offset;
+    size_t basic_offset, action_offset;
     uint16_t prio = TC_RESERVED_PRIORITY_POLICE;
     int ifindex, err = 0;
     struct tc_police pol_act;
@@ -2634,9 +2692,7 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     nl_msg_put_string(&request, TCA_KIND, "matchall");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
-    inner_offset = nl_msg_start_nested(&request, 1);
-    nl_msg_put_act_police(&request, pol_act);
-    nl_msg_end_nested(&request, inner_offset);
+    nl_msg_put_act_police(&request, pol_act, kpkts_rate, kpkts_burst);
     nl_msg_end_nested(&request, action_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -2676,8 +2732,9 @@ tc_del_matchall_policer(struct netdev *netdev)
 /* Attempts to set input rate limiting (policing) policy.  Returns 0 if
  * successful, otherwise a positive errno value. */
 static int
-netdev_linux_set_policing(struct netdev *netdev_,
-                          uint32_t kbits_rate, uint32_t kbits_burst)
+netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
+                          uint32_t kbits_burst, uint32_t kpkts_rate,
+                          uint32_t kpkts_burst)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     const char *netdev_name = netdev_get_name(netdev_);
@@ -2688,6 +2745,10 @@ netdev_linux_set_policing(struct netdev *netdev_,
                    : !kbits_burst ? 8000 /* Default to 8000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
+    kpkts_burst = (!kpkts_rate ? 0       /* Force to 0 if no rate specified. */
+                   : !kpkts_burst ? 16   /* Default to 16 kpkts if 0. */
+                   : kpkts_burst);       /* Stick with user-specified value. */
+
     ovs_mutex_lock(&netdev->mutex);
     if (netdev_linux_netnsid_is_remote(netdev)) {
         error = EOPNOTSUPP;
@@ -2697,7 +2758,9 @@ netdev_linux_set_policing(struct netdev *netdev_,
     if (netdev->cache_valid & VALID_POLICING) {
         error = netdev->netdev_policing_error;
         if (error || (netdev->kbits_rate == kbits_rate &&
-                      netdev->kbits_burst == kbits_burst)) {
+                      netdev->kpkts_rate == kpkts_rate &&
+                      netdev->kbits_burst == kbits_burst &&
+                      netdev->kpkts_burst == kpkts_burst)) {
             /* Assume that settings haven't changed since we last set them. */
             goto out;
         }
@@ -2709,8 +2772,9 @@ netdev_linux_set_policing(struct netdev *netdev_,
     /* Use matchall for policing when offloadling ovs with tc-flower. */
     if (netdev_is_flow_api_enabled()) {
         error = tc_del_matchall_policer(netdev_);
-        if (kbits_rate) {
-            error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst);
+        if (kbits_rate || kpkts_rate) {
+            error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,
+                                            kpkts_rate, kpkts_burst);
         }
         ovs_mutex_unlock(&netdev->mutex);
         return error;
@@ -2729,7 +2793,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
         goto out;
     }
 
-    if (kbits_rate) {
+    if (kbits_rate || kpkts_rate) {
         error = tc_add_del_qdisc(ifindex, true, 0, TC_INGRESS);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
@@ -2737,7 +2801,8 @@ netdev_linux_set_policing(struct netdev *netdev_,
             goto out;
         }
 
-        error = tc_add_policer(netdev_, kbits_rate, kbits_burst);
+        error = tc_add_policer(netdev_, kbits_rate, kbits_burst,
+                               kpkts_rate, kpkts_burst);
         if (error){
             VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
                     netdev_name, ovs_strerror(error));
@@ -2747,6 +2812,8 @@ netdev_linux_set_policing(struct netdev *netdev_,
 
     netdev->kbits_rate = kbits_rate;
     netdev->kbits_burst = kbits_burst;
+    netdev->kpkts_rate = kpkts_rate;
+    netdev->kpkts_burst = kpkts_burst;
 
 out:
     if (!error || error == ENODEV) {
@@ -5523,7 +5590,8 @@ netdev_linux_tc_make_request(const struct netdev *netdev, int type,
 }
 
 /* Adds a policer to 'netdev' with a rate of 'kbits_rate' and a burst size
- * of 'kbits_burst'.
+ * of 'kbits_burst', with a rate of 'kpkts_rate' and a burst size of
+ * 'kpkts_burst'.
  *
  * This function is equivalent to running:
  *     /sbin/tc filter add dev <devname> parent ffff: protocol all prio 49
@@ -5536,14 +5604,14 @@ netdev_linux_tc_make_request(const struct netdev *netdev, int type,
  * Returns 0 if successful, otherwise a positive errno value.
  */
 static int
-tc_add_policer(struct netdev *netdev,
-               uint32_t kbits_rate, uint32_t kbits_burst)
+tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
+               uint32_t kbits_burst, uint32_t kpkts_rate,
+               uint32_t kpkts_burst)
 {
+    size_t basic_offset, police_offset;
     struct tc_police tc_police;
     struct ofpbuf request;
     struct tcmsg *tcmsg;
-    size_t basic_offset;
-    size_t police_offset;
     int error;
     int mtu = 65535;
 
@@ -5561,7 +5629,6 @@ tc_add_policer(struct netdev *netdev,
      * tc's point of view.  Whatever. */
     tc_police.burst = tc_bytes_to_ticks(
         tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8);
-
     tcmsg = netdev_linux_tc_make_request(netdev, RTM_NEWTFILTER,
                                          NLM_F_EXCL | NLM_F_CREATE, &request);
     if (!tcmsg) {
@@ -5570,12 +5637,10 @@ tc_add_policer(struct netdev *netdev,
     tcmsg->tcm_parent = tc_make_handle(0xffff, 0);
     tcmsg->tcm_info = tc_make_handle(49,
                                      (OVS_FORCE uint16_t) htons(ETH_P_ALL));
-
     nl_msg_put_string(&request, TCA_KIND, "basic");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
-    police_offset = nl_msg_start_nested(&request, TCA_BASIC_POLICE);
-    nl_msg_put_unspec(&request, TCA_POLICE_TBF, &tc_police, sizeof tc_police);
-    tc_put_rtab(&request, TCA_POLICE_RATE, &tc_police.rate);
+    police_offset = nl_msg_start_nested(&request, TCA_BASIC_ACT);
+    nl_msg_put_act_police(&request, tc_police, kpkts_rate, kpkts_burst);
     nl_msg_end_nested(&request, police_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -6344,6 +6409,7 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
     }
 
     if (rtnetlink_parse(reply, change)
+        && !change->irrelevant
         && change->nlmsg_type == RTM_NEWLINK) {
         bool changed = false;
         error = 0;

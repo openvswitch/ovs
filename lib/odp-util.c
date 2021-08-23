@@ -2643,6 +2643,10 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
 
         retval = parse_odp_action(&context, s, actions);
 
+        if (retval >= 0 && nl_attr_oversized(actions->size - NLA_HDRLEN)) {
+            retval = -E2BIG;
+        }
+
         if (retval < 0 || !strchr(delimiters, s[retval])) {
             actions->size = old_size;
             return -retval;
@@ -3189,17 +3193,17 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
     if ((!tnl_type || !strcmp(tnl_type, "erspan") ||
         !strcmp(tnl_type, "ip6erspan")) &&
         (tun_key->erspan_ver == 1 || tun_key->erspan_ver == 2)) {
-        struct erspan_metadata opts;
+        struct erspan_metadata *opts;
 
-        opts.version = tun_key->erspan_ver;
-        if (opts.version == 1) {
-            opts.u.index = htonl(tun_key->erspan_idx);
+        opts = nl_msg_put_unspec_zero(a, OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS,
+                                      sizeof *opts);
+        opts->version = tun_key->erspan_ver;
+        if (opts->version == 1) {
+            opts->u.index = htonl(tun_key->erspan_idx);
         } else {
-            opts.u.md2.dir = tun_key->erspan_dir;
-            set_hwid(&opts.u.md2, tun_key->erspan_hwid);
+            opts->u.md2.dir = tun_key->erspan_dir;
+            set_hwid(&opts->u.md2, tun_key->erspan_hwid);
         }
-        nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS,
-                          &opts, sizeof(opts));
     }
 
     if ((!tnl_type || !strcmp(tnl_type, "gtpu")) &&
@@ -6073,6 +6077,15 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
         }
 
         retval = parse_odp_key_mask_attr(&context, s, key, mask);
+
+        if (retval >= 0) {
+            if (nl_attr_oversized(key->size - NLA_HDRLEN)) {
+                retval = -E2BIG;
+            } else if (mask && nl_attr_oversized(mask->size - NLA_HDRLEN)) {
+                retval = -E2BIG;
+            }
+        }
+
         if (retval < 0) {
             if (errorp) {
                 *errorp = xasprintf("syntax error at %s", s);
@@ -7830,7 +7843,8 @@ commit_set_ether_action(const struct flow *flow, struct flow *base_flow,
     struct offsetof_sizeof ovs_key_ethernet_offsetof_sizeof_arr[] =
         OVS_KEY_ETHERNET_OFFSETOF_SIZEOF_ARR;
 
-    if (flow->packet_type != htonl(PT_ETH)) {
+    if (flow->packet_type != htonl(PT_ETH) ||
+        base_flow->packet_type != htonl(PT_ETH)) {
         return;
     }
 

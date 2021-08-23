@@ -91,6 +91,13 @@ struct ovsdb {
     bool need_txn_history;     /* Need to maintain history of transactions. */
     unsigned int n_txn_history; /* Current number of history transactions. */
     struct ovs_list txn_history; /* Contains "struct ovsdb_txn_history_node. */
+
+    /* Relay mode. */
+    bool is_relay;  /* True, if database is in relay mode. */
+    /* List that holds transactions waiting to be forwarded to the server. */
+    struct ovs_list txn_forward_new;
+    /* Hash map for transactions that are already sent and waits for reply. */
+    struct hmap txn_forward_sent;
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *, struct ovsdb_storage *);
@@ -104,7 +111,7 @@ struct ovsdb_txn *ovsdb_execute_compose(
     struct ovsdb *, const struct ovsdb_session *, const struct json *params,
     bool read_only, const char *role, const char *id,
     long long int elapsed_msec, long long int *timeout_msec,
-    bool *durable, struct json **);
+    bool *durable, bool *forwarding_needed, struct json **);
 
 struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            const struct json *params, bool read_only,

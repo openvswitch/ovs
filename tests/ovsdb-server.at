@@ -3,10 +3,13 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 m4_define([OVSDB_SERVER_SHUTDOWN],
   [OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])])
 
+m4_define([OVSDB_SERVER_SHUTDOWN_N],
+  [cp pid$1 savepid$1
+   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl$1 -e exit], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat savepid$1`], [kill `cat savepid$1`])])
+
 m4_define([OVSDB_SERVER_SHUTDOWN2],
-  [cp pid2 savepid2
-   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 -e exit], [0], [ignore], [ignore])
-   OVS_WAIT_WHILE([kill -0 `cat savepid2`], [kill `cat savepid2`])])
+  [OVSDB_SERVER_SHUTDOWN_N([2])])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -548,8 +551,8 @@ AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 # msys on Windows does not convert the path style automatically.
 # So, do that forcefully with a 'pwd -W' (called through pwd() function).
 PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
-AT_SKIP_IF([expr "$PKIDIR" : ".*[       '\"
-\\]"])
+AT_SKIP_IF([expr "$PKIDIR" : ".*[[       '\"
+\\]]"])
 AT_DATA([schema],
   [[{"name": "mydb",
      "tables": {
@@ -1412,6 +1415,82 @@ m4_define([OVSDB_CHECK_EXECUTION],
 
 EXECUTION_EXAMPLES
 
+AT_BANNER([OVSDB -- ovsdb-server relay])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA and starts an ovsdb-server on
+# it.  Also starts a daisy chain of ovsdb-servers in relay mode where the
+# first relay server is connected to the main non-relay ovsdb-server.
+#
+# Runs each of the TRANSACTIONS (which should be a quoted list of
+# quoted strings) against one of relay servers in the middle with
+# ovsdb-client one at a time.  The server executes read-only transactions
+# and forwards rest of them to the previous ovsdb-server in a chain.
+# The main ovsdb-server executes 'write' transactions.  Transaction
+# reply with data updates propagates back through the chain to all
+# the servers and the client.
+#
+#    main        relay       relay       relay       relay       relay
+#   server1 <-- server2 <-- server3 <-- server4 <-- server5 <-- server6
+#                                         ^
+#                                         |
+#                                     ovsdb-client
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# Checks that the dump of all databases is the same.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server tcp relay $5])
+   n_servers=6
+   target=4
+   $2 > schema
+   schema_name=`ovsdb-tool schema-name schema`
+   AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
+
+   on_exit 'kill `cat *.pid`'
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log dnl
+                          --pidfile --remote=punix:db1.sock db1
+            ], [0], [ignore], [ignore])
+
+   for i in $(seq 2 ${n_servers}); do
+     AT_CHECK([ovsdb-server --detach --no-chdir                           dnl
+                            --log-file=ovsdb-server$i.log                 dnl
+                            --pidfile=${i}.pid --remote=punix:db${i}.sock dnl
+                            --unixctl=unixctl${i} -vjsonrpc:file:dbg      dnl
+                            relay:${schema_name}:unix:db$((i-1)).sock
+            ], [0], [ignore], [ignore])
+   done
+
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client transact unix:db${target}.sock 'txn'], [0],
+               [stdout], [ignore])
+      cat stdout >> output
+   ])
+
+   AT_CHECK([uuidfilt output], [0], [$4], [ignore])
+
+   AT_CHECK([ovsdb-client dump unix:db1.sock], [0], [stdout], [ignore])
+   for i in $(seq 2 ${n_servers}); do
+     OVS_WAIT_UNTIL([ovsdb-client dump unix:db${i}.sock > dump${i}; dnl
+                     diff stdout dump${i}])
+   done
+
+   OVSDB_SERVER_SHUTDOWN
+   for i in $(seq 2 ${n_servers}); do
+     OVSDB_SERVER_SHUTDOWN_N([$i])
+   done
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
 AT_BANNER([OVSDB -- ovsdb-server replication])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
@@ -2012,5 +2091,154 @@ name number
 nine 9
 six  6
 ])
+
+AT_CLEANUP
+
+AT_BANNER([OVSDB -- ovsdb-server stream record/replay])
+
+AT_SETUP([ovsdb-server record/replay])
+AT_KEYWORDS([ovsdb server record replay])
+on_exit 'kill `cat *.pid`'
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+
+dnl Create a directory for replay files.
+AT_CHECK([mkdir replay_dir])
+
+dnl Make a copy of a database for later replay.
+AT_CHECK([cp db ./replay_dir/db.copy])
+
+dnl Starting a dummy server only to reserve some tcp port.
+AT_CHECK([cp db db.tmp])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --log-file=listener.log  dnl
+            --detach --no-chdir                                   dnl
+            --pidfile=pid2 --unixctl=unixctl2                     dnl
+            --remote=ptcp:0:127.0.0.1                             dnl
+            db.tmp], [0], [stdout], [stderr])
+PARSE_LISTENING_PORT([listener.log], [BAD_TCP_PORT])
+
+dnl Start ovsdb-server with recording enabled.
+dnl Trying to start a tcp session on already used port to record the error.
+AT_CHECK([ovsdb-server --record=./replay_dir                      dnl
+            -vfile -vvlog:off -vjsonrpc:file:dbg --log-file=1.log dnl
+            --detach --no-chdir --pidfile                         dnl
+            --remote=punix:db.sock                                dnl
+            --remote=ptcp:$BAD_TCP_PORT:127.0.0.1                 dnl
+            --remote=ptcp:0:127.0.0.1                             dnl
+            db], [0], [stdout], [stderr])
+CHECK_DBS([ordinals
+])
+PARSE_LISTENING_PORT([1.log], [TCP_PORT])
+
+dnl Start a monitor on the 'ordinals' db to check recording of this kind
+dnl of messages.
+AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir      dnl
+            --pidfile=monitor.pid --log-file=monitor.log          dnl
+            --db-change-aware --no-headings                       dnl
+            monitor tcp:127.0.0.1:$TCP_PORT                       dnl
+            ordinals ordinals number name                         dnl
+              > monitor.stdout 2> monitor.stderr])
+OVS_WAIT_UNTIL([test -e monitor.pid])
+
+dnl Do a bunch of random transactions.
+AT_CHECK(
+  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+      set -- $pair
+      if test "$2" -eq "5"; then
+          # killing the monitor to check if this correctly recorded.
+          kill -9 $(cat monitor.pid)
+      fi
+      ovsdb-client --db-change-aware transact unix:db.sock '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+      ovsdb-client transact unix:db.sock '
+        ["ordinals",
+         {"op": "delete",
+          "table": "ordinals",
+          "where": [["number", "==", '$2']]},
+         {"op": "comment",
+          "comment": "delete row for '"$2"'"}]'
+      ovsdb-client transact unix:db.sock '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add back row for '"$pair"'"}]'
+    done]],
+  [0], [stdout])
+
+AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], 0, [dnl
+ordinals table
+_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5
+<1> four  4
+<2> one   1
+<3> three 3
+<4> two   2
+<5> zero  0
+])
+
+AT_CHECK([uuidfilt monitor.stdout | sed '/^$/d'], [0], [dnl
+<0> insert 0 zero
+<0> delete 0 zero
+<1> insert 0 zero
+<2> insert 1 one
+<2> delete 1 one
+<3> insert 1 one
+<4> insert 2 two
+<4> delete 2 two
+<5> insert 2 two
+<6> insert 3 three
+<6> delete 3 three
+<7> insert 3 three
+<8> insert 4 four
+<8> delete 4 four
+<9> insert 4 four
+])
+OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN2
+
+dnl Starting a replay.
+AT_CHECK([ovsdb-server --replay=./replay_dir                      dnl
+            -vfile -vvlog:off -vjsonrpc:file:dbg --log-file=2.log dnl
+            --detach --no-chdir --pidfile                         dnl
+            --remote=punix:db.sock                                dnl
+            --remote=ptcp:$BAD_TCP_PORT:127.0.0.1                 dnl
+            --remote=ptcp:0:127.0.0.1                             dnl
+            ./replay_dir/db.copy], [0], [stdout], [stderr])
+
+dnl Waiting for process termination.  Process should exit after correct
+dnl processing of the 'exit' unixctl command from the recorded session.
+OVS_WAIT_WHILE([test -e ovsdb-server.pid])
+
+dnl Stripping out timestamps from database files.  Also clearing record
+dnl hashes in database files, since dates inside are different.
+m4_define([CLEAN_DB_FILE],
+  [sed 's/\(OVSDB JSON [[0-9]]*\).*$/\1/g' $1 | dnl
+   sed 's/"_date":[[0-9]]*/"_date":<clared>/g' > $2])
+
+CLEAN_DB_FILE([db], [db.clear])
+CLEAN_DB_FILE([./replay_dir/db.copy], [./replay_dir/db.copy.clear])
+
+dnl Stripping out timestamps, PIDs and poll_loop warnings from the log.
+dnl Also stripping socket_util errors as sockets are not used in replay.
+m4_define([CLEAN_LOG_FILE],
+  [sed 's/[[0-9\-]]*T[[0-9:\.]]*Z|[[0-9]]*\(|.*$\)/\1/g' $1 | dnl
+   sed '/|poll_loop|/d' |   dnl
+   sed '/|socket_util|/d' | dnl
+   sed 's/[[0-9]]*\.ctl/<cleared>\.ctl/g'> $2])
+
+CLEAN_LOG_FILE([1.log], [1.log.clear])
+CLEAN_LOG_FILE([2.log], [2.log.clear])
+
+dnl Checking that databases and logs are equal.
+AT_CHECK([diff db.clear ./replay_dir/db.copy.clear])
+AT_CHECK([diff 1.log.clear 2.log.clear])
 
 AT_CLEANUP

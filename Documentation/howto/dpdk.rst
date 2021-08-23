@@ -398,6 +398,7 @@ Supported actions for hardware offload are:
 - VLAN Push/Pop (push_vlan/pop_vlan).
 - Modification of IPv6 (set_field:<ADDR>->ipv6_src/ipv6_dst/mod_nw_ttl).
 - Clone/output (tnl_push and output) for encapsulating over a tunnel.
+- Tunnel pop, for packets received on physical ports.
 
 Further Reading
 ---------------

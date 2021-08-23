@@ -2,14 +2,14 @@ freebsd_build_task:
 
   freebsd_instance:
     matrix:
-      image_family: freebsd-12-1-snap
+      image_family: freebsd-12-2-snap
       image_family: freebsd-11-4-snap
     cpu: 4
     memory: 8G
 
   env:
-    DEPENDENCIES: automake libtool gmake gcc wget openssl
-                  python3 py37-openssl py37-sphinx
+    DEPENDENCIES: automake libtool gmake gcc wget openssl python3
+    PY_DEPS:      sphinx|openssl
     matrix:
       COMPILER: gcc
       COMPILER: clang
@@ -18,6 +18,7 @@ freebsd_build_task:
     - sysctl -w kern.coredump=0
     - pkg update -f
     - pkg install -y ${DEPENDENCIES}
+        $(pkg search -xq "^py3[0-9]+-(${PY_DEPS})-[0-9]+" | xargs)
 
   configure_script:
     - ./boot.sh

@@ -176,8 +176,7 @@ where:
 * **min(RTE_MAX_LCORE,  requested number of rxqs)**: Compare the maximum
   number of lcores supported by DPDK to the number of requested receive
   queues for the device and use the variable of lesser value.
-* **NETDEV_MAX_BURST**: Maximum number of of packets in a burst, defined as
-  32.
+* **NETDEV_MAX_BURST**: Maximum number of packets in a burst, defined as 32.
 * **MIN_NB_MBUF**: Additional memory for corner case, defined as 16384.
 
 For all examples below assume the following values:

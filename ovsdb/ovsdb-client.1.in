@@ -71,6 +71,7 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .so lib/ssl-syn.man
 .so lib/ssl-bootstrap-syn.man
 .so lib/ssl-connect-syn.man
+.so lib/ovs-replay-syn.man
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
@@ -370,6 +371,7 @@ effect.
 .SS "SSL Connection Options"
 .so lib/ssl-connect.man
 .SS "Other Options"
+.so lib/ovs-replay.man
 .so lib/common.man
 .SH "SEE ALSO"
 .

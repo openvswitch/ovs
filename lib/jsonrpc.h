@@ -114,6 +114,7 @@ struct jsonrpc_session *jsonrpc_session_open_unreliably(struct jsonrpc *,
 void jsonrpc_session_close(struct jsonrpc_session *);
 
 struct jsonrpc *jsonrpc_session_steal(struct jsonrpc_session *);
+void jsonrpc_session_replace(struct jsonrpc_session *, struct jsonrpc *);
 
 void jsonrpc_session_run(struct jsonrpc_session *);
 void jsonrpc_session_wait(struct jsonrpc_session *);
@@ -136,6 +137,7 @@ void jsonrpc_session_get_reconnect_stats(const struct jsonrpc_session *,
 
 void jsonrpc_session_enable_reconnect(struct jsonrpc_session *);
 void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
+void jsonrpc_session_reset_backoff(struct jsonrpc_session *);
 
 void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
                                      int max_backoff);

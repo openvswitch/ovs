@@ -162,6 +162,10 @@ def get_simple_printable_row_string(row, columns):
             if isinstance(value, dict):
                 value = sorted((row_to_uuid(k), row_to_uuid(v))
                                for k, v in value.items())
+            if isinstance(value, (list, tuple)):
+                value = sorted((row_to_uuid(v) for v in value))
+            elif isinstance(value, list):
+                value = sorted(row_to_uuid(v) for v in value)
             s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
@@ -172,9 +176,10 @@ def get_simple_printable_row_string(row, columns):
     return s
 
 
-def get_simple_table_printable_row(row):
+def get_simple_table_printable_row(row, *additional_columns):
     simple_columns = ["i", "r", "b", "s", "u", "ia",
-                      "ra", "ba", "sa", "ua", "uuid"]
+                      "ra", "ba", "sa", "ua"]
+    simple_columns.extend(additional_columns)
     return get_simple_printable_row_string(row, simple_columns)
 
 
@@ -184,8 +189,53 @@ def get_simple2_table_printable_row(row):
 
 
 def get_simple3_table_printable_row(row):
-    simple3_columns = ["name", "uset"]
+    simple3_columns = ["name", "uset", "uref"]
     return get_simple_printable_row_string(row, simple3_columns)
+
+
+def get_simple4_table_printable_row(row):
+    simple4_columns = ["name"]
+    return get_simple_printable_row_string(row, simple4_columns)
+
+
+def get_simple5_table_printable_row(row):
+    simple5_columns = ["name", "irefmap"]
+    return get_simple_printable_row_string(row, simple5_columns)
+
+
+def get_simple6_table_printable_row(row):
+    simple6_columns = ["name", "weak_ref"]
+    return get_simple_printable_row_string(row, simple6_columns)
+
+
+def get_link1_table_printable_row(row):
+    s = ["i=%s k=" % row.i]
+    if hasattr(row, "k") and row.k:
+        s.append(str(row.k.i))
+    if hasattr(row, "ka"):
+        s.append(" ka=[")
+        s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
+        s.append("] l2=")
+    if hasattr(row, "l2") and row.l2:
+        s.append(str(row.l2[0].i))
+    return ''.join(s)
+
+
+def get_link2_table_printable_row(row):
+    s = "i=%s l1=" % row.i
+    if hasattr(row, "l1") and row.l1:
+        s += str(row.l1[0].i)
+    return s
+
+
+def get_singleton_table_printable_row(row):
+    return "name=%s" % row.name
+
+
+def print_row(table, row, step, contents):
+    s = "%03d: table %s: %s " % (step, table, contents)
+    s += get_simple_printable_row_string(row, ["uuid"])
+    print(s)
 
 
 def print_idl(idl, step):
@@ -193,72 +243,64 @@ def print_idl(idl, step):
     if "simple" in idl.tables:
         simple = idl.tables["simple"].rows
         for row in simple.values():
-            s = "%03d: " % step
-            s += get_simple_table_printable_row(row)
-            print(s)
+            print_row("simple", row, step,
+                      get_simple_table_printable_row(row))
             n += 1
 
     if "simple2" in idl.tables:
         simple2 = idl.tables["simple2"].rows
         for row in simple2.values():
-            s = "%03d: " % step
-            s += get_simple2_table_printable_row(row)
-            print(s)
+            print_row("simple2", row, step,
+                      get_simple2_table_printable_row(row))
             n += 1
 
     if "simple3" in idl.tables:
         simple3 = idl.tables["simple3"].rows
         for row in simple3.values():
-            s = "%03d: " % step
-            s += get_simple3_table_printable_row(row)
-            print(s)
+            print_row("simple3", row, step,
+                      get_simple3_table_printable_row(row))
+            n += 1
+
+    if "simple4" in idl.tables:
+        simple4 = idl.tables["simple4"].rows
+        for row in simple4.values():
+            print_row("simple4", row, step,
+                      get_simple4_table_printable_row(row))
             n += 1
 
     if "simple5" in idl.tables:
         simple5 = idl.tables["simple5"].rows
         for row in simple5.values():
-            s = "%03d: " % step
-            s += get_simple_printable_row_string(row, ["name", "irefmap"])
-            print(s)
+            print_row("simple5", row, step,
+                      get_simple5_table_printable_row(row))
+            n += 1
+
+    if "simple6" in idl.tables:
+        simple6 = idl.tables["simple6"].rows
+        for row in simple6.values():
+            print_row("simple6", row, step,
+                      get_simple6_table_printable_row(row))
             n += 1
 
     if "link1" in idl.tables:
         l1 = idl.tables["link1"].rows
         for row in l1.values():
-            s = ["%03d: i=%s k=" % (step, row.i)]
-            if hasattr(row, "k") and row.k:
-                s.append(str(row.k.i))
-            if hasattr(row, "ka"):
-                s.append(" ka=[")
-                s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
-                s.append("] l2=")
-            if hasattr(row, "l2") and row.l2:
-                s.append(str(row.l2[0].i))
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+            print_row("link1", row, step,
+                      get_link1_table_printable_row(row))
             n += 1
 
     if "link2" in idl.tables:
         l2 = idl.tables["link2"].rows
         for row in l2.values():
-            s = ["%03d:" % step]
-            s.append(" i=%s l1=" % row.i)
-            if hasattr(row, "l1") and row.l1:
-                s.append(str(row.l1[0].i))
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+            print_row("link2", row, step,
+                      get_link2_table_printable_row(row))
             n += 1
 
     if "singleton" in idl.tables:
         sng = idl.tables["singleton"].rows
         for row in sng.values():
-            s = ["%03d:" % step]
-            s.append(" name=%s" % row.name)
-            if hasattr(row, "uuid"):
-                s.append(" uuid=%s" % row.uuid)
-            print(''.join(s))
+            print_row("singleton", row, step,
+                      get_singleton_table_printable_row(row))
             n += 1
 
     if not n:
@@ -609,7 +651,7 @@ def do_idl(schema_file, remote, *commands):
         commands = commands[1:]
     else:
         schema_helper.register_all()
-    idl = ovs.db.idl.Idl(remote, schema_helper)
+    idl = ovs.db.idl.Idl(remote, schema_helper, leader_only=False)
     if "simple3" in idl.tables:
         idl.index_create("simple3", "simple3_by_name")
 
@@ -637,7 +679,8 @@ def do_idl(schema_file, remote, *commands):
     def mock_notify(event, row, updates=None):
         output = "%03d: " % step
         output += "event:" + str(event) + ", row={"
-        output += get_simple_table_printable_row(row) + "}, updates="
+        output += get_simple_table_printable_row(row, 'l2', 'l1') + "}, "
+        output += get_simple_printable_row_string(row, ["uuid"]) + ", updates="
         if updates is None:
             output += "None"
         else:

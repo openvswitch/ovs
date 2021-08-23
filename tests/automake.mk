@@ -62,6 +62,7 @@ TESTSUITE_AT = \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
 	tests/pmd.at \
+	tests/alb.at \
 	tests/tunnel.at \
 	tests/tunnel-push-pop.at \
 	tests/tunnel-push-pop-ipv6.at \
@@ -134,12 +135,18 @@ FUZZ_REGRESSION_TESTS = \
 	tests/fuzz-regression/ofp_print_fuzzer-5722747668791296 \
 	tests/fuzz-regression/ofp_print_fuzzer-6285128790704128 \
 	tests/fuzz-regression/ofp_print_fuzzer-6470117922701312 \
-	tests/fuzz-regression/ofp_print_fuzzer-6502620041576448
+	tests/fuzz-regression/ofp_print_fuzzer-6502620041576448 \
+	tests/fuzz-regression/ofp_print_fuzzer-6540965472632832
 $(srcdir)/tests/fuzz-regression-list.at: tests/automake.mk
 	$(AM_V_GEN)for name in $(FUZZ_REGRESSION_TESTS); do \
             basename=`echo $$name | sed 's,^.*/,,'`; \
 	    echo "TEST_FUZZ_REGRESSION([$$basename])"; \
 	done > $@.tmp && mv $@.tmp $@
+
+EXTRA_DIST += $(MFEX_AUTOVALIDATOR_TESTS)
+MFEX_AUTOVALIDATOR_TESTS = \
+	tests/pcap/mfex_test.pcap \
+	tests/mfex_fuzzy.py
 
 OVSDB_CLUSTER_TESTSUITE_AT = \
 	tests/ovsdb-cluster-testsuite.at \
@@ -172,6 +179,7 @@ SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-layer3-tunnels.at \
 	tests/system-traffic.at \
+	tests/system-ipsec.at \
 	tests/system-interface.at
 
 SYSTEM_OFFLOADS_TESTSUITE_AT = \
@@ -189,6 +197,7 @@ check_SCRIPTS += tests/atlocal
 
 TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
+TESTSUITE_DIR = $(abs_top_builddir)/tests/testsuite.dir
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
 SYSTEM_TSO_TESTSUITE = $(srcdir)/tests/system-tso-testsuite
@@ -198,11 +207,13 @@ SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 OVSDB_CLUSTER_TESTSUITE = $(srcdir)/tests/ovsdb-cluster-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR)
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:ipsec:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR)
 
 check-local:
 	set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH); \
-	"$$@" $(TESTSUITEFLAGS) || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+	"$$@" $(TESTSUITEFLAGS) || \
+	(test -z "$$(find $(TESTSUITE_DIR) -name 'asan.*')" && \
+	 test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
 # Python Coverage support.
 # Requires coverage.py http://nedbatchelder.com/code/coverage/.
@@ -487,7 +498,8 @@ endif
 
 if LINUX
 tests_ovstest_SOURCES += \
-	tests/test-netlink-conntrack.c
+	tests/test-netlink-conntrack.c \
+	tests/test-netlink-policy.c
 endif
 
 tests_ovstest_LDADD = lib/libopenvswitch.la
@@ -506,6 +518,7 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 CHECK_PYFILES = \
 	tests/appctl.py \
 	tests/flowgen.py \
+	tests/mfex_fuzzy.py \
 	tests/ovsdb-monitor-sort.py \
 	tests/test-daemon.py \
 	tests/test-json.py \

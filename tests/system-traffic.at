@@ -574,6 +574,60 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping over geneve tunnel, delete flow regression])
+OVS_CHECK_GENEVE()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_DATA([flows.txt], [dnl
+priority=100,icmp actions=resubmit(,10)
+priority=0 actions=NORMAL
+table=10, priority=100, ip, actions=ct(table=20,zone=65520)
+table=20, priority=200, ip, ct_state=-new+trk, actions=resubmit(,30)
+table=20, priority=100, ip, ct_state=+new, actions=resubmit(,30)
+table=20, priority=50, ip, actions=DROP
+table=30, priority=100, ip, actions=ct(commit,table=40,zone=65520)
+table=40, actions=normal
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([geneve], [br0], [at_gnv0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [vni 0])
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl ping over tunnel should work
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-ofctl del-flows br0 "ct_state=+new"])
+
+dnl ping should not go through after removal of the flow
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/|ERR|/d
+/|WARN|/d"])
+AT_CLEANUP
+
 AT_SETUP([datapath - flow resume with geneve tun_metadata])
 OVS_CHECK_GENEVE()
 
@@ -2561,7 +2615,7 @@ priority=10,arp,action=normal
 
 dnl Only allow non-fragmented messages and 1st fragments of each message
 priority=100,in_port=1,icmp,ip_frag=no,action=ct(commit,zone=9),2
-priority=100,in_port=1,icmp,ip_frag=firstaction=ct(commit,zone=9),2
+priority=100,in_port=1,icmp,ip_frag=first,action=ct(commit,zone=9),2
 priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
 priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
@@ -4433,6 +4487,52 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+
+AT_SETUP([conntrack - all-zero IP SNAT])
+AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_ZEROIP_SNAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+NS_CHECK_EXEC([at_ns0], [ip route add 172.1.1.0/24 via 10.1.1.2])
+
+OVS_START_L7([at_ns1], [http])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=30,ct_state=-trk,ip,action=ct(table=0)
+table=0,priority=20,ct_state=-rpl,ip,nw_dst=10.1.1.0/24,actions=ct(commit,nat(src=0.0.0.0),table=10)
+table=0,priority=20,ct_state=+rpl,ip,nw_dst=10.1.1.0/24,actions=resubmit(,10)
+table=0,priority=20,ip,nw_dst=172.1.1.2,actions=ct(commit,nat(dst=10.1.1.2),table=10)
+table=0,priority=10,arp,action=normal
+table=0,priority=1,action=drop
+table=10,priority=20,ct_state=+rpl,ip,nw_dst=10.1.1.0/24 actions=ct(table=20,nat)
+table=10,priority=10,ip,nw_dst=10.1.1.0/24 actions=resubmit(,20)
+table=20,priority=10,ip,nw_dst=10.1.1.1,action=1
+table=20,priority=10,ip,nw_dst=10.1.1.2,action=2
+])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl - Test to make sure src nat is NOT done when not needed
+NS_CHECK_EXEC([at_ns0], [echo "TEST" | nc -p 30000 10.1.1.2 80 > nc-1.log])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.1,"], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=30000,dport=80),reply=(src=10.1.1.2,dst=10.1.1.1,sport=80,dport=30000),protoinfo=(state=TIME_WAIT)
+])
+
+dnl - Test to make sure src nat is done when needed
+NS_CHECK_EXEC([at_ns0], [echo "TEST2" | nc -p 30001 172.1.1.2 80 > nc-2.log])
+NS_CHECK_EXEC([at_ns0], [echo "TEST3" | nc -p 30001 10.1.1.2 80 > nc-3.log])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep 30001 | grep "orig=.src=10\.1\.1\.1," | sed -e 's/port=30001/port=<clnt_s_port>/g' -e 's/sport=80,dport=[[0-9]]\+/sport=80,dport=<rnd_port>/g' | sort], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<clnt_s_port>,dport=80),reply=(src=10.1.1.2,dst=10.1.1.1,sport=80,dport=<rnd_port>),protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=172.1.1.2,sport=<clnt_s_port>,dport=80),reply=(src=10.1.1.2,dst=10.1.1.1,sport=80,dport=<clnt_s_port>),protoinfo=(state=TIME_WAIT)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([conntrack - simple DNAT])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
@@ -4483,6 +4583,41 @@ NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - DNAT with additional SNAT])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+NS_CHECK_EXEC([at_ns0], [ip route add 172.1.1.0/24 via 10.1.1.2])
+
+OVS_START_L7([at_ns1], [http])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=30,in_port=1,ip,nw_dst=172.1.1.2,actions=ct(commit,nat(dst=10.1.1.2:80),table=1)
+table=0,priority=20,in_port=2,ip,actions=ct(nat),1
+table=0,priority=10,arp,actions=NORMAL
+table=0,priority=1,actions=drop
+dnl Be sure all ct() actions but src nat are executed
+table=1,ip,actions=ct(commit,nat(src=10.1.1.240),exec(set_field:0xac->ct_mark,set_field:0xac->ct_label),table=2)
+table=2,in_port=1,ip,ct_mark=0xac,ct_label=0xac,actions=2
+])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [wget http://172.1.1.2:8080 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl - make sure only dst nat has been performed
+AT_CHECK([ovs-appctl dpctl/dump-conntrack |  FORMAT_CT(10.1.1.240)], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=172.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=172,labels=0xac,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP

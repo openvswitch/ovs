@@ -1240,6 +1240,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         execute.needs_help = false;
         execute.probe = false;
         execute.mtu = 0;
+        execute.hash = 0;
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &this_module, &execute,
                             true, aux->error);
@@ -1486,6 +1487,22 @@ dpif_handlers_set(struct dpif *dpif, uint32_t n_handlers)
         log_operation(dpif, "handlers_set", error);
     }
     return error;
+}
+
+/* Checks if a certain number of handlers are required.
+ *
+ * If a certain number of handlers are required, returns 'true' and sets
+ * 'n_handlers' to that number of handler threads.
+ *
+ * If not, returns 'false'
+ */
+bool
+dpif_number_handlers_required(struct dpif *dpif, uint32_t *n_handlers)
+{
+    if (dpif->dpif_class->number_handlers_required) {
+        return dpif->dpif_class->number_handlers_required(dpif, n_handlers);
+    }
+    return false;
 }
 
 void

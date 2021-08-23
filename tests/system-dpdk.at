@@ -232,3 +232,163 @@ OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably
 \@EAL: No free hugepages reported in hugepages-1048576kB@d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+dnl Add standard DPDK PHY port
+AT_SETUP([OVS-DPDK - MFEX Autovalidator])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=$srcdir/pcap/mfex_test.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+
+AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator.
+])
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 1000])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+dnl Add standard DPDK PHY port
+AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
+AT_KEYWORDS([dpdk])
+AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
+AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py $srcdir], [], [stdout])
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=$srcdir/pcap/fuzzy.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+
+AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator.
+])
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 100000])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+AT_SETUP([OVS-DPDK - MFEX Configuration])
+AT_KEYWORDS([dpdk])
+OVS_DPDK_START()
+AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:pmd-cpu-mask=0xC])
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=$srcdir/pcap/mfex_test.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar 1], [2],
+[], [dnl
+Error: unknown argument 1.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 6 study 300 xyz], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: xyz.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 0 scalar abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd], [2],
+[], [dnl
+Error: -pmd option requires a thread id argument.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set tudy abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 7 study abcd], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 study], [0], [dnl
+Miniflow extract implementation set to study, on pmd thread 3, studying 128 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 study 512], [0], [dnl
+Miniflow extract implementation set to study, on pmd thread 3, studying 512 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set study 512], [0], [dnl
+Miniflow extract implementation set to study, studying 512 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set study], [0], [dnl
+Miniflow extract implementation set to study, studying 128 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator, on pmd thread 3.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd zero study], [2],
+[], [dnl
+Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1], [2],
+[], [dnl
+Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1 superstudy], [2],
+[], [dnl
+Error: unknown miniflow extract implementation superstudy.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set superstudy], [2],
+[], [dnl
+Error: unknown miniflow extract implementation superstudy.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1 study -pmd], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: -pmd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+AT_CLEANUP dnl
+dnl --------------------------------------------------------------------------

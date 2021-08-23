@@ -177,7 +177,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     sock->protocol = protocol;
     sock->next_seq = 1;
 
-    rcvbuf = 1024 * 1024;
+    rcvbuf = 1024 * 1024 * 4;
 #ifdef _WIN32
     sock->rcvbuf = rcvbuf;
     retval = get_sock_pid_from_kernel(sock);
@@ -917,7 +917,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
             }
             if (txn->error) {
                 VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
-                            error, ovs_strerror(txn->error));
+                            txn->error, ovs_strerror(txn->error));
             }
         } else {
             txn->error = 0;

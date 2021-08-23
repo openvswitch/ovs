@@ -142,8 +142,8 @@ elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
 fi
 
 if [ X"$ver_offset" = X ]; then
-    echo "This script is not intended to run on kernel $(uname -r)"
-    exit 1
+#    echo "This script is not intended to run on kernel $(uname -r)"
+    exit 0
 fi
 
 #IFS='.\|-' read -r -a version_nums <<<"${current_kernel}"
@@ -155,6 +155,16 @@ kmod_versions=()
 kversion=$(rpm -ql ${rpmname} | grep '\.ko$' | \
            sed -n -e 's/^\/lib\/modules\/\(.*\)\/extra\/.*$/\1/p' | \
            sort | uniq)
+
+IFS='.\|-' read installed_major installed_minor installed_patch \
+    installed_major_rev installed_minor_rev installed_extra <<<"${kversion}"
+
+if [ "$installed_major_rev" -lt "$major_rev" ]; then
+    echo "Not installing RPM with major revision $installed_major_rev" \
+         "to kernel with greater major revision $major_rev.  Exiting"
+    exit 1
+fi
+
 for kv in $kversion; do
     IFS='.\|-' read -r -a kv_nums <<<"${kv}"
     kmod_versions+=(${kv_nums[$ver_offset]})

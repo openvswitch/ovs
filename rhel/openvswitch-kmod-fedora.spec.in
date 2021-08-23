@@ -25,6 +25,8 @@
 #define kernel %{kernel_source}
 %{?kversion:%define kernel %kversion}
 
+%{!?release_number:%define release_number 1}
+
 Name: openvswitch-kmod
 Summary: Open vSwitch Kernel Modules
 Group: System Environment/Daemons
@@ -34,7 +36,7 @@ Version: @VERSION@
 
 # The entire source code is ASL 2.0 except datapath/ which is GPLv2
 License: GPLv2
-Release: 1%{?dist}
+Release: %{release_number}%{?dist}
 Source: openvswitch-%{version}.tar.gz
 #Source1: openvswitch-init
 Buildroot: /tmp/openvswitch-xen-rpm

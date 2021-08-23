@@ -101,7 +101,8 @@ save_interfaces () {
 
 get_highest_ofp_version() {
     ovs-vsctl get bridge "$1" protocols | \
-        awk -F '"' '{ print (NF>1)? $(NF-1) : "OpenFlow14" }'
+        sed 's/[][]//g' | sed 's/\ //g' | \
+            awk -F ',' '{ print (NF>1)? $(NF) : "OpenFlow14" }'
 }
 
 save_flows () {
@@ -127,7 +128,7 @@ save_flows () {
         ofp_version=$(get_highest_ofp_version "$bridge")
 
         printf "%s" "ovs-ofctl add-tlv-map ${bridge} '"
-        ovs-ofctl dump-tlv-map ${bridge} | \
+        ovs-ofctl dump-tlv-map ${bridge} -O $ofp_version | \
         awk '/^  *0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"

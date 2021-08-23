@@ -10,6 +10,7 @@ ovsdb\-server \- Open vSwitch database server
 .SH SYNOPSIS
 \fBovsdb\-server\fR
 [\fIdatabase\fR]\&...
+[\fIrelay:schema_name:remote\fR]\&...
 [\fB\-\-remote=\fIremote\fR]\&...
 [\fB\-\-run=\fIcommand\fR]
 .so lib/daemon-syn.man
@@ -24,6 +25,7 @@ ovsdb\-server \- Open vSwitch database server
 .so lib/ssl-peer-ca-cert-syn.man
 .so lib/ssl-connect-syn.man
 .so lib/unixctl-syn.man
+.so lib/ovs-replay-syn.man
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
@@ -34,12 +36,15 @@ For an introduction to OVSDB and its implementation in Open vSwitch,
 see \fBovsdb\fR(7).
 .PP
 Each OVSDB file may be specified on the command line as \fIdatabase\fR.
-If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
-files must already have been created and initialized using, for
-example, \fBovsdb\-tool\fR's \fBcreate\fR, \fBcreate\-cluster\fR, or
-\fBjoin\-cluster\fR command.
+Relay databases may be specified on the command line as
+\fIrelay:schema_name:remote\fR.  For a detailed description of relay database
+argument, see \fBovsdb\fR(7).
+If none of database files or relay databases is specified, the default is
+\fB@DBDIR@/conf.db\fR.  The database files must already have been created and
+initialized using, for example, \fBovsdb\-tool\fR's \fBcreate\fR,
+\fBcreate\-cluster\fR, or \fBjoin\-cluster\fR command.
 .PP
-This OVSDB implementation supports standalone, active-backup, and
+This OVSDB implementation supports standalone, active-backup, relay and
 clustered database service models, as well as database replication.
 See the Service Models section of \fBovsdb\fR(7) for more information.
 .PP
@@ -49,7 +54,9 @@ successfully join a cluster (if the database file is freshly created
 with \fBovsdb\-tool join\-cluster\fR) or connect to a cluster that it
 has already joined.  Use \fBovsdb\-client wait\fR (see
 \fBovsdb\-client\fR(1)) to wait until the server has successfully
-joined and connected to a cluster.
+joined and connected to a cluster.  The same is true for relay databases.
+Same commands could be used to wait for a relay database to connect to
+the relay source (remote).
 .PP
 In addition to user-specified databases, \fBovsdb\-server\fR version
 2.9 and later also always hosts a built-in database named
@@ -188,6 +195,7 @@ one row in \fItable\fR.)
 .so lib/ssl-connect.man
 .SS "Other Options"
 .so lib/unixctl.man
+.so lib/ovs-replay.man
 .so lib/common.man
 .SH "RUNTIME MANAGEMENT COMMANDS"
 \fBovs\-appctl\fR(8) can send commands to a running
@@ -241,10 +249,11 @@ not list remotes added indirectly because they were read from the
 database by configuring a
 \fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR remote.
 .
-.IP "\fBovsdb\-server/add\-db \fIdatabase\fR"
-Adds the \fIdatabase\fR to the running \fBovsdb\-server\fR.  The database
-file must already have been created and initialized using, for example,
-\fBovsdb\-tool create\fR.
+.IP "\fBovsdb\-server/add\-db \fIdatabase\fR
+Adds the \fIdatabase\fR to the running \fBovsdb\-server\fR.  \fIdatabase\fR
+could be a database file or a relay description in the following format:
+\fIrelay:schema_name:remote\fR.  The database file must already have been
+created and initialized using, for example, \fBovsdb\-tool create\fR.
 .
 .IP "\fBovsdb\-server/remove\-db \fIdatabase\fR"
 Removes \fIdatabase\fR from the running \fBovsdb\-server\fR.  \fIdatabase\fR

@@ -25,6 +25,7 @@
 #include <rte_cpuflags.h>
 #include <rte_errno.h>
 #include <rte_log.h>
+#include <rte_malloc.h>
 #include <rte_memzone.h>
 #include <rte_version.h>
 
@@ -129,33 +130,12 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
     }
 }
 
-static char *
-construct_dpdk_socket_mem(void)
-{
-    const char *def_value = "1024";
-    int numa, numa_nodes = ovs_numa_get_n_numas();
-    struct ds dpdk_socket_mem = DS_EMPTY_INITIALIZER;
-
-    if (numa_nodes == 0 || numa_nodes == OVS_NUMA_UNSPEC) {
-        numa_nodes = 1;
-    }
-
-    ds_put_cstr(&dpdk_socket_mem, def_value);
-    for (numa = 1; numa < numa_nodes; ++numa) {
-        ds_put_format(&dpdk_socket_mem, ",%s", def_value);
-    }
-
-    return ds_cstr(&dpdk_socket_mem);
-}
-
 #define MAX_DPDK_EXCL_OPTS 10
 
 static void
 construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                              struct svec *args)
 {
-    char *default_dpdk_socket_mem = construct_dpdk_socket_mem();
-
     struct dpdk_exclusive_options_map {
         const char *category;
         const char *ovs_dpdk_options[MAX_DPDK_EXCL_OPTS];
@@ -166,7 +146,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         {"memory type",
          {"dpdk-alloc-mem", "dpdk-socket-mem", NULL,},
          {"-m",             "--socket-mem",    NULL,},
-         default_dpdk_socket_mem, 1
+         NULL, 0
         },
     };
 
@@ -210,8 +190,6 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                       "dpdk-extra config", popt->eal_dpdk_options[found_pos]);
         }
     }
-
-    free(default_dpdk_socket_mem);
 }
 
 static void
@@ -356,6 +334,12 @@ dpdk_unixctl_log_set(struct unixctl_conn *conn, int argc, const char *argv[],
     unixctl_command_reply(conn, NULL);
 }
 
+static void
+malloc_dump_stats_wrapper(FILE *stream)
+{
+    rte_malloc_dump_stats(stream, NULL);
+}
+
 static bool
 dpdk_init__(const struct smap *ovs_other_config)
 {
@@ -420,22 +404,6 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
-
-    if (!args_contains(&args, "--legacy-mem")
-        && !args_contains(&args, "--socket-limit")) {
-        const char *arg;
-        size_t i;
-
-        SVEC_FOR_EACH (i, arg, &args) {
-            if (!strcmp(arg, "--socket-mem")) {
-                break;
-            }
-        }
-        if (i < args.n - 1) {
-            svec_add(&args, "--socket-limit");
-            svec_add(&args, args.names[i + 1]);
-        }
-    }
 
     if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
         auto_determine = false;
@@ -525,6 +493,9 @@ dpdk_init__(const struct smap *ovs_other_config)
                              dpdk_unixctl_mem_stream, rte_log_dump);
     unixctl_command_register("dpdk/log-set", "{level | pattern:level}", 0,
                              INT_MAX, dpdk_unixctl_log_set, NULL);
+    unixctl_command_register("dpdk/get-malloc-stats", "", 0, 0,
+                             dpdk_unixctl_mem_stream,
+                             malloc_dump_stats_wrapper);
 
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
@@ -614,13 +585,33 @@ print_dpdk_version(void)
     puts(rte_version());
 }
 
+/* Avoid calling rte_cpu_get_flag_enabled() excessively, by caching the
+ * result of the call for each CPU flag in a static variable. To avoid
+ * allocating large numbers of static variables, use a uint8 as a bitfield.
+ * Note the macro must only return if the ISA check is done and available.
+ */
+#define ISA_CHECK_DONE_BIT (1 << 0)
+#define ISA_AVAILABLE_BIT  (1 << 1)
+
 #define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
     do {                                                                \
         if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
-            int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);        \
-            VLOG_DBG("CPU flag %s, available %s\n", name_str,           \
-                      has_isa ? "yes" : "no");                          \
-            return true;                                                \
+            static uint8_t isa_check_##RTE_CPUFLAG;                     \
+            int check = isa_check_##RTE_CPUFLAG & ISA_CHECK_DONE_BIT;   \
+            if (OVS_UNLIKELY(!check)) {                                 \
+                int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);    \
+                VLOG_DBG("CPU flag %s, available %s\n",                 \
+                         name_str, has_isa ? "yes" : "no");             \
+                isa_check_##RTE_CPUFLAG = ISA_CHECK_DONE_BIT;           \
+                if (has_isa) {                                          \
+                    isa_check_##RTE_CPUFLAG |= ISA_AVAILABLE_BIT;       \
+                }                                                       \
+            }                                                           \
+            if (isa_check_##RTE_CPUFLAG & ISA_AVAILABLE_BIT) {          \
+                return true;                                            \
+            } else {                                                    \
+                return false;                                           \
+            }                                                           \
         }                                                               \
     } while (0)
 
@@ -635,6 +626,9 @@ dpdk_get_cpu_has_isa(const char *arch, const char *feature)
 #if __x86_64__
     /* CPU flags only defined for the architecture that support it. */
     CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
+    CHECK_CPU_FEATURE(feature, "avx512bw", RTE_CPUFLAG_AVX512BW);
+    CHECK_CPU_FEATURE(feature, "avx512vbmi", RTE_CPUFLAG_AVX512VBMI);
+    CHECK_CPU_FEATURE(feature, "avx512vpopcntdq", RTE_CPUFLAG_AVX512VPOPCNTDQ);
     CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
 #endif
 

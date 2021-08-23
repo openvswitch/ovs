@@ -44,10 +44,12 @@ OVS
    openflow
    bonding
    networking-namespaces
+   ovsdb-relay
    ovsdb-replication
    dpdk/index
    windows
    language-bindings
+   record-replay
    testing
    tracing
    userspace-tso

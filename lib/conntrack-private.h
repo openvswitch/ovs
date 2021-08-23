@@ -148,6 +148,39 @@ enum ct_update_res {
     CT_TIMEOUT(ICMP_FIRST) \
     CT_TIMEOUT(ICMP_REPLY)
 
+#define NAT_ACTION_SNAT_ALL (NAT_ACTION_SRC | NAT_ACTION_SRC_PORT)
+#define NAT_ACTION_DNAT_ALL (NAT_ACTION_DST | NAT_ACTION_DST_PORT)
+
+enum ct_ephemeral_range {
+    MIN_NAT_EPHEMERAL_PORT = 1024,
+    MAX_NAT_EPHEMERAL_PORT = 65535
+};
+
+#define IN_RANGE(curr, min, max) \
+    (curr >= min && curr <= max)
+
+#define NEXT_PORT_IN_RANGE(curr, min, max) \
+    (curr = (!IN_RANGE(curr, min, max) || curr == max) ? min : curr + 1)
+
+/* If the current port is out of range increase the attempts by
+ * one so that in the worst case scenario the current out of
+ * range port plus all the in-range ports get tested.
+ * Note that curr can be an out of range port only in case of
+ * source port (SNAT with port range unspecified or DNAT),
+ * furthermore the source port in the packet has to be less than
+ * MIN_NAT_EPHEMERAL_PORT. */
+#define N_PORT_ATTEMPTS(curr, min, max) \
+    ((!IN_RANGE(curr, min, max)) ? (max - min) + 2 : (max - min) + 1)
+
+/* Loose in-range check, the first curr port can be any port out of
+ * the range. */
+#define FOR_EACH_PORT_IN_RANGE__(curr, min, max, INAME) \
+    for (uint16_t INAME = N_PORT_ATTEMPTS(curr, min, max); \
+        INAME > 0; INAME--, NEXT_PORT_IN_RANGE(curr, min, max))
+
+#define FOR_EACH_PORT_IN_RANGE(curr, min, max) \
+    FOR_EACH_PORT_IN_RANGE__(curr, min, max, OVS_JOIN(idx, __COUNTER__))
+
 enum ct_timeout {
 #define CT_TIMEOUT(NAME) CT_TM_##NAME,
     CT_TIMEOUTS

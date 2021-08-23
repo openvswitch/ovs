@@ -514,13 +514,16 @@ struct netdev_class {
      * NETDEV_PT_LEGACY_L2. */
     enum netdev_pt_mode (*get_pt_mode)(const struct netdev *netdev);
 
-    /* Attempts to set input rate limiting (policing) policy, such that up to
-     * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative
-     * burst size of 'kbits' kb.
+    /* Attempts to set input rate limiting (policing) policy, such that:
+     * - up to 'kbits_rate' kbps of traffic is accepted, with a maximum
+     *   accumulative burst size of 'kbits' kb; and
+     * - up to 'kpkts' kpps of traffic is accepted, with a maximum
+     *   accumulative burst size of 'kpkts' kilo packets.
      *
      * This function may be set to null if policing is not supported. */
     int (*set_policing)(struct netdev *netdev, unsigned int kbits_rate,
-                        unsigned int kbits_burst);
+                        unsigned int kbits_burst, unsigned int kpkts_rate,
+                        unsigned int kpkts_burst);
 
     /* Adds to 'types' all of the forms of QoS supported by 'netdev', or leaves
      * it empty if 'netdev' does not support QoS.  Any names added to 'types'

@@ -13,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import print_function
 
 import email
 import getopt
@@ -158,6 +157,8 @@ __regex_trailing_whitespace = re.compile(r'[^\S]+$')
 __regex_single_line_feed = re.compile(r'^\f$')
 __regex_for_if_missing_whitespace = re.compile(r' +(%s)[\(]'
                                                % __parenthesized_constructs)
+__regex_hash_define_for_each = re.compile(
+    r'#define [_A-Z]+FOR_*EACH[_A-Z0-9]*\(')
 __regex_for_if_too_much_whitespace = re.compile(r' +(%s)  +[\(]'
                                                 % __parenthesized_constructs)
 __regex_for_if_parens_whitespace = \
@@ -246,9 +247,11 @@ def if_and_for_whitespace_checks(line):
     """
     if skip_block_whitespace_check:
         return True
-    if (__regex_for_if_missing_whitespace.search(line) is not None or
-            __regex_for_if_too_much_whitespace.search(line) is not None or
-            __regex_for_if_parens_whitespace.search(line)):
+    if (__regex_for_if_missing_whitespace.search(line) is not None and
+        __regex_hash_define_for_each.search(line) is None):
+        return False
+    if (__regex_for_if_too_much_whitespace.search(line) is not None or
+        __regex_for_if_parens_whitespace.search(line)):
         return False
     return True
 

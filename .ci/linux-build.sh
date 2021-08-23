@@ -7,6 +7,21 @@ CFLAGS_FOR_OVS="-g -O2"
 SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
 
+on_exit() {
+    if [ $? = 0 ]; then
+        exit
+    fi
+    FILES_TO_PRINT="config.log"
+    FILES_TO_PRINT="$FILES_TO_PRINT */_build/sub/tests/testsuite.log"
+
+    for pr_file in $FILES_TO_PRINT; do
+        cat "$pr_file" 2>/dev/null
+    done
+}
+# We capture the error logs as artifacts in Github Actions, no need to dump
+# them via a EXIT handler.
+[ -n "$GITHUB_WORKFLOW" ] || trap on_exit EXIT
+
 function install_kernel()
 {
     if [[ "$1" =~ ^5.* ]]; then
@@ -163,7 +178,7 @@ function install_dpdk()
 function configure_ovs()
 {
     ./boot.sh
-    ./configure CFLAGS="${CFLAGS_FOR_OVS}" $* || { cat config.log; exit 1; }
+    ./configure CFLAGS="${CFLAGS_FOR_OVS}" $*
 }
 
 function build_ovs()
@@ -180,7 +195,7 @@ function build_ovs()
         make -j4
         popd
     else
-        make -j4 || { cat config.log; exit 1; }
+        make -j4
     fi
 }
 
@@ -201,7 +216,7 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="20.11"
+        DPDK_VER="20.11.1"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
@@ -226,6 +241,15 @@ elif [ "$TRAVIS_ARCH" != "aarch64" ]; then
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${SPARSE_FLAGS}"
 fi
 
+if [ "$ASAN" ]; then
+    # This will override default option configured in tests/atlocal.in.
+    export ASAN_OPTIONS='detect_leaks=1'
+    # -O2 generates few false-positive memory leak reports in test-ovsdb
+    # application, so lowering optimizations to -O1 here.
+    CLFAGS_ASAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=address"
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CLFAGS_ASAN}"
+fi
+
 save_OPTS="${OPTS} $*"
 OPTS="${EXTRA_OPTS} ${save_OPTS}"
 
@@ -235,12 +259,8 @@ if [ "$TESTSUITE" ]; then
     configure_ovs
 
     export DISTCHECK_CONFIGURE_FLAGS="$OPTS"
-    if ! make distcheck CFLAGS="${CFLAGS_FOR_OVS}" \
-         TESTSUITEFLAGS=-j4 RECHECK=yes; then
-        # testsuite.log is necessary for debugging.
-        cat */_build/sub/tests/testsuite.log
-        exit 1
-    fi
+    make distcheck -j4 CFLAGS="${CFLAGS_FOR_OVS}" \
+        TESTSUITEFLAGS=-j4 RECHECK=yes
 else
     if [ -z "${KERNEL_LIST}" ]; then build_ovs ${KERNEL};
     else

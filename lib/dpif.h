@@ -727,7 +727,7 @@ struct dpif_execute {
     bool probe;                     /* Suppress error messages. */
     unsigned int mtu;               /* Maximum transmission unit to fragment.
                                        0 if not a fragmented packet */
-    uint64_t hash;
+    uint64_t hash;                  /* Packet flow hash. 0 if not specified. */
     const struct flow *flow;         /* Flow extracted from 'packet'. */
 
     /* Input, but possibly modified as a side effect of execution. */
@@ -873,6 +873,7 @@ void dpif_register_upcall_cb(struct dpif *, upcall_callback *, void *aux);
 
 int dpif_recv_set(struct dpif *, bool enable);
 int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
+bool dpif_number_handlers_required(struct dpif *, uint32_t *n_handlers);
 int dpif_set_config(struct dpif *, const struct smap *cfg);
 int dpif_port_set_config(struct dpif *, odp_port_t, const struct smap *cfg);
 int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,

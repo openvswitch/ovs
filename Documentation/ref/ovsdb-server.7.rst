@@ -304,7 +304,7 @@ monitoring session.
 
 The response object has the following members::
 
-    "result": null
+    "result": {}
     "error": null
     "id": same "id" as request
 

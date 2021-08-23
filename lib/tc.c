@@ -61,6 +61,10 @@
 #define TCA_DUMP_FLAGS 15
 #endif
 
+#ifndef RTM_GETCHAIN
+#define RTM_GETCHAIN 102
+#endif
+
 VLOG_DEFINE_THIS_MODULE(tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
@@ -295,6 +299,10 @@ static const struct nl_policy tca_policy[] = {
     [TCA_STATS] = { .type = NL_A_UNSPEC,
                     .min_len = sizeof(struct tc_stats), .optional = true, },
     [TCA_STATS2] = { .type = NL_A_NESTED, .optional = true, },
+};
+
+static const struct nl_policy tca_chain_policy[] = {
+    [TCA_CHAIN] = { .type = NL_A_U32, .optional = false, },
 };
 
 static const struct nl_policy tca_flower_policy[] = {
@@ -1906,6 +1914,25 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
 }
 
 int
+parse_netlink_to_tc_chain(struct ofpbuf *reply, uint32_t *chain)
+{
+    struct nlattr *ta[ARRAY_SIZE(tca_chain_policy)];
+    struct tcmsg *tc;
+
+    tc = ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+
+    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof *tc,
+                         tca_chain_policy, ta, ARRAY_SIZE(ta))) {
+        VLOG_ERR_RL(&error_rl, "failed to parse tca chain policy");
+        return EINVAL;
+    }
+
+   *chain = nl_attr_get_u32(ta[TCA_CHAIN]);
+
+    return 0;
+}
+
+int
 tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump, bool terse)
 {
     struct ofpbuf request;
@@ -1918,6 +1945,18 @@ tc_dump_flower_start(struct tcf_id *id, struct nl_dump *dump, bool terse)
         nl_msg_put_unspec(&request, TCA_DUMP_FLAGS, &dump_flags,
                           sizeof dump_flags);
     }
+    nl_dump_start(dump, NETLINK_ROUTE, &request);
+    ofpbuf_uninit(&request);
+
+    return 0;
+}
+
+int
+tc_dump_tc_chain_start(struct tcf_id *id, struct nl_dump *dump)
+{
+    struct ofpbuf request;
+
+    request_from_tcf_id(id, 0, RTM_GETCHAIN, NLM_F_DUMP, &request);
     nl_dump_start(dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
@@ -2599,6 +2638,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 if (!released && flower->tunnel) {
                     act_offset = nl_msg_start_nested(request, act_index++);
                     nl_msg_put_act_tunnel_key_release(request);
+                    nl_msg_put_act_flags(request);
                     nl_msg_end_nested(request, act_offset);
                     released = true;
                 }
@@ -2940,6 +2980,50 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     return 0;
 }
 
+static bool
+cmp_tc_flower_match_action(const struct tc_flower *a,
+                           const struct tc_flower *b)
+{
+    if (memcmp(&a->mask, &b->mask, sizeof a->mask)) {
+        VLOG_DBG_RL(&error_rl, "tc flower compare failed mask compare");
+        return false;
+    }
+
+    /* We can not memcmp() the key as some keys might be set while the mask
+     * is not.*/
+
+    for (int i = 0; i < sizeof a->key; i++) {
+        uint8_t mask = ((uint8_t *)&a->mask)[i];
+        uint8_t key_a = ((uint8_t *)&a->key)[i] & mask;
+        uint8_t key_b = ((uint8_t *)&b->key)[i] & mask;
+
+        if (key_a != key_b) {
+            VLOG_DBG_RL(&error_rl, "tc flower compare failed key compare at "
+                        "%d", i);
+            return false;
+        }
+    }
+
+    /* Compare the actions. */
+    const struct tc_action *action_a = a->actions;
+    const struct tc_action *action_b = b->actions;
+
+    if (a->action_count != b->action_count) {
+        VLOG_DBG_RL(&error_rl, "tc flower compare failed action length check");
+        return false;
+    }
+
+    for (int i = 0; i < a->action_count; i++, action_a++, action_b++) {
+        if (memcmp(action_a, action_b, sizeof *action_a)) {
+            VLOG_DBG_RL(&error_rl, "tc flower compare failed action compare "
+                        "for %d", i);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 int
 tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 {
@@ -2971,6 +3055,21 @@ tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 
         id->prio = tc_get_major(tc->tcm_info);
         id->handle = tc->tcm_handle;
+
+        if (id->prio != TC_RESERVED_PRIORITY_POLICE) {
+            struct tc_flower flower_out;
+            struct tcf_id id_out;
+            int ret;
+
+            ret = parse_netlink_to_tc_flower(reply, &id_out, &flower_out,
+                                             false);
+
+            if (ret || !cmp_tc_flower_match_action(flower, &flower_out)) {
+                VLOG_WARN_RL(&error_rl, "Kernel flower acknowledgment does "
+                             "not match request!  Set dpif_netlink to dbg to "
+                             "see which rule caused this error.");
+            }
+        }
         ofpbuf_delete(reply);
     }
 

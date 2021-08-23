@@ -36,6 +36,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ipf);
 COVERAGE_DEFINE(ipf_stuck_frag_list_purged);
+COVERAGE_DEFINE(ipf_l3csum_err);
 
 enum {
     IPV4_PACKET_MAX_HDR_SIZE = 60,
@@ -93,7 +94,6 @@ struct ipf_frag {
     struct dp_packet *pkt;
     uint16_t start_data_byte;
     uint16_t end_data_byte;
-    bool dnsteal; /* 'do not steal': if true, ipf should not free packet. */
 };
 
 /* The key for a collection of fragments potentially making up an unfragmented
@@ -575,6 +575,7 @@ static bool
 ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
 {
     if (OVS_UNLIKELY(dp_packet_ip_checksum_bad(pkt))) {
+        COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
     }
 
@@ -610,6 +611,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(pkt)
                      && !dp_packet_hwol_is_ipv4(pkt)
                      && csum(l3, ip_hdr_len) != 0)) {
+        COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
     }
 
@@ -795,8 +797,7 @@ ipf_is_frag_duped(const struct ipf_frag *frag_list, int last_inuse_idx,
 static bool
 ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
                  struct dp_packet *pkt, uint16_t start_data_byte,
-                 uint16_t end_data_byte, bool ff, bool lf, bool v6,
-                 bool dnsteal)
+                 uint16_t end_data_byte, bool ff, bool lf, bool v6)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     bool duped_frag = ipf_is_frag_duped(ipf_list->frag_list,
@@ -811,10 +812,9 @@ ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
              * recommend not setting the mempool number of buffers too low
              * and also clamp the number of fragments. */
             struct ipf_frag *frag = &ipf_list->frag_list[last_inuse_idx + 1];
-            frag->pkt = pkt;
+            frag->pkt = dp_packet_clone(pkt);
             frag->start_data_byte = start_data_byte;
             frag->end_data_byte = end_data_byte;
-            frag->dnsteal = dnsteal;
             ipf_list->last_inuse_idx++;
             atomic_count_inc(&ipf->nfrag);
             ipf_count(ipf, v6, IPF_NFRAGS_ACCEPTED);
@@ -851,8 +851,7 @@ ipf_list_init(struct ipf_list *ipf_list, struct ipf_list_key *key,
  * to a list of fragemnts. */
 static bool
 ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
-                uint16_t zone, long long now, uint32_t hash_basis,
-                bool dnsteal)
+                uint16_t zone, long long now, uint32_t hash_basis)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     struct ipf_list_key key;
@@ -921,7 +920,7 @@ ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
     }
 
     return ipf_process_frag(ipf, ipf_list, pkt, start_data_byte,
-                            end_data_byte, ff, lf, v6, dnsteal);
+                            end_data_byte, ff, lf, v6);
 }
 
 /* Filters out fragments from a batch of fragments and adjust the batch. */
@@ -942,8 +941,7 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
                           ipf_is_valid_v6_frag(ipf, pkt)))) {
 
             ovs_mutex_lock(&ipf->ipf_lock);
-            if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis,
-                                 pb->do_not_steal)) {
+            if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis)) {
                 dp_packet_batch_refill(pb, pkt, pb_idx);
             }
             ovs_mutex_unlock(&ipf->ipf_lock);
@@ -1338,9 +1336,7 @@ ipf_destroy(struct ipf *ipf)
         while (ipf_list->last_sent_idx < ipf_list->last_inuse_idx) {
             struct dp_packet *pkt
                 = ipf_list->frag_list[ipf_list->last_sent_idx + 1].pkt;
-            if (!ipf_list->frag_list[ipf_list->last_sent_idx + 1].dnsteal) {
-                dp_packet_delete(pkt);
-            }
+            dp_packet_delete(pkt);
             atomic_count_dec(&ipf->nfrag);
             ipf_list->last_sent_idx++;
         }

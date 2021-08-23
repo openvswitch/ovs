@@ -26,12 +26,7 @@ struct netdev;
 
 #ifdef DPDK_NETDEV
 
-struct rte_flow;
-struct rte_flow_error;
-struct rte_flow_attr;
-struct rte_flow_item;
-struct rte_flow_action;
-struct rte_flow_query_count;
+#include <rte_flow.h>
 
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
@@ -55,6 +50,102 @@ netdev_dpdk_rte_flow_query_count(struct netdev *netdev,
                                  struct rte_flow_error *error);
 int
 netdev_dpdk_get_port_id(struct netdev *netdev);
+
+#ifdef ALLOW_EXPERIMENTAL_API
+
+int netdev_dpdk_rte_flow_tunnel_decap_set(struct netdev *,
+                                          struct rte_flow_tunnel *,
+                                          struct rte_flow_action **,
+                                          uint32_t *num_of_actions,
+                                          struct rte_flow_error *);
+int netdev_dpdk_rte_flow_tunnel_match(struct netdev *,
+                                      struct rte_flow_tunnel *,
+                                      struct rte_flow_item **,
+                                      uint32_t *num_of_items,
+                                      struct rte_flow_error *);
+int netdev_dpdk_rte_flow_get_restore_info(struct netdev *,
+                                          struct dp_packet *,
+                                          struct rte_flow_restore_info *,
+                                          struct rte_flow_error *);
+int netdev_dpdk_rte_flow_tunnel_action_decap_release(struct netdev *,
+                                                     struct rte_flow_action *,
+                                                     uint32_t num_of_actions,
+                                                     struct rte_flow_error *);
+int netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *,
+                                             struct rte_flow_item *,
+                                             uint32_t num_of_items,
+                                             struct rte_flow_error *);
+
+#else
+
+static inline void
+set_error(struct rte_flow_error *error, enum rte_flow_error_type type)
+{
+    if (!error) {
+        return;
+    }
+    error->type = type;
+    error->cause = NULL;
+    error->message = NULL;
+}
+
+static inline int
+netdev_dpdk_rte_flow_tunnel_decap_set(
+    struct netdev *netdev OVS_UNUSED,
+    struct rte_flow_tunnel *tunnel OVS_UNUSED,
+    struct rte_flow_action **actions OVS_UNUSED,
+    uint32_t *num_of_actions OVS_UNUSED,
+    struct rte_flow_error *error)
+{
+    set_error(error, RTE_FLOW_ERROR_TYPE_ACTION);
+    return -1;
+}
+
+static inline int
+netdev_dpdk_rte_flow_tunnel_match(struct netdev *netdev OVS_UNUSED,
+                                  struct rte_flow_tunnel *tunnel OVS_UNUSED,
+                                  struct rte_flow_item **items OVS_UNUSED,
+                                  uint32_t *num_of_items OVS_UNUSED,
+                                  struct rte_flow_error *error)
+{
+    set_error(error, RTE_FLOW_ERROR_TYPE_ITEM);
+    return -1;
+}
+
+static inline int
+netdev_dpdk_rte_flow_get_restore_info(
+    struct netdev *netdev OVS_UNUSED,
+    struct dp_packet *p OVS_UNUSED,
+    struct rte_flow_restore_info *info OVS_UNUSED,
+    struct rte_flow_error *error)
+{
+    set_error(error, RTE_FLOW_ERROR_TYPE_ATTR);
+    return -1;
+}
+
+static inline int
+netdev_dpdk_rte_flow_tunnel_action_decap_release(
+    struct netdev *netdev OVS_UNUSED,
+    struct rte_flow_action *actions OVS_UNUSED,
+    uint32_t num_of_actions OVS_UNUSED,
+    struct rte_flow_error *error)
+{
+    set_error(error, RTE_FLOW_ERROR_TYPE_NONE);
+    return 0;
+}
+
+static inline int
+netdev_dpdk_rte_flow_tunnel_item_release(
+    struct netdev *netdev OVS_UNUSED,
+    struct rte_flow_item *items OVS_UNUSED,
+    uint32_t num_of_items OVS_UNUSED,
+    struct rte_flow_error *error)
+{
+    set_error(error, RTE_FLOW_ERROR_TYPE_NONE);
+    return 0;
+}
+
+#endif /* ALLOW_EXPERIMENTAL_API */
 
 #else
 

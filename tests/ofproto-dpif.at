@@ -342,6 +342,22 @@ AT_CHECK([test `egrep 'in_port\(6\)' br1_flows.txt |wc -l` -gt 3])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# SEND_TCP_BOND_PKTS([p_name], [p_ofport], [packet_len])
+#
+# Sends 256 packets to port 'p_name' with different TCP destination ports.
+m4_define([SEND_TCP_BOND_PKTS],
+   [
+    len_cmd=""
+    if test -n "$3"; then
+        len_cmd=" --len $3"
+    fi
+    for i in `seq 0 255`; do
+        pkt="in_port($2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
+        ovs-appctl netdev-dummy/receive $1 $pkt$len_cmd
+    done
+   ]
+)
+
 AT_SETUP([ofproto-dpif - balance-tcp bonding])
 # Create br0 with members bond0(p1, p2, p3) and p7,
 #    and br1 with members bond1(p4, p5, p6) and p8.
@@ -377,13 +393,7 @@ ovs-appctl lacp/show > lacp.txt
 ovs-appctl bond/show > bond.txt
 # Check that lb_output is not enabled by default.
 AT_CHECK([grep -q '^lb_output action: disabled' bond.txt])
-(
-for i in `seq 0 255` ;
-    do
-    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
-    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
-    done
-)
+AT_CHECK([SEND_TCP_BOND_PKTS([p7], [7])])
 ovs-appctl time/warp 300 100
 AT_CHECK([ovs-appctl dpif/dump-flows br0 |grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 |grep tcp > br1_flows.txt])
@@ -400,13 +410,7 @@ OVS_WAIT_UNTIL([ovs-appctl bond/show | grep -q '^lb_output action: enabled'])
 ovs-appctl time/warp 10000 500
 ovs-appctl revalidator/wait
 OVS_WAIT_WHILE([ovs-appctl dpif/dump-flows br1 | grep -q tcp])
-(
-for i in $(seq 256) ;
-    do
-    pkt="in_port(7),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=$i),tcp_flags(ack)"
-    AT_CHECK([ovs-appctl netdev-dummy/receive p7 $pkt])
-    done
-)
+AT_CHECK([SEND_TCP_BOND_PKTS([p7], [7])])
 ovs-appctl time/warp 300 100
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | grep tcp > br0_flows.txt])
 AT_CHECK([ovs-appctl dpif/dump-flows br1 | grep tcp > br1_flows.txt])
@@ -422,6 +426,78 @@ OVS_WAIT_UNTIL([test -z "$(ovs-appctl dpif-netdev/bond-show)"])
 
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
+
+# Make sure that rebalancing works after link state changes.
+AT_SETUP([ofproto-dpif - balance-tcp bonding rebalance after link state changes])
+# Create br0 with interfaces bond0(p1, p2) and p5,
+#    and br1 with interfaces bond1(p3, p4) and p6.
+#    bond0 <-> bond1
+# Send some traffic, set link state down and up for p2,
+# send big amount of traffic to trigger rebalancing and
+# make sure that some hashes rebalanced.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 --\
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 mtu_request=65535 -- \
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 mtu_request=65535 -- \
+   add-port br0 p5 -- set interface p5 ofport_request=5 type=dummy mtu_request=65535 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p3 p4 bond_mode=balance-tcp lacp=active \
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 --\
+   set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 mtu_request=65535 -- \
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 mtu_request=65535 -- \
+   add-port br1 p6 -- set interface p6 ofport_request=6 type=dummy mtu_request=65535 --])
+AT_CHECK([ovs-appctl vlog/set bond:dbg])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+], [])
+OVS_WAIT_WHILE([ovs-appctl bond/show | grep "may_enable: false"])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 2000 200
+
+# Send some traffic to distribute all the hashes between ports.
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+
+# Wait for rebalancing for per-hash stats accounting.
+ovs-appctl time/warp 1000 100
+
+# Check that p2 handles some hashes.
+ovs-appctl bond/show > bond1.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond1.txt | grep 'hash'], [0], [ignore])
+
+# Move p2 down to force all hashes move to p1
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 down], 0, [OK
+])
+
+ovs-appctl time/warp 200 100
+# Check that all hashes moved form p2
+ovs-appctl bond/show > bond2.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond2.txt | grep 'hash'], [1], [ignore])
+
+# Move p2 up
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 up], 0, [OK
+])
+
+# Send some packets to trigger rebalancing.
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+
+# Wait for rebalancing
+ovs-appctl time/warp 1000 100
+
+# Check that some hashes was shifted to p2
+ovs-appctl bond/show > bond3.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond3.txt | grep 'hash'], [0], [ignore])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
 
 # Makes sure recirculation does not change the way packet is handled.
 AT_SETUP([ofproto-dpif - balance-tcp bonding, different recirc flow ])
@@ -5492,7 +5568,8 @@ dnl
 dnl EXTRA_SETUP is an optional list of extra commands to run after setting up
 dnl both bridges, e.g. to configure mirrors or patch ports.
 m4_define([CHECK_CONTINUATION], [dnl
-    AT_SETUP([ofproto-dpif - continuation - $1])
+  m4_foreach([monitor_version], [[OpenFlow10], [OpenFlow13]], [dnl
+    AT_SETUP([ofproto-dpif - continuation - $1 - monitor_version])
     AT_KEYWORDS([continuations pause resume])
     OVS_VSWITCHD_START
 
@@ -5511,10 +5588,10 @@ m4_define([CHECK_CONTINUATION], [dnl
        add_of_ports --pcap br1 `seq m4_eval([$2 + 1]) m4_eval([$2 + $3])`])
 
     AT_CAPTURE_FILE([ofctl_monitor0.log])
-    AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
+    AT_CHECK([ovs-ofctl -O monitor_version monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
     m4_if([$3], [0], [],
       [AT_CAPTURE_FILE([ofctl_monitor1.log])
-       AT_CHECK([ovs-ofctl monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl1.pid 2> ofctl_monitor1.log])])
+       AT_CHECK([ovs-ofctl -O monitor_version monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl1.pid 2> ofctl_monitor1.log])])
 
     actions0='$4'
     actions1='$5'
@@ -5538,9 +5615,19 @@ m4_define([CHECK_CONTINUATION], [dnl
         AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 
         # Wait for the expected number of packets to show up.
-        n_packets=`expr $n_packets + $2 - 1 + $3`
-        echo "waiting for $n_packets packets..."
-        OVS_WAIT_UNTIL([test $n_packets = `ovs-ofctl parse-pcap p*-tx.pcap | wc -l`])
+        n_packets=$(expr $n_packets + 1)
+        nports=m4_eval([$2 + $3])
+        echo "waiting for $n_packets packets on p2 through p$nports..."
+        OVS_WAIT_UNTIL([
+            ok=true
+            for i in $(seq 2 $nports); do
+                n=$(ovs-ofctl parse-pcap p$i-tx.pcap | wc -l)
+                printf "%d " $n
+                if test $n_packets != $n; then ok=false; fi
+            done
+            echo
+            $ok
+        ])
 
         # Wait for the expected number of NXT_RESUMEs to be logged.
         n_resumes=$(expr $n_resumes + $(echo "$actions0 $actions1" | count_matches pause) )
@@ -5575,6 +5662,7 @@ m4_define([CHECK_CONTINUATION], [dnl
     done
     OVS_VSWITCHD_STOP
     AT_CLEANUP
+  ])
 ])
 
 # Check that pause at the end of the pipeline works OK.
@@ -5603,6 +5691,22 @@ CHECK_CONTINUATION([resubmit], [10], [0],
 CHECK_CONTINUATION([action set], [3], [0],
   [in_port=1 actions=1 pause resubmit(,1) pause 2
    table=1 actions=write_actions(3)])
+
+# Check that goto_table instructions following pause work as expected.
+CHECK_CONTINUATION([goto_table], [6], [0],
+  [table=0 in_port=1 actions=pause 2 pause goto_table:1
+   table=1 in_port=1 actions=pause 3 pause goto_table:2
+   table=2 in_port=1 actions=pause 4 pause goto_table:3
+   table=3 in_port=1 actions=pause 5 pause goto_table:4
+   table=4 in_port=1 actions=pause 6 pause])
+
+# Check that write_metadata instructions following pause work as expected.
+CHECK_CONTINUATION([write_metadata], [6], [0],
+  [table=0 in_port=1             actions=pause 2 pause write_metadata:1/1 goto_table:1
+   table=1 in_port=1 metadata=1  actions=pause 3 pause write_metadata:2/2 goto_table:2
+   table=2 in_port=1 metadata=3  actions=pause 4 pause write_metadata:4/4 goto_table:3
+   table=3 in_port=1 metadata=7  actions=pause 5 pause write_metadata:8/8 goto_table:4
+   table=4 in_port=1 metadata=15 actions=pause 6 pause])
 
 # Check that metadata and the stack used by push and pop is preserved
 # across pause/resume.
@@ -6752,6 +6856,105 @@ PORTNAME
 PORTNAME
         portName=p2
 ])])
+
+AT_SETUP([ofproto-dpif - static-mac add/del/flush])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+add_of_ports br0 1 2
+
+dnl Generate some dynamic fdb entries on some ports.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:01)], [-generate], [100,2])
+OFPROTO_TRACE([ovs-dummy], [in_port(2),eth(src=50:54:00:00:00:02)], [-generate], [100,1])
+
+dnl Add some static mac entries.
+AT_CHECK([ovs-appctl fdb/add br0 p1 0 50:54:00:00:01:01])
+AT_CHECK([ovs-appctl fdb/add br0 p2 0 50:54:00:00:02:02])
+
+dnl Check initial fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    1     0  50:54:00:00:00:01
+    1     0  50:54:00:00:01:01  static
+    2     0  50:54:00:00:00:02
+    2     0  50:54:00:00:02:02  static
+])
+
+dnl Remove static mac entry.
+AT_CHECK([ovs-appctl fdb/del br0 0 50:54:00:00:01:01])
+
+dnl Check that entry is removed.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | grep "50:54:00:00:01:01"], [1], [dnl
+])
+
+# Add some more cache and static entries, to test out flush operation
+for i in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    ovs-appctl ofproto/trace ovs-dummy "in_port(1),eth(src=50:54:00:00:0$i:ff)" -generate
+    ovs-appctl fdb/add br0 p2 0 50:54:00:0$i:00:ff
+done
+
+for i in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    ovs-appctl fdb/add br0 p2 0 50:54:00:0$i:00:ff
+done
+
+dnl Flush mac entries, only dynamic ones should be evicted.
+AT_CHECK([ovs-appctl fdb/flush br0], [0], [dnl
+table successfully flushed
+])
+
+dnl Count number of static entries remaining.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/stats-show br0 | grep static], [0], [dnl
+  Current static MAC entries in the table : 17
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - static-mac mac moves])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+add_of_ports br0 1 2
+
+dnl Generate a dynamic entry.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:00)], [-generate], [100,2])
+
+dnl Convert dynamically learnt dl_src to a static-mac.
+AT_CHECK([ovs-appctl fdb/add br0 p1 0 50:54:00:00:00:00], [0], [dnl
+Overriding already existing dynamic entry on 1
+])
+
+dnl Check fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    1     0  50:54:00:00:00:00  static
+])
+
+dnl Move the static mac to different port.
+AT_CHECK([ovs-appctl fdb/add br0 p2 0 50:54:00:00:00:00], [0], [dnl
+Overriding already existing static entry on 1
+])
+
+dnl Check fdb.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl static-mac should not be converted to a dynamic one when a packet with same dl_src
+dnl arrives on any port of the switch.
+dnl Packet arriving on p1.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=50:54:00:00:00:00)], [-generate], [100,2])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl Packet arriving on p2.
+OFPROTO_TRACE([ovs-dummy], [in_port(2),eth(src=50:54:00:00:00:00)], [-generate], [100,1])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | grep -v port | sort], [0], [dnl
+    2     0  50:54:00:00:00:00  static
+])
+
+dnl Check mac_move coverage counter mac_learning_static_none_move.
+AT_CHECK([ovs-appctl coverage/read-counter mac_learning_static_none_move], [0], [dnl
+1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - basic truncate action])
 OVS_VSWITCHD_START
@@ -10842,6 +11045,31 @@ dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=106 in_port=2 (via action) data_len=106 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:553
 ])
+
+dnl The next test verifies that ct_clear at the datapath only gets executed
+dnl if conntrack information is present.
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=ct_clear,ct_clear,ct_clear,p2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=p1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 ip actions=ct_clear,ct(table=1)
+table=1 in_port=1 actions=ct_clear,ct_clear,goto_table:2
+table=2 in_port=1 actions=ct_clear,p2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=p1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2'], [0], [stdout])
+AT_CHECK([grep Datapath stdout | sed 's/recirc(.*)/recirc(X)/'], [0],
+  [Datapath actions: ct,recirc(X)
+Datapath actions: ct_clear,2
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

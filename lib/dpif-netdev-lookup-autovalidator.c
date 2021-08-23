@@ -17,7 +17,6 @@
 #include <config.h>
 #include "dpif-netdev.h"
 #include "dpif-netdev-lookup.h"
-#include "dpif-netdev-private.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_lookup_autovalidator);

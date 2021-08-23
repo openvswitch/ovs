@@ -28,6 +28,8 @@
 %bcond_without libcapng
 # To enable DPDK support, specify '--with dpdk' when building
 %bcond_with dpdk
+# To enable AF_XDP support, specify '--with afxdp' when building
+%bcond_with afxdp
 
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
@@ -42,6 +44,8 @@
 %define _rundir /run
 %endif
 
+%{!?release_number:%define release_number 1}
+
 Name: openvswitch
 Summary: Open vSwitch
 Group: System Environment/Daemons
@@ -52,7 +56,7 @@ Version: @VERSION@
 # lib/sflow*.[ch] files are SISSL
 # datapath/ is GPLv2 (although not built into any of the binary packages)
 License: ASL 2.0 and LGPLv2+ and SISSL
-Release: 1%{?dist}
+Release: %{release_number}%{?dist}
 Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 
 BuildRequires: gcc gcc-c++
@@ -70,8 +74,11 @@ BuildRequires: libcap-ng libcap-ng-devel
 %endif
 %if %{with dpdk}
 BuildRequires: libpcap-devel numactl-devel
-BuildRequires: dpdk-devel >= 17.05.1
+BuildRequires: dpdk-devel >= 20.11
 Provides: %{name}-dpdk = %{version}-%{release}
+%endif
+%if %{with afxdp}
+BuildRequires: libbpf-devel numactl-devel
 %endif
 BuildRequires: unbound unbound-devel
 
@@ -163,6 +170,9 @@ This package provides IPsec tunneling support for OVS tunnels.
 %endif
 %if %{with dpdk}
         --with-dpdk=shared \
+%endif
+%if %{with afxdp}
+        --enable-afxdp \
 %endif
         --enable-ssl \
         --disable-static \

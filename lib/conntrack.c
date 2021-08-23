@@ -45,7 +45,9 @@ VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
 COVERAGE_DEFINE(conntrack_long_cleanup);
+COVERAGE_DEFINE(conntrack_l3csum_err);
 COVERAGE_DEFINE(conntrack_l4csum_err);
+COVERAGE_DEFINE(conntrack_lookup_natted_miss);
 
 struct conn_lookup_ctx {
     struct conn_key key;
@@ -108,8 +110,8 @@ static void set_label(struct dp_packet *, struct conn *,
 static void *clean_thread_main(void *f_);
 
 static bool
-nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
-                       struct conn *nat_conn);
+nat_get_unique_tuple(struct conntrack *ct, const struct conn *conn,
+                     struct conn *nat_conn);
 
 static uint8_t
 reverse_icmp_type(uint8_t type);
@@ -291,6 +293,11 @@ conntrack_init(void)
     static struct ovsthread_once setup_l4_once = OVSTHREAD_ONCE_INITIALIZER;
     struct conntrack *ct = xzalloc(sizeof *ct);
 
+    /* This value can be used during init (e.g. timeout_policy_init()),
+     * set it first to ensure it is available.
+     */
+    ct->hash_basis = random_uint32();
+
     ovs_rwlock_init(&ct->resources_lock);
     ovs_rwlock_wrlock(&ct->resources_lock);
     hmap_init(&ct->alg_expectations);
@@ -308,7 +315,6 @@ conntrack_init(void)
     timeout_policy_init(ct);
     ovs_mutex_unlock(&ct->ct_lock);
 
-    ct->hash_basis = random_uint32();
     atomic_count_init(&ct->n_conn, 0);
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
     atomic_init(&ct->tcp_seq_chk, true);
@@ -728,11 +734,11 @@ pat_packet(struct dp_packet *pkt, const struct conn *conn)
         }
     } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
         if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, th->tcp_src, conn->rev_key.src.port);
+            packet_set_tcp_port(pkt, conn->rev_key.dst.port,
+                                conn->rev_key.src.port);
         } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, uh->udp_src, conn->rev_key.src.port);
+            packet_set_udp_port(pkt, conn->rev_key.dst.port,
+                                conn->rev_key.src.port);
         }
     }
 }
@@ -786,11 +792,9 @@ un_pat_packet(struct dp_packet *pkt, const struct conn *conn)
         }
     } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
         if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, conn->key.dst.port, th->tcp_dst);
+            packet_set_tcp_port(pkt, conn->key.dst.port, conn->key.src.port);
         } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, conn->key.dst.port, uh->udp_dst);
+            packet_set_udp_port(pkt, conn->key.dst.port, conn->key.src.port);
         }
     }
 }
@@ -810,12 +814,10 @@ reverse_pat_packet(struct dp_packet *pkt, const struct conn *conn)
         }
     } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
         if (conn->key.nw_proto == IPPROTO_TCP) {
-            struct tcp_header *th_in = dp_packet_l4(pkt);
-            packet_set_tcp_port(pkt, th_in->tcp_src,
+            packet_set_tcp_port(pkt, conn->key.src.port,
                                 conn->key.dst.port);
         } else if (conn->key.nw_proto == IPPROTO_UDP) {
-            struct udp_header *uh_in = dp_packet_l4(pkt);
-            packet_set_udp_port(pkt, uh_in->udp_src,
+            packet_set_udp_port(pkt, conn->key.src.port,
                                 conn->key.dst.port);
         }
     }
@@ -825,7 +827,7 @@ static void
 reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
 {
     char *tail = dp_packet_tail(pkt);
-    uint8_t pad = dp_packet_l2_pad_size(pkt);
+    uint16_t pad = dp_packet_l2_pad_size(pkt);
     struct conn_key inner_key;
     const char *inner_l4 = NULL;
     uint16_t orig_l3_ofs = pkt->l3_ofs;
@@ -1029,14 +1031,14 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                 }
             } else {
                 memcpy(nat_conn, nc, sizeof *nat_conn);
-                bool nat_res = nat_select_range_tuple(ct, nc, nat_conn);
+                bool nat_res = nat_get_unique_tuple(ct, nc, nat_conn);
 
                 if (!nat_res) {
                     goto nat_res_exhaustion;
                 }
 
                 /* Update nc with nat adjustments made to nat_conn by
-                 * nat_select_range_tuple(). */
+                 * nat_get_unique_tuple(). */
                 memcpy(nc, nat_conn, sizeof *nc);
             }
 
@@ -1282,6 +1284,34 @@ process_one_fast(uint16_t zone, const uint32_t *setmark,
 }
 
 static void
+initial_conn_lookup(struct conntrack *ct, struct conn_lookup_ctx *ctx,
+                    long long now, bool natted)
+{
+    if (natted) {
+        /* If the packet has been already natted (e.g. a previous
+         * action took place), retrieve it performing a lookup of its
+         * reverse key. */
+        conn_key_reverse(&ctx->key);
+    }
+
+    conn_key_lookup(ct, &ctx->key, ctx->hash, now, &ctx->conn, &ctx->reply);
+
+    if (natted) {
+        if (OVS_LIKELY(ctx->conn)) {
+            ctx->reply = !ctx->reply;
+            ctx->key = ctx->reply ? ctx->conn->rev_key : ctx->conn->key;
+            ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
+        } else {
+            /* A lookup failure does not necessarily imply that an
+             * error occurred, it may simply indicate that a conn got
+             * removed during the recirculation. */
+            COVERAGE_INC(conntrack_lookup_natted_miss);
+            conn_key_reverse(&ctx->key);
+        }
+    }
+}
+
+static void
 process_one(struct conntrack *ct, struct dp_packet *pkt,
             struct conn_lookup_ctx *ctx, uint16_t zone,
             bool force, bool commit, long long now, const uint32_t *setmark,
@@ -1296,7 +1326,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     }
 
     bool create_new_conn = false;
-    conn_key_lookup(ct, &ctx->key, ctx->hash, now, &ctx->conn, &ctx->reply);
+    initial_conn_lookup(ct, ctx, now, !!(pkt->md.ct_state &
+                                         (CS_SRC_NAT | CS_DST_NAT)));
     struct conn *conn = ctx->conn;
 
     /* Delete found entry if in wrong direction. 'force' implies commit. */
@@ -1613,6 +1644,7 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
     }
 
     if (validate_checksum && csum(data, ip_len) != 0) {
+        COVERAGE_INC(conntrack_l3csum_err);
         return false;
     }
 
@@ -1669,15 +1701,22 @@ static inline bool
 checksum_valid(const struct conn_key *key, const void *data, size_t size,
                const void *l3)
 {
+    bool valid;
+
     if (key->dl_type == htons(ETH_TYPE_IP)) {
         uint32_t csum = packet_csum_pseudoheader(l3);
-        return csum_finish(csum_continue(csum, data, size)) == 0;
+        valid = (csum_finish(csum_continue(csum, data, size)) == 0);
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)) {
-        return packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0;
+        valid = (packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0);
     } else {
-        COVERAGE_INC(conntrack_l4csum_err);
-        return false;
+        valid = false;
     }
+
+    if (!valid) {
+        COVERAGE_INC(conntrack_l4csum_err);
+    }
+
+    return valid;
 }
 
 static inline bool
@@ -2051,6 +2090,7 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         bool hwol_bad_l3_csum = dp_packet_ip_checksum_bad(pkt);
         if (hwol_bad_l3_csum) {
             ok = false;
+            COVERAGE_INC(conntrack_l3csum_err);
         } else {
             bool hwol_good_l3_csum = dp_packet_ip_checksum_valid(pkt)
                                      || dp_packet_hwol_is_ipv4(pkt);
@@ -2076,6 +2116,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
                 ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
                 return true;
             }
+        } else {
+            COVERAGE_INC(conntrack_l4csum_err);
         }
     }
 
@@ -2210,130 +2252,218 @@ nat_range_hash(const struct conn *conn, uint32_t basis)
     return hash_finish(hash, 0);
 }
 
-static bool
-nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
-                       struct conn *nat_conn)
+/* Ports are stored in host byte order for convenience. */
+static void
+set_sport_range(struct nat_action_info_t *ni, const struct conn_key *k,
+                uint32_t hash, uint16_t *curr, uint16_t *min,
+                uint16_t *max)
 {
-    enum { MIN_NAT_EPHEMERAL_PORT = 1024,
-           MAX_NAT_EPHEMERAL_PORT = 65535 };
-
-    uint16_t min_port;
-    uint16_t max_port;
-    uint16_t first_port;
-    uint32_t hash = nat_range_hash(conn, ct->hash_basis);
-
-    if ((conn->nat_info->nat_action & NAT_ACTION_SRC) &&
-        (!(conn->nat_info->nat_action & NAT_ACTION_SRC_PORT))) {
-        min_port = ntohs(conn->key.src.port);
-        max_port = ntohs(conn->key.src.port);
-        first_port = min_port;
-    } else if ((conn->nat_info->nat_action & NAT_ACTION_DST) &&
-               (!(conn->nat_info->nat_action & NAT_ACTION_DST_PORT))) {
-        min_port = ntohs(conn->key.dst.port);
-        max_port = ntohs(conn->key.dst.port);
-        first_port = min_port;
+    if (((ni->nat_action & NAT_ACTION_SNAT_ALL) == NAT_ACTION_SRC) ||
+        ((ni->nat_action & NAT_ACTION_DST))) {
+        *curr = ntohs(k->src.port);
+        *min = MIN_NAT_EPHEMERAL_PORT;
+        *max = MAX_NAT_EPHEMERAL_PORT;
     } else {
-        uint16_t deltap = conn->nat_info->max_port - conn->nat_info->min_port;
-        uint32_t port_index = hash % (deltap + 1);
-        first_port = conn->nat_info->min_port + port_index;
-        min_port = conn->nat_info->min_port;
-        max_port = conn->nat_info->max_port;
+        *min = ni->min_port;
+        *max = ni->max_port;
+        *curr = *min + (hash % ((*max - *min) + 1));
     }
+}
 
-    uint32_t deltaa = 0;
-    uint32_t address_index;
-    union ct_addr ct_addr;
-    memset(&ct_addr, 0, sizeof ct_addr);
-    union ct_addr max_ct_addr;
-    memset(&max_ct_addr, 0, sizeof max_ct_addr);
-    max_ct_addr = conn->nat_info->max_addr;
-
-    if (conn->key.dl_type == htons(ETH_TYPE_IP)) {
-        deltaa = ntohl(conn->nat_info->max_addr.ipv4) -
-                 ntohl(conn->nat_info->min_addr.ipv4);
-        address_index = hash % (deltaa + 1);
-        ct_addr.ipv4 = htonl(
-            ntohl(conn->nat_info->min_addr.ipv4) + address_index);
+static void
+set_dport_range(struct nat_action_info_t *ni, const struct conn_key *k,
+                uint32_t hash, uint16_t *curr, uint16_t *min,
+                uint16_t *max)
+{
+    if (ni->nat_action & NAT_ACTION_DST_PORT) {
+        *min = ni->min_port;
+        *max = ni->max_port;
+        *curr = *min + (hash % ((*max - *min) + 1));
     } else {
-        deltaa = nat_ipv6_addrs_delta(&conn->nat_info->min_addr.ipv6,
-                                      &conn->nat_info->max_addr.ipv6);
-        /* deltaa must be within 32 bits for full hash coverage. A 64 or
+        *curr = ntohs(k->dst.port);
+        *min = *max = *curr;
+    }
+}
+
+/* Gets the initial in range address based on the hash.
+ * Addresses are kept in network order. */
+static void
+get_addr_in_range(union ct_addr *min, union ct_addr *max,
+                  union ct_addr *curr, uint32_t hash, bool ipv4)
+{
+    uint32_t offt, range;
+
+    if (ipv4) {
+        range = (ntohl(max->ipv4) - ntohl(min->ipv4)) + 1;
+        offt = hash % range;
+        curr->ipv4 = htonl(ntohl(min->ipv4) + offt);
+    } else {
+        range = nat_ipv6_addrs_delta(&min->ipv6, &max->ipv6) + 1;
+        /* Range must be within 32 bits for full hash coverage. A 64 or
          * 128 bit hash is unnecessary and hence not used here. Most code
          * is kept common with V4; nat_ipv6_addrs_delta() will do the
          * enforcement via max_ct_addr. */
-        max_ct_addr = conn->nat_info->min_addr;
-        nat_ipv6_addr_increment(&max_ct_addr.ipv6, deltaa);
-        address_index = hash % (deltaa + 1);
-        ct_addr.ipv6 = conn->nat_info->min_addr.ipv6;
-        nat_ipv6_addr_increment(&ct_addr.ipv6, address_index);
+        offt = hash % range;
+        curr->ipv6 = min->ipv6;
+        nat_ipv6_addr_increment(&curr->ipv6, offt);
     }
+}
 
-    uint16_t port = first_port;
-    bool all_ports_tried = false;
-    /* For DNAT or for specified port ranges, we don't use ephemeral ports. */
-    bool ephemeral_ports_tried
-        = conn->nat_info->nat_action & NAT_ACTION_DST ||
-              conn->nat_info->nat_action & NAT_ACTION_SRC_PORT
-          ? true : false;
-    union ct_addr first_addr = ct_addr;
-    bool pat_enabled = conn->key.nw_proto == IPPROTO_TCP ||
-                       conn->key.nw_proto == IPPROTO_UDP;
+static void
+get_initial_addr(const struct conn *conn, union ct_addr *min,
+                 union ct_addr *max, union ct_addr *curr,
+                 uint32_t hash, bool ipv4)
+{
+    const union ct_addr zero_ip = {0};
 
-    while (true) {
+    /* All-zero case. */
+    if (!memcmp(min, &zero_ip, sizeof *min)) {
         if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
-            nat_conn->rev_key.dst.addr = ct_addr;
-            if (pat_enabled) {
-                nat_conn->rev_key.dst.port = htons(port);
-            }
-        } else {
-            nat_conn->rev_key.src.addr = ct_addr;
-            if (pat_enabled) {
-                nat_conn->rev_key.src.port = htons(port);
-            }
+            *curr = conn->key.src.addr;
+        } else if (conn->nat_info->nat_action & NAT_ACTION_DST) {
+            *curr = conn->key.dst.addr;
+        }
+    } else {
+        get_addr_in_range(min, max, curr, hash, ipv4);
+    }
+}
+
+static void
+store_addr_to_key(union ct_addr *addr, struct conn_key *key,
+                  uint16_t action)
+{
+    if (action & NAT_ACTION_SRC) {
+        key->dst.addr = *addr;
+    } else {
+        key->src.addr = *addr;
+    }
+}
+
+static void
+next_addr_in_range(union ct_addr *curr, union ct_addr *min,
+                   union ct_addr *max, bool ipv4)
+{
+    if (ipv4) {
+        /* This check could be unified with IPv6, but let's avoid
+         * an unneeded memcmp() in case of IPv4. */
+        if (min->ipv4 == max->ipv4) {
+            return;
         }
 
-        bool found = conn_lookup(ct, &nat_conn->rev_key, time_msec(), NULL,
-                                 NULL);
-        if (!found) {
+        curr->ipv4 = (curr->ipv4 == max->ipv4) ? min->ipv4
+                                               : htonl(ntohl(curr->ipv4) + 1);
+    } else {
+        if (!memcmp(min, max, sizeof *min)) {
+            return;
+        }
+
+        if (!memcmp(curr, max, sizeof *curr)) {
+            *curr = *min;
+            return;
+        }
+
+        nat_ipv6_addr_increment(&curr->ipv6, 1);
+    }
+}
+
+static bool
+next_addr_in_range_guarded(union ct_addr *curr, union ct_addr *min,
+                           union ct_addr *max, union ct_addr *guard,
+                           bool ipv4)
+{
+    bool exhausted;
+
+    next_addr_in_range(curr, min, max, ipv4);
+
+    if (ipv4) {
+        exhausted = (curr->ipv4 == guard->ipv4);
+    } else {
+        exhausted = !memcmp(curr, guard, sizeof *curr);
+    }
+
+    return exhausted;
+}
+
+/* This function tries to get a unique tuple.
+ * Every iteration checks that the reverse tuple doesn't
+ * collide with any existing one.
+ *
+ * In case of SNAT:
+ *    - For each src IP address in the range (if any).
+ *        - Try to find a source port in range (if any).
+ *        - If no port range exists, use the whole
+ *          ephemeral range (after testing the port
+ *          used by the sender), otherwise use the
+ *          specified range.
+ *
+ * In case of DNAT:
+ *    - For each dst IP address in the range (if any).
+ *        - For each dport in range (if any).
+ *             - Try to find a source port in the ephemeral range
+ *               (after testing the port used by the sender).
+ *
+ * If none can be found, return exhaustion to the caller. */
+static bool
+nat_get_unique_tuple(struct conntrack *ct, const struct conn *conn,
+                     struct conn *nat_conn)
+{
+    union ct_addr min_addr = {0}, max_addr = {0}, curr_addr = {0},
+                  guard_addr = {0};
+    uint32_t hash = nat_range_hash(conn, ct->hash_basis);
+    bool pat_proto = conn->key.nw_proto == IPPROTO_TCP ||
+                     conn->key.nw_proto == IPPROTO_UDP;
+    uint16_t min_dport, max_dport, curr_dport;
+    uint16_t min_sport, max_sport, curr_sport;
+
+    min_addr = conn->nat_info->min_addr;
+    max_addr = conn->nat_info->max_addr;
+
+    get_initial_addr(conn, &min_addr, &max_addr, &curr_addr, hash,
+                     (conn->key.dl_type == htons(ETH_TYPE_IP)));
+
+    /* Save the address we started from so that
+     * we can stop once we reach it. */
+    guard_addr = curr_addr;
+
+    set_sport_range(conn->nat_info, &conn->key, hash, &curr_sport,
+                    &min_sport, &max_sport);
+    set_dport_range(conn->nat_info, &conn->key, hash, &curr_dport,
+                    &min_dport, &max_dport);
+
+another_round:
+    store_addr_to_key(&curr_addr, &nat_conn->rev_key,
+                      conn->nat_info->nat_action);
+
+    if (!pat_proto) {
+        if (!conn_lookup(ct, &nat_conn->rev_key,
+                         time_msec(), NULL, NULL)) {
             return true;
-        } else if (pat_enabled && !all_ports_tried) {
-            if (min_port == max_port) {
-                all_ports_tried = true;
-            } else if (port == max_port) {
-                port = min_port;
-            } else {
-                port++;
+        }
+
+        goto next_addr;
+    }
+
+    FOR_EACH_PORT_IN_RANGE(curr_dport, min_dport, max_dport) {
+        nat_conn->rev_key.src.port = htons(curr_dport);
+        FOR_EACH_PORT_IN_RANGE(curr_sport, min_sport, max_sport) {
+            nat_conn->rev_key.dst.port = htons(curr_sport);
+            if (!conn_lookup(ct, &nat_conn->rev_key,
+                             time_msec(), NULL, NULL)) {
+                return true;
             }
-            if (port == first_port) {
-                all_ports_tried = true;
-            }
-        } else {
-            if (memcmp(&ct_addr, &max_ct_addr, sizeof ct_addr)) {
-                if (conn->key.dl_type == htons(ETH_TYPE_IP)) {
-                    ct_addr.ipv4 = htonl(ntohl(ct_addr.ipv4) + 1);
-                } else {
-                    nat_ipv6_addr_increment(&ct_addr.ipv6, 1);
-                }
-            } else {
-                ct_addr = conn->nat_info->min_addr;
-            }
-            if (!memcmp(&ct_addr, &first_addr, sizeof ct_addr)) {
-                if (pat_enabled && !ephemeral_ports_tried) {
-                    ephemeral_ports_tried = true;
-                    ct_addr = conn->nat_info->min_addr;
-                    first_addr = ct_addr;
-                    min_port = MIN_NAT_EPHEMERAL_PORT;
-                    max_port = MAX_NAT_EPHEMERAL_PORT;
-                } else {
-                    break;
-                }
-            }
-            first_port = min_port;
-            port = first_port;
-            all_ports_tried = false;
         }
     }
-    return false;
+
+    /* Check if next IP is in range and respin. Otherwise, notify
+     * exhaustion to the caller. */
+next_addr:
+    if (next_addr_in_range_guarded(&curr_addr, &min_addr,
+                                   &max_addr, &guard_addr,
+                                   conn->key.dl_type == htons(ETH_TYPE_IP))) {
+        return false;
+    }
+
+    goto another_round;
 }
 
 static enum ct_update_res

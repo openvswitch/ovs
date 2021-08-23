@@ -79,7 +79,7 @@ To see a complete list of test options, run::
     $ make check TESTSUITEFLAGS=--help
 
 The results of a testing run are reported in ``tests/testsuite.log``. Report
-report test failures as bugs and include the ``testsuite.log`` in your report.
+test failures as bugs and include the ``testsuite.log`` in your report.
 
 .. note::
   Sometimes a few tests may fail on some runs but not others. This is usually a

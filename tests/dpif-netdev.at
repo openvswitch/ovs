@@ -98,7 +98,7 @@ m4_define([DPIF_NETDEV_DUMMY_IFACE],
                      fail-mode=secure -- \
       add-port br1 p2 -- set interface p2 type=$1 options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
       add-port br1 p8 -- set interface p8 ofport_request=8 type=$1 --], [], [],
-      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,8,8,8,8"], [])])
    AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
    AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -299,60 +299,87 @@ type=drop rate=1 burst_size=2
 ])
 
 ovs-appctl time/warp 5000
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+for i in `seq 1 7`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p7 \
+       'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
+for i in `seq 1 5`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p8 \
+       'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
 sleep 1  # wait for forwarders process packets
 
 # Meter 1 is measuring packets, allowing one packet per second with
-# bursts of one packet, so 4 out of 5 packets should hit the drop
-# band.
+# bursts of one packet, so 4 out of 5 packets should hit the drop band.
 # Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). 4 packets
-# (240 bytes == 1920 bits) pass, but the last packet should hit the drop band.
+# (240 bytes == 1920 bits) pass, but the last three packets should hit the
+# drop band.  There should be 80 bits remaining for the next packets.
 AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
 meter:1 flow_count:1 packet_in_count:5 byte_in_count:300 duration:0.0s bands:
 0: packet_count:4 byte_count:240
 
-meter:2 flow_count:1 packet_in_count:5 byte_in_count:300 duration:0.0s bands:
-0: packet_count:1 byte_count:60
+meter:2 flow_count:1 packet_in_count:7 byte_in_count:420 duration:0.0s bands:
+0: packet_count:3 byte_count:180
 ])
 
-# Advance time by 1/2 second
-ovs-appctl time/warp 500
+# Advance time by 870 ms
+ovs-appctl time/warp 870
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+for i in `seq 1 5`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p7 \
+       'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p8 \
+       'in_port(8),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
 sleep 1  # wait for forwarders process packets
 
 # Meter 1 is measuring packets, allowing one packet per second with
 # bursts of one packet, so all 5 of the new packets should hit the drop
 # band.
-# Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). After 500ms
-# there should be space for 80 + 500 bits, so one new 60 byte (480 bit) packet
-# should pass, remaining 4 should hit the drop band.
+# Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). After 870ms
+# there should be space for 80 + 870 = 950 bits, so one new 60 byte (480 bit)
+# packet should pass, remaining 4 should hit the drop band.  There should be
+# 470 bits left.
 AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
 meter:1 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
 0: packet_count:9 byte_count:540
 
-meter:2 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
-0: packet_count:5 byte_count:300
+meter:2 flow_count:1 packet_in_count:12 byte_in_count:720 duration:0.0s bands:
+0: packet_count:7 byte_count:420
+])
+
+# Advance time by 10 ms
+ovs-appctl time/warp 10
+
+for i in `seq 1 5`; do
+  AT_CHECK(
+    [ovs-appctl netdev-dummy/receive p7 \
+       'in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' --len 60])
+done
+
+sleep 1  # wait for forwarders process packets
+
+# Meter 1 should remain the same as we didn't send anything that should hit it.
+# Meter 2 is measuring kbps, with burst size 2 (== 2000 bits). After 10ms
+# there should be space for 470 + 10 = 480 bits, so one new 60 byte (480 bit)
+# packet should pass, remaining 4 should hit the drop band.
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:1 packet_in_count:10 byte_in_count:600 duration:0.0s bands:
+0: packet_count:9 byte_count:540
+
+meter:2 flow_count:1 packet_in_count:17 byte_in_count:1020 duration:0.0s bands:
+0: packet_count:11 byte_count:660
 ])
 
 ovs-appctl time/warp 5000
@@ -360,7 +387,7 @@ ovs-appctl time/warp 5000
 AT_CHECK([
 ovs-appctl coverage/read-counter datapath_drop_meter
 ], [0], [dnl
-14
+20
 ])
 
 AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout_keep_actions], [0], [dnl
@@ -369,6 +396,8 @@ recirc_id(0),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:meter(1),1
 recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:2
 ])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 del-meters br0])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -589,3 +618,20 @@ arp,in_port=ANY,dl_vlan=11,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:
 
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy])
 DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP([dummy-pmd])
+
+AT_SETUP([dpif-netdev - check dpctl/add-flow in_port exact match])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure])
+
+AT_CHECK([ovs-appctl dpctl/add-flow "eth(),eth_type(0x0800),ipv4()" "3"], [2],
+[], [dnl
+ovs-vswitchd: updating flow table (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_WAIT_UNTIL([grep "flow: in_port is not an exact match" ovs-vswitchd.log])
+OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
+/failed to put/d"])
+AT_CLEANUP

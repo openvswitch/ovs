@@ -16,6 +16,7 @@
 #define OFPROTO_DPIF_UPCALL_H
 
 #include <stddef.h>
+#include <inttypes.h>
 
 struct dpif;
 struct dpif_backer;
@@ -31,8 +32,8 @@ struct simap;
 void udpif_init(void);
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_run(struct udpif *udpif);
-void udpif_set_threads(struct udpif *, size_t n_handlers,
-                       size_t n_revalidators);
+void udpif_set_threads(struct udpif *, uint32_t n_handlers,
+                       uint32_t n_revalidators);
 void udpif_destroy(struct udpif *);
 void udpif_revalidate(struct udpif *);
 void udpif_get_memory_usage(struct udpif *, struct simap *usage);

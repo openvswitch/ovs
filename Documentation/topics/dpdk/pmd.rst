@@ -101,15 +101,20 @@ like so:
 - Queue #2 not pinned
 - Queue #3 pinned to core 8
 
-PMD threads on cores where Rx queues are *pinned* will become *isolated*. This
-means that this thread will only poll the *pinned* Rx queues.
+PMD threads on cores where Rx queues are *pinned* will become *isolated* by
+default. This means that this thread will only poll the *pinned* Rx queues.
+
+If using ``pmd-rxq-assign=group`` PMD threads with *pinned* Rxqs can be
+*non-isolated* by setting::
+
+  $ ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-isolate=false
 
 .. warning::
 
    If there are no *non-isolated* PMD threads, *non-pinned* RX queues will not
-   be polled. Also, if the provided ``<core-id>`` is not available (e.g. the
-   ``<core-id>`` is not in ``pmd-cpu-mask``), the RX queue will not be polled
-   by any PMD thread.
+   be polled. If the provided ``<core-id>`` is not available (e.g. the
+   ``<core-id>`` is not in ``pmd-cpu-mask``), the RX queue will be assigned to
+   a *non-isolated* PMD, that will remain *non-isolated*.
 
 If ``pmd-rxq-affinity`` is not set for Rx queues, they will be assigned to PMDs
 (cores) automatically.
@@ -135,6 +140,32 @@ The Rx queues will be assigned to the cores in the following order::
     Core 3: Q1 (80%) |
     Core 7: Q4 (70%) | Q5 (10%)
     Core 8: Q3 (60%) | Q0 (30%)
+
+``group`` assignment is similar to ``cycles`` in that the Rxqs will be
+ordered by their measured processing cycles before being assigned to PMDs.
+It differs from ``cycles`` in that it uses a running estimate of the cycles
+that will be on each PMD to select the PMD with the lowest load for each Rxq.
+
+This means that there can be a group of low traffic Rxqs on one PMD, while a
+high traffic Rxq may have a PMD to itself. Where ``cycles`` kept as close to
+the same number of Rxqs per PMD as possible, with ``group`` this restriction is
+removed for a better balance of the workload across PMDs.
+
+For example, where there are five Rx queues and three cores - 3, 7, and 8 -
+available and the measured usage of core cycles per Rx queue over the last
+interval is seen to be:
+
+- Queue #0: 10%
+- Queue #1: 80%
+- Queue #3: 50%
+- Queue #4: 70%
+- Queue #5: 10%
+
+The Rx queues will be assigned to the cores in the following order::
+
+    Core 3: Q1 (80%) |
+    Core 7: Q4 (70%) |
+    Core 8: Q3 (50%) | Q0 (10%) | Q5 (10%)
 
 Alternatively, ``roundrobin`` assignment can be used, where the Rxqs are
 assigned to PMDs in a round-robined fashion. This algorithm was used by
@@ -163,6 +194,11 @@ queue::
    traffic pattern spikes. Any changes in the Rx queue's PMD core cycles usage,
    due to traffic pattern or reconfig changes, will take one minute to be fully
    reflected in the stats.
+
+.. versionchanged:: 2.16.0
+
+   A ``overhead`` statistics is shown per PMD: it represents the number of
+   cycles inherently consumed by the OVS PMD processing loop.
 
 Rx queue to PMD assignment takes place whenever there are configuration changes
 or can be triggered by using::
@@ -210,21 +246,38 @@ If any of above is not met PMD Auto Load Balancing is disabled.
 
 Once auto load balancing is set, each non-isolated PMD measures the processing
 load for each of its associated queues every 10 seconds. If the aggregated PMD
-load reaches 95% for 6 consecutive intervals then PMD considers itself to be
-overloaded.
+load reaches the load threshold for 6 consecutive intervals then PMD considers
+itself to be overloaded.
+
+For example, to set the load threshold to 70%::
+
+    $ ovs-vsctl set open_vswitch .\
+        other_config:pmd-auto-lb-load-threshold="70"
+
+If not set, the default load threshold is 95%.
 
 If any PMD is overloaded, a dry-run of the PMD assignment algorithm is
 performed by OVS main thread. The dry-run does NOT change the existing queue
 to PMD assignments.
 
 If the resultant mapping of dry-run indicates an improved distribution of the
-load then the actual reassignment will be performed.
+load by at least the variance improvement threshold then the actual
+reassignment will be performed.
+
+For example, to set the variance improvement threshold to 40%::
+
+    $ ovs-vsctl set open_vswitch .\
+        other_config:pmd-auto-lb-improvement-threshold="40"
+
+If not set, the default variance improvement threshold is 25%.
 
 .. note::
 
     PMD Auto Load Balancing doesn't currently work if queues are assigned
     cross NUMA as actual processing load could get worse after assignment
-    as compared to what dry run predicts.
+    as compared to what dry run predicts. The only exception is when all
+    PMD threads are running on cores from a single NUMA node.  In this case
+    Auto Load Balancing is still possible.
 
 The minimum time between 2 consecutive PMD auto load balancing iterations can
 also be configured by::

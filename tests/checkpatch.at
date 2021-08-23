@@ -284,6 +284,11 @@ try_checkpatch \
     +     for (init; condition; increment) { \\
     "
 
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +#define SOME_FOR_EACH(a, b, c) /* Foo. */
+   "
+
 AT_CLEANUP
 
 

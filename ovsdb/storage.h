@@ -29,7 +29,7 @@ struct uuid;
 struct ovsdb_error *ovsdb_storage_open(const char *filename, bool rw,
                                        struct ovsdb_storage **)
     OVS_WARN_UNUSED_RESULT;
-struct ovsdb_storage *ovsdb_storage_create_unbacked(void);
+struct ovsdb_storage *ovsdb_storage_create_unbacked(const char *name);
 void ovsdb_storage_close(struct ovsdb_storage *);
 
 const char *ovsdb_storage_get_model(const struct ovsdb_storage *);

@@ -69,22 +69,24 @@ to prioritize certain traffic over others at a port level.
 
 For example, the following configuration will limit the traffic rate at a
 port level to a maximum of 2000 packets a second (64 bytes IPv4 packets).
-100pps as CIR (Committed Information Rate) and 1000pps as EIR (Excess
-Information Rate). High priority traffic is routed to queue 10, which marks
+1000pps as CIR (Committed Information Rate) and 1000pps as EIR (Excess
+Information Rate). CIR and EIR are measured in bytes without Ethernet header.
+As a result, 1000pps means (64-byte - 14-byte) * 1000 = 50,000 in the
+configuration below. High priority traffic is routed to queue 10, which marks
 all traffic as CIR, i.e. Green. All low priority traffic, queue 20, is
 marked as EIR, i.e. Yellow::
 
     $ ovs-vsctl --timeout=5 set port dpdk1 qos=@myqos -- \
         --id=@myqos create qos type=trtcm-policer \
-        other-config:cir=52000 other-config:cbs=2048 \
-        other-config:eir=52000 other-config:ebs=2048  \
+        other-config:cir=50000 other-config:cbs=2048 \
+        other-config:eir=50000 other-config:ebs=2048  \
         queues:10=@dpdk1Q10 queues:20=@dpdk1Q20 -- \
          --id=@dpdk1Q10 create queue \
-          other-config:cir=41600000 other-config:cbs=2048 \
+          other-config:cir=100000 other-config:cbs=2048 \
           other-config:eir=0 other-config:ebs=0 -- \
          --id=@dpdk1Q20 create queue \
            other-config:cir=0 other-config:cbs=0 \
-           other-config:eir=41600000 other-config:ebs=2048 \
+           other-config:eir=50000 other-config:ebs=2048
 
 This configuration accomplishes that the high priority traffic has a
 guaranteed bandwidth egressing the ports at CIR (1000pps), but it can also

@@ -139,7 +139,7 @@ Additional Information
 Open vSwitch's rate-limiting uses policing, which does not queue packets. It
 drops any packets beyond the specified rate. Specifying a larger burst size
 lets the algorithm be more forgiving, which is important for protocols like TCP
-that react severely to dropped packets. Setting a burst size of less than than
+that react severely to dropped packets. Setting a burst size of less than
 the MTU (e.g., 10 kb) should be avoided.
 
 For TCP traffic, setting a burst size to be a sizeable fraction (e.g., > 10%)

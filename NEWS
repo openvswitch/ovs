@@ -1,10 +1,106 @@
-Post-v2.15.0
+Post-v2.16.0
 ---------------------
+   - DPDK:
+     * EAL argument --socket-mem is no longer configured by default upon
+       start-up.  If dpdk-socket-mem and dpdk-alloc-mem are not specified,
+       DPDK defaults will be used.
+     * EAL argument --socket-limit no longer takes on the value of --socket-mem
+       by default.  'other_config:dpdk-socket-limit' can be set equal to
+       the 'other_config:dpdk-socket-mem' to preserve the legacy memory
+       limiting behavior.
+
+
+v2.16.0 - 16 Aug 2021
+---------------------
+   - Removed support for 1024-bit Diffie-Hellman key exchange, which is now
+     considered unsafe.
+   - Ingress Policing:
+     * Rate limiting configuration now supports setting packet-per-second
+       limits in addition to the previously configurable byte rate settings.
+       This is not supported in the userspace datapath yet.
+   - OVSDB:
+     * Introduced new database service model - "relay".  Targeted to scale out
+       read-mostly access (ovn-controller) to existing databases.
+       For more information: ovsdb(7) and Documentation/topics/ovsdb-relay.rst
+     * New command line options --record/--replay for ovsdb-server and
+       ovsdb-client to record and replay all the incoming transactions,
+       monitors, etc.  More datails in Documentation/topics/record-replay.rst.
+     * The Python Idl class now has a cooperative_yield() method that can be
+       overridden by an application that uses eventlet / gevent / asyncio with
+       the desired yield method (e.g. {eventlet,gevent,asyncio}.sleep(0)) to
+       prevent the application from being blocked for a long time while
+       processing database updates.
    - In ovs-vsctl and vtep-ctl, the "find" command now accept new
      operators {in} and {not-in}.
+   - Userspace datapath:
+     * Auto load balancing of PMDs now partially supports cross-NUMA polling
+       cases, e.g if all PMD threads are running on the same NUMA node.
+     * Userspace datapath now supports up to 2^18 meters.
+     * Added support for systems with non-contiguous NUMA nodes and core ids.
+     * Added all-zero IP SNAT handling to conntrack. In case of collision,
+       using ct(src=0.0.0.0), the source port will be replaced with another
+       non-colliding port in the ephemeral range (1024, 65535).
+     * Refactor lib/dpif-netdev.c to multiple header files.
+     * Add avx512 implementation of dpif which can process non recirculated
+       packets. It supports partial HWOL, EMC, SMC and DPCLS lookups.
+     * Add commands to get and set the dpif implementations.
+     * Add a partial HWOL PMD statistic counting hits similar to existing
+       EMC/SMC/DPCLS stats.
+     * Enable AVX512 optimized DPCLS to search subtables with larger miniflows.
+     * Add more specialized DPCLS subtables to cover common rules, enhancing
+       the lookup performance.
+     * Enable the AVX512 DPCLS implementation to use VPOPCNT instruction if the
+       CPU supports it. This enhances performance by using the native vpopcount
+       instructions, instead of the emulated version of vpopcount.
+     * Add command line option to switch between MFEX function pointers.
+     * Add miniflow extract auto-validator function to compare different
+       miniflow extract implementations against default implementation.
+     * Add study function to miniflow function table which studies packet
+       and automatically chooses the best miniflow implementation for that
+       traffic.
+     * Add build time configure command to enable auto-validatior as default
+       miniflow implementation at build time.
+     * Cache results for CPU ISA checks, reduces overhead on repeated lookups.
+     * Add AVX512 based optimized miniflow extract function for traffic type
+       IPv4/UDP, IPv4/TCP, Vlan/IPv4/UDP and Vlan/Ipv4/TCP.
+     * Added new 'group' option to pmd-rxq-assign. This will assign rxq to pmds
+       purely based on rxq and pmd load.
+     * Add new 'pmd-rxq-isolate' option that can be set to 'false' in order
+       that pmd cores which are pinned with rxqs using 'pmd-rxq-affinity'
+       are available for assigning other non-pinned rxqs.
+   - ovs-ctl:
+     * New option '--no-record-hostname' to disable hostname configuration
+       in ovsdb on startup.
+     * New command 'record-hostname-if-not-set' to update hostname in ovsdb.
+   - DPDK:
+     * OVS validated with DPDK 20.11.1. It is recommended to use this version
+       until further releases.
+     * New debug appctl command 'dpdk/get-malloc-stats'.
+     * Add hardware offload support for tunnel pop action (experimental).
+       Available only if DPDK experimantal APIs enabled during the build.
+     * Add hardware offload support for VXLAN flows (experimental).
+       Available only if DPDK experimantal APIs enabled during the build.
+     * EAL options --socket-mem and --socket-limit to have default values
+       removed with 2.17 release. Logging added to alert users.
+   - ovsdb-tool:
+     * New option '--election-timer' to the 'create-cluster' command to set the
+       leader election timer during cluster creation.
+   - OVS now reports the datapath capability 'ct_zero_snat', which reflects
+     whether the SNAT with all-zero IP address is supported.
+     See ovs-vswitchd.conf.db(5) for details.
+   - ovs-appctl:
+     * Added ability to add and delete static mac entries using:
+       'ovs-appctl fdb/add <bridge> <port> <vlan> <mac>'
+       'ovs-appctl fdb/del <bridge> <vlan> <mac>'
+   - Linux datapath:
+     * ovs-vswitchd will configure the kernel module using per-cpu dispatch
+       mode (if available). This changes the way upcalls are delivered to user
+       space in order to resolve a number of issues with per-vport dispatch.
+     * New vswitchd unixctl command `dpif-netlink/dispatch-mode` will return
+       the current dispatch mode for each datapath.
 
 
-v2.15.0 - xx xxx xxxx
+v2.15.0 - 15 Feb 2021
 ---------------------
    - OVSDB:
      * Changed format in which ovsdb transactions are stored in database files.

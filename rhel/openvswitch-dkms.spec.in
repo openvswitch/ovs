@@ -8,10 +8,11 @@
 # without warranty of any kind.
 
 %define oname openvswitch
+%{!?release_number:%define release_number 1}
 
 Name:             %{oname}-dkms
 Version:          @VERSION@
-Release:          1%{?dist}
+Release:          %{release_number}%{?dist}
 Summary:          Open vSwitch kernel module
 
 Group:            System/Kernel
@@ -27,6 +28,8 @@ BuildRoot:        %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 # conflicts with the openvswitch-debuginfo package for OVS userspace).
 %undefine _enable_debug_packages
 
+# Disable shebangs mangling
+%undefine __brp_mangle_shebangs
 
 %description
 Open vSwitch Linux kernel module.

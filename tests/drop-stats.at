@@ -40,7 +40,7 @@ ovs-appctl coverage/read-counter drop_action_of_pipeline
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([drop-stats - pipeline and recurssion drops])
+AT_SETUP([drop-stats - pipeline and recursion drops])
 
 OVS_VSWITCHD_START([dnl
     set bridge br0 datapath_type=dummy \

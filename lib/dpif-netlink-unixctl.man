@@ -1,0 +1,6 @@
+.SS "DPIF-NETLINK COMMANDS"
+These commands are used to expose internal information of the "dpif-netlink"
+kernel space datapath.
+.
+.IP "\fBdpif-netlink/dispatch-mode\fR"
+Displays the "dispatch-mode" for all datapaths.

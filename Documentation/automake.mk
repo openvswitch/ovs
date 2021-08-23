@@ -52,8 +52,10 @@ DOC_SOURCE = \
 	Documentation/topics/networking-namespaces.rst \
 	Documentation/topics/openflow.rst \
 	Documentation/topics/ovs-extensions.rst \
+	Documentation/topics/ovsdb-relay.rst \
 	Documentation/topics/ovsdb-replication.rst \
 	Documentation/topics/porting.rst \
+	Documentation/topics/record-replay.rst \
 	Documentation/topics/tracing.rst \
 	Documentation/topics/userspace-tso.rst \
 	Documentation/topics/windows.rst \
@@ -216,8 +218,13 @@ install-man-rst: docs-check
 	    $(extract_stem_and_section); \
 	    echo " $(MKDIR_P) '$(DESTDIR)'\"$$mandir\""; \
 	    $(MKDIR_P) '$(DESTDIR)'"$$mandir"; \
-	    echo " $(INSTALL_DATA) $(SPHINXBUILDDIR)/man/$$stem.$$section '$(DESTDIR)'\"$$mandir/$$stem.$$section\""; \
-	    $(INSTALL_DATA) $(SPHINXBUILDDIR)/man/$$stem.$$section '$(DESTDIR)'"$$mandir/$$stem.$$section"; \
+	    if test -f $(SPHINXBUILDDIR)/man/$$stem.$$section; then \
+	        filepath=$(SPHINXBUILDDIR)/man/$$stem.$$section; \
+	    else \
+	        filepath=$(SPHINXBUILDDIR)/man/$$section/$$stem.$$section; \
+	    fi; \
+	    echo " $(INSTALL_DATA) $$filepath '$(DESTDIR)'\"$$mandir/$$stem.$$section\""; \
+	    $(INSTALL_DATA) $$filepath '$(DESTDIR)'"$$mandir/$$stem.$$section"; \
 	done
 else
 install-man-rst:

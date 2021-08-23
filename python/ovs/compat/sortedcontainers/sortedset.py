@@ -1,50 +1,153 @@
-"""Sorted set implementation.
+"""Sorted Set
+=============
+
+:doc:`Sorted Containers<index>` is an Apache2 licensed Python sorted
+collections library, written in pure-Python, and fast as C-extensions. The
+:doc:`introduction<introduction>` is the best way to get started.
+
+Sorted set implementations:
+
+.. currentmodule:: sortedcontainers
+
+* :class:`SortedSet`
 
 """
 
-from collections import Set, MutableSet, Sequence
 from itertools import chain
-import operator as op
+from operator import eq, ne, gt, ge, lt, le
+from textwrap import dedent
 
-from .sortedlist import SortedList, recursive_repr, SortedListWithKey
+from .sortedlist import SortedList, recursive_repr
+
+###############################################################################
+# BEGIN Python 2/3 Shims
+###############################################################################
+
+try:
+    from collections.abc import MutableSet, Sequence, Set
+except ImportError:
+    from collections import MutableSet, Sequence, Set
+
+###############################################################################
+# END Python 2/3 Shims
+###############################################################################
+
 
 class SortedSet(MutableSet, Sequence):
-    """
-    A `SortedSet` provides the same methods as a `set`.  Additionally, a
-    `SortedSet` maintains its items in sorted order, allowing the `SortedSet` to
-    be indexed.
+    """Sorted set is a sorted mutable set.
 
-    Unlike a `set`, a `SortedSet` requires items be hashable and comparable.
+    Sorted set values are maintained in sorted order. The design of sorted set
+    is simple: sorted set uses a set for set-operations and maintains a sorted
+    list of values.
+
+    Sorted set values must be hashable and comparable. The hash and total
+    ordering of values must not change while they are stored in the sorted set.
+
+    Mutable set methods:
+
+    * :func:`SortedSet.__contains__`
+    * :func:`SortedSet.__iter__`
+    * :func:`SortedSet.__len__`
+    * :func:`SortedSet.add`
+    * :func:`SortedSet.discard`
+
+    Sequence methods:
+
+    * :func:`SortedSet.__getitem__`
+    * :func:`SortedSet.__delitem__`
+    * :func:`SortedSet.__reversed__`
+
+    Methods for removing values:
+
+    * :func:`SortedSet.clear`
+    * :func:`SortedSet.pop`
+    * :func:`SortedSet.remove`
+
+    Set-operation methods:
+
+    * :func:`SortedSet.difference`
+    * :func:`SortedSet.difference_update`
+    * :func:`SortedSet.intersection`
+    * :func:`SortedSet.intersection_update`
+    * :func:`SortedSet.symmetric_difference`
+    * :func:`SortedSet.symmetric_difference_update`
+    * :func:`SortedSet.union`
+    * :func:`SortedSet.update`
+
+    Methods for miscellany:
+
+    * :func:`SortedSet.copy`
+    * :func:`SortedSet.count`
+    * :func:`SortedSet.__repr__`
+    * :func:`SortedSet._check`
+
+    Sorted list methods available:
+
+    * :func:`SortedList.bisect_left`
+    * :func:`SortedList.bisect_right`
+    * :func:`SortedList.index`
+    * :func:`SortedList.irange`
+    * :func:`SortedList.islice`
+    * :func:`SortedList._reset`
+
+    Additional sorted list methods available, if key-function used:
+
+    * :func:`SortedKeyList.bisect_key_left`
+    * :func:`SortedKeyList.bisect_key_right`
+    * :func:`SortedKeyList.irange_key`
+
+    Sorted set comparisons use subset and superset relations. Two sorted sets
+    are equal if and only if every element of each sorted set is contained in
+    the other (each is a subset of the other). A sorted set is less than
+    another sorted set if and only if the first sorted set is a proper subset
+    of the second sorted set (is a subset, but is not equal). A sorted set is
+    greater than another sorted set if and only if the first sorted set is a
+    proper superset of the second sorted set (is a superset, but is not equal).
+
     """
-    # pylint: disable=too-many-ancestors
     def __init__(self, iterable=None, key=None):
-        """
-        A `SortedSet` provides the same methods as a `set`.  Additionally, a
-        `SortedSet` maintains its items in sorted order, allowing the
-        `SortedSet` to be indexed.
+        """Initialize sorted set instance.
 
-        An optional *iterable* provides an initial series of items to populate
-        the `SortedSet`.
+        Optional `iterable` argument provides an initial iterable of values to
+        initialize the sorted set.
 
-        An optional *key* argument defines a callable that, like the `key`
+        Optional `key` argument defines a callable that, like the `key`
         argument to Python's `sorted` function, extracts a comparison key from
-        each set item. If no function is specified, the default compares the
-        set items directly.
+        each value. The default, none, compares values directly.
+
+        Runtime complexity: `O(n*log(n))`
+
+        >>> ss = SortedSet([3, 1, 2, 5, 4])
+        >>> ss
+        SortedSet([1, 2, 3, 4, 5])
+        >>> from operator import neg
+        >>> ss = SortedSet([3, 1, 2, 5, 4], neg)
+        >>> ss
+        SortedSet([5, 4, 3, 2, 1], key=<built-in function neg>)
+
+        :param iterable: initial values (optional)
+        :param key: function used to extract comparison key (optional)
+
         """
         self._key = key
 
+        # SortedSet._fromset calls SortedSet.__init__ after initializing the
+        # _set attribute. So only create a new set if the _set attribute is not
+        # already present.
+
         if not hasattr(self, '_set'):
             self._set = set()
+
+        self._list = SortedList(self._set, key=key)
+
+        # Expose some set methods publicly.
 
         _set = self._set
         self.isdisjoint = _set.isdisjoint
         self.issubset = _set.issubset
         self.issuperset = _set.issuperset
 
-        if key is None:
-            self._list = SortedList(self._set)
-        else:
-            self._list = SortedListWithKey(self._set, key=key)
+        # Expose some sorted list methods publicly.
 
         _list = self._list
         self.bisect_left = _list.bisect_left
@@ -53,7 +156,7 @@ class SortedSet(MutableSet, Sequence):
         self.index = _list.index
         self.irange = _list.irange
         self.islice = _list.islice
-        self._reset = _list._reset  # pylint: disable=protected-access
+        self._reset = _list._reset
 
         if key is not None:
             self.bisect_key_left = _list.bisect_key_left
@@ -64,36 +167,93 @@ class SortedSet(MutableSet, Sequence):
         if iterable is not None:
             self._update(iterable)
 
-    @property
-    def key(self):
-        """Key function used to extract comparison key for sorting."""
-        return self._key
 
     @classmethod
     def _fromset(cls, values, key=None):
-        """Initialize sorted set from existing set."""
+        """Initialize sorted set from existing set.
+
+        Used internally by set operations that return a new set.
+
+        """
         sorted_set = object.__new__(cls)
-        sorted_set._set = values  # pylint: disable=protected-access
+        sorted_set._set = values
         sorted_set.__init__(key=key)
         return sorted_set
 
+
+    @property
+    def key(self):
+        """Function used to extract comparison key from values.
+
+        Sorted set compares values directly when the key function is none.
+
+        """
+        return self._key
+
+
     def __contains__(self, value):
-        """Return True if and only if *value* is an element in the set."""
+        """Return true if `value` is an element of the sorted set.
+
+        ``ss.__contains__(value)`` <==> ``value in ss``
+
+        Runtime complexity: `O(1)`
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> 3 in ss
+        True
+
+        :param value: search for value in sorted set
+        :return: true if `value` in sorted set
+
+        """
         return value in self._set
 
-    def __getitem__(self, index):
-        """
-        Return the element at position *index*.
 
-        Supports slice notation and negative indexes.
+    def __getitem__(self, index):
+        """Lookup value at `index` in sorted set.
+
+        ``ss.__getitem__(index)`` <==> ``ss[index]``
+
+        Supports slicing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet('abcde')
+        >>> ss[2]
+        'c'
+        >>> ss[-1]
+        'e'
+        >>> ss[2:5]
+        ['c', 'd', 'e']
+
+        :param index: integer or slice for indexing
+        :return: value or list of values
+        :raises IndexError: if index out of range
+
         """
         return self._list[index]
 
-    def __delitem__(self, index):
-        """
-        Remove the element at position *index*.
 
-        Supports slice notation and negative indexes.
+    def __delitem__(self, index):
+        """Remove value at `index` from sorted set.
+
+        ``ss.__delitem__(index)`` <==> ``del ss[index]``
+
+        Supports slicing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet('abcde')
+        >>> del ss[2]
+        >>> ss
+        SortedSet(['a', 'b', 'd', 'e'])
+        >>> del ss[:2]
+        >>> ss
+        SortedSet(['d', 'e'])
+
+        :param index: integer or slice for indexing
+        :raises IndexError: if index out of range
+
         """
         _set = self._set
         _list = self._list
@@ -105,149 +265,316 @@ class SortedSet(MutableSet, Sequence):
             _set.remove(value)
         del _list[index]
 
-    def _make_cmp(self, set_op, doc):
+
+    def __make_cmp(set_op, symbol, doc):
         "Make comparator method."
-        def comparer(self, that):
-            "Compare method for sorted set and set-like object."
-            # pylint: disable=protected-access
-            if isinstance(that, SortedSet):
-                return set_op(self._set, that._set)
-            elif isinstance(that, Set):
-                return set_op(self._set, that)
+        def comparer(self, other):
+            "Compare method for sorted set and set."
+            if isinstance(other, SortedSet):
+                return set_op(self._set, other._set)
+            elif isinstance(other, Set):
+                return set_op(self._set, other)
             return NotImplemented
 
-        comparer.__name__ = '__{0}__'.format(set_op.__name__)
-        doc_str = 'Return True if and only if Set is {0} `that`.'
-        comparer.__doc__ = doc_str.format(doc)
+        set_op_name = set_op.__name__
+        comparer.__name__ = '__{0}__'.format(set_op_name)
+        doc_str = """Return true if and only if sorted set is {0} `other`.
 
+        ``ss.__{1}__(other)`` <==> ``ss {2} other``
+
+        Comparisons use subset and superset semantics as with sets.
+
+        Runtime complexity: `O(n)`
+
+        :param other: `other` set
+        :return: true if sorted set is {0} `other`
+
+        """
+        comparer.__doc__ = dedent(doc_str.format(doc, set_op_name, symbol))
         return comparer
 
-    __eq__ = _make_cmp(None, op.eq, 'equal to')
-    __ne__ = _make_cmp(None, op.ne, 'not equal to')
-    __lt__ = _make_cmp(None, op.lt, 'a proper subset of')
-    __gt__ = _make_cmp(None, op.gt, 'a proper superset of')
-    __le__ = _make_cmp(None, op.le, 'a subset of')
-    __ge__ = _make_cmp(None, op.ge, 'a superset of')
+
+    __eq__ = __make_cmp(eq, '==', 'equal to')
+    __ne__ = __make_cmp(ne, '!=', 'not equal to')
+    __lt__ = __make_cmp(lt, '<', 'a proper subset of')
+    __gt__ = __make_cmp(gt, '>', 'a proper superset of')
+    __le__ = __make_cmp(le, '<=', 'a subset of')
+    __ge__ = __make_cmp(ge, '>=', 'a superset of')
+    __make_cmp = staticmethod(__make_cmp)
+
 
     def __len__(self):
-        """Return the number of elements in the set."""
+        """Return the size of the sorted set.
+
+        ``ss.__len__()`` <==> ``len(ss)``
+
+        :return: size of sorted set
+
+        """
         return len(self._set)
 
-    def __iter__(self):
-        """
-        Return an iterator over the Set. Elements are iterated in their sorted
-        order.
 
-        Iterating the Set while adding or deleting values may raise a
-        `RuntimeError` or fail to iterate over all entries.
+    def __iter__(self):
+        """Return an iterator over the sorted set.
+
+        ``ss.__iter__()`` <==> ``iter(ss)``
+
+        Iterating the sorted set while adding or deleting values may raise a
+        :exc:`RuntimeError` or fail to iterate over all values.
+
         """
         return iter(self._list)
 
-    def __reversed__(self):
-        """
-        Return an iterator over the Set. Elements are iterated in their reverse
-        sorted order.
 
-        Iterating the Set while adding or deleting values may raise a
-        `RuntimeError` or fail to iterate over all entries.
+    def __reversed__(self):
+        """Return a reverse iterator over the sorted set.
+
+        ``ss.__reversed__()`` <==> ``reversed(ss)``
+
+        Iterating the sorted set while adding or deleting values may raise a
+        :exc:`RuntimeError` or fail to iterate over all values.
+
         """
         return reversed(self._list)
 
+
     def add(self, value):
-        """Add the element *value* to the set."""
+        """Add `value` to sorted set.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet()
+        >>> ss.add(3)
+        >>> ss.add(1)
+        >>> ss.add(2)
+        >>> ss
+        SortedSet([1, 2, 3])
+
+        :param value: value to add to sorted set
+
+        """
         _set = self._set
         if value not in _set:
             _set.add(value)
             self._list.add(value)
 
+    _add = add
+
+
     def clear(self):
-        """Remove all elements from the set."""
+        """Remove all values from sorted set.
+
+        Runtime complexity: `O(n)`
+
+        """
         self._set.clear()
         self._list.clear()
 
+
     def copy(self):
-        """Create a shallow copy of the sorted set."""
+        """Return a shallow copy of the sorted set.
+
+        Runtime complexity: `O(n)`
+
+        :return: new sorted set
+
+        """
         return self._fromset(set(self._set), key=self._key)
 
     __copy__ = copy
 
+
     def count(self, value):
-        """Return the number of occurrences of *value* in the set."""
+        """Return number of occurrences of `value` in the sorted set.
+
+        Runtime complexity: `O(1)`
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.count(3)
+        1
+
+        :param value: value to count in sorted set
+        :return: count
+
+        """
         return 1 if value in self._set else 0
 
+
     def discard(self, value):
-        """
-        Remove the first occurrence of *value*.  If *value* is not a member,
-        does nothing.
+        """Remove `value` from sorted set if it is a member.
+
+        If `value` is not a member, do nothing.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.discard(5)
+        >>> ss.discard(0)
+        >>> ss == set([1, 2, 3, 4])
+        True
+
+        :param value: `value` to discard from sorted set
+
         """
         _set = self._set
         if value in _set:
             _set.remove(value)
-            self._list.discard(value)
+            self._list.remove(value)
+
+    _discard = discard
+
 
     def pop(self, index=-1):
-        """
-        Remove and return item at *index* (default last).  Raises IndexError if
-        set is empty or index is out of range.  Negative indexes are supported,
-        as for slice indices.
+        """Remove and return value at `index` in sorted set.
+
+        Raise :exc:`IndexError` if the sorted set is empty or index is out of
+        range.
+
+        Negative indices are supported.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet('abcde')
+        >>> ss.pop()
+        'e'
+        >>> ss.pop(2)
+        'c'
+        >>> ss
+        SortedSet(['a', 'b', 'd'])
+
+        :param int index: index of value (default -1)
+        :return: value
+        :raises IndexError: if index is out of range
+
         """
         # pylint: disable=arguments-differ
         value = self._list.pop(index)
         self._set.remove(value)
         return value
 
+
     def remove(self, value):
-        """
-        Remove first occurrence of *value*.  Raises ValueError if
-        *value* is not present.
+        """Remove `value` from sorted set; `value` must be a member.
+
+        If `value` is not a member, raise :exc:`KeyError`.
+
+        Runtime complexity: `O(log(n))` -- approximate.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.remove(5)
+        >>> ss == set([1, 2, 3, 4])
+        True
+        >>> ss.remove(0)
+        Traceback (most recent call last):
+          ...
+        KeyError: 0
+
+        :param value: `value` to remove from sorted set
+        :raises KeyError: if `value` is not in sorted set
+
         """
         self._set.remove(value)
         self._list.remove(value)
 
+
     def difference(self, *iterables):
-        """
-        Return a new set with elements in the set that are not in the
-        *iterables*.
+        """Return the difference of two or more sets as a new sorted set.
+
+        The `difference` method also corresponds to operator ``-``.
+
+        ``ss.__sub__(iterable)`` <==> ``ss - iterable``
+
+        The difference is all values that are in this sorted set but not the
+        other `iterables`.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.difference([4, 5, 6, 7])
+        SortedSet([1, 2, 3])
+
+        :param iterables: iterable arguments
+        :return: new sorted set
+
         """
         diff = self._set.difference(*iterables)
         return self._fromset(diff, key=self._key)
 
     __sub__ = difference
-    __rsub__ = __sub__
+
 
     def difference_update(self, *iterables):
-        """
-        Update the set, removing elements found in keeping only elements
-        found in any of the *iterables*.
+        """Remove all values of `iterables` from this sorted set.
+
+        The `difference_update` method also corresponds to operator ``-=``.
+
+        ``ss.__isub__(iterable)`` <==> ``ss -= iterable``
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> _ = ss.difference_update([4, 5, 6, 7])
+        >>> ss
+        SortedSet([1, 2, 3])
+
+        :param iterables: iterable arguments
+        :return: itself
+
         """
         _set = self._set
+        _list = self._list
         values = set(chain(*iterables))
         if (4 * len(values)) > len(_set):
-            _list = self._list
             _set.difference_update(values)
             _list.clear()
             _list.update(_set)
         else:
-            _discard = self.discard
+            _discard = self._discard
             for value in values:
                 _discard(value)
         return self
 
     __isub__ = difference_update
 
+
     def intersection(self, *iterables):
+        """Return the intersection of two or more sets as a new sorted set.
+
+        The `intersection` method also corresponds to operator ``&``.
+
+        ``ss.__and__(iterable)`` <==> ``ss & iterable``
+
+        The intersection is all values that are in this sorted set and each of
+        the other `iterables`.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.intersection([4, 5, 6, 7])
+        SortedSet([4, 5])
+
+        :param iterables: iterable arguments
+        :return: new sorted set
+
         """
-        Return a new set with elements common to the set and all *iterables*.
-        """
-        comb = self._set.intersection(*iterables)
-        return self._fromset(comb, key=self._key)
+        intersect = self._set.intersection(*iterables)
+        return self._fromset(intersect, key=self._key)
 
     __and__ = intersection
     __rand__ = __and__
 
+
     def intersection_update(self, *iterables):
-        """
-        Update the set, keeping only elements found in it and all *iterables*.
+        """Update the sorted set with the intersection of `iterables`.
+
+        The `intersection_update` method also corresponds to operator ``&=``.
+
+        ``ss.__iand__(iterable)`` <==> ``ss &= iterable``
+
+        Keep only values found in itself and all `iterables`.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> _ = ss.intersection_update([4, 5, 6, 7])
+        >>> ss
+        SortedSet([4, 5])
+
+        :param iterables: iterable arguments
+        :return: itself
+
         """
         _set = self._set
         _list = self._list
@@ -258,42 +585,100 @@ class SortedSet(MutableSet, Sequence):
 
     __iand__ = intersection_update
 
-    def symmetric_difference(self, that):
+
+    def symmetric_difference(self, other):
+        """Return the symmetric difference with `other` as a new sorted set.
+
+        The `symmetric_difference` method also corresponds to operator ``^``.
+
+        ``ss.__xor__(other)`` <==> ``ss ^ other``
+
+        The symmetric difference is all values tha are in exactly one of the
+        sets.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.symmetric_difference([4, 5, 6, 7])
+        SortedSet([1, 2, 3, 6, 7])
+
+        :param other: `other` iterable
+        :return: new sorted set
+
         """
-        Return a new set with elements in either *self* or *that* but not both.
-        """
-        diff = self._set.symmetric_difference(that)
+        diff = self._set.symmetric_difference(other)
         return self._fromset(diff, key=self._key)
 
     __xor__ = symmetric_difference
     __rxor__ = __xor__
 
-    def symmetric_difference_update(self, that):
-        """
-        Update the set, keeping only elements found in either *self* or *that*,
-        but not in both.
+
+    def symmetric_difference_update(self, other):
+        """Update the sorted set with the symmetric difference with `other`.
+
+        The `symmetric_difference_update` method also corresponds to operator
+        ``^=``.
+
+        ``ss.__ixor__(other)`` <==> ``ss ^= other``
+
+        Keep only values found in exactly one of itself and `other`.
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> _ = ss.symmetric_difference_update([4, 5, 6, 7])
+        >>> ss
+        SortedSet([1, 2, 3, 6, 7])
+
+        :param other: `other` iterable
+        :return: itself
+
         """
         _set = self._set
         _list = self._list
-        _set.symmetric_difference_update(that)
+        _set.symmetric_difference_update(other)
         _list.clear()
         _list.update(_set)
         return self
 
     __ixor__ = symmetric_difference_update
 
+
     def union(self, *iterables):
-        """
-        Return a new SortedSet with elements from the set and all *iterables*.
+        """Return new sorted set with values from itself and all `iterables`.
+
+        The `union` method also corresponds to operator ``|``.
+
+        ``ss.__or__(iterable)`` <==> ``ss | iterable``
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> ss.union([4, 5, 6, 7])
+        SortedSet([1, 2, 3, 4, 5, 6, 7])
+
+        :param iterables: iterable arguments
+        :return: new sorted set
+
         """
         return self.__class__(chain(iter(self), *iterables), key=self._key)
 
     __or__ = union
     __ror__ = __or__
 
+
     def update(self, *iterables):
-        """Update the set, adding elements from all *iterables*."""
+        """Update the sorted set adding values from all `iterables`.
+
+        The `update` method also corresponds to operator ``|=``.
+
+        ``ss.__ior__(iterable)`` <==> ``ss |= iterable``
+
+        >>> ss = SortedSet([1, 2, 3, 4, 5])
+        >>> _ = ss.update([4, 5, 6, 7])
+        >>> ss
+        SortedSet([1, 2, 3, 4, 5, 6, 7])
+
+        :param iterables: iterable arguments
+        :return: itself
+
+        """
         _set = self._set
+        _list = self._list
         values = set(chain(*iterables))
         if (4 * len(values)) > len(_set):
             _list = self._list
@@ -301,7 +686,7 @@ class SortedSet(MutableSet, Sequence):
             _list.clear()
             _list.update(_set)
         else:
-            _add = self.add
+            _add = self._add
             for value in values:
                 _add(value)
         return self
@@ -309,19 +694,40 @@ class SortedSet(MutableSet, Sequence):
     __ior__ = update
     _update = update
 
+
     def __reduce__(self):
+        """Support for pickle.
+
+        The tricks played with exposing methods in :func:`SortedSet.__init__`
+        confuse pickle so customize the reducer.
+
+        """
         return (type(self), (self._set, self._key))
 
-    @recursive_repr
+
+    @recursive_repr()
     def __repr__(self):
+        """Return string representation of sorted set.
+
+        ``ss.__repr__()`` <==> ``repr(ss)``
+
+        :return: string representation
+
+        """
         _key = self._key
         key = '' if _key is None else ', key={0!r}'.format(_key)
-        name = type(self).__name__
-        return '{0}({1!r}{2})'.format(name, list(self), key)
+        type_name = type(self).__name__
+        return '{0}({1!r}{2})'.format(type_name, list(self), key)
+
 
     def _check(self):
-        # pylint: disable=protected-access
-        self._list._check()
-        assert len(self._set) == len(self._list)
+        """Check invariants of sorted set.
+
+        Runtime complexity: `O(n)`
+
+        """
         _set = self._set
-        assert all(val in _set for val in self._list)
+        _list = self._list
+        _list._check()
+        assert len(_set) == len(_list)
+        assert all(value in _set for value in _list)

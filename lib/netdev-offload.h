@@ -76,6 +76,7 @@ struct offload_info {
 
     bool tc_modify_flow_deleted; /* Indicate the tc modify flow put success
                                   * to delete the original flow. */
+    odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 };
 
 int netdev_flow_flush(struct netdev *);
@@ -89,6 +90,7 @@ bool netdev_flow_dump_next(struct netdev_flow_dump *, struct match *,
 int netdev_flow_put(struct netdev *, struct match *, struct nlattr *actions,
                     size_t actions_len, const ovs_u128 *,
                     struct offload_info *, struct dpif_flow_stats *);
+int netdev_hw_miss_packet_recover(struct netdev *, struct dp_packet *);
 int netdev_flow_get(struct netdev *, struct match *, struct nlattr **actions,
                     const ovs_u128 *, struct dpif_flow_stats *,
                     struct dpif_flow_attrs *, struct ofpbuf *wbuffer);
@@ -112,6 +114,14 @@ struct netdev *netdev_ports_get(odp_port_t port, const char *dpif_type);
 int netdev_ports_remove(odp_port_t port, const char *dpif_type);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);
 
+/* For each of the ports with dpif_type, call cb with the netdev and port
+ * number of the port, and an opaque user argument.
+ * The returned value is used to continue traversing upon false or stop if
+ * true.
+ */
+void netdev_ports_traverse(const char *dpif_type,
+                           bool (*cb)(struct netdev *, odp_port_t, void *),
+                           void *aux);
 struct netdev_flow_dump **netdev_ports_flow_dump_create(
                                         const char *dpif_type,
                                         int *ports,

@@ -33,11 +33,14 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512f \
 	-mavx512bw \
 	-mavx512dq \
+	-mbmi \
 	-mbmi2 \
 	-fPIC \
 	$(AM_CFLAGS)
 lib_libopenvswitchavx512_la_SOURCES = \
-	lib/dpif-netdev-lookup-avx512-gather.c
+	lib/dpif-netdev-lookup-avx512-gather.c \
+	lib/dpif-netdev-extract-avx512.c \
+	lib/dpif-netdev-avx512.c
 lib_libopenvswitchavx512_la_LDFLAGS = \
 	-static
 endif
@@ -105,12 +108,22 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dp-packet.h \
 	lib/dp-packet.c \
 	lib/dpdk.h \
+	lib/dpif-netdev-extract-study.c \
 	lib/dpif-netdev-lookup.h \
 	lib/dpif-netdev-lookup.c \
 	lib/dpif-netdev-lookup-autovalidator.c \
 	lib/dpif-netdev-lookup-generic.c \
 	lib/dpif-netdev.c \
 	lib/dpif-netdev.h \
+	lib/dpif-netdev-private-dfc.c \
+	lib/dpif-netdev-private-dfc.h \
+	lib/dpif-netdev-private-dpcls.h \
+	lib/dpif-netdev-private-dpif.c \
+	lib/dpif-netdev-private-dpif.h \
+	lib/dpif-netdev-private-extract.c \
+	lib/dpif-netdev-private-extract.h \
+	lib/dpif-netdev-private-flow.h \
+	lib/dpif-netdev-private-thread.h \
 	lib/dpif-netdev-private.h \
 	lib/dpif-netdev-perf.c \
 	lib/dpif-netdev-perf.h \
@@ -236,6 +249,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-numa.h \
 	lib/ovs-rcu.c \
 	lib/ovs-rcu.h \
+	lib/ovs-replay.c \
+	lib/ovs-replay.h \
 	lib/ovs-router.h \
 	lib/ovs-router.c \
 	lib/ovs-thread.c \
@@ -310,6 +325,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
+	lib/stream-replay.c \
 	lib/stream-ssl.h \
 	lib/stream-tcp.c \
 	lib/stream.c \
@@ -525,13 +541,13 @@ pkgconfig_DATA += \
 	lib/libsflow.pc
 
 EXTRA_DIST += \
-	lib/dh1024.pem \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
 	lib/common.xml \
 	lib/daemon.xml \
 	lib/dirs.c.in \
 	lib/db-ctl-base.xml \
+	lib/ovs-replay.xml \
 	lib/ssl.xml \
 	lib/ssl-bootstrap.xml \
 	lib/ssl-peer-ca-cert.xml \
@@ -552,8 +568,11 @@ MAN_FRAGMENTS += \
 	lib/memory-unixctl.man \
 	lib/netdev-dpdk-unixctl.man \
 	lib/dpif-netdev-unixctl.man \
+	lib/dpif-netlink-unixctl.man \
 	lib/ofp-version.man \
 	lib/ovs.tmac \
+	lib/ovs-replay.man \
+	lib/ovs-replay-syn.man \
 	lib/service.man \
 	lib/service-syn.man \
 	lib/ssl-bootstrap.man \
@@ -590,7 +609,7 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]sysconfdir[@],"$(sysconfdir)",g' \
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
 	     > lib/dirs.c.tmp && \
-	mv lib/dirs.c.tmp lib/dirs.c
+	mv -f lib/dirs.c.tmp lib/dirs.c
 
 lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/meta-flow.h
 	$(AM_V_GEN)$(run_python) $< meta-flow $(srcdir)/include/openvswitch/meta-flow.h > $@.tmp

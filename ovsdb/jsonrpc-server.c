@@ -600,7 +600,8 @@ ovsdb_jsonrpc_session_wait(struct ovsdb_jsonrpc_session *s)
 {
     jsonrpc_session_wait(s->js);
     if (!jsonrpc_session_get_backlog(s->js)) {
-        if (ovsdb_jsonrpc_monitor_needs_flush(s)) {
+        if (ovsdb_jsonrpc_monitor_needs_flush(s)
+            || !ovs_list_is_empty(&s->up.completions)) {
             poll_immediate_wake();
         } else {
             jsonrpc_session_recv_wait(s->js);

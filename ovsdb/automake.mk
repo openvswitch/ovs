@@ -34,6 +34,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/rbac.h \
 	ovsdb/replication.c \
 	ovsdb/replication.h \
+	ovsdb/relay.c \
+	ovsdb/relay.h \
 	ovsdb/row.c \
 	ovsdb/row.h \
 	ovsdb/server.c \
@@ -46,6 +48,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/trigger.h \
 	ovsdb/transaction.c \
 	ovsdb/transaction.h \
+	ovsdb/transaction-forward.c \
+	ovsdb/transaction-forward.h \
 	ovsdb/ovsdb-util.c \
 	ovsdb/ovsdb-util.h
 ovsdb_libovsdb_la_CFLAGS = $(AM_CFLAGS)

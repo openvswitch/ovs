@@ -1,0 +1,3 @@
+.IP "Replay options:"
+[\fB\-\-record\fR[\fB=\fIdirectory\fR]]
+[\fB\-\-replay\fR[\fB=\fIdirectory\fR]]

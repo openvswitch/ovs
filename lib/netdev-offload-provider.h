@@ -87,6 +87,12 @@ struct netdev_flow_api {
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*flow_get_n_flows)(struct netdev *, uint64_t *n_flows);
 
+    /* Recover the packet state (contents and data) for continued processing
+     * in software.
+     * Return 0 if successful, otherwise returns a positive errno value and
+     * takes ownership of a packet if errno != EOPNOTSUPP. */
+    int (*hw_miss_packet_recover)(struct netdev *, struct dp_packet *);
+
     /* Initializies the netdev flow api.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*init_flow_api)(struct netdev *);

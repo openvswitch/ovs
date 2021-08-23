@@ -362,11 +362,15 @@
           preallocate 2048MB and socket 3 (no value given) to preallocate 0MB.
         </p>
         <p>
-          If dpdk-socket-mem and dpdk-alloc-mem are not specified, dpdk-socket-mem
-          will be used and the default value is 1024 for each numa node. If
-          dpdk-socket-mem and dpdk-alloc-mem are specified at same time,
-          dpdk-socket-mem will be used as default. Changing this value
-          requires restarting the daemon.
+          If <ref column="other_config" key="dpdk-socket-mem"/> and
+          <ref column="other_config" key="dpdk-alloc-mem"/> are not specified,
+          neither will be used and there will be no default value for each numa
+          node.  DPDK defaults will be used instead.
+          If <ref column="other_config" key="dpdk-socket-mem"/> and
+          <ref column="other_config" key="dpdk-alloc-mem"/> are specified at
+          the same time, <ref column="other_config" key="dpdk-socket-mem"/>
+          will be used as default.
+          Changing this value requires restarting the daemon.
         </p>
       </column>
 
@@ -381,13 +385,7 @@
           <code>0</code> will disable the limit for a particular socket.
         </p>
         <p>
-          If not specified, OVS will configure limits equal to the amount of
-          preallocated memory specified by <ref column="other_config"
-          key="dpdk-socket-mem"/> or <code>--socket-mem</code> in
-          <ref column="other_config" key="dpdk-extra"/>. If none of the above
-          options specified or <code>--legacy-mem</code> provided in
-          <ref column="other_config" key="dpdk-extra"/>, limits will not be
-          applied.
+          If not specified, OVS will not configure limits by default.
           Changing this value requires restarting the daemon.
         </p>
       </column>
@@ -519,7 +517,7 @@
 
       <column name="other_config" key="pmd-rxq-assign"
               type='{"type": "string",
-                     "enum": ["set", ["cycles", "roundrobin"]]}'>
+                     "enum": ["set", ["cycles", "roundrobin", "group"]]}'>
         <p>
           Specifies how RX queues will be automatically assigned to CPU cores.
           Options:
@@ -529,6 +527,9 @@
             before being assigned to CPU cores.</dd>
             <dt><code>roundrobin</code></dt>
             <dd>Rxqs will be round-robined across CPU cores.</dd>
+            <dt><code>group</code></dt>
+            <dd>Rxqs will be sorted by order of measured processing cycles
+            before being assigned to CPU cores with lowest estimated load.</dd>
           </dl>
         </p>
         <p>
@@ -541,12 +542,31 @@
         </p>
       </column>
 
+      <column name="other_config" key="pmd-rxq-isolate"
+              type='{"type": "boolean"}'>
+        <p>
+          Specifies if a CPU core will be isolated after being pinned with
+          an Rx queue.
+        <p/>
+          Set this value to <code>false</code> to non-isolate a CPU core after
+          it is pinned with an Rxq using <code>pmd-rxq-affinity</code>. This
+          will allow OVS to assign other Rxqs to that CPU core.
+        </p>
+        <p>
+          The default value is <code>true</code>.
+        </p>
+        <p>
+          This can only be <code>false</code> when <code>pmd-rxq-assign</code>
+          is set to <code>group</code>.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of threads for software datapaths to use for
-          handling new flows.  The default the number of online CPU cores minus
-          the number of revalidators.
+          Attempts to specify the number of threads for software datapaths to
+          use for handling new flows.  Some datapaths may choose to ignore
+          this and it will be set to a sensible option for the datapath type.
         </p>
         <p>
           This configuration is per datapath.  If you have more than one
@@ -560,12 +580,17 @@
       <column name="other_config" key="n-revalidator-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of threads for software datapaths to use for
-          revalidating flows in the datapath.  Typically, there is a direct
-          correlation between the number of revalidator threads, and the number
-          of flows allowed in the datapath.  The default is the number of cpu
-          cores divided by four plus one.  If <code>n-handler-threads</code> is
-          set, the default changes to the number of cpu cores minus the number
+          Attempts to specify the number of threads for software datapaths to
+          use for revalidating flows in the datapath.  Some datapaths may
+          choose to ignore this and will set to a sensible option for the
+          datapath type.
+        </p>
+        <p>
+          Typically, there is a direct correlation between the
+          number of revalidator threads, and the number of flows allowed in the
+          datapath.  The default is the number of cpu cores divided by four
+          plus one.  If <code>n-handler-threads</code> is set, the default
+          changes to the number of cpu cores minus the number
           of handler threads.
         </p>
         <p>
@@ -3654,8 +3679,18 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         table="Queue"/> tables).
       </p>
       <p>
-        Policing is currently implemented on Linux and OVS with DPDK. Both
-        implementations use a simple ``token bucket'' approach:
+        Policing settings can be set with byte rate or packet rate, and they
+        can be configured together, in which case they take effect together,
+        that means the smaller speed limit of them is in effect.
+      </p>
+      <p>
+        Currently, byte rate policing is implemented on Linux and OVS with
+        DPDK, while packet rate policing is only implemented on Linux.  Both
+        Linux and OVS DPDK implementations use a simple ``token bucket''
+        approach.
+      </p>
+      <p>
+        Byte rate policing:
       </p>
       <ul>
         <li>
@@ -3671,6 +3706,26 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <li>
           Whenever it is not full, the bucket is refilled with tokens at the
           rate specified by <ref column="ingress_policing_rate"/>.
+        </li>
+      </ul>
+      <p>
+        Packet rate policing:
+      </p>
+      <ul>
+        <li>
+          The size of the bucket corresponds to <ref
+          column="ingress_policing_kpkts_burst"/>.  Initially the bucket is
+          full.
+        </li>
+        <li>
+          Whenever a packet is received, it will consume one token from the
+          current bucket.  If the token is available in the bucket, it's
+          removed and the packet is forwarded.  Otherwise, the packet is
+          dropped.
+        </li>
+        <li>
+          Whenever it is not full, the bucket is refilled with tokens at the
+          rate specified by <ref column="ingress_policing_kpkts_rate"/>.
         </li>
       </ul>
       <p>
@@ -3698,6 +3753,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
+      <column name="ingress_policing_kpkts_rate">
+        <p>
+          Maximum rate for data received on this interface, in kpps (1 kpps is
+          1000 pps).  Data received faster than this rate is dropped.  Set to
+          <code>0</code> (the default) to disable policing.
+        </p>
+      </column>
+
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
         default burst size if set to <code>0</code> is 8000 kbit.  This value
@@ -3712,6 +3775,23 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           closer to achieving the full rate.
         </p>
       </column>
+
+      <column name="ingress_policing_kpkts_burst">
+        <p>
+          Maximum burst size for data received on this interface, in kpkts (1
+          kpkts is 1000 packets).  The default burst size if set to
+          <code>0</code> is 16 kpkts.  This value has no effect if
+          <ref column="ingress_policing_kpkts_rate"/> is <code>0</code>.
+        </p>
+        <p>
+          Specifying a larger burst size lets the algorithm be more forgiving,
+          which is important for protocols like TCP that react severely to
+          dropped packets.  Specifying a value that is numerically at least as
+          large as 80% of <ref column="ingress_policing_kpkts_rate"/> helps TCP
+          come closer to achieving the full rate.
+        </p>
+      </column>
+
     </group>
 
     <group title="Bidirectional Forwarding Detection (BFD)">
@@ -4660,7 +4740,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         packets per second the CIR would be set to to to 46000000. This value
         can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
         rate for the number of packets per second and 46 represents the size
-        of the packet data for a 64 byte ip packet.
+        of the packet data for a 64 bytes IP packet without 14 bytes Ethernet
+        and 4 bytes FCS header.
       </column>
       <column name="other_config" key="cbs" type='{"type": "integer"}'>
         The Committed Burst Size (CBS) is measured in bytes and represents a
@@ -4681,7 +4762,8 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         packets per second the EIR would be set to to to 46000000. This value
         can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
         rate for the number of packets per second and 46 represents the size
-        of the packet data for a 64 byte ip packet.
+        of the packet data for a 64 bytes IP packet without 14 bytes Ethernet
+        and 4 bytes FCS header.
       </column>
       <column name="other_config" key="ebs" type='{"type": "integer"}'>
         The Excess Burst Size (EBS) is measured in bytes and represents a
@@ -6123,6 +6205,15 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
               type='{"type": "boolean"}'>
         True if the datapath supports OVS_ACTION_ATTR_DROP.  If false,
         explicit drop action will not be sent to the datapath.
+      </column>
+      <column name="capabilities" key="ct_zero_snat"
+              type='{"type": "boolean"}'>
+        True if the datapath supports all-zero SNAT. This is a special case
+        if the <code>src</code> IP address is configured as all 0's, i.e.,
+        <code>nat(src=0.0.0.0)</code>. In this case, when a source port
+        collision is detected during the commit, the source port will be
+        translated to an ephemeral port. If there is no collision, no SNAT
+        is performed.
       </column>
     </group>
 

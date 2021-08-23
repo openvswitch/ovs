@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import BaseHTTPServer
 import getopt
-import httplib
+import http.client
+import http.server
 import os
 import threading
 import time
@@ -84,7 +84,7 @@ class UDPReceiver:
 
         try:
             sock.bind((self.vlan_ip, self.vlan_port))
-        except socket.error, e:
+        except socket.error as e:
             print_safe('Failed to bind to %s:%d with error: %s'
                     % (self.vlan_ip, self.vlan_port, e))
             os._exit(1) #sys.exit only exits the current thread.
@@ -95,7 +95,7 @@ class UDPReceiver:
                 data, _ = sock.recvfrom(4096)
             except socket.timeout:
                 continue
-            except socket.error, e:
+            except socket.error as e:
                 print_safe('Failed to receive from %s:%d with error: %s'
                     % (self.vlan_ip, self.vlan_port, e))
                 os._exit(1)
@@ -180,7 +180,7 @@ class VlanServer:
             for _ in range(send_time * 2):
                 try:
                     send_packet(test_id, size, ip, port)
-                except socket.error, e:
+                except socket.error as e:
                     self.set_result(test_id, 'Failure: ' + str(e))
                     return
                 time.sleep(.5)
@@ -194,15 +194,15 @@ class VlanServer:
     def run(self):
         self.udp_recv.start()
         try:
-            BaseHTTPServer.HTTPServer((self.server_ip, self.server_port),
+            http.server.HTTPServer((self.server_ip, self.server_port),
                     VlanServerHandler).serve_forever()
-        except socket.error, e:
+        except socket.error as e:
             print_safe('Failed to start control server: %s' % e)
             self.udp_recv.stop()
 
         return 1
 
-class VlanServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class VlanServerHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
 
         #Guarantee three arguments.
@@ -244,7 +244,7 @@ class VlanClient:
         self.udp_recv       = UDPReceiver(vlan_ip, vlan_port)
 
     def request(self, resource):
-        conn = httplib.HTTPConnection(self.server_ip_port)
+        conn = http.client.HTTPConnection(self.server_ip_port)
         conn.request('GET', resource)
         return conn
 
@@ -256,7 +256,7 @@ class VlanClient:
         try:
             conn = self.request('/start/recv')
             data = conn.getresponse().read()
-        except (socket.error, httplib.HTTPException), e:
+        except (socket.error, http.client.HTTPException) as e:
             error_msg(e)
             return False
 
@@ -277,7 +277,7 @@ class VlanClient:
                 send_packet(test_id, size, ip, port)
                 resp = self.request('/result/%d' % test_id).getresponse()
                 data = resp.read()
-            except (socket.error, httplib.HTTPException), e:
+            except (socket.error, http.client.HTTPException) as e:
                 error_msg(e)
                 return False
 
@@ -302,7 +302,7 @@ class VlanClient:
         try:
             conn    = self.request(resource)
             test_id = conn.getresponse().read()
-        except (socket.error, httplib.HTTPException), e:
+        except (socket.error, http.client.HTTPException) as e:
             error_msg(e)
             return False
 
@@ -335,7 +335,7 @@ class VlanClient:
         try:
             resp = self.request('/ping').getresponse()
             data = resp.read()
-        except (socket.error, httplib.HTTPException), e:
+        except (socket.error, http.client.HTTPException) as e:
             error_msg(e)
             return False
 
@@ -383,7 +383,7 @@ def main():
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:], 'hVs',
                                           ['help', 'version', 'server'])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         print_safe('%s: %s\n' % (sys.argv[0], geo.msg))
         return 1
 

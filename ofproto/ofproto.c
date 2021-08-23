@@ -309,7 +309,7 @@ unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
 unsigned ofproto_min_revalidate_pps = OFPROTO_MIN_REVALIDATE_PPS_DEFAULT;
 
-size_t n_handlers, n_revalidators;
+uint32_t n_handlers, n_revalidators;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
@@ -792,20 +792,8 @@ ofproto_type_set_config(const char *datapath_type, const struct smap *cfg)
 void
 ofproto_set_threads(int n_handlers_, int n_revalidators_)
 {
-    int threads = MAX(count_cpu_cores(), 2);
-
     n_revalidators = MAX(n_revalidators_, 0);
     n_handlers = MAX(n_handlers_, 0);
-
-    if (!n_revalidators) {
-        n_revalidators = n_handlers
-            ? MAX(threads - (int) n_handlers, 1)
-            : threads / 4 + 1;
-    }
-
-    if (!n_handlers) {
-        n_handlers = MAX(threads - (int) n_revalidators, 1);
-    }
 }
 
 void
@@ -968,7 +956,7 @@ ofproto_get_datapath_cap(const char *datapath_type, struct smap *dp_cap)
     datapath_type = ofproto_normalize_type(datapath_type);
     const struct ofproto_class *class = ofproto_class_find__(datapath_type);
 
-    if (class->get_datapath_cap) {
+    if (class && class->get_datapath_cap) {
         class->get_datapath_cap(datapath_type, dp_cap);
     }
 }
@@ -981,7 +969,7 @@ ofproto_ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
     datapath_type = ofproto_normalize_type(datapath_type);
     const struct ofproto_class *class = ofproto_class_find__(datapath_type);
 
-    if (class->ct_set_zone_timeout_policy) {
+    if (class && class->ct_set_zone_timeout_policy) {
         class->ct_set_zone_timeout_policy(datapath_type, zone_id,
                                           timeout_policy);
     }
@@ -993,7 +981,7 @@ ofproto_ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
     datapath_type = ofproto_normalize_type(datapath_type);
     const struct ofproto_class *class = ofproto_class_find__(datapath_type);
 
-    if (class->ct_del_zone_timeout_policy) {
+    if (class && class->ct_del_zone_timeout_policy) {
         class->ct_del_zone_timeout_policy(datapath_type, zone_id);
     }
 

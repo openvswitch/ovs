@@ -4020,6 +4020,7 @@ ofctl_meter_mod__(const char *bridge, const char *str, int command)
     enum ofputil_protocol usable_protocols;
     enum ofp_version version;
 
+    memset(&mm, 0, sizeof mm);
     if (str) {
         char *error;
         error = parse_ofp_meter_mod_str(&mm, str, command, &usable_protocols);
@@ -4030,7 +4031,6 @@ ofctl_meter_mod__(const char *bridge, const char *str, int command)
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.command = command;
         mm.meter.meter_id = OFPM13_ALL;
-        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
@@ -4050,6 +4050,7 @@ ofctl_meter_request__(const char *bridge, const char *str,
     enum ofputil_protocol protocol;
     enum ofp_version version;
 
+    memset(&mm, 0, sizeof mm);
     if (str) {
         char *error;
         error = parse_ofp_meter_mod_str(&mm, str, -1, &usable_protocols);
@@ -4059,7 +4060,6 @@ ofctl_meter_request__(const char *bridge, const char *str,
     } else {
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.meter.meter_id = OFPM13_ALL;
-        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
@@ -5051,7 +5051,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "add-group", "switch group",
       1, 2, ofctl_add_group, OVS_RW },
     { "add-groups", "switch file",
-      1, 2, ofctl_add_groups, OVS_RW },
+      2, 2, ofctl_add_groups, OVS_RW },
     { "mod-group", "switch group",
       1, 2, ofctl_mod_group, OVS_RW },
     { "del-groups", "switch [group]",

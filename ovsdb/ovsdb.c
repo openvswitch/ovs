@@ -31,7 +31,9 @@
 #include "simap.h"
 #include "storage.h"
 #include "table.h"
+#include "timeval.h"
 #include "transaction.h"
+#include "transaction-forward.h"
 #include "trigger.h"
 
 #include "openvswitch/vlog.h"
@@ -420,6 +422,10 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
     ovs_list_init(&db->triggers);
     db->run_triggers_now = db->run_triggers = false;
 
+    db->is_relay = false;
+    ovs_list_init(&db->txn_forward_new);
+    hmap_init(&db->txn_forward_sent);
+
     shash_init(&db->tables);
     if (schema) {
         SHASH_FOR_EACH (node, &schema->tables) {
@@ -461,6 +467,12 @@ ovsdb_destroy(struct ovsdb *db)
 
         /* Destroy txn history. */
         ovsdb_txn_history_destroy(db);
+
+        /* Cancell all the forwarded transactions.  There should not be
+         * any as all triggers should be already cancelled. */
+        ovsdb_txn_forward_cancel_all(db, false);
+        ovs_assert(hmap_is_empty(&db->txn_forward_sent));
+        hmap_destroy(&db->txn_forward_sent);
 
         /* The caller must ensure that no triggers remain. */
         ovs_assert(ovs_list_is_empty(&db->triggers));
@@ -525,6 +537,7 @@ ovsdb_snapshot(struct ovsdb *db, bool trim_memory OVS_UNUSED)
         return NULL;
     }
 
+    uint64_t elapsed, start_time = time_msec();
     struct json *schema = ovsdb_schema_to_json(db->schema);
     struct json *data = ovsdb_to_txn_json(db, "compacting database online");
     struct ovsdb_error *error = ovsdb_storage_store_snapshot(db->storage,
@@ -537,6 +550,12 @@ ovsdb_snapshot(struct ovsdb *db, bool trim_memory OVS_UNUSED)
         malloc_trim(0);
     }
 #endif
+
+    elapsed = time_msec() - start_time;
+    if (elapsed > 1000) {
+        VLOG_INFO("%s: Database compaction took %"PRIu64"ms",
+                  db->name, elapsed);
+    }
     return error;
 }
 

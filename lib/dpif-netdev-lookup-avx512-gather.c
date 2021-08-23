@@ -21,7 +21,6 @@
 
 #include "dpif-netdev.h"
 #include "dpif-netdev-lookup.h"
-#include "dpif-netdev-private.h"
 #include "cmap.h"
 #include "flow.h"
 #include "pvector.h"
@@ -35,7 +34,21 @@
  * AVX512 code at a time.
  */
 #define NUM_U64_IN_ZMM_REG (8)
-#define BLOCKS_CACHE_SIZE (NETDEV_MAX_BURST * NUM_U64_IN_ZMM_REG)
+
+/* This implementation of AVX512 gather allows up to 16 blocks of MF data to be
+ * present in the blocks_cache, hence the multiply by 2 in the blocks count.
+ */
+#define MF_BLOCKS_PER_PACKET (NUM_U64_IN_ZMM_REG * 2)
+
+/* Blocks cache size is the maximum number of miniflow blocks that this
+ * implementation of lookup can handle.
+ */
+#define BLOCKS_CACHE_SIZE (NETDEV_MAX_BURST * MF_BLOCKS_PER_PACKET)
+
+/* The gather instruction can handle a scale for the size of the items to
+ * gather. For uint64_t data, this scale is 8.
+ */
+#define GATHER_SCALE_8 (8)
 
 
 VLOG_DEFINE_THIS_MODULE(dpif_lookup_avx512_gather);
@@ -63,6 +76,23 @@ _mm512_popcnt_epi64_manual(__m512i v_in)
     return _mm512_sad_epu8(v_u8_pop, _mm512_setzero_si512());
 }
 
+/* Wrapper function required to enable ISA. First enable the ISA via the
+ * attribute target for this function, then check if the compiler actually
+ * #defines the ISA itself. If the ISA is not #define-ed by the compiler it
+ * indicates the compiler is too old or is not capable of compiling the
+ * requested ISA level, so fallback to the integer manual implementation.
+ */
+static inline __m512i
+__attribute__((__target__("avx512vpopcntdq")))
+_mm512_popcnt_epi64_wrapper(__m512i v_in)
+{
+#ifdef __AVX512VPOPCNTDQ__
+    return _mm512_popcnt_epi64(v_in);
+#else
+    return _mm512_popcnt_epi64_manual(v_in);
+#endif
+}
+
 static inline uint64_t
 netdev_rule_matches_key(const struct dpcls_rule *rule,
                         const uint32_t mf_bits_total,
@@ -70,20 +100,105 @@ netdev_rule_matches_key(const struct dpcls_rule *rule,
 {
     const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
     const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
-    const uint32_t lane_mask = (1 << mf_bits_total) - 1;
+    const uint32_t lane_mask = (1ULL << mf_bits_total) - 1;
 
     /* Always load a full cache line from blocks_cache. Other loads must be
      * trimmed to the amount of data required for mf_bits_total blocks.
      */
-    __m512i v_blocks = _mm512_loadu_si512(&block_cache[0]);
-    __m512i v_mask   = _mm512_maskz_loadu_epi64(lane_mask, &maskp[0]);
-    __m512i v_key    = _mm512_maskz_loadu_epi64(lane_mask, &keyp[0]);
+    uint32_t res_mask;
 
-    __m512i v_data = _mm512_and_si512(v_blocks, v_mask);
-    uint32_t res_mask = _mm512_mask_cmpeq_epi64_mask(lane_mask, v_data, v_key);
+    /* To avoid a loop, we have two iterations of a block of code here.
+     * Note the scope brackets { } are used to avoid accidental variable usage
+     * in the second iteration.
+     */
+    {
+        __m512i v_blocks = _mm512_loadu_si512(&block_cache[0]);
+        __m512i v_mask   = _mm512_maskz_loadu_epi64(lane_mask, &maskp[0]);
+        __m512i v_key    = _mm512_maskz_loadu_epi64(lane_mask, &keyp[0]);
+        __m512i v_data = _mm512_and_si512(v_blocks, v_mask);
+        res_mask = _mm512_mask_cmpeq_epi64_mask(lane_mask, v_data, v_key);
+    }
 
-    /* returns 1 assuming result of SIMD compare is all blocks. */
+    if (mf_bits_total > 8) {
+        uint32_t lane_mask_gt8 = lane_mask >> 8;
+        __m512i v_blocks = _mm512_loadu_si512(&block_cache[8]);
+        __m512i v_mask   = _mm512_maskz_loadu_epi64(lane_mask_gt8, &maskp[8]);
+        __m512i v_key    = _mm512_maskz_loadu_epi64(lane_mask_gt8, &keyp[8]);
+        __m512i v_data = _mm512_and_si512(v_blocks, v_mask);
+        uint32_t c = _mm512_mask_cmpeq_epi64_mask(lane_mask_gt8, v_data,
+                                                  v_key);
+        res_mask |= (c << 8);
+    }
+
+    /* Returns 1 assuming result of SIMD compare is all blocks matching. */
     return res_mask == lane_mask;
+}
+
+/* Takes u0 and u1 inputs, and gathers the next 8 blocks to be stored
+ * contiguously into the blocks cache. Note that the pointers and bitmasks
+ * passed into this function must be incremented for handling next 8 blocks.
+ *
+ * Register contents on entry:
+ *   v_u0: register with all u64 lanes filled with u0 bits.
+ *   v_u1: register with all u64 lanes filled with u1 bits.
+ *   pkt_blocks: pointer to packet blocks.
+ *   tbl_blocks: pointer to table blocks.
+ *   tbl_mf_masks: pointer to miniflow bitmasks for this subtable.
+ *   u1_bcast_msk: bitmask of lanes where u1 bits are used.
+ *   pkt_mf_u0_pop: population count of bits in u0 of the packet.
+ *   zero_mask: bitmask of lanes to zero as packet doesn't have mf bits set.
+ *   u64_lanes_mask: bitmask of lanes to process.
+ *   use_vpop: compile-time constant indicating if VPOPCNT instruction allowed.
+ */
+static inline ALWAYS_INLINE __m512i
+avx512_blocks_gather(__m512i v_u0,
+                     __m512i v_u1,
+                     const uint64_t *pkt_blocks,
+                     const void *tbl_blocks,
+                     const void *tbl_mf_masks,
+                     __mmask64 u1_bcast_msk,
+                     const uint64_t pkt_mf_u0_pop,
+                     __mmask64 zero_mask,
+                     __mmask64 u64_lanes_mask,
+                     const uint32_t use_vpop)
+{
+        /* Suggest to compiler to load tbl blocks ahead of gather(). */
+        __m512i v_tbl_blocks = _mm512_maskz_loadu_epi64(u64_lanes_mask,
+                                                        tbl_blocks);
+
+        /* Blend u0 and u1 bits together for these 8 blocks. */
+        __m512i v_pkt_bits = _mm512_mask_blend_epi64(u1_bcast_msk, v_u0, v_u1);
+
+        /* Load pre-created tbl miniflow bitmasks, bitwise AND with them. */
+        __m512i v_tbl_masks = _mm512_maskz_loadu_epi64(u64_lanes_mask,
+                                                      tbl_mf_masks);
+        __m512i v_masks = _mm512_and_si512(v_pkt_bits, v_tbl_masks);
+
+        /* Calculate AVX512 popcount for u64 lanes using the native instruction
+         * if available, or using emulation if not available.
+         */
+        __m512i v_popcnts;
+        if (use_vpop) {
+            v_popcnts = _mm512_popcnt_epi64_wrapper(v_masks);
+        } else {
+            v_popcnts = _mm512_popcnt_epi64_manual(v_masks);
+        }
+
+        /* Add popcounts and offset for u1 bits. */
+        __m512i v_idx_u0_offset = _mm512_maskz_set1_epi64(u1_bcast_msk,
+                                                          pkt_mf_u0_pop);
+        __m512i v_indexes = _mm512_add_epi64(v_popcnts, v_idx_u0_offset);
+
+        /* Gather u64 blocks from packet miniflow. */
+        __m512i v_zeros = _mm512_setzero_si512();
+        __m512i v_blocks = _mm512_mask_i64gather_epi64(v_zeros, u64_lanes_mask,
+                                                       v_indexes, pkt_blocks,
+                                                       GATHER_SCALE_8);
+
+        /* Mask pkt blocks with subtable blocks, k-mask to zero lanes. */
+        __m512i v_masked_blocks = _mm512_maskz_and_epi64(zero_mask, v_blocks,
+                                                         v_tbl_blocks);
+        return v_masked_blocks;
 }
 
 static inline uint32_t ALWAYS_INLINE
@@ -92,79 +207,92 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                    const struct netdev_flow_key *keys[],
                    struct dpcls_rule **rules,
                    const uint32_t bit_count_u0,
-                   const uint32_t bit_count_u1)
+                   const uint32_t bit_count_u1,
+                   const uint32_t use_vpop)
 {
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)uint64_t block_cache[BLOCKS_CACHE_SIZE];
-
-    const uint32_t bit_count_total = bit_count_u0 + bit_count_u1;
-    int i;
     uint32_t hashes[NETDEV_MAX_BURST];
+
     const uint32_t n_pkts = __builtin_popcountll(keys_map);
     ovs_assert(NETDEV_MAX_BURST >= n_pkts);
+
+    const uint32_t bit_count_total = bit_count_u0 + bit_count_u1;
+    const uint64_t bit_count_total_mask = (1ULL << bit_count_total) - 1;
 
     const uint64_t tbl_u0 = subtable->mask.mf.map.bits[0];
     const uint64_t tbl_u1 = subtable->mask.mf.map.bits[1];
 
-    /* Load subtable blocks for masking later. */
     const uint64_t *tbl_blocks = miniflow_get_values(&subtable->mask.mf);
-    const __m512i v_tbl_blocks = _mm512_loadu_si512(&tbl_blocks[0]);
+    const uint64_t *tbl_mf_masks = subtable->mf_masks;
 
-    /* Load pre-created subtable masks for each block in subtable. */
-    const __mmask8 bit_count_total_mask = (1 << bit_count_total) - 1;
-    const __m512i v_mf_masks = _mm512_maskz_loadu_epi64(bit_count_total_mask,
-                                                        subtable->mf_masks);
-
+    int i;
     ULLONG_FOR_EACH_1 (i, keys_map) {
+        /* Create mask register with packet-specific u0 offset.
+         * Note that as 16 blocks can be handled in total, the width of the
+         * mask register must be >=16.
+         */
         const uint64_t pkt_mf_u0_bits = keys[i]->mf.map.bits[0];
         const uint64_t pkt_mf_u0_pop = __builtin_popcountll(pkt_mf_u0_bits);
-
-        /* Pre-create register with *PER PACKET* u0 offset. */
-        const __mmask8 u1_bcast_mask = (UINT8_MAX << bit_count_u0);
-        const __m512i v_idx_u0_offset = _mm512_maskz_set1_epi64(u1_bcast_mask,
-                                                                pkt_mf_u0_pop);
+        const __mmask64 u1_bcast_mask = (UINT64_MAX << bit_count_u0);
 
         /* Broadcast u0, u1 bitmasks to 8x u64 lanes. */
-        __m512i v_u0 = _mm512_set1_epi64(pkt_mf_u0_bits);
-        __m512i v_pkt_bits = _mm512_mask_set1_epi64(v_u0, u1_bcast_mask,
-                                         keys[i]->mf.map.bits[1]);
-
-        /* Bitmask by pre-created masks. */
-        __m512i v_masks = _mm512_and_si512(v_pkt_bits, v_mf_masks);
-
-        /* Manual AVX512 popcount for u64 lanes. */
-        __m512i v_popcnts = _mm512_popcnt_epi64_manual(v_masks);
-
-        /* Offset popcounts for u1 with pre-created offset register. */
-        __m512i v_indexes = _mm512_add_epi64(v_popcnts, v_idx_u0_offset);
-
-        /* Gather u64 blocks from packet miniflow. */
-        const __m512i v_zeros = _mm512_setzero_si512();
-        const void *pkt_data = miniflow_get_values(&keys[i]->mf);
-        __m512i v_all_blocks = _mm512_mask_i64gather_epi64(v_zeros,
-                                   bit_count_total_mask, v_indexes,
-                                   pkt_data, 8);
+        __m512i v_u0 = _mm512_set1_epi64(keys[i]->mf.map.bits[0]);
+        __m512i v_u1 = _mm512_set1_epi64(keys[i]->mf.map.bits[1]);
 
         /* Zero out bits that pkt doesn't have:
          * - 2x pext() to extract bits from packet miniflow as needed by TBL
          * - Shift u1 over by bit_count of u0, OR to create zero bitmask
          */
-         uint64_t u0_to_zero = _pext_u64(keys[i]->mf.map.bits[0], tbl_u0);
-         uint64_t u1_to_zero = _pext_u64(keys[i]->mf.map.bits[1], tbl_u1);
-         uint64_t zero_mask = (u1_to_zero << bit_count_u0) | u0_to_zero;
+        uint64_t u0_to_zero = _pext_u64(keys[i]->mf.map.bits[0], tbl_u0);
+        uint64_t u1_to_zero = _pext_u64(keys[i]->mf.map.bits[1], tbl_u1);
+        const uint64_t zero_mask_wip = (u1_to_zero << bit_count_u0) |
+                                       u0_to_zero;
+        const uint64_t zero_mask = zero_mask_wip & bit_count_total_mask;
 
-        /* Mask blocks using AND with subtable blocks, use k-mask to zero
-         * where lanes as required for this packet.
-         */
-        __m512i v_masked_blocks = _mm512_maskz_and_epi64(zero_mask,
-                                                v_all_blocks, v_tbl_blocks);
+        /* Get ptr to packet data blocks. */
+        const uint64_t *pkt_blocks = miniflow_get_values(&keys[i]->mf);
 
-        /* Store to blocks cache, full cache line aligned. */
-        _mm512_storeu_si512(&block_cache[i * 8], v_masked_blocks);
+        /* Store first 8 blocks cache, full cache line aligned. */
+        __m512i v_blocks = avx512_blocks_gather(v_u0, v_u1,
+                                                &pkt_blocks[0],
+                                                &tbl_blocks[0],
+                                                &tbl_mf_masks[0],
+                                                u1_bcast_mask,
+                                                pkt_mf_u0_pop,
+                                                zero_mask,
+                                                bit_count_total_mask,
+                                                use_vpop);
+        _mm512_storeu_si512(&block_cache[i * MF_BLOCKS_PER_PACKET], v_blocks);
+
+        if (bit_count_total > 8) {
+            /* Shift masks over by 8.
+             * Pkt blocks pointer remains 0, it is incremented by popcount.
+             * Move tbl and mf masks pointers forward.
+             * Increase offsets by 8.
+             * Re-run same gather code.
+             */
+            uint64_t zero_mask_gt8 = (zero_mask >> 8);
+            uint64_t u1_bcast_mask_gt8 = (u1_bcast_mask >> 8);
+            uint64_t bit_count_gt8_mask = bit_count_total_mask >> 8;
+
+            __m512i v_blocks_gt8 = avx512_blocks_gather(v_u0, v_u1,
+                                                    &pkt_blocks[0],
+                                                    &tbl_blocks[8],
+                                                    &tbl_mf_masks[8],
+                                                    u1_bcast_mask_gt8,
+                                                    pkt_mf_u0_pop,
+                                                    zero_mask_gt8,
+                                                    bit_count_gt8_mask,
+                                                    use_vpop);
+            _mm512_storeu_si512(&block_cache[(i * MF_BLOCKS_PER_PACKET) + 8],
+                                v_blocks_gt8);
+        }
+
     }
 
     /* Hash the now linearized blocks of packet metadata. */
     ULLONG_FOR_EACH_1 (i, keys_map) {
-        uint64_t *block_ptr = &block_cache[i * 8];
+        uint64_t *block_ptr = &block_cache[i * MF_BLOCKS_PER_PACKET];
         uint32_t hash = hash_add_words64(0, block_ptr, bit_count_total);
         hashes[i] = hash_finish(hash, bit_count_total * 8);
     }
@@ -184,7 +312,7 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
         struct dpcls_rule *rule;
 
         CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
-            const uint32_t cidx = i * 8;
+            const uint32_t cidx = i * MF_BLOCKS_PER_PACKET;
             uint32_t match = netdev_rule_matches_key(rule, bit_count_total,
                                                      &block_cache[cidx]);
             if (OVS_LIKELY(match)) {
@@ -204,7 +332,11 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
     return found_map;
 }
 
-/* Expand out specialized functions with U0 and U1 bit attributes. */
+/* Expand out specialized functions with U0 and U1 bit attributes. As the
+ * AVX512 vpopcnt instruction is not supported on all AVX512 capable CPUs,
+ * create two functions for each miniflow signature. This allows the runtime
+ * CPU detection in probe() to select the ideal implementation.
+ */
 #define DECLARE_OPTIMIZED_LOOKUP_FUNCTION(U0, U1)                             \
     static uint32_t                                                           \
     dpcls_avx512_gather_mf_##U0##_##U1(struct dpcls_subtable *subtable,       \
@@ -212,18 +344,41 @@ avx512_lookup_impl(struct dpcls_subtable *subtable,
                                        const struct netdev_flow_key *keys[],  \
                                        struct dpcls_rule **rules)             \
     {                                                                         \
-        return avx512_lookup_impl(subtable, keys_map, keys, rules, U0, U1);   \
+        const uint32_t use_vpop = 0;                                          \
+        return avx512_lookup_impl(subtable, keys_map, keys, rules,            \
+                                  U0, U1, use_vpop);                          \
+    }                                                                         \
+                                                                              \
+    static uint32_t __attribute__((__target__("avx512vpopcntdq")))            \
+    dpcls_avx512_gather_mf_##U0##_##U1##_vpop(struct dpcls_subtable *subtable,\
+                                       uint32_t keys_map,                     \
+                                       const struct netdev_flow_key *keys[],  \
+                                       struct dpcls_rule **rules)             \
+    {                                                                         \
+        const uint32_t use_vpop = 1;                                          \
+        return avx512_lookup_impl(subtable, keys_map, keys, rules,            \
+                                  U0, U1, use_vpop);                          \
     }                                                                         \
 
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 4)
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(9, 1)
+DECLARE_OPTIMIZED_LOOKUP_FUNCTION(5, 3)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(5, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 1)
 DECLARE_OPTIMIZED_LOOKUP_FUNCTION(4, 0)
 
-/* Check if a specialized function is valid for the required subtable. */
-#define CHECK_LOOKUP_FUNCTION(U0, U1)                                         \
-    ovs_assert((U0 + U1) <= NUM_U64_IN_ZMM_REG);                              \
+/* Check if a specialized function is valid for the required subtable.
+ * The use_vpop variable is used to decide if the VPOPCNT instruction can be
+ * used or not.
+ */
+#define CHECK_LOOKUP_FUNCTION(U0, U1, use_vpop)                               \
+    ovs_assert((U0 + U1) <= (NUM_U64_IN_ZMM_REG * 2));                        \
     if (!f && u0_bits == U0 && u1_bits == U1) {                               \
-        f = dpcls_avx512_gather_mf_##U0##_##U1;                               \
+        if (use_vpop) {                                                       \
+            f = dpcls_avx512_gather_mf_##U0##_##U1##_vpop;                    \
+        } else {                                                              \
+            f = dpcls_avx512_gather_mf_##U0##_##U1;                           \
+        }                                                                     \
     }
 
 static uint32_t
@@ -231,9 +386,11 @@ dpcls_avx512_gather_mf_any(struct dpcls_subtable *subtable, uint32_t keys_map,
                            const struct netdev_flow_key *keys[],
                            struct dpcls_rule **rules)
 {
+    const uint32_t use_vpop = 0;
     return avx512_lookup_impl(subtable, keys_map, keys, rules,
                               subtable->mf_bits_set_unit0,
-                              subtable->mf_bits_set_unit1);
+                              subtable->mf_bits_set_unit1,
+                              use_vpop);
 }
 
 dpcls_subtable_lookup_func
@@ -247,14 +404,23 @@ dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
         return NULL;
     }
 
-    CHECK_LOOKUP_FUNCTION(5, 1);
-    CHECK_LOOKUP_FUNCTION(4, 1);
-    CHECK_LOOKUP_FUNCTION(4, 0);
+    int use_vpop = dpdk_get_cpu_has_isa("x86_64", "avx512vpopcntdq");
 
-    if (!f && (u0_bits + u1_bits) < NUM_U64_IN_ZMM_REG) {
+    CHECK_LOOKUP_FUNCTION(9, 4, use_vpop);
+    CHECK_LOOKUP_FUNCTION(9, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(5, 3, use_vpop);
+    CHECK_LOOKUP_FUNCTION(5, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(4, 1, use_vpop);
+    CHECK_LOOKUP_FUNCTION(4, 0, use_vpop);
+
+    /* Check if the _any looping version of the code can perform this miniflow
+     * lookup. Performance gain may be less pronounced due to non-specialized
+     * hashing, however there is usually a good performance win overall.
+     */
+    if (!f && (u0_bits + u1_bits) < (NUM_U64_IN_ZMM_REG * 2)) {
         f = dpcls_avx512_gather_mf_any;
-        VLOG_INFO("Using avx512_gather_mf_any for subtable (%d,%d)\n",
-                  u0_bits, u1_bits);
+        VLOG_INFO_ONCE("Using non-specialized AVX512 lookup for subtable"
+                       " (%d,%d) and possibly others.", u0_bits, u1_bits);
     }
 
     return f;

@@ -43,23 +43,7 @@ esac
 case `uname` in
 Linux)
     MALLOC_PERTURB_=165; export MALLOC_PERTURB_
-
-    # Before glibc 2.11, the feature enabled by MALLOC_CHECK_ was not
-    # thread-safe.  See https://bugzilla.redhat.com/show_bug.cgi?id=585674 and
-    # in particular the patch attached there, which was applied to glibc CVS as
-    # "Restore locking in free_check." between 1.11 and 1.11.1.
-    vswitchd=$abs_top_builddir/vswitchd/ovs-vswitchd
-    glibc=`ldd $vswitchd | sed -n 's/^  libc\.[^ ]* => \([^ ]*\) .*/\1/p'`
-    glibc_version=`$glibc | sed -n '1s/.*version \([0-9]\{1,\}\.[0-9]\{1,\}\).*/\1/p'`
-    case $glibc_version in
-        2.[0-9] | 2.1[01]) mcheck=disabled ;;
-        *) mcheck=enabled ;;
-    esac
-    if test $mcheck = enabled; then
-        MALLOC_CHECK_=2; export MALLOC_CHECK_
-    else
-        echo >&2 "glibc $glibc_version detected, disabling memory checking"
-    fi
+    MALLOC_CHECK_=2; export MALLOC_CHECK_
     ;;
 FreeBSD)
     case `uname -r` in
@@ -182,6 +166,20 @@ if nc --version 2>&1 | grep -q nmap.org; then
 else
     # BSD netcat
     NC_EOF_OPT="-q 1 -w 5"
+fi
+
+# Set HAVE_TC
+find_command tc
+
+# When HAVE_TC=yes, check if the current tc supports adding pps filter
+SUPPORT_TC_INGRESS_PPS="no"
+if test $HAVE_TC="yes"; then
+    ip link add veth0 type veth peer name veth1
+    tc qdisc add dev veth0 handle ffff: ingress
+    if tc filter add dev veth0 parent ffff: u32 match u32 0 0 police pkts_rate 100 pkts_burst 10; then
+        SUPPORT_TC_INGRESS_PPS="yes"
+    fi
+    ip link del veth0
 fi
 
 # Set HAVE_TCPDUMP

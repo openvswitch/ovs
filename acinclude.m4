@@ -14,19 +14,74 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl Set OVS MFEX Autovalidator as default miniflow extract at compile time?
+dnl This enables automatically running all unit tests with all MFEX
+dnl implementations.
+AC_DEFUN([OVS_CHECK_MFEX_AUTOVALIDATOR], [
+  AC_ARG_ENABLE([mfex-default-autovalidator],
+                [AC_HELP_STRING([--enable-mfex-default-autovalidator],
+                                [Enable MFEX autovalidator as default
+                                 miniflow_extract implementation.])],
+                [autovalidator=yes],[autovalidator=no])
+  AC_MSG_CHECKING([whether MFEX Autovalidator is default implementation])
+  if test "$autovalidator" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    AC_DEFINE([MFEX_AUTOVALIDATOR_DEFAULT], [1],
+              [Autovalidator for miniflow_extract is a default implementation.])
+    AC_MSG_RESULT([yes])
+  fi
+])
+
 dnl Set OVS DPCLS Autovalidator as default subtable search at compile time?
 dnl This enables automatically running all unit tests with all DPCLS
 dnl implementations.
 AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
   AC_ARG_ENABLE([autovalidator],
-                [AC_HELP_STRING([--enable-autovalidator], [Enable DPCLS autovalidator as default subtable search implementation.])],
+                [AC_HELP_STRING([--enable-autovalidator],
+                                [Enable DPCLS autovalidator as default subtable
+                                 search implementation.])],
                 [autovalidator=yes],[autovalidator=no])
   AC_MSG_CHECKING([whether DPCLS Autovalidator is default implementation])
   if test "$autovalidator" != yes; then
     AC_MSG_RESULT([no])
   else
-    OVS_CFLAGS="$OVS_CFLAGS -DDPCLS_AUTOVALIDATOR_DEFAULT"
+    AC_DEFINE([DPCLS_AUTOVALIDATOR_DEFAULT], [1],
+              [Autovalidator for the userspace datapath classifier is a
+               default implementation.])
     AC_MSG_RESULT([yes])
+  fi
+])
+
+dnl Set OVS DPIF default implementation at configure time for running the unit
+dnl tests on the whole codebase without modifying tests per DPIF impl
+AC_DEFUN([OVS_CHECK_DPIF_AVX512_DEFAULT], [
+  AC_ARG_ENABLE([dpif-default-avx512],
+                [AC_HELP_STRING([--enable-dpif-default-avx512],
+                                [Enable DPIF AVX512 implementation as default.])],
+                [dpifavx512=yes],[dpifavx512=no])
+  AC_MSG_CHECKING([whether DPIF AVX512 is default implementation])
+  if test "$dpifavx512" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    AC_DEFINE([DPIF_AVX512_DEFAULT], [1],
+              [DPIF AVX512 is a default implementation of the userspace
+               datapath interface.])
+    AC_MSG_RESULT([yes])
+  fi
+])
+
+dnl OVS_CHECK_AVX512
+dnl
+dnl Checks if compiler and binutils supports AVX512.
+AC_DEFUN([OVS_CHECK_AVX512], [
+  OVS_CHECK_BINUTILS_AVX512
+  OVS_CHECK_CC_OPTION(
+    [-mavx512f], [ovs_have_cc_mavx512f=yes], [ovs_have_cc_mavx512f=no])
+  AM_CONDITIONAL([HAVE_AVX512F], [test $ovs_have_cc_mavx512f = yes])
+  if test "$ovs_have_cc_mavx512f" = yes; then
+    AC_DEFINE([HAVE_AVX512F], [1],
+              [Define to 1 if compiler supports AVX512.])
   fi
 ])
 
@@ -209,10 +264,10 @@ dnl Configure Linux tc compat.
 AC_DEFUN([OVS_CHECK_LINUX_TC], [
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
-        int x = TCA_ACT_FLAGS;
+        int x = TCA_POLICE_PKTRATE64;
     ])],
-    [AC_DEFINE([HAVE_TCA_ACT_FLAGS], [1],
-               [Define to 1 if TCA_ACT_FLAGS is available.])])
+    [AC_DEFINE([HAVE_TCA_POLICE_PKTRATE64], [1],
+               [Define to 1 if TCA_POLICE_PKTRATE64 is available.])])
 
   AC_CHECK_MEMBERS([struct tcf_t.firstuse], [], [], [#include <linux/pkt_cls.h>])
 

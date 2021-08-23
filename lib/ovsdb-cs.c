@@ -660,7 +660,8 @@ ovsdb_cs_wait(struct ovsdb_cs *cs)
 
 /* Network connection. */
 
-/* Changes the remote and creates a new session.
+/* Changes the remote and creates a new session.  Keeps existing connection
+ * if current remote is still valid.
  *
  * If 'retry' is true, the connection to the remote will automatically retry
  * when it fails.  If 'retry' is false, the connection is one-time. */
@@ -670,9 +671,12 @@ ovsdb_cs_set_remote(struct ovsdb_cs *cs, const char *remote, bool retry)
     if (cs
         && ((remote != NULL) != (cs->remote != NULL)
             || (remote && cs->remote && strcmp(remote, cs->remote)))) {
+        struct jsonrpc *rpc = NULL;
+
         /* Close the old session, if any. */
         if (cs->session) {
-            jsonrpc_session_close(cs->session);
+            /* Save the current open connection and close the session. */
+            rpc = jsonrpc_session_steal(cs->session);
             cs->session = NULL;
 
             free(cs->remote);
@@ -682,17 +686,30 @@ ovsdb_cs_set_remote(struct ovsdb_cs *cs, const char *remote, bool retry)
         /* Open new session, if any. */
         if (remote) {
             struct svec remotes = SVEC_EMPTY_INITIALIZER;
+            struct uuid old_cid = cs->cid;
+
             ovsdb_session_parse_remote(remote, &remotes, &cs->cid);
             if (cs->shuffle_remotes) {
                 svec_shuffle(&remotes);
             }
             cs->session = jsonrpc_session_open_multiple(&remotes, retry);
+
+            /* Use old connection, if cluster id didn't change and the remote
+             * is still on the list, to avoid unnecessary re-connection. */
+            if (rpc && uuid_equals(&old_cid, &cs->cid)
+                && svec_contains_unsorted(&remotes, jsonrpc_get_name(rpc))) {
+                jsonrpc_session_replace(cs->session, rpc);
+                cs->state_seqno = jsonrpc_session_get_seqno(cs->session);
+                rpc = NULL;
+            } else {
+                cs->state_seqno = UINT_MAX;
+            }
+
             svec_destroy(&remotes);
-
-            cs->state_seqno = UINT_MAX;
-
             cs->remote = xstrdup(remote);
         }
+
+        jsonrpc_close(rpc);
     }
 }
 
@@ -712,6 +729,16 @@ void
 ovsdb_cs_force_reconnect(struct ovsdb_cs *cs)
 {
     if (cs->session) {
+        if (cs->state == CS_S_MONITORING) {
+            /* The ovsdb-cs was in MONITORING state, so we either had data
+             * inconsistency on this server, or it stopped being the cluster
+             * leader, or the user requested to re-connect.  Avoiding backoff
+             * in these cases, as we need to re-connect as soon as possible.
+             * Connections that are not in MONITORING state should have their
+             * backoff to avoid constant flood of re-connection attempts in
+             * case there is no suitable database server. */
+            jsonrpc_session_reset_backoff(cs->session);
+        }
         jsonrpc_session_force_reconnect(cs->session);
     }
 }
@@ -903,8 +930,27 @@ ovsdb_cs_db_set_condition(struct ovsdb_cs_db *db, const char *table,
     }
 
     /* Conditions will be up to date when we receive replies for already
-     * requested and new conditions, if any. */
-    return db->cond_seqno + (t->new_cond ? 1 : 0) + (t->req_cond ? 1 : 0);
+     * requested and new conditions, if any.  This includes condition change
+     * requests for other tables too.
+     */
+    if (t->new_cond) {
+        /* New condition will be sent out after all already requested ones
+         * are acked.
+         */
+        bool any_req_cond = false;
+        HMAP_FOR_EACH (t, hmap_node, &db->tables) {
+            if (t->req_cond) {
+                any_req_cond = true;
+                break;
+            }
+        }
+        return db->cond_seqno + any_req_cond + 1;
+    } else {
+        /* Already requested conditions should be up to date at
+         * db->cond_seqno + 1 while acked conditions are already up to date.
+         */
+        return db->cond_seqno + !!t->req_cond;
+    }
 }
 
 /* Sets the replication condition for 'tc' in 'cs' to 'condition' and arranges
@@ -1367,7 +1413,7 @@ ovsdb_cs_send_transaction(struct ovsdb_cs *cs, struct json *operations)
                               sizeof *cs->txns);
     }
     cs->txns[cs->n_txns++] = request_id;
-    return request_id;
+    return json_clone(request_id);
 }
 
 /* Makes 'cs' drop its record of transaction 'request_id'.  If a reply arrives
@@ -1380,6 +1426,7 @@ ovsdb_cs_forget_transaction(struct ovsdb_cs *cs, const struct json *request_id)
 {
     for (size_t i = 0; i < cs->n_txns; i++) {
         if (json_equal(request_id, cs->txns[i])) {
+            json_destroy(cs->txns[i]);
             cs->txns[i] = cs->txns[--cs->n_txns];
             return true;
         }
@@ -1877,8 +1924,8 @@ ovsdb_cs_check_server_db__(struct ovsdb_cs *cs)
     bool ok = false;
     const char *model = server_column_get_string(db_row, COL_MODEL, "");
     const char *schema = server_column_get_string(db_row, COL_SCHEMA, NULL);
+    bool connected = server_column_get_bool(db_row, COL_CONNECTED, false);
     if (!strcmp(model, "clustered")) {
-        bool connected = server_column_get_bool(db_row, COL_CONNECTED, false);
         bool leader = server_column_get_bool(db_row, COL_LEADER, false);
         uint64_t index = server_column_get_int(db_row, COL_INDEX, 0);
 
@@ -1896,6 +1943,19 @@ ovsdb_cs_check_server_db__(struct ovsdb_cs *cs)
                       "trying another server", server_name);
         } else {
             cs->min_index = index;
+            ok = true;
+        }
+    } else if (!strcmp(model, "relay")) {
+        if (!schema) {
+            VLOG_INFO("%s: relay database server has not yet connected to the "
+                      "relay source; trying another server", server_name);
+        } else if (!connected) {
+            VLOG_INFO("%s: relay database server is disconnected from the "
+                      "relay source; trying another server", server_name);
+        } else if (cs->leader_only) {
+            VLOG_INFO("%s: relay database server cannot be a leader; "
+                      "trying another server", server_name);
+        } else {
             ok = true;
         }
     } else {

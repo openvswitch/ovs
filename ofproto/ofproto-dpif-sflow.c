@@ -1292,10 +1292,10 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
     ovs_be16 vlan_tci;
 
     ovs_mutex_lock(&mutex);
-    sampler = ds->sflow_agent->samplers;
-    if (!sampler) {
+    if (!ds->sflow_agent || !ds->sflow_agent->samplers) {
         goto out;
     }
+    sampler = ds->sflow_agent->samplers;
 
     /* Build a flow sample. */
     memset(&fs, 0, sizeof fs);

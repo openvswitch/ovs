@@ -19,7 +19,7 @@
 
 #include <config.h>
 #include "dpif-netdev.h"
-#include "dpif-netdev-private.h"
+#include "dpif-netdev-private-dpcls.h"
 
 /* Function to perform a probe for the subtable bit fingerprint.
  * Returns NULL if not valid, or a valid function pointer to call for this

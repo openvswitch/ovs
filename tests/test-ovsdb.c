@@ -1485,7 +1485,7 @@ do_execute__(struct ovs_cmdl_context *ctx, bool ro)
     json = parse_json(ctx->argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
+    db = ovsdb_create(schema, ovsdb_storage_create_unbacked(NULL));
 
     for (i = 2; i < ctx->argc; i++) {
         struct json *params, *result;
@@ -1551,7 +1551,7 @@ do_trigger(struct ovs_cmdl_context *ctx)
     json = parse_json(ctx->argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
+    db = ovsdb_create(schema, ovsdb_storage_create_unbacked(NULL));
 
     ovsdb_server_init(&server);
     ovsdb_server_add_db(&server, db);
@@ -1781,7 +1781,7 @@ do_transact(struct ovs_cmdl_context *ctx)
                       "       \"j\": {\"type\": \"integer\"}}}}}");
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    do_transact_db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
+    do_transact_db = ovsdb_create(schema, ovsdb_storage_create_unbacked(NULL));
     do_transact_table = ovsdb_get_table(do_transact_db, "mytable");
     ovs_assert(do_transact_table != NULL);
 
@@ -1861,6 +1861,23 @@ print_and_log(const char *format, ...)
     free(message);
 }
 
+static char *
+format_idl_row(const struct ovsdb_idl_row *row, int step, const char *contents)
+{
+    const char *change_str =
+        !ovsdb_idl_track_is_set(row->table)
+        ? ""
+        : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_INSERT) > 0
+          ? "inserted row: "
+          : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0
+            ? "deleted row: "
+            : "";
+
+    return xasprintf("%03d: table %s: %s%s uuid=" UUID_FMT,
+                     step, row->table->class_->name, change_str, contents,
+                     UUID_ARGS(&row->uuid));
+}
+
 static void
 print_idl_row_updated_simple(const struct idltest_simple *s, int step)
 {
@@ -1871,7 +1888,9 @@ print_idl_row_updated_simple(const struct idltest_simple *s, int step)
         }
     }
     if (updates.length) {
-        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, s->header_.table->class_->name,
+                      ds_cstr(&updates));
         ds_destroy(&updates);
     }
 }
@@ -1886,7 +1905,9 @@ print_idl_row_updated_link1(const struct idltest_link1 *l1, int step)
         }
     }
     if (updates.length) {
-        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, l1->header_.table->class_->name,
+                      ds_cstr(&updates));
         ds_destroy(&updates);
     }
 }
@@ -1901,7 +1922,43 @@ print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
         }
     }
     if (updates.length) {
-        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, l2->header_.table->class_->name,
+                      ds_cstr(&updates));
+        ds_destroy(&updates);
+    }
+}
+
+static void
+print_idl_row_updated_simple3(const struct idltest_simple3 *s3, int step)
+{
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SIMPLE3_N_COLUMNS; i++) {
+        if (idltest_simple3_is_updated(s3, i)) {
+            ds_put_format(&updates, " %s", idltest_simple3_columns[i].name);
+        }
+    }
+    if (updates.length) {
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, s3->header_.table->class_->name,
+                      ds_cstr(&updates));
+        ds_destroy(&updates);
+    }
+}
+
+static void
+print_idl_row_updated_simple4(const struct idltest_simple4 *s4, int step)
+{
+    struct ds updates = DS_EMPTY_INITIALIZER;
+    for (size_t i = 0; i < IDLTEST_SIMPLE4_N_COLUMNS; i++) {
+        if (idltest_simple4_is_updated(s4, i)) {
+            ds_put_format(&updates, " %s", idltest_simple4_columns[i].name);
+        }
+    }
+    if (updates.length) {
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, s4->header_.table->class_->name,
+                      ds_cstr(&updates));
         ds_destroy(&updates);
     }
 }
@@ -1916,7 +1973,9 @@ print_idl_row_updated_simple6(const struct idltest_simple6 *s6, int step)
         }
     }
     if (updates.length) {
-        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, s6->header_.table->class_->name,
+                      ds_cstr(&updates));
         ds_destroy(&updates);
     }
 }
@@ -1931,7 +1990,9 @@ print_idl_row_updated_singleton(const struct idltest_singleton *sng, int step)
         }
     }
     if (updates.length) {
-        print_and_log("%03d: updated columns:%s", step, ds_cstr(&updates));
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, sng->header_.table->class_->name,
+                      ds_cstr(&updates));
         ds_destroy(&updates);
     }
 }
@@ -1940,8 +2001,8 @@ static void
 print_idl_row_simple(const struct idltest_simple *s, int step)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
-    ds_put_format(&msg, "%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
-                  step, s->i, s->r, s->b ? "true" : "false",
+    ds_put_format(&msg, "i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
+                  s->i, s->r, s->b ? "true" : "false",
                   s->s, UUID_ARGS(&s->u));
     for (size_t i = 0; i < s->n_ia; i++) {
         ds_put_format(&msg, "%s%"PRId64, i ? " " : "", s->ia[i]);
@@ -1962,9 +2023,12 @@ print_idl_row_simple(const struct idltest_simple *s, int step)
     for (size_t i = 0; i < s->n_ua; i++) {
         ds_put_format(&msg, "%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
     }
-    ds_put_format(&msg, "] uuid="UUID_FMT, UUID_ARGS(&s->header_.uuid));
-    print_and_log("%s", ds_cstr(&msg));
+    ds_put_cstr(&msg, "]");
+
+    char *row_msg = format_idl_row(&s->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
     ds_destroy(&msg);
+    free(row_msg);
 
     print_idl_row_updated_simple(s, step);
 }
@@ -1973,7 +2037,7 @@ static void
 print_idl_row_link1(const struct idltest_link1 *l1, int step)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
-    ds_put_format(&msg, "%03d: i=%"PRId64" k=", step, l1->i);
+    ds_put_format(&msg, "i=%"PRId64" k=", l1->i);
     if (l1->k) {
         ds_put_format(&msg, "%"PRId64, l1->k->i);
     }
@@ -1988,9 +2052,11 @@ print_idl_row_link1(const struct idltest_link1 *l1, int step)
     if (l1->l2) {
         ds_put_format(&msg, "%"PRId64, l1->l2->i);
     }
-    ds_put_format(&msg, " uuid="UUID_FMT, UUID_ARGS(&l1->header_.uuid));
-    print_and_log("%s", ds_cstr(&msg));
+
+    char *row_msg = format_idl_row(&l1->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
     ds_destroy(&msg);
+    free(row_msg);
 
     print_idl_row_updated_link1(l1, step);
 }
@@ -1999,30 +2065,77 @@ static void
 print_idl_row_link2(const struct idltest_link2 *l2, int step)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
-    ds_put_format(&msg, "%03d: i=%"PRId64" l1=", step, l2->i);
+    ds_put_format(&msg, "i=%"PRId64" l1=", l2->i);
     if (l2->l1) {
         ds_put_format(&msg, "%"PRId64, l2->l1->i);
     }
-    ds_put_format(&msg, " uuid="UUID_FMT, UUID_ARGS(&l2->header_.uuid));
-    print_and_log("%s", ds_cstr(&msg));
+
+    char *row_msg = format_idl_row(&l2->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
     ds_destroy(&msg);
+    free(row_msg);
 
     print_idl_row_updated_link2(l2, step);
+}
+
+static void
+print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
+{
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    size_t i;
+
+    ds_put_format(&msg, "name=%s uset=[", s3->name);
+    for (i = 0; i < s3->n_uset; i++) {
+        ds_put_format(&msg, UUID_FMT"%s",
+                      UUID_ARGS(&s3->uset[i]),
+                      i < s3->n_uset - 1 ? "," : "");
+    }
+    ds_put_cstr(&msg, "] uref=[");
+    for (i = 0; i < s3->n_uref; i++) {
+        ds_put_format(&msg, UUID_FMT"%s",
+                      UUID_ARGS(&s3->uref[i]->header_.uuid),
+                      i < s3->n_uref -1 ? "," : "");
+    }
+    ds_put_cstr(&msg, "]");
+
+    char *row_msg = format_idl_row(&s3->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
+    ds_destroy(&msg);
+    free(row_msg);
+
+    print_idl_row_updated_simple3(s3, step);
+}
+
+static void
+print_idl_row_simple4(const struct idltest_simple4 *s4, int step)
+{
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "name=%s", s4->name);
+
+    char *row_msg = format_idl_row(&s4->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
+    ds_destroy(&msg);
+    free(row_msg);
+
+    print_idl_row_updated_simple4(s4, step);
 }
 
 static void
 print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
-    ds_put_format(&msg, "%03d: name=%s ", step, s6->name);
+    ds_put_format(&msg, "name=%s ", s6->name);
     ds_put_cstr(&msg, "weak_ref=[");
     for (size_t i = 0; i < s6->n_weak_ref; i++) {
         ds_put_format(&msg, "%s"UUID_FMT, i ? " " : "",
                       UUID_ARGS(&s6->weak_ref[i]->header_.uuid));
     }
-    ds_put_format(&msg, "] uuid="UUID_FMT, UUID_ARGS(&s6->header_.uuid));
-    print_and_log("%s", ds_cstr(&msg));
+    ds_put_cstr(&msg, "]");
+
+    char *row_msg = format_idl_row(&s6->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
     ds_destroy(&msg);
+    free(row_msg);
 
     print_idl_row_updated_simple6(s6, step);
 }
@@ -2030,14 +2143,23 @@ print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
 static void
 print_idl_row_singleton(const struct idltest_singleton *sng, int step)
 {
-    print_and_log("%03d: name=%s uuid="UUID_FMT, step, sng->name,
-                  UUID_ARGS(&sng->header_.uuid));
+    struct ds msg = DS_EMPTY_INITIALIZER;
+    ds_put_format(&msg, "name=%s", sng->name);
+
+    char *row_msg = format_idl_row(&sng->header_, step, ds_cstr(&msg));
+    print_and_log("%s", row_msg);
+    ds_destroy(&msg);
+    free(row_msg);
+
     print_idl_row_updated_singleton(sng, step);
 }
 
 static void
 print_idl(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple3 *s3;
+    const struct idltest_simple4 *s4;
+    const struct idltest_simple6 *s6;
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
     const struct idltest_link2 *l2;
@@ -2056,6 +2178,18 @@ print_idl(struct ovsdb_idl *idl, int step)
         print_idl_row_link2(l2, step);
         n++;
     }
+    IDLTEST_SIMPLE3_FOR_EACH (s3, idl) {
+        print_idl_row_simple3(s3, step);
+        n++;
+    }
+    IDLTEST_SIMPLE4_FOR_EACH (s4, idl) {
+        print_idl_row_simple4(s4, step);
+        n++;
+    }
+    IDLTEST_SIMPLE6_FOR_EACH (s6, idl) {
+        print_idl_row_simple6(s6, step);
+        n++;
+    }
     IDLTEST_SINGLETON_FOR_EACH (sng, idl) {
         print_idl_row_singleton(sng, step);
         n++;
@@ -2068,6 +2202,8 @@ print_idl(struct ovsdb_idl *idl, int step)
 static void
 print_idl_track(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple3 *s3;
+    const struct idltest_simple4 *s4;
     const struct idltest_simple6 *s6;
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
@@ -2076,51 +2212,26 @@ print_idl_track(struct ovsdb_idl *idl, int step)
 
     IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
         print_idl_row_simple(s, step);
-        if (idltest_simple_is_deleted(s)) {
-            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
-                          UUID_ARGS(&s->header_.uuid));
-        } else if (idltest_simple_is_new(s)) {
-            print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
-                          UUID_ARGS(&s->header_.uuid));
-        }
         n++;
     }
     IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
-        if (idltest_link1_is_deleted(l1)) {
-            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
-                          UUID_ARGS(&l1->header_.uuid));
-        } else {
-            print_idl_row_link1(l1, step);
-            if (idltest_link1_is_new(l1)) {
-                print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
-                              UUID_ARGS(&l1->header_.uuid));
-            }
-        }
+        print_idl_row_link1(l1, step);
         n++;
     }
     IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
-        if (idltest_link2_is_deleted(l2)) {
-            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
-                          UUID_ARGS(&l2->header_.uuid));
-        } else {
-            print_idl_row_link2(l2, step);
-            if (idltest_link2_is_new(l2)) {
-                print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
-                              UUID_ARGS(&l2->header_.uuid));
-            }
-
-        }
+        print_idl_row_link2(l2, step);
+        n++;
+    }
+    IDLTEST_SIMPLE3_FOR_EACH_TRACKED (s3, idl) {
+        print_idl_row_simple3(s3, step);
+        n++;
+    }
+    IDLTEST_SIMPLE4_FOR_EACH_TRACKED (s4, idl) {
+        print_idl_row_simple4(s4, step);
         n++;
     }
     IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
         print_idl_row_simple6(s6, step);
-        if (idltest_simple6_is_deleted(s6)) {
-            print_and_log("%03d: deleted row: uuid="UUID_FMT, step,
-                   UUID_ARGS(&s6->header_.uuid));
-        } else if (idltest_simple6_is_new(s6)) {
-            print_and_log("%03d: inserted row: uuid="UUID_FMT, step,
-                          UUID_ARGS(&s6->header_.uuid));
-        }
         n++;
     }
 
@@ -2349,6 +2460,10 @@ find_table_class(const char *name)
         return &idltest_table_link1;
     } else if (!strcmp(name, "link2")) {
         return &idltest_table_link2;
+    } else if (!strcmp(name, "simple3")) {
+        return &idltest_table_simple3;
+    } else if (!strcmp(name, "simple4")) {
+        return &idltest_table_simple4;
     } else if (!strcmp(name, "simple6")) {
         return &idltest_table_simple6;
     }
@@ -2506,6 +2621,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     setvbuf(stdout, NULL, _IONBF, 0);
 
     symtab = ovsdb_symbol_table_create();
+    const char remote_s[] = "set-remote ";
     const char cond_s[] = "condition ";
     if (ctx->argc > 2 && strstr(ctx->argv[2], cond_s)) {
         update_conditions(idl, ctx->argv[2] + strlen(cond_s));
@@ -2549,6 +2665,11 @@ do_idl(struct ovs_cmdl_context *ctx)
         if (!strcmp(arg, "reconnect")) {
             print_and_log("%03d: reconnect", step++);
             ovsdb_idl_force_reconnect(idl);
+        }  else if (!strncmp(arg, remote_s, strlen(remote_s))) {
+            ovsdb_idl_set_remote(idl, arg + strlen(remote_s), true);
+            print_and_log("%03d: new remotes: %s, is connected: %s", step++,
+                          arg + strlen(remote_s),
+                          ovsdb_idl_is_connected(idl) ? "true" : "false");
         }  else if (!strncmp(arg, cond_s, strlen(cond_s))) {
             update_conditions(idl, arg + strlen(cond_s));
             print_and_log("%03d: change conditions", step++);
@@ -2700,27 +2821,6 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
 
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
-}
-
-static void
-print_idl_row_simple3(const struct idltest_simple3 *s, int step)
-{
-    size_t i;
-    const struct ovsdb_datum *uset;
-    const struct ovsdb_datum *uref;
-
-    uset = idltest_simple3_get_uset(s, OVSDB_TYPE_UUID);
-    printf("%03d: name=%s uset=[",
-           step, s->name);
-    for (i = 0; i < uset->n; i++) {
-        printf("["UUID_FMT"]%s", UUID_ARGS(&(uset->keys[i].uuid)), i < uset->n-1? ",": "");
-    }
-    uref = idltest_simple3_get_uref(s, OVSDB_TYPE_UUID);
-    printf("] uref=[");
-    for (i = 0; i < uref->n; i++) {
-        printf("["UUID_FMT"]%s", UUID_ARGS(&(uref->keys[i].uuid)), i < uref->n-1? ",": "");
-    }
-    printf("]\n");
 }
 
 static void

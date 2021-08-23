@@ -105,7 +105,7 @@ bridge("br0")
 
 Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
-Datapath actions: push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+Datapath actions: push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x1)
 ])
 
 AT_CHECK([
@@ -139,7 +139,7 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x3)
 recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
 ])
 
@@ -232,7 +232,7 @@ bridge("br0")
 
 Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
-Datapath actions: push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+Datapath actions: push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x1)
 ])
 
 AT_CHECK([
@@ -266,7 +266,7 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x3)
 recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
 ])
 
@@ -368,8 +368,8 @@ bridge("br0")
 -------------
     thaw
             Resuming from table 0
-        Restoring actions: goto_table:2
-    goto_table:2
+        Restoring actions: resubmit(,2)
+    resubmit(,2)
  2. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344, priority 32768
     decap()
 

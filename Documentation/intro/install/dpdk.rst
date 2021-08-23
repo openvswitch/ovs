@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 20.11
+- DPDK 20.11.1
 
 - A `DPDK supported NIC`_
 
@@ -73,9 +73,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget https://fast.dpdk.org/rel/dpdk-20.11.tar.xz
-       $ tar xf dpdk-20.11.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-20.11
+       $ wget https://fast.dpdk.org/rel/dpdk-20.11.1.tar.xz
+       $ tar xf dpdk-20.11.1.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-stable-20.11.1
        $ cd $DPDK_DIR
 
 #. Configure and install DPDK using Meson
@@ -290,8 +290,8 @@ listed below. Defaults will be provided for all values not explicitly set.
 
 ``dpdk-socket-mem``
   Comma separated list of memory to pre-allocate from hugepages on specific
-  sockets. If not specified, 1024 MB will be set for each numa node by
-  default.
+  sockets. If not specified, this option will not be set by default. DPDK
+  default will be used instead.
 
 ``dpdk-hugepage-dir``
   Directory where hugetlbfs is mounted

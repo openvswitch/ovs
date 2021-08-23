@@ -233,7 +233,7 @@ static int
 dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
 {
     int error = 0;
-    size_t n;
+    size_t n = 0;
 
     stream_run(s->stream);
 

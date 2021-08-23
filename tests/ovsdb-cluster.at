@@ -119,16 +119,25 @@ ovsdb_test_cluster_disconnect () {
     # Connect to $target.  Use "wait" to trigger a non-op transaction so
     # that test-ovsdb will not quit.
 
-    test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -v -t10 idl unix:s$target.ovsdb '[["idltest",
+    txn='[["idltest",
           {"op": "wait",
            "table": "simple",
            "where": [["i", "==", 1]],
            "columns": ["i"],
            "until": "==",
-           "rows": [{"i": 1}]}]]' > test-ovsdb.log 2>&1 &
+           "rows": [{"i": 1}]}]]'
+
+    test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -v -t10 idl \
+               unix:s$target.ovsdb "$txn" > test-ovsdb.log 2>&1 &
     echo $! > test-ovsdb.pid
 
-    OVS_WAIT_UNTIL([grep "000: i=1" test-ovsdb.log])
+    OVS_WAIT_UNTIL([grep "000: table simple: i=1" test-ovsdb.log])
+
+    $PYTHON3 $srcdir/test-ovsdb.py -t10 idl $abs_srcdir/idltest.ovsschema \
+               unix:s$target.ovsdb "$txn" > test-ovsdb-py.log 2>&1 &
+    echo $! > test-ovsdb-py.pid
+
+    OVS_WAIT_UNTIL([grep "000: table simple: i=1" test-ovsdb-py.log])
 
     # Start collecting raft_is_connected logs for $target before shutting down
     # any servers.
@@ -142,6 +151,7 @@ ovsdb_test_cluster_disconnect () {
 
     # The test-ovsdb should detect the disconnect and retry.
     OVS_WAIT_UNTIL([grep disconnect test-ovsdb.log])
+    OVS_WAIT_UNTIL([grep disconnect test-ovsdb-py.log])
 
     # The $target debug log should show raft_is_connected: false.
     OVS_WAIT_UNTIL([grep "raft_is_connected: false" raft_is_connected.log])

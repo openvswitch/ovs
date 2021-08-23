@@ -247,6 +247,17 @@ svec_contains(const struct svec *svec, const char *name)
     return svec_find(svec, name) != SIZE_MAX;
 }
 
+bool
+svec_contains_unsorted(const struct svec *svec, const char *name)
+{
+    for (size_t i = 0; i < svec->n; i++) {
+        if (!strcmp(svec->names[i], name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 size_t
 svec_find(const struct svec *svec, const char *name)
 {
