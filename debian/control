@@ -9,6 +9,7 @@ Build-Depends: graphviz,
                bzip2,
                debhelper (>= 8),
                dh-autoreconf,
+               dh-python,
                libssl-dev,
                libtool,
                openssl,
@@ -138,7 +139,8 @@ Description: Open vSwitch public key infrastructure dependency package
 
 Package: openvswitch-testcontroller
 Architecture: linux-any
-Depends: openvswitch-common (= ${binary:Version}),
+Depends: lsb-base,
+         openvswitch-common (= ${binary:Version}),
          openvswitch-pki (= ${source:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
@@ -247,6 +249,7 @@ Description: Open vSwitch development package
 Package: openvswitch-ipsec
 Architecture: linux-any
 Depends: iproute2,
+         lsb-base,
          openvswitch-common (= ${binary:Version}),
          openvswitch-switch (= ${binary:Version}),
          python3,
