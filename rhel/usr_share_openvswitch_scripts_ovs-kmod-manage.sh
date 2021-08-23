@@ -24,6 +24,7 @@
 #   - 3.10.0 major revision 1160 (RHEL 7.9)
 #   - 4.4.x,  x >= 73           (SLES 12 SP3)
 #   - 4.12.x, x >= 14           (SLES 12 SP4).
+#   - 4.18.x major revision 305  (RHEL 8.4)
 # It is packaged in the openvswitch kmod RPM and run in the post-install
 # scripts.
 #
@@ -138,6 +139,13 @@ elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "12" ]; then
         comp_ver=1
         ver_offset=2
         installed_ver="$mainline_patch"
+    fi
+elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "18" ]; then
+    if [ "$major_rev" = "305" ]; then
+        echo "rhel84"
+        comp_ver=9
+        ver_offset=4
+        installed_ver="$minor_rev"
     fi
 fi
 
