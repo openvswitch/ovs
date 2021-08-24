@@ -22,6 +22,8 @@
 #include <getopt.h>
 #include <stdio.h>
 #include "ovstest.h"
+#include "random.h"
+#include "timeval.h"
 #include "util.h"
 
 /* --pretty: If set, the JSON output is pretty-printed, instead of printed as
@@ -157,3 +159,69 @@ test_json_main(int argc, char *argv[])
 }
 
 OVSTEST_REGISTER("test-json", test_json_main);
+
+static void
+json_string_benchmark_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct {
+        int n;
+        int quote_probablility;
+        int special_probability;
+        int iter;
+    } configs[] = {
+        { 100000,     0, 0, 1000, },
+        { 100000,     2, 1, 1000, },
+        { 100000,    10, 1, 1000, },
+        { 10000000,   0, 0, 100,  },
+        { 10000000,   2, 1, 100,  },
+        { 10000000,  10, 1, 100,  },
+        { 100000000,  0, 0, 10.   },
+        { 100000000,  2, 1, 10,   },
+        { 100000000, 10, 1, 10,   },
+    };
+
+    printf("  SIZE      Q  S            TIME\n");
+    printf("--------------------------------------\n");
+
+    for (int i = 0; i < ARRAY_SIZE(configs); i++) {
+        int iter = configs[i].iter;
+        int n = configs[i].n;
+        char *str = xzalloc(n);
+
+        for (int j = 0; j < n - 1; j++) {
+            int r = random_range(100);
+
+            if (r < configs[i].special_probability) {
+                str[j] = random_range(' ' - 1) + 1;
+            } else if (r < (configs[i].special_probability
+                            + configs[i].quote_probablility)) {
+                str[j] = '"';
+            } else {
+                str[j] = random_range(256 - ' ') + ' ';
+            }
+        }
+
+        printf("%-11d %-2d %-2d: ", n, configs[i].quote_probablility,
+                                       configs[i].special_probability);
+        fflush(stdout);
+
+        struct json *json = json_string_create_nocopy(str);
+        uint64_t start = time_msec();
+
+        char **res = xzalloc(iter * sizeof *res);
+        for (int j = 0; j < iter; j++) {
+            res[j] = json_to_string(json, 0);
+        }
+
+        printf("%16.3lf ms\n", (double) (time_msec() - start) / iter);
+        json_destroy(json);
+        for (int j = 0; j < iter; j++) {
+            free(res[j]);
+        }
+        free(res);
+    }
+
+    exit(0);
+}
+
+OVSTEST_REGISTER("json-string-benchmark", json_string_benchmark_main);

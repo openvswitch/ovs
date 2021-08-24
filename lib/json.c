@@ -1696,14 +1696,30 @@ json_serialize_string(const char *string, struct ds *ds)
 {
     uint8_t c;
     uint8_t c2;
+    size_t count;
     const char *escape;
+    const char *start;
 
     ds_put_char(ds, '"');
+    count = 0;
+    start = string;
     while ((c = *string++) != '\0') {
-        escape = chars_escaping[c];
-        while ((c2 = *escape++) != '\0') {
-            ds_put_char(ds, c2);
+        if (c >= ' ' && c != '"' && c != '\\') {
+            count++;
+        } else {
+            if (count) {
+                ds_put_buffer(ds, start, count);
+                count = 0;
+            }
+            start = string;
+            escape = chars_escaping[c];
+            while ((c2 = *escape++) != '\0') {
+                ds_put_char(ds, c2);
+            }
         }
+    }
+    if (count) {
+        ds_put_buffer(ds, start, count);
     }
     ds_put_char(ds, '"');
 }
