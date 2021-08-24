@@ -1231,6 +1231,15 @@ ovsdb_monitor_get_update(
                                             condition,
                                             ovsdb_monitor_compose_row_update2);
                 if (!condition || !condition->conditional) {
+                    if (json) {
+                        struct json *json_serialized;
+
+                        /* Pre-serializing the object to avoid doing this
+                         * for every client. */
+                        json_serialized = json_serialized_object_create(json);
+                        json_destroy(json);
+                        json = json_serialized;
+                    }
                     ovsdb_monitor_json_cache_insert(dbmon, version, mcs,
                                                     json);
                 }
