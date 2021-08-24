@@ -146,6 +146,7 @@ json_type_to_string(enum json_type type)
     case JSON_STRING:
         return "string";
 
+    case JSON_SERIALIZED_OBJECT:
     case JSON_N_TYPES:
     default:
         return "<invalid>";
@@ -178,6 +179,14 @@ struct json *
 json_string_create(const char *s)
 {
     return json_string_create_nocopy(xstrdup(s));
+}
+
+struct json *
+json_serialized_object_create(const struct json *src)
+{
+    struct json *json = json_create(JSON_SERIALIZED_OBJECT);
+    json->string = json_to_string(src, JSSF_SORT);
+    return json;
 }
 
 struct json *
@@ -309,6 +318,13 @@ json_string(const struct json *json)
     return json->string;
 }
 
+const char *
+json_serialized_object(const struct json *json)
+{
+    ovs_assert(json->type == JSON_SERIALIZED_OBJECT);
+    return json->string;
+}
+
 struct json_array *
 json_array(const struct json *json)
 {
@@ -362,6 +378,7 @@ json_destroy(struct json *json)
             break;
 
         case JSON_STRING:
+        case JSON_SERIALIZED_OBJECT:
             free(json->string);
             break;
 
@@ -421,6 +438,9 @@ json_deep_clone(const struct json *json)
 
     case JSON_STRING:
         return json_string_create(json->string);
+
+    case JSON_SERIALIZED_OBJECT:
+        return json_serialized_object_create(json);
 
     case JSON_NULL:
     case JSON_FALSE:
@@ -521,6 +541,7 @@ json_hash(const struct json *json, size_t basis)
         return json_hash_array(&json->array, basis);
 
     case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
         return hash_string(json->string, basis);
 
     case JSON_NULL:
@@ -596,6 +617,7 @@ json_equal(const struct json *a, const struct json *b)
         return json_equal_array(&a->array, &b->array);
 
     case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
         return !strcmp(a->string, b->string);
 
     case JSON_NULL:
@@ -1070,6 +1092,14 @@ json_from_string(const char *string)
     struct json_parser *p = json_parser_create(JSPF_TRAILER);
     json_parser_feed(p, string, strlen(string));
     return json_parser_finish(p);
+}
+
+/* Parses data of JSON_SERIALIZED_OBJECT to the real JSON. */
+struct json *
+json_from_serialized_object(const struct json *json)
+{
+    ovs_assert(json->type == JSON_SERIALIZED_OBJECT);
+    return json_from_string(json->string);
 }
 
 /* Reads the file named 'file_name', parses its contents as a JSON object or
@@ -1561,6 +1591,10 @@ json_serialize(const struct json *json, struct json_serializer *s)
 
     case JSON_STRING:
         json_serialize_string(json->string, ds);
+        break;
+
+    case JSON_SERIALIZED_OBJECT:
+        ds_put_cstr(ds, json->string);
         break;
 
     case JSON_N_TYPES:
