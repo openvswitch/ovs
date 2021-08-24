@@ -268,9 +268,7 @@ ovsdb_storage_read(struct ovsdb_storage *storage,
     struct json *schema_json = NULL;
     struct json *txn_json = NULL;
     if (storage->raft) {
-        bool is_snapshot;
-        json = json_nullable_clone(
-            raft_next_entry(storage->raft, txnid, &is_snapshot));
+        json = raft_next_entry(storage->raft, txnid);
         if (!json) {
             return NULL;
         } else if (json->type != JSON_ARRAY || json->array.n != 2) {

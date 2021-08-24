@@ -494,11 +494,11 @@ raft_create_cluster(const char *file_name, const char *name,
         .snap_index = index++,
         .snap = {
             .term = term,
-            .data = json_nullable_clone(data),
             .eid = uuid_random(),
             .servers = json_object_create(),
         },
     };
+    raft_entry_set_parsed_data(&h.snap, data);
     shash_add_nocopy(json_object(h.snap.servers),
                      xasprintf(UUID_FMT, UUID_ARGS(&h.sid)),
                      json_string_create(local_address));
@@ -727,10 +727,10 @@ raft_add_entry(struct raft *raft,
     uint64_t index = raft->log_end++;
     struct raft_entry *entry = &raft->entries[index - raft->log_start];
     entry->term = term;
-    entry->data = data;
     entry->eid = eid ? *eid : UUID_ZERO;
     entry->servers = servers;
     entry->election_timer = election_timer;
+    raft_entry_set_parsed_data_nocopy(entry, data);
     return index;
 }
 
@@ -741,13 +741,16 @@ raft_write_entry(struct raft *raft, uint64_t term, struct json *data,
                  const struct uuid *eid, struct json *servers,
                  uint64_t election_timer)
 {
+    uint64_t index = raft_add_entry(raft, term, data, eid, servers,
+                                    election_timer);
+    const struct json *entry_data = raft_entry_get_serialized_data(
+                                      &raft->entries[index - raft->log_start]);
     struct raft_record r = {
         .type = RAFT_REC_ENTRY,
         .term = term,
         .entry = {
-            .index = raft_add_entry(raft, term, data, eid, servers,
-                                    election_timer),
-            .data = data,
+            .index = index,
+            .data = CONST_CAST(struct json *, entry_data),
             .servers = servers,
             .election_timer = election_timer,
             .eid = eid ? *eid : UUID_ZERO,
@@ -2161,7 +2164,7 @@ raft_get_eid(const struct raft *raft, uint64_t index)
 {
     for (; index >= raft->log_start; index--) {
         const struct raft_entry *e = raft_get_entry(raft, index);
-        if (e->data) {
+        if (raft_entry_has_data(e)) {
             return &e->eid;
         }
     }
@@ -2826,8 +2829,8 @@ raft_truncate(struct raft *raft, uint64_t new_end)
     return servers_changed;
 }
 
-static const struct json *
-raft_peek_next_entry(struct raft *raft, struct uuid *eid)
+static const struct raft_entry *
+raft_peek_next_entry(struct raft *raft)
 {
     /* Invariant: log_start - 2 <= last_applied <= commit_index < log_end. */
     ovs_assert(raft->log_start <= raft->last_applied + 2);
@@ -2839,30 +2842,18 @@ raft_peek_next_entry(struct raft *raft, struct uuid *eid)
     }
 
     if (raft->log_start == raft->last_applied + 2) {
-        *eid = raft->snap.eid;
-        return raft->snap.data;
+        return &raft->snap;
     }
 
     while (raft->last_applied < raft->commit_index) {
         const struct raft_entry *e = raft_get_entry(raft,
                                                     raft->last_applied + 1);
-        if (e->data) {
-            *eid = e->eid;
-            return e->data;
+        if (raft_entry_has_data(e)) {
+            return e;
         }
         raft->last_applied++;
     }
     return NULL;
-}
-
-static const struct json *
-raft_get_next_entry(struct raft *raft, struct uuid *eid)
-{
-    const struct json *data = raft_peek_next_entry(raft, eid);
-    if (data) {
-        raft->last_applied++;
-    }
-    return data;
 }
 
 /* Updates commit index in raft log. If commit index is already up-to-date
@@ -2878,7 +2869,7 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         while (raft->commit_index < new_commit_index) {
             uint64_t index = ++raft->commit_index;
             const struct raft_entry *e = raft_get_entry(raft, index);
-            if (e->data) {
+            if (raft_entry_has_data(e)) {
                 struct raft_command *cmd
                     = raft_find_command_by_eid(raft, &e->eid);
                 if (cmd) {
@@ -3059,7 +3050,9 @@ raft_handle_append_entries(struct raft *raft,
     for (; i < n_entries; i++) {
         const struct raft_entry *e = &entries[i];
         error = raft_write_entry(raft, e->term,
-                                 json_nullable_clone(e->data), &e->eid,
+                                 json_nullable_clone(
+                                    raft_entry_get_parsed_data(e)),
+                                 &e->eid,
                                  json_nullable_clone(e->servers),
                                  e->election_timer);
         if (error) {
@@ -3314,20 +3307,29 @@ bool
 raft_has_next_entry(const struct raft *raft_)
 {
     struct raft *raft = CONST_CAST(struct raft *, raft_);
-    struct uuid eid;
-    return raft_peek_next_entry(raft, &eid) != NULL;
+    return raft_peek_next_entry(raft) != NULL;
 }
 
 /* Returns the next log entry or snapshot from 'raft', or NULL if there are
- * none left to read.  Stores the entry ID of the log entry in '*eid'.  Stores
- * true in '*is_snapshot' if the returned data is a snapshot, false if it is a
- * log entry. */
-const struct json *
-raft_next_entry(struct raft *raft, struct uuid *eid, bool *is_snapshot)
+ * none left to read.  Stores the entry ID of the log entry in '*eid'.
+ *
+ * The caller takes ownership of the result. */
+struct json * OVS_WARN_UNUSED_RESULT
+raft_next_entry(struct raft *raft, struct uuid *eid)
 {
-    const struct json *data = raft_get_next_entry(raft, eid);
-    *is_snapshot = data == raft->snap.data;
-    return data;
+    const struct raft_entry *e = raft_peek_next_entry(raft);
+
+    if (!e) {
+        return NULL;
+    }
+
+    raft->last_applied++;
+    *eid = e->eid;
+
+    /* DB will only read each entry once, so we don't need to store the fully
+     * parsed json object any longer.  The serialized version is sufficient
+     * for sending to other cluster members or writing to the log. */
+    return raft_entry_steal_parsed_data(CONST_CAST(struct raft_entry *, e));
 }
 
 /* Returns the log index of the last-read snapshot or log entry. */
@@ -3420,6 +3422,7 @@ raft_send_install_snapshot_request(struct raft *raft,
                                    const struct raft_server *s,
                                    const char *comment)
 {
+    const struct json *data = raft_entry_get_serialized_data(&raft->snap);
     union raft_rpc rpc = {
         .install_snapshot_request = {
             .common = {
@@ -3432,7 +3435,7 @@ raft_send_install_snapshot_request(struct raft *raft,
             .last_term = raft->snap.term,
             .last_servers = raft->snap.servers,
             .last_eid = raft->snap.eid,
-            .data = raft->snap.data,
+            .data = CONST_CAST(struct json *, data),
             .election_timer = raft->election_timer, /* use latest value */
         }
     };
@@ -3980,6 +3983,10 @@ raft_write_snapshot(struct raft *raft, struct ovsdb_log *log,
                     uint64_t new_log_start,
                     const struct raft_entry *new_snapshot)
 {
+    /* Ensure that new snapshot contains serialized data object, so it will
+     * not be allocated while serializing the on-stack raft header object. */
+    ovs_assert(raft_entry_get_serialized_data(new_snapshot));
+
     struct raft_header h = {
         .sid = raft->sid,
         .cid = raft->cid,
@@ -3998,12 +4005,13 @@ raft_write_snapshot(struct raft *raft, struct ovsdb_log *log,
     /* Write log records. */
     for (uint64_t index = new_log_start; index < raft->log_end; index++) {
         const struct raft_entry *e = &raft->entries[index - raft->log_start];
+        const struct json *log_data = raft_entry_get_serialized_data(e);
         struct raft_record r = {
             .type = RAFT_REC_ENTRY,
             .term = e->term,
             .entry = {
                 .index = index,
-                .data = e->data,
+                .data = CONST_CAST(struct json *, log_data),
                 .servers = e->servers,
                 .election_timer = e->election_timer,
                 .eid = e->eid,
@@ -4093,19 +4101,21 @@ raft_handle_install_snapshot_request__(
 
     /* Case 3: The new snapshot starts past the end of our current log, so
      * discard all of our current log. */
-    const struct raft_entry new_snapshot = {
+    struct raft_entry new_snapshot = {
         .term = rq->last_term,
-        .data = rq->data,
         .eid = rq->last_eid,
-        .servers = rq->last_servers,
+        .servers = json_clone(rq->last_servers),
         .election_timer = rq->election_timer,
     };
+    raft_entry_set_parsed_data(&new_snapshot, rq->data);
+
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
     if (error) {
         char *error_s = ovsdb_error_to_string_free(error);
         VLOG_WARN("could not save snapshot: %s", error_s);
         free(error_s);
+        raft_entry_uninit(&new_snapshot);
         return false;
     }
 
@@ -4120,7 +4130,7 @@ raft_handle_install_snapshot_request__(
     }
 
     raft_entry_uninit(&raft->snap);
-    raft_entry_clone(&raft->snap, &new_snapshot);
+    raft->snap = new_snapshot;
 
     raft_get_servers_from_log(raft, VLL_INFO);
     raft_get_election_timer_from_log(raft);
@@ -4265,11 +4275,12 @@ raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
     uint64_t new_log_start = raft->last_applied + 1;
     struct raft_entry new_snapshot = {
         .term = raft_get_term(raft, new_log_start - 1),
-        .data = json_clone(new_snapshot_data),
         .eid = *raft_get_eid(raft, new_log_start - 1),
         .servers = json_clone(raft_servers_for_index(raft, new_log_start - 1)),
         .election_timer = raft->election_timer,
     };
+    raft_entry_set_parsed_data(&new_snapshot, new_snapshot_data);
+
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
     if (error) {
@@ -4286,6 +4297,9 @@ raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
     memmove(&raft->entries[0], &raft->entries[new_log_start - raft->log_start],
             (raft->log_end - new_log_start) * sizeof *raft->entries);
     raft->log_start = new_log_start;
+    /* It's a snapshot of the current database state, ovsdb-server will not
+     * read it back.  Destroying the parsed json object to not waste memory. */
+    json_destroy(raft_entry_steal_parsed_data(&raft->snap));
     return NULL;
 }
 

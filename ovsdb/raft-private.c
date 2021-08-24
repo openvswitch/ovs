@@ -18,11 +18,14 @@
 
 #include "raft-private.h"
 
+#include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "socket-util.h"
 #include "sset.h"
+
+COVERAGE_DEFINE(raft_entry_serialize);
 
 /* Addresses of Raft servers. */
 
@@ -281,7 +284,8 @@ void
 raft_entry_clone(struct raft_entry *dst, const struct raft_entry *src)
 {
     dst->term = src->term;
-    dst->data = json_nullable_clone(src->data);
+    dst->data.full_json = json_nullable_clone(src->data.full_json);
+    dst->data.serialized = json_nullable_clone(src->data.serialized);
     dst->eid = src->eid;
     dst->servers = json_nullable_clone(src->servers);
     dst->election_timer = src->election_timer;
@@ -291,7 +295,8 @@ void
 raft_entry_uninit(struct raft_entry *e)
 {
     if (e) {
-        json_destroy(e->data);
+        json_destroy(e->data.full_json);
+        json_destroy(e->data.serialized);
         json_destroy(e->servers);
     }
 }
@@ -301,8 +306,9 @@ raft_entry_to_json(const struct raft_entry *e)
 {
     struct json *json = json_object_create();
     raft_put_uint64(json, "term", e->term);
-    if (e->data) {
-        json_object_put(json, "data", json_clone(e->data));
+    if (raft_entry_has_data(e)) {
+        json_object_put(json, "data",
+                        json_clone(raft_entry_get_serialized_data(e)));
         json_object_put_format(json, "eid", UUID_FMT, UUID_ARGS(&e->eid));
     }
     if (e->servers) {
@@ -323,9 +329,10 @@ raft_entry_from_json(struct json *json, struct raft_entry *e)
     struct ovsdb_parser p;
     ovsdb_parser_init(&p, json, "raft log entry");
     e->term = raft_parse_required_uint64(&p, "term");
-    e->data = json_nullable_clone(
+    raft_entry_set_parsed_data(e,
         ovsdb_parser_member(&p, "data", OP_OBJECT | OP_ARRAY | OP_OPTIONAL));
-    e->eid = e->data ? raft_parse_required_uuid(&p, "eid") : UUID_ZERO;
+    e->eid = raft_entry_has_data(e)
+             ? raft_parse_required_uuid(&p, "eid") : UUID_ZERO;
     e->servers = json_nullable_clone(
         ovsdb_parser_member(&p, "servers", OP_OBJECT | OP_OPTIONAL));
     if (e->servers) {
@@ -344,9 +351,72 @@ bool
 raft_entry_equals(const struct raft_entry *a, const struct raft_entry *b)
 {
     return (a->term == b->term
-            && json_equal(a->data, b->data)
             && uuid_equals(&a->eid, &b->eid)
-            && json_equal(a->servers, b->servers));
+            && json_equal(a->servers, b->servers)
+            && json_equal(raft_entry_get_parsed_data(a),
+                          raft_entry_get_parsed_data(b)));
+}
+
+bool
+raft_entry_has_data(const struct raft_entry *e)
+{
+    return e->data.full_json || e->data.serialized;
+}
+
+static void
+raft_entry_data_serialize(struct raft_entry *e)
+{
+    if (!raft_entry_has_data(e) || e->data.serialized) {
+        return;
+    }
+    COVERAGE_INC(raft_entry_serialize);
+    e->data.serialized = json_serialized_object_create(e->data.full_json);
+}
+
+void
+raft_entry_set_parsed_data_nocopy(struct raft_entry *e, struct json *json)
+{
+    ovs_assert(!json || json->type != JSON_SERIALIZED_OBJECT);
+    e->data.full_json = json;
+    e->data.serialized = NULL;
+}
+
+void
+raft_entry_set_parsed_data(struct raft_entry *e, const struct json *json)
+{
+    raft_entry_set_parsed_data_nocopy(e, json_nullable_clone(json));
+}
+
+/* Returns a pointer to the fully parsed json object of the data.
+ * Caller takes the ownership of the result.
+ *
+ * Entry will no longer contain a fully parsed json object.
+ * Subsequent calls for the same raft entry will return NULL. */
+struct json * OVS_WARN_UNUSED_RESULT
+raft_entry_steal_parsed_data(struct raft_entry *e)
+{
+    /* Ensure that serialized version exists. */
+    raft_entry_data_serialize(e);
+
+    struct json *json = e->data.full_json;
+    e->data.full_json = NULL;
+
+    return json;
+}
+
+/* Returns a pointer to the fully parsed json object of the data, if any. */
+const struct json *
+raft_entry_get_parsed_data(const struct raft_entry *e)
+{
+    return e->data.full_json;
+}
+
+/* Returns a pointer to the JSON_SERIALIZED_OBJECT of the data. */
+const struct json *
+raft_entry_get_serialized_data(const struct raft_entry *e)
+{
+    raft_entry_data_serialize(CONST_CAST(struct raft_entry *, e));
+    return e->data.serialized;
 }
 
 void
@@ -402,8 +472,8 @@ raft_header_from_json__(struct raft_header *h, struct ovsdb_parser *p)
          * present, all of them must be. */
         h->snap_index = raft_parse_optional_uint64(p, "prev_index");
         if (h->snap_index) {
-            h->snap.data = json_nullable_clone(
-                ovsdb_parser_member(p, "prev_data", OP_ANY));
+            raft_entry_set_parsed_data(
+                &h->snap, ovsdb_parser_member(p, "prev_data", OP_ANY));
             h->snap.eid = raft_parse_required_uuid(p, "prev_eid");
             h->snap.term = raft_parse_required_uint64(p, "prev_term");
             h->snap.election_timer = raft_parse_optional_uint64(
@@ -455,8 +525,9 @@ raft_header_to_json(const struct raft_header *h)
     if (h->snap_index) {
         raft_put_uint64(json, "prev_index", h->snap_index);
         raft_put_uint64(json, "prev_term", h->snap.term);
-        if (h->snap.data) {
-            json_object_put(json, "prev_data", json_clone(h->snap.data));
+        if (raft_entry_has_data(&h->snap)) {
+            json_object_put(json, "prev_data",
+                json_clone(raft_entry_get_serialized_data(&h->snap)));
         }
         json_object_put_format(json, "prev_eid",
                                UUID_FMT, UUID_ARGS(&h->snap.eid));
