@@ -94,7 +94,7 @@ __inline long sysconf(int type)
 static __inline int
 rpl_isatty(int fd)
 {
-    HANDLE h = (HANDLE) _get_osfhandle(fd);
+    HANDLE h = (HANDLE)(INT_PTR) _get_osfhandle(fd);
     DWORD st;
     return (_isatty(STDOUT_FILENO)
             && h != INVALID_HANDLE_VALUE
