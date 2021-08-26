@@ -3268,6 +3268,86 @@ do_idl_compound_index(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+static void
+do_idl_table_column_check(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int error;
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    ovsdb_idl_omit(idl, &idltest_link1_col_i);
+    ovsdb_idl_omit(idl, &idltest_simple7_col_id);
+    ovsdb_idl_set_leader_only(idl, false);
+    struct stream *stream;
+
+    error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                              DSCP_DEFAULT), -1, &stream);
+    if (error) {
+        ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+    }
+    rpc = jsonrpc_open(stream);
+
+    for (int r = 1; r <= 2; r++) {
+        ovsdb_idl_set_remote(idl, ctx->argv[r], true);
+        ovsdb_idl_force_reconnect(idl);
+
+        /* Wait for update. */
+        for (;;) {
+            ovsdb_idl_run(idl);
+            ovsdb_idl_check_consistency(idl);
+            if (ovsdb_idl_get_seqno(idl) != seqno) {
+                break;
+            }
+            jsonrpc_run(rpc);
+
+            ovsdb_idl_wait(idl);
+            jsonrpc_wait(rpc);
+            poll_block();
+        }
+
+        seqno = ovsdb_idl_get_seqno(idl);
+
+        bool has_table = idltest_server_has_simple_table(idl);
+        printf("%s remote %s table simple\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_link1_table(idl);
+        printf("%s remote %s table link1\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_link2_table(idl);
+        printf("%s remote %s table link2\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_simple5_table(idl);
+        printf("%s remote %s table simple5\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        bool has_col = idltest_server_has_simple5_table_col_irefmap(idl);
+        printf("%s remote %s col irefmap in table simple5\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_link1_table_col_l2(idl);
+        printf("%s remote %s col l2 in table link1\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_link1_table_col_i(idl);
+        printf("%s remote %s col i in table link1\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_simple7_table_col_id(idl);
+        printf("%s remote %s col id in table simple7\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        printf("--- remote %s done ---\n", ctx->argv[r]);
+    }
+
+    jsonrpc_close(rpc);
+    ovsdb_idl_destroy(idl);
+}
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io, OVS_RO },
     { "default-atoms", NULL, 0, 0, do_default_atoms, OVS_RO },
@@ -3306,6 +3386,8 @@ static struct ovs_cmdl_command all_commands[] = {
         do_idl_partial_update_map_column, OVS_RO },
     { "idl-partial-update-set-column", NULL, 1, INT_MAX,
         do_idl_partial_update_set_column, OVS_RO },
+    { "idl-table-column-check", NULL, 2, 2,
+        do_idl_table_column_check, OVS_RO },
     { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };

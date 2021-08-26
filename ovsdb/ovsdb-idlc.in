@@ -236,7 +236,13 @@ extern "C" {
 
         print("\nextern struct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (structName, structName.upper()))
 
+        for columnName in table.columns:
+            print("bool %(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *); " % {
+                'p': prefix, 't': tableName.lower(),
+                'c': columnName})
+
         print('''
+bool %(p)sserver_has_%(t)s_table(const struct ovsdb_idl *);
 const struct %(s)s_table *%(s)s_table_get(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
 
@@ -349,7 +355,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
  * used to test if an uncommitted row that has been added locally has been
  * updated or it may given unexpected results. */
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
-''' % {'s': structName, 'S': structName.upper()})
+''' % {'s': structName, 'S': structName.upper(), 't': tableName.lower(), 'p': prefix})
 
         for columnName, column in sorted_columns(table):
             if column.extensions.get('synthetic'):
@@ -488,6 +494,26 @@ static struct %(s)s *
         structName = "%s%s" % (prefix, tableName.lower())
         print("")
         print("/* %s table. */" % (tableName))
+
+        for columnName in table.columns:
+            print('''
+bool
+%(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_server_has_column(idl, &%(s)s_col_%(c)s);
+}
+''' % {'s': structName, 'p': prefix, 't': tableName.lower(),
+       'P': prefix.upper(), 'T': tableName.upper(),
+       'c': columnName})
+
+        print('''
+bool
+%(p)sserver_has_%(t)s_table(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_server_has_table(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+}
+''' % {'s': structName, 'p': prefix, 't': tableName.lower(),
+       'P': prefix.upper(), 'T': tableName.upper()})
 
         print('''
 const struct %(s)s_table *

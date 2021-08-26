@@ -210,6 +210,15 @@
       },
       "isRoot": true
     },
+    "simple7" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        },
+        "id": {"type": "string"}
+      },
+      "isRoot" : true
+    },
     "singleton" : {
       "columns" : {
         "name" : {

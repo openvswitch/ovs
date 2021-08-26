@@ -94,6 +94,10 @@ void ovsdb_idl_check_consistency(const struct ovsdb_idl *);
 const struct ovsdb_idl_class *ovsdb_idl_get_class(const struct ovsdb_idl *);
 const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
     const struct ovsdb_idl_class *, const struct ovsdb_idl_column *);
+bool ovsdb_idl_server_has_table(const struct ovsdb_idl *,
+                                const struct ovsdb_idl_table_class *);
+bool ovsdb_idl_server_has_column(const struct ovsdb_idl *,
+                                 const struct ovsdb_idl_column *);
 
 /* Choosing columns and tables to replicate.
  *

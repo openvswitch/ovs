@@ -999,6 +999,7 @@ test-ovsdb|ovsdb_idl|idltest database lacks simple5 table (database needs upgrad
 test-ovsdb|ovsdb_idl|idltest database lacks simple6 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks singleton table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
+test-ovsdb|ovsdb_idl|simple7 table in idltest database lacks id column (database needs upgrade?)
 ])
 
 # Check that ovsdb-idl sent on "monitor" request and that it didn't
@@ -2372,3 +2373,41 @@ OVSDB_CHECK_CLUSTER_IDL([simple idl, initially empty, force reconnect],
 [],
 [],
 reconnect.*waiting .* seconds before reconnect)
+
+AT_SETUP([idl table and column presence check])
+AT_KEYWORDS([ovsdb server idl table column check])
+AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest2.ovsschema"])
+
+AT_CHECK(ovsdb-tool create db2 $abs_srcdir/idltest.ovsschema)
+AT_CHECK(ovsdb-server -vconsole:warn --log-file=ovsdb-server2.log --detach dnl
+           --no-chdir --pidfile=ovsdb-server2.pid --remote=punix:socket2 db2)
+on_exit 'kill `cat ovsdb-server2.pid`'
+
+dnl In this test, test-ovsdb first connects to the server with schema
+dnl idltest2.ovsschema and outputs the presence of tables and columns.
+dnl And then it connectes to the server with the schema idltest.ovsschema
+dnl and does the same.
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 dnl
+                 idl-table-column-check unix:socket unix:socket2], [0], [dnl
+unix:socket remote has table simple
+unix:socket remote has table link1
+unix:socket remote doesn't have table link2
+unix:socket remote doesn't have table simple5
+unix:socket remote doesn't have col irefmap in table simple5
+unix:socket remote doesn't have col l2 in table link1
+unix:socket remote has col i in table link1
+unix:socket remote doesn't have col id in table simple7
+--- remote unix:socket done ---
+unix:socket2 remote has table simple
+unix:socket2 remote has table link1
+unix:socket2 remote has table link2
+unix:socket2 remote has table simple5
+unix:socket2 remote has col irefmap in table simple5
+unix:socket2 remote has col l2 in table link1
+unix:socket2 remote has col i in table link1
+unix:socket2 remote has col id in table simple7
+--- remote unix:socket2 done ---
+], [stderr])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
