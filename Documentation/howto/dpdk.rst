@@ -145,8 +145,8 @@ Transmit traffic into either port. You should see it returned via the other.
 PHY-VM-PHY (vHost Loopback)
 ---------------------------
 
-Add a userspace bridge, two ``dpdk`` (PHY) ports, and two ``dpdkvhostuser``
-ports::
+Add a userspace bridge, two ``dpdk`` (PHY) ports, and two
+``dpdkvhostuserclient`` ports::
 
     # Add userspace bridge
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
@@ -158,11 +158,13 @@ ports::
     $ ovs-vsctl add-port br0 phy1 -- set Interface phy1 type=dpdk
           options:dpdk-devargs=0000:01:00.1 ofport_request=2
 
-    # Add two dpdkvhostuser ports
-    $ ovs-vsctl add-port br0 dpdkvhostuser0 \
-        -- set Interface dpdkvhostuser0 type=dpdkvhostuser ofport_request=3
-    $ ovs-vsctl add-port br0 dpdkvhostuser1 \
-        -- set Interface dpdkvhostuser1 type=dpdkvhostuser ofport_request=4
+    # Add two dpdkvhostuserclient ports
+    $ ovs-vsctl add-port br0 dpdkvhostclient0 \
+        -- set Interface dpdkvhostclient0 type=dpdkvhostuserclient \
+           options:vhost-server-path=/tmp/dpdkvhostclient0 ofport_request=3
+    $ ovs-vsctl add-port br0 dpdkvhostclient1 \
+        -- set Interface dpdkvhostclient1 type=dpdkvhostuserclient \
+           options:vhost-server-path=/tmp/dpdkvhostclient1 ofport_request=4
 
 Add test flows to forward packets between DPDK devices and VM ports::
 
@@ -198,16 +200,16 @@ You can do this directly with QEMU via the ``qemu-system-x86_64`` application::
     $ export VM_NAME=vhost-vm
     $ export GUEST_MEM=3072M
     $ export QCOW2_IMAGE=/root/CentOS7_x86_64.qcow2
-    $ export VHOST_SOCK_DIR=/usr/local/var/run/openvswitch
+    $ export VHOST_SOCK_DIR=/tmp
 
     $ taskset 0x20 qemu-system-x86_64 -name $VM_NAME -cpu host -enable-kvm \
       -m $GUEST_MEM -drive file=$QCOW2_IMAGE --nographic -snapshot \
       -numa node,memdev=mem -mem-prealloc -smp sockets=1,cores=2 \
       -object memory-backend-file,id=mem,size=$GUEST_MEM,mem-path=/dev/hugepages,share=on \
-      -chardev socket,id=char0,path=$VHOST_SOCK_DIR/dpdkvhostuser0 \
+      -chardev socket,id=char0,path=$VHOST_SOCK_DIR/dpdkvhostclient0,server \
       -netdev type=vhost-user,id=mynet1,chardev=char0,vhostforce \
       -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mrg_rxbuf=off \
-      -chardev socket,id=char1,path=$VHOST_SOCK_DIR/dpdkvhostuser1 \
+      -chardev socket,id=char1,path=$VHOST_SOCK_DIR/dpdkvhostclient1,server \
       -netdev type=vhost-user,id=mynet2,chardev=char1,vhostforce \
       -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mrg_rxbuf=off
 
@@ -236,7 +238,7 @@ When you finish testing, bind the vNICs back to kernel::
 
       $ $DPDK_DIR/usertools/dpdk-devbind.py --status
 
-More information on the dpdkvhostuser ports can be found in
+More information on the dpdkvhostuserclient ports can be found in
 :doc:`/topics/dpdk/vhost-user`.
 
 PHY-VM-PHY (vHost Loopback) (Kernel Forwarding)
@@ -308,15 +310,15 @@ devices to bridge ``br0``. Once complete, follow the below steps:
        $ export VM_NAME=vhost-vm
        $ export GUEST_MEM=4096M
        $ export QCOW2_IMAGE=/root/Fedora22_x86_64.qcow2
-       $ export VHOST_SOCK_DIR=/usr/local/var/run/openvswitch
+       $ export VHOST_SOCK_DIR=/tmp
        $ taskset 0x30 qemu-system-x86_64 -cpu host -smp 2,cores=2 -m 4096M \
            -drive file=$QCOW2_IMAGE --enable-kvm -name $VM_NAME \
            -nographic -numa node,memdev=mem -mem-prealloc \
            -object memory-backend-file,id=mem,size=$GUEST_MEM,mem-path=/dev/hugepages,share=on \
-           -chardev socket,id=char1,path=$VHOST_SOCK_DIR/dpdkvhostuser0 \
+           -chardev socket,id=char1,path=$VHOST_SOCK_DIR/dpdkvhostclient0,server \
            -netdev type=vhost-user,id=mynet1,chardev=char1,vhostforce,queues=2 \
            -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mq=on,vectors=6 \
-           -chardev socket,id=char2,path=$VHOST_SOCK_DIR/dpdkvhostuser1 \
+           -chardev socket,id=char2,path=$VHOST_SOCK_DIR/dpdkvhostclient1,server \
            -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce,queues=2 \
            -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=6
 

@@ -98,7 +98,8 @@ Perform the following configuration on `host1`:
    accordingly, using ``vm_port0`` as the interface name::
 
        $ ovs-vsctl add-port br-int vm_port0 \
-           -- set Interface vm_port0 type=dpdkvhostuser
+         -- set Interface vm_port0 type=dpdkvhostuserclient \
+            options:vhost-server-path=/tmp/vm_port0
 
 #. Configure the IP address of the VM interface *in the VM itself*::
 

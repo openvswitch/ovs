@@ -404,14 +404,15 @@ Create a vhost-user port from OVS::
   ovs-vsctl -- add-br br0 -- set Bridge br0 datapath_type=netdev \
     other_config:pmd-cpu-mask=0xfff
   ovs-vsctl add-port br0 vhost-user-1 \
-    -- set Interface vhost-user-1 type=dpdkvhostuser
+    -- set Interface vhost-user-1 type=dpdkvhostuserclient \
+        options:vhost-server-path=/tmp/vhost-user-1
 
 Start VM using vhost-user mode::
 
   qemu-system-x86_64 -hda ubuntu1810.qcow \
    -m 4096 \
    -cpu host,+x2apic -enable-kvm \
-   -chardev socket,id=char1,path=/usr/local/var/run/openvswitch/vhost-user-1 \
+   -chardev socket,id=char1,path=/tmp/vhost-user-1,server \
    -netdev type=vhost-user,id=mynet1,chardev=char1,vhostforce,queues=4 \
    -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mq=on,vectors=10 \
    -object memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,share=on \
