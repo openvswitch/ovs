@@ -256,5 +256,7 @@ AT_CHECK([ovstest test-stopwatch], [0], [......
 AT_CLEANUP
 
 AT_SETUP([netlink policy])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_SKIP_IF([test "$IS_BSD" = "yes"])
 AT_CHECK([ovstest test-netlink-policy ll_addr], [0])
 AT_CLEANUP
