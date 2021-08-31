@@ -2937,7 +2937,7 @@ odp_nsh_key_from_attr__(const struct nlattr *attr, bool is_mask,
             const struct ovs_nsh_key_md1 *md1 = nl_attr_get(a);
             has_md1 = true;
             memcpy(nsh->context, md1->context, sizeof md1->context);
-            if (len == 2 * sizeof(*md1)) {
+            if (nsh_mask && (len == 2 * sizeof *md1)) {
                 const struct ovs_nsh_key_md1 *md1_mask = md1 + 1;
                 memcpy(nsh_mask->context, md1_mask->context,
                        sizeof(*md1_mask));
