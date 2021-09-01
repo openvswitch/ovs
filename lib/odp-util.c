@@ -4507,7 +4507,7 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
             }
             ds_put_char(ds, ')');
         }
-        if (!has_ethtype_key) {
+        if (!has_ethtype_key && mask) {
             const struct nlattr *ma = nl_attr_find__(mask, mask_len,
                                                      OVS_KEY_ATTR_ETHERTYPE);
             if (ma) {
