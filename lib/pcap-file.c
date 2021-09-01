@@ -89,6 +89,7 @@ ovs_pcap_open(const char *file_name, const char *mode)
                    : mode[0] == 'w' ? "writing"
                    : "appending"),
                   ovs_strerror(errno));
+        free(p_file);
         return NULL;
     }
 
