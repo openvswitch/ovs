@@ -672,8 +672,13 @@ out:
 void
 bond_member_set_may_enable(struct bond *bond, void *member_, bool may_enable)
 {
+    struct bond_member *member;
+
     ovs_rwlock_wrlock(&rwlock);
-    bond_member_lookup(bond, member_)->may_enable = may_enable;
+    member = bond_member_lookup(bond, member_);
+    if (member) {
+        member->may_enable = may_enable;
+    }
     ovs_rwlock_unlock(&rwlock);
 }
 
