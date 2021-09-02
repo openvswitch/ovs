@@ -1505,6 +1505,11 @@ class Transaction(object):
         if self != self.idl.txn:
             return self._status
 
+        if self.idl.state != Idl.IDL_S_MONITORING:
+            self._status = Transaction.TRY_AGAIN
+            self.__disassemble()
+            return self._status
+
         # If we need a lock but don't have it, give up quickly.
         if self.idl.lock_name and not self.idl.has_lock:
             self._status = Transaction.NOT_LOCKED
