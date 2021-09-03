@@ -232,6 +232,22 @@ done
 AT_CLEANUP
 
 
+AT_SETUP([checkpatch - catastrophic backtracking])
+dnl Special case this rather than using the above construct because sometimes a
+dnl warning needs to be generated for line lengths (f.e. when the 'while'
+dnl keyword is used).
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (!b_ctx_in->chassis_rec || !b_ctx_in->br_int || !b_ctx_in->ovs_idl_txn)
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         if (!b_ctx_in->chassis_rec || !b_ctx_in->br_int || !b_ctx_in->ovs_idl_txn)
+"
+
+AT_CLEANUP
+
+
 AT_SETUP([checkpatch - parenthesized constructs - for])
 try_checkpatch \
    "COMMON_PATCH_HEADER

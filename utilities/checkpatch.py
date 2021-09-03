@@ -274,9 +274,13 @@ def if_and_for_end_with_bracket_check(line):
         if not balanced_parens(line):
             return True
 
-        if __regex_ends_with_bracket.search(line) is None and \
-           __regex_if_macros.match(line) is None:
-            return False
+        if __regex_ends_with_bracket.search(line) is None:
+            if line.endswith("\\") and \
+               __regex_if_macros.match(line) is not None:
+                return True
+            else:
+                return False
+
     if __regex_conditional_else_bracing.match(line) is not None:
         return False
     if __regex_conditional_else_bracing2.match(line) is not None:
