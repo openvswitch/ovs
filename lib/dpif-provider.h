@@ -635,6 +635,26 @@ struct dpif_class {
      * sufficient to store BOND_BUCKETS number of elements. */
     int (*bond_stats_get)(struct dpif *dpif, uint32_t bond_id,
                           uint64_t *n_bytes);
+
+    /* Cache configuration
+     *
+     * Multiple levels of cache can exist in a given datapath implementation.
+     * An API has been provided to get the number of supported caches, which
+     * can then be used to get/set specific configuration. Cache level is 0
+     * indexed, i.e. if 1 level is supported, the level value to use is 0.
+     *
+     * Get the number of cache levels supported. */
+    int (*cache_get_supported_levels)(struct dpif *dpif, uint32_t *levels);
+
+    /* Get the cache name for the given level. */
+    int (*cache_get_name)(struct dpif *dpif, uint32_t level,
+                          const char **name);
+
+    /* Get currently configured cache size. */
+    int (*cache_get_size)(struct dpif *dpif, uint32_t level, uint32_t *size);
+
+    /* Set cache size. */
+    int (*cache_set_size)(struct dpif *dpif, uint32_t level, uint32_t size);
 };
 
 extern const struct dpif_class dpif_netlink_class;

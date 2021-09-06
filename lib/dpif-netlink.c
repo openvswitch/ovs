@@ -100,6 +100,7 @@ struct dpif_netlink_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_ATTR_UPCALL_PID. */
     uint32_t user_features;            /* OVS_DP_ATTR_USER_FEATURES */
+    uint32_t cache_size;               /* OVS_DP_ATTR_MASKS_CACHE_SIZE */
     const struct ovs_dp_stats *stats;  /* OVS_DP_ATTR_STATS. */
     const struct ovs_dp_megaflow_stats *megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
@@ -4298,6 +4299,104 @@ probe_broken_meters(struct dpif *dpif)
     }
     return broken_meters;
 }
+
+
+static int
+dpif_netlink_cache_get_supported_levels(struct dpif *dpif_, uint32_t *levels)
+{
+    struct dpif_netlink_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    /* If available, in the kernel we support one level of cache.
+     * Unfortunately, there is no way to detect if the older kernel module has
+     * the cache feature.  For now, we only report the cache information if the
+     * kernel module reports the OVS_DP_ATTR_MASKS_CACHE_SIZE attribute. */
+
+    *levels = 0;
+    error = dpif_netlink_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+
+        if (dp.cache_size != UINT32_MAX) {
+            *levels = 1;
+        }
+        ofpbuf_delete(buf);
+    }
+
+    return error;
+}
+
+static int
+dpif_netlink_cache_get_name(struct dpif *dpif_ OVS_UNUSED, uint32_t level,
+                            const char **name)
+{
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    *name = "masks-cache";
+    return 0;
+}
+
+static int
+dpif_netlink_cache_get_size(struct dpif *dpif_, uint32_t level, uint32_t *size)
+{
+    struct dpif_netlink_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    error = dpif_netlink_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+
+        ofpbuf_delete(buf);
+
+        if (dp.cache_size == UINT32_MAX) {
+            return EOPNOTSUPP;
+        }
+        *size = dp.cache_size;
+    }
+    return error;
+}
+
+static int
+dpif_netlink_cache_set_size(struct dpif *dpif_, uint32_t level, uint32_t size)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct dpif_netlink_dp request, reply;
+    struct ofpbuf *bufp;
+    int error;
+
+    size = ROUND_UP_POW2(size);
+
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    dpif_netlink_dp_init(&request);
+    request.cmd = OVS_DP_CMD_SET;
+    request.name = dpif_->base_name;
+    request.dp_ifindex = dpif->dp_ifindex;
+    request.cache_size = size;
+    /* We need to set the dpif user_features, as the kernel module assumes the
+     * OVS_DP_ATTR_USER_FEATURES attribute is always present. If not, it will
+     * reset all the features. */
+    request.user_features = dpif->user_features;
+
+    error = dpif_netlink_dp_transact(&request, &reply, &bufp);
+    if (!error) {
+        ofpbuf_delete(bufp);
+        if (reply.cache_size != size) {
+            return EINVAL;
+        }
+    }
+
+    return error;
+}
+
 
 const struct dpif_class dpif_netlink_class = {
     "system",
@@ -4377,6 +4476,10 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* bond_add */
     NULL,                       /* bond_del */
     NULL,                       /* bond_stats_get */
+    dpif_netlink_cache_get_supported_levels,
+    dpif_netlink_cache_get_name,
+    dpif_netlink_cache_get_size,
+    dpif_netlink_cache_set_size,
 };
 
 static int
@@ -4640,6 +4743,9 @@ dpif_netlink_dp_from_ofpbuf(struct dpif_netlink_dp *dp, const struct ofpbuf *buf
         [OVS_DP_ATTR_USER_FEATURES] = {
                         .type = NL_A_U32,
                         .optional = true },
+        [OVS_DP_ATTR_MASKS_CACHE_SIZE] = {
+                        .type = NL_A_U32,
+                        .optional = true },
     };
 
     dpif_netlink_dp_init(dp);
@@ -4670,6 +4776,12 @@ dpif_netlink_dp_from_ofpbuf(struct dpif_netlink_dp *dp, const struct ofpbuf *buf
 
     if (a[OVS_DP_ATTR_USER_FEATURES]) {
         dp->user_features = nl_attr_get_u32(a[OVS_DP_ATTR_USER_FEATURES]);
+    }
+
+    if (a[OVS_DP_ATTR_MASKS_CACHE_SIZE]) {
+        dp->cache_size = nl_attr_get_u32(a[OVS_DP_ATTR_MASKS_CACHE_SIZE]);
+    } else {
+        dp->cache_size = UINT32_MAX;
     }
 
     return 0;
@@ -4705,6 +4817,10 @@ dpif_netlink_dp_to_ofpbuf(const struct dpif_netlink_dp *dp, struct ofpbuf *buf)
                           sizeof *dp->upcall_pids * dp->n_upcall_pids);
     }
 
+    if (dp->cache_size != UINT32_MAX) {
+        nl_msg_put_u32(buf, OVS_DP_ATTR_MASKS_CACHE_SIZE, dp->cache_size);
+    }
+
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
 }
 
@@ -4713,6 +4829,7 @@ static void
 dpif_netlink_dp_init(struct dpif_netlink_dp *dp)
 {
     memset(dp, 0, sizeof *dp);
+    dp->cache_size = UINT32_MAX;
 }
 
 static void

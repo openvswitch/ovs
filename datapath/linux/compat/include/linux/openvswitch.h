@@ -107,7 +107,7 @@ enum ovs_datapath_attr {
 	OVS_DP_ATTR_MEGAFLOW_STATS,	/* struct ovs_dp_megaflow_stats */
 	OVS_DP_ATTR_USER_FEATURES,	/* OVS_DP_F_*  */
 	OVS_DP_ATTR_PAD,
-	OVS_DP_ATTR_PAD2,
+	OVS_DP_ATTR_MASKS_CACHE_SIZE,
 	OVS_DP_ATTR_PER_CPU_PIDS,	/* Netlink PIDS to receive upcalls */
 	__OVS_DP_ATTR_MAX
 };

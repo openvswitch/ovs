@@ -8812,6 +8812,10 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_bond_add,
     dpif_netdev_bond_del,
     dpif_netdev_bond_stats_get,
+    NULL,                       /* cache_get_supported_levels */
+    NULL,                       /* cache_get_name */
+    NULL,                       /* cache_get_size */
+    NULL,                       /* cache_set_size */
 };
 
 static void

@@ -909,6 +909,13 @@ int dpif_bond_stats_get(struct dpif *, uint32_t bond_id, uint64_t *n_bytes);
 bool dpif_supports_lb_output_action(const struct dpif *);
 
 
+/* Cache */
+int dpif_cache_get_supported_levels(struct dpif *dpif, uint32_t *levels);
+int dpif_cache_get_name(struct dpif *dpif, uint32_t level, const char **name);
+int dpif_cache_get_size(struct dpif *dpif, uint32_t level, uint32_t *size);
+int dpif_cache_set_size(struct dpif *dpif, uint32_t level, uint32_t size);
+
+
 /* Miscellaneous. */
 
 void dpif_get_netflow_ids(const struct dpif *,

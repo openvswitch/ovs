@@ -592,6 +592,36 @@ compare_port_nos(const void *a_, const void *b_)
 }
 
 static void
+show_dpif_cache__(struct dpif *dpif, struct dpctl_params *dpctl_p)
+{
+    uint32_t nr_caches;
+    int error = dpif_cache_get_supported_levels(dpif, &nr_caches);
+
+    if (error || nr_caches == 0) {
+        return;
+    }
+
+    dpctl_print(dpctl_p, "  caches:\n");
+    for (int i = 0; i < nr_caches; i++) {
+        const char *name;
+        uint32_t size;
+
+        if (dpif_cache_get_name(dpif, i, &name) ||
+            dpif_cache_get_size(dpif, i, &size)) {
+            continue;
+        }
+        dpctl_print(dpctl_p, "    %s: size:%u\n", name, size);
+    }
+}
+
+static void
+show_dpif_cache(struct dpif *dpif, struct dpctl_params *dpctl_p)
+{
+    dpctl_print(dpctl_p, "%s:\n", dpif_name(dpif));
+    show_dpif_cache__(dpif, dpctl_p);
+}
+
+static void
 show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
 {
     struct dpif_port_dump dump;
@@ -622,6 +652,8 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             }
         }
     }
+
+    show_dpif_cache__(dpif, dpctl_p);
 
     odp_port_t *port_nos = NULL;
     size_t allocated_port_nos = 0, n_port_nos = 0;
@@ -2409,6 +2441,92 @@ dpctl_ct_ipf_get_status(int argc, const char *argv[],
     return error;
 }
 
+static int
+dpctl_cache_get_size(int argc, const char *argv[],
+                     struct dpctl_params *dpctl_p)
+{
+    int error;
+
+    if (argc > 1) {
+        struct dpif *dpif;
+
+        error = parsed_dpif_open(argv[1], false, &dpif);
+        if (!error) {
+            show_dpif_cache(dpif, dpctl_p);
+            dpif_close(dpif);
+        } else {
+            dpctl_error(dpctl_p, error, "Opening datapath %s failed", argv[1]);
+        }
+    } else {
+        error = dps_for_each(dpctl_p, show_dpif_cache);
+    }
+
+    return error;
+}
+
+static int
+dpctl_cache_set_size(int argc, const char *argv[],
+                     struct dpctl_params *dpctl_p)
+{
+    uint32_t nr_caches, size;
+    int i, error = EINVAL;
+    struct dpif *dpif;
+
+    if (argc != 4) {
+        dpctl_error(dpctl_p, error, "Invalid number of arguments");
+        return error;
+    }
+
+    if (!ovs_scan(argv[3], "%"SCNu32, &size)) {
+        dpctl_error(dpctl_p, error, "size is malformed");
+        return error;
+    }
+
+    error = parsed_dpif_open(argv[1], false, &dpif);
+    if (error) {
+            dpctl_error(dpctl_p, error, "Opening datapath %s failed",
+                        argv[1]);
+            return error;
+    }
+
+    error = dpif_cache_get_supported_levels(dpif, &nr_caches);
+    if (error || nr_caches == 0) {
+        dpctl_error(dpctl_p, error, "Setting caches not supported");
+        goto exit;
+    }
+
+    for (i = 0; i < nr_caches; i++) {
+        const char *name;
+
+        if (dpif_cache_get_name(dpif, i, &name)) {
+            continue;
+        }
+        if (!strcmp(argv[2], name)) {
+            break;
+        }
+    }
+
+    if (i == nr_caches) {
+        error = EINVAL;
+        dpctl_error(dpctl_p, error, "Cache name \"%s\" not found on dpif",
+                    argv[2]);
+        goto exit;
+    }
+
+    error = dpif_cache_set_size(dpif, i, size);
+    if (!error) {
+        dpif_cache_get_size(dpif, i, &size);
+        dpctl_print(dpctl_p, "Setting cache size successful, new size %u\n",
+                    size);
+    } else {
+        dpctl_error(dpctl_p, error, "Setting cache size failed");
+    }
+
+exit:
+    dpif_close(dpif);
+    return error;
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -2710,6 +2828,8 @@ static const struct dpctl_command all_commands[] = {
       0, 4, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
       dpctl_flush_conntrack, DP_RW },
+    { "cache-get-size", "[dp]", 0, 1, dpctl_cache_get_size, DP_RO },
+    { "cache-set-size", "dp cache <size>", 3, 3, dpctl_cache_set_size, DP_RW },
     { "ct-stats-show", "[dp] [zone=N]",
       0, 3, dpctl_ct_stats_show, DP_RO },
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },

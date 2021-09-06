@@ -1454,6 +1454,42 @@ AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - configure cache size])
+
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_KERNEL_EXCL(3, 10, 5, 8)
+
+AT_CHECK([ovs-dpctl cache-get-size one-bad-dp], [1], [], [dnl
+ovs-dpctl: Opening datapath one-bad-dp failed (No such device)
+])
+AT_CHECK([ovs-dpctl cache-get-size | grep masks-cache | tr -d [[:blank:]]], [0], [dnl
+masks-cache:size:256
+])
+AT_CHECK([ovs-dpctl cache-set-size one-bad-dp masks-cache 0], [1], [], [dnl
+ovs-dpctl: Opening datapath one-bad-dp failed (No such device)
+])
+AT_CHECK([ovs-dpctl cache-set-size system@ovs-system dummy-cache 0], [1], [], [dnl
+ovs-dpctl: Cache name "dummy-cache" not found on dpif (Invalid argument)
+])
+AT_CHECK([ovs-dpctl cache-set-size system@ovs-system masks-cache 80000], [1], [], [dnl
+ovs-dpctl: Setting cache size failed (Numerical result out of range)
+])
+AT_CHECK([ovs-dpctl cache-set-size system@ovs-system masks-cache 0], [0], [dnl
+Setting cache size successful, new size 0
+])
+AT_CHECK([ovs-dpctl cache-get-size | grep masks-cache | tr -d [[:blank:]]], [0], [dnl
+masks-cache:size:0
+])
+AT_CHECK([ovs-dpctl cache-set-size system@ovs-system masks-cache 256], [0], [dnl
+Setting cache size successful, new size 256
+])
+AT_CHECK([ovs-dpctl cache-get-size | grep masks-cache | tr -d [[:blank:]]], [0], [dnl
+masks-cache:size:256
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conntrack])
 
 AT_SETUP([conntrack - controller])
