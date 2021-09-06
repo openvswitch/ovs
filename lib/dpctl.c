@@ -611,6 +611,15 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             dpctl_print(dpctl_p, "  masks: hit:%"PRIu64" total:%"PRIu32
                                  " hit/pkt:%.2f\n",
                         stats.n_mask_hit, stats.n_masks, avg);
+
+            if (stats.n_cache_hit != UINT64_MAX) {
+                double avg_hits = n_pkts ?
+                    (double) stats.n_cache_hit / n_pkts * 100 : 0.0;
+
+                dpctl_print(dpctl_p,
+                            "  cache: hit:%"PRIu64" hit-rate:%.2f%%\n",
+                            stats.n_cache_hit, avg_hits);
+            }
         }
     }
 

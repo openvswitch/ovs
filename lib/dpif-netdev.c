@@ -1963,6 +1963,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     }
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
+    stats->n_cache_hit = UINT64_MAX;
 
     return 0;
 }
