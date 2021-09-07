@@ -377,6 +377,20 @@ AC_DEFUN([OVS_CHECK_DPDK], [
               AC_MSG_ERROR([grep exited with status $status])
               ;;
           esac
+          ;;
+      *)
+          DPDK_AUTO_DISCOVER="false"
+          DPDK_INCLUDE_PATH="$with_dpdk/include"
+          # If 'with_dpdk' is passed install directory, point to headers
+          # installed in $DESTDIR/$prefix/include/dpdk
+          if test -e "$DPDK_INCLUDE_PATH/rte_config.h"; then
+            DPDK_INCLUDE="-I$DPDK_INCLUDE_PATH"
+          elif test -e "$DPDK_INCLUDE_PATH/dpdk/rte_config.h"; then
+            DPDK_INCLUDE="-I$DPDK_INCLUDE_PATH/dpdk"
+          fi
+          DPDK_LIB_DIR="$with_dpdk/lib"
+          DPDK_LIB="-ldpdk"
+          ;;
     esac
 
     ovs_save_CFLAGS="$CFLAGS"
