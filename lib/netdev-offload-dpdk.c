@@ -47,8 +47,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
  *    For example, simultaneous call of 'netdev_reconfigure()' for the same
  *    'netdev' is forbidden.
  *
- * For current implementation all above restrictions could be fulfilled by
- * taking the datapath 'port_mutex' in lib/dpif-netdev.c.  */
+ * For current implementation all above restrictions are fulfilled by
+ * read-locking the datapath 'port_rwlock' in lib/dpif-netdev.c.  */
 
 /*
  * A mapping from ufid to dpdk rte_flow.
