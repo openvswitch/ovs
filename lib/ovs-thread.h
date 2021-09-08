@@ -21,16 +21,16 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include "ovs-atomic.h"
+#include "ovs-rcu.h"
 #include "openvswitch/thread.h"
 #include "util.h"
 
 struct seq;
 
 /* Poll-block()-able barrier similar to pthread_barrier_t. */
+struct ovs_barrier_impl;
 struct ovs_barrier {
-    uint32_t size;            /* Number of threads to wait. */
-    atomic_count count;       /* Number of threads already hit the barrier. */
-    struct seq *seq;
+    OVSRCU_TYPE(struct ovs_barrier_impl *) impl;
 };
 
 /* Wrappers for pthread_mutexattr_*() that abort the process on any error. */
