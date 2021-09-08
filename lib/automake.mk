@@ -181,6 +181,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/memory.c \
 	lib/memory.h \
 	lib/meta-flow.c \
+	lib/mov-avg.h \
 	lib/multipath.c \
 	lib/multipath.h \
 	lib/namemap.c \
