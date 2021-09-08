@@ -339,7 +339,7 @@ enum {
     DP_NETDEV_FLOW_OFFLOAD_OP_DEL,
 };
 
-struct dp_flow_offload_item {
+struct dp_offload_thread_item {
     struct dp_netdev_pmd_thread *pmd;
     struct dp_netdev_flow *flow;
     int op;
@@ -351,15 +351,15 @@ struct dp_flow_offload_item {
     struct ovs_list node;
 };
 
-struct dp_flow_offload {
+struct dp_offload_thread {
     struct ovs_mutex mutex;
     struct ovs_list list;
     pthread_cond_t cond;
 };
 
-static struct dp_flow_offload dp_flow_offload = {
+static struct dp_offload_thread dp_offload_thread = {
     .mutex = OVS_MUTEX_INITIALIZER,
-    .list  = OVS_LIST_INITIALIZER(&dp_flow_offload.list),
+    .list  = OVS_LIST_INITIALIZER(&dp_offload_thread.list),
 };
 
 static struct ovsthread_once offload_thread_once
@@ -2554,12 +2554,12 @@ mark_to_flow_find(const struct dp_netdev_pmd_thread *pmd,
     return NULL;
 }
 
-static struct dp_flow_offload_item *
+static struct dp_offload_thread_item *
 dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
                              struct dp_netdev_flow *flow,
                              int op)
 {
-    struct dp_flow_offload_item *offload;
+    struct dp_offload_thread_item *offload;
 
     offload = xzalloc(sizeof(*offload));
     offload->pmd = pmd;
@@ -2573,7 +2573,7 @@ dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
 }
 
 static void
-dp_netdev_free_flow_offload(struct dp_flow_offload_item *offload)
+dp_netdev_free_flow_offload(struct dp_offload_thread_item *offload)
 {
     dp_netdev_pmd_unref(offload->pmd);
     dp_netdev_flow_unref(offload->flow);
@@ -2583,16 +2583,16 @@ dp_netdev_free_flow_offload(struct dp_flow_offload_item *offload)
 }
 
 static void
-dp_netdev_append_flow_offload(struct dp_flow_offload_item *offload)
+dp_netdev_append_flow_offload(struct dp_offload_thread_item *offload)
 {
-    ovs_mutex_lock(&dp_flow_offload.mutex);
-    ovs_list_push_back(&dp_flow_offload.list, &offload->node);
-    xpthread_cond_signal(&dp_flow_offload.cond);
-    ovs_mutex_unlock(&dp_flow_offload.mutex);
+    ovs_mutex_lock(&dp_offload_thread.mutex);
+    ovs_list_push_back(&dp_offload_thread.list, &offload->node);
+    xpthread_cond_signal(&dp_offload_thread.cond);
+    ovs_mutex_unlock(&dp_offload_thread.mutex);
 }
 
 static int
-dp_netdev_flow_offload_del(struct dp_flow_offload_item *offload)
+dp_netdev_flow_offload_del(struct dp_offload_thread_item *offload)
 {
     return mark_to_flow_disassociate(offload->pmd, offload->flow);
 }
@@ -2609,7 +2609,7 @@ dp_netdev_flow_offload_del(struct dp_flow_offload_item *offload)
  * valid, thus only item 2 needed.
  */
 static int
-dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
+dp_netdev_flow_offload_put(struct dp_offload_thread_item *offload)
 {
     struct dp_netdev_pmd_thread *pmd = offload->pmd;
     struct dp_netdev_flow *flow = offload->flow;
@@ -2690,22 +2690,22 @@ err_free:
 static void *
 dp_netdev_flow_offload_main(void *data OVS_UNUSED)
 {
-    struct dp_flow_offload_item *offload;
+    struct dp_offload_thread_item *offload;
     struct ovs_list *list;
     const char *op;
     int ret;
 
     for (;;) {
-        ovs_mutex_lock(&dp_flow_offload.mutex);
-        if (ovs_list_is_empty(&dp_flow_offload.list)) {
+        ovs_mutex_lock(&dp_offload_thread.mutex);
+        if (ovs_list_is_empty(&dp_offload_thread.list)) {
             ovsrcu_quiesce_start();
-            ovs_mutex_cond_wait(&dp_flow_offload.cond,
-                                &dp_flow_offload.mutex);
+            ovs_mutex_cond_wait(&dp_offload_thread.cond,
+                                &dp_offload_thread.mutex);
             ovsrcu_quiesce_end();
         }
-        list = ovs_list_pop_front(&dp_flow_offload.list);
-        offload = CONTAINER_OF(list, struct dp_flow_offload_item, node);
-        ovs_mutex_unlock(&dp_flow_offload.mutex);
+        list = ovs_list_pop_front(&dp_offload_thread.list);
+        offload = CONTAINER_OF(list, struct dp_offload_thread_item, node);
+        ovs_mutex_unlock(&dp_offload_thread.mutex);
 
         switch (offload->op) {
         case DP_NETDEV_FLOW_OFFLOAD_OP_ADD:
@@ -2738,10 +2738,10 @@ static void
 queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
                       struct dp_netdev_flow *flow)
 {
-    struct dp_flow_offload_item *offload;
+    struct dp_offload_thread_item *offload;
 
     if (ovsthread_once_start(&offload_thread_once)) {
-        xpthread_cond_init(&dp_flow_offload.cond, NULL);
+        xpthread_cond_init(&dp_offload_thread.cond, NULL);
         ovs_thread_create("hw_offload", dp_netdev_flow_offload_main, NULL);
         ovsthread_once_done(&offload_thread_once);
     }
@@ -2822,14 +2822,14 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
                       const struct nlattr *actions, size_t actions_len,
                       odp_port_t orig_in_port, int op)
 {
-    struct dp_flow_offload_item *offload;
+    struct dp_offload_thread_item *offload;
 
     if (!netdev_is_flow_api_enabled()) {
         return;
     }
 
     if (ovsthread_once_start(&offload_thread_once)) {
-        xpthread_cond_init(&dp_flow_offload.cond, NULL);
+        xpthread_cond_init(&dp_offload_thread.cond, NULL);
         ovs_thread_create("hw_offload", dp_netdev_flow_offload_main, NULL);
         ovsthread_once_done(&offload_thread_once);
     }
