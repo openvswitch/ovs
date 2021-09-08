@@ -337,6 +337,7 @@ enum rxq_cycles_counter_type {
 
 enum dp_offload_type {
     DP_OFFLOAD_FLOW,
+    DP_OFFLOAD_FLUSH,
 };
 
 enum {
@@ -355,8 +356,15 @@ struct dp_offload_flow_item {
     odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 };
 
+struct dp_offload_flush_item {
+    struct dp_netdev *dp;
+    struct netdev *netdev;
+    struct ovs_barrier *barrier;
+};
+
 union dp_offload_thread_data {
     struct dp_offload_flow_item flow;
+    struct dp_offload_flush_item flush;
 };
 
 struct dp_offload_thread_item {
@@ -558,6 +566,9 @@ static void dp_netdev_add_bond_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
 static void dp_netdev_del_bond_tx_from_pmd(struct dp_netdev_pmd_thread *pmd,
                                            uint32_t bond_id)
     OVS_EXCLUDED(pmd->bond_mutex);
+
+static void dp_netdev_offload_flush(struct dp_netdev *dp,
+                                    struct dp_netdev_port *port);
 
 static void reconfigure_datapath(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex);
@@ -2278,7 +2289,7 @@ static void
 do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    netdev_flow_flush(port->netdev);
+    dp_netdev_offload_flush(dp, port);
     netdev_uninit_flow_api(port->netdev);
     hmap_remove(&dp->ports, &port->node);
     seq_change(dp->port_seq);
@@ -2630,13 +2641,16 @@ dp_netdev_free_offload(struct dp_offload_thread_item *offload)
     case DP_OFFLOAD_FLOW:
         dp_netdev_free_flow_offload(offload);
         break;
+    case DP_OFFLOAD_FLUSH:
+        free(offload);
+        break;
     default:
         OVS_NOT_REACHED();
     };
 }
 
 static void
-dp_netdev_append_flow_offload(struct dp_offload_thread_item *offload)
+dp_netdev_append_offload(struct dp_offload_thread_item *offload)
 {
     ovs_mutex_lock(&dp_offload_thread.mutex);
     ovs_list_push_back(&dp_offload_thread.list, &offload->node);
@@ -2770,6 +2784,23 @@ dp_offload_flow(struct dp_offload_thread_item *item)
              UUID_ARGS((struct uuid *) &flow_offload->flow->mega_ufid));
 }
 
+static void
+dp_offload_flush(struct dp_offload_thread_item *item)
+{
+    struct dp_offload_flush_item *flush = &item->data->flush;
+
+    ovs_mutex_lock(&flush->dp->port_mutex);
+    netdev_flow_flush(flush->netdev);
+    ovs_mutex_unlock(&flush->dp->port_mutex);
+
+    ovs_barrier_block(flush->barrier);
+
+    /* Allow the other thread to take again the port lock, before
+     * continuing offload operations in this thread.
+     */
+    ovs_barrier_block(flush->barrier);
+}
+
 #define DP_NETDEV_OFFLOAD_QUIESCE_INTERVAL_US (10 * 1000) /* 10 ms */
 
 static void *
@@ -2799,6 +2830,9 @@ dp_netdev_flow_offload_main(void *data OVS_UNUSED)
         switch (offload->type) {
         case DP_OFFLOAD_FLOW:
             dp_offload_flow(offload);
+            break;
+        case DP_OFFLOAD_FLUSH:
+            dp_offload_flush(offload);
             break;
         default:
             OVS_NOT_REACHED();
@@ -2837,7 +2871,7 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
     offload = dp_netdev_alloc_flow_offload(pmd, flow,
                                            DP_NETDEV_FLOW_OFFLOAD_OP_DEL);
     offload->timestamp = pmd->ctx.now;
-    dp_netdev_append_flow_offload(offload);
+    dp_netdev_append_offload(offload);
 }
 
 static void
@@ -2933,7 +2967,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
     flow_offload->orig_in_port = orig_in_port;
 
     item->timestamp = pmd->ctx.now;
-    dp_netdev_append_flow_offload(item);
+    dp_netdev_append_offload(item);
 }
 
 static void
@@ -2957,6 +2991,90 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     flow->dead = true;
 
     dp_netdev_flow_unref(flow);
+}
+
+static void
+dp_netdev_offload_flush_enqueue(struct dp_netdev *dp,
+                                struct netdev *netdev,
+                                struct ovs_barrier *barrier)
+{
+    struct dp_offload_thread_item *item;
+    struct dp_offload_flush_item *flush;
+
+    if (ovsthread_once_start(&offload_thread_once)) {
+        xpthread_cond_init(&dp_offload_thread.cond, NULL);
+        ovs_thread_create("hw_offload", dp_netdev_flow_offload_main, NULL);
+        ovsthread_once_done(&offload_thread_once);
+    }
+
+    item = xmalloc(sizeof *item + sizeof *flush);
+    item->type = DP_OFFLOAD_FLUSH;
+    item->timestamp = time_usec();
+
+    flush = &item->data->flush;
+    flush->dp = dp;
+    flush->netdev = netdev;
+    flush->barrier = barrier;
+
+    dp_netdev_append_offload(item);
+}
+
+/* Blocking call that will wait on the offload thread to
+ * complete its work.  As the flush order will only be
+ * enqueued after existing offload requests, those previous
+ * offload requests must be processed, which requires being
+ * able to lock the 'port_mutex' from the offload thread.
+ *
+ * Flow offload flush is done when a port is being deleted.
+ * Right after this call executes, the offload API is disabled
+ * for the port. This call must be made blocking until the
+ * offload provider completed its job.
+ */
+static void
+dp_netdev_offload_flush(struct dp_netdev *dp,
+                        struct dp_netdev_port *port)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    /* The flush mutex only serves to protect the static memory barrier.
+     * The memory barrier needs to go beyond the function scope as
+     * the other thread can resume from blocking after this function
+     * already finished.
+     * As the barrier is made static, then it will be shared by
+     * calls to this function, and it needs to be protected from
+     * concurrent use.
+     */
+    static struct ovs_mutex flush_mutex = OVS_MUTEX_INITIALIZER;
+    static struct ovs_barrier barrier OVS_GUARDED_BY(flush_mutex);
+    struct netdev *netdev;
+
+    if (!netdev_is_flow_api_enabled()) {
+        return;
+    }
+
+    ovs_mutex_unlock(&dp->port_mutex);
+    ovs_mutex_lock(&flush_mutex);
+
+    /* This thread and the offload thread. */
+    ovs_barrier_init(&barrier, 2);
+
+    netdev = netdev_ref(port->netdev);
+    dp_netdev_offload_flush_enqueue(dp, netdev, &barrier);
+    ovs_barrier_block(&barrier);
+    netdev_close(netdev);
+
+    /* Take back the datapath port lock before allowing the offload
+     * thread to proceed further. The port deletion must complete first,
+     * to ensure no further offloads are inserted after the flush.
+     *
+     * Some offload provider (e.g. DPDK) keeps a netdev reference with
+     * the offload data. If this reference is not closed, the netdev is
+     * kept indefinitely. */
+    ovs_mutex_lock(&dp->port_mutex);
+
+    ovs_barrier_block(&barrier);
+    ovs_barrier_destroy(&barrier);
+
+    ovs_mutex_unlock(&flush_mutex);
 }
 
 static void
