@@ -9142,6 +9142,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_dump_thread_destroy,
     dpif_netdev_flow_dump_next,
     dpif_netdev_operate,
+    NULL,                       /* offload_stats_get */
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
     NULL,                       /* number_handlers_required */

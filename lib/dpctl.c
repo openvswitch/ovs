@@ -1583,6 +1583,40 @@ dpctl_del_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 }
 
 static int
+dpctl_offload_stats_show(int argc, const char *argv[],
+                         struct dpctl_params *dpctl_p)
+{
+    struct netdev_custom_stats stats;
+    struct dpif *dpif;
+    int error;
+    size_t i;
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (error) {
+        return error;
+    }
+
+    memset(&stats, 0, sizeof(stats));
+    error = dpif_offload_stats_get(dpif, &stats);
+    if (error) {
+        dpctl_error(dpctl_p, error, "retrieving offload statistics");
+        goto close_dpif;
+    }
+
+    dpctl_print(dpctl_p, "HW Offload stats:\n");
+    for (i = 0; i < stats.size; i++) {
+        dpctl_print(dpctl_p, "   %s: %6" PRIu64 "\n",
+                    stats.counters[i].name, stats.counters[i].value);
+    }
+
+    netdev_free_custom_stats_counters(&stats);
+
+close_dpif:
+    dpif_close(dpif);
+    return error;
+}
+
+static int
 dpctl_help(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
            struct dpctl_params *dpctl_p)
 {
@@ -2824,6 +2858,8 @@ static const struct dpctl_command all_commands[] = {
     { "add-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
     { "mod-flows", "[dp] file", 1, 2, dpctl_process_flows, DP_RW },
     { "del-flows", "[dp] [file]", 0, 2, dpctl_del_flows, DP_RW },
+    { "offload-stats-show", "[dp]",
+      0, 1, dpctl_offload_stats_show, DP_RO },
     { "dump-conntrack", "[-m] [-s] [dp] [zone=N]",
       0, 4, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
