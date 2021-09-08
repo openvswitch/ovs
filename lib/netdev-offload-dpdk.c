@@ -62,6 +62,8 @@ struct ufid_to_rte_flow_data {
     bool actions_offloaded;
     struct dpif_flow_stats stats;
     struct netdev *physdev;
+    struct ovs_mutex lock;
+    bool dead;
 };
 
 struct netdev_offload_dpdk_data {
@@ -239,6 +241,7 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
     data->physdev = netdev != physdev ? netdev_ref(physdev) : physdev;
     data->rte_flow = rte_flow;
     data->actions_offloaded = actions_offloaded;
+    ovs_mutex_init(&data->lock);
 
     cmap_insert(map, CONST_CAST(struct cmap_node *, &data->node), hash);
 
@@ -246,8 +249,16 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
     return data;
 }
 
+static void
+rte_flow_data_unref(struct ufid_to_rte_flow_data *data)
+{
+    ovs_mutex_destroy(&data->lock);
+    free(data);
+}
+
 static inline void
 ufid_to_rte_flow_disassociate(struct ufid_to_rte_flow_data *data)
+    OVS_REQUIRES(data->lock)
 {
     size_t hash = hash_bytes(&data->ufid, sizeof data->ufid, 0);
     struct cmap *map = offload_data_map(data->netdev);
@@ -264,7 +275,7 @@ ufid_to_rte_flow_disassociate(struct ufid_to_rte_flow_data *data)
         netdev_close(data->netdev);
     }
     netdev_close(data->physdev);
-    ovsrcu_postpone(free, data);
+    ovsrcu_postpone(rte_flow_data_unref, data);
 }
 
 /*
@@ -2273,6 +2284,15 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
     ovs_u128 *ufid;
     int ret;
 
+    ovs_mutex_lock(&rte_flow_data->lock);
+
+    if (rte_flow_data->dead) {
+        ovs_mutex_unlock(&rte_flow_data->lock);
+        return 0;
+    }
+
+    rte_flow_data->dead = true;
+
     rte_flow = rte_flow_data->rte_flow;
     physdev = rte_flow_data->physdev;
     netdev = rte_flow_data->netdev;
@@ -2301,6 +2321,8 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
                  netdev_dpdk_get_port_id(physdev),
                  UUID_ARGS((struct uuid *) ufid));
     }
+
+    ovs_mutex_unlock(&rte_flow_data->lock);
 
     return ret;
 }
@@ -2434,8 +2456,19 @@ netdev_offload_dpdk_flow_get(struct netdev *netdev,
     struct rte_flow_error error;
     int ret = 0;
 
+    attrs->dp_extra_info = NULL;
+
     rte_flow_data = ufid_to_rte_flow_data_find(netdev, ufid, false);
-    if (!rte_flow_data || !rte_flow_data->rte_flow) {
+    if (!rte_flow_data || !rte_flow_data->rte_flow ||
+        rte_flow_data->dead || ovs_mutex_trylock(&rte_flow_data->lock)) {
+        return -1;
+    }
+
+    /* Check again whether the data is dead, as it could have been
+     * updated while the lock was not yet taken. The first check above
+     * was only to avoid unnecessary locking if possible.
+     */
+    if (rte_flow_data->dead) {
         ret = -1;
         goto out;
     }
@@ -2463,7 +2496,7 @@ netdev_offload_dpdk_flow_get(struct netdev *netdev,
     }
     memcpy(stats, &rte_flow_data->stats, sizeof *stats);
 out:
-    attrs->dp_extra_info = NULL;
+    ovs_mutex_unlock(&rte_flow_data->lock);
     return ret;
 }
 
