@@ -210,7 +210,7 @@
  * In this section, A is an atomic type and C is the corresponding non-atomic
  * type.
  *
- * The "store" and "compare_exchange" primitives match C11:
+ * The "store", "exchange", and "compare_exchange" primitives match C11:
  *
  *     void atomic_store(A *object, C value);
  *     void atomic_store_explicit(A *object, C value, memory_order);
@@ -243,6 +243,12 @@
  *         a loop.  Some platforms can implement the weak form more
  *         efficiently, so it should be used if the application will need to
  *         loop anyway.
+ *
+ *     C atomic_exchange(A *object, C desired);
+ *     C atomic_exchange_explicit(A *object, C desired, memory_order);
+ *
+ *         Atomically stores 'desired' into '*object', returning the value
+ *         previously held.
  *
  * The following primitives differ from the C11 ones (and have different names)
  * because there does not appear to be a way to implement the standard

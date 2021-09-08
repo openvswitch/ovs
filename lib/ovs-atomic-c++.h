@@ -29,6 +29,9 @@ using std::atomic_compare_exchange_strong_explicit;
 using std::atomic_compare_exchange_weak;
 using std::atomic_compare_exchange_weak_explicit;
 
+using std::atomic_exchange;
+using std::atomic_exchange_explicit;
+
 #define atomic_read(SRC, DST) \
     atomic_read_explicit(SRC, DST, memory_order_seq_cst)
 #define atomic_read_explicit(SRC, DST, ORDER)   \

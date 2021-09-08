@@ -345,6 +345,28 @@ atomic_signal_fence(memory_order order)
 #define atomic_compare_exchange_weak_explicit \
         atomic_compare_exchange_strong_explicit
 
+/* While intrinsics offering different memory ordering
+ * are available in MSVC C compiler, they are not defined
+ * in the C++ compiler. Ignore for compatibility.
+ *
+ * Use nested ternary operators as the GNU extension ({})
+ * is not available.
+ */
+
+#define atomic_exchange_explicit(DST, SRC, ORDER) \
+    ((sizeof *(DST) == 1) ? \
+        _InterlockedExchange8((char volatile *) DST, SRC) \
+    : (sizeof *(DST) == 2) ? \
+        _InterlockedExchange16((short volatile *) DST, SRC) \
+    : (sizeof *(DST) == 4) ? \
+        _InterlockedExchange((long int volatile *) DST, SRC) \
+    : (sizeof *(DST) == 8) ? \
+        _InterlockedExchange64((__int64 volatile *) DST, SRC) \
+    : (abort(), 0))
+
+#define atomic_exchange(DST, SRC) \
+        atomic_exchange_explicit(DST, SRC, memory_order_seq_cst)
+
 /* MSVCs c++ compiler implements c11 atomics and looking through its
  * implementation (in xatomic.h), orders are ignored for x86 platform.
  * Do the same here. */

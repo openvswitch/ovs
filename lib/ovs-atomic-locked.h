@@ -31,6 +31,15 @@ void atomic_unlock__(void *);
          atomic_unlock__(DST),                          \
          false)))
 
+#define atomic_exchange_locked(DST, SRC)     \
+    ({                                       \
+        atomic_lock__(DST);                  \
+        typeof(*(DST)) __tmp = *(DST);       \
+        *(DST) = SRC;                        \
+        atomic_unlock__(DST);                \
+        __tmp;                               \
+    })
+
 #define atomic_op_locked_add +=
 #define atomic_op_locked_sub -=
 #define atomic_op_locked_or  |=
