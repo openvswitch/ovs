@@ -406,6 +406,7 @@ Todd Deshane                       deshantm@gmail.com
 Tom Everman                        teverman@google.com
 Tomasz Konieczny                   tomaszx.konieczny@intel.com
 Toms Atteka                        cpp.code.lv@gmail.com
+Tony van der Peet                  tony.vanderpeet@alliedtelesis.co.nz
 Torgny Lindberg                    torgny.lindberg@ericsson.com
 Tsvi Slonim                        tsvi@toroki.com
 Tuan Nguyen                        tuan.nguyen@veriksystems.com
