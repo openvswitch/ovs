@@ -2581,13 +2581,18 @@ dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
 }
 
 static void
+dp_netdev_free_flow_offload__(struct dp_offload_thread_item *offload)
+{
+    free(offload->actions);
+    free(offload);
+}
+
+static void
 dp_netdev_free_flow_offload(struct dp_offload_thread_item *offload)
 {
     dp_netdev_pmd_unref(offload->pmd);
     dp_netdev_flow_unref(offload->flow);
-
-    free(offload->actions);
-    free(offload);
+    ovsrcu_postpone(dp_netdev_free_flow_offload__, offload);
 }
 
 static void
