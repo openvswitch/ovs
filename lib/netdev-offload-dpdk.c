@@ -41,9 +41,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
  *
  * Below API is NOT thread safe in following terms:
  *
- *  - The caller must be sure that none of these functions will be called
- *    simultaneously.  Even for different 'netdev's.
- *
  *  - The caller must be sure that 'netdev' will not be destructed/deallocated.
  *
  *  - The caller must be sure that 'netdev' configuration will not be changed.
@@ -70,6 +67,7 @@ struct ufid_to_rte_flow_data {
 struct netdev_offload_dpdk_data {
     struct cmap ufid_to_rte_flow;
     uint64_t *rte_flow_counters;
+    struct ovs_mutex map_lock;
 };
 
 static int
@@ -78,6 +76,7 @@ offload_data_init(struct netdev *netdev)
     struct netdev_offload_dpdk_data *data;
 
     data = xzalloc(sizeof *data);
+    ovs_mutex_init(&data->map_lock);
     cmap_init(&data->ufid_to_rte_flow);
     data->rte_flow_counters = xcalloc(netdev_offload_thread_nb(),
                                       sizeof *data->rte_flow_counters);
@@ -90,6 +89,7 @@ offload_data_init(struct netdev *netdev)
 static void
 offload_data_destroy__(struct netdev_offload_dpdk_data *data)
 {
+    ovs_mutex_destroy(&data->map_lock);
     free(data->rte_flow_counters);
     free(data);
 }
@@ -119,6 +119,34 @@ offload_data_destroy(struct netdev *netdev)
     ovsrcu_postpone(offload_data_destroy__, data);
 
     ovsrcu_set(&netdev->hw_info.offload_data, NULL);
+}
+
+static void
+offload_data_lock(struct netdev *netdev)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    struct netdev_offload_dpdk_data *data;
+
+    data = (struct netdev_offload_dpdk_data *)
+        ovsrcu_get(void *, &netdev->hw_info.offload_data);
+    if (!data) {
+        return;
+    }
+    ovs_mutex_lock(&data->map_lock);
+}
+
+static void
+offload_data_unlock(struct netdev *netdev)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    struct netdev_offload_dpdk_data *data;
+
+    data = (struct netdev_offload_dpdk_data *)
+        ovsrcu_get(void *, &netdev->hw_info.offload_data);
+    if (!data) {
+        return;
+    }
+    ovs_mutex_unlock(&data->map_lock);
 }
 
 static struct cmap *
@@ -159,6 +187,24 @@ ufid_to_rte_flow_data_find(struct netdev *netdev,
     return NULL;
 }
 
+/* Find rte_flow with @ufid, lock-protected. */
+static struct ufid_to_rte_flow_data *
+ufid_to_rte_flow_data_find_protected(struct netdev *netdev,
+                                     const ovs_u128 *ufid)
+{
+    size_t hash = hash_bytes(ufid, sizeof *ufid, 0);
+    struct ufid_to_rte_flow_data *data;
+    struct cmap *map = offload_data_map(netdev);
+
+    CMAP_FOR_EACH_WITH_HASH_PROTECTED (data, node, hash, map) {
+        if (ovs_u128_equals(*ufid, data->ufid)) {
+            return data;
+        }
+    }
+
+    return NULL;
+}
+
 static inline struct ufid_to_rte_flow_data *
 ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
                            struct netdev *physdev, struct rte_flow *rte_flow,
@@ -175,13 +221,15 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
 
     data = xzalloc(sizeof *data);
 
+    offload_data_lock(netdev);
+
     /*
      * We should not simply overwrite an existing rte flow.
      * We should have deleted it first before re-adding it.
      * Thus, if following assert triggers, something is wrong:
      * the rte_flow is not destroyed.
      */
-    data_prev = ufid_to_rte_flow_data_find(netdev, ufid, false);
+    data_prev = ufid_to_rte_flow_data_find_protected(netdev, ufid);
     if (data_prev) {
         ovs_assert(data_prev->rte_flow == NULL);
     }
@@ -193,6 +241,8 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
     data->actions_offloaded = actions_offloaded;
 
     cmap_insert(map, CONST_CAST(struct cmap_node *, &data->node), hash);
+
+    offload_data_unlock(netdev);
     return data;
 }
 
@@ -206,7 +256,10 @@ ufid_to_rte_flow_disassociate(struct ufid_to_rte_flow_data *data)
         return;
     }
 
+    offload_data_lock(data->netdev);
     cmap_remove(map, CONST_CAST(struct cmap_node *, &data->node), hash);
+    offload_data_unlock(data->netdev);
+
     if (data->netdev != data->physdev) {
         netdev_close(data->netdev);
     }

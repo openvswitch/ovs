@@ -2557,7 +2557,7 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
         port = netdev_ports_get(in_port, dpif_type_str);
         if (port) {
             /* Taking a global 'port_mutex' to fulfill thread safety
-             * restrictions for the netdev-offload-dpdk module. */
+             * restrictions regarding netdev port mapping. */
             ovs_mutex_lock(&pmd->dp->port_mutex);
             ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
             ovs_mutex_unlock(&pmd->dp->port_mutex);
@@ -2726,8 +2726,8 @@ dp_netdev_flow_offload_put(struct dp_offload_flow_item *offload)
         goto err_free;
     }
 
-    /* Taking a global 'port_mutex' to fulfill thread safety restrictions for
-     * the netdev-offload-dpdk module. */
+    /* Taking a global 'port_mutex' to fulfill thread safety
+     * restrictions regarding the netdev port mapping. */
     ovs_mutex_lock(&pmd->dp->port_mutex);
     ret = netdev_flow_put(port, &offload->match,
                           CONST_CAST(struct nlattr *, offload->actions),
@@ -3566,7 +3566,7 @@ dpif_netdev_get_flow_offload_status(const struct dp_netdev *dp,
     }
     ofpbuf_use_stack(&buf, &act_buf, sizeof act_buf);
     /* Taking a global 'port_mutex' to fulfill thread safety
-     * restrictions for the netdev-offload-dpdk module.
+     * restrictions regarding netdev port mapping.
      *
      * XXX: Main thread will try to pause/stop all revalidators during datapath
      *      reconfiguration via datapath purge callback (dp_purge_cb) while
