@@ -7,6 +7,8 @@ Post-v2.16.0
        to 'hash', enables hash-based Tx packet steering mode to utilize all the
        Tx queues of the interface regardles of the number of PMD threads.
      * Removed experimental tag for PMD Auto Load Balance.
+     * New configuration knob 'other_config:n-offload-threads' to change the
+       number of HW offloading threads.
    - DPDK:
      * EAL argument --socket-mem is no longer configured by default upon
        start-up.  If dpdk-socket-mem and dpdk-alloc-mem are not specified,

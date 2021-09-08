@@ -84,6 +84,7 @@ struct netdev_flow_api {
                     struct dpif_flow_stats *);
 
     /* Get the number of flows offloaded to netdev.
+     * 'n_flows' is an array of counters, one per offload thread.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*flow_get_n_flows)(struct netdev *, uint64_t *n_flows);
 

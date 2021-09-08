@@ -247,6 +247,22 @@
         </p>
       </column>
 
+      <column name="other_config" key="n-offload-threads"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
+        <p>
+          Set this value to the number of threads created to manage hardware
+          offloads.
+        </p>
+        <p>
+          The default value is <code>1</code>. Changing this value requires
+          restarting the daemon.
+        </p>
+        <p>
+          This is only relevant for userspace datapath and only if
+          <ref column="other_config" key="hw-offload"/> is enabled.
+        </p>
+      </column>
+
       <column name="other_config" key="tc-policy"
               type='{"type": "string",
                      "enum": ["set", ["none", "skip_sw", "skip_hw"]]}'>
