@@ -393,6 +393,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
           ;;
     esac
 
+    LDFLAGS="$LDFLAGS -L$DPDK_LIB_DIR"
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
     CFLAGS="$CFLAGS $DPDK_INCLUDE"
@@ -436,19 +437,19 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     AC_MSG_CHECKING([whether linking with dpdk works])
     LIBS="$DPDK_LIB $LIBS"
- #   AC_LINK_IFELSE(
- #     [AC_LANG_PROGRAM([#include <rte_config.h>
- #                       #include <rte_eal.h>],
- #                      [int rte_argc; char ** rte_argv;
- #                       rte_eal_init(rte_argc, rte_argv);])],
- #     [AC_MSG_RESULT([yes])
- #      DPDKLIB_FOUND=true],
-#      [AC_MSG_RESULT([no])
-#       AC_MSG_ERROR(m4_normalize([
-#          Could not find DPDK library in default search path, update
-#          PKG_CONFIG_PATH for pkg-config to find the .pc file in
-#          non-standard location]))
-#      ])
+    AC_LINK_IFELSE(
+      [AC_LANG_PROGRAM([#include <rte_config.h>
+                        #include <rte_eal.h>],
+                       [int rte_argc; char ** rte_argv;
+                        rte_eal_init(rte_argc, rte_argv);])],
+      [AC_MSG_RESULT([yes])
+       DPDKLIB_FOUND=true],
+      [AC_MSG_RESULT([no])
+       AC_MSG_ERROR(m4_normalize([
+          Could not find DPDK library in default search path, update
+          PKG_CONFIG_PATH for pkg-config to find the .pc file in
+          non-standard location]))
+      ])
 
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
