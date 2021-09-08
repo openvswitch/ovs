@@ -472,6 +472,7 @@ tests_ovstest_SOURCES = \
 	tests/test-list.c \
 	tests/test-lockfile.c \
 	tests/test-multipath.c \
+	tests/test-mpsc-queue.c \
 	tests/test-netflow.c \
 	tests/test-odp.c \
 	tests/test-ofpbuf.c \
