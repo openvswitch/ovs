@@ -270,3 +270,7 @@ AT_SETUP([mpsc-queue module])
 AT_CHECK([ovstest test-mpsc-queue check], [0], [....
 ])
 AT_CLEANUP
+
+AT_SETUP([id-fpool module])
+AT_CHECK([ovstest test-id-fpool check], [0], [])
+AT_CLEANUP

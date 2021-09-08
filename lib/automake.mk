@@ -153,6 +153,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/hmap.c \
 	lib/hmapx.c \
 	lib/hmapx.h \
+	lib/id-fpool.c \
+	lib/id-fpool.h \
 	lib/id-pool.c \
 	lib/id-pool.h \
 	lib/if-notifier-manual.c \
