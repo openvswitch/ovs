@@ -63,6 +63,7 @@ struct ufid_to_rte_flow_data {
     struct dpif_flow_stats stats;
     struct netdev *physdev;
     struct ovs_mutex lock;
+    unsigned int creation_tid;
     bool dead;
 };
 
@@ -241,6 +242,7 @@ ufid_to_rte_flow_associate(const ovs_u128 *ufid, struct netdev *netdev,
     data->physdev = netdev != physdev ? netdev_ref(physdev) : physdev;
     data->rte_flow = rte_flow;
     data->actions_offloaded = actions_offloaded;
+    data->creation_tid = netdev_offload_thread_id();
     ovs_mutex_init(&data->lock);
 
     cmap_insert(map, CONST_CAST(struct cmap_node *, &data->node), hash);
@@ -2505,6 +2507,7 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
 {
     struct cmap *map = offload_data_map(netdev);
     struct ufid_to_rte_flow_data *data;
+    unsigned int tid = netdev_offload_thread_id();
 
     if (!map) {
         return -1;
@@ -2514,7 +2517,9 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
         if (data->netdev != netdev && data->physdev != netdev) {
             continue;
         }
-        netdev_offload_dpdk_flow_destroy(data);
+        if (data->creation_tid == tid) {
+            netdev_offload_dpdk_flow_destroy(data);
+        }
     }
 
     return 0;
