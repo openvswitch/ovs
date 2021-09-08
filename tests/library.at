@@ -246,6 +246,11 @@ AT_SETUP([ofpbuf module])
 AT_CHECK([ovstest test-ofpbuf], [0], [])
 AT_CLEANUP
 
+AT_SETUP([barrier module])
+AT_KEYWORDS([barrier])
+AT_CHECK([ovstest test-barrier], [0], [])
+AT_CLEANUP
+
 AT_SETUP([rcu])
 AT_CHECK([ovstest test-rcu-quiesce], [0], [])
 AT_CLEANUP

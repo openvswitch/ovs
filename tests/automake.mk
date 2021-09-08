@@ -454,6 +454,7 @@ tests_ovstest_SOURCES = \
 	tests/ovstest.h \
 	tests/test-aes128.c \
 	tests/test-atomic.c \
+	tests/test-barrier.c \
 	tests/test-bundle.c \
 	tests/test-byte-order.c \
 	tests/test-classifier.c \
