@@ -78,10 +78,10 @@ struct dp_netdev_pmd_thread {
     struct ovs_refcount ref_cnt;    /* Every reference must be refcount'ed. */
     struct cmap_node node;          /* In 'dp->poll_threads'. */
 
-    /* Per thread exact-match cache.  Note, the instance for cpu core
-     * NON_PMD_CORE_ID can be accessed by multiple threads, and thusly
-     * need to be protected by 'non_pmd_mutex'.  Every other instance
-     * will only be accessed by its own pmd thread. */
+    /* Per thread exact match cache and signature match cache.  Note, the
+     * instance for cpu core NON_PMD_CORE_ID can be accessed by multiple
+     * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
+     * other instance will only be accessed by its own pmd thread. */
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct dfc_cache flow_cache;
 
     /* Flow-Table and classifiers
