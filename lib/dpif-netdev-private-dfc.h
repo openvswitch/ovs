@@ -59,7 +59,8 @@ extern "C" {
  * Thread-safety
  * =============
  *
- * Each pmd_thread has its own private exact match cache.
+ * Each pmd_thread has its own private exact match cache and signature match
+ * cache.
  * If dp_netdev_input is not called from a pmd thread, a mutex is used.
  */
 
