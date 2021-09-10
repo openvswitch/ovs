@@ -364,3 +364,63 @@ try_checkpatch \
 "
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - malformed tags])
+try_checkpatch \
+   "    Author: A
+
+    Acked by: foo...
+    Signed-off-by: A" \
+    "ERROR: Acked-by tag is malformed.
+    1: Acked by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reported at: foo...
+    Signed-off-by: A" \
+    "ERROR: Reported-at tag is malformed.
+    1: Reported at: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reported by: foo...
+    Signed-off-by: A" \
+    "ERROR: Reported-by tag is malformed.
+    1: Reported by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Requested by: foo...
+    Signed-off-by: A" \
+    "ERROR: Requested-by tag is malformed.
+    1: Requested by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reviewed by: foo...
+    Signed-off-by: A" \
+    "ERROR: Reviewed-by tag is malformed.
+    1: Reviewed by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Submitted at: foo...
+    Signed-off-by: A" \
+    "ERROR: Submitted-at tag is malformed.
+    1: Submitted at: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Suggested by: foo...
+    Signed-off-by: A" \
+    "ERROR: Suggested-by tag is malformed.
+    1: Suggested by: foo...
+"
+
+AT_CLEANUP
