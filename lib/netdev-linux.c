@@ -604,6 +604,7 @@ netdev_linux_notify_sock(void)
         if (!error) {
             size_t i;
 
+            nl_sock_listen_all_nsid(sock, true);
             for (i = 0; i < ARRAY_SIZE(mcgroups); i++) {
                 error = nl_sock_join_mcgroup(sock, mcgroups[i]);
                 if (error) {
@@ -613,7 +614,6 @@ netdev_linux_notify_sock(void)
                 }
             }
         }
-        nl_sock_listen_all_nsid(sock, true);
         ovsthread_once_done(&once);
     }
 
