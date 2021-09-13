@@ -1306,7 +1306,7 @@ static int
 vhost_common_construct(struct netdev *netdev)
     OVS_REQUIRES(dpdk_mutex)
 {
-    int socket_id = rte_lcore_to_socket_id(rte_get_main_lcore());
+    int socket_id = rte_lcore_to_socket_id(rte_get_master_lcore());
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     dev->vhost_rxq_enabled = dpdk_rte_mzalloc(OVS_VHOST_MAX_QUEUE_NUM *
