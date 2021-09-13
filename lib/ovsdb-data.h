@@ -235,6 +235,12 @@ void ovsdb_datum_subtract(struct ovsdb_datum *a,
                           const struct ovsdb_type *b_type);
 
 /* Generate and apply diffs */
+void ovsdb_datum_added_removed(struct ovsdb_datum *added,
+                               struct ovsdb_datum *removed,
+                               const struct ovsdb_datum *old,
+                               const struct ovsdb_datum *new,
+                               const struct ovsdb_type *type);
+
 void ovsdb_datum_diff(struct ovsdb_datum *diff,
                       const struct ovsdb_datum *old_datum,
                       const struct ovsdb_datum *new_datum,

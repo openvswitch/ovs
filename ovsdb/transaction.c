@@ -266,9 +266,9 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_txn_adjust_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
-                          const struct ovsdb_column *column, int delta)
+                          const struct ovsdb_column *column,
+                          const struct ovsdb_datum *field, int delta)
 {
-    const struct ovsdb_datum *field = &r->fields[column->index];
     struct ovsdb_error *error;
 
     error = ovsdb_txn_adjust_atom_refs(txn, r, column, &column->type.key,
@@ -291,14 +291,39 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
         struct ovsdb_error *error;
 
         if (bitmap_is_set(r->changed, column->index)) {
-            if (r->old) {
-                error = ovsdb_txn_adjust_row_refs(txn, r->old, column, -1);
+            if (r->old && !r->new) {
+                error = ovsdb_txn_adjust_row_refs(
+                            txn, r->old, column,
+                            &r->old->fields[column->index], -1);
                 if (error) {
                     return OVSDB_WRAP_BUG("error decreasing refcount", error);
                 }
-            }
-            if (r->new) {
-                error = ovsdb_txn_adjust_row_refs(txn, r->new, column, 1);
+            } else if (!r->old && r->new) {
+                error = ovsdb_txn_adjust_row_refs(
+                            txn, r->new, column,
+                            &r->new->fields[column->index], 1);
+                if (error) {
+                    return error;
+                }
+            } else if (r->old && r->new) {
+                struct ovsdb_datum added, removed;
+
+                ovsdb_datum_added_removed(&added, &removed,
+                                          &r->old->fields[column->index],
+                                          &r->new->fields[column->index],
+                                          &column->type);
+
+                error = ovsdb_txn_adjust_row_refs(
+                            txn, r->old, column, &removed, -1);
+                ovsdb_datum_destroy(&removed, &column->type);
+                if (error) {
+                    ovsdb_datum_destroy(&added, &column->type);
+                    return OVSDB_WRAP_BUG("error decreasing refcount", error);
+                }
+
+                error = ovsdb_txn_adjust_row_refs(
+                            txn, r->new, column, &added, 1);
+                ovsdb_datum_destroy(&added, &column->type);
                 if (error) {
                     return error;
                 }
