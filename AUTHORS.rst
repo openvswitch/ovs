@@ -369,6 +369,7 @@ Scott Cheloha                      scottcheloha@gmail.com
 Scott Lowe                         scott.lowe@scottlowe.org
 Scott Mann                         sdmnix@gmail.com
 Selvamuthukumar                    smkumar@merunetworks.com
+Sergey Madaminov                   sergey.madaminov@gmail.com
 Sha Zhang                          zhangsha.zhang@huawei.com
 Shad Ansari                        shad.ansari@hpe.com
 Shahar Klein                       sklein@nvidia.com
