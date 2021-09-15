@@ -323,9 +323,9 @@ void sfl_sampler_init(SFLSampler *sampler, SFLAgent *agent, SFLDataSource_instan
 void sfl_poller_init(SFLPoller *poller, SFLAgent *agent, SFLDataSource_instance *pdsi, void *magic, getCountersFn_t getCountersFn);
 
 
-void sfl_receiver_tick(SFLReceiver *receiver, time_t now);
-void sfl_poller_tick(SFLPoller *poller, time_t now);
-void sfl_sampler_tick(SFLSampler *sampler, time_t now);
+void sfl_receiver_tick(SFLReceiver *receiver);
+void sfl_poller_tick(SFLPoller *poller);
+void sfl_sampler_tick(SFLSampler *sampler);
 
 int sfl_receiver_writeFlowSample(SFLReceiver *receiver, SFL_FLOW_SAMPLE_TYPE *fs);
 int sfl_receiver_writeCountersSample(SFLReceiver *receiver, SFL_COUNTERS_SAMPLE_TYPE *cs);

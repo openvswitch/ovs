@@ -125,7 +125,7 @@ void sfl_poller_resetCountersSeqNo(SFLPoller *poller) {  poller->countersSampleS
   -----------------___________________________------------------
 */
 
-void sfl_poller_tick(SFLPoller *poller, time_t now)
+void sfl_poller_tick(SFLPoller *poller)
 {
     if(poller->countersCountdown == 0) return; /* counters retrieval was not enabled */
     if(poller->sFlowCpReceiver == 0) return;

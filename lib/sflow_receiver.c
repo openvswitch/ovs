@@ -141,7 +141,7 @@ void sfl_receiver_set_sFlowRcvrPort(SFLReceiver *receiver, u_int32_t sFlowRcvrPo
   -----------------___________________________------------------
 */
 
-void sfl_receiver_tick(SFLReceiver *receiver, time_t now)
+void sfl_receiver_tick(SFLReceiver *receiver)
 {
     // if there are any samples to send, flush them now
     if(receiver->sampleCollector.numSamples > 0) sendSample(receiver);
