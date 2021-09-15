@@ -84,6 +84,8 @@ enum { MAX_PORTS = USHRT_MAX };
 #define EPOLLEXCLUSIVE (1u << 28)
 #endif
 
+#define OVS_DP_F_UNSUPPORTED (1 << 31);
+
 /* This PID is not used by the kernel datapath when using dispatch per CPU,
  * but it is required to be set (not zero). */
 #define DPIF_NETLINK_PER_CPU_PID UINT32_MAX
@@ -382,36 +384,62 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         dp_request.cmd = OVS_DP_CMD_SET;
     }
 
-    /* The Open vSwitch kernel module has two modes for dispatching upcalls:
-     * per-vport and per-cpu.
-     *
-     * When dispatching upcalls per-vport, the kernel will
-     * send the upcall via a Netlink socket that has been selected based on the
-     * vport that received the packet that is causing the upcall.
-     *
-     * When dispatching upcall per-cpu, the kernel will send the upcall via
-     * a Netlink socket that has been selected based on the cpu that received
-     * the packet that is causing the upcall.
-     *
-     * First we test to see if the kernel module supports per-cpu dispatching
-     * (the preferred method). If it does not support per-cpu dispatching, we
-     * fall back to the per-vport dispatch mode.
+    /* Some older kernels will not reject unknown features. This will cause
+     * 'ovs-vswitchd' to incorrectly assume a feature is supported. In order to
+     * test for that, we attempt to set a feature that we know is not supported
+     * by any kernel. If this feature is not rejected, we can assume we are
+     * running on one of these older kernels.
      */
     dp_request.user_features |= OVS_DP_F_UNALIGNED;
-    dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
-    dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+    dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+    dp_request.user_features |= OVS_DP_F_UNSUPPORTED;
     error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
     if (error) {
-        dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+        /* The Open vSwitch kernel module has two modes for dispatching
+         * upcalls: per-vport and per-cpu.
+         *
+         * When dispatching upcalls per-vport, the kernel will
+         * send the upcall via a Netlink socket that has been selected based on
+         * the vport that received the packet that is causing the upcall.
+         *
+         * When dispatching upcall per-cpu, the kernel will send the upcall via
+         * a Netlink socket that has been selected based on the cpu that
+         * received the packet that is causing the upcall.
+         *
+         * First we test to see if the kernel module supports per-cpu
+         * dispatching (the preferred method). If it does not support per-cpu
+         * dispatching, we fall back to the per-vport dispatch mode.
+         */
+        dp_request.user_features &= ~OVS_DP_F_UNSUPPORTED;
+        dp_request.user_features |= OVS_DP_F_UNALIGNED;
+        dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
+        dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+        error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+        if (error) {
+            dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+            dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+            error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+        }
+        if (error) {
+            return error;
+        }
+
+        error = open_dpif(&dp, dpifp);
+        dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
+    } else {
+        VLOG_INFO("Kernel does not correctly support feature negotiation. "
+                  "Using standard features.");
+        dp_request.cmd = OVS_DP_CMD_SET;
+        dp_request.user_features = 0;
+        dp_request.user_features |= OVS_DP_F_UNALIGNED;
         dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
         error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
-    }
-    if (error) {
-        return error;
+        if (error) {
+            return error;
+        }
+        error = open_dpif(&dp, dpifp);
     }
 
-    error = open_dpif(&dp, dpifp);
-    dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
     ofpbuf_delete(buf);
 
     if (create) {
