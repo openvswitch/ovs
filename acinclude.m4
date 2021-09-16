@@ -446,11 +446,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       OVS_FIND_DEPENDENCY([get_mempolicy], [numa], [libnuma])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
+    AC_CHECK_DECL([RTE_NET_PCAP], [
       OVS_FIND_DEPENDENCY([pcap_dump_close], [pcap], [libpcap])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_PMD_AF_XDP], [
+    AC_CHECK_DECL([RTE_NET_AF_XDP], [
       LIBBPF_LDADD="-lbpf"
     ], [], [[#include <rte_config.h>]])
 
@@ -458,14 +458,14 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
+    AC_CHECK_DECL([RTE_NET_MLX5], [dnl found
       AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx5dv_create_wq], [mlx5], [libmlx5])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_MLX4_PMD], [dnl found
+    AC_CHECK_DECL([RTE_NET_MLX4], [dnl found
       AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx4dv_init_obj], [mlx4], [libmlx4])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
