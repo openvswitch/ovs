@@ -8429,7 +8429,7 @@ dpif_netdev_ct_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
 }
 
 static int
-dpif_netdev_ct_set_limits(struct dpif *dpif OVS_UNUSED,
+dpif_netdev_ct_set_limits(struct dpif *dpif,
                            const uint32_t *default_limits,
                            const struct ovs_list *zone_limits)
 {
@@ -8454,7 +8454,7 @@ dpif_netdev_ct_set_limits(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
-dpif_netdev_ct_get_limits(struct dpif *dpif OVS_UNUSED,
+dpif_netdev_ct_get_limits(struct dpif *dpif,
                            uint32_t *default_limit,
                            const struct ovs_list *zone_limits_request,
                            struct ovs_list *zone_limits_reply)
@@ -8494,7 +8494,7 @@ dpif_netdev_ct_get_limits(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
-dpif_netdev_ct_del_limits(struct dpif *dpif OVS_UNUSED,
+dpif_netdev_ct_del_limits(struct dpif *dpif,
                            const struct ovs_list *zone_limits)
 {
     int err = 0;
