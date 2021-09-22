@@ -74,7 +74,7 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_TYPE_STRING:
-        atom->string = xmemdup("", 1);
+        atom->s = ovsdb_atom_string_create_nocopy(xmemdup("", 1));
         break;
 
     case OVSDB_TYPE_UUID:
@@ -136,7 +136,7 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
         return atom->boolean == false;
 
     case OVSDB_TYPE_STRING:
-        return atom->string[0] == '\0';
+        return atom->s->string[0] == '\0';
 
     case OVSDB_TYPE_UUID:
         return uuid_is_zero(&atom->uuid);
@@ -172,7 +172,8 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
         break;
 
     case OVSDB_TYPE_STRING:
-        new->string = xstrdup(old->string);
+        new->s = old->s;
+        new->s->n_refs++;
         break;
 
     case OVSDB_TYPE_UUID:
@@ -214,7 +215,7 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         return hash_boolean(atom->boolean, basis);
 
     case OVSDB_TYPE_STRING:
-        return hash_string(atom->string, basis);
+        return hash_string(atom->s->string, basis);
 
     case OVSDB_TYPE_UUID:
         return hash_int(uuid_hash(&atom->uuid), basis);
@@ -246,7 +247,7 @@ ovsdb_atom_compare_3way(const union ovsdb_atom *a,
         return a->boolean - b->boolean;
 
     case OVSDB_TYPE_STRING:
-        return strcmp(a->string, b->string);
+        return a->s == b->s ? 0 : strcmp(a->s->string, b->s->string);
 
     case OVSDB_TYPE_UUID:
         return uuid_compare_3way(&a->uuid, &b->uuid);
@@ -404,7 +405,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
 
     case OVSDB_TYPE_STRING:
         if (json->type == JSON_STRING) {
-            atom->string = xstrdup(json->string);
+            atom->s = ovsdb_atom_string_create(json->string);
             return NULL;
         }
         break;
@@ -473,7 +474,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         return json_boolean_create(atom->boolean);
 
     case OVSDB_TYPE_STRING:
-        return json_string_create(atom->string);
+        return json_string_create(atom->s->string);
 
     case OVSDB_TYPE_UUID:
         return wrap_json("uuid", json_string_create_nocopy(
@@ -551,14 +552,18 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
             if (s_len < 2 || s[s_len - 1] != '"') {
                 return xasprintf("%s: missing quote at end of "
                                  "quoted string", s);
-            } else if (!json_string_unescape(s + 1, s_len - 2,
-                                             &atom->string)) {
-                char *error = xasprintf("%s: %s", s, atom->string);
-                free(atom->string);
-                return error;
+            } else {
+                char *res;
+                if (json_string_unescape(s + 1, s_len - 2, &res)) {
+                    atom->s = ovsdb_atom_string_create_nocopy(res);
+                } else {
+                    char *error = xasprintf("%s: %s", s, res);
+                    free(res);
+                    return error;
+                }
             }
         } else {
-            atom->string = xstrdup(s);
+            atom->s = ovsdb_atom_string_create(s);
         }
         break;
 
@@ -721,14 +726,14 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_STRING:
-        if (string_needs_quotes(atom->string)) {
+        if (string_needs_quotes(atom->s->string)) {
             struct json json;
 
             json.type = JSON_STRING;
-            json.string = atom->string;
+            json.string = atom->s->string;
             json_to_ds(&json, 0, out);
         } else {
-            ds_put_cstr(out, atom->string);
+            ds_put_cstr(out, atom->s->string);
         }
         break;
 
@@ -750,7 +755,7 @@ ovsdb_atom_to_bare(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                    struct ds *out)
 {
     if (type == OVSDB_TYPE_STRING) {
-        ds_put_cstr(out, atom->string);
+        ds_put_cstr(out, atom->s->string);
     } else {
         ovsdb_atom_to_string(atom, type, out);
     }
@@ -877,7 +882,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
         return NULL;
 
     case OVSDB_TYPE_STRING:
-        return check_string_constraints(atom->string, &base->string);
+        return check_string_constraints(atom->s->string, &base->string);
 
     case OVSDB_TYPE_UUID:
         return NULL;
@@ -1691,8 +1696,8 @@ ovsdb_datum_from_smap(struct ovsdb_datum *datum, const struct smap *smap)
     struct smap_node *node;
     size_t i = 0;
     SMAP_FOR_EACH (node, smap) {
-        datum->keys[i].string = xstrdup(node->key);
-        datum->values[i].string = xstrdup(node->value);
+        datum->keys[i].s = ovsdb_atom_string_create(node->key);
+        datum->values[i].s = ovsdb_atom_string_create(node->value);
         i++;
     }
     ovs_assert(i == datum->n);

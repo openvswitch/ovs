@@ -247,15 +247,15 @@ record_id_equals(const union ovsdb_atom *name, enum ovsdb_atomic_type type,
                  const char *record_id)
 {
     if (type == OVSDB_TYPE_STRING) {
-        if (!strcmp(name->string, record_id)) {
+        if (!strcmp(name->s->string, record_id)) {
             return true;
         }
 
         struct uuid uuid;
         size_t len = strlen(record_id);
         if (len >= 4
-            && uuid_from_string(&uuid, name->string)
-            && !strncmp(name->string, record_id, len)) {
+            && uuid_from_string(&uuid, name->s->string)
+            && !strncmp(name->s->string, record_id, len)) {
             return true;
         }
 
@@ -318,14 +318,15 @@ get_row_by_id(struct ctl_context *ctx,
         if (!id->key) {
             name = datum->n == 1 ? &datum->keys[0] : NULL;
         } else {
-            const union ovsdb_atom key_atom
-                = { .string = CONST_CAST(char *, id->key) };
+            union ovsdb_atom key_atom = {
+                .s = ovsdb_atom_string_create(CONST_CAST(char *, id->key)) };
             unsigned int i;
 
             if (ovsdb_datum_find_key(datum, &key_atom,
                                      OVSDB_TYPE_STRING, &i)) {
                 name = &datum->values[i];
             }
+            ovsdb_atom_destroy(&key_atom, OVSDB_TYPE_STRING);
         }
         if (!name) {
             continue;

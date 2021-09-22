@@ -20,6 +20,7 @@
 #include "compiler.h"
 #include "ovsdb-types.h"
 #include "openvswitch/shash.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -31,12 +32,33 @@ struct ds;
 struct ovsdb_symbol_table;
 struct smap;
 
+struct ovsdb_atom_string {
+    char *string;
+    size_t n_refs;
+};
+
+static inline struct ovsdb_atom_string *
+ovsdb_atom_string_create_nocopy(char *str)
+{
+    struct ovsdb_atom_string *s = xzalloc(sizeof *s);
+
+    s->string = str;
+    s->n_refs = 1;
+    return s;
+}
+
+static inline struct ovsdb_atom_string *
+ovsdb_atom_string_create(const char *str)
+{
+    return ovsdb_atom_string_create_nocopy(xstrdup(str));
+}
+
 /* One value of an atomic type (given by enum ovs_atomic_type). */
 union ovsdb_atom {
     int64_t integer;
     double real;
     bool boolean;
-    char *string;
+    struct ovsdb_atom_string *s;
     struct uuid uuid;
 };
 
@@ -66,8 +88,9 @@ ovsdb_atom_needs_destruction(enum ovsdb_atomic_type type)
 static inline void
 ovsdb_atom_destroy(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
-    if (type == OVSDB_TYPE_STRING) {
-        free(atom->string);
+    if (type == OVSDB_TYPE_STRING && !--atom->s->n_refs) {
+        free(atom->s->string);
+        free(atom->s);
     }
 }
 

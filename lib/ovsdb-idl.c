@@ -1951,8 +1951,7 @@ ovsdb_idl_index_destroy_row(const struct ovsdb_idl_row *row_)
     BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
         c = &class->columns[i];
         (c->unparse) (row);
-        free(row->new_datum[i].values);
-        free(row->new_datum[i].keys);
+        ovsdb_datum_destroy(&row->new_datum[i], &c->type);
     }
     free(row->new_datum);
     free(row->written);

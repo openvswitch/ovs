@@ -204,7 +204,7 @@ class Atom(object):
             else:
                 return '.boolean = false'
         elif self.type == ovs.db.types.StringType:
-            return '.string = "%s"' % escapeCString(self.value)
+            return '.s = %s' % escapeCString(self.value)
         elif self.type == ovs.db.types.UuidType:
             return '.uuid = %s' % ovs.ovsuuid.to_c_assignment(self.value)
 
@@ -563,16 +563,41 @@ class Datum(object):
         if n == 0:
             return ["static struct ovsdb_datum %s = { .n = 0 };"]
 
-        s = ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
-        for key in sorted(self.values):
-            s += ["    { %s }," % key.cInitAtom(key)]
-        s += ["};"]
+        s = []
+        if self.type.key.type == ovs.db.types.StringType:
+            s += ["static struct ovsdb_atom_string %s_key_strings[%d] = {"
+                  % (name, n)]
+            for key in sorted(self.values):
+                s += ['    { .string = "%s", .n_refs = 2 },'
+                      % escapeCString(key.value)]
+            s += ["};"]
+            s += ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
+            for i in range(n):
+                s += ["    { .s = &%s_key_strings[%d] }," % (name, i)]
+            s += ["};"]
+        else:
+            s = ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
+            for key in sorted(self.values):
+                s += ["    { %s }," % key.cInitAtom(key)]
+            s += ["};"]
 
         if self.type.value:
-            s = ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]
-            for k, v in sorted(self.values.items()):
-                s += ["    { %s }," % v.cInitAtom(v)]
-            s += ["};"]
+            if self.type.value.type == ovs.db.types.StringType:
+                s += ["static struct ovsdb_atom_string %s_val_strings[%d] = {"
+                      % (name, n)]
+                for k, v in sorted(self.values):
+                    s += ['    { .string = "%s", .n_refs = 2 },'
+                          % escapeCString(v.value)]
+                s += ["};"]
+                s += ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]
+                for i in range(n):
+                    s += ["    { .s = &%s_val_strings[%d] }," % (name, i)]
+                s += ["};"]
+            else:
+                s = ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]
+                for k, v in sorted(self.values.items()):
+                    s += ["    { %s }," % v.cInitAtom(v)]
+                s += ["};"]
 
         s += ["static struct ovsdb_datum %s = {" % name]
         s += ["    .n = %d," % n]
