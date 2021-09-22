@@ -2026,26 +2026,55 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
                      const struct ovsdb_datum *b,
                      const struct ovsdb_type *b_type)
 {
-    bool changed = false;
-    size_t i;
+    unsigned int *idx, ai;
+    size_t n_idx;
 
     ovs_assert(a_type->key.type == b_type->key.type);
     ovs_assert(a_type->value.type == b_type->value.type
                || b_type->value.type == OVSDB_TYPE_VOID);
 
-    /* XXX The big-O of this could easily be improved. */
-    for (i = 0; i < a->n; ) {
-        unsigned int idx = ovsdb_datum_find(a, i, b, b_type);
-        if (idx != UINT_MAX) {
-            changed = true;
-            ovsdb_datum_remove_unsafe(a, i, a_type);
-        } else {
-            i++;
+    idx = xmalloc(b->n * sizeof *idx);
+    n_idx = 0;
+    for (size_t bi = 0; bi < b->n; bi++) {
+        ai = ovsdb_datum_find(b, bi, a, b_type);
+        if (ai == UINT_MAX) {
+            /* No such atom in 'a'. */
+            continue;
         }
+        /* Not destroying right away since ovsdb_datum_find() will use them. */
+        idx[n_idx++] = ai;
     }
-    if (changed) {
-        ovsdb_datum_sort_assert(a, a_type->key.type);
+    if (!n_idx) {
+        free(idx);
+        return;
     }
+
+    struct ovsdb_datum result;
+
+    ovsdb_datum_init_empty(&result);
+    ovsdb_datum_reallocate(&result, a_type, a->n - n_idx);
+
+    unsigned int start_idx = 0;
+    for (size_t i = 0; i < n_idx; i++) {
+        ai = idx[i];
+
+        /* Destroying atom. */
+        ovsdb_atom_destroy(&a->keys[ai], a_type->key.type);
+        if (a_type->value.type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_destroy(&a->values[ai], a_type->value.type);
+        }
+
+        /* Copy non-removed atoms from 'a' to result. */
+        ovsdb_datum_push_unsafe(&result, a, start_idx, ai - start_idx, a_type);
+        start_idx = idx[i] + 1;
+    }
+    /* Copying remaining atoms. */
+    ovsdb_datum_push_unsafe(&result, a, start_idx, a->n - start_idx, a_type);
+    a->n = 0;
+
+    ovsdb_datum_swap(&result, a);
+    ovsdb_datum_destroy(&result, a_type);
+    free(idx);
 }
 
 struct ovsdb_symbol_table *
