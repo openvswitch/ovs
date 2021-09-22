@@ -209,9 +209,10 @@ bool ovsdb_datum_equals(const struct ovsdb_datum *,
                         const struct ovsdb_type *);
 
 /* Search. */
-unsigned int ovsdb_datum_find_key(const struct ovsdb_datum *,
-                                  const union ovsdb_atom *key,
-                                  enum ovsdb_atomic_type key_type);
+bool ovsdb_datum_find_key(const struct ovsdb_datum *,
+                          const union ovsdb_atom *key,
+                          enum ovsdb_atomic_type key_type,
+                          unsigned int *pos);
 unsigned int ovsdb_datum_find_key_value(const struct ovsdb_datum *,
                                         const union ovsdb_atom *key,
                                         enum ovsdb_atomic_type key_type,
@@ -227,8 +228,7 @@ bool ovsdb_datum_excludes_all(const struct ovsdb_datum *,
                               const struct ovsdb_type *);
 void ovsdb_datum_union(struct ovsdb_datum *,
                        const struct ovsdb_datum *,
-                       const struct ovsdb_type *,
-                       bool replace);
+                       const struct ovsdb_type *);
 void ovsdb_datum_subtract(struct ovsdb_datum *a,
                           const struct ovsdb_type *a_type,
                           const struct ovsdb_datum *b,

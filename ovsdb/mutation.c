@@ -383,7 +383,7 @@ ovsdb_mutation_set_execute(struct ovsdb_row *row,
             break;
 
         case OVSDB_M_INSERT:
-            ovsdb_datum_union(dst, arg, dst_type, false);
+            ovsdb_datum_union(dst, arg, dst_type);
             error = ovsdb_mutation_check_count(dst, dst_type);
             break;
 

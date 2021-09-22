@@ -314,15 +314,18 @@ get_row_by_id(struct ctl_context *ctx,
             row, id->name_column, key, value);
 
         /* Extract the name from the column. */
-        const union ovsdb_atom *name;
+        const union ovsdb_atom *name = NULL;
         if (!id->key) {
             name = datum->n == 1 ? &datum->keys[0] : NULL;
         } else {
             const union ovsdb_atom key_atom
                 = { .string = CONST_CAST(char *, id->key) };
-            unsigned int i = ovsdb_datum_find_key(datum, &key_atom,
-                                                  OVSDB_TYPE_STRING);
-            name = i == UINT_MAX ? NULL : &datum->values[i];
+            unsigned int i;
+
+            if (ovsdb_datum_find_key(datum, &key_atom,
+                                     OVSDB_TYPE_STRING, &i)) {
+                name = &datum->values[i];
+            }
         }
         if (!name) {
             continue;
@@ -819,14 +822,14 @@ check_condition(const struct ovsdb_idl_table_class *table,
             goto out;
         }
 
-        idx = ovsdb_datum_find_key(have_datum,
-                                   &want_key, column->type.key.type);
-        if (idx == UINT_MAX && !is_set_operator(operator)) {
+        bool found = ovsdb_datum_find_key(have_datum, &want_key,
+                                          column->type.key.type, &idx);
+        if (!found && !is_set_operator(operator)) {
             retval = false;
         } else {
             struct ovsdb_datum a;
 
-            if (idx != UINT_MAX) {
+            if (found) {
                 a.n = 1;
                 a.keys = &have_datum->values[idx];
                 a.values = NULL;
@@ -992,9 +995,8 @@ cmd_get(struct ctl_context *ctx)
                 return;
             }
 
-            idx = ovsdb_datum_find_key(datum, &key,
-                                       column->type.key.type);
-            if (idx == UINT_MAX) {
+            if (!ovsdb_datum_find_key(datum, &key,
+                                      column->type.key.type, &idx)) {
                 if (must_exist) {
                     ctl_error(
                         ctx, "no key \"%s\" in %s record \"%s\" column %s",
@@ -1375,7 +1377,7 @@ set_column(const struct ovsdb_idl_table_class *table,
         ovsdb_atom_destroy(&value, column->type.value.type);
 
         ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
-                          &column->type, false);
+                          &column->type);
         ovsdb_idl_txn_verify(row, column);
         ovsdb_idl_txn_write(row, column, &datum);
     } else {
@@ -1514,7 +1516,7 @@ cmd_add(struct ctl_context *ctx)
             ovsdb_datum_destroy(&old, &column->type);
             return;
         }
-        ovsdb_datum_union(&old, &add, type, false);
+        ovsdb_datum_union(&old, &add, type);
         ovsdb_datum_destroy(&add, type);
     }
     if (old.n > type->n_max) {

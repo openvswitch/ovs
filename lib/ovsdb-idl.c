@@ -2840,9 +2840,8 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
                     struct ovsdb_datum *new_datum;
                     unsigned int pos;
                     new_datum = map_op_datum(map_op);
-                    pos = ovsdb_datum_find_key(old_datum,
-                                               &new_datum->keys[0],
-                                               key_type);
+                    ovsdb_datum_find_key(old_datum, &new_datum->keys[0],
+                                         key_type, &pos);
                     if (ovsdb_atom_equals(&new_datum->values[0],
                                           &old_datum->values[pos],
                                           value_type)) {
@@ -2851,11 +2850,9 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
                     }
                 } else if (map_op_type(map_op) == MAP_OP_DELETE){
                     /* Verify that there is a key to delete. */
-                    unsigned int pos;
-                    pos = ovsdb_datum_find_key(old_datum,
-                                               &map_op_datum(map_op)->keys[0],
-                                               key_type);
-                    if (pos == UINT_MAX) {
+                    if (!ovsdb_datum_find_key(old_datum,
+                                              &map_op_datum(map_op)->keys[0],
+                                              key_type, NULL)) {
                         /* No key to delete.  Move on to next update. */
                         VLOG_WARN("Trying to delete a key that doesn't "
                                   "exist in the map.");
@@ -2950,11 +2947,9 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
                     any_ins = true;
                 } else { /* SETP_OP_DELETE */
                     /* Verify that there is a key to delete. */
-                    unsigned int pos;
-                    pos = ovsdb_datum_find_key(old_datum,
-                                               &set_op_datum(set_op)->keys[0],
-                                               key_type);
-                    if (pos == UINT_MAX) {
+                    if (!ovsdb_datum_find_key(old_datum,
+                                              &set_op_datum(set_op)->keys[0],
+                                              key_type, NULL)) {
                         /* No key to delete.  Move on to next update. */
                         VLOG_WARN("Trying to delete a key that doesn't "
                                   "exist in the set.");
@@ -4119,7 +4114,6 @@ ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *row_,
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     enum ovsdb_atomic_type key_type;
     enum map_op_type op_type;
-    unsigned int pos;
     const struct ovsdb_datum *old_datum;
 
     if (!is_valid_partial_update(row, column, datum)) {
@@ -4131,8 +4125,11 @@ ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *row_,
     /* Find out if this is an insert or an update. */
     key_type = column->type.key.type;
     old_datum = ovsdb_idl_read(row, column);
-    pos = ovsdb_datum_find_key(old_datum, &datum->keys[0], key_type);
-    op_type = pos == UINT_MAX ? MAP_OP_INSERT : MAP_OP_UPDATE;
+    if (ovsdb_datum_find_key(old_datum, &datum->keys[0], key_type, NULL)) {
+        op_type = MAP_OP_UPDATE;
+    } else {
+        op_type = MAP_OP_INSERT;
+    }
 
     ovsdb_idl_txn_add_map_op(row, column, datum, op_type);
 }
