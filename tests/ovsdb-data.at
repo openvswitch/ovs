@@ -846,18 +846,21 @@ OVSDB_CHECK_POSITIVE([generate and apply diff -- integer],
   [[diff-data '["integer"]' '[0]' '[2]']],
   [[diff: 2
 apply diff: 2
+apply diff in place: 2
 OK]])
 
 OVSDB_CHECK_POSITIVE([generate and apply diff -- boolean],
   [[diff-data '["boolean"]' '[true]' '[false]']],
   [[diff: false
 apply diff: false
+apply diff in place: false
 OK]])
 
 OVSDB_CHECK_POSITIVE([generate and apply diff -- string],
   [[diff-data '["string"]' '["AAA"]' '["BBB"]']],
   [[diff: "BBB"
 apply diff: "BBB"
+apply diff in place: "BBB"
 OK]])
 
 dnl Test set modifications.
@@ -870,15 +873,19 @@ OVSDB_CHECK_POSITIVE([generate and apply diff -- set],
   ]],
   [[diff: ["set",[0,2]]
 apply diff: ["set",[1,2]]
+apply diff in place: ["set",[1,2]]
 OK
 diff: 0
 apply diff: 1
+apply diff in place: 1
 OK
 diff: ["set",[0,1]]
 apply diff: ["set",[0,1]]
+apply diff in place: ["set",[0,1]]
 OK
 diff: ["set",[0,1]]
 apply diff: ["set",[]]
+apply diff in place: ["set",[]]
 OK]])
 
 dnl Test set modifications causes data to violate set size constrain.
@@ -898,18 +905,23 @@ OVSDB_CHECK_POSITIVE([generate and apply diff -- map],
   ]],
   [[diff: ["map",[["2 gills","1 chopin"],["2 pints","1 quart"]]]
 apply diff: ["map",[["2 pints","1 quart"]]]
+apply diff in place: ["map",[["2 pints","1 quart"]]]
 OK
 diff: ["map",[]]
 apply diff: ["map",[["2 gills","1 chopin"]]]
+apply diff in place: ["map",[["2 gills","1 chopin"]]]
 OK
 diff: ["map",[["2 gills","1 chopin"]]]
 apply diff: ["map",[]]
+apply diff in place: ["map",[]]
 OK
 diff: ["map",[["2 pints","1 quart"]]]
 apply diff: ["map",[["2 pints","1 quart"]]]
+apply diff in place: ["map",[["2 pints","1 quart"]]]
 OK
 diff: ["map",[["2 gills","1 gallon"]]]
 apply diff: ["map",[["2 gills","1 gallon"]]]
+apply diff in place: ["map",[["2 gills","1 gallon"]]]
 OK]])
 
 OVSDB_CHECK_NEGATIVE([generate and apply diff with map -- size error],

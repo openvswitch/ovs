@@ -2253,6 +2253,106 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
     }
 }
 
+/* Apply 'diff' to 'a'.
+ *
+ * Return NULL if the 'a' is successfully updated, otherwise, return
+ * ovsdb_error. */
+struct ovsdb_error *
+ovsdb_datum_apply_diff_in_place(struct ovsdb_datum *a,
+                                const struct ovsdb_datum *diff,
+                                const struct ovsdb_type *type)
+{
+    struct ovsdb_error *error = NULL;
+    struct ovsdb_datum result;
+    size_t i, new_size;
+    unsigned int *idx, pos;
+    enum {
+        DIFF_OP_ADD,
+        DIFF_OP_REMOVE,
+        DIFF_OP_UPDATE,
+    } *operation;
+
+    if (!ovsdb_type_is_composite(type)) {
+        ovsdb_datum_destroy(a, type);
+        ovsdb_datum_clone(a, diff, type);
+        return NULL;
+    }
+
+    operation = xmalloc(diff->n * sizeof *operation);
+    idx = xmalloc(diff->n * sizeof *idx);
+    new_size = a->n;
+    for (i = 0; i < diff->n; i++) {
+        if (!ovsdb_datum_find_key(a, &diff->keys[i], type->key.type, &pos)) {
+            operation[i] = DIFF_OP_ADD;
+            new_size++;
+        } else if (type->value.type != OVSDB_TYPE_VOID
+                   && !ovsdb_atom_equals(&diff->values[i], &a->values[pos],
+                                         type->value.type)) {
+            operation[i] = DIFF_OP_UPDATE;
+        } else {
+            operation[i] = DIFF_OP_REMOVE;
+            new_size--;
+        }
+        idx[i] = pos;
+    }
+
+    /* Make sure member size of 'new' conforms to type. */
+    if (new_size < type->n_min || new_size > type->n_max) {
+        error = ovsdb_error(NULL, "Datum crated by diff has size error");
+        goto exit;
+    }
+
+    ovsdb_datum_init_empty(&result);
+    ovsdb_datum_reallocate(&result, type, new_size);
+
+    unsigned int copied = 0;
+    for (i = 0; i < diff->n; i++) {
+        pos = idx[i];
+
+        if (copied < pos) {
+            /* Copying all atoms that should go before the current one. */
+            ovsdb_datum_push_unsafe(&result, a, copied, pos - copied, type);
+            copied = pos;
+        }
+
+        switch (operation[i]) {
+        case DIFF_OP_UPDATE:
+        case DIFF_OP_ADD:
+            /* Inserting new atom from 'diff'. */
+            ovsdb_atom_clone(&result.keys[result.n],
+                             &diff->keys[i], type->key.type);
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_clone(&result.values[result.n],
+                                 &diff->values[i], type->value.type);
+            }
+            result.n++;
+            if (operation[i] != DIFF_OP_UPDATE) {
+                break;
+            }
+            /* fall through */
+
+        case DIFF_OP_REMOVE:
+            /* Destroying atom. */
+            ovsdb_atom_destroy(&a->keys[pos], type->key.type);
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_destroy(&a->values[pos], type->value.type);
+            }
+            copied++; /* Skipping removed atom. */
+            break;
+        }
+    }
+    /* Copying remaining atoms. */
+    ovsdb_datum_push_unsafe(&result, a, copied, a->n - copied, type);
+    a->n = 0;
+
+    ovsdb_datum_swap(&result, a);
+    ovsdb_datum_destroy(&result, type);
+exit:
+    free(operation);
+    free(idx);
+    return error;
+}
+
 /* Apply 'diff' to 'old' to regenerate 'new'.
  *
  * Return NULL if the 'new' is successfully generated, otherwise, return

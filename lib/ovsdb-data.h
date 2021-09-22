@@ -252,6 +252,12 @@ struct ovsdb_error *ovsdb_datum_apply_diff(struct ovsdb_datum *new_datum,
                                            const struct ovsdb_type *type)
 OVS_WARN_UNUSED_RESULT;
 
+struct ovsdb_error * ovsdb_datum_apply_diff_in_place(
+                struct ovsdb_datum *a,
+                const struct ovsdb_datum *diff,
+                const struct ovsdb_type *type)
+OVS_WARN_UNUSED_RESULT;
+
 /* Raw operations that may not maintain the invariants. */
 void ovsdb_datum_remove_unsafe(struct ovsdb_datum *, size_t idx,
                                const struct ovsdb_type *);

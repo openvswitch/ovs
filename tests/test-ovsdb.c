@@ -512,6 +512,18 @@ do_diff_data(struct ovs_cmdl_context *ctx)
             ovs_fatal(0, "failed to apply diff");
         }
 
+        /* Apply diff to 'old' in place. */
+        error = ovsdb_datum_apply_diff_in_place(&old, &diff, &type);
+        if (error) {
+            char *string = ovsdb_error_to_string_free(error);
+            ovs_fatal(0, "%s", string);
+        }
+
+        /* Test to make sure 'old' equals 'new' now.  */
+        if (!ovsdb_datum_equals(&new, &old, &type)) {
+            ovs_fatal(0, "failed to apply diff in place");
+        }
+
         /* Print diff */
         json = ovsdb_datum_to_json(&diff, &type);
         printf ("diff: ");
@@ -520,6 +532,11 @@ do_diff_data(struct ovs_cmdl_context *ctx)
         /* Print reincarnation */
         json = ovsdb_datum_to_json(&reincarnation, &type);
         printf ("apply diff: ");
+        print_and_free_json(json);
+
+        /* Print updated 'old' */
+        json = ovsdb_datum_to_json(&old, &type);
+        printf ("apply diff in place: ");
         print_and_free_json(json);
 
         ovsdb_datum_destroy(&new, &type);
