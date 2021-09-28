@@ -41,6 +41,9 @@ struct ovsdb_txn {
     struct ovs_list txn_tables; /* Contains "struct ovsdb_txn_table"s. */
     struct ds comment;
     struct uuid txnid; /* For clustered mode only. It is the eid. */
+    size_t n_atoms;    /* Number of atoms in all transaction rows. */
+    ssize_t n_atoms_diff;  /* Difference between number of added and
+                            * removed atoms. */
 };
 
 /* A table modified by a transaction. */
@@ -940,6 +943,37 @@ check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+count_atoms(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+{
+    struct ovsdb_table *table = txn_row->table;
+    ssize_t n_atoms_old = 0, n_atoms_new = 0;
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &table->schema->columns) {
+        const struct ovsdb_column *column = node->data;
+        const struct ovsdb_type *type = &column->type;
+        unsigned int idx = column->index;
+
+        if (txn_row->old) {
+            n_atoms_old += txn_row->old->fields[idx].n;
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                n_atoms_old += txn_row->old->fields[idx].n;
+            }
+        }
+        if (txn_row->new) {
+            n_atoms_new += txn_row->new->fields[idx].n;
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                n_atoms_new += txn_row->new->fields[idx].n;
+            }
+        }
+    }
+
+    txn->n_atoms += n_atoms_old + n_atoms_new;
+    txn->n_atoms_diff += n_atoms_new - n_atoms_old;
+    return NULL;
+}
+
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 update_version(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_table *table = txn_row->table;
@@ -1007,6 +1041,12 @@ ovsdb_txn_precommit(struct ovsdb_txn *txn)
         return error;
     }
 
+    /* Count atoms. */
+    error = for_each_txn_row(txn, count_atoms);
+    if (error) {
+        return OVSDB_WRAP_BUG("can't happen", error);
+    }
+
     /* Update _version for rows that changed.  */
     error = for_each_txn_row(txn, update_version);
     if (error) {
@@ -1022,6 +1062,8 @@ ovsdb_txn_clone(const struct ovsdb_txn *txn)
     struct ovsdb_txn *txn_cloned = xzalloc(sizeof *txn_cloned);
     ovs_list_init(&txn_cloned->txn_tables);
     txn_cloned->txnid = txn->txnid;
+    txn_cloned->n_atoms = txn->n_atoms;
+    txn_cloned->n_atoms_diff = txn->n_atoms_diff;
 
     struct ovsdb_txn_table *t;
     LIST_FOR_EACH (t, node, &txn->txn_tables) {
@@ -1080,6 +1122,7 @@ ovsdb_txn_add_to_history(struct ovsdb_txn *txn)
         node->txn = ovsdb_txn_clone(txn);
         ovs_list_push_back(&txn->db->txn_history, &node->node);
         txn->db->n_txn_history++;
+        txn->db->n_txn_history_atoms += txn->n_atoms;
     }
 }
 
@@ -1090,6 +1133,7 @@ ovsdb_txn_complete(struct ovsdb_txn *txn)
     if (!ovsdb_txn_is_empty(txn)) {
 
         txn->db->run_triggers_now = txn->db->run_triggers = true;
+        txn->db->n_atoms += txn->n_atoms_diff;
         ovsdb_monitors_commit(txn->db, txn);
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
         ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
@@ -1548,12 +1592,18 @@ ovsdb_txn_history_run(struct ovsdb *db)
     if (!db->need_txn_history) {
         return;
     }
-    /* Remove old histories to limit the size of the history */
-    while (db->n_txn_history > 100) {
+    /* Remove old histories to limit the size of the history.  Removing until
+     * the number of ovsdb atoms in history becomes less than the number of
+     * atoms in the database, because it will be faster to just get a database
+     * snapshot than re-constructing changes from the history that big. */
+    while (db->n_txn_history &&
+           (db->n_txn_history > 100 ||
+            db->n_txn_history_atoms > db->n_atoms)) {
         struct ovsdb_txn_history_node *txn_h_node = CONTAINER_OF(
                 ovs_list_pop_front(&db->txn_history),
                 struct ovsdb_txn_history_node, node);
 
+        db->n_txn_history_atoms -= txn_h_node->txn->n_atoms;
         ovsdb_txn_destroy_cloned(txn_h_node->txn);
         free(txn_h_node);
         db->n_txn_history--;
@@ -1565,6 +1615,7 @@ ovsdb_txn_history_init(struct ovsdb *db, bool need_txn_history)
 {
     db->need_txn_history = need_txn_history;
     db->n_txn_history = 0;
+    db->n_txn_history_atoms = 0;
     ovs_list_init(&db->txn_history);
 }
 
@@ -1583,4 +1634,5 @@ ovsdb_txn_history_destroy(struct ovsdb *db)
         free(txn_h_node);
     }
     db->n_txn_history = 0;
+    db->n_txn_history_atoms = 0;
 }

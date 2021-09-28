@@ -1230,6 +1230,69 @@ AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
 ])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
+
+AT_SETUP([ovsdb-server transaction history size])
+on_exit 'kill `cat *.pid`'
+
+dnl Start an ovsdb-server with the clustered vswitchd schema.
+AT_CHECK([ovsdb-tool create-cluster db dnl
+            $abs_top_srcdir/vswitchd/vswitch.ovsschema unix:s1.raft],
+         [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile dnl
+            --log-file --remote=punix:db.sock db],
+         [0], [ignore], [ignore])
+AT_CHECK([ovs-vsctl --no-wait init])
+
+dnl Create a bridge with N ports per transaction.  Increase N every 4
+dnl iterations.  And then remove the bridges.  By increasing the size of
+dnl transactions, ensuring that they take up a significant percentage of
+dnl the total database size, so the transaction history will not be able
+dnl to hold all of them.
+dnl
+dnl The test verifies that the number of atoms in the transaction history
+dnl is always less than the number of atoms in the database.
+get_n_atoms () {
+    n=$(ovs-appctl -t ovsdb-server memory/show dnl
+            | tr ' ' '\n' | grep atoms | grep "^$1:" | cut -d ':' -f 2)
+    if test X"$n" == "X"; then
+        n=0
+    fi
+    echo $n
+}
+
+check_atoms () {
+    n_db_atoms=$(get_n_atoms atoms)
+    n_txn_history_atoms=$(get_n_atoms txn-history-atoms)
+    echo "n_db_atoms:          $n_db_atoms"
+    echo "n_txn_history_atoms: $n_txn_history_atoms"
+    AT_CHECK([test $n_txn_history_atoms -le $n_db_atoms])
+}
+
+add_ports () {
+    for j in $(seq 1 $2); do
+        printf " -- add-port br$1 p$1-%d" $j
+    done
+}
+
+initial_db_atoms=$(get_n_atoms atoms)
+
+for i in $(seq 1 100); do
+    cmd=$(add_ports $i $(($i / 4 + 1)))
+    AT_CHECK([ovs-vsctl --no-wait add-br br$i $cmd])
+    check_atoms
+done
+
+for i in $(seq 1 100); do
+    AT_CHECK([ovs-vsctl --no-wait del-br br$i])
+    check_atoms
+done
+
+dnl After removing all the bridges, the number of atoms in the database
+dnl should return to its initial value.
+AT_CHECK([test $(get_n_atoms atoms) -eq $initial_db_atoms])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
 
