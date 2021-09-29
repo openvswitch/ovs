@@ -637,6 +637,24 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
     return retval;
 }
 
+static inline bool is_concerned_recv_ofptype(enum ofptype type)
+{
+    return type == OFPTYPE_FLOW_MOD || type == OFPTYPE_GROUP_MOD;
+}
+
+static void record_concerned_recv(struct vconn *vconn, struct ofpbuf **msgp)
+{
+    enum ofptype type;
+    enum ofperr error;
+    error = ofptype_decode(&type,(struct ofp_header *)((*msgp)->data));
+    if((!error) && is_concerned_recv_ofptype(type)) {
+        char *string = ofp_to_string((*msgp)->data, (*msgp)->size, NULL, NULL, 1);
+        VLOG_INFO("%s: received: %s", vconn->name, string);
+        free(string);
+        string = NULL;
+    }
+    return;
+}
 static int
 do_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
@@ -648,6 +666,8 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
                                     NULL, NULL, 1);
             VLOG_DBG_RL(&ofmsg_rl, "%s: received: %s", vconn->name, s);
             free(s);
+        } else {
+            record_concerned_recv(vconn, msgp);
         }
     }
     return retval;
@@ -673,6 +693,31 @@ vconn_send(struct vconn *vconn, struct ofpbuf *msg)
     return retval;
 }
 
+static inline bool is_concerned_send_ofptype(enum ofptype type)
+{
+    return type == OFPTYPE_ROLE_REPLY || type == OFPTYPE_BARRIER_REPLY;
+}
+
+static void record_concerned_send(const char *vconn_name, const char *msg_info, enum ofptype type)
+{
+    if (msg_info != NULL) {
+        VLOG_INFO("%s: received type %u: %s", vconn_name, type, msg_info);
+    }
+
+    return;
+}
+
+static char *extract_msg_send(enum ofptype *type, struct ofpbuf *msgp)
+{
+    enum ofperr error;
+    char *string = NULL;
+    error = ofptype_decode(type,(struct ofp_header *)(msgp->data));
+    if((!error) && is_concerned_send_ofptype(*type)) {
+        string = ofp_to_string(msgp->data, msgp->size, NULL, NULL, 1);
+    }
+    return string;
+}
+
 static int
 do_send(struct vconn *vconn, struct ofpbuf *msg)
 {
@@ -683,7 +728,13 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
     ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
         COVERAGE_INC(vconn_sent);
+        enum ofptype type;
+        char *s = extract_msg_send(&type, msg);
         retval = (vconn->vclass->send)(vconn, msg);
+        if (retval != EAGAIN) {
+            record_concerned_send(vconn->name, s, type);
+        }
+        free(s);
     } else {
         char *s = ofp_to_string(msg->data, msg->size, NULL, NULL, 1);
         retval = (vconn->vclass->send)(vconn, msg);
