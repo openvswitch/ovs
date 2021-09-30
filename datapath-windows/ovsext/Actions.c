@@ -1112,9 +1112,9 @@ OvsPopFieldInPacketBuf(OvsForwardingContext *ovsFwdCtx,
      * should split the function and refactor. */
     if (!bufferData) {
         EthHdr *ethHdr = (EthHdr *)bufferStart;
-        /* If the frame is not VLAN make it a no op */
         if (ethHdr->Type != ETH_TYPE_802_1PQ_NBO) {
-            return NDIS_STATUS_SUCCESS;
+            OVS_LOG_ERROR("Invalid ethHdr type %u, nbl %p", ethHdr->Type, ovsFwdCtx->curNbl);
+            return NDIS_STATUS_INVALID_PACKET;
         }
     }
     RtlMoveMemory(bufferStart + shiftLength, bufferStart, shiftOffset);
@@ -1137,6 +1137,9 @@ OvsPopFieldInPacketBuf(OvsForwardingContext *ovsFwdCtx,
 static __inline NDIS_STATUS
 OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
 {
+    NDIS_STATUS status;
+    OVS_PACKET_HDR_INFO* layers = &ovsFwdCtx->layers;
+
     /*
      * Declare a dummy vlanTag structure since we need to compute the size
      * of shiftLength. The NDIS one is a unionized structure.
@@ -1145,7 +1148,15 @@ OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
     UINT32 shiftLength = sizeof(vlanTag.TagHeader);
     UINT32 shiftOffset = sizeof(DL_EUI48) + sizeof(DL_EUI48);
 
-    return OvsPopFieldInPacketBuf(ovsFwdCtx, shiftOffset, shiftLength, NULL);
+    status = OvsPopFieldInPacketBuf(ovsFwdCtx, shiftOffset, shiftLength,
+                                    NULL);
+
+    if (status == NDIS_STATUS_SUCCESS) {
+        layers->l3Offset -= (UINT16) shiftLength;
+        layers->l4Offset -= (UINT16) shiftLength;
+    }
+
+    return status;
 }
 
 
@@ -2100,6 +2111,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                  */
                 status = OvsPopVlanInPktBuf(&ovsFwdCtx);
                 if (status != NDIS_STATUS_SUCCESS) {
+                    OVS_LOG_ERROR("OVS-pop vlan action failed status = %lu", status);
                     dropReason = L"OVS-pop vlan action failed";
                     goto dropit;
                 }
