@@ -83,7 +83,7 @@ bool
 dpdk_get_cpu_has_isa(const char *arch OVS_UNUSED,
                      const char *feature OVS_UNUSED)
 {
-    VLOG_ERR_ONCE("DPDK not supported in this version of Open vSwitch, "
+    VLOG_DBG_ONCE("DPDK not supported in this version of Open vSwitch, "
                   "cannot use CPU flag based optimizations");
     return false;
 }
