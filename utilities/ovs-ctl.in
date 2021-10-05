@@ -421,7 +421,9 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --no-force-corefiles           do not force on core dumps for OVS daemons
   --no-mlockall                  do not lock all of ovs-vswitchd into memory
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
+  --ovsdb-server-options=OPTIONS additional options for ovsdb-server (example: '-vconsole:dbg -vfile:dbg')
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
+  --ovs-vswitchd-options=OPTIONS additional options for ovs-vswitchd (example: '-vconsole:dbg -vfile:dbg')
   --no-full-hostname             set short hostname instead of full hostname
   --no-record-hostname           do not attempt to determine/record system
                                  hostname as part of start command
