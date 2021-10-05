@@ -49,8 +49,6 @@ This is the current list of active Open vSwitch committers:
      - azhou@ovn.org
    * - Ansis Atteka
      - aatteka@nicira.com
-   * - Ben Pfaff
-     - blp@ovn.org
    * - Daniele Di Proietto
      - daniele.di.proietto@gmail.com
    * - Gurucharan Shetty
@@ -89,5 +87,7 @@ More information about Emeritus Committers can be found
 
    * - Name
      - Email
+   * - Ben Pfaff
+     - blp@ovn.org
    * - Ethan J. Jackson
      - ejj@eecs.berkeley.edu
