@@ -943,6 +943,8 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
             ovs_mutex_lock(&ipf->ipf_lock);
             if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis)) {
                 dp_packet_batch_refill(pb, pkt, pb_idx);
+            } else {
+                dp_packet_delete(pkt);
             }
             ovs_mutex_unlock(&ipf->ipf_lock);
         } else {
