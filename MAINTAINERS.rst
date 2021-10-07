@@ -44,7 +44,7 @@ This is the current list of active Open vSwitch committers:
    * - Alex Wang
      - ee07b291@gmail.com
    * - Alin Serdean
-     - aserdean@cloudbasesolutions.com
+     - aserdean@ovn.org
    * - Andy Zhou
      - azhou@ovn.org
    * - Ansis Atteka

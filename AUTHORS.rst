@@ -46,7 +46,7 @@ Alexey Roytman                     roytman@il.ibm.com
 Alex Wang                          ee07b291@gmail.com
 Alfredo Finelli                    alf@computationes.de
 Alin Balutoiu                      abalutoiu@cloudbasesolutions.com
-Alin Serdean                       aserdean@cloudbasesolutions.com
+Alin Serdean                       aserdean@ovn.org
 Amber Kumar                        kumar.amber@intel.com
 Ambika Arora                       ambika.arora@tcs.com
 Amit Bose                          bose@noironetworks.com
