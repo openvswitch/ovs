@@ -113,12 +113,6 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
-    - name: fix up /etc/hosts
-      # https://github.com/actions/virtual-environments/issues/3353
-      run:  |
-        cat /etc/hosts
-        sudo sed -i "/don't remove this line/d" /etc/hosts || true
-
     - name: update PATH
       run:  |
         echo "$HOME/bin"        >> $GITHUB_PATH
