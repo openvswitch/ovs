@@ -6420,6 +6420,51 @@ rewrite_flow_encap_ethernet(struct xlate_ctx *ctx,
     }
 }
 
+static void
+rewrite_flow_encap_mpls(struct xlate_ctx *ctx,
+                        const struct ofpact_encap *encap,
+                        struct flow *flow,
+                        struct flow_wildcards *wc)
+{
+    ovs_be16 ether_type = pt_ns_type_be(encap->new_pkt_type);
+    int n;
+
+    if (encap->n_props == 1) {
+        struct ofpact_ed_prop_mpls_ethertype *prop_ether_type =
+            ALIGNED_CAST(struct ofpact_ed_prop_mpls_ethertype *,
+                         &encap->props[0]);
+        ether_type = htons(prop_ether_type->ether_type);
+    }
+    n = flow_count_mpls_labels(flow, ctx->wc);
+    if (n < FLOW_MAX_MPLS_LABELS) {
+        wc->masks.packet_type = OVS_BE32_MAX;
+
+       /* If the current packet is already a MPLS packet with ethernet header
+        * the existing MPLS states must be cleared before the encap MPLS action
+        * is applied. */
+       if (flow->packet_type == htonl(PT_ETH) &&
+           flow->dl_type == htons(ETH_TYPE_MPLS)) {
+           memset(&ctx->wc->masks.mpls_lse, 0x0,
+                  sizeof *wc->masks.mpls_lse * FLOW_MAX_MPLS_LABELS);
+           memset(&flow->mpls_lse, 0x0, sizeof *flow->mpls_lse *
+                  FLOW_MAX_MPLS_LABELS);
+           memset(&ctx->base_flow.mpls_lse, 0x0,
+                  sizeof *ctx->base_flow.mpls_lse * FLOW_MAX_MPLS_LABELS);
+       }
+       flow->packet_type = htonl(PT_MPLS);
+       flow_push_mpls(flow, n, ether_type, ctx->wc, true);
+       flow->dl_src = eth_addr_zero;
+       flow->dl_dst = eth_addr_zero;
+    } else {
+        xlate_report_error(ctx, "dropping packet on which an encap MPLS "
+                           "action can't be performed as it would have "
+                           "more MPLS LSEs than the %d supported.",
+                           FLOW_MAX_MPLS_LABELS);
+        ctx->error = XLATE_TOO_MANY_MPLS_LABELS;
+        return;
+    }
+}
+
 /* For an MD2 NSH header returns a pointer to an ofpbuf with the encoded
  * MD2 TLVs provided as encap properties to the encap operation. This
  * will be stored as encap_data in the ctx and copied into the push_nsh
@@ -6551,6 +6596,13 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
         case PT_NSH:
             encap_data = rewrite_flow_push_nsh(ctx, encap, flow, wc);
             break;
+        case PT_MPLS:
+        case PT_MPLS_MC:
+            rewrite_flow_encap_mpls(ctx, encap, flow, wc);
+            if (!ctx->xbridge->support.add_mpls) {
+                ctx->xout->slow |= SLOW_ACTION;
+            }
+            break;
         default:
             /* New packet type was checked during decoding. */
             OVS_NOT_REACHED();
@@ -6622,6 +6674,30 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
             ctx->pending_decap = true;
             /* Trigger recirculation. */
             return true;
+        case PT_MPLS: {
+             int n;
+             ovs_be16 ethertype;
+
+             flow->packet_type = decap->new_pkt_type;
+             ethertype = pt_ns_type_be(flow->packet_type);
+
+             n = flow_count_mpls_labels(flow, ctx->wc);
+             if (!ethertype) {
+                 ethertype = htons(ETH_TYPE_TEB);
+             }
+             flow_pop_mpls(flow, n, ethertype, ctx->wc);
+
+             if (!ctx->xbridge->support.add_mpls) {
+                ctx->xout->slow |= SLOW_ACTION;
+             }
+             ctx->pending_decap = true;
+             if (n == 1) {
+                  /* Trigger recirculation. */
+                  return true;
+             } else {
+                  return false;
+             }
+        }
         default:
             /* Error handling: drop packet. */
             xlate_report_debug(

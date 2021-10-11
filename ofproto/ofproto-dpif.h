@@ -207,7 +207,9 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(bool, lb_output_action, "Optimized Balance TCP mode")\
                                                                             \
     /* True if the datapath supports all-zero IP SNAT. */                   \
-    DPIF_SUPPORT_FIELD(bool, ct_zero_snat, "Conntrack all-zero IP SNAT")
+    DPIF_SUPPORT_FIELD(bool, ct_zero_snat, "Conntrack all-zero IP SNAT")    \
+    /* True if the datapath supports add_mpls action   */                   \
+    DPIF_SUPPORT_FIELD(bool, add_mpls, "MPLS Label add")
 
 
 /* Stores the various features which the corresponding backer supports. */

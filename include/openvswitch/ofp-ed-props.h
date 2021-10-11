@@ -46,6 +46,11 @@ enum ofp_ed_nsh_prop_type {
     OFPPPT_PROP_NSH_TLV = 2,     /* property TLV in NSH */
 };
 
+enum ofp_ed_mpls_prop_type {
+    OFPPPT_PROP_MPLS_NONE = 0,       /* unused */
+    OFPPPT_PROP_MPLS_ETHERTYPE = 1,  /* MPLS Ethertype */
+};
+
 /*
  * External representation of encap/decap properties.
  * These must be padded to a multiple of 8 bytes.
@@ -72,6 +77,12 @@ struct ofp_ed_prop_nsh_tlv {
     uint8_t data[0];
 };
 
+struct ofp_ed_prop_mpls_ethertype {
+    struct ofp_ed_prop_header header;
+    uint16_t ether_type;     /* MPLS ethertype . */
+    uint8_t pad[2];          /* Padding to 8 bytes. */
+};
+
 /*
  * Internal representation of encap/decap properties
  */
@@ -96,6 +107,13 @@ struct ofpact_ed_prop_nsh_tlv {
     /* tlv_len octets of metadata value, padded to a multiple of 8 bytes. */
     uint8_t data[0];
 };
+
+struct ofpact_ed_prop_mpls_ethertype {
+    struct ofpact_ed_prop header;
+    uint16_t ether_type;     /* MPLS ethertype . */
+    uint8_t pad[2];          /* Padding to 8 bytes. */
+};
+
 enum ofperr decode_ed_prop(const struct ofp_ed_prop_header **ofp_prop,
                            struct ofpbuf *out, size_t *remaining);
 enum ofperr encode_ed_prop(const struct ofpact_ed_prop **prop,
