@@ -64,6 +64,8 @@ def returnUnchanged(x):
 
 @functools.total_ordering
 class Atom(object):
+    __slots__ = ('value', 'type')
+
     def __init__(self, type_, value=None):
         self.type = type_
         if value is not None:
@@ -266,6 +268,8 @@ class Atom(object):
 
 @functools.total_ordering
 class Datum(object):
+    __slots__ = ('type', 'values')
+
     def __init__(self, type_, values={}):
         self.type = type_
         self.values = values
