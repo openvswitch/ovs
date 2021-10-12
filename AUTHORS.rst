@@ -339,6 +339,7 @@ Randall Sharo                      andall.sharo@navy.mil
 Ravi Kerur                         Ravi.Kerur@telekom.com
 Raymond Burkholder                 ray@oneunified.net
 Reid Price
+Remi Jouannet                      remi.jouannet@outscale.com
 Remko Tronçon                      git@el-tramo.be
 Renat Nurgaliyev                   impleman@gmail.com
 Rich Lane                          rlane@bigswitch.com
