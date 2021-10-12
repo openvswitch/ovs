@@ -4160,11 +4160,21 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         dp_netdev_pmd_unref(pmd);
     }
 
-    if (dp_packet_batch_size(&pp)) {
+    if (dp_packet_batch_size(&pp) == 1) {
         /* Packet wasn't dropped during the execution.  Swapping content with
          * the original packet, because the caller might expect actions to
-         * modify it. */
-        dp_packet_swap(execute->packet, packet_clone);
+         * modify it.  Uisng the packet from a batch instead of 'packet_clone'
+         * because it maybe stolen and replaced by other packet, e.g. by
+         * the fragmentation engine. */
+        dp_packet_swap(execute->packet, pp.packets[0]);
+        dp_packet_delete_batch(&pp, true);
+    } else if (dp_packet_batch_size(&pp)) {
+        /* FIXME: We have more packets than expected.  Likely, we got IP
+         * fragments of the reassembled packet.  Dropping them here as we have
+         * no way to get them to the caller.  It might be that all the required
+         * actions with them are already executed, but it also might not be a
+         * case, e.g. if dpif_netdev_execute() called to execute a single
+         * tunnel push. */
         dp_packet_delete_batch(&pp, true);
     }
 
