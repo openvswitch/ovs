@@ -101,6 +101,7 @@ class Idl(object):
     IDL_S_SERVER_MONITOR_REQUESTED = 2
     IDL_S_DATA_MONITOR_REQUESTED = 3
     IDL_S_DATA_MONITOR_COND_REQUESTED = 4
+    IDL_S_MONITORING = 5
 
     def __init__(self, remote, schema_helper, probe_interval=None,
                  leader_only=True):
@@ -294,6 +295,7 @@ class Idl(object):
                     else:
                         assert self.state == self.IDL_S_DATA_MONITOR_REQUESTED
                         self.__parse_update(msg.result, OVSDB_UPDATE)
+                    self.state = self.IDL_S_MONITORING
 
                 except error.Error as e:
                     vlog.err("%s: parse error in received schema: %s"
@@ -1466,6 +1468,11 @@ class Transaction(object):
         # The status can only change if we're the active transaction.
         # (Otherwise, our status will change only in Idl.run().)
         if self != self.idl.txn:
+            return self._status
+
+        if self.idl.state != Idl.IDL_S_MONITORING:
+            self._status = Transaction.TRY_AGAIN
+            self.__disassemble()
             return self._status
 
         # If we need a lock but don't have it, give up quickly.
