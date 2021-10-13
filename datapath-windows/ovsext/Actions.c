@@ -1803,9 +1803,11 @@ OvsExecuteRecirc(OvsForwardingContext *ovsFwdCtx,
     }
 
     if (newNbl) {
-        deferredAction = OvsAddDeferredActions(newNbl, key, NULL);
+        deferredAction = OvsAddDeferredActions(newNbl, key, &(ovsFwdCtx->layers),
+                                               NULL);
     } else {
-        deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+        deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key,
+                                              &(ovsFwdCtx->layers), NULL);
     }
 
     if (deferredAction) {
@@ -1975,7 +1977,7 @@ OvsExecuteSampleAction(OvsForwardingContext *ovsFwdCtx,
         return STATUS_SUCCESS;
     }
 
-    if (!OvsAddDeferredActions(newNbl, key, a)) {
+    if (!OvsAddDeferredActions(newNbl, key, &(ovsFwdCtx->layers), a)) {
         OVS_LOG_INFO(
             "Deferred actions limit reached, dropping sample action.");
         OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
@@ -2361,7 +2363,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
 
     if (status == STATUS_SUCCESS) {
         status = OvsProcessDeferredActions(switchContext, completionList,
-                                           portNo, sendFlags, layers);
+                                           portNo, sendFlags, NULL);
     }
 
     return status;
