@@ -18,6 +18,7 @@
 #define __RECIRC_H_ 1
 
 #include "Actions.h"
+#include "NetProto.h"
 
 #define DEFERRED_ACTION_QUEUE_SIZE          10
 #define DEFERRED_ACTION_EXEC_LEVEL           4
@@ -26,6 +27,7 @@ typedef struct _OVS_DEFERRED_ACTION {
     PNET_BUFFER_LIST    nbl;
     PNL_ATTR            actions;
     OvsFlowKey          key;
+    OVS_PACKET_HDR_INFO layers;
 } OVS_DEFERRED_ACTION, *POVS_DEFERRED_ACTION;
 
 /*
@@ -52,6 +54,7 @@ OvsProcessDeferredActions(POVS_SWITCH_CONTEXT switchContext,
 POVS_DEFERRED_ACTION
 OvsAddDeferredActions(PNET_BUFFER_LIST packet,
                       OvsFlowKey *key,
+                      POVS_PACKET_HDR_INFO layers,
                       const PNL_ATTR actions);
 
 /*
