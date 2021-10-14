@@ -42,6 +42,7 @@
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "skiplist.h"
+#include "simap.h"
 #include "sset.h"
 #include "svec.h"
 #include "util.h"
@@ -463,6 +464,29 @@ void
 ovsdb_idl_wait(struct ovsdb_idl *idl)
 {
     ovsdb_cs_wait(idl->cs);
+}
+
+/* Returns memory usage statistics. */
+void
+ovsdb_idl_get_memory_usage(struct ovsdb_idl *idl, struct simap *usage)
+{
+    unsigned int cells = 0;
+
+    if (!idl) {
+        return;
+    }
+
+    for (size_t i = 0; i < idl->class_->n_tables; i++) {
+        struct ovsdb_idl_table *table = &idl->tables[i];
+        unsigned int n_columns = table->class_->n_columns;
+        unsigned int n_rows = hmap_count(&table->rows);
+
+        cells += n_rows * n_columns;
+    }
+
+    simap_increase(usage, "idl-cells", cells);
+    simap_increase(usage, "idl-outstanding-txns",
+                   hmap_count(&idl->outstanding_txns));
 }
 
 /* Returns a "sequence number" that represents the state of 'idl'.  When

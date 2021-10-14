@@ -3423,6 +3423,8 @@ bridge_get_memory_usage(struct simap *usage)
     HMAP_FOR_EACH (br, node, &all_bridges) {
         ofproto_get_memory_usage(br->ofproto, usage);
     }
+
+    ovsdb_idl_get_memory_usage(idl, usage);
 }
 
 /* QoS unixctl user interface functions. */

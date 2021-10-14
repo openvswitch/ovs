@@ -55,6 +55,7 @@ struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
+struct simap;
 struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
@@ -72,6 +73,8 @@ void ovsdb_idl_set_leader_only(struct ovsdb_idl *, bool leader_only);
 
 void ovsdb_idl_run(struct ovsdb_idl *);
 void ovsdb_idl_wait(struct ovsdb_idl *);
+
+void ovsdb_idl_get_memory_usage(struct ovsdb_idl *, struct simap *usage);
 
 void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
 bool ovsdb_idl_has_lock(const struct ovsdb_idl *);
