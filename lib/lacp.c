@@ -429,6 +429,20 @@ lacp_status(const struct lacp *lacp) OVS_EXCLUDED(mutex)
     }
 }
 
+const char *lacp_status_description(enum lacp_status lacp_status)
+{
+    switch (lacp_status) {
+    case LACP_NEGOTIATED:
+        return "negotiated";
+    case LACP_CONFIGURED:
+        return "configured";
+    case LACP_DISABLED:
+        return "off";
+    default:
+        return "<unknown>";
+    }
+}
+
 /* Registers 'member_' as subordinate to 'lacp'.  This should be called at
  * least once per member in a LACP managed bond.  Should also be called
  * whenever a member's settings change. */

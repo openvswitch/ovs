@@ -49,6 +49,7 @@ bool lacp_is_active(const struct lacp *);
 bool lacp_process_packet(struct lacp *, const void *member,
                          const struct dp_packet *packet);
 enum lacp_status lacp_status(const struct lacp *);
+const char *lacp_status_description(enum lacp_status);
 
 struct lacp_member_settings {
     char *name;                       /* Name (for debugging). */
