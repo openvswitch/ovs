@@ -38,8 +38,7 @@ allocate_row(const struct ovsdb_table *table)
     struct ovsdb_row *row = xmalloc(row_size);
     row->table = CONST_CAST(struct ovsdb_table *, table);
     row->txn_row = NULL;
-    ovs_list_init(&row->src_refs);
-    ovs_list_init(&row->dst_refs);
+    hmap_init(&row->dst_refs);
     row->n_refs = 0;
     return row;
 }
@@ -61,6 +60,78 @@ ovsdb_row_create(const struct ovsdb_table *table)
     return row;
 }
 
+static struct ovsdb_weak_ref *
+ovsdb_weak_ref_clone(struct ovsdb_weak_ref *src)
+{
+    struct ovsdb_weak_ref *weak = xzalloc(sizeof *weak);
+
+    hmap_node_nullify(&weak->dst_node);
+    ovs_list_init(&weak->src_node);
+    weak->src_table = src->src_table;
+    weak->src = src->src;
+    weak->dst_table = src->dst_table;
+    weak->dst = src->dst;
+    ovsdb_atom_clone(&weak->key, &src->key, src->type.key.type);
+    if (src->type.value.type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_clone(&weak->value, &src->value, src->type.value.type);
+    }
+    ovsdb_type_clone(&weak->type, &src->type);
+    weak->column_idx = src->column_idx;
+    weak->by_key = src->by_key;
+    return weak;
+}
+
+uint32_t
+ovsdb_weak_ref_hash(const struct ovsdb_weak_ref *weak)
+{
+    return uuid_hash(&weak->src);
+}
+
+static bool
+ovsdb_weak_ref_equals(const struct ovsdb_weak_ref *a,
+                      const struct ovsdb_weak_ref *b)
+{
+    if (a == b) {
+        return true;
+    }
+    return a->src_table == b->src_table
+           && a->dst_table == b->dst_table
+           && uuid_equals(&a->src, &b->src)
+           && uuid_equals(&a->dst, &b->dst)
+           && a->column_idx == b->column_idx
+           && a->by_key == b->by_key
+           && ovsdb_atom_equals(&a->key, &b->key, a->type.key.type);
+}
+
+struct ovsdb_weak_ref *
+ovsdb_row_find_weak_ref(const struct ovsdb_row *row,
+                        const struct ovsdb_weak_ref *ref)
+{
+    struct ovsdb_weak_ref *weak;
+    HMAP_FOR_EACH_WITH_HASH (weak, dst_node,
+                             ovsdb_weak_ref_hash(ref), &row->dst_refs) {
+        if (ovsdb_weak_ref_equals(weak, ref)) {
+            return weak;
+        }
+    }
+    return NULL;
+}
+
+void
+ovsdb_weak_ref_destroy(struct ovsdb_weak_ref *weak)
+{
+    if (!weak) {
+        return;
+    }
+    ovs_assert(ovs_list_is_empty(&weak->src_node));
+    ovsdb_atom_destroy(&weak->key, weak->type.key.type);
+    if (weak->type.value.type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_destroy(&weak->value, weak->type.value.type);
+    }
+    ovsdb_type_destroy(&weak->type);
+    free(weak);
+}
+
 struct ovsdb_row *
 ovsdb_row_clone(const struct ovsdb_row *old)
 {
@@ -75,6 +146,13 @@ ovsdb_row_clone(const struct ovsdb_row *old)
                           &old->fields[column->index],
                           &column->type);
     }
+
+    struct ovsdb_weak_ref *weak, *clone;
+    HMAP_FOR_EACH (weak, dst_node, &old->dst_refs) {
+        clone = ovsdb_weak_ref_clone(weak);
+        hmap_insert(&new->dst_refs, &clone->dst_node,
+                    ovsdb_weak_ref_hash(clone));
+    }
     return new;
 }
 
@@ -85,20 +163,13 @@ ovsdb_row_destroy(struct ovsdb_row *row)
 {
     if (row) {
         const struct ovsdb_table *table = row->table;
-        struct ovsdb_weak_ref *weak, *next;
+        struct ovsdb_weak_ref *weak;
         const struct shash_node *node;
 
-        LIST_FOR_EACH_SAFE (weak, next, dst_node, &row->dst_refs) {
-            ovs_list_remove(&weak->src_node);
-            ovs_list_remove(&weak->dst_node);
-            free(weak);
+        HMAP_FOR_EACH_POP (weak, dst_node, &row->dst_refs) {
+            ovsdb_weak_ref_destroy(weak);
         }
-
-        LIST_FOR_EACH_SAFE (weak, next, src_node, &row->src_refs) {
-            ovs_list_remove(&weak->src_node);
-            ovs_list_remove(&weak->dst_node);
-            free(weak);
-        }
+        hmap_destroy(&row->dst_refs);
 
         SHASH_FOR_EACH (node, &table->schema->columns) {
             const struct ovsdb_column *column = node->data;

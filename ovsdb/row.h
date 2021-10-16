@@ -36,11 +36,28 @@ struct ovsdb_column_set;
  * ovsdb_weak_ref" structures are created for them.
  */
 struct ovsdb_weak_ref {
-    struct ovs_list src_node;      /* In src->src_refs list. */
-    struct ovs_list dst_node;      /* In destination row's dst_refs list. */
-    struct ovsdb_row *src;         /* Source row. */
-    struct ovsdb_table *dst_table; /* Destination table. */
+    struct hmap_node dst_node;     /* In ovsdb_row's 'dst_refs' hmap. */
+    struct ovs_list src_node;      /* In txn_row's 'deleted/added_refs'. */
+
+    struct ovsdb_table *src_table; /* Source row table. */
+    struct uuid src;               /* Source row uuid. */
+
+    struct ovsdb_table *dst_table; /* Destination row table. */
     struct uuid dst;               /* Destination row uuid. */
+
+    /* Source row's key-value pair that created this reference.
+     * This information is needed in order to find and delete the reference
+     * from the source row.  We need both key and value in order to avoid
+     * accidential deletion of an updated data, i.e. if value in datum got
+     * updated and the reference was created by the old value.
+     * Storing column index in order to remove references from the correct
+     * column.   'by_key' flag allows to distinguish 2 references in a corner
+     * case where key and value are the same. */
+    union ovsdb_atom key;
+    union ovsdb_atom value;
+    struct ovsdb_type type;        /* Datum type of the key-value pair. */
+    unsigned int column_idx;       /* Row column index for this pair. */
+    bool by_key;                   /* 'true' if reference is a 'key'. */
 };
 
 /* A row in a database table. */
@@ -50,8 +67,7 @@ struct ovsdb_row {
     struct ovsdb_txn_row *txn_row; /* Transaction that row is in, if any. */
 
     /* Weak references.  Updated and checked only at transaction commit. */
-    struct ovs_list src_refs;   /* Weak references from this row. */
-    struct ovs_list dst_refs;   /* Weak references to this row. */
+    struct hmap dst_refs;          /* Weak references to this row. */
 
     /* Number of strong refs to this row from other rows, in this table or
      * other tables, through 'uuid' columns that have a 'refTable' constraint
@@ -68,6 +84,12 @@ struct ovsdb_row {
      * have have been committed as part of the database, the hmap_node with
      * index 'i' is contained in hmap table->indexes[i].  */
 };
+
+uint32_t ovsdb_weak_ref_hash(const struct ovsdb_weak_ref *);
+struct ovsdb_weak_ref * ovsdb_row_find_weak_ref(const struct ovsdb_row *,
+                                                const struct ovsdb_weak_ref *);
+void ovsdb_weak_ref_destroy(struct ovsdb_weak_ref *);
+
 
 struct ovsdb_row *ovsdb_row_create(const struct ovsdb_table *);
 struct ovsdb_row *ovsdb_row_clone(const struct ovsdb_row *);
