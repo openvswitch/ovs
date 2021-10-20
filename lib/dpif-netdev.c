@@ -6187,6 +6187,9 @@ reload:
                 netdev_rxq_get_queue_id(poll_list[i].rxq->rx));
        /* Reset the rxq current cycles counter. */
        dp_netdev_rxq_set_cycles(poll_list[i].rxq, RXQ_CYCLES_PROC_CURR, 0);
+       for (int j = 0; j < PMD_INTERVAL_MAX; j++) {
+           dp_netdev_rxq_set_intrvl_cycles(poll_list[i].rxq, 0);
+       }
     }
 
     if (!poll_cnt) {
