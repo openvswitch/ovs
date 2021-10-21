@@ -1,5 +1,6 @@
-v2.13.5 - xx xxx xxxx
+v2.13.5 - 21 Oct 2021
 ---------------------
+   - Bug fixes
    - OVS now reports the datapath capability 'ct_zero_snat', which reflects
      whether the SNAT with all-zero IP address is supported.
      See ovs-vswitchd.conf.db(5) for details.
