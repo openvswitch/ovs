@@ -2222,17 +2222,18 @@ struct get_vport_netdev_aux {
     struct rte_flow_tunnel *tunnel;
     odp_port_t *odp_port;
     struct netdev *vport;
+    const char *type;
 };
 
 static bool
-get_vxlan_netdev_cb(struct netdev *netdev,
+get_vport_netdev_cb(struct netdev *netdev,
                     odp_port_t odp_port,
                     void *aux_)
 {
     const struct netdev_tunnel_config *tnl_cfg;
     struct get_vport_netdev_aux *aux = aux_;
 
-    if (strcmp(netdev_get_type(netdev), "vxlan")) {
+    if (!aux->type || strcmp(netdev_get_type(netdev), aux->type)) {
         return false;
     }
 
@@ -2243,29 +2244,15 @@ get_vxlan_netdev_cb(struct netdev *netdev,
         return false;
     }
 
-    if (tnl_cfg->dst_port == aux->tunnel->tp_dst) {
-        /* Found the netdev. Store the results and stop the traversing. */
-        aux->vport = netdev_ref(netdev);
-        *aux->odp_port = odp_port;
-        return true;
+    if (tnl_cfg->dst_port != aux->tunnel->tp_dst) {
+        return false;
     }
 
-    return false;
-}
+    /* Found the netdev. Store the results and stop the traversing. */
+    aux->vport = netdev_ref(netdev);
+    *aux->odp_port = odp_port;
 
-static struct netdev *
-get_vxlan_netdev(const char *dpif_type,
-                 struct rte_flow_tunnel *tunnel,
-                 odp_port_t *odp_port)
-{
-    struct get_vport_netdev_aux aux = {
-        .tunnel = tunnel,
-        .odp_port = odp_port,
-        .vport = NULL,
-    };
-
-    netdev_ports_traverse(dpif_type, get_vxlan_netdev_cb, &aux);
-    return aux.vport;
+    return true;
 }
 
 static struct netdev *
@@ -2273,11 +2260,19 @@ get_vport_netdev(const char *dpif_type,
                  struct rte_flow_tunnel *tunnel,
                  odp_port_t *odp_port)
 {
-    if (tunnel->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
-        return get_vxlan_netdev(dpif_type, tunnel, odp_port);
-    }
+    struct get_vport_netdev_aux aux = {
+        .tunnel = tunnel,
+        .odp_port = odp_port,
+        .vport = NULL,
+        .type = NULL,
+    };
 
-    OVS_NOT_REACHED();
+    if (tunnel->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
+        aux.type = "vxlan";
+    }
+    netdev_ports_traverse(dpif_type, get_vport_netdev_cb, &aux);
+
+    return aux.vport;
 }
 
 static int
