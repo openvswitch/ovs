@@ -1611,10 +1611,10 @@ ovsdb_idl_row_change(struct ovsdb_idl_row *row, const struct shash *values,
     SHASH_FOR_EACH (node, values) {
         const char *column_name = node->name;
         const struct ovsdb_idl_column *column;
-        struct ovsdb_datum datum;
         struct ovsdb_error *error;
         unsigned int column_idx;
         struct ovsdb_datum *old;
+        bool datum_changed = false;
 
         column = shash_find_data(&table->columns, column_name);
         if (!column) {
@@ -1626,57 +1626,59 @@ ovsdb_idl_row_change(struct ovsdb_idl_row *row, const struct shash *values,
         column_idx = column - table->class_->columns;
         old = &row->old_datum[column_idx];
 
-        error = NULL;
         if (xor) {
             struct ovsdb_datum diff;
 
             error = ovsdb_transient_datum_from_json(&diff, &column->type,
                                                     node->data);
             if (!error) {
-                error = ovsdb_datum_apply_diff(&datum, old, &diff,
-                                               &column->type);
+                error = ovsdb_datum_apply_diff_in_place(old, &diff,
+                                                        &column->type);
                 ovsdb_datum_destroy(&diff, &column->type);
+                datum_changed = true;
             }
         } else {
+            struct ovsdb_datum datum;
+
             error = ovsdb_datum_from_json(&datum, &column->type, node->data,
                                           NULL);
+            if (!error) {
+                if (!ovsdb_datum_equals(old, &datum, &column->type)) {
+                    ovsdb_datum_swap(old, &datum);
+                    datum_changed = true;
+                }
+                ovsdb_datum_destroy(&datum, &column->type);
+            }
         }
 
-        if (!error) {
-            if (!ovsdb_datum_equals(old, &datum, &column->type)) {
-                ovsdb_datum_swap(old, &datum);
-                if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
-                    changed = true;
-                    row->change_seqno[change]
-                        = row->table->change_seqno[change]
-                        = row->table->idl->change_seqno + 1;
-
-                    if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
-                        if (ovs_list_is_empty(&row->track_node) &&
-                            ovsdb_idl_track_is_set(row->table)) {
-                            ovs_list_push_back(&row->table->track_list,
-                                               &row->track_node);
-                        }
-
-                        add_tracked_change_for_references(row);
-                        if (!row->updated) {
-                            row->updated = bitmap_allocate(class->n_columns);
-                        }
-                        bitmap_set1(row->updated, column_idx);
-                    }
-                }
-            } else {
-                /* Didn't really change but the OVSDB monitor protocol always
-                 * includes every value in a row. */
-            }
-
-            ovsdb_datum_destroy(&datum, &column->type);
-        } else {
+        if (error) {
             char *s = ovsdb_error_to_string_free(error);
             VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
                          " in table %s: %s", column_name,
                          UUID_ARGS(&row->uuid), table->class_->name, s);
             free(s);
+            continue;
+        }
+
+        if (datum_changed && table->modes[column_idx] & OVSDB_IDL_ALERT) {
+            changed = true;
+            row->change_seqno[change]
+                = row->table->change_seqno[change]
+                = row->table->idl->change_seqno + 1;
+
+            if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
+                if (ovs_list_is_empty(&row->track_node) &&
+                    ovsdb_idl_track_is_set(row->table)) {
+                    ovs_list_push_back(&row->table->track_list,
+                                       &row->track_node);
+                }
+
+                add_tracked_change_for_references(row);
+                if (!row->updated) {
+                    row->updated = bitmap_allocate(class->n_columns);
+                }
+                bitmap_set1(row->updated, column_idx);
+            }
         }
     }
     return changed;
