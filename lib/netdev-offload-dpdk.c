@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <netinet/ip6.h>
 #include <rte_flow.h>
+#include <rte_gre.h>
 
 #include "cmap.h"
 #include "dpif-netdev.h"
@@ -448,6 +449,46 @@ dump_flow_pattern(struct ds *s,
                                                        vxlan_mask->vni));
             DUMP_PATTERN_ITEM(vxlan_mask->vni, false, "vni", "%"PRIu32,
                               ntohl(spec_vni) >> 8, ntohl(mask_vni) >> 8, 0);
+        }
+        ds_put_cstr(s, "/ ");
+    } else if (item->type == RTE_FLOW_ITEM_TYPE_GRE) {
+        const struct rte_flow_item_gre *gre_spec = item->spec;
+        const struct rte_flow_item_gre *gre_mask = item->mask;
+        const struct rte_gre_hdr *greh_spec, *greh_mask;
+        uint8_t c_bit_spec, c_bit_mask;
+        uint8_t k_bit_spec, k_bit_mask;
+
+        ds_put_cstr(s, "gre ");
+        if (gre_spec) {
+            if (!gre_mask) {
+                gre_mask = &rte_flow_item_gre_mask;
+            }
+            greh_spec = (struct rte_gre_hdr *) gre_spec;
+            greh_mask = (struct rte_gre_hdr *) gre_mask;
+
+            c_bit_spec = greh_spec->c;
+            c_bit_mask = greh_mask->c ? UINT8_MAX : 0;
+            DUMP_PATTERN_ITEM(c_bit_mask, false, "c_bit", "%"PRIu8,
+                              c_bit_spec, c_bit_mask, 0);
+
+            k_bit_spec = greh_spec->k;
+            k_bit_mask = greh_mask->k ? UINT8_MAX : 0;
+            DUMP_PATTERN_ITEM(k_bit_mask, false, "k_bit", "%"PRIu8,
+                              k_bit_spec, k_bit_mask, 0);
+        }
+        ds_put_cstr(s, "/ ");
+    } else if (item->type == RTE_FLOW_ITEM_TYPE_GRE_KEY) {
+        const rte_be32_t gre_mask = RTE_BE32(UINT32_MAX);
+        const rte_be32_t *key_spec = item->spec;
+        const rte_be32_t *key_mask = item->mask;
+
+        ds_put_cstr(s, "gre_key ");
+        if (key_spec) {
+            if (!key_mask) {
+                key_mask = &gre_mask;
+            }
+            DUMP_PATTERN_ITEM(*key_mask, false, "value", "%"PRIu32,
+                              ntohl(*key_spec), ntohl(*key_mask), 0);
         }
         ds_put_cstr(s, "/ ");
     } else {
@@ -1092,6 +1133,59 @@ parse_vxlan_match(struct flow_patterns *patterns,
     return 0;
 }
 
+static int
+parse_gre_match(struct flow_patterns *patterns,
+                struct match *match)
+{
+    struct rte_flow_item_gre *gre_spec, *gre_mask;
+    struct rte_gre_hdr *greh_spec, *greh_mask;
+    rte_be32_t *key_spec, *key_mask;
+    struct flow *consumed_masks;
+    int ret;
+
+
+    ret = parse_tnl_ip_match(patterns, match, IPPROTO_GRE);
+    if (ret) {
+        return -1;
+    }
+
+    gre_spec = xzalloc(sizeof *gre_spec);
+    gre_mask = xzalloc(sizeof *gre_mask);
+    add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_GRE, gre_spec, gre_mask,
+                     NULL);
+
+    consumed_masks = &match->wc.masks;
+
+    greh_spec = (struct rte_gre_hdr *) gre_spec;
+    greh_mask = (struct rte_gre_hdr *) gre_mask;
+
+    if (match->wc.masks.tunnel.flags & FLOW_TNL_F_CSUM) {
+        greh_spec->c = !!(match->flow.tunnel.flags & FLOW_TNL_F_CSUM);
+        greh_mask->c = 1;
+        consumed_masks->tunnel.flags &= ~FLOW_TNL_F_CSUM;
+    }
+
+    if (match->wc.masks.tunnel.flags & FLOW_TNL_F_KEY) {
+        greh_spec->k = !!(match->flow.tunnel.flags & FLOW_TNL_F_KEY);
+        greh_mask->k = 1;
+
+        key_spec = xzalloc(sizeof *key_spec);
+        key_mask = xzalloc(sizeof *key_mask);
+
+        *key_spec = htonl(ntohll(match->flow.tunnel.tun_id));
+        *key_mask = htonl(ntohll(match->wc.masks.tunnel.tun_id));
+
+        consumed_masks->tunnel.tun_id = 0;
+        consumed_masks->tunnel.flags &= ~FLOW_TNL_F_KEY;
+        add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_GRE_KEY, key_spec,
+                         key_mask, NULL);
+    }
+
+    consumed_masks->tunnel.flags &= ~FLOW_TNL_F_DONT_FRAGMENT;
+
+    return 0;
+}
+
 static int OVS_UNUSED
 parse_flow_tnl_match(struct netdev *tnldev,
                      struct flow_patterns *patterns,
@@ -1107,6 +1201,9 @@ parse_flow_tnl_match(struct netdev *tnldev,
 
     if (!strcmp(netdev_get_type(tnldev), "vxlan")) {
         ret = parse_vxlan_match(patterns, match);
+    }
+    else if (!strcmp(netdev_get_type(tnldev), "gre")) {
+        ret = parse_gre_match(patterns, match);
     }
 
     return ret;
