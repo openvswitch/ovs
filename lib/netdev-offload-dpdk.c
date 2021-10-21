@@ -908,6 +908,12 @@ vport_to_rte_tunnel(struct netdev *vport,
             ds_put_format(s_tnl, "flow tunnel create %d type vxlan; ",
                           netdev_dpdk_get_port_id(netdev));
         }
+    } else if (!strcmp(netdev_get_type(vport), "gre")) {
+        tunnel->type = RTE_FLOW_ITEM_TYPE_GRE;
+        if (!VLOG_DROP_DBG(&rl)) {
+            ds_put_format(s_tnl, "flow tunnel create %d type gre; ",
+                          netdev_dpdk_get_port_id(netdev));
+        }
     } else {
         VLOG_DBG_RL(&rl, "vport type '%s' is not supported",
                     netdev_get_type(vport));
@@ -2236,6 +2242,9 @@ get_vport_netdev_cb(struct netdev *netdev,
     if (!aux->type || strcmp(netdev_get_type(netdev), aux->type)) {
         return false;
     }
+    if (!strcmp(netdev_get_type(netdev), "gre")) {
+        goto out;
+    }
 
     tnl_cfg = netdev_get_tunnel_config(netdev);
     if (!tnl_cfg) {
@@ -2248,6 +2257,7 @@ get_vport_netdev_cb(struct netdev *netdev,
         return false;
     }
 
+out:
     /* Found the netdev. Store the results and stop the traversing. */
     aux->vport = netdev_ref(netdev);
     *aux->odp_port = odp_port;
@@ -2269,6 +2279,8 @@ get_vport_netdev(const char *dpif_type,
 
     if (tunnel->type == RTE_FLOW_ITEM_TYPE_VXLAN) {
         aux.type = "vxlan";
+    } else if (tunnel->type == RTE_FLOW_ITEM_TYPE_GRE) {
+        aux.type = "gre";
     }
     netdev_ports_traverse(dpif_type, get_vport_netdev_cb, &aux);
 
