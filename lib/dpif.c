@@ -2012,7 +2012,7 @@ dpif_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
 int
 dpif_bond_add(struct dpif *dpif, uint32_t bond_id, odp_port_t *member_map)
 {
-    return dpif->dpif_class->bond_del
+    return dpif->dpif_class->bond_add
            ? dpif->dpif_class->bond_add(dpif, bond_id, member_map)
            : EOPNOTSUPP;
 }
