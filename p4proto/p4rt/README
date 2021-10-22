@@ -1,0 +1,61 @@
+This directory will contain files related to p4 server autobuild.
+This P4 server intercats with any P4 client over gRPC.
+
+In our use case, this module gets initialized from the P4-OVS component
+in the north-bound direction. And in ths south-bound direction, it
+interacts with the bfNode interface library and makes use of P4 SDE stack
+to program the P4 target device.
+
+This P4 server library code depends on the below open soure packages
+to be installed in the standard library path.
+* gflags - https://github.com/gflags/gflags.git
+* glog - https://github.com/google/glog.git
+* abseil - https://github.com/abseil/abseil-cpp.git
+* cctz - https://github.com/google/cctz.git
+* protobuf (v3.6.1)  - https://github.com/google/protobuf.git
+* grpc (v1.17.2) - https://github.com/google/grpc.git
+* nlohmann json - https://github.com/nlohmann/json.git
+Note: All the above dependencies can be installed through the script,
+     ./${WORKSPACE_DIR}/install_dep_packages.sh <SRC_FLODER> [INSTALL_FOLDER]
+PS:- INSTALL_FOLDER needs to be mentioned for the customized path installation
+     of the deps; If not specified, deps will be installed in /usr/local.
+Additional helper script to uninstall all the dependencies that were installed.
+     ./${WORKSPACE_DIR}/uninstall_dep_packages.sh <SRC_FOLDER> [INSTALL_FOLDER]
+
+GIT submodules:
+Please refer to the .gitmodules file.
+p4runtime: https://github.com/p4lang/p4runtime.git
+stratum: https://github.com/stratum/stratum.git
+googleapis: https://github.com/googleapis/googleapis.git
+SAI: https://github.com/opencomputeproject/SAI.git
+
+Significant portion of the source code for the P4 server module is
+resused from the open source stratum source code. Stratum code is
+now added as a git submodule to the project for easy reference.
+Some of the custom changes for the stratum code are maintained as
+part of PATCH-01-STRATUM  patch file. This Stratum patch is applied
+as part of ./apply_stratum_artifacts.sh script file.
+
+Configure command for the OVS:(When building with P4 TDI)
+./configure --with-p4tdi=$SDE_INSTALL
+
+The order of the script(s) and P4-OVS repo check out/compilation are as below.
+a) P4-OVS repo checkout and submodule update.
+       git clone git@github.com:otcshare/P4-OVS.git
+       cd ${WORKSPACE_DIR}/P4-OVS
+       git submodule update --init --recursive
+b) Install all the mandatory dependency modules using
+       ./install_dep_packages.sh <SRC_FOLDER> [INSTALL_FOLDER]
+c) Setup all the mandatory environment variables using
+       source p4ovs_env_setup.sh <SDE_INSTALL> [P4OVS_DEPS_INSTALL]
+   Ex:- source p4ovs_env_setup.sh /root/p4-sde/install /root/P4OVS_DEPS_INSTALL
+d) Apply some of the stratum artifacts.
+       ./apply_stratum_artifacts.sh <SDE_INSTALL>
+Steps for compilation:
+e)./boot.sh
+f)./configure --with-p4tdi=$SDE_INSTALL
+  Ex:- ./configure --with-p4tdi=/root/p4-sde/install
+g) make
+h) sudo make install
+PS:- Alternately user can replace steps (c)-(h) above by running,
+    ./build-p4ovs.sh <SDE_INSTALL> [P4OVS_DEPS_INSTALL]

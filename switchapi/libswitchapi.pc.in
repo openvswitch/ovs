@@ -1,0 +1,9 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libswitchapi
+Description: Switchapi library of P4-OVS
+Version: 2.14.90
+Libs: -L${libdir} -lswitchapi

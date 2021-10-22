@@ -1,0 +1,238 @@
+# Copyright (c) 2021 Intel Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+diff --git a/stratum/hal/lib/barefoot/bf_sde_interface.h b/stratum/hal/lib/barefoot/bf_sde_interface.h
+index 5ce9129..dd9e613 100644
+--- a/stratum/hal/lib/barefoot/bf_sde_interface.h
++++ b/stratum/hal/lib/barefoot/bf_sde_interface.h
+@@ -37,6 +37,15 @@ class BfSdeInterface {
+     absl::Time time_last_changed;
+   };
+
++  struct PortConfigParams {
++    SWBackendPortType port_type;
++    SWBackendDeviceType device_type;
++    int queues;
++    std::string socket_path;
++    std::string host_name;
++    std::string port_name;
++  };
++
+   // SessionInterface is a proxy class for BfRt sessions. Most API calls require
+   // an active session. It also allows batching requests for performance.
+   class SessionInterface {
+diff --git a/stratum/hal/lib/barefoot/bf_sde_wrapper.cc b/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
+index 9f4bb3a..bfceb68 100644
+--- a/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
++++ b/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
+@@ -1239,6 +1239,7 @@ std::string GetBfChipFamilyAndType(int device) {
+       return "TOFINO_17D";
+     case BF_DEV_BFNT20128Q:
+       return "TOFINO2_128Q";
++#ifndef P4TOFINO
+ #ifdef BF_DEV_BFNT20128QM
+     case BF_DEV_BFNT20128QM:  // added in 9.3.0
+       return "TOFINO2_128QM";
+@@ -1247,8 +1248,10 @@ std::string GetBfChipFamilyAndType(int device) {
+     case BF_DEV_BFNT20128QH:  // added in 9.3.0
+       return "TOFINO2_128QH";
+ #endif  // BF_DEV_BFNT20128QH
++#ifdef BF_DEV_BFNT20096T
+     case BF_DEV_BFNT20096T:
+       return "TOFINO2_96T";
++#endif // BF_DEV_BFNT20096T
+     case BF_DEV_BFNT20080T:
+       return "TOFINO2_80T";
+ #ifdef BF_DEV_BFNT20080TM
+@@ -1267,8 +1270,10 @@ std::string GetBfChipFamilyAndType(int device) {
+     case BF_DEV_BFNT20032S:  // removed in 9.3.0
+       return "TOFINO2_32S";
+ #endif  // BF_DEV_BFNT20032S
++#ifdef BF_DEV_BFNT20048D
+     case BF_DEV_BFNT20048D:
+       return "TOFINO2_48D";
++#endif // BF_DEV_BFNT20048D
+ #ifdef BF_DEV_BFNT20036D
+     case BF_DEV_BFNT20036D:  // removed in 9.3.0
+       return "TOFINO2_36D";
+@@ -1281,6 +1286,7 @@ std::string GetBfChipFamilyAndType(int device) {
+     case BF_DEV_BFNT20064E:  // removed in 9.3.0
+       return "TOFINO2_64E";
+ #endif  // BF_DEV_BFNT20064E
++#endif  // P4TOFINO
+     default:
+       return "UNKNOWN";
+   }
+diff --git a/stratum/hal/lib/barefoot/bfrt_node.cc b/stratum/hal/lib/barefoot/bfrt_node.cc
+index 1b81184..2b13d3a 100644
+--- a/stratum/hal/lib/barefoot/bfrt_node.cc
++++ b/stratum/hal/lib/barefoot/bfrt_node.cc
+@@ -31,7 +31,7 @@ BfrtNode::BfrtNode(BfrtTableManager* bfrt_table_manager,
+                    BfrtCounterManager* bfrt_counter_manager,
+                    BfSdeInterface* bf_sde_interface, int device_id)
+     : pipeline_initialized_(false),
+-      initialized_(false),
++      initialized_(true),
+       bfrt_config_(),
+       bf_sde_interface_(ABSL_DIE_IF_NULL(bf_sde_interface)),
+       bfrt_table_manager_(ABSL_DIE_IF_NULL(bfrt_table_manager)),
+@@ -40,7 +40,7 @@ BfrtNode::BfrtNode(BfrtTableManager* bfrt_table_manager,
+       bfrt_packetio_manager_(bfrt_packetio_manager),
+       bfrt_pre_manager_(ABSL_DIE_IF_NULL(bfrt_pre_manager)),
+       bfrt_counter_manager_(ABSL_DIE_IF_NULL(bfrt_counter_manager)),
+-      node_id_(0),
++      node_id_(1),
+       device_id_(device_id) {}
+
+ BfrtNode::BfrtNode()
+diff --git a/stratum/hal/lib/barefoot/bfrt_node.h b/stratum/hal/lib/barefoot/bfrt_node.h
+index 8c3f875..27b2326 100644
+--- a/stratum/hal/lib/barefoot/bfrt_node.h
++++ b/stratum/hal/lib/barefoot/bfrt_node.h
+@@ -76,6 +76,7 @@ class BfrtNode {
+   BfrtNode& operator=(const BfrtNode&) = delete;
+   BfrtNode(BfrtNode&&) = delete;
+   BfrtNode& operator=(BfrtNode&&) = delete;
++  uint64 node_id_ GUARDED_BY(lock_);
+
+  protected:
+   // Default constructor. To be called by the Mock class instance only.
+@@ -135,7 +136,6 @@ class BfrtNode {
+   // Logical node ID corresponding to the node/ASIC managed by this class
+   // instance. Assigned on PushChassisConfig() and might change during the
+   // lifetime of the class.
+-  uint64 node_id_ GUARDED_BY(lock_);
+
+   // Fixed zero-based BFRT device_id number corresponding to the node/ASIC
+   // managed by this class instance. Assigned in the class constructor.
+diff --git a/stratum/hal/lib/common/common.proto b/stratum/hal/lib/common/common.proto
+index f7a72d7..4573666 100644
+--- a/stratum/hal/lib/common/common.proto
++++ b/stratum/hal/lib/common/common.proto
+@@ -243,6 +243,23 @@ enum FecMode {
+   FEC_MODE_AUTO = 3;
+ }
+
++// SW backend port Types
++enum SWBackendPortType {
++  PORT_TYPE_NONE = 0;
++  PORT_TYPE_TAP = 1;
++  PORT_TYPE_LINK = 2;
++  PORT_TYPE_SOURCE = 3;
++  PORT_TYPE_SINK = 4;
++}
++
++// SW backend device type:
++enum SWBackendDeviceType {
++  DEVICE_TYPE_NONE = 0;
++  DEVICE_TYPE_VIRTIO_NET = 1;
++  DEVICE_TYPE_VIRTIO_BLK = 2;
++}
++
++
+ // Config-related parameters for the ports (singleton and trunk ports).
+ message PortConfigParams {
+   // Per port hash config. Most of the hash configuration is given per node.
+@@ -276,6 +293,18 @@ message PortConfigParams {
+   MacAddress mac_address = 7;
+   // The configured loopback state for this port.
+   LoopbackState loopback_mode = 8;
++  // Type of this port.
++  SWBackendPortType type = 9;
++  // Flag to trigger SW backed pipeline.
++  bool build_pipeline = 10;
++  // VM associated in the OpenConfig.
++  string host_name = 11;
++  // Queues to be configured
++  int32 queues  = 12;
++  // Socket path to be used
++  string socket = 13;
++  // Backend device type
++  SWBackendDeviceType device_type = 14;
+ }
+
+ // Chassis uniquely identifies a switch with a single management interface,
+@@ -1115,6 +1144,31 @@ message LoopbackStatus {
+   LoopbackState state = 1;  // required
+ }
+
++// Specifies backend port type to be used
++message SWBackendPortStatus {
++  SWBackendPortType type = 1; // required
++}
++
++// Specifies backend device type to be used
++message SWBackendDeviceStatus {
++  SWBackendDeviceType device_type = 1; // required
++}
++
++// Specifies host to be used by the device
++message HostConfigName {
++  string host_name = 1; // required
++}
++
++// Specifies number of queues needed for backend
++message QueuesConfigured {
++  int32 queue_count = 1; // required
++}
++
++// Specifies socket path to be used for port creation
++message SocketPathConfigured {
++  string sock_path = 1; // required
++}
++
+ // Wrapper around admin state of a HW component.
+ message AdminStatus {
+   AdminState state = 1;  // required
+@@ -1302,6 +1356,11 @@ message DataResponse {
+     LoopbackStatus loopback_status = 20;
+     NodeInfo node_info = 21;
+     SdnPortId sdn_port_id = 22;
++    SWBackendPortStatus port_type = 23;
++    HostConfigName host_config = 24;
++    QueuesConfigured queue_count = 25;
++    SocketPathConfigured sock_path = 26;
++    SWBackendDeviceStatus device_type = 27;
+   }
+ }
+
+@@ -1331,6 +1390,16 @@ message SetRequest {
+         ForwardingViability forwarding_viability = 10;
+         // The intended loopback state of the port.
+         LoopbackStatus loopback_status = 11;
++        // The new port type to be used.
++        SWBackendPortStatus port_type = 12;
++        // The new device to be used.
++        SWBackendDeviceStatus device_type = 13;
++        // The hostname to be used by backend.
++        HostConfigName host_config = 14;
++        // The no of queues to be used by backend.
++        QueuesConfigured queue_count = 15;
++        // The socket path to be used by backend.
++        SocketPathConfigured sock_path = 16;
+       }
+     }
+     // Data required to set info for a specific node.
+diff --git a/stratum/hal/lib/common/gnmi_events.h b/stratum/hal/lib/common/gnmi_events.h
+index 9ef4b7d..ff9cf9c 100644
+--- a/stratum/hal/lib/common/gnmi_events.h
++++ b/stratum/hal/lib/common/gnmi_events.h
+@@ -13,7 +13,7 @@
+
+ #include "absl/container/flat_hash_map.h"
+ #include "absl/synchronization/mutex.h"
+-#include "gnmi/gnmi.grpc.pb.h"
++#include "p4/gnmi/gnmi.grpc.pb.h"
+ #include "stratum/glue/gtl/map_util.h"
+ #include "stratum/glue/integral_types.h"
+ #include "stratum/glue/status/status.h"

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "8.3.0",
- "cksum": "3781850481 26690",
+ "cksum": "2334774277 27445",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -12,6 +12,10 @@
        "bridges": {
          "type": {"key": {"type": "uuid",
                           "refTable": "Bridge"},
+                  "min": 0, "max": "unlimited"}},
+       "p4_devices": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "P4_Device"},
                   "min": 0, "max": "unlimited"}},
        "manager_options": {
          "type": {"key": {"type": "uuid",
@@ -717,4 +721,20 @@
                   "value": {"type": "integer",
                           "minInteger": 0,
                           "maxInteger": 4095},
-                  "min": 0, "max": "unlimited"}}}}}}
+                  "min": 0, "max": "unlimited"}}}},
+   "P4_Device": {
+     "columns": {
+       "device_id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 1,
+                          "maxInteger": 16},
+                  "min": 0, "max": 1}},
+       "config_file_path": {
+         "type": {"key": {"type": "string"},
+                  "min": 0, "max": 1}},
+       "bridges": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "Bridge",
+                          "refType": "weak"},
+                  "min": 0, "max": "unlimited"}}},
+       "indexes": [["device_id"]]}}}

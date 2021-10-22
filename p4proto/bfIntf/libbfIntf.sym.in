@@ -1,0 +1,4 @@
+libbfIntf_@LT_CURRENT@ {
+global:
+        *;
+};

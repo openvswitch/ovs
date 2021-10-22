@@ -59,6 +59,11 @@ https://github.com/openvswitch/ovs.
 
 .. _general-build-reqs:
 
+Submodules (p4runtime)
+----------------------
+
+git submodule update --init --recursive
+
 Build Requirements
 ------------------
 
@@ -312,6 +317,15 @@ example, to build for a running instance of Linux::
   If ``--with-linux`` requests building for an unsupported version of Linux,
   then ``configure`` will fail with an error message. Refer to the
   :doc:`/faq/index` for advice in that case.
+
+To build with P4 based TDI (Table driven interface) such as P4-SDE or Tofino based P4-SDE,
+pass the location of the SDE install directory on ``--with-p4tdi``. For example::
+
+        $ ./configure --with-p4tdi=<SDE INSTALL PATH>
+        $ Ex:  ./configure --with-p4sde=</root/p4-sde-latest/install>
+
+.. note::
+   Patch to be applied for the STRATUM code - ./external/PATCH-01-STRATUM
 
 If you wish to build the kernel module for an architecture other than the
 architecture of the machine used for the build, you may specify the kernel

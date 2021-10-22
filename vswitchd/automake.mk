@@ -4,17 +4,32 @@ CLEANFILES += \
 	vswitchd/ovs-vswitchd.8
 
 vswitchd_ovs_vswitchd_SOURCES = \
-	vswitchd/bridge.c \
 	vswitchd/bridge.h \
+	vswitchd/bridge.c \
 	vswitchd/ovs-vswitchd.c \
 	vswitchd/system-stats.c \
 	vswitchd/system-stats.h \
 	vswitchd/xenserver.c \
 	vswitchd/xenserver.h
+
+if P4OVS
+vswitchd_ovs_vswitchd_SOURCES += \
+	p4proto/p4proto.h \
+	p4proto/p4proto-provider.h \
+	p4proto/p4proto.c
+endif
+
 vswitchd_ovs_vswitchd_LDADD = \
 	ofproto/libofproto.la \
 	lib/libsflow.la \
 	lib/libopenvswitch.la
+
+if P4OVS
+vswitchd_ovs_vswitchd_LDADD += \
+	p4proto/p4rt/libp4rt.la \
+	p4proto/libp4proto.la
+endif
+
 vswitchd_ovs_vswitchd_LDFLAGS = $(AM_LDFLAGS) $(DPDK_vswitchd_LDFLAGS)
 MAN_ROOTS += vswitchd/ovs-vswitchd.8.in
 

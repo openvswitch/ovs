@@ -46,6 +46,8 @@ Installation from Source
    userspace
    dpdk
    afxdp
+   ovs-with-p4-general
+   ovs-with-p4-tofino
 
 Installation from Packages
 --------------------------

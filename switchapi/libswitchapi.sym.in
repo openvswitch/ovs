@@ -1,0 +1,4 @@
+libswitchapi_@LT_CURRENT@ {
+global:
+        *;
+};

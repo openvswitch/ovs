@@ -1,0 +1,816 @@
+# Copyright (c) 2021 Intel Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+diff --git a/stratum/hal/bin/barefoot/tofino_skip_p4_no_bsp.conf b/stratum/hal/bin/barefoot/tofino_skip_p4_no_bsp.conf
+index e1f4338e..bffdc71e 100644
+--- a/stratum/hal/bin/barefoot/tofino_skip_p4_no_bsp.conf
++++ b/stratum/hal/bin/barefoot/tofino_skip_p4_no_bsp.conf
+@@ -1,31 +1,41 @@
+ {
+-    "instance": 0,
+     "chip_list": [
+         {
+-            "chip_family": "Tofino",
++            "id": "asic-0",
++            "chip_family": "dpdk",
++            "instance": 0,
+             "pcie_sysfs_prefix": "/sys/devices/pci0000:00/0000:00:03.0/0000:05:00.0",
++            "pcie_domain": 0,
+             "pcie_bus": 5,
++            "pcie_fn": 0,
+             "pcie_dev": 0,
+             "pcie_int_mode": 1,
+-            "pcie_domain": 0,
+-            "instance": 0,
+-            "sds_fw_path": "share/tofino_sds_fw/avago/firmware",
+-            "pcie_fn": 0,
+-            "id": "asic-0"
++            "sds_fw_path": "share/tofino_sds_fw/avago/firmware"
+         }
+     ],
+-    "id": "dummy.csv",
+-    "p4_program_list": [
++    "instance": 0,
++    "p4_devices": [
+         {
+-            "pd-thrift": "",
+-            "program-name": "dummy",
+-            "tofino-bin": "",
+-            "instance": 0,
+-            "pd": "",
+-            "board-port-map": "share/port_map.json",
+-            "path": "dummy",
+-            "id": "pgm-0",
+-            "table-config": ""
++            "device-id": 0,
++            "eal-args": "dummy -n 4 -c 3",
++            "p4_programs": [
++                {
++                    "program-name": "dummy",
++		    "cpu_numa_node": "0",
++                    "p4_pipelines": [
++                        {
++                            "p4_pipeline_name": "pipe",
++                            "pipe_scope": [
++                                0,
++                                1,
++                                2,
++                                3
++                            ],
++                            "path": "share/tofinopd/simple_l2l3_lpm"
++                        }
++                    ]
++                }
++            ]
+         }
+     ]
+ }
+diff --git a/stratum/hal/lib/barefoot/bf_sde_interface.h b/stratum/hal/lib/barefoot/bf_sde_interface.h
+index 5ce91295..156a4690 100644
+--- a/stratum/hal/lib/barefoot/bf_sde_interface.h
++++ b/stratum/hal/lib/barefoot/bf_sde_interface.h
+@@ -37,6 +37,15 @@ class BfSdeInterface {
+     absl::Time time_last_changed;
+   };
+
++  struct PortConfigParams {
++    SWBackendPortType port_type;
++    SWBackendDeviceType device_type;
++    int queues;
++    std::string socket_path;
++    std::string host_name;
++    std::string port_name;
++  };
++
+   // SessionInterface is a proxy class for BfRt sessions. Most API calls require
+   // an active session. It also allows batching requests for performance.
+   class SessionInterface {
+@@ -170,6 +179,11 @@ class BfSdeInterface {
+   virtual ::util::Status AddPort(int device, int port, uint64 speed_bps,
+                                  FecMode fec_mode = FEC_MODE_UNKNOWN) = 0;
+
++  // Add a new port with the given parameters.
++  virtual ::util::Status AddPort(int device, int port, uint64 speed_bps,
++                                 PortConfigParams& config,
++                                 FecMode fec_mode = FEC_MODE_UNKNOWN) = 0 ;
++
+   // Delete a port.
+   virtual ::util::Status DeletePort(int device, int port) = 0;
+
+diff --git a/stratum/hal/lib/barefoot/bf_sde_wrapper.cc b/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
+index 9f4bb3a9..fdb8d898 100644
+--- a/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
++++ b/stratum/hal/lib/barefoot/bf_sde_wrapper.cc
+@@ -12,7 +12,10 @@
+ #include "absl/synchronization/notification.h"
+ #include "absl/time/time.h"
+ #include "bf_rt/bf_rt_table_operations.hpp"
++#ifdef P4SDE_DPDK_TARGET_STUB
+ #include "lld/lld_sku.h"
++#endif
++
+ #include "stratum/glue/gtl/cleanup.h"
+ #include "stratum/glue/gtl/map_util.h"
+ #include "stratum/glue/gtl/stl_util.h"
+@@ -30,18 +33,30 @@
+ #include "stratum/lib/utils.h"
+
+ extern "C" {
+-#include "bf_switchd/bf_switchd.h"
+-#include "tofino/bf_pal/bf_pal_port_intf.h"
+-#include "tofino/bf_pal/dev_intf.h"
++#include "bf_switchd/lib/bf_switchd_lib_init.h"
++#include "bf_pal/bf_pal_port_intf.h"
++#include "bf_pal/dev_intf.h"
++#ifdef P4SDE_DPDK_TARGET_STUB
+ #include "tofino/bf_pal/pltfm_intf.h"
+ #include "tofino/pdfixed/pd_devport_mgr.h"
+-#include "tofino/pdfixed/pd_tm.h"
++#include "pdfixed/pd_tm.h"
++#endif
++#ifdef P4SDE_DPDK_TARGET_STUB
++#include "tofino/bf_pal/pltfm_intf.h"
++#include "tofino/pdfixed/pd_devport_mgr.h"
++#include "pdfixed/pd_tm.h"
++#endif
+ // Flag to enable detailed logging in the SDE pipe manager.
++#ifdef P4SDE_DPDK_TARGET_STUB
+ extern bool stat_mgr_enable_detail_trace;
++#endif //P4SDE_DPDK_TARGET_STUB
+ // Get the /sys fs file name of the first Tofino ASIC.
+ int switch_pci_sysfs_str_get(char* name, size_t name_size);
+ }
+
++/* Newly Defined Macros */
++#define MAX_PORT_HDL_STRING_LEN 100
++
+ DEFINE_string(bfrt_sde_config_dir, "/var/run/stratum/bfrt_config",
+               "The dir used by the SDE to load the device configuration.");
+ DEFINE_bool(incompatible_enable_bfrt_legacy_bytestring_responses, true,
+@@ -973,6 +988,7 @@ bf_status_t sde_port_status_callback(bf_dev_id_t device, bf_dev_port_t dev_port,
+   return status.ok() ? BF_SUCCESS : BF_INTERNAL_ERROR;
+ }
+
++#ifdef P4SDE_DPDK_TARGET_STUB
+ ::util::StatusOr<bf_port_speed_t> PortSpeedHalToBf(uint64 speed_bps) {
+   switch (speed_bps) {
+     case kOneGigBps:
+@@ -992,6 +1008,8 @@ bf_status_t sde_port_status_callback(bf_dev_id_t device, bf_dev_port_t dev_port,
+   }
+ }
+
++#endif
++
+ ::util::StatusOr<int> AutonegHalToBf(TriState autoneg) {
+   switch (autoneg) {
+     case TRI_STATE_UNKNOWN:
+@@ -1005,6 +1023,7 @@ bf_status_t sde_port_status_callback(bf_dev_id_t device, bf_dev_port_t dev_port,
+   }
+ }
+
++#ifdef P4SDE_DPDK_TARGET_STUB
+ ::util::StatusOr<bf_fec_type_t> FecModeHalToBf(FecMode fec_mode,
+                                                uint64 speed_bps) {
+   if (fec_mode == FEC_MODE_UNKNOWN || fec_mode == FEC_MODE_OFF) {
+@@ -1043,6 +1062,7 @@ bf_status_t sde_port_status_callback(bf_dev_id_t device, bf_dev_port_t dev_port,
+           << ".";
+   }
+ }
++#endif //P4SDE_DPDK_TARGET_STUB
+
+ }  // namespace
+
+@@ -1052,15 +1072,18 @@ ABSL_CONST_INIT absl::Mutex BfSdeWrapper::init_lock_(absl::kConstInit);
+ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+
+ ::util::StatusOr<PortState> BfSdeWrapper::GetPortState(int device, int port) {
+-  int state;
++  int state = 0;
++#ifdef P4SDE_DPDK_TARGET_STUB
+   RETURN_IF_BFRT_ERROR(
+       bf_pal_port_oper_state_get(static_cast<bf_dev_id_t>(device),
+                                  static_cast<bf_dev_port_t>(port), &state));
++#endif //P4SDE_DPDK_TARGET_STUB
+   return state ? PORT_STATE_UP : PORT_STATE_DOWN;
+ }
+
+ ::util::Status BfSdeWrapper::GetPortCounters(int device, int port,
+                                              PortCounters* counters) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   uint64_t stats[BF_NUM_RMON_COUNTERS];
+   RETURN_IF_BFRT_ERROR(
+       bf_pal_port_all_stats_get(static_cast<bf_dev_id_t>(device),
+@@ -1084,7 +1107,7 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+   counters->set_in_errors(stats[bf_mac_stat_FrameswithanyError]);
+   counters->set_out_errors(stats[bf_mac_stat_FramesTransmittedwithError]);
+   counters->set_in_fcs_errors(stats[bf_mac_stat_FramesReceivedwithFCSError]);
+-
++#endif //P4SDE_DPDK_TARGET_STUB
+   return ::util::OkStatus();
+ }
+
+@@ -1107,8 +1130,11 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+     std::unique_ptr<ChannelWriter<PortStatusEvent>> writer) {
+   absl::WriterMutexLock l(&port_status_event_writer_lock_);
+   port_status_event_writer_ = std::move(writer);
++#ifdef P4SDE_DPDK_TARGET_STUB
+   RETURN_IF_BFRT_ERROR(
+       bf_pal_port_status_notif_reg(sde_port_status_callback, nullptr));
++#endif //P4SDE_DPDK_TARGET_STUB
++
+   return ::util::OkStatus();
+ }
+
+@@ -1118,13 +1144,67 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+   return ::util::OkStatus();
+ }
+
++dpdk_port_type_t get_target_port_type(SWBackendPortType type) {
++  switch(type) {
++    case PORT_TYPE_TAP: return BF_DPDK_TAP;
++    case PORT_TYPE_LINK: return BF_DPDK_LINK;
++    case PORT_TYPE_SOURCE: return BF_DPDK_SOURCE;
++    case PORT_TYPE_SINK: return BF_DPDK_SINK;
++  }
++  return BF_DPDK_PORT_MAX;
++}
++
+ ::util::Status BfSdeWrapper::AddPort(int device, int port, uint64 speed_bps,
+                                      FecMode fec_mode) {
++  auto port_attrs = absl::make_unique<port_attributes_t>();
++#ifdef P4SDE_DPDK_TARGET_STUB
+   ASSIGN_OR_RETURN(auto bf_speed, PortSpeedHalToBf(speed_bps));
+   ASSIGN_OR_RETURN(auto bf_fec_mode, FecModeHalToBf(fec_mode, speed_bps));
++#endif
+   RETURN_IF_BFRT_ERROR(bf_pal_port_add(static_cast<bf_dev_id_t>(device),
+                                        static_cast<bf_dev_port_t>(port),
+-                                       bf_speed, bf_fec_mode));
++                                       port_attrs.get()));
++  return ::util::OkStatus();
++}
++
++::util::Status BfSdeWrapper::AddPort(int device, int port, uint64 speed_bps,
++                                     PortConfigParams& config,
++                                     FecMode fec_mode) {
++  static int port_in;
++  static int port_out;
++
++  auto port_attrs = absl::make_unique<port_attributes_t>();
++#ifdef P4SDE_DPDK_TARGET_STUB
++  ASSIGN_OR_RETURN(auto bf_speed, PortSpeedHalToBf(speed_bps));
++  ASSIGN_OR_RETURN(auto bf_fec_mode, FecModeHalToBf(fec_mode, speed_bps));
++#endif
++  strncpy(port_attrs->port_name, config.port_name.c_str(), sizeof(port_attrs->port_name));
++  strncpy(port_attrs->pipe_name, "pipe", PIPE_NAME_LEN);
++  strncpy(port_attrs->mempool_name, "MEMPOOL0", MEMPOOL_NAME_LEN);
++  port_attrs->port_type = get_target_port_type(config.port_type);
++  port_attrs->port_dir = PM_PORT_DIR_DEFAULT;
++  port_attrs->port_in_id = port_in++;
++  port_attrs->port_out_id = port_out++;
++
++  if (port_attrs->port_type == BF_DPDK_LINK) {
++    // Update LINK parametrs
++    strncpy(port_attrs->link.pcie_domain_bdf, config.port_name.c_str(),
++            sizeof(port_attrs->link.pcie_domain_bdf));
++    port_attrs->link.dev_hotplug_enabled = 1;
++    snprintf(port_attrs->link.dev_args, DEV_ARGS_LEN, "iface=%s,queues=%d",
++             config.socket_path.c_str(), config.queues);
++    LOG(INFO) << "Parameters for backend are: port_name=" << port_attrs->port_name
++              << " port_type=" << port_attrs->port_type
++              << " port_in_id=" << port_in
++              << " port_out=" << port_out
++              << " pcie_domain_bdf=" << port_attrs->link.pcie_domain_bdf
++              << " dev_args=" << port_attrs->link.dev_args;
++  }
++
++  RETURN_IF_BFRT_ERROR(bf_pal_port_add(static_cast<bf_dev_id_t>(device),
++                                       static_cast<bf_dev_port_t>(port),
++                                       port_attrs.get()));
++
+   return ::util::OkStatus();
+ }
+
+@@ -1135,14 +1215,18 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+ }
+
+ ::util::Status BfSdeWrapper::EnablePort(int device, int port) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   RETURN_IF_BFRT_ERROR(bf_pal_port_enable(static_cast<bf_dev_id_t>(device),
+                                           static_cast<bf_dev_port_t>(port)));
++#endif //P4SDE_DPDK_TARGET_STUB
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::DisablePort(int device, int port) {
+-  RETURN_IF_BFRT_ERROR(bf_pal_port_disable(static_cast<bf_dev_id_t>(device),
++#ifdef P4SDE_DPDK_TARGET_STUB
++ RETURN_IF_BFRT_ERROR(bf_pal_port_disable(static_cast<bf_dev_id_t>(device),
+                                            static_cast<bf_dev_port_t>(port)));
++#endif //P4SDE_DPDK_TARGET_STUB
+   return ::util::OkStatus();
+ }
+
+@@ -1150,37 +1234,43 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+                                                 bool is_in_pps,
+                                                 uint32 burst_size,
+                                                 uint64 rate_per_second) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   if (!is_in_pps) {
+     rate_per_second /= 1000;  // The SDE expects the bitrate in kbps.
+   }
+
+   RETURN_IF_BFRT_ERROR(p4_pd_tm_set_port_shaping_rate(
+       device, port, is_in_pps, burst_size, rate_per_second));
+-
++#endif
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::EnablePortShaping(int device, int port,
+                                                TriState enable) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   if (enable == TriState::TRI_STATE_TRUE) {
+     RETURN_IF_BFRT_ERROR(p4_pd_tm_enable_port_shaping(device, port));
+   } else if (enable == TriState::TRI_STATE_FALSE) {
+     RETURN_IF_BFRT_ERROR(p4_pd_tm_disable_port_shaping(device, port));
+   }
++#endif
+
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::SetPortAutonegPolicy(int device, int port,
+                                                   TriState autoneg) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   ASSIGN_OR_RETURN(auto autoneg_v, AutonegHalToBf(autoneg));
+   RETURN_IF_BFRT_ERROR(bf_pal_port_autoneg_policy_set(
+       static_cast<bf_dev_id_t>(device), static_cast<bf_dev_port_t>(port),
+       autoneg_v));
++#endif //P4SDE_DPDK_TARGET_STUB
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::SetPortMtu(int device, int port, int32 mtu) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   if (mtu < 0) {
+     RETURN_ERROR(ERR_INVALID_PARAM) << "Invalid MTU value.";
+   }
+@@ -1188,11 +1278,16 @@ BfSdeWrapper::BfSdeWrapper() : port_status_event_writer_(nullptr) {}
+   RETURN_IF_BFRT_ERROR(bf_pal_port_mtu_set(
+       static_cast<bf_dev_id_t>(device), static_cast<bf_dev_port_t>(port),
+       static_cast<uint32>(mtu), static_cast<uint32>(mtu)));
++#endif //P4SDE_DPDK_TARGET_STUB
++
+   return ::util::OkStatus();
+ }
+
+ bool BfSdeWrapper::IsValidPort(int device, int port) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   return bf_pal_port_is_valid(device, port) == BF_SUCCESS;
++#endif //P4SDE_DPDK_TARGET_STUB
++  return BF_SUCCESS;
+ }
+
+ ::util::Status BfSdeWrapper::SetPortLoopbackMode(int device, int port,
+@@ -1201,19 +1296,22 @@ bool BfSdeWrapper::IsValidPort(int device, int port) {
+     // Do nothing if we try to set loopback mode to the default one (UNKNOWN).
+     return ::util::OkStatus();
+   }
++#ifdef P4SDE_DPDK_TARGET_STUB
+   ASSIGN_OR_RETURN(bf_loopback_mode_e lp_mode, LoopbackModeToBf(loopback_mode));
+   RETURN_IF_BFRT_ERROR(
+       bf_pal_port_loopback_mode_set(static_cast<bf_dev_id_t>(device),
+                                     static_cast<bf_dev_port_t>(port), lp_mode));
+-
++#endif
+   return ::util::OkStatus();
+ }
+
+ ::util::StatusOr<bool> BfSdeWrapper::IsSoftwareModel(int device) {
+-  bool is_sw_model;
++  bool is_sw_model = true;
++#ifdef P4SDE_DPDK_TARGET_STUB
+   auto bf_status = bf_pal_pltfm_type_get(device, &is_sw_model);
+   CHECK_RETURN_IF_FALSE(bf_status == BF_SUCCESS)
+       << "Error getting software model status.";
++#endif //P4SDE_DPDK_TARGET_STUB
+
+   return is_sw_model;
+ }
+@@ -1221,6 +1319,7 @@ bool BfSdeWrapper::IsValidPort(int device, int port) {
+ // Helper functions around reading the switch SKU.
+ namespace {
+ std::string GetBfChipFamilyAndType(int device) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   bf_dev_type_t dev_type = lld_sku_get_dev_type(device);
+   switch (dev_type) {
+     case BF_DEV_BFNT10064Q:
+@@ -1284,9 +1383,12 @@ std::string GetBfChipFamilyAndType(int device) {
+     default:
+       return "UNKNOWN";
+   }
++#endif //P4SDE_DPDK_TARGET_STUB
++  return "UNKNOWN";
+ }
+
+ std::string GetBfChipRevision(int device) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   bf_sku_chip_part_rev_t revision_number;
+   lld_sku_get_chip_part_revision_number(device, &revision_number);
+   switch (revision_number) {
+@@ -1297,11 +1399,15 @@ std::string GetBfChipRevision(int device) {
+     default:
+       return "UNKOWN";
+   }
++#endif //P4SDE_DPDK_TARGET_STUB
++  return "UNKNOWN";
+ }
+
+ std::string GetBfChipId(int device) {
+   uint64 chip_id = 0;
++#ifdef P4SDE_DPDK_TARGET_STUB
+   lld_sku_get_chip_id(device, &chip_id);
++#endif
+   return absl::StrCat("0x", absl::Hex(chip_id));
+ }
+ }  // namespace
+@@ -1364,23 +1470,32 @@ std::string BfSdeWrapper::GetSdeVersion() const {
+ }
+
+ ::util::StatusOr<int> BfSdeWrapper::GetPcieCpuPort(int device) {
++  int port = 0;
++#ifdef P4SDE_DPDK_TARGET_STUB
+   int port = p4_devport_mgr_pcie_cpu_port_get(device);
+   CHECK_RETURN_IF_FALSE(port != -1);
++#endif //P4SDE_DPDK_TARGET_STUB
+   return port;
+ }
+
+ ::util::Status BfSdeWrapper::SetTmCpuPort(int device, int port) {
++
++#ifdef P4SDE_DPDK_TARGET_STUB
+   CHECK_RETURN_IF_FALSE(p4_pd_tm_set_cpuport(device, port) == 0)
+       << "Unable to set CPU port " << port << " on device " << device;
++#endif
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::SetDeflectOnDropDestination(int device, int port,
+                                                          int queue) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   // The DoD destination must be a pipe-local port.
+   p4_pd_tm_pipe_t pipe = DEV_PORT_TO_PIPE(port);
+   RETURN_IF_BFRT_ERROR(
+       p4_pd_tm_set_negative_mirror_dest(device, pipe, port, queue));
++#endif
++
+   return ::util::OkStatus();
+ }
+
+@@ -1417,9 +1532,17 @@ std::string BfSdeWrapper::GetSdeVersion() const {
+     // Override previous parsing if bf_kpkt KLM was loaded.
+     LOG(INFO)
+         << "kernel mode packet driver present, forcing kernel_pkt option!";
++#ifdef P4SDE_DPDK_TARGET_STUB
+     switchd_main_ctx->kernel_pkt = true;
++#endif //P4SDE_DPDK_TARGET_STUB
+   }
+
++#ifdef P4SDE_DPDK_TARGET_STUB
++  switchd_main_ctx->skip_hld.mc_mgr = true;
++  switchd_main_ctx->skip_hld.pkt_mgr = true;
++  switchd_main_ctx->skip_hld.traffic_mgr = true;
++#endif
++
+   RETURN_IF_BFRT_ERROR(bf_switchd_lib_init(switchd_main_ctx.get()))
+       << "Error when starting switchd.";
+   LOG(INFO) << "switchd started successfully";
+@@ -1442,7 +1565,7 @@ std::string BfSdeWrapper::GetSdeVersion() const {
+   bfrt_id_mapper_.reset();
+
+   RETURN_IF_BFRT_ERROR(bf_pal_device_warm_init_begin(
+-      device, BF_DEV_WARM_INIT_FAST_RECFG, BF_DEV_SERDES_UPD_NONE,
++      device, BF_DEV_WARM_INIT_FAST_RECFG,
+       /* upgrade_agents */ true));
+   bf_device_profile_t device_profile = {};
+
+@@ -1510,11 +1633,15 @@ std::string BfSdeWrapper::GetSdeVersion() const {
+       bf_sys_log_level_set(BF_MOD_PKT, BF_LOG_DEST_STDOUT, BF_LOG_WARN) == 0);
+   CHECK_RETURN_IF_FALSE(
+       bf_sys_log_level_set(BF_MOD_PIPE, BF_LOG_DEST_STDOUT, BF_LOG_WARN) == 0);
++#ifdef P4SDE_DPDK_TARGET_STUB
+   stat_mgr_enable_detail_trace = false;
++#endif //P4SDE_DPDK_TARGET_STUB
+   if (VLOG_IS_ON(2)) {
+     CHECK_RETURN_IF_FALSE(bf_sys_log_level_set(BF_MOD_PIPE, BF_LOG_DEST_STDOUT,
+                                                BF_LOG_INFO) == 0);
++#ifdef P4SDE_DPDK_TARGET_STUB
+     stat_mgr_enable_detail_trace = true;
++#endif //P4SDE_DPDK_TARGET_STUB
+   }
+
+   RETURN_IF_BFRT_ERROR(bfrt_device_manager_->bfRtInfoGet(
+@@ -1549,6 +1676,7 @@ BfSdeWrapper::CreateTableData(int table_id, int action_id) {
+ //  Packetio
+
+ ::util::Status BfSdeWrapper::TxPacket(int device, const std::string& buffer) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   bf_pkt* pkt = nullptr;
+   RETURN_IF_BFRT_ERROR(
+       bf_pkt_alloc(device, &pkt, buffer.size(), BF_DMA_CPU_PKT_TRANSMIT_0));
+@@ -1558,11 +1686,12 @@ BfSdeWrapper::CreateTableData(int table_id, int action_id) {
+       pkt, reinterpret_cast<const uint8*>(buffer.data()), buffer.size()));
+   RETURN_IF_BFRT_ERROR(bf_pkt_tx(device, pkt, BF_PKT_TX_RING_0, pkt));
+   pkt_cleaner.release();
+-
++#endif
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::StartPacketIo(int device) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   // Maybe move to InitSde function?
+   if (!bf_pkt_is_inited(device)) {
+     RETURN_IF_BFRT_ERROR(bf_pkt_init());
+@@ -1583,11 +1712,12 @@ BfSdeWrapper::CreateTableData(int table_id, int action_id) {
+                            static_cast<bf_pkt_rx_ring_t>(rx_ring), nullptr));
+   }
+   VLOG(1) << "Registered packetio callbacks on device " << device << ".";
+-
++#endif
+   return ::util::OkStatus();
+ }
+
+ ::util::Status BfSdeWrapper::StopPacketIo(int device) {
++#ifdef P4SDE_DPDK_TARGET_STUB
+   for (int tx_ring = BF_PKT_TX_RING_0; tx_ring < BF_PKT_TX_RING_MAX;
+        ++tx_ring) {
+     RETURN_IF_BFRT_ERROR(bf_pkt_tx_done_notif_deregister(
+@@ -1600,7 +1730,7 @@ BfSdeWrapper::CreateTableData(int table_id, int action_id) {
+         bf_pkt_rx_deregister(device, static_cast<bf_pkt_rx_ring_t>(rx_ring)));
+   }
+   VLOG(1) << "Unregistered packetio callbacks on device " << device << ".";
+-
++#endif
+   return ::util::OkStatus();
+ }
+
+@@ -1617,6 +1747,7 @@ BfSdeWrapper::CreateTableData(int table_id, int action_id) {
+   return ::util::OkStatus();
+ }
+
++#ifdef P4SDE_DPDK_TARGET_STUB
+ ::util::Status BfSdeWrapper::HandlePacketRx(bf_dev_id_t device, bf_pkt* pkt,
+                                             bf_pkt_rx_ring_t rx_ring) {
+   absl::ReaderMutexLock l(&packet_rx_callback_lock_);
+@@ -1655,6 +1786,7 @@ bf_status_t BfSdeWrapper::BfPktRxNotifyCallback(bf_dev_id_t device, bf_pkt* pkt,
+   bf_sde_wrapper->HandlePacketRx(device, pkt, rx_ring);
+   return bf_pkt_free(device, pkt);
+ }
++#endif
+
+ bf_rt_target_t BfSdeWrapper::GetDeviceTarget(int device) const {
+   bf_rt_target_t dev_tgt = {};
+diff --git a/stratum/hal/lib/barefoot/bf_sde_wrapper.h b/stratum/hal/lib/barefoot/bf_sde_wrapper.h
+index f8b9962d..5684fe30 100644
+--- a/stratum/hal/lib/barefoot/bf_sde_wrapper.h
++++ b/stratum/hal/lib/barefoot/bf_sde_wrapper.h
+@@ -15,7 +15,9 @@
+ #include "bf_rt/bf_rt_session.hpp"
+ #include "bf_rt/bf_rt_table.hpp"
+ #include "bf_rt/bf_rt_table_key.hpp"
++#ifdef P4SDE_DPDK_TARGET_STUB
+ #include "pkt_mgr/pkt_mgr_intf.h"
++#endif
+ #include "stratum/glue/integral_types.h"
+ #include "stratum/glue/status/status.h"
+ #include "stratum/glue/status/statusor.h"
+@@ -156,6 +158,8 @@ class BfSdeWrapper : public BfSdeInterface {
+       LOCKS_EXCLUDED(port_status_event_writer_lock_);
+   ::util::Status AddPort(int device, int port, uint64 speed_bps,
+                          FecMode fec_mode) override;
++  ::util::Status AddPort(int device, int port, uint64 speed_bps,
++                         PortConfigParams& config, FecMode fec_mode) override;
+   ::util::Status DeletePort(int device, int port) override;
+   ::util::Status EnablePort(int device, int port) override;
+   ::util::Status DisablePort(int device, int port) override;
+@@ -365,11 +369,13 @@ class BfSdeWrapper : public BfSdeInterface {
+   // Return the singleton instance to be used in the SDE callbacks.
+   static BfSdeWrapper* GetSingleton() LOCKS_EXCLUDED(init_lock_);
+
++#ifdef P4SDE_DPDK_TARGET_STUB
+   // Writes a received packet to the registered Rx writer. Called from the SDE
+   // callback function.
+   ::util::Status HandlePacketRx(bf_dev_id_t device, bf_pkt* pkt,
+                                 bf_pkt_rx_ring_t rx_ring)
+       LOCKS_EXCLUDED(packet_rx_callback_lock_);
++#endif
+
+   // Called whenever a port status event is received from SDK. It forwards the
+   // port status event to the module who registered a callback by calling
+@@ -409,6 +415,7 @@ class BfSdeWrapper : public BfSdeInterface {
+   // RW mutex lock for protecting the pipeline state.
+   mutable absl::Mutex data_lock_;
+
++#ifdef P4SDE_DPDK_TARGET_STUB
+   // Callback registed with the SDE for Tx notifications.
+   static bf_status_t BfPktTxNotifyCallback(bf_dev_id_t device,
+                                            bf_pkt_tx_ring_t tx_ring,
+@@ -419,6 +426,8 @@ class BfSdeWrapper : public BfSdeInterface {
+                                            void* cookie,
+                                            bf_pkt_rx_ring_t rx_ring);
+
++#endif
++
+   // Common code for multicast group handling.
+   ::util::Status WriteMulticastGroup(
+       int device, std::shared_ptr<BfSdeInterface::SessionInterface> session,
+diff --git a/stratum/hal/lib/barefoot/bfrt_node.cc b/stratum/hal/lib/barefoot/bfrt_node.cc
+index 1b811845..2b13d3a5 100644
+--- a/stratum/hal/lib/barefoot/bfrt_node.cc
++++ b/stratum/hal/lib/barefoot/bfrt_node.cc
+@@ -31,7 +31,7 @@ BfrtNode::BfrtNode(BfrtTableManager* bfrt_table_manager,
+                    BfrtCounterManager* bfrt_counter_manager,
+                    BfSdeInterface* bf_sde_interface, int device_id)
+     : pipeline_initialized_(false),
+-      initialized_(false),
++      initialized_(true),
+       bfrt_config_(),
+       bf_sde_interface_(ABSL_DIE_IF_NULL(bf_sde_interface)),
+       bfrt_table_manager_(ABSL_DIE_IF_NULL(bfrt_table_manager)),
+@@ -40,7 +40,7 @@ BfrtNode::BfrtNode(BfrtTableManager* bfrt_table_manager,
+       bfrt_packetio_manager_(bfrt_packetio_manager),
+       bfrt_pre_manager_(ABSL_DIE_IF_NULL(bfrt_pre_manager)),
+       bfrt_counter_manager_(ABSL_DIE_IF_NULL(bfrt_counter_manager)),
+-      node_id_(0),
++      node_id_(1),
+       device_id_(device_id) {}
+
+ BfrtNode::BfrtNode()
+diff --git a/stratum/hal/lib/barefoot/bfrt_node.h b/stratum/hal/lib/barefoot/bfrt_node.h
+index 8c3f8757..27b23264 100644
+--- a/stratum/hal/lib/barefoot/bfrt_node.h
++++ b/stratum/hal/lib/barefoot/bfrt_node.h
+@@ -76,6 +76,7 @@ class BfrtNode {
+   BfrtNode& operator=(const BfrtNode&) = delete;
+   BfrtNode(BfrtNode&&) = delete;
+   BfrtNode& operator=(BfrtNode&&) = delete;
++  uint64 node_id_ GUARDED_BY(lock_);
+
+  protected:
+   // Default constructor. To be called by the Mock class instance only.
+@@ -135,7 +136,6 @@ class BfrtNode {
+   // Logical node ID corresponding to the node/ASIC managed by this class
+   // instance. Assigned on PushChassisConfig() and might change during the
+   // lifetime of the class.
+-  uint64 node_id_ GUARDED_BY(lock_);
+
+   // Fixed zero-based BFRT device_id number corresponding to the node/ASIC
+   // managed by this class instance. Assigned in the class constructor.
+diff --git a/stratum/hal/lib/barefoot/bfrt_switch.cc b/stratum/hal/lib/barefoot/bfrt_switch.cc
+index f553054d..3f41e9e1 100644
+--- a/stratum/hal/lib/barefoot/bfrt_switch.cc
++++ b/stratum/hal/lib/barefoot/bfrt_switch.cc
+@@ -35,8 +35,11 @@ BfrtSwitch::BfrtSwitch(PhalInterface* phal_interface,
+   for (const auto& entry : device_id_to_bfrt_node_) {
+     CHECK_GE(entry.first, 0)
+         << "Invalid device_id number " << entry.first << ".";
++/*
+     CHECK_NE(entry.second, nullptr)
+         << "Detected null BfrtNode for device_id " << entry.first << ".";
++*/
++
+   }
+ }
+
+diff --git a/stratum/hal/lib/common/common.proto b/stratum/hal/lib/common/common.proto
+index f7a72d70..45736661 100644
+--- a/stratum/hal/lib/common/common.proto
++++ b/stratum/hal/lib/common/common.proto
+@@ -243,6 +243,23 @@ enum FecMode {
+   FEC_MODE_AUTO = 3;
+ }
+
++// SW backend port Types
++enum SWBackendPortType {
++  PORT_TYPE_NONE = 0;
++  PORT_TYPE_TAP = 1;
++  PORT_TYPE_LINK = 2;
++  PORT_TYPE_SOURCE = 3;
++  PORT_TYPE_SINK = 4;
++}
++
++// SW backend device type:
++enum SWBackendDeviceType {
++  DEVICE_TYPE_NONE = 0;
++  DEVICE_TYPE_VIRTIO_NET = 1;
++  DEVICE_TYPE_VIRTIO_BLK = 2;
++}
++
++
+ // Config-related parameters for the ports (singleton and trunk ports).
+ message PortConfigParams {
+   // Per port hash config. Most of the hash configuration is given per node.
+@@ -276,6 +293,18 @@ message PortConfigParams {
+   MacAddress mac_address = 7;
+   // The configured loopback state for this port.
+   LoopbackState loopback_mode = 8;
++  // Type of this port.
++  SWBackendPortType type = 9;
++  // Flag to trigger SW backed pipeline.
++  bool build_pipeline = 10;
++  // VM associated in the OpenConfig.
++  string host_name = 11;
++  // Queues to be configured
++  int32 queues  = 12;
++  // Socket path to be used
++  string socket = 13;
++  // Backend device type
++  SWBackendDeviceType device_type = 14;
+ }
+
+ // Chassis uniquely identifies a switch with a single management interface,
+@@ -1115,6 +1144,31 @@ message LoopbackStatus {
+   LoopbackState state = 1;  // required
+ }
+
++// Specifies backend port type to be used
++message SWBackendPortStatus {
++  SWBackendPortType type = 1; // required
++}
++
++// Specifies backend device type to be used
++message SWBackendDeviceStatus {
++  SWBackendDeviceType device_type = 1; // required
++}
++
++// Specifies host to be used by the device
++message HostConfigName {
++  string host_name = 1; // required
++}
++
++// Specifies number of queues needed for backend
++message QueuesConfigured {
++  int32 queue_count = 1; // required
++}
++
++// Specifies socket path to be used for port creation
++message SocketPathConfigured {
++  string sock_path = 1; // required
++}
++
+ // Wrapper around admin state of a HW component.
+ message AdminStatus {
+   AdminState state = 1;  // required
+@@ -1302,6 +1356,11 @@ message DataResponse {
+     LoopbackStatus loopback_status = 20;
+     NodeInfo node_info = 21;
+     SdnPortId sdn_port_id = 22;
++    SWBackendPortStatus port_type = 23;
++    HostConfigName host_config = 24;
++    QueuesConfigured queue_count = 25;
++    SocketPathConfigured sock_path = 26;
++    SWBackendDeviceStatus device_type = 27;
+   }
+ }
+
+@@ -1331,6 +1390,16 @@ message SetRequest {
+         ForwardingViability forwarding_viability = 10;
+         // The intended loopback state of the port.
+         LoopbackStatus loopback_status = 11;
++        // The new port type to be used.
++        SWBackendPortStatus port_type = 12;
++        // The new device to be used.
++        SWBackendDeviceStatus device_type = 13;
++        // The hostname to be used by backend.
++        HostConfigName host_config = 14;
++        // The no of queues to be used by backend.
++        QueuesConfigured queue_count = 15;
++        // The socket path to be used by backend.
++        SocketPathConfigured sock_path = 16;
+       }
+     }
+     // Data required to set info for a specific node.
+diff --git a/stratum/hal/lib/common/gnmi_events.h b/stratum/hal/lib/common/gnmi_events.h
+index 9ef4b7d2..ff9cf9c0 100644
+--- a/stratum/hal/lib/common/gnmi_events.h
++++ b/stratum/hal/lib/common/gnmi_events.h
+@@ -13,7 +13,7 @@
+
+ #include "absl/container/flat_hash_map.h"
+ #include "absl/synchronization/mutex.h"
+-#include "gnmi/gnmi.grpc.pb.h"
++#include "p4/gnmi/gnmi.grpc.pb.h"
+ #include "stratum/glue/gtl/map_util.h"
+ #include "stratum/glue/integral_types.h"
+ #include "stratum/glue/status/status.h"

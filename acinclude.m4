@@ -1,6 +1,7 @@
 # -*- autoconf -*-
 
 # Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
+# Copyright(c) 2021 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -531,6 +532,131 @@ AC_DEFUN([OVS_CHECK_DPDK], [
   fi
 
   AM_CONDITIONAL([DPDK_NETDEV], test "$DPDKLIB_FOUND" = true)
+])
+
+dnl OVS_CHECK_P4TDI
+dnl
+dnl Configure P4TDI source tree
+AC_DEFUN([OVS_CHECK_P4TDI], [
+  AC_ARG_WITH([p4tdi],
+              [AC_HELP_STRING([--with-p4tdi=/path/to/p4tdi],
+                              [Specify the P4TDI build directory])],
+              [have_p4tdi=true])
+  AC_ARG_WITH([tofino],
+              [AC_HELP_STRING([--with-tofino],
+                              [Build for Tofino target])],
+              [with_tofino=yes])
+  AC_ARG_WITH([sai],
+              [AC_HELP_STRING([--with-sai],
+                              [Enable SAI Path in P4-OVS])],
+              [have_sai=true])
+
+  AC_MSG_CHECKING([whether P4TDI is enabled])
+  if test "$have_p4tdi" != true || test "$with_p4tdi" = no; then
+    AC_MSG_RESULT([no])
+    P4TDILIB_FOUND=false
+  else
+    AC_MSG_RESULT([yes])
+    case "$with_p4tdi" in
+      yes)
+        P4TDI_AUTO_DISCOVER="true"
+        if test "$with_tofino" = yes; then
+            PKG_CHECK_MODULES([P4TDI],
+                [libbfutils libbfsys libdriver],
+                [P4TDI_INCLUDE="$P4TDI_CFLAGS"],
+                [P4TDI_INCLUDE="-I/usr/local/include -I/usr/include"
+                 P4TDI_LIB="-lbfsys -lbfutils -ldriver -lpython3.8 -lstdc++"])
+        else
+            PKG_CHECK_MODULES([P4TDI],
+                [libtarget_utils libtargetsys libdriver libbf_switchd_lib libdpdk_infra],
+                [P4TDI_INCLUDE="$P4TDI_CFLAGS"],
+                [P4TDI_INCLUDE="-I/usr/local/include -I/usr/include"
+                 P4TDI_LIB="-lbf_switchd_lib -ltargetsys -ltarget_utils -ldriver -lstdc++ -ldpdk_infra"])
+        fi
+        ;;
+      *)
+        P4TDI_AUTO_DISCOVER="false"
+        P4TDI_INCLUDE_PATH="$with_p4tdi/include"
+        P4TDI_INCLUDE="-I$P4TDI_INCLUDE_PATH"
+        P4TDI_LIB_DIR="$with_p4tdi/lib"
+        P4TDI_DPDK_LIB_DIR="$with_p4tdi/lib/x86_64-linux-gnu"
+        ;;
+    esac
+
+    ovs_save_CFLAGS="$CFLAGS"
+    ovs_save_LDFLAGS="$LDFLAGS"
+    save_LIBS=$LIBS
+
+    if test "$with_tofino" = yes; then
+        P4TDI_LIB="-lbfsys -lbfutils -ldriver -lpython3.8 -lstdc++"
+    else
+        P4TDI_LIB="-lbf_switchd_lib -ltargetsys -ltarget_utils -ldriver -lpython3.8 -lstdc++ -ldpdk_infra"
+    fi
+    CFLAGS="$CFLAGS $P4TDI_INCLUDE"
+    LIBS="$P4TDI_LIB $save_LIBS"
+
+    if test "$P4TDI_AUTO_DISCOVER" = "false"; then
+      LDFLAGS="$LDFLAGS -L${P4TDI_LIB_DIR} -L${P4TDI_DPDK_LIB_DIR}"
+    fi
+
+    AC_MSG_CHECKING([whether linking with P4TDI works])
+    if test "$with_tofino" = yes; then
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <bfsys/bf_sal/bf_sys_intf.h>
+                          #include <bf_switchd/bf_switchd.h>],
+                         [bf_switchd_context_t *switchd_ctx;
+                          bf_switchd_lib_init(switchd_ctx);])],
+        [AC_MSG_RESULT([yes])
+         P4TDILIB_FOUND=true],
+        [AC_MSG_RESULT([no])
+         if test "$P4TDI_AUTO_DISCOVER" = "true"; then
+           AC_MSG_ERROR(m4_normalize([
+              Could not find P4TDI library in default search path,
+              Use --with-p4tdi to specify the P4TDI library installed in
+              non-standard location]))
+         else
+           AC_MSG_ERROR([Could not find P4TDI libraries in $P4TDI_LIB_DIR])
+         fi
+        ])
+    else
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <target_sys/bf_sal/bf_sys_intf.h>
+                          #include <bf_switchd/lib/bf_switchd_lib_init.h>],
+                         [bf_switchd_context_t *switchd_ctx;
+                          bf_switchd_lib_init(switchd_ctx);])],
+        [AC_MSG_RESULT([yes])
+         P4TDILIB_FOUND=true],
+        [AC_MSG_RESULT([no])
+         if test "$P4TDI_AUTO_DISCOVER" = "true"; then
+           AC_MSG_ERROR(m4_normalize([
+              Could not find P4TDI library in default search path,
+              Use --with-p4tdi to specify the P4TDI library installed in
+              non-standard location]))
+         else
+           AC_MSG_ERROR([Could not find P4TDI libraries in $P4TDI_LIB_DIR])
+         fi
+        ])
+    fi
+
+    CFLAGS="$ovs_save_CFLAGS"
+    LDFLAGS="$ovs_save_LDFLAGS"
+    if test "$P4TDI_AUTO_DISCOVER" = "false"; then
+      OVS_LDFLAGS="$OVS_LDFLAGS -L$P4TDI_LIB_DIR -L$P4TDI_DPDK_LIB_DIR"
+    fi
+    OVS_CFLAGS="$OVS_CFLAGS $P4TDI_INCLUDE"
+    AC_DEFINE([P4OVS], [1], [System uses the P4PROTO module.])
+
+    if test "$have_sai" = true; then
+        AC_DEFINE([P4SAI], [1], [System uses the SWITCHLINK and SWITCHSAI modules.])
+    fi
+    if test "$with_tofino" = true; then
+    AC_DEFINE([P4TOFINO], [1], [System is being built for Tofino target])
+    fi
+
+  fi
+  AM_CONDITIONAL([P4OVS], test "$P4TDILIB_FOUND" = true)
+  AM_CONDITIONAL([P4SAI], test "$P4TDILIB_FOUND" = true && test "$have_sai" = true)
+  AM_CONDITIONAL([P4TOFINO], test "$P4TDILIB_FOUND" = true && test "$with_tofino" = yes)
 ])
 
 dnl OVS_GREP_IFELSE(FILE, REGEX, [IF-MATCH], [IF-NO-MATCH])

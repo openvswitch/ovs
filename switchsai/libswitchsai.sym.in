@@ -1,0 +1,4 @@
+libswitchsai_@LT_CURRENT@ {
+global:
+        *;
+};

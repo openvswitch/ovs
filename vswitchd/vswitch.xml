@@ -63,6 +63,10 @@
         Set of bridges managed by the daemon.
       </column>
 
+      <column name="p4_devices">
+        Set of p4_devices managed by the daemon.
+      </column>
+
       <column name="ssl">
         SSL used globally by the daemon.
       </column>
@@ -6765,4 +6769,25 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       id.
     </column>
   </table>
+
+  <table name="P4_Device">
+    <p>
+      Store p4 device specific information. This is shared between runtime
+      clients and the vswitchd.
+    </p>
+
+    <column name="device_id">
+      Identifies the p4 device_id which corresponds to pipeline in target.
+    </column>
+
+    <column name="config_file_path">
+      Identifies the config file associated with the device_id.
+      This information is consumed by target.
+    </column>
+
+    <column name="bridges">
+      Software bridges associated with the P4 device.
+    </column>
+  </table>
+
 </database>

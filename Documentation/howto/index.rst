@@ -49,4 +49,4 @@ OVS
    vtep
    sflow
    dpdk
-
+   ovs-with-p4-executables

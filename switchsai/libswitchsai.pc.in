@@ -1,0 +1,9 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libswitchsai
+Description: Switchsai library of P4-OVS
+Version: @VERSION@
+Libs: -L${libdir} -lswitchsai
