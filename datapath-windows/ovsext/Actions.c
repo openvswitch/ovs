@@ -1527,6 +1527,7 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
 
     csumInfo.Value = NET_BUFFER_LIST_INFO(ovsFwdCtx->curNbl,
                                           TcpIpChecksumNetBufferListInfo);
+
     /*
      * Adjust the IP header inline as dictated by the action, and also update
      * the IP and the TCP checksum for the data modified.
@@ -1535,6 +1536,7 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
      * ChecksumUpdate32(). Ignoring this for now, since for the most common
      * case, we only update the TTL.
      */
+     /*Only tx direction the checksum value will be reset to be PseudoChecksum*/
 
     if (isSource) {
         addrField = &ipHdr->saddr;
@@ -1551,7 +1553,7 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                         ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
                          (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
         }
-        if (l4Offload) {
+        if (isTx && l4Offload) {
             *checkField = IPPseudoChecksum(&newAddr, &ipHdr->daddr,
                 tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
                 ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
@@ -1572,7 +1574,7 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                          (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
         }
 
-       if (l4Offload) {
+       if (isTx && l4Offload) {
             *checkField = IPPseudoChecksum(&ipHdr->saddr, &newAddr,
                 tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
                 ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
@@ -1581,7 +1583,7 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
 
     if (*addrField != newAddr) {
         UINT32 oldAddr = *addrField;
-        if (checkField && *checkField != 0 && !l4Offload) {
+        if ((checkField && *checkField != 0) && (!l4Offload || !isTx)) {
             /* Recompute total checksum. */
             *checkField = ChecksumUpdate32(*checkField, oldAddr,
                                             newAddr);
@@ -1590,11 +1592,12 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
             ipHdr->check = ChecksumUpdate32(ipHdr->check, oldAddr,
                                             newAddr);
         }
+
         *addrField = newAddr;
     }
 
     if (portField && *portField != newPort) {
-        if (checkField && !l4Offload) {
+        if ((checkField) && (!l4Offload || !isTx)) {
             /* Recompute total checksum. */
             *checkField = ChecksumUpdate16(*checkField, *portField,
                                            newPort);
