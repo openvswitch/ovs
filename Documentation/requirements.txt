@@ -1,2 +1,5 @@
 sphinx>=1.1,<2.0
 ovs_sphinx_theme>=1.0,<1.1
+grpcio>=1.36.1
+grpcio-tools>=1.36.1
+google-api-core>=1.26.2

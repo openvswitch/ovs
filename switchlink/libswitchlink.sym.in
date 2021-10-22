@@ -1,0 +1,4 @@
+libswitchlink_@LT_CURRENT@ {
+global:
+        *;
+};

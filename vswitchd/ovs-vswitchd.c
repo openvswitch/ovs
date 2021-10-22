@@ -1,4 +1,6 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/*
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright(c) 2021 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +29,7 @@
 
 #include "bridge.h"
 #include "command-line.h"
+#include "p4proto/p4proto.h"
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
@@ -110,6 +113,9 @@ main(int argc, char *argv[])
                              ovs_vswitchd_exit, &exit_args);
 
     bridge_init(remote);
+#ifdef P4OVS
+    p4proto_init();
+#endif
     free(remote);
 
     exiting = false;
@@ -141,6 +147,9 @@ main(int argc, char *argv[])
         }
     }
     bridge_exit(cleanup);
+#ifdef P4OVS
+    p4proto_exit();
+#endif
     unixctl_server_destroy(unixctl);
     service_stop();
     vlog_disable_async();

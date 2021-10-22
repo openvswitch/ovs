@@ -1,5 +1,6 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
- *
+/*
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+ * Copyright(c) 2021 Intel Corporation
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at:
@@ -71,6 +72,10 @@
 #include "lib/vswitch-idl.h"
 #include "xenserver.h"
 #include "vlan-bitmap.h"
+#include "p4proto/p4proto.h"
+#ifdef P4OVS
+#include "p4proto/bfIntf/bf_interface.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(bridge);
 
@@ -449,6 +454,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_dpdk_version);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_dpdk_initialized);
+    ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_p4_devices);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_version);
@@ -2021,6 +2027,16 @@ iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
     return netdev_set_config(netdev, &iface_cfg->options, errp);
 }
 
+#ifdef P4OVS
+static void port_attrs_prepare(struct port_properties_t *port_props,
+                   const struct ovsrec_interface *iface_cfg)
+{
+    ovs_strzcpy(port_props->port_name, (char *)(iface_cfg->name), PORT_NAME_LEN);
+    ovs_strzcpy(port_props->mac_in_use, (char *)(iface_cfg->mac_in_use), MAC_STRING_LEN);
+    return;
+}
+#endif
+
 /* Opens a network device for 'if_cfg' and configures it.  Adds the network
  * device to br->ofproto and stores the OpenFlow port number in '*ofp_portp'.
  *
@@ -2100,6 +2116,10 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     struct port *port;
     char *errp = NULL;
     int error;
+#ifdef P4OVS
+    uint64_t device_id = 0;
+    struct port_properties_t port_props;
+#endif
 
     /* Do the bits that can fail up front. */
     ovs_assert(!iface_lookup(br, iface_cfg->name));
@@ -2133,6 +2153,21 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
     /* Populate initial status in database. */
     iface_refresh_stats(iface);
     iface_refresh_netdev_status(iface);
+
+#ifdef P4OVS
+    /* Make sure attributes structure is initialized to empty values */
+    memset((void*)&port_props, 0, sizeof(port_properties_t));
+
+    port_attrs_prepare(&port_props, iface_cfg);
+    device_id = get_device_id_from_bridge_name(br->name);
+
+    /* Add Port config to target through P4 SDE, iff Port is not internal */
+    if (!(iface_is_internal(iface_cfg, br->cfg))) {
+        VLOG_INFO("bridge %s: device-id:%"PRIu64" added with interface " \
+              "index:%"PRIu64, br->name, device_id, *iface_cfg->ifindex);
+        bf_p4_add_port(device_id, *iface_cfg->ifindex, &port_props);
+    }
+#endif
 
     /* Add bond fake iface if necessary. */
     if (port_is_bond_fake_iface(port)) {
@@ -3329,6 +3364,7 @@ bridge_run(void)
         idl_seqno = ovsdb_idl_get_seqno(idl);
         txn = ovsdb_idl_txn_create(idl);
         bridge_reconfigure(cfg ? cfg : &null_cfg);
+        p4proto_run();
 
         if (cfg) {
             ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
@@ -3601,7 +3637,9 @@ bridge_destroy(struct bridge *br, bool del)
         HMAP_FOR_EACH_SAFE (mirror, next_mirror, hmap_node, &br->mirrors) {
             mirror_destroy(mirror);
         }
-
+#ifdef P4OVS
+        p4proto_remove_bridge(&br->node, br->name);
+#endif
         hmap_remove(&all_bridges, &br->node);
         ofproto_destroy(br->ofproto, del);
         hmap_destroy(&br->ifaces);
@@ -5239,4 +5277,81 @@ discover_types(const struct ovsrec_open_vswitch *cfg)
     ovsrec_open_vswitch_set_iface_types(cfg, iface_types, sset_count(&types));
     free(iface_types);
     sset_destroy(&types);
+}
+
+void
+p4proto_dump_bridge_names(struct ds *ds, struct hmap *bridges)
+{
+    struct bridge *bridge;
+
+    /* This loop prints bridge names in between parentheses */
+    ds_put_format(ds, " (");
+    HMAP_FOR_EACH (bridge, node, bridges) {
+        ds_put_format(ds, " %s", bridge->name);
+    }
+    ds_put_format(ds, " )");
+}
+
+
+struct hmap_node *
+get_bridge_node(const char *br_name)
+{
+    struct hmap_node *br_node;
+
+    br_node = hmap_first_with_hash(&all_bridges, hash_string(br_name, 0));
+
+    if (!br_node) {
+        VLOG_ERR("Cannot fetch bridge node for %s", br_name);
+    }
+    return br_node;
+}
+
+void
+p4proto_delete_bridges(struct hmap *bridges, struct hmap *new_p4device_bridges,
+                       uint64_t device_id)
+{
+    struct bridge *bridge, *bridge_next;
+    struct hmap_node *br_node;
+    char *br_name;
+
+    HMAP_FOR_EACH_SAFE (bridge, bridge_next, node, bridges) {
+        br_name = bridge->name;
+        br_node = hmap_first_with_hash(new_p4device_bridges,
+                                       hash_string(br_name, 0));
+        if (!br_node) {
+            VLOG_DBG("[%s]: Deleted bridge %s from P4 device %"PRIu64,
+                     __func__, br_name, device_id);
+            br_node = hmap_first_with_hash(bridges, hash_string(br_name, 0));
+            hmap_remove(bridges, br_node);
+            /* TODO Send an event regarding bridge delete */
+        }
+    }
+}
+
+void
+p4proto_run(void)
+{
+    const struct ovsrec_p4_device *device_cfg;
+    struct shash new_p4_device;
+    char *key = NULL;
+    uint64_t device_id = 0;
+
+    VLOG_DBG("Func called: %s", __func__);
+
+    shash_init(&new_p4_device);
+    OVSREC_P4_DEVICE_FOR_EACH(device_cfg, idl) {
+        device_id = (uint64_t)*device_cfg->device_id;
+        key = xasprintf("%"PRIu64, device_id);
+        if (!shash_add_once(&new_p4_device, key, device_cfg)) {
+            VLOG_WARN("Device id %"PRIu64" is added twice", device_id);
+        }
+        free(key);
+        key = NULL;
+    }
+
+#ifdef P4OVS
+    p4proto_add_del_devices(&new_p4_device);
+#endif
+
+    shash_destroy(&new_p4_device);
 }

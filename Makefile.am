@@ -1,5 +1,19 @@
 # Copyright (C) 2007-2017 Nicira, Inc.
 #
+# Copyright (c) 2021 Intel Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
 # notice and this notice are preserved.  This file is offered as-is,
@@ -29,6 +43,7 @@ AM_CPPFLAGS += -I $(top_srcdir)/lib
 AM_CPPFLAGS += -I $(top_builddir)/lib
 
 AM_CPPFLAGS += $(SSL_INCLUDES)
+AM_CPPFLAGS += -I $(SDE_INSTALL)/include
 
 AM_CFLAGS = -Wstrict-prototypes
 AM_CFLAGS += $(WARNING_FLAGS)
@@ -93,6 +108,19 @@ EXTRA_DIST = \
 	$(MAN_ROOTS) \
 	Vagrantfile \
 	Vagrantfile-FreeBSD \
+	p4runtime \
+	.gitmodules \
+	install_dep_packages.sh \
+	apply_stratum_artifacts.sh \
+	os_ver_details.sh \
+	p4ovs_env_setup.sh \
+	uninstall_dep_packages.sh \
+	build-p4ovs.sh \
+	component.sh \
+	fix_sde_libs.sh \
+	external/PATCH-01-GRPC \
+        OVS-WITH-P4-BUILD-README \
+	external/PATCH-01-TOFINO \
 	.mailmap
 bin_PROGRAMS =
 sbin_PROGRAMS =
@@ -299,7 +327,7 @@ check-endian:
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
 	  (cd $(srcdir) && git --no-pager grep -l -E \
 	   -e 'BIG_ENDIAN|LITTLE_ENDIAN' --and --not -e 'BYTE_ORDER' | \
-	  $(EGREP) -v '^datapath/|^include/sparse/rte_'); \
+	  $(EGREP) -v '^switchlink/|^datapath/|^include/sparse/rte_'); \
 	then \
 	  echo "See above for list of files that misuse LITTLE""_ENDIAN"; \
 	  echo "or BIG""_ENDIAN.  Please use WORDS_BIGENDIAN instead."; \
@@ -481,6 +509,19 @@ include Documentation/automake.mk
 include m4/automake.mk
 include lib/automake.mk
 include ofproto/automake.mk
+
+if P4OVS
+include p4proto/bfIntf/automake.mk
+include p4proto/p4rt/automake.mk
+include p4proto/automake.mk
+endif
+
+if P4SAI
+include switchapi/automake.mk
+include switchsai/automake.mk
+include switchlink/automake.mk
+endif
+
 include utilities/automake.mk
 include tests/automake.mk
 include include/automake.mk

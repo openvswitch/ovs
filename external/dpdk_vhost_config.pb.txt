@@ -1,0 +1,202 @@
+description: "Default Chassis Config for DPDK Backend"
+chassis {
+  platform: PLT_P4_SOFT_SWITCH
+  name: "DPDK"
+}
+nodes {
+  id: 1
+  slot: 1
+  index: 1
+}
+singleton_ports {
+  id: 100
+  name: "net_vhost0"
+  slot: 1
+  port: 1
+  channel: 1
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 101
+  name: "net_vhost1"
+  slot: 1
+  port: 1
+  channel: 2
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 102
+  name: "net_vhost2"
+  slot: 1
+  port: 1
+  channel: 3
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 103
+  name: "net_vhost3"
+  slot: 1
+  port: 1
+  channel: 4
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 200
+  name: "net_vhost4"
+  slot: 1
+  port: 2
+  channel: 1
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 201
+  name: "net_vhost5"
+  slot: 1
+  port: 2
+  channel: 2
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 202
+  name: "net_vhost6"
+  slot: 1
+  port: 2
+  channel: 3
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 203
+  name: "net_vhost7"
+  slot: 1
+  port: 2
+  channel: 4
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 300
+  name: "net_vhost8"
+  slot: 1
+  port: 3
+  channel: 1
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 301
+  name: "net_vhost9"
+  slot: 1
+  port: 3
+  channel: 2
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 302
+  name: "net_vhost10"
+  slot: 1
+  port: 3
+  channel: 3
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 303
+  name: "net_vhost11"
+  slot: 1
+  port: 3
+  channel: 4
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 400
+  name: "net_vhost12"
+  slot: 1
+  port: 4
+  channel: 1
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 401
+  name: "net_vhost13"
+  slot: 1
+  port: 4
+  channel: 2
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 402
+  name: "net_vhost14"
+  slot: 1
+  port: 4
+  channel: 3
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}
+singleton_ports {
+  id: 403
+  name: "net_vhost15"
+  slot: 1
+  port: 4
+  channel: 4
+  speed_bps: 10000000000
+  config_params {
+    admin_state: ADMIN_STATE_ENABLED
+  }
+  node: 1
+}

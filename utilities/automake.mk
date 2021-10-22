@@ -3,7 +3,9 @@ bin_PROGRAMS += \
 	utilities/ovs-testcontroller \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
-	utilities/ovs-vsctl
+	utilities/ovs-vsctl \
+	utilities/gnmi-cli \
+	utilities/ovs_pipeline_builder
 bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-pki \
 	utilities/ovs-pcap \
@@ -13,6 +15,7 @@ bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-l3ping \
 	utilities/ovs-parse-backtrace \
 	utilities/ovs-test \
+	utilities/ovs-p4ctl \
 	utilities/ovs-vlan-test
 scripts_SCRIPTS += \
 	utilities/ovs-check-dead-ifs \
@@ -56,12 +59,13 @@ EXTRA_DIST += \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vsctl-bashcomp.bash \
 	utilities/checkpatch.py \
-        utilities/docker/Makefile \
-        utilities/docker/ovs-override.conf \
-        utilities/docker/start-ovs \
-        utilities/docker/create_ovs_db.sh \
-        utilities/docker/debian/Dockerfile \
-        utilities/docker/debian/build-kernel-modules.sh
+	utilities/ovs-p4ctl.in \
+	utilities/docker/Makefile \
+	utilities/docker/ovs-override.conf \
+	utilities/docker/start-ovs \
+	utilities/docker/create_ovs_db.sh \
+	utilities/docker/debian/Dockerfile \
+	utilities/docker/debian/build-kernel-modules.sh
 MAN_ROOTS += \
 	utilities/ovs-testcontroller.8.in \
 	utilities/ovs-dpctl.8.in \
@@ -90,7 +94,8 @@ CLEANFILES += \
 	utilities/ovs-tcpundump \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test \
-	utilities/ovs-vsctl.8
+	utilities/ovs-vsctl.8 \
+	utilities/ovs-p4ctl
 
 man_MANS += \
 	utilities/ovs-testcontroller.8 \
@@ -100,6 +105,7 @@ man_MANS += \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-vsctl.8
+
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.la
@@ -117,6 +123,23 @@ utilities_ovs_ofctl_LDADD = \
 
 utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.la
+
+utilities_gnmi_cli_SOURCES = utilities/gnmi_cli.cc
+utilities_gnmi_cli_LDADD = lib/libopenvswitch.la
+utilities_gnmi_cli_LDADD += -lgrpc -lprotobuf -lgflags -lgrpc++
+utilities_gnmi_cli_LDADD += p4proto/p4rt/libp4rt.la
+utilities_gnmi_cli_CPPFLAGS = $(AM_CPPFLAGS)
+utilities_gnmi_cli_CPPFLAGS += -I ./p4proto/p4rt/proto/p4
+utilities_gnmi_cli_CPPFLAGS += -I /usr/local/include
+
+utilities_ovs_pipeline_builder_SOURCES = stratum/stratum/hal/bin/barefoot/bf_pipeline_builder.cc
+utilities_ovs_pipeline_builder_LDADD = p4proto/bfIntf/libbfIntf.la
+utilities_ovs_pipeline_builder_LDADD += p4proto/p4rt/libp4rt.la
+utilities_ovs_pipeline_builder_LDADD += -lprotobuf -lgflags
+utilities_ovs_pipeline_builder_CPPFLAGS = $(AM_CPPFLAGS)
+utilities_ovs_pipeline_builder_CPPFLAGS += -I .
+utilities_ovs_pipeline_builder_CPPFLAGS += -I ./stratum
+utilities_ovs_pipeline_builder_CPPFLAGS += -I ./p4proto/p4rt/proto
 
 if LINUX
 noinst_PROGRAMS += utilities/nlmon

@@ -1,0 +1,4 @@
+libp4rt_@LT_CURRENT@ {
+global:
+        *;
+};

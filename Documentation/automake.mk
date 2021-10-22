@@ -22,6 +22,8 @@ DOC_SOURCE = \
 	Documentation/intro/install/userspace.rst \
 	Documentation/intro/install/windows.rst \
 	Documentation/intro/install/xenserver.rst \
+        Documentation/intro/install/ovs-with-p4-general.rst \
+	Documentation/intro/install/ovs-with-p4-tofino.rst \
 	Documentation/tutorials/index.rst \
 	Documentation/tutorials/faucet.rst \
 	Documentation/tutorials/ovs-advanced.rst \
@@ -77,6 +79,7 @@ DOC_SOURCE = \
 	Documentation/howto/vlan.png \
 	Documentation/howto/vlan.rst \
 	Documentation/howto/vtep.rst \
+	Documentation/howto/ovs-with-p4-executables.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \
 	Documentation/faq/configuration.rst \

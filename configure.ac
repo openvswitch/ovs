@@ -1,4 +1,5 @@
 # Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+# Copyright(c) 2021 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -146,6 +147,12 @@ AC_CONFIG_FILES([
     lib/string.h
     ovsdb/libovsdb.sym
     ofproto/libofproto.sym
+    p4proto/libp4proto.sym
+    p4proto/p4rt/libp4rt.sym
+    p4proto/bfIntf/libbfIntf.sym
+    switchlink/libswitchlink.sym
+    switchsai/libswitchsai.sym
+    switchapi/libswitchapi.sym
     lib/libsflow.sym
     lib/libopenvswitch.sym
     vtep/libvtep.sym])
@@ -196,6 +203,7 @@ OVS_CHECK_LINUX_SCTP_CT
 OVS_CHECK_LINUX_VIRTIO_TYPES
 OVS_CHECK_DPDK
 OVS_CHECK_PRAGMA_MESSAGE
+OVS_CHECK_P4TDI
 AC_SUBST([OVS_CFLAGS])
 AC_SUBST([OVS_LDFLAGS])
 
@@ -208,6 +216,12 @@ AC_CONFIG_FILES(tests/atlocal)
 AC_CONFIG_FILES(lib/libopenvswitch.pc)
 AC_CONFIG_FILES(lib/libsflow.pc)
 AC_CONFIG_FILES(ofproto/libofproto.pc)
+AC_CONFIG_FILES(p4proto/libp4proto.pc)
+AC_CONFIG_FILES(p4proto/p4rt/libp4rt.pc)
+AC_CONFIG_FILES(p4proto/bfIntf/libbfIntf.pc)
+AC_CONFIG_FILES(switchlink/libswitchlink.pc)
+AC_CONFIG_FILES(switchsai/libswitchsai.pc)
+AC_CONFIG_FILES(switchapi/libswitchapi.pc)
 AC_CONFIG_FILES(ovsdb/libovsdb.pc)
 AC_CONFIG_FILES(include/openvswitch/version.h)
 
@@ -216,6 +230,12 @@ AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
 AC_CONFIG_COMMANDS([ipsec/dummy], [:])
+
+AC_CHECK_PROG([PROTOC], [protoc], [protoc])
+AS_IF([test "x${PROTOC}" == "x"],
+    [AC_MSG_ERROR([ProtoBuf compiler "protoc" not found.])])
+
+PKG_CHECK_MODULES([PYTHON], [python-3.6], , [path = /usr/local/lib])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 

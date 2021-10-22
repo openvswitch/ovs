@@ -1,0 +1,12 @@
+[submodule "p4runtime"]
+    path = p4runtime
+    url = https://github.com/p4lang/p4runtime.git
+[submodule "stratum"]
+    path = stratum
+    url = https://github.com/stratum/stratum.git
+[submodule "external/googleapis"]
+    path = external/googleapis
+    url = https://github.com/googleapis/googleapis.git
+[submodule "switchlink/submodules/SAI"]
+    path = switchlink/submodules/SAI
+    url = https://github.com/opencomputeproject/SAI.git

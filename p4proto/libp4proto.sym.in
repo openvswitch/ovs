@@ -1,0 +1,4 @@
+libp4proto_@LT_CURRENT@ {
+global:
+        *;
+};
