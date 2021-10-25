@@ -3951,7 +3951,7 @@ zone=4,limit=10,count=0
 zone=5,limit=10,count=0
 ])
 
-dnl Test ct-get-limits for all zoens
+dnl Test ct-get-limits for all zones
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=10
 zone=0,limit=5,count=5
