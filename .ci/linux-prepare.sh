@@ -21,7 +21,6 @@ make -j4 HAVE_LLVM= HAVE_SQLITE= install
 cd ..
 
 pip3 install --disable-pip-version-check --user flake8 hacking
-pip3 install --user --upgrade docutils
 
 if [ "$M32" ]; then
     # Installing 32-bit libraries.
