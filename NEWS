@@ -10,6 +10,9 @@ Post-v2.16.0
        limiting behavior.
      * Add hardware offload support for matching IPv4/IPv6 frag types
        (experimental).
+   - Python:
+     * For SSL support, the use of the pyOpenSSL library has been replaced
+       with the native 'ssl' module.
 
 
 v2.16.0 - 16 Aug 2021

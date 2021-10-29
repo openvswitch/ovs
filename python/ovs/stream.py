@@ -22,9 +22,9 @@ import ovs.socket_util
 import ovs.vlog
 
 try:
-    from OpenSSL import SSL
+    import ssl
 except ImportError:
-    SSL = None
+    ssl = None
 
 if sys.platform == 'win32':
     import ovs.winutils as winutils
@@ -322,6 +322,12 @@ class Stream(object):
         The recv function will not block waiting for data to arrive.  If no
         data have been received, it returns (errno.EAGAIN, "") immediately."""
 
+        try:
+            return self._recv(n)
+        except socket.error as e:
+            return (ovs.socket_util.get_exception_errno(e), "")
+
+    def _recv(self, n):
         retval = self.connect()
         if retval != 0:
             return (retval, "")
@@ -331,10 +337,7 @@ class Stream(object):
         if sys.platform == 'win32' and self.socket is None:
             return self.__recv_windows(n)
 
-        try:
-            return (0, self.socket.recv(n))
-        except socket.error as e:
-            return (ovs.socket_util.get_exception_errno(e), "")
+        return (0, self.socket.recv(n))
 
     def __recv_windows(self, n):
         if self._read_pending:
@@ -396,6 +399,12 @@ class Stream(object):
         Will not block.  If no bytes can be immediately accepted for
         transmission, returns -errno.EAGAIN immediately."""
 
+        try:
+            return self._send(buf)
+        except socket.error as e:
+            return -ovs.socket_util.get_exception_errno(e)
+
+    def _send(self, buf):
         retval = self.connect()
         if retval != 0:
             return -retval
@@ -409,10 +418,7 @@ class Stream(object):
         if sys.platform == 'win32' and self.socket is None:
             return self.__send_windows(buf)
 
-        try:
-            return self.socket.send(buf)
-        except socket.error as e:
-            return -ovs.socket_util.get_exception_errno(e)
+        return self.socket.send(buf)
 
     def __send_windows(self, buf):
         if self._write_pending:
@@ -769,7 +775,7 @@ class SSLStream(Stream):
     def check_connection_completion(sock):
         try:
             return Stream.check_connection_completion(sock)
-        except SSL.SysCallError as e:
+        except ssl.SSLSyscallError as e:
             return ovs.socket_util.get_exception_errno(e)
 
     @staticmethod
@@ -777,27 +783,34 @@ class SSLStream(Stream):
         return True
 
     @staticmethod
-    def verify_cb(conn, cert, errnum, depth, ok):
-        return ok
-
-    @staticmethod
     def _open(suffix, dscp):
-        error, sock = TCPStream._open(suffix, dscp)
-        if error:
-            return error, None
+        address = ovs.socket_util.inet_parse_active(suffix, 0)
+        family, sock = ovs.socket_util.inet_create_socket_active(
+                socket.SOCK_STREAM, address)
+        if sock is None:
+            return family, sock
 
         # Create an SSL context
-        ctx = SSL.Context(SSL.SSLv23_METHOD)
-        ctx.set_verify(SSL.VERIFY_PEER, SSLStream.verify_cb)
-        ctx.set_options(SSL.OP_NO_SSLv2 | SSL.OP_NO_SSLv3)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.options |= ssl.OP_NO_SSLv2
+        ctx.options |= ssl.OP_NO_SSLv3
         # If the client has not set the SSL configuration files
         # exception would be raised.
-        ctx.use_privatekey_file(Stream._SSL_private_key_file)
-        ctx.use_certificate_file(Stream._SSL_certificate_file)
         ctx.load_verify_locations(Stream._SSL_ca_cert_file)
+        ctx.load_cert_chain(Stream._SSL_certificate_file,
+                            Stream._SSL_private_key_file)
+        ssl_sock = ctx.wrap_socket(sock, do_handshake_on_connect=False)
 
-        ssl_sock = SSL.Connection(ctx, sock)
-        ssl_sock.set_connect_state()
+        # Connect
+        error = ovs.socket_util.inet_connect_active(ssl_sock, address, family,
+                                                    dscp)
+        if not error:
+            try:
+                ssl_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except socket.error as e:
+                ssl_sock.close()
+                return ovs.socket_util.get_exception_errno(e), None
         return error, ssl_sock
 
     def connect(self):
@@ -809,40 +822,44 @@ class SSLStream(Stream):
         # TCP Connection is successful. Now do the SSL handshake
         try:
             self.socket.do_handshake()
-        except SSL.WantReadError:
+        except ssl.SSLWantReadError:
             return errno.EAGAIN
-        except SSL.SysCallError as e:
+        except ssl.SSLSyscallError as e:
             return ovs.socket_util.get_exception_errno(e)
 
         return 0
 
     def recv(self, n):
         try:
-            return super(SSLStream, self).recv(n)
-        except SSL.WantReadError:
+            return super(SSLStream, self)._recv(n)
+        except ssl.SSLWantReadError:
             return (errno.EAGAIN, "")
-        except SSL.SysCallError as e:
+        except ssl.SSLSyscallError as e:
             return (ovs.socket_util.get_exception_errno(e), "")
-        except SSL.ZeroReturnError:
+        except ssl.SSLZeroReturnError:
             return (0, "")
+        except socket.error as e:
+            return (ovs.socket_util.get_exception_errno(e), "")
 
     def send(self, buf):
         try:
-            return super(SSLStream, self).send(buf)
-        except SSL.WantWriteError:
+            return super(SSLStream, self)._send(buf)
+        except ssl.SSLWantWriteError:
             return -errno.EAGAIN
-        except SSL.SysCallError as e:
+        except ssl.SSLSyscallError as e:
+            return -ovs.socket_util.get_exception_errno(e)
+        except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)
 
     def close(self):
         if self.socket:
             try:
-                self.socket.shutdown()
-            except SSL.Error:
+                self.socket.shutdown(socket.SHUT_RDWR)
+            except socket.error:
                 pass
         return super(SSLStream, self).close()
 
 
-if SSL:
+if ssl:
     # Register SSL only if the OpenSSL module is available
     Stream.register_method("ssl", SSLStream)

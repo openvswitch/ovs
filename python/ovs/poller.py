@@ -26,9 +26,9 @@ if sys.platform == "win32":
     import ovs.winutils as winutils
 
 try:
-    from OpenSSL import SSL
+    import ssl
 except ImportError:
-    SSL = None
+    ssl = None
 
 try:
     from eventlet import patcher as eventlet_patcher
@@ -73,7 +73,7 @@ class _SelectSelect(object):
     def register(self, fd, events):
         if isinstance(fd, socket.socket):
             fd = fd.fileno()
-        if SSL and isinstance(fd, SSL.Connection):
+        if ssl and isinstance(fd, ssl.SSLSocket):
             fd = fd.fileno()
 
         if sys.platform != 'win32':
