@@ -3681,6 +3681,7 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     netdev_init_tnl_build_header_params(&tnl_params, flow, &s_ip6, dmac, smac);
     err = tnl_port_build_header(xport->ofport, &tnl_push_data, &tnl_params);
     if (err) {
+        xlate_report(ctx, OFT_WARN, "native tunnel header build failed");
         return err;
     }
     tnl_push_data.tnl_port = tunnel_odp_port;
