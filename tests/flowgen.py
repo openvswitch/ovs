@@ -135,7 +135,7 @@ def output(attrs):
                                       12893)  # urgent pointer
                     if attrs['TP_PROTO'] == 'TCP+options':
                         tcp = (tcp[:12]
-                               + struct.pack('H', (6 << 12) | 0x02 | 0x10)
+                               + struct.pack('>H', (6 << 12) | 0x02 | 0x10)
                                + tcp[14:])
                         tcp += struct.pack('>BBH', 2, 4, 1975)  # MSS option
                     tcp += b'payload'
