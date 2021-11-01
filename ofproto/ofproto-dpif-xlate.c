@@ -4081,14 +4081,35 @@ is_neighbor_reply_correct(const struct xlate_ctx *ctx, const struct flow *flow)
 }
 
 static bool
-terminate_native_tunnel(struct xlate_ctx *ctx, struct flow *flow,
-                        struct flow_wildcards *wc, odp_port_t *tnl_port)
+xport_has_ip(const struct xport *xport)
+{
+    struct in6_addr *ip_addr, *mask;
+    int n_in6 = 0;
+
+    if (netdev_get_addr_list(xport->netdev, &ip_addr, &mask, &n_in6)) {
+        n_in6 = 0;
+    } else {
+        free(ip_addr);
+        free(mask);
+    }
+    return n_in6 ? true : false;
+}
+
+static bool
+terminate_native_tunnel(struct xlate_ctx *ctx, const struct xport *xport,
+                        struct flow *flow, struct flow_wildcards *wc,
+                        odp_port_t *tnl_port)
 {
     *tnl_port = ODPP_NONE;
 
     /* XXX: Write better Filter for tunnel port. We can use in_port
-     * in tunnel-port flow to avoid these checks completely. */
-    if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+     * in tunnel-port flow to avoid these checks completely.
+     *
+     * Port without an IP address cannot be a tunnel termination point.
+     * Not performing a lookup in this case to avoid unwildcarding extra
+     * flow fields (dl_dst). */
+    if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)
+        && xport_has_ip(xport)) {
         *tnl_port = tnl_port_map_lookup(flow, wc);
 
         /* If no tunnel port was found and it's about an ARP or ICMPv6 packet,
@@ -4242,7 +4263,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             native_tunnel_output(ctx, xport, flow, odp_port, truncate);
             flow->tunnel = flow_tnl; /* Restore tunnel metadata */
 
-        } else if (terminate_native_tunnel(ctx, flow, wc,
+        } else if (terminate_native_tunnel(ctx, xport, flow, wc,
                                            &odp_tnl_port)) {
             /* Intercept packet to be received on native tunnel port. */
             nl_msg_put_odp_port(ctx->odp_actions, OVS_ACTION_ATTR_TUNNEL_POP,
