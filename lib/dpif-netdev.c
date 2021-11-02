@@ -216,7 +216,8 @@ struct dp_meter {
 };
 
 struct pmd_auto_lb {
-    bool auto_lb_requested;     /* Auto load balancing requested by user. */
+    bool do_dry_run;
+    bool recheck_config;
     bool is_enabled;            /* Current status of Auto load balancing. */
     uint64_t rebalance_intvl;
     uint64_t rebalance_poll_timer;
@@ -4149,54 +4150,27 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
 /* Enable or Disable PMD auto load balancing. */
 static void
-set_pmd_auto_lb(struct dp_netdev *dp, bool always_log)
+set_pmd_auto_lb(struct dp_netdev *dp, bool state, bool always_log)
 {
-    unsigned int cnt = 0;
-    struct dp_netdev_pmd_thread *pmd;
     struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
-    uint8_t rebalance_load_thresh;
 
-    bool enable_alb = false;
-    bool multi_rxq = false;
-    enum sched_assignment_type pmd_rxq_assign_type = dp->pmd_rxq_assign_type;
-
-    /* Ensure that there is at least 2 non-isolated PMDs and
-     * one of them is polling more than one rxq. */
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        if (pmd->core_id == NON_PMD_CORE_ID || pmd->isolated) {
-            continue;
-        }
-
-        if (hmap_count(&pmd->poll_list) > 1) {
-            multi_rxq = true;
-        }
-        if (cnt && multi_rxq) {
-                enable_alb = true;
-                break;
-        }
-        cnt++;
-    }
-
-    /* Enable auto LB if requested and not using roundrobin assignment. */
-    enable_alb = enable_alb && pmd_rxq_assign_type != SCHED_ROUNDROBIN &&
-                    pmd_alb->auto_lb_requested;
-
-    if (pmd_alb->is_enabled != enable_alb || always_log) {
-        pmd_alb->is_enabled = enable_alb;
+    if (pmd_alb->is_enabled != state || always_log) {
+        pmd_alb->is_enabled = state;
         if (pmd_alb->is_enabled) {
+            uint8_t rebalance_load_thresh;
+
             atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
                                 &rebalance_load_thresh);
-            VLOG_INFO("PMD auto load balance is enabled "
+            VLOG_INFO("PMD auto load balance is enabled, "
                       "interval %"PRIu64" mins, "
                       "pmd load threshold %"PRIu8"%%, "
-                      "improvement threshold %"PRIu8"%%",
+                      "improvement threshold %"PRIu8"%%.",
                        pmd_alb->rebalance_intvl / MIN_TO_MSEC,
                        rebalance_load_thresh,
                        pmd_alb->rebalance_improve_thresh);
-
         } else {
             pmd_alb->rebalance_poll_timer = 0;
-            VLOG_INFO("PMD auto load balance is disabled");
+            VLOG_INFO("PMD auto load balance is disabled.");
         }
     }
 }
@@ -4317,12 +4291,6 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     }
 
     struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
-    bool cur_rebalance_requested = pmd_alb->auto_lb_requested;
-    pmd_alb->auto_lb_requested = smap_get_bool(other_config, "pmd-auto-lb",
-                              false);
-    if (cur_rebalance_requested != pmd_alb->auto_lb_requested) {
-        log_autolb = true;
-    }
 
     rebalance_intvl = smap_get_int(other_config, "pmd-auto-lb-rebal-interval",
                                    ALB_REBALANCE_INTERVAL);
@@ -4364,7 +4332,10 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
                   rebalance_load);
         log_autolb = true;
     }
-    set_pmd_auto_lb(dp, log_autolb);
+
+    bool autolb_state = smap_get_bool(other_config, "pmd-auto-lb", false);
+
+    set_pmd_auto_lb(dp, autolb_state, log_autolb);
     return 0;
 }
 
@@ -5492,6 +5463,64 @@ sched_numa_list_variance(struct sched_numa_list *numa_list)
     return var;
 }
 
+/*
+ * This function checks that some basic conditions needed for a rebalance to be
+ * effective are met. Such as Rxq scheduling assignment type, more than one
+ * PMD, more than 2 Rxqs on a PMD. If there was no reconfiguration change
+ * since the last check, it reuses the last result.
+ *
+ * It is not intended to be an inclusive check of every condition that may make
+ * a rebalance ineffective. It is done as a quick check so a full
+ * pmd_rebalance_dry_run() can be avoided when it is not needed.
+ */
+static bool
+pmd_reblance_dry_run_needed(struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    struct dp_netdev_pmd_thread *pmd;
+    struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
+    unsigned int cnt = 0;
+    bool multi_rxq = false;
+
+    /* Check if there was no reconfiguration since last check. */
+    if (!pmd_alb->recheck_config) {
+        if (!pmd_alb->do_dry_run) {
+            VLOG_DBG("PMD auto load balance nothing to do, "
+                     "no configuration changes since last check.");
+            return false;
+        }
+        return true;
+    }
+    pmd_alb->recheck_config = false;
+
+    /* Check for incompatible assignment type. */
+    if (dp->pmd_rxq_assign_type == SCHED_ROUNDROBIN) {
+        VLOG_DBG("PMD auto load balance nothing to do, "
+                 "pmd-rxq-assign=roundrobin assignment type configured.");
+        return pmd_alb->do_dry_run = false;
+    }
+
+    /* Check that there is at least 2 non-isolated PMDs and
+     * one of them is polling more than one rxq. */
+    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        if (pmd->core_id == NON_PMD_CORE_ID || pmd->isolated) {
+            continue;
+        }
+
+        if (hmap_count(&pmd->poll_list) > 1) {
+            multi_rxq = true;
+        }
+        if (cnt && multi_rxq) {
+            return pmd_alb->do_dry_run = true;
+        }
+        cnt++;
+    }
+
+    VLOG_DBG("PMD auto load balance nothing to do, "
+             "not enough non-isolated PMDs or RxQs.");
+    return pmd_alb->do_dry_run = false;
+}
+
 static bool
 pmd_rebalance_dry_run(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex)
@@ -5876,8 +5905,8 @@ reconfigure_datapath(struct dp_netdev *dp)
     /* Reload affected pmd threads. */
     reload_affected_pmds(dp);
 
-    /* Check if PMD Auto LB is to be enabled */
-    set_pmd_auto_lb(dp, false);
+    /* PMD ALB will need to recheck if dry run needed. */
+    dp->pmd_alb.recheck_config = true;
 }
 
 /* Returns true if one of the netdevs in 'dp' requires a reconfiguration */
@@ -6005,6 +6034,7 @@ dpif_netdev_run(struct dpif *dpif)
             if (pmd_rebalance &&
                 !dp_netdev_is_reconf_required(dp) &&
                 !ports_require_restart(dp) &&
+                pmd_reblance_dry_run_needed(dp) &&
                 pmd_rebalance_dry_run(dp)) {
                 VLOG_INFO("PMD auto load balance dry run. "
                           "Requesting datapath reconfigure.");
