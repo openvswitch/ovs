@@ -223,3 +223,11 @@ previously configured CONFIG params.
     sub-node which holds multiple ports like net_vhost0, net_vhost1,... Pass
     the key name for whose value need to be fetched. Each get can take ONLY
     one key, and fetches value for that previously configured KEY.
+
+.. important::
+  If grpc connection to server fails, export GRPC_TRACE=all and check if any
+  proxy errors are encountered. If Yes, then configure localhost as an entry in
+  NO_PROXY environmental variable (append localhost if NO_PROXY is already
+  configured).
+
+  Example: export NO_PROXY=localhost,127.0.0.1

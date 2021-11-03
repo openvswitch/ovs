@@ -389,6 +389,16 @@ void LogReadRequest(uint64 node_id, const ::p4::v1::ReadRequest& req,
                        node_id, "."));
     }
 
+    // FIXME: We are not supporting overwrite of an already configured pipeline
+    // for a single device. Remove this check when support for overwriting an
+    // already configured forwarding pipeline is available.
+    if (forwarding_pipeline_configs_ != nullptr &&
+          forwarding_pipeline_configs_->node_id_to_config_size() != 0) {
+        return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION,
+                              "Only a single forwarding pipeline can be pushed "
+                              "for any node so far.");
+    }
+
     ::util::Status status = ::util::OkStatus();
     switch (req->action()) {
       case ::p4::v1::SetForwardingPipelineConfigRequest::VERIFY:
