@@ -55,7 +55,9 @@ example:
 
 #define MAX_STR_LENGTH 128
 
-DEFINE_string(grpc_addr, "0.0.0.0:9339", "gNMI server address");
+// FIXME: For now it is connecting to localhost and later it has to be fixed
+// to support any host, by providing an CLI options to the user.
+DEFINE_string(grpc_addr, "127.0.0.1:9339", "gNMI server address");
 
 DEFINE_uint64(interval, 5000, "Subscribe poll interval in ms");
 DEFINE_bool(replace, false, "Use replace instead of update");
