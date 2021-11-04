@@ -1556,8 +1556,6 @@ match_format(const struct match *match,
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMP) {
                     ds_put_format(s, "%sicmp%s,", colors.value, colors.end);
-                } else if (f->nw_proto == IPPROTO_IGMP) {
-                    ds_put_format(s, "%sigmp%s,", colors.value, colors.end);
                 } else if (f->nw_proto == IPPROTO_TCP) {
                     ds_put_format(s, "%stcp%s,", colors.value, colors.end);
                 } else if (f->nw_proto == IPPROTO_UDP) {
@@ -1761,10 +1759,6 @@ match_format(const struct match *match,
         f->nw_proto == IPPROTO_ICMP) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
-    } else if (dl_type == htons(ETH_TYPE_IP) &&
-               f->nw_proto == IPPROTO_IGMP) {
-        format_be16_masked(s, "igmp_type", f->tp_src, wc->masks.tp_src);
-        format_be16_masked(s, "igmp_code", f->tp_dst, wc->masks.tp_dst);
     } else if (dl_type == htons(ETH_TYPE_IPV6) &&
                f->nw_proto == IPPROTO_ICMPV6) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
