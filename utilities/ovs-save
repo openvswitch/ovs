@@ -150,7 +150,10 @@ save_flows () {
         ovs-ofctl -O $ofp_version dump-flows --no-names --no-stats "$bridge" | \
             sed -e '/NXST_FLOW/d' \
                 -e '/OFPST_FLOW/d' \
-                -e 's/\(idle\|hard\)_age=[^,]*,//g' > \
+                -e 's/\(idle\|hard\)_age=[^,]*,//g' \
+                -e 's/igmp_type/tp_src/g' \
+                -e 's/igmp_code/tp_dst/g' \
+                -e 's/igmp/ip,nw_proto=2/g' > \
                 "$workdir/$bridge.flows.dump"
     done
     echo "rm -rf \"$workdir\""
