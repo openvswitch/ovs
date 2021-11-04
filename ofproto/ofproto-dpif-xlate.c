@@ -6311,6 +6311,7 @@ xlate_check_pkt_larger(struct xlate_ctx *ctx,
      * then ctx->exit would be true. Reset to false so that we can
      * do flow translation for 'IF_LESS_EQUAL' case. finish_freezing()
      * would have taken care of Undoing the changes done for freeze. */
+    bool old_exit = ctx->exit;
     ctx->exit = false;
 
     offset_attr = nl_msg_start_nested(
@@ -6335,7 +6336,7 @@ xlate_check_pkt_larger(struct xlate_ctx *ctx,
     ctx->was_mpls = old_was_mpls;
     ctx->conntracked = old_conntracked;
     ctx->xin->flow = old_flow;
-    ctx->exit = true;
+    ctx->exit = old_exit;
 }
 
 static void
@@ -6713,6 +6714,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         return;
     }
 
+    bool exit = false;
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
         const struct ofpact_metadata *metadata;
@@ -6727,7 +6729,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         recirc_for_mpls(a, ctx);
 
-        if (ctx->exit) {
+        if (ctx->exit || exit) {
             /* Check if need to store the remaining actions for later
              * execution. */
             if (ctx->freezing) {
@@ -7129,6 +7131,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                                                              ofpacts_len);
             xlate_check_pkt_larger(ctx, ofpact_get_CHECK_PKT_LARGER(a),
                                    remaining_acts, remaining_acts_len);
+            if (ctx->xbridge->support.check_pkt_len) {
+                /* If datapath supports check_pkt_len, then
+                 * xlate_check_pkt_larger() does the translation for the
+                 * ofpacts following 'a'. */
+                exit = true;
+            }
             break;
         }
         }
