@@ -11424,6 +11424,23 @@ Megaflow: recirc_id=0x3,eth,ip,in_port=1,nw_frag=no
 Datapath actions: 4
 ])
 
+ovs-ofctl del-flows br0
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=load:0x1->NXM_NX_REG1[[]],resubmit(,1),load:0x2->NXM_NX_REG1[[]],resubmit(,1),load:0x3->NXM_NX_REG1[[]],resubmit(,1)
+table=1,in_port=1,reg1=0x1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,4)
+table=1,in_port=1,reg1=0x2 actions=output:2
+table=1,in_port=1,reg1=0x3 actions=output:4
+table=4,in_port=1 actions=output:3
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([cat stdout | grep Datapath -B1], [0], [dnl
+Megaflow: recirc_id=0,eth,ip,in_port=1,nw_frag=no
+Datapath actions: check_pkt_len(size=200,gt(3),le(3)),2,4
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
