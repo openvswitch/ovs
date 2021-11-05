@@ -170,7 +170,7 @@ To verify hugepage configuration::
 
 Mount the hugepages, if not already mounted by default::
 
-    $ mount -t hugetlbfs none /dev/hugepages``
+    $ mount -t hugetlbfs none /dev/hugepages
 
 .. note::
 
