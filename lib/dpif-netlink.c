@@ -412,11 +412,10 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
          * dispatching, we fall back to the per-vport dispatch mode.
          */
         dp_request.user_features &= ~OVS_DP_F_UNSUPPORTED;
-        dp_request.user_features |= OVS_DP_F_UNALIGNED;
         dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
         dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
         error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
-        if (error) {
+        if (error == EOPNOTSUPP) {
             dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
             dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
             error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
