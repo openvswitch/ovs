@@ -519,13 +519,13 @@ join_cluster() {
     LOCAL_ADDR="$3"
     REMOTE_ADDR="$4"
 
-    if test ! -e "$DB_FILE"; then
-        ovsdb_tool join-cluster "$DB_FILE" "$SCHEMA_NAME" "$LOCAL_ADDR" "$REMOTE_ADDR"
-    elif ovsdb_tool db-is-standalone "$DB_FILE"; then
-        # Backup standalone database and join cluster.
+    if test -e "$DB_FILE" && ovsdb_tool db-is-standalone "$DB_FILE"; then
         backup_db || return 1
+        rm $DB_FILE
+    fi
+    if test ! -e "$DB_FILE"; then
         action "Joining $DB_FILE to cluster" \
-               ovsdb_tool join-cluster "$DB_FILE" "$SCHEMA_NAME" "$LOCAL_ADDR"
+               ovsdb_tool join-cluster "$DB_FILE" "$SCHEMA_NAME" "$LOCAL_ADDR" "$REMOTE_ADDR"
     fi
 }
 
