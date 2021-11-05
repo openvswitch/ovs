@@ -14,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import fcntl
-
 import os
 import pwd
 from random import randint
-import struct
 import subprocess
 import sys
 import time
+import struct
+import fcntl
 
 try:
     from netifaces import interfaces
@@ -52,8 +51,8 @@ except Exception:
     print("       the correct location.")
     sys.exit(1)
 
-tapdev_fd = None
 _make_taps = {}
+_del_taps = {}
 _make_mirror_name = {}
 IFNAMSIZ_LINUX = 15      # this is the max name size, excluding the null byte.
 
@@ -67,21 +66,25 @@ def _doexec(*args, **kwargs):
     return proc
 
 
-def _install_tap_linux(tap_name, mtu_value=None):
-    """Uses /dev/net/tun to create a tap device"""
-    global tapdev_fd
+def _install_dst_if_linux(tap_name, mtu_value=None):
+    ret_code = _doexec(
+        *['ip', 'link', 'add', str(tap_name), 'type', 'dummy']
+        ).wait()
 
-    IFF_TAP = 0x0002
-    IFF_NO_PI = 0x1000
-    TUNSETIFF = 0x400454CA  # This is derived by printf() of TUNSETIFF
-    TUNSETOWNER = TUNSETIFF + 2
+    if ret_code != 0:
+        """If dummy driver is not present, fall back on /dev/net/tun"""
+        IFF_TAP = 0x0002
+        IFF_NO_PI = 0x1000
+        TUNSETIFF = 0x400454CA  # This is derived by printf() of TUNSETIFF
+        TUNSETOWNER = TUNSETIFF + 2
 
-    tapdev_fd = os.open('/dev/net/tun', os.O_RDWR)
-    ifr = struct.pack('16sH', tap_name.encode('utf8'), IFF_TAP | IFF_NO_PI)
-    fcntl.ioctl(tapdev_fd, TUNSETIFF, ifr)
-    fcntl.ioctl(tapdev_fd, TUNSETOWNER, os.getegid())
+        tapdev_fd = os.open('/dev/net/tun', os.O_RDWR)
+        ifr = struct.pack('16sH', tap_name.encode('utf8'), IFF_TAP | IFF_NO_PI)
+        fcntl.ioctl(tapdev_fd, TUNSETIFF, ifr)
+        fcntl.ioctl(tapdev_fd, TUNSETOWNER, os.getegid())
 
-    time.sleep(1)  # required to give the new device settling time
+        time.sleep(1)  # required to give the new device settling time
+
     if mtu_value is not None:
         pipe = _doexec(
             *(['ip', 'link', 'set', 'dev', str(tap_name), 'mtu',
@@ -93,14 +96,22 @@ def _install_tap_linux(tap_name, mtu_value=None):
     pipe.wait()
 
 
+def _remove_dst_if_linux(tap_name):
+    _doexec(
+        *['ip', 'link', 'del', str(tap_name)]
+        ).wait()
+
+
 def _make_linux_mirror_name(interface_name):
     if len(interface_name) > IFNAMSIZ_LINUX - 2:
         return "ovsmi%06d" % randint(1, 999999)
     return "mi%s" % interface_name
 
 
-_make_taps['linux'] = _install_tap_linux
-_make_taps['linux2'] = _install_tap_linux
+_make_taps['linux'] = _install_dst_if_linux
+_make_taps['linux2'] = _install_dst_if_linux
+_del_taps['linux'] = _remove_dst_if_linux
+_del_taps['linux2'] = _remove_dst_if_linux
 _make_mirror_name['linux'] = _make_linux_mirror_name
 _make_mirror_name['linux2'] = _make_linux_mirror_name
 
@@ -455,6 +466,9 @@ def main():
        mirror_interface not in interfaces():
         _make_taps[sys.platform](mirror_interface,
                                  ovsdb.interface_mtu(interface))
+        tap_created = True
+    else:
+        tap_created = False
 
     if mirror_interface not in interfaces():
         print("ERROR: Please create an interface called `%s`" %
@@ -480,6 +494,8 @@ def main():
         print("ERROR: Unable to properly setup the mirror: %s." % str(oe))
         try:
             ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
+            if tap_created is True:
+                _del_taps[sys.platform](mirror_interface)
         except Exception:
             pass
         sys.exit(1)
@@ -498,6 +514,8 @@ def main():
 
         ovsdb.destroy_mirror(interface, ovsdb.port_bridge(interface))
         ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
+        if tap_created is True:
+            _del_taps[sys.platform](mirror_interface)
     except Exception:
         print("Unable to tear down the ports and mirrors.")
         print("Please use ovs-vsctl to remove the ports and mirrors created.")
