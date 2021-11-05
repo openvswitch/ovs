@@ -45,6 +45,36 @@ Notice = collections.namedtuple('Notice', ('event', 'row', 'updates'))
 Notice.__new__.__defaults__ = (None,)  # default updates=None
 
 
+class ColumnDefaultDict(dict):
+    """A column dictionary with on-demand generated default values
+
+    This object acts like the Row._data column dictionary, but without the
+    necessity of populating column default values. These values are generated
+    on-demand and therefore only use memory once they are accessed.
+    """
+    __slots__ = ('_table', )
+
+    def __init__(self, table):
+        self._table = table
+        super().__init__()
+
+    def __missing__(self, column):
+        column = self._table.columns[column]
+        return ovs.db.data.Datum.default(column.type)
+
+    def keys(self):
+        return self._table.columns.keys()
+
+    def values(self):
+        return iter(self[k] for k in self)
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __contains__(self, item):
+        return item in self.keys()
+
+
 class Idl(object):
     """Open vSwitch Database Interface Definition Language (OVSDB IDL).
 
@@ -908,10 +938,7 @@ class Idl(object):
         return changed
 
     def __create_row(self, table, uuid):
-        data = {}
-        for column in table.columns.values():
-            data[column.name] = ovs.db.data.Datum.default(column.type)
-        return Row(self, table, uuid, data)
+        return Row(self, table, uuid, ColumnDefaultDict(table))
 
     def __error(self):
         self._session.force_reconnect()
@@ -1249,7 +1276,7 @@ class Row(object):
         A transaction must be in progress."""
         assert self._idl.txn
         assert self._changes is not None
-        if not self._data or column_name in self._changes:
+        if self._data is None or column_name in self._changes:
             return
 
         self._prereqs[column_name] = None
@@ -1782,7 +1809,7 @@ class Transaction(object):
         # transaction only does writes of existing values, without making any
         # real changes, we will drop the whole transaction later in
         # ovsdb_idl_txn_commit().)
-        if (not column.alert and row._data and
+        if (not column.alert and row._data is not None and
                 row._data.get(column.name) == datum):
             new_value = row._changes.get(column.name)
             if new_value is None or new_value == datum:
