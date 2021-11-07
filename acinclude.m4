@@ -250,6 +250,13 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
     ])],
     [AC_DEFINE([HAVE_TCA_SKBEDIT_FLAGS], [1],
                [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/gen_stats.h>], [
+        int x = TCA_STATS_PKT64;
+    ])],
+    [AC_DEFINE([HAVE_TCA_STATS_PKT64], [1],
+               [Define to 1 if TCA_STATS_PKT64 is available.])])
 ])
 
 dnl OVS_CHECK_LINUX_SCTP_CT
