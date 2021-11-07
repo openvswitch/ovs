@@ -1577,6 +1577,9 @@ static const struct nl_policy stats_policy[] = {
     [TCA_STATS_BASIC] = { .type = NL_A_UNSPEC,
                           .min_len = sizeof(struct gnet_stats_basic),
                           .optional = false, },
+    [TCA_STATS_BASIC_HW] = { .type = NL_A_UNSPEC,
+                             .min_len = sizeof(struct gnet_stats_basic),
+                             .optional = true, },
 };
 
 static int
@@ -1588,8 +1591,11 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     const char *act_kind;
     struct nlattr *action_attrs[ARRAY_SIZE(act_policy)];
     struct nlattr *stats_attrs[ARRAY_SIZE(stats_policy)];
-    struct ovs_flow_stats *stats = &flower->stats;
-    const struct gnet_stats_basic *bs;
+    struct ovs_flow_stats *stats_sw = &flower->stats_sw;
+    struct ovs_flow_stats *stats_hw = &flower->stats_hw;
+    const struct gnet_stats_basic *bs_all = NULL;
+    const struct gnet_stats_basic *bs_hw = NULL;
+    struct gnet_stats_basic bs_sw = { .packets = 0, .bytes = 0, };
     int err = 0;
 
     if (!nl_parse_nested(action, act_policy, action_attrs,
@@ -1642,10 +1648,26 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
         return EPROTO;
     }
 
-    bs = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof *bs);
-    if (bs->packets) {
-        put_32aligned_u64(&stats->n_packets, bs->packets);
-        put_32aligned_u64(&stats->n_bytes, bs->bytes);
+    bs_all = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof *bs_all);
+    if (stats_attrs[TCA_STATS_BASIC_HW]) {
+        bs_hw = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC_HW],
+                                   sizeof *bs_hw);
+
+        bs_sw.packets = bs_all->packets - bs_hw->packets;
+        bs_sw.bytes = bs_all->bytes - bs_hw->bytes;
+    } else {
+        bs_sw.packets = bs_all->packets;
+        bs_sw.bytes = bs_all->bytes;
+    }
+
+    if (bs_sw.packets > get_32aligned_u64(&stats_sw->n_packets)) {
+        put_32aligned_u64(&stats_sw->n_packets, bs_sw.packets);
+        put_32aligned_u64(&stats_sw->n_bytes, bs_sw.bytes);
+    }
+
+    if (bs_hw && bs_hw->packets > get_32aligned_u64(&stats_hw->n_packets)) {
+        put_32aligned_u64(&stats_hw->n_packets, bs_hw->packets);
+        put_32aligned_u64(&stats_hw->n_bytes, bs_hw->bytes);
     }
 
     return 0;

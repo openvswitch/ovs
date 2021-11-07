@@ -505,6 +505,22 @@ flower_tun_opt_to_match(struct match *match, struct tc_flower *flower)
     match->wc.masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
 }
 
+static void
+parse_tc_flower_to_stats(struct tc_flower *flower,
+                         struct dpif_flow_stats *stats)
+{
+    if (!stats) {
+        return;
+    }
+
+    memset(stats, 0, sizeof *stats);
+    stats->n_packets = get_32aligned_u64(&flower->stats_sw.n_packets);
+    stats->n_packets += get_32aligned_u64(&flower->stats_hw.n_packets);
+    stats->n_bytes = get_32aligned_u64(&flower->stats_sw.n_bytes);
+    stats->n_bytes += get_32aligned_u64(&flower->stats_hw.n_bytes);
+    stats->used = flower->lastused;
+}
+
 static int
 parse_tc_flower_to_match(struct tc_flower *flower,
                          struct match *match,
@@ -865,12 +881,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
 
     *actions = ofpbuf_at_assert(buf, act_off, sizeof(struct nlattr));
 
-    if (stats) {
-        memset(stats, 0, sizeof *stats);
-        stats->n_packets = get_32aligned_u64(&flower->stats.n_packets);
-        stats->n_bytes = get_32aligned_u64(&flower->stats.n_bytes);
-        stats->used = flower->lastused;
-    }
+    parse_tc_flower_to_stats(flower, stats);
 
     attrs->offloaded = (flower->offloaded_state == TC_OFFLOADED_STATE_IN_HW)
                        || (flower->offloaded_state == TC_OFFLOADED_STATE_UNDEFINED);
@@ -1830,9 +1841,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
     if (stats) {
         memset(stats, 0, sizeof *stats);
         if (!tc_get_flower(&id, &flower)) {
-            stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
-            stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
-            stats->used = flower.lastused;
+            parse_tc_flower_to_stats(&flower, stats);
         }
     }
 
