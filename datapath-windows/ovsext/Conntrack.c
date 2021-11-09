@@ -491,15 +491,32 @@ static __inline NDIS_STATUS
 OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
                   OvsFlowKey *key)
 {
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    OvsFlowKey  newFlowKey = { 0 };
+
     switch (ntohs(key->l2.dlType)) {
     case ETH_TYPE_IPV4:
         if (key->ipKey.nwFrag != OVS_FRAG_TYPE_NONE) {
-            return OvsProcessIpv4Fragment(fwdCtx->switchContext,
+            status = OvsProcessIpv4Fragment(fwdCtx->switchContext,
                                           &fwdCtx->curNbl,
                                           fwdCtx->completionList,
                                           fwdCtx->fwdDetail->SourcePortId,
                                           &fwdCtx->layers,
                                           key->tunKey.tunnelId);
+            if (status == NDIS_STATUS_SUCCESS) {
+                 /* After the Ipv4 Fragment is reassembled, update flow key as
+                   L3 and L4 headers are not correct */
+                 status =
+                      OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                     &newFlowKey, &fwdCtx->layers,
+                                     fwdCtx->tunKey.dst != 0 ? &fwdCtx->tunKey : NULL);
+                if (status != NDIS_STATUS_SUCCESS) {
+                     OVS_LOG_ERROR("Extract flow failed Nbl %p", fwdCtx->curNbl);
+                     return status;
+                 }
+                *key = newFlowKey;
+            }
+            return status;
         }
         if (key->ipKey.nwProto == IPPROTO_TCP
             || key->ipKey.nwProto == IPPROTO_UDP
