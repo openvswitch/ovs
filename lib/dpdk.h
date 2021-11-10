@@ -36,7 +36,8 @@ struct smap;
 struct ovsrec_open_vswitch;
 
 void dpdk_init(const struct smap *ovs_other_config);
-void dpdk_set_lcore_id(unsigned cpu);
+bool dpdk_attach_thread(unsigned cpu);
+void dpdk_detach_thread(void);
 const char *dpdk_get_vhost_sock_dir(void);
 bool dpdk_vhost_iommu_enabled(void);
 bool dpdk_vhost_postcopy_enabled(void);

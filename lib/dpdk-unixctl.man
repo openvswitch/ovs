@@ -1,5 +1,8 @@
 .SS "DPDK COMMANDS"
 These commands manage DPDK components.
+.IP "\fBdpdk/lcore-list\fR"
+Lists the DPDK lcores and their cpu affinity.
+When RTE_MAX_LCORE lcores are registered, some OVS PMD threads won't appear.
 .IP "\fBdpdk/log-list\fR"
 Lists all DPDK components that emit logs and their logging levels.
 .IP "\fBdpdk/log-set\fR [\fIspec\fR]"

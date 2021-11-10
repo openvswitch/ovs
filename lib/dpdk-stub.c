@@ -38,10 +38,15 @@ dpdk_init(const struct smap *ovs_other_config)
     }
 }
 
-void
-dpdk_set_lcore_id(unsigned cpu OVS_UNUSED)
+bool
+dpdk_attach_thread(unsigned cpu OVS_UNUSED)
 {
-    /* Nothing */
+    return false;
+}
+
+void
+dpdk_detach_thread(void)
+{
 }
 
 const char *

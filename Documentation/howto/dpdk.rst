@@ -402,6 +402,11 @@ Supported actions for hardware offload are:
 - Clone/output (tnl_push and output) for encapsulating over a tunnel.
 - Tunnel pop, for packets received on physical ports.
 
+Multiprocess
+------------
+
+This DPDK feature is not supported and disabled during OVS initialization.
+
 Further Reading
 ---------------
 

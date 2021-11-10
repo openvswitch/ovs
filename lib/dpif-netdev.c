@@ -6390,6 +6390,7 @@ pmd_thread_main(void *f_)
     unsigned int lc = 0;
     struct polled_queue *poll_list;
     bool wait_for_reload = false;
+    bool dpdk_attached;
     bool reload_tx_qid;
     bool exiting;
     bool reload;
@@ -6402,13 +6403,17 @@ pmd_thread_main(void *f_)
     /* Stores the pmd thread's 'pmd' to 'per_pmd_key'. */
     ovsthread_setspecific(pmd->dp->per_pmd_key, pmd);
     ovs_numa_thread_setaffinity_core(pmd->core_id);
-    dpdk_set_lcore_id(pmd->core_id);
+    dpdk_attached = dpdk_attach_thread(pmd->core_id);
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
     dfc_cache_init(&pmd->flow_cache);
     pmd_alloc_static_tx_qid(pmd);
 
 reload:
     atomic_count_init(&pmd->pmd_overloaded, 0);
+
+    if (!dpdk_attached) {
+        dpdk_attached = dpdk_attach_thread(pmd->core_id);
+    }
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
@@ -6546,6 +6551,9 @@ reload:
     dfc_cache_uninit(&pmd->flow_cache);
     free(poll_list);
     pmd_free_cached_ports(pmd);
+    if (dpdk_attached) {
+        dpdk_detach_thread();
+    }
     return NULL;
 }
 
