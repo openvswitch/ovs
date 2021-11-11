@@ -24,7 +24,7 @@ p4proto_bfIntf_libbfIntf_la_LIBADD += -lbfutils -lbfsys -ldriver
 else
 p4proto_bfIntf_libbfIntf_la_LIBADD = $(LIB_ABSL)
 p4proto_bfIntf_libbfIntf_la_LIBADD += -lgrpc -lprotobuf -lglog -lgflags -lgrpc++
-p4proto_bfIntf_libbfIntf_la_LIBADD += -ltarget_utils -lbf_switchd_lib -ltargetsys -ldriver
+p4proto_bfIntf_libbfIntf_la_LIBADD += -ltarget_utils -lbf_switchd_lib -ltarget_sys -ldriver
 endif
 
 SUFFIXES += .proto
