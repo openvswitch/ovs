@@ -1083,8 +1083,9 @@ This field is optional for \fBadd\-group\fR, \fBadd\-groups\fR and
 otherwise.  If no selection method is specified, Open vSwitch up to
 release 2.9 applies the \fBhash\fR method with default fields. From
 2.10 onwards Open vSwitch defaults to the \fBdp_hash\fR method with symmetric
-L3/L4 hash algorithm, unless the weighted group buckets cannot be mapped to
-a maximum of 64 dp_hash values with sufficient accuracy.
+L3/L4 hash algorithm, as long as the weighted group buckets can be mapped to
+dp_hash values with sufficient accuracy.  In 2.10 this was restricted to a
+maximum of 64 buckets, and in 2.17 the limit was raised to 256 buckets.
 In those rare cases Open vSwitch 2.10 and later fall back to the \fBhash\fR
 method with the default set of hash fields.
 .RS

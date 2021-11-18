@@ -5152,9 +5152,9 @@ group_set_selection_method(struct group_dpif *group)
     if (selection_method[0] == '\0') {
         VLOG_DBG("No selection method specified. Trying dp_hash.");
         /* If the controller has not specified a selection method, check if
-         * the dp_hash selection method with max 64 hash values is appropriate
+         * the dp_hash selection method with max 256 hash values is appropriate
          * for the given bucket configuration. */
-        if (group_setup_dp_hash_table(group, 64)) {
+        if (group_setup_dp_hash_table(group, 256)) {
             /* Use dp_hash selection method with symmetric L4 hash. */
             group->selection_method = SEL_METHOD_DP_HASH;
             group->hash_alg = OVS_HASH_ALG_SYM_L4;
