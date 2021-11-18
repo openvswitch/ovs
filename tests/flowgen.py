@@ -166,15 +166,15 @@ def output(attrs):
             ip = ip[:2] + struct.pack('>H', len(ip)) + ip[4:]
             packet += ip
     if attrs['DL_HEADER'].startswith('802.2'):
-        packet_len = len(packet)
+        packet_len = len(packet) - 14
         if flow['DL_VLAN'] != 0xffff:
             packet_len -= 4
         packet = (packet[:len_ofs]
                   + struct.pack('>H', packet_len)
                   + packet[len_ofs + 2:])
 
-    print(' '.join(['%s=%s' for k, v in attrs.items()]))
-    print(' '.join(['%s=%s' for k, v in flow.items()]))
+    print(' '.join(['%s=%s' % (k, v) for k, v in attrs.items()]))
+    print(' '.join(['%s=%s' % (k, v) for k, v in flow.items()]))
     print()
 
     flows.write(struct.pack('>LH',
