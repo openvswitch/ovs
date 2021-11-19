@@ -1962,6 +1962,7 @@ struct ofproto_flow_mod {
     bool modify_may_add_flow;
     bool modify_keep_counts;
     enum nx_flow_update_event event;
+    uint8_t table_id;
 
     /* These are only used during commit execution.
      * ofproto_flow_mod_uninit() does NOT clean these up. */
