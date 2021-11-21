@@ -4786,6 +4786,54 @@ recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,fr
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - handling of malformed TCP packets])
+OVS_VSWITCHD_START
+add_of_ports br0 1 90
+
+dnl drop packet has tcp port 0-f but allow other tcp packets
+AT_DATA([flows.txt], [dnl
+priority=75 tcp tp_dst=0/0xfff0     actions=drop
+priority=50 tcp                     actions=output:1
+])
+AT_CHECK([ovs-ofctl replace-flows br0 flows.txt])
+
+dnl good tcp pkt, tcp(sport=100,dpor=16)
+pkt1="be95df40fb57fa163e5ee3570800450000280001000040063e940a0a0a0a141414140064001000000000000000005002200053330000"
+
+dnl malformed tcp pkt(tcp_hdr < 20 byte), tcp(sport=100,dport=16,dataofs=1)
+pkt2="be95df40fb57fa163e5ee3570800450000280001000040063e940a0a0a0a141414140064001000000000000000001002200093330000"
+
+dnl malformed tcp pkt(tcp_hdr > pkt_len), tcp(sport=100,dport=16,dataofs=15)
+pkt3="be95df40fb57fa163e5ee3570800450000280001000040063e940a0a0a0a14141414006400100000000000000000f002200093330000"
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$pkt1"], [0], [stdout])
+dnl for good tcp pkt, ovs can extract the tp_dst=16
+AT_CHECK([ovs-appctl dpctl/dump-flows filter=in_port\(90\),tcp], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=16/0xfff0), packets:0, bytes:0, used:never, actions:1
+])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0], [stdout])
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$pkt2"], [0], [stdout])
+dnl for malformed tcp pkt(tcp_hdr < 20 byte), ovs uses default value tp_dst=0
+AT_CHECK([ovs-appctl dpctl/dump-flows filter=in_port\(90\),tcp], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=0/0xfff0), packets:0, bytes:0, used:never, actions:drop
+])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0], [stdout])
+AT_CHECK([ovs-appctl netdev-dummy/receive p90 "$pkt3"], [0], [stdout])
+dnl for malformed tcp pkt(tcp_hdr > pkt_len), ovs uses default value tp_dst=0
+AT_CHECK([ovs-appctl dpctl/dump-flows filter=in_port\(90\),tcp], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=0/0xfff0), packets:0, bytes:0, used:never, actions:drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - exit])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 10 11 12 13 14
