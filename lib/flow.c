@@ -1006,14 +1006,18 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         if (OVS_LIKELY(nw_proto == IPPROTO_TCP)) {
             if (OVS_LIKELY(size >= TCP_HEADER_LEN)) {
                 const struct tcp_header *tcp = data;
+                size_t tcp_hdr_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
 
-                miniflow_push_be32(mf, arp_tha.ea[2], 0);
-                miniflow_push_be32(mf, tcp_flags,
-                                   TCP_FLAGS_BE32(tcp->tcp_ctl));
-                miniflow_push_be16(mf, tp_src, tcp->tcp_src);
-                miniflow_push_be16(mf, tp_dst, tcp->tcp_dst);
-                miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
-                miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
+                if (OVS_LIKELY(tcp_hdr_len >= TCP_HEADER_LEN)
+                    && OVS_LIKELY(size >= tcp_hdr_len)) {
+                    miniflow_push_be32(mf, arp_tha.ea[2], 0);
+                    miniflow_push_be32(mf, tcp_flags,
+                                       TCP_FLAGS_BE32(tcp->tcp_ctl));
+                    miniflow_push_be16(mf, tp_src, tcp->tcp_src);
+                    miniflow_push_be16(mf, tp_dst, tcp->tcp_dst);
+                    miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
+                    miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
+                }
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_UDP)) {
             if (OVS_LIKELY(size >= UDP_HEADER_LEN)) {
