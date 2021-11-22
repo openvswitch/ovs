@@ -2745,13 +2745,13 @@ print_idl_row_simple2(const struct idltest_simple2 *s, int step)
            step, s->name);
     for (i = 0; i < smap->n; i++) {
         printf("[%s : %s]%s",
-               smap->keys[i].s->string, smap->values[i].s->string,
+               json_string(smap->keys[i].s), json_string(smap->values[i].s),
                i < smap->n - 1 ? "," : "");
     }
     printf("] imap=[");
     for (i = 0; i < imap->n; i++) {
         printf("[%"PRId64" : %s]%s",
-               imap->keys[i].integer, imap->values[i].s->string,
+               imap->keys[i].integer, json_string(imap->values[i].s),
                i < imap->n - 1 ? "," : "");
     }
     printf("]\n");
@@ -2821,8 +2821,9 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     myTxn = ovsdb_idl_txn_create(idl);
     smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
                                     OVSDB_TYPE_STRING);
-    ovs_strlcpy(key_to_delete, smap->keys[0].s->string, sizeof key_to_delete);
-    idltest_simple2_update_smap_delkey(myRow, smap->keys[0].s->string);
+    ovs_strlcpy(key_to_delete,
+                json_string(smap->keys[0].s), sizeof key_to_delete);
+    idltest_simple2_update_smap_delkey(myRow, json_string(smap->keys[0].s));
     ovsdb_idl_txn_commit_block(myTxn);
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);

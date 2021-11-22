@@ -136,7 +136,7 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
         return atom->boolean == false;
 
     case OVSDB_TYPE_STRING:
-        return atom->s->string[0] == '\0';
+        return json_string(atom->s)[0] == '\0';
 
     case OVSDB_TYPE_UUID:
         return uuid_is_zero(&atom->uuid);
@@ -172,8 +172,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
         break;
 
     case OVSDB_TYPE_STRING:
-        new->s = old->s;
-        new->s->n_refs++;
+        new->s = json_clone(old->s);
         break;
 
     case OVSDB_TYPE_UUID:
@@ -215,7 +214,7 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         return hash_boolean(atom->boolean, basis);
 
     case OVSDB_TYPE_STRING:
-        return hash_string(atom->s->string, basis);
+        return json_hash(atom->s, basis);
 
     case OVSDB_TYPE_UUID:
         return hash_int(uuid_hash(&atom->uuid), basis);
@@ -247,7 +246,7 @@ ovsdb_atom_compare_3way(const union ovsdb_atom *a,
         return a->boolean - b->boolean;
 
     case OVSDB_TYPE_STRING:
-        return a->s == b->s ? 0 : strcmp(a->s->string, b->s->string);
+        return a->s == b->s ? 0 : strcmp(json_string(a->s), json_string(b->s));
 
     case OVSDB_TYPE_UUID:
         return uuid_compare_3way(&a->uuid, &b->uuid);
@@ -405,7 +404,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
 
     case OVSDB_TYPE_STRING:
         if (json->type == JSON_STRING) {
-            atom->s = ovsdb_atom_string_create(json->string);
+            atom->s = json_clone(json);
             return NULL;
         }
         break;
@@ -474,7 +473,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         return json_boolean_create(atom->boolean);
 
     case OVSDB_TYPE_STRING:
-        return json_string_create(atom->s->string);
+        return json_clone(atom->s);
 
     case OVSDB_TYPE_UUID:
         return wrap_json("uuid", json_string_create_nocopy(
@@ -726,14 +725,10 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_STRING:
-        if (string_needs_quotes(atom->s->string)) {
-            struct json json;
-
-            json.type = JSON_STRING;
-            json.string = atom->s->string;
-            json_to_ds(&json, 0, out);
+        if (string_needs_quotes(json_string(atom->s))) {
+            json_to_ds(atom->s, 0, out);
         } else {
-            ds_put_cstr(out, atom->s->string);
+            ds_put_cstr(out, json_string(atom->s));
         }
         break;
 
@@ -755,7 +750,7 @@ ovsdb_atom_to_bare(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                    struct ds *out)
 {
     if (type == OVSDB_TYPE_STRING) {
-        ds_put_cstr(out, atom->s->string);
+        ds_put_cstr(out, json_string(atom->s));
     } else {
         ovsdb_atom_to_string(atom, type, out);
     }
@@ -882,7 +877,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
         return NULL;
 
     case OVSDB_TYPE_STRING:
-        return check_string_constraints(atom->s->string, &base->string);
+        return check_string_constraints(json_string(atom->s), &base->string);
 
     case OVSDB_TYPE_UUID:
         return NULL;

@@ -53,8 +53,8 @@ ovsdb_find_row_by_string_key(const struct ovsdb_table *table,
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
             const struct ovsdb_datum *datum = &row->fields[column->index];
             for (size_t i = 0; i < datum->n; i++) {
-                if (datum->keys[i].s->string[0] &&
-                    !strcmp(key, datum->keys[i].s->string)) {
+                const char *row_key = json_string(datum->keys[i].s);
+                if (row_key[0] && !strcmp(key, row_key)) {
                     return row;
                 }
             }
@@ -113,7 +113,7 @@ ovsdb_rbac_authorized(const struct ovsdb_row *perms,
     }
 
     for (i = 0; i < datum->n; i++) {
-        const char *name = datum->keys[i].s->string;
+        const char *name = json_string(datum->keys[i].s);
         const char *value = NULL;
         bool is_map;
 
@@ -271,7 +271,7 @@ rbac_column_modification_permitted(const struct ovsdb_column *column,
     size_t i;
 
     for (i = 0; i < modifiable->n; i++) {
-        char *name = modifiable->keys[i].s->string;
+        const char *name = json_string(modifiable->keys[i].s);
 
         if (!strcmp(name, column->name)) {
             return true;

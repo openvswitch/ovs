@@ -569,10 +569,11 @@ class Datum(object):
 
         s = []
         if self.type.key.type == ovs.db.types.StringType:
-            s += ["static struct ovsdb_atom_string %s_key_strings[%d] = {"
+            s += ["static struct json %s_key_strings[%d] = {"
                   % (name, n)]
             for key in sorted(self.values):
-                s += ['    { .string = "%s", .n_refs = 2 },'
+                s += ['    { .type = JSON_STRING, '
+                      '.string = "%s", .count = 2 },'
                       % escapeCString(key.value)]
             s += ["};"]
             s += ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
@@ -587,10 +588,11 @@ class Datum(object):
 
         if self.type.value:
             if self.type.value.type == ovs.db.types.StringType:
-                s += ["static struct ovsdb_atom_string %s_val_strings[%d] = {"
+                s += ["static struct json %s_val_strings[%d] = {"
                       % (name, n)]
                 for k, v in sorted(self.values):
-                    s += ['    { .string = "%s", .n_refs = 2 },'
+                    s += ['    { .type = JSON_STRING, '
+                          '.string = "%s", .count = 2 },'
                           % escapeCString(v.value)]
                 s += ["};"]
                 s += ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]

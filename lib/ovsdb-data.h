@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
+#include "openvswitch/json.h"
 #include "openvswitch/shash.h"
 #include "util.h"
 
@@ -32,25 +33,16 @@ struct ds;
 struct ovsdb_symbol_table;
 struct smap;
 
-struct ovsdb_atom_string {
-    char *string;
-    size_t n_refs;
-};
-
-static inline struct ovsdb_atom_string *
+static inline struct json *
 ovsdb_atom_string_create_nocopy(char *str)
 {
-    struct ovsdb_atom_string *s = xzalloc(sizeof *s);
-
-    s->string = str;
-    s->n_refs = 1;
-    return s;
+    return json_string_create_nocopy(str);
 }
 
-static inline struct ovsdb_atom_string *
+static inline struct json *
 ovsdb_atom_string_create(const char *str)
 {
-    return ovsdb_atom_string_create_nocopy(xstrdup(str));
+    return json_string_create(str);
 }
 
 /* One value of an atomic type (given by enum ovs_atomic_type). */
@@ -58,7 +50,7 @@ union ovsdb_atom {
     int64_t integer;
     double real;
     bool boolean;
-    struct ovsdb_atom_string *s;
+    struct json *s;
     struct uuid uuid;
 };
 
@@ -88,9 +80,8 @@ ovsdb_atom_needs_destruction(enum ovsdb_atomic_type type)
 static inline void
 ovsdb_atom_destroy(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
-    if (type == OVSDB_TYPE_STRING && !--atom->s->n_refs) {
-        free(atom->s->string);
-        free(atom->s);
+    if (type == OVSDB_TYPE_STRING) {
+        json_destroy(atom->s);
     }
 }
 

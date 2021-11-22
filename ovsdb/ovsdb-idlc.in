@@ -192,6 +192,7 @@ def printCIDLHeader(schemaFile):
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
 #include "smap.h"
@@ -577,8 +578,8 @@ static void
                 print("    smap_init(&row->%s);" % columnName)
                 print("    for (size_t i = 0; i < datum->n; i++) {")
                 print("        smap_add(&row->%s," % columnName)
-                print("                 datum->keys[i].s->string,")
-                print("                 datum->values[i].s->string);")
+                print("                 json_string(datum->keys[i].s),")
+                print("                 json_string(datum->values[i].s));")
                 print("    }")
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print("")
