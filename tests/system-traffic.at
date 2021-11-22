@@ -1087,6 +1087,382 @@ NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([mpls - encap header dp-support])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_SKIP_IF([! ovs-appctl dpif/show-dp-features br0 2>&1 | grep "MPLS Label add: Yes" >/dev/null])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will encap a mpls header to the ip packet
+dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected mpls encapsulated packet on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mpls - encap header slow-path])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK(ovs-appctl dpif/set-dp-features br0 add_mpls false)
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will encap a mpls header to the ip packet
+dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected mpls encapsulated packet on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mpls_mc - encap header dp-support])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_SKIP_IF([! ovs-appctl dpif/show-dp-features br0 2>&1 | grep "MPLS Label add: Yes" >/dev/null])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will encap a mpls header to the ip packet
+dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected mpls encapsulated packet on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mpls_mc - encap header slow-path])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK(ovs-appctl dpif/set-dp-features br0 add_mpls false)
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will encap a mpls header to the ip packet
+dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected mpls encapsulated packet on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mpls - decap header dp-support])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_SKIP_IF([! ovs-appctl dpif/show-dp-features br0 2>&1 | grep "MPLS Label add: Yes" >/dev/null])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will decap a mpls header which in turn carries a icmp packet
+dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
+
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected decapsulated on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0060:  *3637" 2>&1 1>/dev/null])
+
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mpls - decap header slow-path])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK(ovs-appctl dpif/set-dp-features br0 add_mpls false)
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+dnl The flow will decap a mpls header which in turn carries a icmp packet
+dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
+
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
+
+rm -rf p1.pcap
+NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+sleep 1
+
+dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
+
+dnl Check the expected decapsulated on the egress interface
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0060:  *3637" 2>&1 1>/dev/null])
+
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([datapath - Encap Decap mpls actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=ovs-p0 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p0
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,in_port=ovs-p1 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3  10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3  10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - multiple encap decap mpls actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=ovs-p0 actions=encap(mpls),set_mpls_label:3, encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=1,type=0x8847)),decap(packet_type(ns=0,type=0)),ovs-p0
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,in_port=ovs-p1 actions=encap(mpls),set_mpls_label:3, encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=1,type=0x8847)),decap(packet_type(ns=0,type=0)),ovs-p1
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - encap mpls pop mpls actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=decap,encap(mpls),set_mpls_label:2,encap(ethernet),mod_dl_dst:36:b1:ee:7c:01:02,mod_dl_src:36:b1:ee:7c:01:03,output:100
+table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=pop_mpls:0x0800,resubmit(,3)
+table=0,priority=10 actions=resubmit(,3)
+table=3,priority=10 actions=normal
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=decap,encap(mpls),set_mpls_label:2,encap(ethernet),mod_dl_dst:36:b1:ee:7c:01:03,mod_dl_src:36:b1:ee:7c:01:02,output:100
+table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=pop_mpls:0x0800,resubmit(,3)
+table=0,priority=10 actions=resubmit(,3)
+table=3,priority=10 actions=normal
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - push mpls decap mpls actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24", 36:b1:ee:7c:01:02)
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_field:2->mpls_label,output:100
+table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap,decap(packet_type(ns=1,type=0x0800)),encap(ethernet),mod_dl_dst:36:b1:ee:7c:01:03,mod_dl_src:36:b1:ee:7c:01:02,resubmit(,3)
+table=0,priority=10 actions=resubmit(,3)
+table=3,priority=10 actions=normal
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_field:2->mpls_label,output:100
+table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap,decap(packet_type(ns=1,type=0x0800)),encap(ethernet),mod_dl_dst:36:b1:ee:7c:01:02,mod_dl_src:36:b1:ee:7c:01:03,resubmit(,3)
+table=0,priority=10 actions=resubmit(,3)
+table=3,priority=10 actions=normal
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - basic truncate action])
 AT_SKIP_IF([test $HAVE_NC = no])
 OVS_TRAFFIC_VSWITCHD_START()

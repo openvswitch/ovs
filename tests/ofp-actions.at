@@ -780,6 +780,14 @@ dnl NSH encap with non-zero padding.
 # 23: 56 -> 00
 ffff 0018 00002320 002e 0000 0001894f 0004 01 05 01 123456
 
+dnl Check mpls encap
+# actions=encap(mpls)
+ffff 0010 00002320 002e 0000 00018847
+
+dnl Check mpls encap
+# actions=encap(mpls_mc)
+ffff 0010 00002320 002e 0000 00018848
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout

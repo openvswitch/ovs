@@ -142,6 +142,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_PUSH_NSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_POP_NSH: return 0;
     case OVS_ACTION_ATTR_CHECK_PKT_LEN: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_ADD_MPLS: return sizeof(struct ovs_action_add_mpls);
     case OVS_ACTION_ATTR_DROP: return sizeof(uint32_t);
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -1254,6 +1255,14 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
     case OVS_ACTION_ATTR_CHECK_PKT_LEN:
         format_odp_check_pkt_len_action(ds, a, portno_names);
         break;
+    case OVS_ACTION_ATTR_ADD_MPLS: {
+        const struct ovs_action_add_mpls *mpls = nl_attr_get(a);
+        ds_put_cstr(ds, "add_mpls(");
+        format_mpls_lse(ds, mpls->mpls_lse);
+        ds_put_format(ds, ",eth_type=0x%"PRIx16")",
+                      ntohs(mpls->mpls_ethertype));
+        break;
+    }
     case OVS_ACTION_ATTR_DROP:
         ds_put_cstr(ds, "drop");
         break;
@@ -2593,6 +2602,29 @@ parse_odp_action__(struct parse_odp_context *context, const char *s,
         retval = parse_conntrack_action(s, actions);
         if (retval) {
             return retval;
+        }
+    }
+    {
+        struct ovs_action_add_mpls mpls;
+        uint32_t lse;
+        uint8_t ttl, tc, bos;
+        int n = -1;
+        uint16_t eth_type;
+
+        if (ovs_scan(s,
+                     "add_mpls(label=%"SCNi32",tc=%"SCNd8",ttl=%"SCNd8",bos=%"SCNd8",eth_type=0x%"SCNx16")%n",
+                     &lse, &tc, &ttl, &bos, &eth_type, &n)) {
+
+            mpls.mpls_ethertype = htons(eth_type);
+            mpls.mpls_lse = htonl(lse << MPLS_LABEL_SHIFT |
+                                  tc  << MPLS_TC_SHIFT |
+                                  ttl << MPLS_TTL_SHIFT |
+                                  bos << MPLS_BOS_SHIFT);
+            mpls.tun_flags = 0;
+            nl_msg_put_unspec(actions, OVS_ACTION_ATTR_ADD_MPLS,
+                              &mpls, sizeof mpls);
+
+            return n;
         }
     }
 
@@ -7890,7 +7922,7 @@ commit_vlan_action(const struct flow* flow, struct flow *base,
 /* Wildcarding already done at action translation time. */
 static void
 commit_mpls_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions)
+                   struct ofpbuf *odp_actions, bool pending_encap)
 {
     int base_n = flow_count_mpls_labels(base, NULL);
     int flow_n = flow_count_mpls_labels(flow, NULL);
@@ -7938,18 +7970,29 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
     /* If, after the above popping and setting, there are more LSEs in flow
      * than base then some LSEs need to be pushed. */
     while (base_n < flow_n) {
-        struct ovs_action_push_mpls *mpls;
 
-        mpls = nl_msg_put_unspec_zero(odp_actions,
-                                      OVS_ACTION_ATTR_PUSH_MPLS,
-                                      sizeof *mpls);
-        mpls->mpls_ethertype = flow->dl_type;
-        mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
+        if (pending_encap) {
+             struct ovs_action_add_mpls *mpls;
+
+             mpls = nl_msg_put_unspec_zero(odp_actions,
+                                           OVS_ACTION_ATTR_ADD_MPLS,
+                                           sizeof *mpls);
+             mpls->mpls_ethertype = flow->dl_type;
+             mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
+        } else {
+             struct ovs_action_push_mpls *mpls;
+
+             mpls = nl_msg_put_unspec_zero(odp_actions,
+                                           OVS_ACTION_ATTR_PUSH_MPLS,
+                                           sizeof *mpls);
+             mpls->mpls_ethertype = flow->dl_type;
+             mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
+        }
         /* Update base flow's MPLS stack, but do not clear L3.  We need the L3
          * headers if the flow is restored later due to returning from a patch
          * port or group bucket. */
-        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL, false);
-        flow_set_mpls_lse(base, 0, mpls->mpls_lse);
+        flow_push_mpls(base, base_n, flow->dl_type, NULL, false);
+        flow_set_mpls_lse(base, 0, flow->mpls_lse[flow_n - base_n - 1]);
         base_n++;
     }
 }
@@ -8600,6 +8643,10 @@ commit_encap_decap_action(const struct flow *flow,
             memcpy(&base_flow->dl_dst, &flow->dl_dst,
                    sizeof(*flow) - offsetof(struct flow, dl_dst));
             break;
+        case PT_MPLS:
+            commit_mpls_action(flow, base_flow, odp_actions,
+                               pending_encap);
+            break;
         default:
             /* Only the above protocols are supported for encap.
              * The check is done at action translation. */
@@ -8621,6 +8668,10 @@ commit_encap_decap_action(const struct flow *flow,
             case PT_NSH:
                 /* pop_nsh. */
                 odp_put_pop_nsh_action(odp_actions);
+                break;
+            case PT_MPLS:
+                commit_mpls_action(flow, base_flow, odp_actions,
+                                   pending_encap);
                 break;
             default:
                 /* Checks are done during translation. */
@@ -8667,7 +8718,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     /* Make packet a non-MPLS packet before committing L3/4 actions,
      * which would otherwise do nothing. */
     if (eth_type_mpls(base->dl_type) && !eth_type_mpls(flow->dl_type)) {
-        commit_mpls_action(flow, base, odp_actions);
+        commit_mpls_action(flow, base, odp_actions, false);
         mpls_done = true;
     }
     commit_set_nsh_action(flow, base, odp_actions, wc, use_masked);
@@ -8675,7 +8726,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
     slow2 = commit_set_icmp_action(flow, base, odp_actions, wc);
     if (!mpls_done) {
-        commit_mpls_action(flow, base, odp_actions);
+        commit_mpls_action(flow, base, odp_actions, false);
     }
     commit_vlan_action(flow, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
