@@ -213,6 +213,8 @@ static void ofproto_rule_insert__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 static void ofproto_rule_remove__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
+static void remove_rules_postponed(struct rule_collection *)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* The source of an OpenFlow request.
  *
@@ -530,6 +532,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     hindex_init(&ofproto->cookies);
     hmap_init(&ofproto->learned_cookies);
     ovs_list_init(&ofproto->expirable);
+    ofproto->to_remove = xzalloc(sizeof *ofproto->to_remove);
+    rule_collection_init(ofproto->to_remove);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->min_mtu = INT_MAX;
     cmap_init(&ofproto->groups);
@@ -1635,6 +1639,7 @@ ofproto_flush__(struct ofproto *ofproto)
     }
     ofproto_group_delete_all__(ofproto);
     meter_delete_all(ofproto);
+    remove_rules_postponed(ofproto->to_remove);
     /* XXX: Concurrent handler threads may insert new learned flows based on
      * learn actions of the now deleted flows right after we release
      * 'ofproto_mutex'. */
@@ -1685,6 +1690,11 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     ovs_assert(hmap_is_empty(&ofproto->learned_cookies));
     hmap_destroy(&ofproto->learned_cookies);
+
+    ovs_mutex_lock(&ofproto_mutex);
+    rule_collection_destroy(ofproto->to_remove);
+    free(ofproto->to_remove);
+    ovs_mutex_unlock(&ofproto_mutex);
 
     ofproto->ofproto_class->dealloc(ofproto);
 }
@@ -1882,6 +1892,9 @@ ofproto_run(struct ofproto *p)
 
     connmgr_run(p->connmgr, handle_openflow);
 
+    ovs_mutex_lock(&ofproto_mutex);
+    remove_rules_postponed(p->to_remove);
+    ovs_mutex_unlock(&ofproto_mutex);
     return error;
 }
 
@@ -4440,6 +4453,20 @@ rule_criteria_destroy(struct rule_criteria *criteria)
     criteria->version = OVS_VERSION_NOT_REMOVED; /* Mark as destroyed. */
 }
 
+/* Adds rules to the 'to_remove' collection, so they can be destroyed
+ * later all together.  Destroys 'rules'. */
+static void
+rules_mark_for_removal(struct ofproto *ofproto, struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule;
+
+    RULE_COLLECTION_FOR_EACH (rule, rules) {
+        rule_collection_add(ofproto->to_remove, rule);
+    }
+    rule_collection_destroy(rules);
+}
+
 /* Schedules postponed removal of rules, destroys 'rules'. */
 static void
 remove_rules_postponed(struct rule_collection *rules)
@@ -5836,7 +5863,7 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
             }
         }
         learned_cookies_flush(ofproto, &dead_cookies);
-        remove_rules_postponed(old_rules);
+        rules_mark_for_removal(ofproto, old_rules);
     }
 
     return error;
@@ -5944,7 +5971,7 @@ delete_flows_finish__(struct ofproto *ofproto,
             learned_cookies_dec(ofproto, rule_get_actions(rule),
                                 &dead_cookies);
         }
-        remove_rules_postponed(rules);
+        rules_mark_for_removal(ofproto, rules);
 
         learned_cookies_flush(ofproto, &dead_cookies);
     }
