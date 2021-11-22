@@ -66,6 +66,7 @@ struct bfd_cfg;
 struct meter;
 struct ofoperation;
 struct ofproto_packet_out;
+struct rule_collection;
 struct smap;
 
 extern struct ovs_mutex ofproto_mutex;
@@ -114,6 +115,9 @@ struct ofproto {
 
     /* List of expirable flows, in all flow tables. */
     struct ovs_list expirable OVS_GUARDED_BY(ofproto_mutex);
+
+    /* List of flows to remove from flow tables. */
+    struct rule_collection *to_remove OVS_GUARDED_BY(ofproto_mutex);
 
     /* Meter table.  */
     struct ofputil_meter_features meter_features;
