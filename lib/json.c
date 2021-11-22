@@ -365,35 +365,33 @@ static void json_destroy_array(struct json_array *array);
 
 /* Frees 'json' and everything it points to, recursively. */
 void
-json_destroy(struct json *json)
+json_destroy__(struct json *json)
 {
-    if (json && !--json->count) {
-        switch (json->type) {
-        case JSON_OBJECT:
-            json_destroy_object(json->object);
-            break;
+    switch (json->type) {
+    case JSON_OBJECT:
+        json_destroy_object(json->object);
+        break;
 
-        case JSON_ARRAY:
-            json_destroy_array(&json->array);
-            break;
+    case JSON_ARRAY:
+        json_destroy_array(&json->array);
+        break;
 
-        case JSON_STRING:
-        case JSON_SERIALIZED_OBJECT:
-            free(json->string);
-            break;
+    case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
+        free(json->string);
+        break;
 
-        case JSON_NULL:
-        case JSON_FALSE:
-        case JSON_TRUE:
-        case JSON_INTEGER:
-        case JSON_REAL:
-            break;
+    case JSON_NULL:
+    case JSON_FALSE:
+    case JSON_TRUE:
+    case JSON_INTEGER:
+    case JSON_REAL:
+        break;
 
-        case JSON_N_TYPES:
-            OVS_NOT_REACHED();
-        }
-        free(json);
+    case JSON_N_TYPES:
+        OVS_NOT_REACHED();
     }
+    free(json);
 }
 
 static void
@@ -457,15 +455,6 @@ json_deep_clone(const struct json *json)
     default:
         OVS_NOT_REACHED();
     }
-}
-
-/* Returns 'json', with the reference count incremented. */
-struct json *
-json_clone(const struct json *json_)
-{
-    struct json *json = CONST_CAST(struct json *, json_);
-    json->count++;
-    return json;
 }
 
 struct json *

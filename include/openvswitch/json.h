@@ -110,9 +110,9 @@ double json_real(const struct json *);
 int64_t json_integer(const struct json *);
 
 struct json *json_deep_clone(const struct json *);
-struct json *json_clone(const struct json *);
+static inline struct json *json_clone(const struct json *);
 struct json *json_nullable_clone(const struct json *);
-void json_destroy(struct json *);
+static inline void json_destroy(struct json *);
 
 size_t json_hash(const struct json *, size_t basis);
 bool json_equal(const struct json *, const struct json *);
@@ -146,6 +146,28 @@ void json_to_ds(const struct json *, int flags, struct ds *);
 
 bool json_string_unescape(const char *in, size_t in_len, char **outp);
 void json_string_escape(const char *in, struct ds *out);
+
+/* Inline functions. */
+
+/* Returns 'json', with the reference count incremented. */
+static inline struct json *
+json_clone(const struct json *json_)
+{
+    struct json *json = CONST_CAST(struct json *, json_);
+    json->count++;
+    return json;
+}
+
+void json_destroy__(struct json *json);
+
+/* Frees 'json' and everything it points to, recursively. */
+static inline void
+json_destroy(struct json *json)
+{
+    if (json && !--json->count) {
+        json_destroy__(json);
+    }
+}
 
 #ifdef  __cplusplus
 }
