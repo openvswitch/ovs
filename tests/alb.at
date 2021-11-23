@@ -89,6 +89,7 @@ ovs-appctl time/warp 60000 10000
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, not enough non-isolated PMDs or RxQs."])
 
 # Same config as last time
+get_log_next_line_num
 ovs-appctl time/warp 60000 10000
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, no configuration changes since last check."])
 
