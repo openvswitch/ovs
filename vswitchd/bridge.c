@@ -2052,6 +2052,8 @@ iface_do_create(const struct bridge *br,
         goto error;
     }
 
+    netdev_set_dpif_type(netdev, br->ofproto->type);
+
     error = iface_set_netdev_config(iface_cfg, netdev, errp);
     if (error) {
         goto error;

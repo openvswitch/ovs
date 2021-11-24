@@ -1151,6 +1151,12 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
 {
     char buf[NETDEV_VPORT_NAME_BUFSIZE];
     const char *name = netdev_vport_get_dpif_port(netdev_, buf, sizeof(buf));
+    const char *dpif_type = netdev_get_dpif_type(netdev_);
+
+    if (dpif_type && strcmp(dpif_type, "system")) {
+        /* Not a system device. */
+        return -ENODEV;
+    }
 
     return linux_get_ifindex(name);
 }
