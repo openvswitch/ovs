@@ -120,8 +120,7 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
 
-dnl Give settling time to the testpmd processes - NOTE: this is bad form.
-sleep 10
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
@@ -196,8 +195,7 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
-dnl Give settling time to the testpmd processes - NOTE: this is bad form.
-sleep 10
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
