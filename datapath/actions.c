@@ -456,8 +456,13 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 				 __be32 addr[4], const __be32 new_addr[4])
 {
 	int transport_len = skb->len - skb_transport_offset(skb);
+	int err;
 
 	if (l4_proto == NEXTHDR_TCP) {
+		err = skb_ensure_writable(skb, skb_transport_offset(skb) +
+				  sizeof(struct tcphdr));
+		if (unlikely(err))
+			return;
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			inet_proto_csum_replace16(&tcp_hdr(skb)->check, skb,
 						  addr, new_addr, true);
@@ -465,6 +470,10 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
+			err = skb_ensure_writable(skb, skb_transport_offset(skb) +
+				  sizeof(struct udphdr));
+			if (unlikely(err))
+				return;
 			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace16(&uh->check, skb,
 							  addr, new_addr, true);
@@ -473,6 +482,10 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 			}
 		}
 	} else if (l4_proto == NEXTHDR_ICMP) {
+		err = skb_ensure_writable(skb, skb_transport_offset(skb) +
+				  sizeof(struct icmp6hdr));
+		if (unlikely(err))
+			return;
 		if (likely(transport_len >= sizeof(struct icmp6hdr)))
 			inet_proto_csum_replace16(&icmp6_hdr(skb)->icmp6_cksum,
 						  skb, addr, new_addr, true);
@@ -589,12 +602,15 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 	if (is_ipv6_mask_nonzero(mask->ipv6_src)) {
 		__be32 *saddr = (__be32 *)&nh->saddr;
 		__be32 masked[4];
+		bool recalc_csum = true;
 
 		mask_ipv6_addr(saddr, key->ipv6_src, mask->ipv6_src, masked);
 
 		if (unlikely(memcmp(saddr, masked, sizeof(masked)))) {
+			if (flow_key->ip.frag == OVS_FRAG_TYPE_LATER)
+				recalc_csum = false;
 			set_ipv6_addr(skb, flow_key->ip.proto, saddr, masked,
-				      true);
+				      recalc_csum);
 			memcpy(&flow_key->ipv6.addr.src, masked,
 			       sizeof(flow_key->ipv6.addr.src));
 		}
@@ -614,6 +630,8 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 							     NEXTHDR_ROUTING,
 							     NULL, &flags)
 					       != NEXTHDR_ROUTING);
+			if (flow_key->ip.frag == OVS_FRAG_TYPE_LATER)
+				recalc_csum = false;
 
 			set_ipv6_addr(skb, flow_key->ip.proto, daddr, masked,
 				      recalc_csum);
