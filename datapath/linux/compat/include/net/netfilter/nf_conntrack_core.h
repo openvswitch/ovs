@@ -108,7 +108,14 @@ static inline bool rpl_nf_ct_delete(struct nf_conn *ct, u32 portid, int report)
 static inline unsigned int
 rpl_nf_conntrack_in(struct sk_buff *skb, const struct nf_hook_state *state)
 {
-	return nf_conntrack_in(state->net, state->pf, state->hook, skb);
+	int err;
+
+	/* Repeat if requested, see nf_iterate(). */
+	do {
+		err = nf_conntrack_in(state->net, state->pf, state->hook, skb);
+	} while (err == NF_REPEAT);
+
+	return err;
 }
 #define nf_conntrack_in rpl_nf_conntrack_in
 #endif /* HAVE_NF_CONNTRACK_IN_TAKES_NF_HOOK_STATE */
