@@ -32,7 +32,7 @@
 #include "util.h"
 
 int tnl_neigh_snoop(const struct flow *flow, struct flow_wildcards *wc,
-                    const char dev_name[IFNAMSIZ]);
+                    const char dev_name[IFNAMSIZ], bool allow_update);
 int tnl_neigh_lookup(const char dev_name[IFNAMSIZ], const struct in6_addr *dst,
                      struct eth_addr *mac);
 void tnl_neigh_cache_init(void);
