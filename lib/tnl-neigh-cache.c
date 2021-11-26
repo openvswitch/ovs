@@ -163,7 +163,7 @@ tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst,
 
 static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
-              const char name[IFNAMSIZ])
+              const char name[IFNAMSIZ], bool allow_update)
 {
     /* Snoop normal ARP replies and gratuitous ARP requests/replies only */
     if (!is_arp(flow)
@@ -173,13 +173,17 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
         return EINVAL;
     }
 
-    tnl_arp_set(name, FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_src), flow->arp_sha);
+    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+
+    if (allow_update) {
+        tnl_arp_set(name, flow->nw_src, flow->arp_sha);
+    }
     return 0;
 }
 
 static int
 tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
-             const char name[IFNAMSIZ])
+             const char name[IFNAMSIZ], bool allow_update)
 {
     if (!is_nd(flow, wc) || flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
         return EINVAL;
@@ -198,20 +202,22 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
     memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
     memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
 
-    tnl_neigh_set__(name, &flow->nd_target, flow->arp_tha);
+    if (allow_update) {
+        tnl_neigh_set__(name, &flow->nd_target, flow->arp_tha);
+    }
     return 0;
 }
 
 int
 tnl_neigh_snoop(const struct flow *flow, struct flow_wildcards *wc,
-                const char name[IFNAMSIZ])
+                const char name[IFNAMSIZ], bool allow_update)
 {
     int res;
-    res = tnl_arp_snoop(flow, wc, name);
+    res = tnl_arp_snoop(flow, wc, name, allow_update);
     if (res != EINVAL) {
         return res;
     }
-    return tnl_nd_snoop(flow, wc, name);
+    return tnl_nd_snoop(flow, wc, name, allow_update);
 }
 
 void
