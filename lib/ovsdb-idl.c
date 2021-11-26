@@ -1506,10 +1506,15 @@ ovsdb_idl_reparse_refs_to_inserted(struct ovsdb_idl *db)
     struct ovsdb_idl_row *row;
 
     LIST_FOR_EACH_POP (row, reparse_node, &db->rows_to_reparse) {
+        ovs_list_init(&row->reparse_node);
+
+        /* Skip rows that have been deleted in the meantime. */
+        if (ovsdb_idl_row_is_orphan(row)) {
+            continue;
+        }
         ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_arcs(row, false);
         ovsdb_idl_row_parse(row);
-        ovs_list_init(&row->reparse_node);
     }
 }
 

@@ -1540,6 +1540,32 @@ OVSDB_CHECK_IDL([simple idl, initially populated, strong references, conditional
 006: done
 ]])
 
+dnl This test checks that deleting a row that refers to a row that was inserted
+dnl in the current IDL run works properly.
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, strong references, insert and delete],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "link1",
+       "uuid-name": "uuid_l1",
+       "row": {"i": 1, "k": ["named-uuid", "uuid_l1"]}},
+      {"op": "insert",
+       "table": "link2",
+       "row": {"i": 2, "l1": ["set", [["named-uuid", "uuid_l1"]]]}}
+      ]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "link2",
+       "where": [["i", "==", 2]]}]'
+  ]],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: {"error":null,"result":[{"count":1}]}
+003: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<0>
+003: table link1: updated columns: i k
+004: done
+]])
+
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
   [],
   [['["idltest",
