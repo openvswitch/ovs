@@ -32,6 +32,7 @@
 #include "errno.h"
 #include "flow.h"
 #include "netdev.h"
+#include "ovs-atomic.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
@@ -44,14 +45,13 @@
 #include "openvswitch/vlog.h"
 
 
-/* In seconds */
-#define NEIGH_ENTRY_DEFAULT_IDLE_TIME  (15 * 60)
+#define NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS  (15 * 60 * 1000)
 
 struct tnl_neigh_entry {
     struct cmap_node cmap_node;
     struct in6_addr ip;
     struct eth_addr mac;
-    time_t expires;             /* Expiration time. */
+    atomic_llong expires;       /* Expiration time in ms. */
     char br_name[IFNAMSIZ];
 };
 
@@ -64,6 +64,16 @@ tnl_neigh_hash(const struct in6_addr *ip)
     return hash_bytes(ip->s6_addr, 16, 0);
 }
 
+static bool
+tnl_neigh_expired(struct tnl_neigh_entry *neigh)
+{
+    long long expires;
+
+    atomic_read_explicit(&neigh->expires, &expires, memory_order_acquire);
+
+    return expires <= time_msec();
+}
+
 static struct tnl_neigh_entry *
 tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
 {
@@ -73,11 +83,13 @@ tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
     hash = tnl_neigh_hash(dst);
     CMAP_FOR_EACH_WITH_HASH (neigh, cmap_node, hash, &table) {
         if (ipv6_addr_equals(&neigh->ip, dst) && !strcmp(neigh->br_name, br_name)) {
-            if (neigh->expires <= time_now()) {
+            if (tnl_neigh_expired(neigh)) {
                 return NULL;
             }
 
-            neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
+            atomic_store_explicit(&neigh->expires, time_msec() +
+                                  NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS,
+                                  memory_order_release);
             return neigh;
         }
     }
@@ -121,7 +133,8 @@ tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
     struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
     if (neigh) {
         if (eth_addr_equals(neigh->mac, mac)) {
-            neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
+            atomic_store_relaxed(&neigh->expires, time_msec() +
+                                 NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS);
             ovs_mutex_unlock(&mutex);
             return;
         }
@@ -133,7 +146,8 @@ tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
 
     neigh->ip = *dst;
     neigh->mac = mac;
-    neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
+    atomic_store_relaxed(&neigh->expires, time_msec() +
+                         NEIGH_ENTRY_DEFAULT_IDLE_TIME_MS);
     ovs_strlcpy(neigh->br_name, name, sizeof neigh->br_name);
     cmap_insert(&table, &neigh->cmap_node, tnl_neigh_hash(&neigh->ip));
     ovs_mutex_unlock(&mutex);
@@ -208,7 +222,7 @@ tnl_neigh_cache_run(void)
 
     ovs_mutex_lock(&mutex);
     CMAP_FOR_EACH(neigh, cmap_node, &table) {
-        if (neigh->expires <= time_now()) {
+        if (tnl_neigh_expired(neigh)) {
             tnl_neigh_delete(neigh);
             changed = true;
         }
@@ -319,7 +333,7 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         ds_put_format(&ds, ETH_ADDR_FMT"   %s",
                       ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
-        if (neigh->expires <= time_now()) {
+        if (tnl_neigh_expired(neigh)) {
             ds_put_format(&ds, " STALE");
         }
         ds_put_char(&ds, '\n');
