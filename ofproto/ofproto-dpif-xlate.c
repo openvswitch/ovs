@@ -4119,7 +4119,8 @@ terminate_native_tunnel(struct xlate_ctx *ctx, const struct xport *xport,
             (flow->dl_type == htons(ETH_TYPE_ARP) ||
              flow->nw_proto == IPPROTO_ICMPV6) &&
              is_neighbor_reply_correct(ctx, flow)) {
-            tnl_neigh_snoop(flow, wc, ctx->xbridge->name);
+            tnl_neigh_snoop(flow, wc, ctx->xbridge->name,
+                            ctx->xin->allow_side_effects);
         }
     }
 
