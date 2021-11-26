@@ -125,9 +125,9 @@ tnl_neigh_delete(struct tnl_neigh_entry *neigh)
     ovsrcu_postpone(neigh_entry_free, neigh);
 }
 
-static void
-tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
-                const struct eth_addr mac)
+void
+tnl_neigh_set(const char name[IFNAMSIZ], const struct in6_addr *dst,
+              const struct eth_addr mac)
 {
     ovs_mutex_lock(&mutex);
     struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
@@ -158,7 +158,7 @@ tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst,
             const struct eth_addr mac)
 {
     struct in6_addr dst6 = in6_addr_mapped_ipv4(dst);
-    tnl_neigh_set__(name, &dst6, mac);
+    tnl_neigh_set(name, &dst6, mac);
 }
 
 static int
@@ -203,7 +203,7 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
     memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
 
     if (allow_update) {
-        tnl_neigh_set__(name, &flow->nd_target, flow->arp_tha);
+        tnl_neigh_set(name, &flow->nd_target, flow->arp_tha);
     }
     return 0;
 }
@@ -314,7 +314,7 @@ tnl_neigh_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    tnl_neigh_set__(br_name, &ip6, mac);
+    tnl_neigh_set(br_name, &ip6, mac);
     unixctl_command_reply(conn, "OK");
 }
 
