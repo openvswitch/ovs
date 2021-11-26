@@ -27,6 +27,15 @@ to \fImac\fR.
 .IP "\fBtnl/arp/flush\fR"
 Flush ARP table.
 .
+.IP "\fBtnl/neigh/aging [\fIseconds\fB]\fR"
+.IP "\fBtnl/arp/aging [\fIseconds\fB]\fR"
+Changes the aging time. The accepted values of \fIseconds\fR are
+between 1 and 3600. The new entries will get the value as specified in
+\fIseconds\fR. For the existing entries, the aging time is updated
+only if the current expiration is greater than \fIseconds\fR.
+.IP
+If used without arguments, it prints the current aging value.
+.
 .IP "\fBtnl/egress_port_range [num1] [num2]\fR"
 Set range for UDP source port used for UDP based Tunnels. For
 example VxLAN. If case of zero arguments this command prints

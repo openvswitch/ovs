@@ -270,6 +270,53 @@ AT_CHECK([cat p0.pcap.txt | grep 101025d | uniq], [0], [dnl
 ffffffffffffaa55aa55000008060001080006040001aa55aa550000010102580000000000000101025d
 ])
 
+dnl Check input range
+AT_CHECK([ovs-appctl tnl/neigh/aging 0], [2], [], [dnl
+bad aging value
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 3601], [2], [], [dnl
+bad aging value
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 1], [0], [OK
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 3600], [0], [OK
+])
+
+dnl Set the aging time to 5 seconds
+AT_CHECK([ovs-appctl tnl/neigh/aging 5], [0], [OK
+])
+
+dnl Read the current aging time
+AT_CHECK([ovs-appctl tnl/neigh/aging], [0], [5
+])
+
+dnl Add an entry
+AT_CHECK([ovs-appctl tnl/neigh/set br0 1.1.2.92 aa:bb:cc:00:00:01], [0], [OK
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      aa:bb:cc:00:00:01   br0
+])
+
+ovs-appctl time/warp 5000
+
+dnl Check the entry has been removed
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+])
+
+dnl Restore the aging time to 900s (default)
+AT_CHECK([ovs-appctl tnl/neigh/aging 900], [0], [OK
+])
+
+dnl Read the current aging time
+AT_CHECK([ovs-appctl tnl/neigh/aging], [0], [900
+])
+
 dnl Check ARP Snoop
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:c8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:c8,tha=00:00:00:00:00:00)'])
 

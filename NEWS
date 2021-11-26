@@ -22,6 +22,8 @@ Post-v2.16.0
        get or configure linux kernel datapath cache sizes.
    - ovs-ofctl dump-flows no longer prints "igmp".  Instead the flag
      "ip,nw_proto=2" is used.
+   - ovs-appctl:
+     * New command tnl/neigh/aging to read/write the neigh aging time.
    - OpenFlow:
      * Default selection method for select groups with up to 256 buckets is
        now dp_hash.  Previously this was limited to 64 buckets.  This change
