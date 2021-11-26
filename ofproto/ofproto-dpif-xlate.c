@@ -4098,6 +4098,19 @@ terminate_native_tunnel(struct xlate_ctx *ctx, struct flow *flow,
              is_neighbor_reply_correct(ctx, flow)) {
             tnl_neigh_snoop(flow, wc, ctx->xbridge->name,
                             ctx->xin->allow_side_effects);
+        } else if (*tnl_port != ODPP_NONE &&
+                   ctx->xin->allow_side_effects &&
+                   dl_type_is_ip_any(flow->dl_type)) {
+            struct eth_addr mac = flow->dl_src;
+            struct in6_addr s_ip6;
+
+            if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                in6_addr_set_mapped_ipv4(&s_ip6, flow->nw_src);
+            } else {
+                s_ip6 = flow->ipv6_src;
+            }
+
+            tnl_neigh_set(ctx->xbridge->name, &s_ip6, mac);
         }
     }
 
