@@ -1539,6 +1539,43 @@ check_nd_extensions(struct dpif_backer *backer)
     return !error;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_ACTION_ATTR_ADD_MPLS
+ * action. */
+static bool
+check_add_mpls(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct flow flow;
+    bool supported;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+    ofpbuf_init(&actions, 64);
+
+    struct ovs_action_add_mpls *mpls;
+
+    mpls = nl_msg_put_unspec_zero(&actions,
+                                  OVS_ACTION_ATTR_ADD_MPLS,
+                                  sizeof *mpls);
+    mpls->mpls_ethertype = htons(ETH_TYPE_MPLS);
+
+    supported = dpif_probe_feature(backer->dpif, "add_mpls", &key,
+                                   &actions, NULL);
+    ofpbuf_uninit(&actions);
+    VLOG_INFO("%s: Datapath %s add_mpls action",
+              dpif_name(backer->dpif),
+              supported ? "supports" : "does not support");
+    return supported;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1609,6 +1646,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.lb_output_action =
         dpif_supports_lb_output_action(backer->dpif);
     backer->rt_support.ct_zero_snat = dpif_supports_ct_zero_snat(backer);
+    backer->rt_support.add_mpls = check_add_mpls(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -5625,6 +5663,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
              s.explicit_drop_action ? "true" :"false");
     smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
+    smap_add(cap, "add_mpls", s.add_mpls ? "true" : "false");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
