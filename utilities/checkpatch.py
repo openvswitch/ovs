@@ -765,12 +765,16 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
 
     reset_counters()
 
-    for line in text.splitlines():
+    for line in text.split("\n"):
         if current_file != previous_file:
             previous_file = current_file
 
         lineno = lineno + 1
         total_line = total_line + 1
+
+        if line == "\f":
+            # Form feed
+            continue
         if len(line) <= 0:
             continue
 
