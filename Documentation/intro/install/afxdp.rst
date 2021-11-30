@@ -312,7 +312,6 @@ Below is a script using namespaces and veth peer::
   ovs-vsctl -- add-br br0 -- set Bridge br0 \
     protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14 \
     fail-mode=secure datapath_type=netdev
-  ovs-vsctl -- add-br br0 -- set Bridge br0 datapath_type=netdev
 
   ip netns add at_ns0
   ovs-appctl vlog/set netdev_afxdp::dbg
