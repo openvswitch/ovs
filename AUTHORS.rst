@@ -361,6 +361,7 @@ Ryan Wilson
 Sairam Venugopal                   vsairam@vmware.com
 Sajjad Lateef
 Saloni Jain                        saloni.jain@tcs.com
+Salvatore Daniele                  sdaniele@redhat.com
 Samuel Ghinet                      sghinet@cloudbasesolutions.com
 Sanjay Sane
 Saurabh Mohan                      saurabh@cplanenetworks.com
