@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 20.11.1
+- DPDK 21.11
 
 - A `DPDK supported NIC`_
 
@@ -59,8 +59,8 @@ vSwitch with DPDK will require the following:
 
 Detailed system requirements can be found at `DPDK requirements`_.
 
-.. _DPDK supported NIC: https://doc.dpdk.org/guides-20.11/nics/index.html
-.. _DPDK requirements: https://doc.dpdk.org/guides-20.11/linux_gsg/sys_reqs.html
+.. _DPDK supported NIC: https://doc.dpdk.org/guides-21.11/nics/index.html
+.. _DPDK requirements: https://doc.dpdk.org/guides-21.11/linux_gsg/sys_reqs.html
 
 .. _dpdk-install:
 
@@ -73,9 +73,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget https://fast.dpdk.org/rel/dpdk-20.11.1.tar.xz
-       $ tar xf dpdk-20.11.1.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-20.11.1
+       $ wget https://fast.dpdk.org/rel/dpdk-21.11.tar.xz
+       $ tar xf dpdk-21.11.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-21.11
        $ cd $DPDK_DIR
 
 #. Configure and install DPDK using Meson
@@ -121,7 +121,7 @@ Install DPDK
 
 .. _DPDK sources: http://dpdk.org/rel
 .. _DPDK documentation:
-   https://doc.dpdk.org/guides-20.11/linux_gsg/build_dpdk.html
+   https://doc.dpdk.org/guides-21.11/linux_gsg/build_dpdk.html
 
 Install OVS
 ~~~~~~~~~~~
@@ -722,7 +722,7 @@ Limitations
   release notes`_.
 
 .. _DPDK release notes:
-   https://doc.dpdk.org/guides-20.11/rel_notes/release_20_11.html
+   https://doc.dpdk.org/guides-21.11/rel_notes/release_21_11.html
 
 - Upper bound MTU: DPDK device drivers differ in how the L2 frame for a
   given MTU value is calculated e.g. i40e driver includes 2 x vlan headers in
