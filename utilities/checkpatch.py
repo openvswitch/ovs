@@ -181,6 +181,7 @@ __regex_added_doc_rst = re.compile(
 __regex_empty_return = re.compile(r'\s*return;')
 __regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
                                __parenthesized_constructs)
+__regex_nonascii_characters = re.compile("[^\u0000-\u007f]")
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -292,6 +293,11 @@ def pointer_whitespace_check(line):
     """Return TRUE if there is no space between a pointer name and the
        asterisk that denotes this is a apionter type, ie: 'struct foo*'"""
     return __regex_ptr_declaration_missing_whitespace.search(line) is not None
+
+
+def nonascii_character_check(line):
+    """Return TRUE if inappropriate Unicode characters are detected """
+    return __regex_nonascii_characters.search(line) is not None
 
 
 def cast_whitespace_check(line):
@@ -564,6 +570,11 @@ checks = [
      'check': lambda x: pointer_whitespace_check(x),
      'print':
      lambda: print_error("Inappropriate spacing in pointer declaration")},
+
+    {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
+     'check': lambda x: nonascii_character_check(x),
+     'print':
+     lambda: print_error("Inappropriate non-ascii characters detected.")},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
@@ -943,7 +954,7 @@ def ovs_checkpatch_print_result():
 
 def ovs_checkpatch_file(filename):
     try:
-        mail = email.message_from_file(open(filename, 'r'))
+        mail = email.message_from_file(open(filename, 'r', encoding='utf8'))
     except:
         print_error("Unable to parse file '%s'. Is it a patch?" % filename)
         return -1

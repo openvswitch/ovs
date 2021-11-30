@@ -424,3 +424,25 @@ try_checkpatch \
 "
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - Unicode code])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (snowman == ☃️) {  /* Emoji
+    +     void НelloWorld() {  /* Homoglyph
+    +     ة /* ;C++            /* BiDi
+    " \
+    "ERROR: Inappropriate non-ascii characters detected.
+    #8 FILE: A.c:1:
+         if (snowman == ☃️) {  /* Emoji
+
+ERROR: Inappropriate non-ascii characters detected.
+    #9 FILE: A.c:2:
+         void НelloWorld() {  /* Homoglyph
+
+ERROR: Inappropriate non-ascii characters detected.
+    #10 FILE: A.c:3:
+         ة /* ;C++            /* BiDi
+"
+
+AT_CLEANUP
