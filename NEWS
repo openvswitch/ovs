@@ -17,6 +17,10 @@ Post-v2.16.0
    - Python:
      * For SSL support, the use of the pyOpenSSL library has been replaced
        with the native 'ssl' module.
+   - OVSDB:
+     * Python library for OVSDB clients now also supports faster
+       resynchronization with a clustered database after a brief disconnection,
+       i.e. 'monitor_cond_since' monitoring method.
    - ovs-dpctl and 'ovs-appctl dpctl/':
      * New commands 'cache-get-size' and 'cache-set-size' that allows to
        get or configure linux kernel datapath cache sizes.
