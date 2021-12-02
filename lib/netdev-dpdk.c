@@ -540,6 +540,7 @@ static void netdev_dpdk_vhost_destruct(struct netdev *netdev);
 
 static int netdev_dpdk_get_sw_custom_stats(const struct netdev *,
                                            struct netdev_custom_stats *);
+static void netdev_dpdk_configure_xstats(struct netdev_dpdk *dev);
 static void netdev_dpdk_clear_xstats(struct netdev_dpdk *dev);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
@@ -1161,6 +1162,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     }
     dev->started = true;
 
+    netdev_dpdk_configure_xstats(dev);
+
     rte_eth_promiscuous_enable(dev->port_id);
     rte_eth_allmulticast_enable(dev->port_id);
 
@@ -1560,23 +1563,19 @@ netdev_dpdk_dealloc(struct netdev *netdev)
 
 static void
 netdev_dpdk_clear_xstats(struct netdev_dpdk *dev)
+    OVS_REQUIRES(dev->mutex)
 {
-    /* If statistics are already allocated, we have to
-     * reconfigure, as port_id could have been changed. */
-    if (dev->rte_xstats_names) {
-        free(dev->rte_xstats_names);
-        dev->rte_xstats_names = NULL;
-        dev->rte_xstats_names_size = 0;
-    }
-    if (dev->rte_xstats_ids) {
-        free(dev->rte_xstats_ids);
-        dev->rte_xstats_ids = NULL;
-        dev->rte_xstats_ids_size = 0;
-    }
+    free(dev->rte_xstats_names);
+    dev->rte_xstats_names = NULL;
+    dev->rte_xstats_names_size = 0;
+    free(dev->rte_xstats_ids);
+    dev->rte_xstats_ids = NULL;
+    dev->rte_xstats_ids_size = 0;
 }
 
-static const char*
+static const char *
 netdev_dpdk_get_xstat_name(struct netdev_dpdk *dev, uint64_t id)
+    OVS_REQUIRES(dev->mutex)
 {
     if (id >= dev->rte_xstats_names_size) {
         return "UNKNOWN";
@@ -1584,101 +1583,70 @@ netdev_dpdk_get_xstat_name(struct netdev_dpdk *dev, uint64_t id)
     return dev->rte_xstats_names[id].name;
 }
 
-static bool
+static void
 netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
     OVS_REQUIRES(dev->mutex)
 {
+    struct rte_eth_xstat_name *rte_xstats_names = NULL;
+    struct rte_eth_xstat *rte_xstats = NULL;
+    int rte_xstats_names_size;
     int rte_xstats_len;
-    bool ret;
-    struct rte_eth_xstat *rte_xstats;
-    uint64_t id;
-    int xstats_no;
     const char *name;
+    uint64_t id;
 
-    /* Retrieving all XSTATS names. If something will go wrong
-     * or amount of counters will be equal 0, rte_xstats_names
-     * buffer will be marked as NULL, and any further xstats
-     * query won't be performed (e.g. during netdev_dpdk_get_stats
-     * execution). */
+    netdev_dpdk_clear_xstats(dev);
 
-    ret = false;
-    rte_xstats = NULL;
+    rte_xstats_names_size = rte_eth_xstats_get_names(dev->port_id, NULL, 0);
+    if (rte_xstats_names_size < 0) {
+        VLOG_WARN("Cannot get XSTATS names for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
+        goto out;
+    }
 
-    if (dev->rte_xstats_names == NULL || dev->rte_xstats_ids == NULL) {
-        dev->rte_xstats_names_size =
-                rte_eth_xstats_get_names(dev->port_id, NULL, 0);
+    rte_xstats_names = xcalloc(rte_xstats_names_size,
+                               sizeof *rte_xstats_names);
+    rte_xstats_len = rte_eth_xstats_get_names(dev->port_id,
+                                              rte_xstats_names,
+                                              rte_xstats_names_size);
+    if (rte_xstats_len < 0 || rte_xstats_len != rte_xstats_names_size) {
+        VLOG_WARN("Cannot get XSTATS names for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
+        goto out;
+    }
 
-        if (dev->rte_xstats_names_size < 0) {
-            VLOG_WARN("Cannot get XSTATS for port: "DPDK_PORT_ID_FMT,
-                      dev->port_id);
-            dev->rte_xstats_names_size = 0;
-        } else {
-            /* Reserve memory for xstats names and values */
-            dev->rte_xstats_names = xcalloc(dev->rte_xstats_names_size,
-                                            sizeof *dev->rte_xstats_names);
+    rte_xstats = xcalloc(rte_xstats_names_size, sizeof *rte_xstats);
+    rte_xstats_len = rte_eth_xstats_get(dev->port_id, rte_xstats,
+                                        rte_xstats_names_size);
+    if (rte_xstats_len < 0 || rte_xstats_len != rte_xstats_names_size) {
+        VLOG_WARN("Cannot get XSTATS for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
+        goto out;
+    }
 
-            if (dev->rte_xstats_names) {
-                /* Retreive xstats names */
-                rte_xstats_len =
-                        rte_eth_xstats_get_names(dev->port_id,
-                                                 dev->rte_xstats_names,
-                                                 dev->rte_xstats_names_size);
+    dev->rte_xstats_names = rte_xstats_names;
+    rte_xstats_names = NULL;
+    dev->rte_xstats_names_size = rte_xstats_names_size;
 
-                if (rte_xstats_len < 0) {
-                    VLOG_WARN("Cannot get XSTATS names for port: "
-                              DPDK_PORT_ID_FMT, dev->port_id);
-                    goto out;
-                } else if (rte_xstats_len != dev->rte_xstats_names_size) {
-                    VLOG_WARN("XSTATS size doesn't match for port: "
-                              DPDK_PORT_ID_FMT, dev->port_id);
-                    goto out;
-                }
+    dev->rte_xstats_ids = xcalloc(rte_xstats_names_size,
+                                  sizeof *dev->rte_xstats_ids);
+    for (unsigned int i = 0; i < rte_xstats_names_size; i++) {
+        id = rte_xstats[i].id;
+        name = netdev_dpdk_get_xstat_name(dev, id);
 
-                dev->rte_xstats_ids = xcalloc(dev->rte_xstats_names_size,
-                                              sizeof(uint64_t));
+        /* We need to filter out everything except dropped, error and
+         * management counters. */
+        if (string_ends_with(name, "_errors") ||
+            strstr(name, "_management_") ||
+            string_ends_with(name, "_dropped")) {
 
-                /* We have to calculate number of counters */
-                rte_xstats = xmalloc(rte_xstats_len * sizeof *rte_xstats);
-                memset(rte_xstats, 0xff, sizeof *rte_xstats * rte_xstats_len);
-
-                /* Retreive xstats values */
-                if (rte_eth_xstats_get(dev->port_id, rte_xstats,
-                                       rte_xstats_len) > 0) {
-                    dev->rte_xstats_ids_size = 0;
-                    xstats_no = 0;
-                    for (uint32_t i = 0; i < rte_xstats_len; i++) {
-                        id = rte_xstats[i].id;
-                        name = netdev_dpdk_get_xstat_name(dev, id);
-                        /* We need to filter out everything except
-                         * dropped, error and management counters */
-                        if (string_ends_with(name, "_errors") ||
-                            strstr(name, "_management_") ||
-                            string_ends_with(name, "_dropped")) {
-
-                            dev->rte_xstats_ids[xstats_no] = id;
-                            xstats_no++;
-                        }
-                    }
-                    dev->rte_xstats_ids_size = xstats_no;
-                    ret = true;
-                } else {
-                    VLOG_WARN("Can't get XSTATS IDs for port: "
-                              DPDK_PORT_ID_FMT, dev->port_id);
-                }
-
-                free(rte_xstats);
-            }
+            dev->rte_xstats_ids[dev->rte_xstats_ids_size] = id;
+            dev->rte_xstats_ids_size++;
         }
-    } else {
-        /* Already configured */
-        ret = true;
     }
 
 out:
-    if (!ret) {
-        netdev_dpdk_clear_xstats(dev);
-    }
-    return ret;
+    free(rte_xstats);
+    free(rte_xstats_names);
 }
 
 static bool
@@ -1964,7 +1932,6 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
                     dev->devargs = xstrdup(new_devargs);
                     dev->port_id = new_port_id;
                     netdev_request_reconfigure(&dev->up);
-                    netdev_dpdk_clear_xstats(dev);
                     err = 0;
                 }
             }
@@ -3197,7 +3164,7 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
 
     ovs_mutex_lock(&dev->mutex);
 
-    if (netdev_dpdk_configure_xstats(dev)) {
+    if (dev->rte_xstats_ids_size > 0) {
         uint64_t *values = xcalloc(dev->rte_xstats_ids_size,
                                    sizeof(uint64_t));
 
@@ -3224,9 +3191,6 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
         } else {
             VLOG_WARN("Cannot get XSTATS values for port: "DPDK_PORT_ID_FMT,
                       dev->port_id);
-            /* Let's clear statistics cache, so it will be
-             * reconfigured */
-            netdev_dpdk_clear_xstats(dev);
         }
 
         free(values);
