@@ -2464,6 +2464,17 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
     return 0;
 }
 
+static void
+nl_msg_put_flower_acts_release(struct ofpbuf *request, uint16_t act_index)
+{
+    size_t act_offset;
+
+    act_offset = nl_msg_start_nested(request, act_index);
+    nl_msg_put_act_tunnel_key_release(request);
+    nl_msg_put_act_flags(request);
+    nl_msg_end_nested(request, act_offset);
+}
+
 static int
 nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
 {
@@ -2498,6 +2509,11 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             }
             break;
             case TC_ACT_ENCAP: {
+                if (!released && flower->tunnel) {
+                    nl_msg_put_flower_acts_release(request, act_index++);
+                    released = true;
+                }
+
                 act_offset = nl_msg_start_nested(request, act_index++);
                 nl_msg_put_act_tunnel_key_set(request, action->encap.id_present,
                                               action->encap.id,
@@ -2555,10 +2571,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             break;
             case TC_ACT_OUTPUT: {
                 if (!released && flower->tunnel) {
-                    act_offset = nl_msg_start_nested(request, act_index++);
-                    nl_msg_put_act_tunnel_key_release(request);
-                    nl_msg_put_act_flags(request);
-                    nl_msg_end_nested(request, act_offset);
+                    nl_msg_put_flower_acts_release(request, act_index++);
                     released = true;
                 }
 
