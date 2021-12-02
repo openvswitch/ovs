@@ -1583,6 +1583,16 @@ netdev_dpdk_get_xstat_name(struct netdev_dpdk *dev, uint64_t id)
     return dev->rte_xstats_names[id].name;
 }
 
+static bool
+is_queue_stat(const char *s)
+{
+    uint16_t tmp;
+
+    return (s[0] == 'r' || s[0] == 't') &&
+            (ovs_scan(s + 1, "x_q%"SCNu16"_packets", &tmp) ||
+             ovs_scan(s + 1, "x_q%"SCNu16"_bytes", &tmp));
+}
+
 static void
 netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
     OVS_REQUIRES(dev->mutex)
@@ -1633,9 +1643,10 @@ netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
         id = rte_xstats[i].id;
         name = netdev_dpdk_get_xstat_name(dev, id);
 
-        /* We need to filter out everything except dropped, error and
-         * management counters. */
-        if (string_ends_with(name, "_errors") ||
+        /* For custom stats, we filter out everything except per rxq/txq basic
+         * stats, and dropped, error and management counters. */
+        if (is_queue_stat(name) ||
+            string_ends_with(name, "_errors") ||
             strstr(name, "_management_") ||
             string_ends_with(name, "_dropped")) {
 
