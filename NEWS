@@ -37,6 +37,8 @@ Post-v2.16.0
      * Default selection method for select groups with up to 256 buckets is
        now dp_hash.  Previously this was limited to 64 buckets.  This change
        is mainly for the benefit of OVN load balancing configurations.
+   - Ingress policing on Linux now uses 'matchall' classifier instead of
+     'basic', if available.
 
 
 v2.16.0 - 16 Aug 2021

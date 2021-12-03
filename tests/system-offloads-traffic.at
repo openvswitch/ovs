@@ -89,10 +89,8 @@ AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
   [0],[dnl
 rate 100Kbit burst 1280b
 ])
-AT_CHECK([tc -s -d filter show dev ovs-p0 ingress | grep basic |
-  sed -n 's/.*\(basic\).*/\1/; T; p; q'], [0], [dnl
-basic
-])
+AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
+  egrep "basic|matchall" > /dev/null], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -135,14 +133,13 @@ AT_CHECK([ovs-vsctl --columns=other_config list open], [0], [dnl
 other_config        : {hw-offload="false"}
 ])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(pkts_rate [[0-9]]*[[a-zA-Z]]* pkts_burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
+  sed -n 's/.*\(pkts_rate [[0-9]]*[[a-zA-Z]]* pkts_burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q' |
+  sed -e 's/10240/10000/'],
   [0],[dnl
-pkts_rate 100000 pkts_burst 10240
+pkts_rate 100000 pkts_burst 10000
 ])
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(basic\).*/\1/; T; p; q'], [0], [dnl
-basic
-])
+  egrep "basic|matchall" > /dev/null], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -160,9 +157,10 @@ AT_CHECK([ovs-vsctl --columns=other_config list open], [0], [dnl
 other_config        : {hw-offload="true"}
 ])
 AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
-  sed -n 's/.*\(pkts_rate [[0-9]]*[[a-zA-Z]]* pkts_burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
+  sed -n 's/.*\(pkts_rate [[0-9]]*[[a-zA-Z]]* pkts_burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q' |
+  sed -e 's/10240/10000/'],
   [0],[dnl
-pkts_rate 100000 pkts_burst 10240
+pkts_rate 100000 pkts_burst 10000
 ])
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
   sed -n 's/.*\(matchall\).*/\1/; T; p; q'], [0], [dnl

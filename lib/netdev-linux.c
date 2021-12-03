@@ -2776,8 +2776,7 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
             error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,
                                             kpkts_rate, kpkts_burst);
         }
-        ovs_mutex_unlock(&netdev->mutex);
-        return error;
+        goto out;
     }
 
     error = get_ifindex(netdev_, &ifindex);
@@ -2794,6 +2793,8 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
     }
 
     if (kbits_rate || kpkts_rate) {
+        const char *cls_name = "matchall";
+
         error = tc_add_del_qdisc(ifindex, true, 0, TC_INGRESS);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
@@ -2801,21 +2802,30 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
             goto out;
         }
 
-        error = tc_add_policer(netdev_, kbits_rate, kbits_burst,
-                               kpkts_rate, kpkts_burst);
+        error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,
+                                        kpkts_rate, kpkts_burst);
+        if (error == ENOENT) {
+            cls_name = "basic";
+            /* This error is returned when the matchall classifier is missing.
+             * Fall back to the basic classifier.  */
+            error = tc_add_policer(netdev_, kbits_rate, kbits_burst,
+                                   kpkts_rate, kpkts_burst);
+        }
         if (error){
-            VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
-                    netdev_name, ovs_strerror(error));
+            VLOG_WARN_RL(&rl, "%s: adding cls_%s policing action failed: %s",
+                         netdev_name, cls_name, ovs_strerror(error));
             goto out;
         }
     }
 
-    netdev->kbits_rate = kbits_rate;
-    netdev->kbits_burst = kbits_burst;
-    netdev->kpkts_rate = kpkts_rate;
-    netdev->kpkts_burst = kpkts_burst;
-
 out:
+    if (!error) {
+        netdev->kbits_rate = kbits_rate;
+        netdev->kbits_burst = kbits_burst;
+        netdev->kpkts_rate = kpkts_rate;
+        netdev->kpkts_burst = kpkts_burst;
+    }
+
     if (!error || error == ENODEV) {
         netdev->netdev_policing_error = error;
         netdev->cache_valid |= VALID_POLICING;
