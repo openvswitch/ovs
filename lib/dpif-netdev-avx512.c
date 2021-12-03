@@ -186,7 +186,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
 
         /* Check for a partial hardware offload match. */
         if (hwol_enabled) {
-            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, in_port, packet, &f))) {
+            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, packet, &f))) {
                 /* Packet restoration failed and it was dropped, do not
                  * continue processing. */
                 continue;

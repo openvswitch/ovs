@@ -7322,28 +7322,22 @@ smc_lookup_single(struct dp_netdev_pmd_thread *pmd,
     return NULL;
 }
 
-static struct tx_port * pmd_send_port_cache_lookup(
-    const struct dp_netdev_pmd_thread *pmd, odp_port_t port_no);
-
 inline int
 dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
-                  odp_port_t port_no OVS_UNUSED,
                   struct dp_packet *packet,
                   struct dp_netdev_flow **flow)
 {
-    struct tx_port *p OVS_UNUSED;
     uint32_t mark;
 
 #ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
     /* Restore the packet if HW processing was terminated before completion. */
-    p = pmd_send_port_cache_lookup(pmd, port_no);
-    if (OVS_LIKELY(p)) {
-        int err = netdev_hw_miss_packet_recover(p->port->netdev, packet);
+    struct dp_netdev_rxq *rxq = pmd->ctx.last_rxq;
+    int err;
 
-        if (err && err != EOPNOTSUPP) {
-            COVERAGE_INC(datapath_drop_hw_miss_recover);
-            return -1;
-        }
+    err = netdev_hw_miss_packet_recover(rxq->port->netdev, packet);
+    if (err && err != EOPNOTSUPP) {
+        COVERAGE_INC(datapath_drop_hw_miss_recover);
+        return -1;
     }
 #endif
 
@@ -7420,7 +7414,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
         }
 
         if (netdev_flow_api && recirc_depth == 0) {
-            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, port_no, packet, &flow))) {
+            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, packet, &flow))) {
                 /* Packet restoration failed and it was dropped, do not
                  * continue processing.
                  */
