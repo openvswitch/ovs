@@ -491,6 +491,15 @@ class Idl(object):
         :type updates:  Row
         """
 
+    def cooperative_yield(self):
+        """Hook for cooperatively yielding to eventlet/gevent/asyncio/etc.
+
+        When a block of code is going to spend a lot of time cpu-bound without
+        doing any I/O, it can cause greenthread/coroutine libraries to block.
+        This call should be added to code where this can happen, but defaults
+        to doing nothing to avoid overhead where it is not needed.
+        """
+
     def __send_cond_change(self, table, cond):
         monitor_cond_change = {table.name: [{"where": cond}]}
         old_uuid = str(self.uuid)
@@ -655,6 +664,8 @@ class Idl(object):
                                       'contains <row-update> for %s that '
                                       'is not an object'
                                       % (table_name, uuid_string))
+
+                self.cooperative_yield()
 
                 if version == OVSDB_UPDATE2:
                     changes = self.__process_update2(table, uuid, row_update)
