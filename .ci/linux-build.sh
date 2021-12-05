@@ -223,10 +223,6 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         DPDK_VER="21.11"
     fi
     install_dpdk $DPDK_VER
-    if [ "$CC" = "clang" ]; then
-        # Disregard cast alignment errors until DPDK is fixed
-        CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-cast-align"
-    fi
 fi
 
 if [ "$CC" = "clang" ]; then

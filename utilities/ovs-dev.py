@@ -90,7 +90,6 @@ def conf():
 
     if options.with_dpdk:
         configure.append("--with-dpdk=" + options.with_dpdk)
-        cflags += " -Wno-cast-align -Wno-bad-function-cast"  # DPDK warnings.
 
     if options.optimize is None:
         options.optimize = 0
