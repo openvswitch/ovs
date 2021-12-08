@@ -2099,6 +2099,7 @@ ofmonitor_create(const struct ofputil_flow_monitor_request *request,
     m->id = request->id;
     m->flags = request->flags;
     m->out_port = request->out_port;
+    m->out_group = request->out_group;
     m->table_id = request->table_id;
     minimatch_init(&m->match, &request->match);
 
@@ -2134,7 +2135,7 @@ ofmonitor_destroy(struct ofmonitor *m)
 
 void
 ofmonitor_report(struct connmgr *mgr, struct rule *rule,
-                 enum nx_flow_update_event event,
+                 enum ofp_flow_update_event event,
                  enum ofp_flow_removed_reason reason,
                  const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid,
                  const struct rule_actions *old_actions)
@@ -2144,39 +2145,42 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
         return;
     }
 
-    enum nx_flow_monitor_flags update;
+    enum ofp14_flow_monitor_flags update;
     switch (event) {
-    case NXFME_ADDED:
-        update = NXFMF_ADD;
+    case OFPFME_ADDED:
+        update = OFPFMF_ADD;
         rule->add_seqno = rule->modify_seqno = monitor_seqno++;
         break;
 
-    case NXFME_DELETED:
-        update = NXFMF_DELETE;
+    case OFPFME_REMOVED:
+        update = OFPFMF_REMOVED;
         break;
 
-    case NXFME_MODIFIED:
-        update = NXFMF_MODIFY;
+    case OFPFME_MODIFIED:
+        update = OFPFMF_MODIFY;
         rule->modify_seqno = monitor_seqno++;
         break;
 
     default:
-    case NXFME_ABBREV:
+    case OFPFME_INITIAL:
+    case OFPFME_PAUSED:
+    case OFPFME_RESUMED:
+    case OFPFME_ABBREV:
         OVS_NOT_REACHED();
     }
 
     struct ofconn *ofconn;
     LIST_FOR_EACH (ofconn, connmgr_node, &mgr->conns) {
         if (ofconn->monitor_paused) {
-            /* Only send NXFME_DELETED notifications for flows that were added
+            /* Only send OFPFME_REMOVED notifications for flows that were added
              * before we paused. */
-            if (event != NXFME_DELETED
+            if (event != OFPFME_REMOVED
                 || rule->add_seqno > ofconn->monitor_paused) {
                 continue;
             }
         }
 
-        enum nx_flow_monitor_flags flags = 0;
+        enum ofp14_flow_monitor_flags flags = 0;
         struct ofmonitor *m;
         HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {
             if (m->flags & update
@@ -2186,6 +2190,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                         && ofpacts_output_to_port(old_actions->ofpacts,
                                                   old_actions->ofpacts_len,
                                                   m->out_port)))
+                && ofproto_rule_has_out_group(rule, m->out_group)
                 && cls_rule_is_loose_match(&rule->cr, &m->match)) {
                 flags |= m->flags;
             }
@@ -2198,12 +2203,12 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 ofconn->sent_abbrev_update = false;
             }
 
-            if (flags & NXFMF_OWN || ofconn != abbrev_ofconn
+            if (flags & OFPFMF_ONLY_OWN || ofconn != abbrev_ofconn
                 || ofconn->monitor_paused) {
                 struct ofputil_flow_update fu;
 
                 fu.event = event;
-                fu.reason = event == NXFME_DELETED ? reason : 0;
+                fu.reason = event == OFPFME_REMOVED ? reason : 0;
                 fu.table_id = rule->table_id;
                 fu.cookie = rule->flow_cookie;
                 minimatch_expand(&rule->cr.match, &fu.match);
@@ -2214,7 +2219,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 fu.hard_timeout = rule->hard_timeout;
                 ovs_mutex_unlock(&rule->mutex);
 
-                if (flags & NXFMF_ACTIONS) {
+                if (flags & OFPFMF_INSTRUCTIONS) {
                     const struct rule_actions *actions
                         = rule_get_actions(rule);
                     fu.ofpacts = actions->ofpacts;
@@ -2228,7 +2233,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
             } else if (!ofconn->sent_abbrev_update) {
                 struct ofputil_flow_update fu;
 
-                fu.event = NXFME_ABBREV;
+                fu.event = OFPFME_ABBREV;
                 fu.xid = abbrev_xid;
                 ofputil_append_flow_update(&fu, &ofconn->updates,
                                            ofproto_get_tun_tab(rule->ofproto));
@@ -2263,9 +2268,8 @@ ofmonitor_flush(struct connmgr *mgr)
             COVERAGE_INC(ofmonitor_pause);
             ofconn->monitor_paused = monitor_seqno++;
             protocol = ofconn_get_protocol(ofconn);
-            struct ofpbuf *pause = ofpraw_alloc_xid(
-                OFPRAW_NXT_FLOW_MONITOR_PAUSED,
-                ofputil_protocol_to_ofp_version(protocol), htonl(0), 0);
+            struct ofpbuf *pause = ofputil_encode_flow_monitor_pause(
+                OFPFME_PAUSED,protocol);
             ofconn_send(ofconn, pause, counter);
         }
     }
@@ -2289,9 +2293,8 @@ ofmonitor_resume(struct ofconn *ofconn)
                                       ofconn_get_protocol(ofconn));
 
     protocol = ofconn_get_protocol(ofconn);
-    struct ofpbuf *resumed = ofpraw_alloc_xid(
-            OFPRAW_NXT_FLOW_MONITOR_RESUMED,
-            ofputil_protocol_to_ofp_version(protocol), htonl(0), 0);
+    struct ofpbuf *resumed = ofputil_encode_flow_monitor_pause(
+        OFPFME_RESUMED, protocol);
     ovs_list_push_back(&msgs, &resumed->list_node);
     ofconn_send_replies(ofconn, &msgs);
 

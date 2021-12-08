@@ -168,10 +168,11 @@ struct ofmonitor {
     struct hmap_node ofconn_node; /* In ofconn's 'monitors' hmap. */
     uint32_t id;
 
-    enum nx_flow_monitor_flags flags;
+    enum ofp14_flow_monitor_flags flags;
 
     /* Matching. */
     ofp_port_t out_port;
+    uint32_t out_group;
     uint8_t table_id;
     struct minimatch match;
 };
@@ -187,7 +188,8 @@ void ofmonitor_destroy(struct ofmonitor *)
     OVS_REQUIRES(ofproto_mutex);
 
 void ofmonitor_report(struct connmgr *, struct rule *,
-                      enum nx_flow_update_event, enum ofp_flow_removed_reason,
+                      enum ofp_flow_update_event event,
+                      enum ofp_flow_removed_reason,
                       const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid,
                       const struct rule_actions *old_actions)
     OVS_REQUIRES(ofproto_mutex);

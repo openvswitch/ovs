@@ -425,7 +425,7 @@ struct rule {
      * 'add_seqno' is the sequence number when this rule was created.
      * 'modify_seqno' is the sequence number when this rule was last modified.
      * See 'monitor_seqno' in connmgr.c for more information. */
-    enum nx_flow_monitor_flags monitor_flags OVS_GUARDED_BY(ofproto_mutex);
+    enum ofp14_flow_monitor_flags monitor_flags OVS_GUARDED_BY(ofproto_mutex);
     uint64_t add_seqno OVS_GUARDED_BY(ofproto_mutex);
     uint64_t modify_seqno OVS_GUARDED_BY(ofproto_mutex);
 
@@ -485,6 +485,8 @@ BUILD_ASSERT_DECL(offsetof(struct rule_actions, ofpacts) % OFPACT_ALIGNTO == 0);
 const struct rule_actions *rule_actions_create(const struct ofpact *, size_t);
 void rule_actions_destroy(const struct rule_actions *);
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t port)
+    OVS_REQUIRES(ofproto_mutex);
+bool ofproto_rule_has_out_group(const struct rule *rule, uint32_t group_id)
     OVS_REQUIRES(ofproto_mutex);
 
 #define DECL_OFPROTO_COLLECTION(TYPE, NAME)                             \

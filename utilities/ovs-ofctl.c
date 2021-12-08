@@ -2313,6 +2313,12 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
 
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg, protocol);
+
+            if (verbosity) {
+                ofpmsg_update_length(msg);
+                ofp_print(stdout, msg->data, msg->size, NULL,
+                          NULL, verbosity + 2);
+            }
             dump_transaction(vconn, msg);
             fflush(stdout);
         } else if (!strcmp(arg, "resume")) {

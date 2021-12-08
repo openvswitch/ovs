@@ -744,10 +744,10 @@ ofp_print_nxt_flow_monitor_cancel(struct ds *string,
 }
 
 static enum ofperr
-ofp_print_nxst_flow_monitor_request(struct ds *string,
-                                    const struct ofp_header *oh,
-                                    const struct ofputil_port_map *port_map,
-                                    const struct ofputil_table_map *table_map)
+ofp_print_flow_monitor_request(struct ds *string,
+                               const struct ofp_header *oh,
+                               const struct ofputil_port_map *port_map,
+                               const struct ofputil_table_map *table_map)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
@@ -765,10 +765,10 @@ ofp_print_nxst_flow_monitor_request(struct ds *string,
 }
 
 static enum ofperr
-ofp_print_nxst_flow_monitor_reply(struct ds *string,
-                                  const struct ofp_header *oh,
-                                  const struct ofputil_port_map *port_map,
-                                  const struct ofputil_table_map *table_map)
+ofp_print_flow_monitor_reply(struct ds *string,
+                             const struct ofp_header *oh,
+                             const struct ofputil_port_map *port_map,
+                             const struct ofputil_table_map *table_map)
 {
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
@@ -1147,12 +1147,12 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
-        return ofp_print_nxst_flow_monitor_request(string, msg, port_map,
-                                                   table_map);
+        return ofp_print_flow_monitor_request(string, msg, port_map,
+                                              table_map);
 
     case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
-        return ofp_print_nxst_flow_monitor_reply(string, msg, port_map,
-                                                 table_map);
+        return ofp_print_flow_monitor_reply(string, msg, port_map,
+                                            table_map);
 
     case OFPTYPE_BUNDLE_CONTROL:
         return ofp_print_bundle_ctrl(string, msg);

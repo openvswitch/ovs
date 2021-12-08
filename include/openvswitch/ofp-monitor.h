@@ -61,8 +61,10 @@ void ofputil_flow_removed_format(struct ds *,
 /* Abstract nx_flow_monitor_request. */
 struct ofputil_flow_monitor_request {
     uint32_t id;
-    enum nx_flow_monitor_flags flags;
+    enum ofp14_flow_monitor_command command;
+    enum ofp14_flow_monitor_flags flags;
     ofp_port_t out_port;
+    uint32_t out_group;
     uint8_t table_id;
     struct match match;
 };
@@ -85,7 +87,7 @@ char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
 
 /* Abstract nx_flow_update. */
 struct ofputil_flow_update {
-    enum nx_flow_update_event event;
+    enum ofp_flow_update_event event;
 
     /* Used only for NXFME_ADDED, NXFME_DELETED, NXFME_MODIFIED. */
     enum ofp_flow_removed_reason reason;
@@ -118,6 +120,9 @@ void ofputil_flow_update_format(struct ds *,
 uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_monitor_cancel(
     uint32_t id, enum ofputil_protocol protocol);
+
+struct ofpbuf * ofputil_encode_flow_monitor_pause(
+    enum ofp_flow_update_event command, enum ofputil_protocol protocol);
 
 struct ofputil_requestforward {
     ovs_be32 xid;

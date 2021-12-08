@@ -3258,31 +3258,88 @@ NXT_SET_CONTROLLER_ID (xid=0x3): id=123
 ])
 AT_CLEANUP
 
-AT_SETUP([NXT_FLOW_MONITOR_CANCEL])
+AT_SETUP([FLOW_MONITOR_CANCEL])
 AT_KEYWORDS([ofp-print])
+
+dnl OpenFlow 1.0-1.2
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 14 00 00 00 03 00 00 23 20 00 00 00 15 \
 01 02 30 40 \
 "], [0], [dnl
 NXT_FLOW_MONITOR_CANCEL (xid=0x3): id=16920640
 ])
+
+dnl OpenFlow 1.3
+AT_CHECK([ovs-ofctl ofp-print "\
+04 04 00 14 00 00 00 06 4f 4e 46 00 00 00 07 4e \
+01 02 30 40 \
+"], [0], [dnl
+ONFT_FLOW_MONITOR_CANCEL (OF1.3) (xid=0x6): id=16920640
+])
+
+dnl OpenFlow 1.4+
+AT_CHECK([ovs-ofctl ofp-print "\
+05 12 00 28 00 00 00 04 00 10 00 00 00 00 00 00 \
+01 02 30 40 00 00 00 00 00 00 00 00 00 00 00 02 \
+00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW_MONITOR request (OF1.4) (xid=0x4):
+ id=16920640 command=delete
+])
+
 AT_CLEANUP
 
-AT_SETUP([NXT_FLOW_MONITOR_PAUSED])
+AT_SETUP([FLOW_MONITOR_PAUSED])
 AT_KEYWORDS([ofp-print])
+
+dnl OpenFlow 1.0-1.2
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 10 00 00 00 03 00 00 23 20 00 00 00 16 \
 "], [0], [dnl
 NXT_FLOW_MONITOR_PAUSED (xid=0x3):
 ])
+
+dnl OpenFlow 1.3
+AT_CHECK([ovs-ofctl ofp-print "\
+04 04 00 10 00 00 00 03 4f 4e 46 00 00 00 07 4F \
+"], [0], [dnl
+ONFT_FLOW_MONITOR_PAUSED (OF1.3) (xid=0x3):
+])
+
+dnl OpenFlow 1.4+
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 18 00 00 00 00 00 10 00 00 00 00 00 00 \
+00 08 00 05 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=PAUSED
+])
 AT_CLEANUP
 
-AT_SETUP([NXT_FLOW_MONITOR_RESUMED])
+AT_SETUP([FLOW_MONITOR_RESUMED])
 AT_KEYWORDS([ofp-print])
+
+dnl OpenFlow 1.0-1.2
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 10 00 00 00 03 00 00 23 20 00 00 00 17 \
 "], [0], [dnl
 NXT_FLOW_MONITOR_RESUMED (xid=0x3):
+])
+
+dnl OpenFlow 1.3
+AT_CHECK([ovs-ofctl ofp-print "\
+04 04 00 10 00 00 00 03 4f 4e 46 00 00 00 07 50 \
+"], [0], [dnl
+ONFT_FLOW_MONITOR_RESUMED (OF1.3) (xid=0x3):
+])
+
+dnl OpenFlow 1.4+
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 18 00 00 00 00 00 10 00 00 00 00 00 00
+00 08 00 06 00 00 00 00
+"], [0], [dnl
+OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=RESUMED
 ])
 AT_CLEANUP
 
@@ -3629,8 +3686,10 @@ NXST_AGGREGATE reply (xid=0x4): packet_count=7 byte_count=420 flow_count=7
 ])
 AT_CLEANUP
 
-AT_SETUP([NXST_FLOW_MONITOR request])
+AT_SETUP([FLOW_MONITOR request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+
+dnl OpenFlow 1.0-1.2
 AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 40 00 00 00 04 ff ff 00 00 00 00 23 20 00 00 00 02 00 00 00 00 \
 00 00 40 00 00 3f ff fe 00 00 01 00 00 00 00 00 \
@@ -3640,10 +3699,37 @@ NXST_FLOW_MONITOR request (xid=0x4):
  id=16384 flags=initial,add,delete,modify,actions,own out_port=LOCAL table=1
  id=8192 flags=delete table=2 in_port=1
 ])
+
+dnl OpenFlow 1.3
+AT_CHECK([ovs-ofctl ofp-print "\
+04 12 00 48 00 00 00 06 ff ff 00 00 00 00 00 00 \
+4f 4e 46 00 00 00 07 4e \
+00 00 10 00 00 3f 00 04 ff ff ff fe 01 00 00 00 00 01 00 04 00 00 00 00 \
+00 00 20 00 00 04 ff ff 00 00 00 02 01 00 00 00 00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+ONFST_FLOW_MONITOR request (OF1.3) (xid=0x6):
+ id=4096 flags=initial,add,delete,modify,actions,own out_port=LOCAL table=1
+ id=8192 flags=delete out_port=2 table=1
+])
+
+dnl OpenFlow 1.4+
+AT_CHECK([ovs-ofctl ofp-print "\
+05 12 00 58 00 00 00 06 00 10 00 00 00 00 00 00 \
+00 00 10 00 ff ff ff fe ff ff ff ff 00 5f 00 00 00 01 00 04 00 00 00 00 \
+00 00 20 00 00 00 00 01 00 00 00 40 00 5f 01 01 00 01 00 04 00 00 00 00 \
+00 00 40 00 00 00 00 02 00 00 00 40 00 5f 02 02 00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW_MONITOR request (OF1.4) (xid=0x6):
+ id=4096 flags=initial,add,delete,modify,actions,own out_port=LOCAL table=0
+ id=8192 flags=initial,add,delete,modify,actions,own out_port=1 out_group=64 table=1
+ id=16384 command=delete
+])
 AT_CLEANUP
 
-AT_SETUP([NXST_FLOW_MONITOR reply])
+AT_SETUP([FLOW_MONITOR reply])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+
+dnl OpenFlow 1.0-1.2
 AT_CHECK([ovs-ofctl ofp-print "\
 01 11 00 40 00 00 00 04 ff ff 00 00 00 00 23 20 00 00 00 02 00 00 00 00 \
 00 20 00 01 00 05 80 00 00 05 00 10 00 06 01 00 12 34 56 78 9a bc de f0 \
@@ -3652,6 +3738,32 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 NXST_FLOW_MONITOR reply (xid=0x4):
  event=DELETED reason=eviction table=1 idle_timeout=5 hard_timeout=16 cookie=0x123456789abcdef0 in_port=1
+ event=ABBREV xid=0x186a0
+])
+
+dnl OpenFlow 1.3
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 00 48 00 00 00 06 ff ff 00 00 00 00 00 00 4f 4e 46 00 00 00 07 4e \
+00 28 00 01 00 05 80 00 00 00 00 00 00 0c 00 00 \
+12 34 56 78 9a bc de f0 00 01 00 0c 80 00 00 04 \
+00 00 00 01 00 00 00 00 \
+00 08 00 03 00 01 86 a0 \
+"], [0], [dnl
+ONFST_FLOW_MONITOR reply (OF1.3) (xid=0x6):
+ event=DELETED reason=eviction table=0 cookie=0x123456789abcdef0 in_port=1
+ event=ABBREV xid=0x186a0
+])
+
+dnl OpenFlow 1.4+
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 40 00 00 00 00 00 10 00 00 00 00 00 00 \
+00 28 00 02 00 05 00 00 00 00 80 00 00 00 00 00 \
+12 34 56 78 9a bc de f0 00 01 00 0c 80 00 00 04 \
+00 00 00 01 00 00 00 00 \
+00 08 00 04 00 01 86 a0 \
+"], [0], [dnl
+OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=DELETED reason=eviction table=0 cookie=0x123456789abcdef0 in_port=1
  event=ABBREV xid=0x186a0
 ])
 AT_CLEANUP

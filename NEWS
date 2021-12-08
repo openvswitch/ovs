@@ -24,8 +24,10 @@ Post-v2.17.0
        applications to relax atomicity requirements when dealing with
        columns whose value has been rewritten (but not changed).
    - OpenFlow:
-     * Added Flow Monitoring support for OpenFlow 1.0-1.2 with Nicira
-       Extensions.
+     * Extended Flow Monitoring support for all supported OpenFlow versions:
+         OpenFlow versions 1.0-1.2 with Nicira Extensions
+         OpenFlow versions 1.3 with Open Network Foundation extension
+         OpenFlow versions 1.4+, as defined in the OpenFlow specification
 
 
 v2.17.0 - 17 Feb 2022
