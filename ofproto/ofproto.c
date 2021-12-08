@@ -6421,7 +6421,8 @@ static void
 ofproto_compose_flow_refresh_update(const struct rule *rule,
                                     enum nx_flow_monitor_flags flags,
                                     struct ovs_list *msgs,
-                                    const struct tun_table *tun_table)
+                                    const struct tun_table *tun_table,
+                                    enum ofputil_protocol protocol)
     OVS_REQUIRES(ofproto_mutex)
 {
     const struct rule_actions *actions;
@@ -6444,14 +6445,15 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.ofpacts_len = actions ? actions->ofpacts_len : 0;
 
     if (ovs_list_is_empty(msgs)) {
-        ofputil_start_flow_update(msgs);
+        ofputil_start_flow_update(msgs, protocol);
     }
     ofputil_append_flow_update(&fu, msgs, tun_table);
 }
 
 void
 ofmonitor_compose_refresh_updates(struct rule_collection *rules,
-                                  struct ovs_list *msgs)
+                                  struct ovs_list *msgs,
+                                  enum ofputil_protocol protocol)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule *rule;
@@ -6461,7 +6463,7 @@ ofmonitor_compose_refresh_updates(struct rule_collection *rules,
         rule->monitor_flags = 0;
 
         ofproto_compose_flow_refresh_update(rule, flags, msgs,
-                ofproto_get_tun_tab(rule->ofproto));
+                ofproto_get_tun_tab(rule->ofproto), protocol);
     }
 }
 
@@ -6625,7 +6627,8 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ovs_list *msgs)
 
     struct ovs_list replies;
     ofpmp_init(&replies, ofpbuf_from_list(ovs_list_back(msgs))->header);
-    ofmonitor_compose_refresh_updates(&rules, &replies);
+    ofmonitor_compose_refresh_updates(&rules, &replies,
+                                      ofconn_get_protocol(ofconn));
     ovs_mutex_unlock(&ofproto_mutex);
 
     rule_collection_destroy(&rules);

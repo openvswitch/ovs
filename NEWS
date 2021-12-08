@@ -23,6 +23,9 @@ Post-v2.17.0
      * New monitor mode flag, OVSDB_IDL_WRITE_CHANGED_ONLY, allowing
        applications to relax atomicity requirements when dealing with
        columns whose value has been rewritten (but not changed).
+   - OpenFlow:
+     * Added Flow Monitoring support for OpenFlow 1.0-1.2 with Nicira
+       Extensions.
 
 
 v2.17.0 - 17 Feb 2022

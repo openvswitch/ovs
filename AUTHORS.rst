@@ -427,6 +427,7 @@ Tony van der Peet                  tony.vanderpeet@alliedtelesis.co.nz
 Tonghao Zhang                      xiangxia.m.yue@gmail.com
 Usman Ansari                       ua1422@gmail.com
 Valient Gough                      vgough@pobox.com
+Vasu Dasari                        vdasari@gmail.com
 Venkata Anil Kommaddi              vkommadi@redhat.com
 Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
@@ -700,7 +701,6 @@ Tulio Ribeiro                   tribeiro@lasige.di.fc.ul.pt
 Tytus Kurek                     Tytus.Kurek@pega.com
 Valentin Bud                    valentin@hackaserver.com
 Vasiliy Tolstov                 v.tolstov@selfip.ru
-Vasu Dasari                     vdasari@gmail.com
 Vinllen Chen                    cvinllen@gmail.com
 Vishal Swarankar                vishal.swarnkar@gmail.com
 Vjekoslav Brajkovic             balkan@cs.washington.edu

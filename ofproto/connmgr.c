@@ -2193,7 +2193,8 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
 
         if (flags) {
             if (ovs_list_is_empty(&ofconn->updates)) {
-                ofputil_start_flow_update(&ofconn->updates);
+                ofputil_start_flow_update(&ofconn->updates,
+                                          ofconn_get_protocol(ofconn));
                 ofconn->sent_abbrev_update = false;
             }
 
@@ -2243,6 +2244,7 @@ ofmonitor_flush(struct connmgr *mgr)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofconn *ofconn;
+    enum ofputil_protocol protocol;
 
     if (!mgr) {
         return;
@@ -2260,8 +2262,10 @@ ofmonitor_flush(struct connmgr *mgr)
             && rconn_packet_counter_n_bytes(counter) > 128 * 1024) {
             COVERAGE_INC(ofmonitor_pause);
             ofconn->monitor_paused = monitor_seqno++;
+            protocol = ofconn_get_protocol(ofconn);
             struct ofpbuf *pause = ofpraw_alloc_xid(
-                OFPRAW_NXT_FLOW_MONITOR_PAUSED, OFP10_VERSION, htonl(0), 0);
+                OFPRAW_NXT_FLOW_MONITOR_PAUSED,
+                ofputil_protocol_to_ofp_version(protocol), htonl(0), 0);
             ofconn_send(ofconn, pause, counter);
         }
     }
@@ -2271,6 +2275,7 @@ static void
 ofmonitor_resume(struct ofconn *ofconn)
     OVS_REQUIRES(ofproto_mutex)
 {
+    enum ofputil_protocol protocol;
     struct rule_collection rules;
     rule_collection_init(&rules);
 
@@ -2280,10 +2285,13 @@ ofmonitor_resume(struct ofconn *ofconn)
     }
 
     struct ovs_list msgs = OVS_LIST_INITIALIZER(&msgs);
-    ofmonitor_compose_refresh_updates(&rules, &msgs);
+    ofmonitor_compose_refresh_updates(&rules, &msgs,
+                                      ofconn_get_protocol(ofconn));
 
-    struct ofpbuf *resumed = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_RESUMED,
-                                              OFP10_VERSION, htonl(0), 0);
+    protocol = ofconn_get_protocol(ofconn);
+    struct ofpbuf *resumed = ofpraw_alloc_xid(
+            OFPRAW_NXT_FLOW_MONITOR_RESUMED,
+            ofputil_protocol_to_ofp_version(protocol), htonl(0), 0);
     ovs_list_push_back(&msgs, &resumed->list_node);
     ofconn_send_replies(ofconn, &msgs);
 

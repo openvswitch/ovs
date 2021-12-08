@@ -453,12 +453,12 @@ enum ofpraw {
 
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REQUEST,
-    /* NXST 1.0 (2): uint8_t[8][]. */
+    /* NXST 1.0-1.2 (2): uint8_t[8][]. */
     OFPRAW_NXST_FLOW_MONITOR_REQUEST,
 
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REPLY,
-    /* NXST 1.0 (2): uint8_t[8][]. */
+    /* NXST 1.0-1.2 (2): uint8_t[8][]. */
     OFPRAW_NXST_FLOW_MONITOR_REPLY,
 
 /* Nicira extension messages.

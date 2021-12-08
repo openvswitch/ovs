@@ -199,7 +199,8 @@ void ofmonitor_collect_resume_rules(struct ofmonitor *, uint64_t seqno,
                                     struct rule_collection *)
     OVS_REQUIRES(ofproto_mutex);
 void ofmonitor_compose_refresh_updates(struct rule_collection *rules,
-                                       struct ovs_list *msgs)
+                                       struct ovs_list *msgs,
+                                       enum ofputil_protocol protocol)
     OVS_REQUIRES(ofproto_mutex);
 
 void connmgr_send_table_status(struct connmgr *,
