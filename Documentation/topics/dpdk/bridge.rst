@@ -153,7 +153,7 @@ In OVS v2.14 runtime CPU detection was introduced to enable identifying if
 these CPU ISA additions are available, and to allow the user to enable them.
 
 OVS provides multiple implementations of dpcls. The following command enables
-the user to check what implementations are available in a running instance ::
+the user to check what implementations are available in a running instance::
 
     $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
     Available lookup functions (priority : name)
@@ -161,7 +161,7 @@ the user to check what implementations are available in a running instance ::
             1 : generic
             0 : avx512_gather
 
-To set the priority of a lookup function, run the ``prio-set`` command ::
+To set the priority of a lookup function, run the ``prio-set`` command::
 
     $ ovs-appctl dpif-netdev/subtable-lookup-prio-set avx512_gather 5
     Lookup priority change affected 1 dpcls ports and 1 subtables.
@@ -169,7 +169,7 @@ To set the priority of a lookup function, run the ``prio-set`` command ::
 The highest priority lookup function is used for classification, and the output
 above indicates that one subtable of one DPCLS port is has changed its lookup
 function due to the command being run. To verify the prioritization, re-run the
-get command, note the updated priority of the ``avx512_gather`` function ::
+get command, note the updated priority of the ``avx512_gather`` function::
 
     $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
     Available lookup functions (priority : name)
@@ -185,24 +185,23 @@ best candidate.
 Optimizing Specific Subtable Search
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-During the packet classification, the datapath can use specialized
-lookup tables to optimize the search. However, not all situations
-are optimized. If you see a message like the following one in the OVS
-logs, it means that there is no specialized implementation available
-for the current networking traffic. In this case, OVS will continue
-to process the traffic normally using a more generic lookup table."
+During the packet classification, the datapath can use specialized lookup
+tables to optimize the search.  However, not all situations are optimized.  If
+you see a message like the following one in the OVS logs, it means that there
+is no specialized implementation available for the current network traffic::
 
-"Using non-specialized AVX512 lookup for subtable (4,1) and possibly others."
+  Using non-specialized AVX512 lookup for subtable (X,Y) and possibly others.
 
-(Note that the numbers 4 and 1 will likely be different in your logs)
+In this case, OVS will continue to process the traffic normally using a more
+generic lookup table.
 
-Additional specialized lookups can be added to OVS if the user
-provides that log message along with the command output as show
-below to the OVS mailing list. Note that the numbers in the log
-message ("subtable (X,Y)") need to match with the numbers in
-the provided command output ("dp-extra-info:miniflow_bits(X,Y)").
+Additional specialized lookups can be added to OVS if the user provides that
+log message along with the command output as show below to the OVS mailing
+list.  Note that the numbers in the log message (``subtable (X,Y)``) need to
+match with the numbers in the provided command output
+(``dp-extra-info:miniflow_bits(X,Y)``).
 
-"ovs-appctl dpctl/dump-flows -m", which results in output like this:
+``ovs-appctl dpctl/dump-flows -m``, which results in output like this::
 
     ufid:82770b5d-ca38-44ff-8283-74ba36bd1ca5, skb_priority(0/0),skb_mark(0/0)
     ,ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),
@@ -214,62 +213,28 @@ the provided command output ("dp-extra-info:miniflow_bits(X,Y)").
     actions:vhostuserclient0, dp-extra-info:miniflow_bits(4,1)
 
 Please send an email to the OVS mailing list ovs-dev@openvswitch.org with
-the output of the "dp-extra-info:miniflow_bits(4,1)" values.
-
-CPU ISA Testing and Validation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-As multiple versions of DPCLS can co-exist, each with different CPU ISA
-optimizations, it is important to validate that they all give the exact same
-results. To easily test all DPCLS implementations, an ``autovalidator``
-implementation of the DPCLS exists. This implementation runs all other
-available DPCLS implementations, and verifies that the results are identical.
-
-Running the OVS unit tests with the autovalidator enabled ensures all
-implementations provide the same results. Note that the performance of the
-autovalidator is lower than all other implementations, as it tests the scalar
-implementation against itself, and against all other enabled DPCLS
-implementations.
-
-To adjust the DPCLS autovalidator priority, use this command ::
-
-    $ ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 7
-
-Running Unit Tests with Autovalidator
-+++++++++++++++++++++++++++++++++++++
-
-To run the OVS unit test suite with the DPCLS autovalidator as the default
-implementation, it is required to recompile OVS. During the recompilation,
-the default priority of the `autovalidator` implementation is set to the
-maximum priority, ensuring every test will be run with every lookup
-implementation ::
-
-    $ ./configure --enable-autovalidator
-
-Compile OVS in debug mode to have `ovs_assert` statements error out if
-there is a mis-match in the DPCLS lookup implementation.
+the output of the ``dp-extra-info:miniflow_bits(4,1)`` values.
 
 Datapath Interface Performance
 ------------------------------
 
-The datapath interface (DPIF) or dp_netdev_input() is responsible for taking
-packets through the major components of the userspace datapath; such as
-miniflow_extract, EMC, SMC and DPCLS lookups, and a lot of the performance
-stats associated with the datapath.
+The datapath interface (DPIF) is responsible for taking packets through the
+major components of the userspace datapath; such as packet parsing, caches and
+datapath classifier lookups.
 
-Just like with the SIMD DPCLS feature above, SIMD can be applied to the DPIF to
-improve performance.
+Just like with the datapath classifier, SIMD instructions can be applied to the
+datapath interface implementation to improve performance.
 
-OVS provides multiple implementations of the DPIF. The available
-implementations can be listed with the following command ::
+OVS provides multiple implementations of the userspace datapath interface.
+Available implementations can be listed with the following command::
 
     $ ovs-appctl dpif-netdev/dpif-impl-get
     Available DPIF implementations:
       dpif_scalar (pmds: none)
       dpif_avx512 (pmds: 1,2,6,7)
 
-By default, dpif_scalar is used. The DPIF implementation can be selected by
-name ::
+By default, ``dpif_scalar`` is used.  Implementations can be selected by
+name::
 
     $ ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512
     DPIF implementation set to dpif_avx512.
@@ -277,38 +242,23 @@ name ::
     $ ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar
     DPIF implementation set to dpif_scalar.
 
-Running Unit Tests with AVX512 DPIF
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Packet parsing performance
+--------------------------
 
-Since the AVX512 DPIF is disabled by default, a compile time option is
-available in order to test it with the OVS unit test suite. When building with
-a CPU that supports AVX512, use the following configure option ::
+Open vSwitch performs parsing of the raw packets and extracts the important
+header information into a compressed miniflow structure.  This miniflow is
+composed of bits and blocks where the bits signify which blocks are set or have
+values where as the blocks hold the metadata, ip, udp, vlan, etc.  These values
+are used by the datapath for switching decisions later.
 
-    $ ./configure --enable-dpif-default-avx512
+Most modern CPUs have some SIMD (single instruction, mutiple data)
+capabilities.  These SIMD instructions are able to process a vector rather than
+act on one variable.  OVS provides multiple implementations of packet parsing
+functions.  This allows the user to take advantage of SIMD instructions like
+AVX512 to gain additional performance.
 
-The following line should be seen in the configure output when the above option
-is used ::
-
-    checking whether DPIF AVX512 is default implementation... yes
-
-Miniflow Extract
-----------------
-
-Miniflow extract (MFEX) performs parsing of the raw packets and extracts the
-important header information into a compressed miniflow. This miniflow is
-composed of bits and blocks where the bits signify which blocks are set or
-have values where as the blocks hold the metadata, ip, udp, vlan, etc. These
-values are used by the datapath for switching decisions later. The Optimized
-miniflow extract is traffic specific to speed up the lookup, whereas the
-scalar works for ALL traffic patterns
-
-Most modern CPUs have SIMD capabilities. These SIMD instructions are able
-to process a vector rather than act on one variable. OVS provides multiple
-implementations of miniflow extract. This allows the user to take advantage
-of SIMD instructions like AVX512 to gain additional performance.
-
-A list of implementations can be obtained by the following command. The
-command also shows whether the CPU supports each implementation ::
+A list of implementations can be obtained by the following command.  The
+command also shows whether the CPU supports each implementation::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-get
         Available Optimized Miniflow Extracts:
@@ -316,123 +266,34 @@ command also shows whether the CPU supports each implementation ::
             scalar (available: True, pmds: 1,15)
             study (available: True, pmds: none)
 
-An implementation can be selected manually by the following command ::
+An implementation can be selected manually by the following command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set [-pmd core_id] name \
       [study_cnt]
 
-The above command has two optional parameters: study_cnt and core_id.
-The core_id sets a particular miniflow extract function to a specific
-pmd thread on the core. The third parameter study_cnt, which is specific
-to study and ignored by other implementations, means how many packets
+The above command has two optional parameters: ``study_cnt`` and ``core_id``.
+The ``core_id`` sets a particular packet parsing function to a specific
+PMD thread on the core.  The third parameter ``study_cnt``, which is specific
+to ``study`` and ignored by other implementations, means how many packets
 are needed to choose the best implementation.
 
-Also user can select the study implementation which studies the traffic for
+Also user can select the ``study`` implementation which studies the traffic for
 a specific number of packets by applying all available implementations of
-miniflow extract and then chooses the one with the most optimal result for
-that traffic pattern. The user can optionally provide an packet count
-[study_cnt] parameter which is the minimum number of packets that OVS must
-study before choosing an optimal implementation. If no packet count is
-provided, then the default value, 128 is chosen. Also, as there is no
-synchronization point between threads, one PMD thread might still be running
-a previous round, and can now decide on earlier data.
+the packet parsing function and then chooses the one with the most optimal
+result for that traffic pattern.  The user can optionally provide a packet
+count ``study_cnt`` parameter which is the minimum number of packets that OVS
+must study before choosing an optimal implementation.  If no packet count is
+provided, then the default value, ``128`` is chosen.
 
-The per packet count is a global value, and parallel study executions with
-differing packet counts will use the most recent count value provided by user.
-
-Study can be selected with packet count by the following command ::
+``study`` can be selected with packet count by the following command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set study 1024
 
-Study can be selected with packet count and explicit PMD selection
-by the following command ::
+``study`` can be selected with packet count and explicit PMD selection by the
+following command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 study 1024
 
-In the above command the first parameter is the CORE ID of the PMD
-thread and this can also be used to explicitly set the miniflow
-extraction function pointer on different PMD threads.
-
-Scalar can be selected on core 3 by the following command where
-study count should not be provided for any implementation other
-than study ::
+``scalar`` can be selected on core ``3`` by the following command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 scalar
-
-Miniflow Extract Validation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-As multiple versions of miniflow extract can co-exist, each with different
-CPU ISA optimizations, it is important to validate that they all give the
-exact same results. To easily test all miniflow implementations, an
-``autovalidator`` implementation of the miniflow exists. This implementation
-runs all other available miniflow extract implementations, and verifies that
-the results are identical.
-
-Running the OVS unit tests with the autovalidator enabled ensures all
-implementations provide the same results.
-
-To set the Miniflow autovalidator, use this command ::
-
-    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
-
-A compile time option is available in order to test it with the OVS unit
-test suite. Use the following configure option ::
-
-    $ ./configure --enable-mfex-default-autovalidator
-
-Unit Test Miniflow Extract
-++++++++++++++++++++++++++
-
-Unit test can also be used to test the workflow mentioned above by running
-the following test-case in tests/system-dpdk.at ::
-
-    make check-dpdk TESTSUITEFLAGS='-k MFEX'
-    OVS-DPDK - MFEX Autovalidator
-
-The unit test uses mulitple traffic type to test the correctness of the
-implementaions.
-
-The MFEX commands can also be tested for negative and positive cases to
-verify that the MFEX set command does not allow for incorrect parameters.
-A user can directly run the following configuration test case in
-tests/system-dpdk.at ::
-
-    make check-dpdk TESTSUITEFLAGS='-k MFEX'
-    OVS-DPDK - MFEX Configuration
-
-Running Fuzzy test with Autovalidator
-+++++++++++++++++++++++++++++++++++++
-
-Fuzzy tests can also be done on miniflow extract with the help of
-auto-validator and Scapy. The steps below describes the steps to
-reproduce the setup with IP being fuzzed to generate packets.
-
-Scapy is used to create fuzzy IP packets and save them into a PCAP ::
-
-    pkt = fuzz(Ether()/IP()/TCP())
-
-Set the miniflow extract to autovalidator using ::
-
-    $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
-
-OVS is configured to receive the generated packets ::
-
-    $ ovs-vsctl add-port br0 pcap0 -- \
-        set Interface pcap0 type=dpdk options:dpdk-devargs=net_pcap0
-        "rx_pcap=fuzzy.pcap"
-
-With this workflow, the autovalidator will ensure that all MFEX
-implementations are classifying each packet in exactly the same way.
-If an optimized MFEX implementation causes a different miniflow to be
-generated, the autovalidator has ovs_assert and logging statements that
-will inform about the issue.
-
-Unit Fuzzy test with Autovalidator
-+++++++++++++++++++++++++++++++++++++
-
-Unit test can also be used to test the workflow mentioned above by running
-the following test-case in tests/system-dpdk.at ::
-
-    make check-dpdk TESTSUITEFLAGS='-k MFEX'
-    OVS-DPDK - MFEX Autovalidator Fuzzy
