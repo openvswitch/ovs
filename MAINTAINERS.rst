@@ -61,8 +61,6 @@ This is the current list of active Open vSwitch committers:
      - jarno@ovn.org
    * - Jesse Gross
      - jesse@kernel.org
-   * - Joe Stringer
-     - joe@ovn.org
    * - Justin Pettit
      - jpettit@ovn.org
    * - Pravin B Shelar
@@ -91,3 +89,5 @@ More information about Emeritus Committers can be found
      - blp@ovn.org
    * - Ethan J. Jackson
      - ejj@eecs.berkeley.edu
+   * - Joe Stringer
+     - joe@ovn.org
