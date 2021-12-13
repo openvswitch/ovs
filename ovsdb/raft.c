@@ -4226,7 +4226,7 @@ raft_may_snapshot(const struct raft *raft)
             && !raft->leaving
             && !raft->left
             && !raft->failed
-            && raft->role != RAFT_LEADER
+            && (raft->role == RAFT_FOLLOWER || hmap_count(&raft->servers) == 1)
             && raft->last_applied >= raft->log_start);
 }
 
