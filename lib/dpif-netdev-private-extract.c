@@ -295,8 +295,8 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
             if ((keys[i].mf.map.bits[0] != test_keys[i].mf.map.bits[0]) ||
                 (keys[i].mf.map.bits[1] != test_keys[i].mf.map.bits[1])) {
                 ds_put_format(&log_msg, "Autovalidation map failed\n"
-                              "Good 0x%llx 0x%llx\tTest 0x%llx"
-                              " 0x%llx\n", keys[i].mf.map.bits[0],
+                              "Good: 0x%llx 0x%llx    Test: 0x%llx 0x%llx\n",
+                              keys[i].mf.map.bits[0],
                               keys[i].mf.map.bits[1],
                               test_keys[i].mf.map.bits[0],
                               test_keys[i].mf.map.bits[1]);
@@ -305,13 +305,15 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
 
             if (!miniflow_equal(&keys[i].mf, &test_keys[i].mf)) {
                 uint32_t block_cnt = miniflow_n_values(&keys[i].mf);
+                uint32_t test_block_cnt = miniflow_n_values(&test_keys[i].mf);
+
                 ds_put_format(&log_msg, "Autovalidation blocks failed\n"
-                              "nGood hex:\n");
+                              "Good hex:\n");
                 ds_put_hex_dump(&log_msg, &keys[i].buf, block_cnt * 8, 0,
                                 false);
                 ds_put_format(&log_msg, "Test hex:\n");
-                ds_put_hex_dump(&log_msg, &test_keys[i].buf, block_cnt * 8, 0,
-                                false);
+                ds_put_hex_dump(&log_msg, &test_keys[i].buf,
+                                test_block_cnt * 8, 0, false);
                 failed = 1;
             }
 
@@ -320,14 +322,16 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
                     (packet->l2_5_ofs != good_l2_5_ofs[i]) ||
                     (packet->l3_ofs != good_l3_ofs[i]) ||
                     (packet->l4_ofs != good_l4_ofs[i])) {
-                ds_put_format(&log_msg, "Autovalidation packet offsets failed"
-                              "\n");
-                ds_put_format(&log_msg, "Good offsets: l2_pad_size %u,"
-                              " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                ds_put_format(&log_msg,
+                              "Autovalidation packet offsets failed\n");
+                ds_put_format(&log_msg, "Good offsets: "
+                              "l2_pad_size: %"PRIu16", l2_5_ofs: %"PRIu16", "
+                              "l3_ofs: %"PRIu16", l4_ofs: %"PRIu16"\n",
                               good_l2_pad_size[i], good_l2_5_ofs[i],
                               good_l3_ofs[i], good_l4_ofs[i]);
-                ds_put_format(&log_msg, "  Test offsets: l2_pad_size %u,"
-                              " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                ds_put_format(&log_msg, "Test offsets: "
+                              "l2_pad_size: %"PRIu16", l2_5_ofs: %"PRIu16", "
+                              "l3_ofs: %"PRIu16", l4_ofs: %"PRIu16"\n",
                               packet->l2_pad_size, packet->l2_5_ofs,
                               packet->l3_ofs, packet->l4_ofs);
                 failed = 1;
