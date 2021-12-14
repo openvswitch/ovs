@@ -123,6 +123,7 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
@@ -199,6 +200,7 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
