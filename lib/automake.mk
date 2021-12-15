@@ -38,6 +38,8 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 	-fPIC \
 	$(AM_CFLAGS)
 lib_libopenvswitchavx512_la_SOURCES = \
+	lib/cpu.c \
+	lib/cpu.h \
 	lib/dpif-netdev-lookup-avx512-gather.c \
 	lib/dpif-netdev-extract-avx512.c \
 	lib/dpif-netdev-avx512.c

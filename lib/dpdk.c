@@ -592,58 +592,6 @@ print_dpdk_version(void)
     puts(rte_version());
 }
 
-/* Avoid calling rte_cpu_get_flag_enabled() excessively, by caching the
- * result of the call for each CPU flag in a static variable. To avoid
- * allocating large numbers of static variables, use a uint8 as a bitfield.
- * Note the macro must only return if the ISA check is done and available.
- */
-#define ISA_CHECK_DONE_BIT (1 << 0)
-#define ISA_AVAILABLE_BIT  (1 << 1)
-
-#define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
-    do {                                                                \
-        if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
-            static uint8_t isa_check_##RTE_CPUFLAG;                     \
-            int check = isa_check_##RTE_CPUFLAG & ISA_CHECK_DONE_BIT;   \
-            if (OVS_UNLIKELY(!check)) {                                 \
-                int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);    \
-                VLOG_DBG("CPU flag %s, available %s\n",                 \
-                         name_str, has_isa ? "yes" : "no");             \
-                isa_check_##RTE_CPUFLAG = ISA_CHECK_DONE_BIT;           \
-                if (has_isa) {                                          \
-                    isa_check_##RTE_CPUFLAG |= ISA_AVAILABLE_BIT;       \
-                }                                                       \
-            }                                                           \
-            if (isa_check_##RTE_CPUFLAG & ISA_AVAILABLE_BIT) {          \
-                return true;                                            \
-            } else {                                                    \
-                return false;                                           \
-            }                                                           \
-        }                                                               \
-    } while (0)
-
-bool
-dpdk_get_cpu_has_isa(const char *arch, const char *feature)
-{
-    /* Ensure Arch is x86_64. */
-    if (strncmp(arch, "x86_64", 6) != 0) {
-        return false;
-    }
-
-#if __x86_64__
-    /* CPU flags only defined for the architecture that support it. */
-    CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
-    CHECK_CPU_FEATURE(feature, "avx512bw", RTE_CPUFLAG_AVX512BW);
-    CHECK_CPU_FEATURE(feature, "avx512vbmi", RTE_CPUFLAG_AVX512VBMI);
-    CHECK_CPU_FEATURE(feature, "avx512vpopcntdq", RTE_CPUFLAG_AVX512VPOPCNTDQ);
-    CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
-#endif
-
-    VLOG_WARN("Unknown CPU arch,feature: %s,%s. Returning not supported.\n",
-              arch, feature);
-    return false;
-}
-
 void
 dpdk_status(const struct ovsrec_open_vswitch *cfg)
 {

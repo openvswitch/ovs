@@ -20,6 +20,7 @@
 
 #include <config.h>
 
+#include "cpu.h"
 #include "dpif-netdev.h"
 #include "dpif-netdev-perf.h"
 #include "dpif-netdev-private.h"
@@ -61,8 +62,8 @@ struct dpif_userdata {
 int32_t
 dp_netdev_input_outer_avx512_probe(void)
 {
-    bool avx512f_available = dpdk_get_cpu_has_isa("x86_64", "avx512f");
-    bool bmi2_available = dpdk_get_cpu_has_isa("x86_64", "bmi2");
+    bool avx512f_available = cpu_has_isa(OVS_CPU_ISA_X86_AVX512F);
+    bool bmi2_available = cpu_has_isa(OVS_CPU_ISA_X86_BMI2);
 
     if (!avx512f_available || !bmi2_available) {
         return -ENOTSUP;

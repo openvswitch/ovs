@@ -42,8 +42,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "cpu.h"
 #include "flow.h"
-#include "dpdk.h"
 
 #include "dpif-netdev-private-dpcls.h"
 #include "dpif-netdev-private-extract.h"
@@ -631,21 +631,21 @@ DECLARE_MFEX_FUNC(dot1q_ip_tcp, PROFILE_ETH_VLAN_IPV4_TCP)
 static int32_t
 avx512_isa_probe(uint32_t needs_vbmi)
 {
-    static const char *isa_required[] = {
-        "avx512f",
-        "avx512bw",
-        "bmi2",
+    static enum ovs_cpu_isa isa_required[] = {
+        OVS_CPU_ISA_X86_AVX512F,
+        OVS_CPU_ISA_X86_AVX512BW,
+        OVS_CPU_ISA_X86_BMI2,
     };
 
     int32_t ret = 0;
     for (uint32_t i = 0; i < ARRAY_SIZE(isa_required); i++) {
-        if (!dpdk_get_cpu_has_isa("x86_64", isa_required[i])) {
+        if (!cpu_has_isa(isa_required[i])) {
             ret = -ENOTSUP;
         }
     }
 
     if (needs_vbmi) {
-        if (!dpdk_get_cpu_has_isa("x86_64", "avx512vbmi")) {
+        if (!cpu_has_isa(OVS_CPU_ISA_X86_AVX512VBMI)) {
             ret = -ENOTSUP;
         }
     }
