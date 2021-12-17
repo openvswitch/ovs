@@ -126,6 +126,7 @@ endif
 
 FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/checkpatch.py utilities/ovs-dev.py \
+	utilities/gdb/ovs_gdb.py \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-tcpdump.in \
 	utilities/ovs-pipegen.py
