@@ -1,5 +1,6 @@
-v2.14.4 - xx xxx xxxx
+v2.14.4 - 17 Dec 2021
 ---------------------
+   - Bug fixes
    - DPDK:
      * OVS validated with DPDK 19.11.10. It is recommended to use this version
        until further releases.
