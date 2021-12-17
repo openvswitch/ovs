@@ -1,5 +1,6 @@
-v2.15.3 - xx xxx xxxx
+v2.15.3 - 17 Dec 2021
 ---------------------
+   - Bug fixes
    - The Python Idl class now has a cooperative_yield() method that can be
      overridden by an application that uses eventlet / gevent / asyncio with
      the desired yield method (e.g. {eventlet,gevent,asyncio}.sleep(0)) to
