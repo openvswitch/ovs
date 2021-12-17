@@ -364,7 +364,8 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
             err = netdev_open(dpif_port.name, dpif_port.type, &netdev);
 
             if (!err) {
-                netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
+                netdev_set_dpif_type(netdev, dpif_type_str);
+                netdev_ports_insert(netdev, &dpif_port);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open netdev %s type %s: %s",
@@ -602,10 +603,12 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
             const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
             struct dpif_port dpif_port;
 
+            netdev_set_dpif_type(netdev, dpif_type_str);
+
             dpif_port.type = CONST_CAST(char *, netdev_get_type(netdev));
             dpif_port.name = CONST_CAST(char *, netdev_name);
             dpif_port.port_no = port_no;
-            netdev_ports_insert(netdev, dpif_type_str, &dpif_port);
+            netdev_ports_insert(netdev, &dpif_port);
         }
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",

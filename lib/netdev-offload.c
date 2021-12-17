@@ -573,11 +573,13 @@ netdev_ports_lookup(odp_port_t port_no, const char *dpif_type)
 }
 
 int
-netdev_ports_insert(struct netdev *netdev, const char *dpif_type,
-                    struct dpif_port *dpif_port)
+netdev_ports_insert(struct netdev *netdev, struct dpif_port *dpif_port)
 {
+    const char *dpif_type = netdev_get_dpif_type(netdev);
     struct port_to_netdev_data *data;
     int ifindex = netdev_get_ifindex(netdev);
+
+    ovs_assert(dpif_type);
 
     ovs_rwlock_wrlock(&netdev_hmap_rwlock);
     if (netdev_ports_lookup(dpif_port->port_no, dpif_type)) {
@@ -595,8 +597,6 @@ netdev_ports_insert(struct netdev *netdev, const char *dpif_type,
     } else {
         data->ifindex = -1;
     }
-
-    netdev_set_dpif_type(netdev, dpif_type);
 
     hmap_insert(&port_to_netdev, &data->portno_node,
                 netdev_ports_hash(dpif_port->port_no, dpif_type));

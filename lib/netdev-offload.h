@@ -108,8 +108,7 @@ bool netdev_is_offload_rebalance_policy_enabled(void);
 int netdev_flow_get_n_flows(struct netdev *netdev, uint64_t *n_flows);
 
 struct dpif_port;
-int netdev_ports_insert(struct netdev *, const char *dpif_type,
-                        struct dpif_port *);
+int netdev_ports_insert(struct netdev *, struct dpif_port *);
 struct netdev *netdev_ports_get(odp_port_t port, const char *dpif_type);
 int netdev_ports_remove(odp_port_t port, const char *dpif_type);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);
