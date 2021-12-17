@@ -161,6 +161,15 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
 #define PATTERN_IPV4_UDP PATTERN_IPV4_GEN(0x45, 0, 0, 0x11)
 #define PATTERN_IPV4_TCP PATTERN_IPV4_GEN(0x45, 0, 0, 0x06)
 
+#define PATTERN_TCP_GEN(data_offset)                                    \
+  0, 0, 0, 0, /* sport, dport */                                        \
+  0, 0, 0, 0, /* sequence number */                                     \
+  0, 0, 0, 0, /* ack number */                                          \
+  data_offset, /* data offset: used to verify = 5, options not supported */
+
+#define PATTERN_TCP_MASK PATTERN_TCP_GEN(0xF0)
+#define PATTERN_TCP PATTERN_TCP_GEN(0x50)
+
 #define NU 0
 #define PATTERN_IPV4_UDP_SHUFFLE \
    0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, NU, NU, /* Ether */ \
@@ -320,8 +329,16 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
     },
 
     [PROFILE_ETH_IPV4_TCP] = {
-        .probe_mask.u8_data = { PATTERN_ETHERTYPE_MASK PATTERN_IPV4_MASK },
-        .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV4 PATTERN_IPV4_TCP},
+        .probe_mask.u8_data = {
+            PATTERN_ETHERTYPE_MASK
+            PATTERN_IPV4_MASK
+            PATTERN_TCP_MASK
+        },
+        .probe_data.u8_data = {
+            PATTERN_ETHERTYPE_IPV4
+            PATTERN_IPV4_TCP
+            PATTERN_TCP
+        },
 
         .store_shuf.u8_data = { PATTERN_IPV4_TCP_SHUFFLE },
         .store_kmsk = PATTERN_IPV4_TCP_KMASK,
@@ -353,10 +370,16 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 
     [PROFILE_ETH_VLAN_IPV4_TCP] = {
         .probe_mask.u8_data = {
-            PATTERN_ETHERTYPE_MASK PATTERN_DT1Q_MASK PATTERN_IPV4_MASK
+            PATTERN_ETHERTYPE_MASK
+            PATTERN_DT1Q_MASK
+            PATTERN_IPV4_MASK
+            PATTERN_TCP_MASK
         },
         .probe_data.u8_data = {
-            PATTERN_ETHERTYPE_DT1Q PATTERN_DT1Q_IPV4 PATTERN_IPV4_TCP
+            PATTERN_ETHERTYPE_DT1Q
+            PATTERN_DT1Q_IPV4
+            PATTERN_IPV4_TCP
+            PATTERN_TCP
         },
 
         .store_shuf.u8_data = { PATTERN_DT1Q_IPV4_TCP_SHUFFLE },
@@ -374,16 +397,31 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 /* Protocol specific helper functions, for calculating offsets/lenghts. */
 static int32_t
 mfex_ipv4_set_l2_pad_size(struct dp_packet *pkt, struct ip_header *nh,
-                          uint32_t len_from_ipv4)
+                          uint32_t len_from_ipv4, uint32_t next_proto_len)
 {
-        /* Handle dynamic l2_pad_size. */
-        uint16_t tot_len = ntohs(nh->ip_tot_len);
-        if (OVS_UNLIKELY(tot_len > len_from_ipv4 ||
-                (len_from_ipv4 - tot_len) > UINT16_MAX)) {
-            return -1;
-        }
-        dp_packet_set_l2_pad_size(pkt, len_from_ipv4 - tot_len);
-        return 0;
+    /* Handle dynamic l2_pad_size; note that avx512 has already validated
+     * the IP->ihl field to be 5, so 20 bytes of IP header (no options).
+     */
+    uint16_t ip_tot_len = ntohs(nh->ip_tot_len);
+
+    /* Error if IP total length is greater than remaining packet size. */
+    bool err_ip_tot_len_too_high = ip_tot_len > len_from_ipv4;
+
+    /* Error if IP total length is less than the size of the IP header
+     * itself, and the size of the next-protocol this profile matches on.
+     */
+    bool err_ip_tot_len_too_low =
+        (IP_HEADER_LEN + next_proto_len) > ip_tot_len;
+
+    /* Ensure the l2 pad size will not overflow. */
+    bool err_len_u16_overflow = (len_from_ipv4 - ip_tot_len) > UINT16_MAX;
+
+    if (OVS_UNLIKELY(err_ip_tot_len_too_high || err_ip_tot_len_too_low ||
+                     err_len_u16_overflow)) {
+        return -1;
+    }
+    dp_packet_set_l2_pad_size(pkt, len_from_ipv4 - ip_tot_len);
+    return 0;
 }
 
 /* Fixup the VLAN CFI and PCP, reading the PCP from the input to this function,
@@ -498,7 +536,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
                 uint32_t size_from_ipv4 = size - VLAN_ETH_HEADER_LEN;
                 struct ip_header *nh = (void *)&pkt[VLAN_ETH_HEADER_LEN];
-                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4,
+                                              TCP_HEADER_LEN)) {
                     continue;
                 }
 
@@ -512,7 +551,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
                 uint32_t size_from_ipv4 = size - VLAN_ETH_HEADER_LEN;
                 struct ip_header *nh = (void *)&pkt[VLAN_ETH_HEADER_LEN];
-                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4,
+                                              UDP_HEADER_LEN)) {
                     continue;
                 }
             } break;
@@ -525,7 +565,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Handle dynamic l2_pad_size. */
                 uint32_t size_from_ipv4 = size - sizeof(struct eth_header);
                 struct ip_header *nh = (void *)&pkt[sizeof(struct eth_header)];
-                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4,
+                                              TCP_HEADER_LEN)) {
                     continue;
                 }
             } break;
@@ -534,7 +575,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Handle dynamic l2_pad_size. */
                 uint32_t size_from_ipv4 = size - sizeof(struct eth_header);
                 struct ip_header *nh = (void *)&pkt[sizeof(struct eth_header)];
-                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4)) {
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4,
+                                              UDP_HEADER_LEN)) {
                     continue;
                 }
 
