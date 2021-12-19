@@ -1595,8 +1595,10 @@ ovsdb_txn_history_run(struct ovsdb *db)
     /* Remove old histories to limit the size of the history.  Removing until
      * the number of ovsdb atoms in history becomes less than the number of
      * atoms in the database, because it will be faster to just get a database
-     * snapshot than re-constructing changes from the history that big. */
-    while (db->n_txn_history &&
+     * snapshot than re-constructing changes from the history that big.
+     * Keeping at least one transaction to avoid sending UUID_ZERO as a last id
+     * if all entries got removed due to the size limit. */
+    while (db->n_txn_history > 1 &&
            (db->n_txn_history > 100 ||
             db->n_txn_history_atoms > db->n_atoms)) {
         struct ovsdb_txn_history_node *txn_h_node = CONTAINER_OF(
