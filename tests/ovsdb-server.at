@@ -1250,10 +1250,11 @@ dnl the total database size, so the transaction history will not be able
 dnl to hold all of them.
 dnl
 dnl The test verifies that the number of atoms in the transaction history
-dnl is always less than the number of atoms in the database.
-get_n_atoms () {
+dnl is always less than the number of atoms in the database, except for
+dnl a case where there is only one transaction in a history.
+get_memory_value () {
     n=$(ovs-appctl -t ovsdb-server memory/show dnl
-            | tr ' ' '\n' | grep atoms | grep "^$1:" | cut -d ':' -f 2)
+            | tr ' ' '\n' | grep "^$1:" | cut -d ':' -f 2)
     if test X"$n" == "X"; then
         n=0
     fi
@@ -1261,8 +1262,9 @@ get_n_atoms () {
 }
 
 check_atoms () {
-    n_db_atoms=$(get_n_atoms atoms)
-    n_txn_history_atoms=$(get_n_atoms txn-history-atoms)
+    if test $(get_memory_value txn-history) -eq 1; then return; fi
+    n_db_atoms=$(get_memory_value atoms)
+    n_txn_history_atoms=$(get_memory_value txn-history-atoms)
     echo "n_db_atoms:          $n_db_atoms"
     echo "n_txn_history_atoms: $n_txn_history_atoms"
     AT_CHECK([test $n_txn_history_atoms -le $n_db_atoms])
@@ -1274,7 +1276,7 @@ add_ports () {
     done
 }
 
-initial_db_atoms=$(get_n_atoms atoms)
+initial_db_atoms=$(get_memory_value atoms)
 
 for i in $(seq 1 100); do
     cmd=$(add_ports $i $(($i / 4 + 1)))
@@ -1289,7 +1291,7 @@ done
 
 dnl After removing all the bridges, the number of atoms in the database
 dnl should return to its initial value.
-AT_CHECK([test $(get_n_atoms atoms) -eq $initial_db_atoms])
+AT_CHECK([test $(get_memory_value atoms) -eq $initial_db_atoms])
 
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
