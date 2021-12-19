@@ -244,24 +244,18 @@ ovsdb_row_update_columns(struct ovsdb_row *dst,
 
     for (i = 0; i < columns->n_columns; i++) {
         const struct ovsdb_column *column = columns->columns[i];
-        struct ovsdb_datum xor_datum;
         struct ovsdb_error *error;
 
         if (xor) {
-            error = ovsdb_datum_apply_diff(&xor_datum,
-                                           &dst->fields[column->index],
-                                           &src->fields[column->index],
-                                           &column->type);
+            error = ovsdb_datum_apply_diff_in_place(
+                            &dst->fields[column->index],
+                            &src->fields[column->index],
+                            &column->type);
             if (error) {
                 return error;
             }
-        }
-
-        ovsdb_datum_destroy(&dst->fields[column->index], &column->type);
-
-        if (xor) {
-            ovsdb_datum_swap(&dst->fields[column->index], &xor_datum);
         } else {
+            ovsdb_datum_destroy(&dst->fields[column->index], &column->type);
             ovsdb_datum_clone(&dst->fields[column->index],
                               &src->fields[column->index],
                               &column->type);
