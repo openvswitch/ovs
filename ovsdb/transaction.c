@@ -40,7 +40,7 @@ struct ovsdb_txn {
     struct ovsdb *db;
     struct ovs_list txn_tables; /* Contains "struct ovsdb_txn_table"s. */
     struct ds comment;
-    struct uuid txnid; /* For clustered mode only. It is the eid. */
+    struct uuid txnid; /* For clustered and relay modes.  It is the eid. */
     size_t n_atoms;    /* Number of atoms in all transaction rows. */
     ssize_t n_atoms_diff;  /* Difference between number of added and
                             * removed atoms. */
@@ -1143,9 +1143,10 @@ ovsdb_txn_complete(struct ovsdb_txn *txn)
 
 /* Applies 'txn' to the internal representation of the database.  This is for
  * transactions that don't need to be written to storage; probably, they came
- * from storage.  These transactions shouldn't ordinarily fail because storage
- * should contain only consistent transactions.  (One exception is for database
- * conversion in ovsdb_convert().) */
+ * from storage or from relay.  These transactions shouldn't ordinarily fail
+ * because storage should contain only consistent transactions.  (One exception
+ * is for database conversion in ovsdb_convert().)  Transactions from relay
+ * should also be consistent, since relay source should have verified them. */
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_txn_replay_commit(struct ovsdb_txn *txn)
 {

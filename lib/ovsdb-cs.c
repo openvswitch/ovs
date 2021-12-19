@@ -1546,6 +1546,7 @@ ovsdb_cs_db_add_update(struct ovsdb_cs_db *db,
         .clear = clear,
         .monitor_reply = monitor_reply,
         .version = version,
+        .last_id = db->last_id,
     };
 }
 

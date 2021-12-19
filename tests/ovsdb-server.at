@@ -1482,11 +1482,13 @@ EXECUTION_EXAMPLES
 
 AT_BANNER([OVSDB -- ovsdb-server relay])
 
-# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+# OVSDB_CHECK_EXECUTION_RELAY(MODEL, TITLE, SCHEMA, TRANSACTIONS,
+#                             OUTPUT, [KEYWORDS])
 #
-# Creates a database with the given SCHEMA and starts an ovsdb-server on
-# it.  Also starts a daisy chain of ovsdb-servers in relay mode where the
-# first relay server is connected to the main non-relay ovsdb-server.
+# Creates a clustered or standalone (MODEL) database with the given SCHEMA
+# and starts an ovsdb-server on it.  Also starts a daisy chain of
+# ovsdb-servers in relay mode where the first relay server is connected to
+# the main non-relay ovsdb-server.
 #
 # Runs each of the TRANSACTIONS (which should be a quoted list of
 # quoted strings) against one of relay servers in the middle with
@@ -1508,17 +1510,21 @@ AT_BANNER([OVSDB -- ovsdb-server relay])
 # If a given UUID appears more than once it is always replaced by the
 # same marker.
 #
-# Checks that the dump of all databases is the same.
+# Checks that the dump of all databases and transaction ids are the same.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
-m4_define([OVSDB_CHECK_EXECUTION],
-  [AT_SETUP([$1])
-   AT_KEYWORDS([ovsdb server tcp relay $5])
+m4_define([OVSDB_CHECK_EXECUTION_RELAY],
+  [AT_SETUP([$2 - relay - $1])
+   AT_KEYWORDS([ovsdb server tcp relay $6 $1])
    n_servers=6
    target=4
-   $2 > schema
+   $3 > schema
    schema_name=`ovsdb-tool schema-name schema`
-   AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
+   AT_CHECK([if test $1 = standalone; then
+                 ovsdb-tool create db1 schema
+             else
+                 ovsdb-tool create-cluster db1 schema unix:s1.raft
+             fi], [0], [stdout], [ignore])
 
    on_exit 'kill `cat *.pid`'
    AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log dnl
@@ -1534,13 +1540,13 @@ m4_define([OVSDB_CHECK_EXECUTION],
             ], [0], [ignore], [ignore])
    done
 
-   m4_foreach([txn], [$3],
+   m4_foreach([txn], [$4],
      [AT_CHECK([ovsdb-client transact unix:db${target}.sock 'txn'], [0],
                [stdout], [ignore])
       cat stdout >> output
    ])
 
-   AT_CHECK([uuidfilt output], [0], [$4], [ignore])
+   AT_CHECK([uuidfilt output], [0], [$5], [ignore])
 
    AT_CHECK([ovsdb-client dump unix:db1.sock], [0], [stdout], [ignore])
    for i in $(seq 2 ${n_servers}); do
@@ -1548,11 +1554,29 @@ m4_define([OVSDB_CHECK_EXECUTION],
                      diff stdout dump${i}])
    done
 
+   dnl Check that transaction ids in notifications are the same on all relays.
+   last_id_pattern='s/\(.*"monid","[[a-z]]*".,"\)\(.*\)\(",{".*\)/\2/'
+   AT_CHECK([grep 'received notification, method="update3"' ovsdb-server2.log dnl
+                | sed $last_id_pattern > txn_ids2])
+   if test $1 = clustered; then
+     dnl Check that transaction ids are not all zeroes in clustered mode.
+     AT_CHECK([! grep -q "00000000-0000-0000-0000-000000000000" txn_ids2])
+   fi
+   for i in $(seq 3 ${n_servers}); do
+     AT_CHECK([grep 'received notification, method="update3"' ovsdb-server$i.log dnl
+                  | sed $last_id_pattern > txn_ids$i])
+     AT_CHECK([diff txn_ids2 txn_ids$i])
+   done
+
    OVSDB_SERVER_SHUTDOWN
    for i in $(seq 2 ${n_servers}); do
      OVSDB_SERVER_SHUTDOWN_N([$i])
    done
    AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_EXECUTION],
+  [OVSDB_CHECK_EXECUTION_RELAY(standalone, $@)
+   OVSDB_CHECK_EXECUTION_RELAY(clustered, $@)])
 
 EXECUTION_EXAMPLES
 

@@ -99,6 +99,7 @@ struct ovsdb_cs_event {
             bool monitor_reply;
             struct json *table_updates;
             int version;
+            struct uuid last_id;
         } update;
 
         /* The "result" member from a transaction reply.  The transaction is

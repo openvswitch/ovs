@@ -1,5 +1,8 @@
 Post-v2.17.0
 ---------------------
+   - OVSDB:
+     * 'relay' service model now supports transaction history, i.e. honors the
+       'last-txn-id' field in 'monitor_cond_since' requests from clients.
 
 
 v2.17.0 - xx xxx xxxx

@@ -729,9 +729,11 @@ open_db(struct server_config *config, const char *filename)
     db->db = ovsdb_create(schema, storage);
     ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db);
 
-    /* Enable txn history for clustered mode. It is not enabled for other mode
-     * for now, since txn id is available for clustered mode only. */
-    ovsdb_txn_history_init(db->db, ovsdb_storage_is_clustered(storage));
+    /* Enable txn history for clustered and relay modes.  It is not enabled for
+     * other modes for now, since txn id is available for clustered and relay
+     * modes only. */
+    ovsdb_txn_history_init(db->db,
+                           is_relay || ovsdb_storage_is_clustered(storage));
 
     read_db(config, db);
 
