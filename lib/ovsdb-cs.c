@@ -1522,12 +1522,11 @@ ovsdb_cs_db_parse_monitor_reply(struct ovsdb_cs_db *db,
     const struct json *table_updates;
     bool clear;
     if (version == 3) {
-        struct uuid last_id;
         if (result->type != JSON_ARRAY || result->array.n != 3
             || (result->array.elems[0]->type != JSON_TRUE &&
                 result->array.elems[0]->type != JSON_FALSE)
             || result->array.elems[1]->type != JSON_STRING
-            || !uuid_from_string(&last_id,
+            || !uuid_from_string(&db->last_id,
                                  json_string(result->array.elems[1]))) {
             struct ovsdb_error *error = ovsdb_syntax_error(
                 result, NULL, "bad monitor_cond_since reply format");
