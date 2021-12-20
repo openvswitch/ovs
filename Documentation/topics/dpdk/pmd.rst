@@ -63,8 +63,8 @@ To clear previous stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear
 
-Port/Rx Queue Assigment to PMD Threads
---------------------------------------
+Port/Rx Queue Assignment to PMD Threads
+---------------------------------------
 
 .. todo::
 
@@ -113,8 +113,7 @@ or can be triggered by using::
    consideration.
 
    In addition, the output of ``pmd-rxq-show`` was modified to include
-   Rx queue utilization of the PMD as a percentage. Prior to this, tracking of
-   stats was not available.
+   Rx queue utilization of the PMD as a percentage.
 
 Port/Rx Queue assignment to PMD threads by manual pinning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -133,8 +132,8 @@ For example::
     $ ovs-vsctl set interface dpdk-p0 options:n_rxq=4 \
         other_config:pmd-rxq-affinity="0:3,1:7,3:8"
 
-This will ensure there are *4* Rx queues and that these queues are configured
-like so:
+This will ensure there are *4* Rx queues for dpdk-p0 and that these queues are
+configured like so:
 
 - Queue #0 pinned to core 3
 - Queue #1 pinned to core 7
@@ -142,7 +141,7 @@ like so:
 - Queue #3 pinned to core 8
 
 PMD threads on cores where Rx queues are *pinned* will become *isolated* by
-default. This means that this thread will only poll the *pinned* Rx queues.
+default. This means that these threads will only poll the *pinned* Rx queues.
 
 If using ``pmd-rxq-assign=group`` PMD threads with *pinned* Rxqs can be
 *non-isolated* by setting::
@@ -212,7 +211,7 @@ The Rx queues will be assigned to the cores in the following order::
     Core 8: Q3 (50%) | Q0 (10%) | Q5 (10%)
 
 Alternatively, ``roundrobin`` assignment can be used, where the Rxqs are
-assigned to PMDs in a round-robined fashion. This algorithm was used by
+assigned to PMDs in a round-robin fashion. This algorithm was used by
 default prior to OVS 2.9. For example, given the following ports and queues:
 
 - Port #0 Queue #0 (P0Q0)
