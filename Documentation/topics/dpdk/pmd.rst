@@ -59,9 +59,24 @@ To show current stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-show
 
+or::
+
+    $ ovs-appctl dpif-netdev/pmd-perf-show
+
+Detailed performance metrics for ``pmd-perf-show`` can also be enabled::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-perf-metrics=true
+
+See the `ovs-vswitchd(8)`_ manpage for more information.
+
 To clear previous stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear
+
+.. note::
+
+    PMD stats are cumulative so they should be cleared in order to see how the
+    PMDs are being used with current traffic.
 
 Port/Rx Queue Assignment to PMD Threads
 ---------------------------------------
@@ -303,3 +318,6 @@ or a week.
     due to changes required in dpctl flows and EMC for newly added flows.
     In such scenarios user should configure rebalance interval accordingly
     to avoid frequent rebalancing happening.
+
+.. _ovs-vswitchd(8):
+    http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html
