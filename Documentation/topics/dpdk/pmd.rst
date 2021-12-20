@@ -31,17 +31,19 @@ input ports for packets, classifying packets once received, and executing
 actions on the packets once they are classified.
 
 PMD threads utilize Receive (Rx) and Transmit (Tx) queues, commonly known as
-*rxq*\s and *txq*\s. While Tx queue configuration happens automatically, Rx
-queues can be configured by the user. This can happen in one of two ways:
+*rxq*\s and *txq*\s to receive and send packets from/to an interface.
 
-- For physical interfaces, configuration is done using the
-  :program:`ovs-appctl` utility.
+- For physical interfaces, the number of Tx Queues is automatically configured
+  based on the number of PMD thread cores. The number of Rx queues can be
+  configured with::
 
-- For virtual interfaces, configuration is done using the :program:`ovs-appctl`
-  utility, but this configuration must be reflected in the guest configuration
-  (e.g. QEMU command line arguments).
+        $ ovs-vsctl set Interface <interface_name> options:n_rxq=N
 
-The :program:`ovs-appctl` utility also provides a number of commands for
+- For virtual interfaces, the number of Tx and Rx queues are configured by
+  libvirt/QEMU and enabled/disabled in the guest. Refer to :doc:'vhost-user'
+  for more information.
+
+The :program:`ovs-appctl` utility provides a number of commands for
 querying PMD threads and their respective queues. This, and all of the above,
 is discussed here.
 
