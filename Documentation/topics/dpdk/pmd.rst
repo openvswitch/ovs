@@ -241,8 +241,8 @@ The Rx queues may be assigned to the cores in the following order::
     Core 7: P0Q1 | P1Q2
     Core 8: P1Q0 |
 
-PMD Automatic Load Balance (experimental)
------------------------------------------
+PMD Automatic Load Balance
+--------------------------
 
 Cycle or utilization based allocation of Rx queues to PMDs is done to give an
 efficient load distribution based at the time of assignment. However, over time
