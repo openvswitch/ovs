@@ -244,44 +244,44 @@ The Rx queues may be assigned to the cores in the following order::
 PMD Automatic Load Balance (experimental)
 -----------------------------------------
 
-Cycle or utilization based allocation of Rx queues to PMDs gives efficient
-load distribution but it is not adaptive to change in traffic pattern
-occurring over the time. This may cause an uneven load among the PMDs which
-results in overall lower throughput.
+Cycle or utilization based allocation of Rx queues to PMDs is done to give an
+efficient load distribution based at the time of assignment. However, over time
+it may become less efficient due to changes in traffic. This may cause an
+uneven load among the PMDs, which in the worst case may result in packet drops
+and lower throughput.
 
-To address this automatic load balancing of PMDs can be set by::
+To address this, automatic load balancing of PMDs can be enabled by::
 
     $ ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"
 
-The following conditions need to be met to have Auto Load balancing
-enabled:
+The following are minimum configuration pre-requisites needed for PMD Auto
+Load Balancing to operate:
 
-1. cycle or group based assignment of RX queues to PMD is enabled.
-2. pmd-auto-lb is set to true.
+1. ``pmd-auto-lb`` is enabled.
+2. ``cycle`` (default) or ``group`` based Rx queue assignment is selected.
 3. There are two or more non-isolated PMDs present.
-4. And at least one of the non-isolated PMD has more than one queue polling.
+4. At least one non-isolated PMD is polling more than one Rx queue.
 
-If any of above is not met PMD Auto Load Balancing is disabled.
+When PMD Auto Load Balance is enabled, a PMD core's CPU utilization percentage
+is measured. The PMD is considered above the threshold if that percentage
+utilization is greater than the load threshold every 10 secs for 1 minute.
 
-Once auto load balancing is set, each non-isolated PMD measures the processing
-load for each of its associated queues every 10 seconds. If the aggregated PMD
-load reaches the load threshold for 6 consecutive intervals then PMD considers
-itself to be overloaded.
-
-For example, to set the load threshold to 70%::
+The load threshold can be set by the user. For example, to set the load
+threshold to 70% utilization of a PMD core::
 
     $ ovs-vsctl set open_vswitch .\
         other_config:pmd-auto-lb-load-threshold="70"
 
 If not set, the default load threshold is 95%.
 
-If any PMD is overloaded, a dry-run of the PMD assignment algorithm is
-performed by OVS main thread. The dry-run does NOT change the existing queue
-to PMD assignments.
+If a PMD core is detected to be above the load threshold and the minimum
+pre-requisites are met, a dry-run using the current PMD assignment algorithm is
+performed.
 
-If the resultant mapping of dry-run indicates an improved distribution of the
-load by at least the variance improvement threshold then the actual
-reassignment will be performed.
+The current variance of load between the PMD cores and estimated variance from
+the dry-run are both calculated. If the estimated dry-run variance is improved
+from the current one by the variance threshold, a new Rx queue to PMD
+assignment will be performed.
 
 For example, to set the variance improvement threshold to 40%::
 
@@ -292,11 +292,12 @@ If not set, the default variance improvement threshold is 25%.
 
 .. note::
 
-    PMD Auto Load Balancing doesn't currently work if queues are assigned
-    cross NUMA as actual processing load could get worse after assignment
-    as compared to what dry run predicts. The only exception is when all
-    PMD threads are running on cores from a single NUMA node.  In this case
-    Auto Load Balancing is still possible.
+    PMD Auto Load Balancing will not operate if Rx queues are assigned to PMD
+    cores on a different NUMA. This is because the processing load could change
+    after a new assignment due to differing cross-NUMA datapaths, making it
+    difficult to estimate the loads during a dry-run. The only exception is
+    when all PMD threads are running on cores from a single NUMA node. In this
+    case cross-NUMA datapaths will not change after reassignment.
 
 The minimum time between 2 consecutive PMD auto load balancing iterations can
 also be configured by::
@@ -304,20 +305,11 @@ also be configured by::
     $ ovs-vsctl set open_vswitch .\
         other_config:pmd-auto-lb-rebal-interval="<interval>"
 
-where ``<interval>`` is a value in minutes. The default interval is 1 minute
-and setting it to 0 will also result in default value i.e. 1 min.
+where ``<interval>`` is a value in minutes. The default interval is 1 minute.
 
-A user can use this option to avoid frequent trigger of Auto Load Balancing of
-PMDs. For e.g. set this (in min) such that it occurs once in few hours or a day
-or a week.
-
-.. note::
-    In some scenarios it may not be desired to have Auto Load Balancing
-    triggerred. For example, if traffic profile for specific RX queue is
-    changing dramatically very frequently which in turn thrashes CPU cache
-    due to changes required in dpctl flows and EMC for newly added flows.
-    In such scenarios user should configure rebalance interval accordingly
-    to avoid frequent rebalancing happening.
+A user can use this option to set a minimum frequency of Rx queue to PMD
+reassignment due to PMD Auto Load Balance. For example, this could be set
+(in min) such that a reassignment is triggered at most every few hours.
 
 .. _ovs-vswitchd(8):
     http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html
