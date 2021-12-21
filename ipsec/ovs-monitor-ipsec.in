@@ -202,18 +202,18 @@ conn prevent_unencrypted_vxlan
 """
 
     auth_tmpl = {"psk": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     authby=psk"""),
                  "pki_remote": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     leftid=$local_name
     rightid=$remote_name
     leftcert=$certificate
     rightcert=$remote_cert"""),
                  "pki_ca": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     leftid=$local_name
     rightid=$remote_name
@@ -299,11 +299,11 @@ conn prevent_unencrypted_vxlan
 
     def config_tunnel(self, tunnel):
         if tunnel.conf["psk"]:
-            self.secrets_file.write('0.0.0.0 %s : PSK "%s"\n' %
+            self.secrets_file.write('%%any %s : PSK "%s"\n' %
                             (tunnel.conf["remote_ip"], tunnel.conf["psk"]))
             auth_section = self.auth_tmpl["psk"].substitute(tunnel.conf)
         else:
-            self.secrets_file.write("0.0.0.0 %s : RSA %s\n" %
+            self.secrets_file.write("%%any %s : RSA %s\n" %
                                         (tunnel.conf["remote_ip"],
                                         tunnel.conf["private_key"]))
             if tunnel.conf["remote_cert"]:
