@@ -202,9 +202,94 @@ used naming convention.
 
 Available probes in ``ovs_vswitchd``:
 
+- dpif_netlink_operate\_\_:op_flow_del
+- dpif_netlink_operate\_\_:op_flow_execute
+- dpif_netlink_operate\_\_:op_flow_get
+- dpif_netlink_operate\_\_:op_flow_put
 - dpif_recv:recv_upcall
 - main:poll_block
 - main:run_start
+
+
+dpif_netlink_operate\_\_:op_flow_del
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered when the Netlink datapath is about to execute the
+DPIF_OP_FLOW_DEL operation as part of the dpif ``operate()`` callback.
+
+**Arguments**:
+
+- *arg0*: ``(struct dpif_netlink *) dpif``
+- *arg1*: ``(struct dpif_flow_del *) del``
+- *arg2*: ``(struct dpif_netlink_flow *) flow``
+- *arg3*: ``(struct ofpbuf *) aux->request``
+
+**Script references**:
+
+- *None*
+
+
+dpif_netlink_operate\_\_:op_flow_execute
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered when the Netlink datapath is about to execute the
+DPIF_OP_FLOW_EXECUTE operation as part of the dpif ``operate()`` callback.
+
+**Arguments**:
+
+- *arg0*: ``(struct dpif_netlink *) dpif``
+- *arg1*: ``(struct dpif_execute *) op->execute``
+- *arg2*: ``dp_packet_data(op->execute.packet)``
+- *arg3*: ``dp_packet_size(op->execute.packet)``
+- *arg4*: ``(struct ofpbuf *) aux->request``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/upcall_cost.py``
+
+
+dpif_netlink_operate\_\_:op_flow_get
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered when the Netlink datapath is about to execute the
+DPIF_OP_FLOW_GET operation as part of the dpif ``operate()`` callback.
+
+**Arguments**:
+
+- *arg0*: ``(struct dpif_netlink *) dpif``
+- *arg1*: ``(struct dpif_flow_get *) get``
+- *arg2*: ``(struct dpif_netlink_flow *) flow``
+- *arg3*: ``(struct ofpbuf *) aux->request``
+
+**Script references**:
+
+- *None*
+
+
+dpif_netlink_operate\_\_:op_flow_put
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered when the Netlink datapath is about to execute the
+DPIF_OP_FLOW_PUT operation as part of the dpif ``operate()`` callback.
+
+**Arguments**:
+
+- *arg0*: ``(struct dpif_netlink *) dpif``
+- *arg1*: ``(struct dpif_flow_put *) put``
+- *arg2*: ``(struct dpif_netlink_flow *) flow``
+- *arg3*: ``(struct ofpbuf *) aux->request``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/upcall_cost.py``
 
 
 probe dpif_recv:recv_upcall
@@ -229,6 +314,7 @@ sent to ``ovs-vswitchd``.
 
 **Script references**:
 
+- ``utilities/usdt-scripts/upcall_cost.py``
 - ``utilities/usdt-scripts/upcall_monitor.py``
 
 

@@ -56,6 +56,7 @@
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/thread.h"
+#include "openvswitch/usdt-probes.h"
 #include "openvswitch/vlog.h"
 #include "packets.h"
 #include "random.h"
@@ -2052,6 +2053,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
                 aux->txn.reply = &aux->reply;
             }
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_put,
+                           dpif, put, &flow, &aux->request);
             break;
 
         case DPIF_OP_FLOW_DEL:
@@ -2062,6 +2066,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
                 aux->txn.reply = &aux->reply;
             }
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_del,
+                           dpif, del, &flow, &aux->request);
             break;
 
         case DPIF_OP_EXECUTE:
@@ -2082,6 +2089,12 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             } else {
                 dpif_netlink_encode_execute(dpif->dp_ifindex, &op->execute,
                                             &aux->request);
+
+                OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_execute,
+                               dpif, &op->execute,
+                               dp_packet_data(op->execute.packet),
+                               dp_packet_size(op->execute.packet),
+                               &aux->request);
             }
             break;
 
@@ -2090,6 +2103,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             dpif_netlink_init_flow_get(dpif, get, &flow);
             aux->txn.reply = get->buffer;
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_get,
+                           dpif, get, &flow, &aux->request);
             break;
 
         default:
