@@ -32,6 +32,7 @@ echo "OS and Version details..."
 echo "$OS : $VER"
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SDE_INSTALL/lib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SDE_INSTALL/lib64
 
 #Dependencies needed for building netlink library
 if [[ $OS =~ "Fedora" ]]; then
