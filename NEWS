@@ -43,6 +43,7 @@ Post-v2.16.0
      * Encap & Decap action support for MPLS packet type.
    - Ingress policing on Linux now uses 'matchall' classifier instead of
      'basic', if available.
+   - Add User Statically-Defined Tracing (USDT) probe framework support.
 
 
 v2.16.0 - 16 Aug 2021

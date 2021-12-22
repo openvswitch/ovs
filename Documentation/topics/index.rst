@@ -56,3 +56,4 @@ OVS
    idl-compound-indexes
    ovs-extensions
    userspace-tx-steering
+   usdt-probes
