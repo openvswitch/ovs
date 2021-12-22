@@ -202,8 +202,34 @@ used naming convention.
 
 Available probes in ``ovs_vswitchd``:
 
+- dpif_recv:recv_upcall
 - main:poll_block
 - main:run_start
+
+
+probe dpif_recv:recv_upcall
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered when the datapath independent layer gets notified
+that a packet needs to be processed by userspace. This allows the probe to
+intercept all packets sent by the kernel to ``ovs-vswitchd``. The
+``upcall_monitor.py`` script uses this probe to display and capture all packets
+sent to ``ovs-vswitchd``.
+
+**Arguments**:
+
+- *arg0*: ``(struct dpif *)->full_name``
+- *arg1*: ``(struct dpif_upcall *)->type``
+- *arg2*: ``dp_packet_data((struct dpif_upcall *)->packet)``
+- *arg3*: ``dp_packet_size((struct dpif_upcall *)->packet)``
+- *arg4*: ``(struct dpif_upcall *)->key``
+- *arg5*: ``(struct dpif_upcall *)->key_len``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/upcall_monitor.py``
 
 
 probe main:run_start

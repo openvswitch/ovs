@@ -24,22 +24,18 @@
 #include <string.h>
 
 #include "coverage.h"
-#include "dpctl.h"
 #include "dp-packet.h"
+#include "dpctl.h"
 #include "dpif-netdev.h"
-#include "openvswitch/dynamic-string.h"
 #include "flow.h"
+#include "netdev-provider.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-execute.h"
 #include "odp-util.h"
-#include "openvswitch/ofp-print.h"
-#include "openvswitch/ofpbuf.h"
 #include "packets.h"
-#include "openvswitch/poll-loop.h"
 #include "route-table.h"
 #include "seq.h"
-#include "openvswitch/shash.h"
 #include "sset.h"
 #include "timeval.h"
 #include "tnl-neigh-cache.h"
@@ -47,9 +43,14 @@
 #include "util.h"
 #include "uuid.h"
 #include "valgrind.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/poll-loop.h"
+#include "openvswitch/shash.h"
+#include "openvswitch/usdt-probes.h"
 #include "openvswitch/vlog.h"
-#include "lib/netdev-provider.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif);
 
@@ -1606,6 +1607,12 @@ dpif_recv(struct dpif *dpif, uint32_t handler_id, struct dpif_upcall *upcall,
     if (dpif->dpif_class->recv) {
         error = dpif->dpif_class->recv(dpif, handler_id, upcall, buf);
         if (!error) {
+            OVS_USDT_PROBE(dpif_recv, recv_upcall, dpif->full_name,
+                           upcall->type,
+                           dp_packet_data(&upcall->packet),
+                           dp_packet_size(&upcall->packet),
+                           upcall->key, upcall->key_len);
+
             dpif_print_packet(dpif, upcall);
         } else if (error != EAGAIN) {
             log_operation(dpif, "recv", error);

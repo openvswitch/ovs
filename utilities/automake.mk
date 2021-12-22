@@ -62,7 +62,8 @@ EXTRA_DIST += \
 	utilities/docker/create_ovs_db.sh \
 	utilities/docker/debian/Dockerfile \
 	utilities/docker/debian/build-kernel-modules.sh \
-	utilities/usdt-scripts/bridge_loop.bt
+	utilities/usdt-scripts/bridge_loop.bt \
+	utilities/usdt-scripts/upcall_monitor.py
 MAN_ROOTS += \
 	utilities/ovs-testcontroller.8.in \
 	utilities/ovs-dpctl.8.in \
@@ -130,6 +131,7 @@ FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/gdb/ovs_gdb.py \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-tcpdump.in \
-	utilities/ovs-pipegen.py
+	utilities/ovs-pipegen.py \
+	utilities/usdt-scripts/upcall_monitor.py
 
 include utilities/bugtool/automake.mk
