@@ -4161,8 +4161,8 @@ OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
-ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
-ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96", [], [], "nodad")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96", [], [], "nodad")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
@@ -4185,6 +4185,7 @@ OVS_START_L7([at_ns1], [http6])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
@@ -4588,8 +4589,8 @@ OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
-ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
-ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96", [], [], "nodad")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96", [], [], "nodad")
 
 dnl Allow any traffic from ns0->ns1.
 dnl Only allow nd, return traffic from ns1->ns0.
@@ -4643,9 +4644,9 @@ OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
-ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96", [], [], "nodad")
 NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
-ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96", [], [], "nodad")
 NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:88:88:88:88:99])
 NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::2 lladdr 80:88:88:88:88:99 dev p0])
 NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::1 lladdr 80:88:88:88:88:88 dev p1])
