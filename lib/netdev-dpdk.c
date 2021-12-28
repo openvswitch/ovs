@@ -556,7 +556,7 @@ is_dpdk_class(const struct netdev_class *class)
 
 /* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
  * aligned at 1k or less. If a declared mbuf size is not a multiple of this
- * value, insufficient buffers are allocated to accomodate the packet in its
+ * value, insufficient buffers are allocated to accommodate the packet in its
  * entirety. Furthermore, certain drivers need to ensure that there is also
  * sufficient space in the Rx buffer to accommodate two VLAN tags (for QinQ
  * frames). If the RX buffer is too small, then the driver enables scatter RX

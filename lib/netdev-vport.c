@@ -1189,7 +1189,7 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
 void
 netdev_vport_tunnel_register(void)
 {
-    /* The name of the dpif_port should be short enough to accomodate adding
+    /* The name of the dpif_port should be short enough to accommodate adding
      * a port number to the end if one is necessary. */
     static struct vport_class vport_classes[] = {
         { "genev_sys",
