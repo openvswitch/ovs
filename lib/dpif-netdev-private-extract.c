@@ -116,8 +116,8 @@ dpif_miniflow_extract_init(void)
             /* Return zero is success, non-zero means error. */
             avail = (mfex_impls[i].probe() == 0);
         }
-        VLOG_INFO("Miniflow Extract implementation %s (available: %s)\n",
-                  mfex_impls[i].name, avail ? "available" : "not available");
+        VLOG_DBG("Miniflow Extract implementation '%s' %s available.",
+                 mfex_impls[i].name, avail ? "is" : "is not");
         mfex_impls[i].available = avail;
     }
 
