@@ -112,7 +112,8 @@ OFPST_PORT reply (OF1.4): 1 ports
            tx pkts=0, bytes=0, drop=?, errs=?, coll=?
            duration=?s
            CUSTOM Statistics
-                      rx_custom_packets_1=0, rx_custom_packets_2=0,
+                      rx_custom_packets_1=0, rx_custom_packets_2=0, rx_q0_bytes=0,
+                      rx_q0_packets=0, tx_q0_bytes=0, tx_q0_packets=0,
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
