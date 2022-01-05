@@ -387,15 +387,21 @@ struct dp_netdev_rxq {
     atomic_ullong cycles_intrvl[PMD_INTERVAL_MAX];
 };
 
+enum txq_req_mode {
+    TXQ_REQ_MODE_THREAD,
+    TXQ_REQ_MODE_HASH,
+};
+
 enum txq_mode {
     TXQ_MODE_STATIC,
     TXQ_MODE_XPS,
+    TXQ_MODE_XPS_HASH,
 };
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     odp_port_t port_no;
-    enum txq_mode txq_mode;     /* static, XPS */
+    enum txq_mode txq_mode;     /* static, XPS, XPS_HASH. */
     bool need_reconfigure;      /* True if we should reconfigure netdev. */
     struct netdev *netdev;
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
@@ -407,6 +413,7 @@ struct dp_netdev_port {
     bool emc_enabled;           /* If true EMC will be used. */
     char *type;                 /* Port type as requested by user. */
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
+    enum txq_req_mode txq_requested_mode;
 };
 
 static bool dp_netdev_flow_ref(struct dp_netdev_flow *);
@@ -442,6 +449,7 @@ struct tx_port {
     struct hmap_node node;
     long long flush_time;
     struct dp_packet_batch output_pkts;
+    struct dp_packet_batch *txq_pkts; /* Only for hash mode. */
     struct dp_netdev_rxq *output_pkts_rxqs[NETDEV_MAX_BURST];
 };
 
@@ -4634,6 +4642,8 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
     int error = 0;
     const char *affinity_list = smap_get(cfg, "pmd-rxq-affinity");
     bool emc_enabled = smap_get_bool(cfg, "emc-enable", true);
+    const char *tx_steering_mode = smap_get(cfg, "tx-steering");
+    enum txq_req_mode txq_mode;
 
     ovs_mutex_lock(&dp->port_mutex);
     error = get_port_by_number(dp, port_no, &port);
@@ -4675,19 +4685,33 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
     }
 
     /* Checking for RXq affinity changes. */
-    if (!netdev_is_pmd(port->netdev)
-        || nullable_string_is_equal(affinity_list, port->rxq_affinity_list)) {
-        goto unlock;
+    if (netdev_is_pmd(port->netdev)
+        && !nullable_string_is_equal(affinity_list, port->rxq_affinity_list)) {
+
+        error = dpif_netdev_port_set_rxq_affinity(port, affinity_list);
+        if (error) {
+            goto unlock;
+        }
+        free(port->rxq_affinity_list);
+        port->rxq_affinity_list = nullable_xstrdup(affinity_list);
+
+        dp_netdev_request_reconfigure(dp);
     }
 
-    error = dpif_netdev_port_set_rxq_affinity(port, affinity_list);
-    if (error) {
-        goto unlock;
+    if (nullable_string_is_equal(tx_steering_mode, "hash")) {
+        txq_mode = TXQ_REQ_MODE_HASH;
+    } else {
+        txq_mode = TXQ_REQ_MODE_THREAD;
     }
-    free(port->rxq_affinity_list);
-    port->rxq_affinity_list = nullable_xstrdup(affinity_list);
 
-    dp_netdev_request_reconfigure(dp);
+    if (txq_mode != port->txq_requested_mode) {
+        port->txq_requested_mode = txq_mode;
+        VLOG_INFO("%s: Tx packet steering mode has been set to '%s'.",
+                  netdev_get_name(port->netdev),
+                  (txq_mode == TXQ_REQ_MODE_THREAD) ? "thread" : "hash");
+        dp_netdev_request_reconfigure(dp);
+    }
+
 unlock:
     ovs_mutex_unlock(&dp->port_mutex);
     return error;
@@ -4802,18 +4826,46 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
 
     cycle_timer_start(&pmd->perf_stats, &timer);
 
-    if (p->port->txq_mode == TXQ_MODE_XPS) {
-        tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p);
-        concurrent_txqs = true;
-    } else {
-        tx_qid = pmd->static_tx_qid;
-        concurrent_txqs = false;
-    }
-
     output_cnt = dp_packet_batch_size(&p->output_pkts);
     ovs_assert(output_cnt > 0);
 
-    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, concurrent_txqs);
+    if (p->port->txq_mode == TXQ_MODE_XPS_HASH) {
+        int n_txq = netdev_n_txq(p->port->netdev);
+
+        /* Re-batch per txq based on packet hash. */
+        for (i = 0; i < output_cnt; i++) {
+            struct dp_packet *packet = p->output_pkts.packets[i];
+            uint32_t hash;
+
+            if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
+                hash = dp_packet_get_rss_hash(packet);
+            } else {
+                struct flow flow;
+
+                flow_extract(packet, &flow);
+                hash = flow_hash_5tuple(&flow, 0);
+            }
+            dp_packet_batch_add(&p->txq_pkts[hash % n_txq], packet);
+        }
+
+        /* Flush batches of each Tx queues. */
+        for (i = 0; i < n_txq; i++) {
+            if (dp_packet_batch_is_empty(&p->txq_pkts[i])) {
+                continue;
+            }
+            netdev_send(p->port->netdev, i, &p->txq_pkts[i], true);
+            dp_packet_batch_init(&p->txq_pkts[i]);
+        }
+    } else {
+        if (p->port->txq_mode == TXQ_MODE_XPS) {
+            tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p);
+            concurrent_txqs = true;
+        } else {
+            tx_qid = pmd->static_tx_qid;
+            concurrent_txqs = false;
+        }
+        netdev_send(p->port->netdev, tx_qid, &p->output_pkts, concurrent_txqs);
+    }
     dp_packet_batch_init(&p->output_pkts);
 
     /* Update time of the next flush. */
@@ -5975,7 +6027,10 @@ reconfigure_datapath(struct dp_netdev *dp)
     HMAP_FOR_EACH (port, node, &dp->ports) {
         if (netdev_is_reconf_required(port->netdev)
             || ((port->txq_mode == TXQ_MODE_XPS)
-                != (netdev_n_txq(port->netdev) < wanted_txqs))) {
+                != (netdev_n_txq(port->netdev) < wanted_txqs))
+            || ((port->txq_mode == TXQ_MODE_XPS_HASH)
+                != (port->txq_requested_mode == TXQ_REQ_MODE_HASH
+                    && netdev_n_txq(port->netdev) > 1))) {
             port->need_reconfigure = true;
         }
     }
@@ -6010,8 +6065,15 @@ reconfigure_datapath(struct dp_netdev *dp)
             seq_change(dp->port_seq);
             port_destroy(port);
         } else {
-            port->txq_mode = (netdev_n_txq(port->netdev) < wanted_txqs)
-                ? TXQ_MODE_XPS : TXQ_MODE_STATIC;
+            /* With a single queue, there is no point in using hash mode. */
+            if (port->txq_requested_mode == TXQ_REQ_MODE_HASH &&
+                netdev_n_txq(port->netdev) > 1) {
+                port->txq_mode = TXQ_MODE_XPS_HASH;
+            } else if (netdev_n_txq(port->netdev) < wanted_txqs) {
+                port->txq_mode = TXQ_MODE_XPS;
+            } else {
+                port->txq_mode = TXQ_MODE_STATIC;
+            }
         }
     }
 
@@ -6300,9 +6362,11 @@ pmd_free_cached_ports(struct dp_netdev_pmd_thread *pmd)
     dpif_netdev_xps_revalidate_pmd(pmd, true);
 
     HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->tnl_port_cache) {
+        free(tx_port_cached->txq_pkts);
         free(tx_port_cached);
     }
     HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->send_port_cache) {
+        free(tx_port_cached->txq_pkts);
         free(tx_port_cached);
     }
 }
@@ -6322,14 +6386,27 @@ pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     hmap_shrink(&pmd->tnl_port_cache);
 
     HMAP_FOR_EACH (tx_port, node, &pmd->tx_ports) {
+        int n_txq = netdev_n_txq(tx_port->port->netdev);
+        struct dp_packet_batch *txq_pkts_cached;
+
         if (netdev_has_tunnel_push_pop(tx_port->port->netdev)) {
             tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
+            if (tx_port->txq_pkts) {
+                txq_pkts_cached = xmemdup(tx_port->txq_pkts,
+                                          n_txq * sizeof *tx_port->txq_pkts);
+                tx_port_cached->txq_pkts = txq_pkts_cached;
+            }
             hmap_insert(&pmd->tnl_port_cache, &tx_port_cached->node,
                         hash_port_no(tx_port_cached->port->port_no));
         }
 
-        if (netdev_n_txq(tx_port->port->netdev)) {
+        if (n_txq) {
             tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
+            if (tx_port->txq_pkts) {
+                txq_pkts_cached = xmemdup(tx_port->txq_pkts,
+                                          n_txq * sizeof *tx_port->txq_pkts);
+                tx_port_cached->txq_pkts = txq_pkts_cached;
+            }
             hmap_insert(&pmd->send_port_cache, &tx_port_cached->node,
                         hash_port_no(tx_port_cached->port->port_no));
         }
@@ -7125,6 +7202,7 @@ dp_netdev_pmd_clear_ports(struct dp_netdev_pmd_thread *pmd)
         free(poll);
     }
     HMAP_FOR_EACH_POP (port, node, &pmd->tx_ports) {
+        free(port->txq_pkts);
         free(port);
     }
     ovs_mutex_unlock(&pmd->port_mutex);
@@ -7195,6 +7273,15 @@ dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
     tx->flush_time = 0LL;
     dp_packet_batch_init(&tx->output_pkts);
 
+    if (tx->port->txq_mode == TXQ_MODE_XPS_HASH) {
+        int i, n_txq = netdev_n_txq(tx->port->netdev);
+
+        tx->txq_pkts = xzalloc(n_txq * sizeof *tx->txq_pkts);
+        for (i = 0; i < n_txq; i++) {
+            dp_packet_batch_init(&tx->txq_pkts[i]);
+        }
+    }
+
     hmap_insert(&pmd->tx_ports, &tx->node, hash_port_no(tx->port->port_no));
     pmd->need_reload = true;
 }
@@ -7207,6 +7294,7 @@ dp_netdev_del_port_tx_from_pmd(struct dp_netdev_pmd_thread *pmd,
     OVS_REQUIRES(pmd->port_mutex)
 {
     hmap_remove(&pmd->tx_ports, &tx->node);
+    free(tx->txq_pkts);
     free(tx);
     pmd->need_reload = true;
 }

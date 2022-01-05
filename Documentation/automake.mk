@@ -58,6 +58,7 @@ DOC_SOURCE = \
 	Documentation/topics/record-replay.rst \
 	Documentation/topics/tracing.rst \
 	Documentation/topics/userspace-tso.rst \
+	Documentation/topics/userspace-tx-steering.rst \
 	Documentation/topics/windows.rst \
 	Documentation/howto/index.rst \
 	Documentation/howto/dpdk.rst \

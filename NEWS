@@ -3,6 +3,9 @@ Post-v2.16.0
    - Userspace datapath:
      * Optimized flow lookups for datapath flows with simple match criteria.
        See 'Simple Match Lookup' in Documentation/topics/dpdk/bridge.rst.
+     * New per-interface configuration knob 'other_config:tx-steering'.  If set
+       to 'hash', enables hash-based Tx packet steering mode to utilize all the
+       Tx queues of the interface regardles of the number of PMD threads.
    - DPDK:
      * EAL argument --socket-mem is no longer configured by default upon
        start-up.  If dpdk-socket-mem and dpdk-alloc-mem are not specified,
