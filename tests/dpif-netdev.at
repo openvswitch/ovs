@@ -635,3 +635,70 @@ OVS_WAIT_UNTIL([grep "flow: in_port is not an exact match" ovs-vswitchd.log])
 OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
 /failed to put/d"])
 AT_CLEANUP
+
+# SEND_UDP_PKTS([p_name], [p_ofport])
+#
+# Sends 128 packets to port 'p_name' with different UDP destination ports.
+m4_define([SEND_UDP_PKTS],
+   [
+    for i in `seq 1 128`; do
+      pkt="in_port($2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.1.1,dst=10.0.0.1,proto=17),udp(src=1000,dst=$i)"
+      ovs-appctl netdev-dummy/receive $1 $pkt --len 256
+    done
+   ]
+)
+
+AT_SETUP([dpif-netdev - tx packet steering])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1], [], [], [--dummy-numa 0])
+
+dnl 'thread' mode, packets are expected to be transmitted on a single
+dnl queue since there is only one PMD thread.
+
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_txq=2 other_config:tx-steering=thread])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=output:2])
+
+AT_CHECK([SEND_UDP_PKTS([p1], [1])])
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get Interface p2 statistics:tx_packets` -eq 128])
+AT_CHECK([ovs-vsctl get Interface p2 statistics], [], [stdout])
+AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -eq 0 -a dnl
+               `ovs-vsctl get Interface p2 statistics:tx_q1_packets` -eq 128 || dnl
+          test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -eq 128 -a dnl
+               `ovs-vsctl get Interface p2 statistics:tx_q1_packets` -eq 0])
+
+AT_CHECK([ovs-vsctl del-port p2])
+
+dnl 'hash' mode, packets are expected to be transmitted on both
+dnl queues, based on their hash value.
+
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_txq=2 other_config:tx-steering=hash])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=output:2])
+
+AT_CHECK([SEND_UDP_PKTS([p1], [1])])
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get Interface p2 statistics:tx_packets` -eq 128])
+AT_CHECK([ovs-vsctl get Interface p2 statistics], [], [stdout])
+
+AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dnl
+               `ovs-vsctl get Interface p2 statistics:tx_q1_packets` -gt 0])
+
+AT_CHECK([ovs-vsctl del-port p2])
+
+dnl 'hash' mode with hw-offload enabled, packets are expected to be transmitted on both
+dnl queues, based on their hash value.
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_txq=2 other_config:tx-steering=hash])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=output:2])
+
+AT_CHECK([SEND_UDP_PKTS([p1], [1])])
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get Interface p2 statistics:tx_packets` -eq 128])
+AT_CHECK([ovs-vsctl get Interface p2 statistics], [], [stdout])
+
+AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dnl
+               `ovs-vsctl get Interface p2 statistics:tx_q1_packets` -gt 0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
