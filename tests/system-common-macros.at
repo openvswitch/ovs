@@ -281,6 +281,14 @@ m4_define([OVS_START_L7],
 #
 m4_define([OFPROTO_CLEAR_DURATION_IDLE], [[sed -e 's/duration=.*s,/duration=<cleared>,/g' -e 's/idle_age=[0-9]*,/idle_age=<cleared>,/g']])
 
+# OVS_CHECK_TUNNEL_TSO()
+#
+# Macro to be used in general tunneling tests that could be also
+# used by system-tso. In that case, tunneling is not supported and
+# the test should be skipped.
+m4_define([OVS_CHECK_TUNNEL_TSO],
+    [m4_ifdef([CHECK_SYSTEM_TSO], [AT_SKIP_IF(:)])])
+
 # OVS_CHECK_VXLAN()
 #
 # Do basic check for vxlan functionality, skip the test if it's not there.
