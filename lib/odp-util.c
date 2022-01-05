@@ -2270,12 +2270,10 @@ parse_action_list(struct parse_odp_context *context, const char *s,
         retval = parse_odp_action(context, s + n, actions);
         if (retval < 0) {
             return retval;
+        } else if (nl_attr_oversized(actions->size - NLA_HDRLEN)) {
+            return -E2BIG;
         }
         n += retval;
-    }
-
-    if (actions->size > UINT16_MAX) {
-        return -EFBIG;
     }
 
     return n;
