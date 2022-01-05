@@ -387,10 +387,15 @@ struct dp_netdev_rxq {
     atomic_ullong cycles_intrvl[PMD_INTERVAL_MAX];
 };
 
+enum txq_mode {
+    TXQ_MODE_STATIC,
+    TXQ_MODE_XPS,
+};
+
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     odp_port_t port_no;
-    bool dynamic_txqs;          /* If true XPS will be used. */
+    enum txq_mode txq_mode;     /* static, XPS */
     bool need_reconfigure;      /* True if we should reconfigure netdev. */
     struct netdev *netdev;
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
@@ -4790,24 +4795,25 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
     int i;
     int tx_qid;
     int output_cnt;
-    bool dynamic_txqs;
+    bool concurrent_txqs;
     struct cycle_timer timer;
     uint64_t cycles;
     uint32_t tx_flush_interval;
 
     cycle_timer_start(&pmd->perf_stats, &timer);
 
-    dynamic_txqs = p->port->dynamic_txqs;
-    if (dynamic_txqs) {
+    if (p->port->txq_mode == TXQ_MODE_XPS) {
         tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p);
+        concurrent_txqs = true;
     } else {
         tx_qid = pmd->static_tx_qid;
+        concurrent_txqs = false;
     }
 
     output_cnt = dp_packet_batch_size(&p->output_pkts);
     ovs_assert(output_cnt > 0);
 
-    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, dynamic_txqs);
+    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, concurrent_txqs);
     dp_packet_batch_init(&p->output_pkts);
 
     /* Update time of the next flush. */
@@ -5961,14 +5967,14 @@ reconfigure_datapath(struct dp_netdev *dp)
      * 'port->need_reconfigure', because netdev_is_reconf_required() can
      * change at any time.
      * Also mark for reconfiguration all ports which will likely change their
-     * 'dynamic_txqs' parameter.  It's required to stop using them before
+     * 'txq_mode' parameter.  It's required to stop using them before
      * changing this setting and it's simpler to mark ports here and allow
      * 'pmd_remove_stale_ports' to remove them from threads.  There will be
      * no actual reconfiguration in 'port_reconfigure' because it's
      * unnecessary.  */
     HMAP_FOR_EACH (port, node, &dp->ports) {
         if (netdev_is_reconf_required(port->netdev)
-            || (port->dynamic_txqs
+            || ((port->txq_mode == TXQ_MODE_XPS)
                 != (netdev_n_txq(port->netdev) < wanted_txqs))) {
             port->need_reconfigure = true;
         }
@@ -6004,7 +6010,8 @@ reconfigure_datapath(struct dp_netdev *dp)
             seq_change(dp->port_seq);
             port_destroy(port);
         } else {
-            port->dynamic_txqs = netdev_n_txq(port->netdev) < wanted_txqs;
+            port->txq_mode = (netdev_n_txq(port->netdev) < wanted_txqs)
+                ? TXQ_MODE_XPS : TXQ_MODE_STATIC;
         }
     }
 
@@ -8068,7 +8075,7 @@ dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
     long long interval;
 
     HMAP_FOR_EACH (tx, node, &pmd->send_port_cache) {
-        if (!tx->port->dynamic_txqs) {
+        if (tx->port->txq_mode != TXQ_MODE_XPS) {
             continue;
         }
         interval = pmd->ctx.now - tx->last_used;
