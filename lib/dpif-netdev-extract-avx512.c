@@ -488,7 +488,14 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
         /* Load packet data and probe with AVX512 mask & compare. */
         const uint8_t *pkt = dp_packet_data(packet);
-        __m512i v_pkt0 = _mm512_loadu_si512(pkt);
+        __m512i v_pkt0;
+        if (size >= 64) {
+            v_pkt0 = _mm512_loadu_si512(pkt);
+        } else {
+            uint64_t load_kmask = (1ULL << size) - 1;
+            v_pkt0 = _mm512_maskz_loadu_epi8(load_kmask, pkt);
+        }
+
         __m512i v_pkt0_masked = _mm512_and_si512(v_pkt0, v_mask);
         __mmask64 k_cmp = _mm512_cmpeq_epi8_mask(v_pkt0_masked, v_vals);
         if (k_cmp != UINT64_MAX) {
