@@ -21,7 +21,7 @@ v2.17.0 - xx xxx xxxx
      * Add hardware offload support for matching IPv4/IPv6 frag types
        (experimental).
      * Add hardware offload support for GRE flows (experimental).
-       Available only if DPDK experimantal APIs enabled during the build.
+       Available only if DPDK experimental APIs enabled during the build.
      * Add support for DPDK 21.11.
      * Forbid use of DPDK multiprocess feature.
      * Add support for running threads on cores >= RTE_MAX_LCORE.
@@ -116,9 +116,9 @@ v2.16.0 - 16 Aug 2021
        until further releases.
      * New debug appctl command 'dpdk/get-malloc-stats'.
      * Add hardware offload support for tunnel pop action (experimental).
-       Available only if DPDK experimantal APIs enabled during the build.
+       Available only if DPDK experimental APIs enabled during the build.
      * Add hardware offload support for VXLAN flows (experimental).
-       Available only if DPDK experimantal APIs enabled during the build.
+       Available only if DPDK experimental APIs enabled during the build.
      * EAL options --socket-mem and --socket-limit to have default values
        removed with 2.17 release. Logging added to alert users.
    - ovsdb-tool:
