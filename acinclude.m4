@@ -492,9 +492,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
        DPDKLIB_FOUND=true],
       [AC_MSG_RESULT([no])
        AC_MSG_ERROR(m4_normalize([
-          Could not find DPDK library in default search path, update
-          PKG_CONFIG_PATH for pkg-config to find the .pc file in
-          non-standard location]))
+          Failed to link with DPDK, check the config.log for more details.
+          If a working DPDK library was not found in the default search path,
+          update PKG_CONFIG_PATH for pkg-config to find the .pc file in a
+          non-standard location.]))
       ])
 
     CFLAGS="$ovs_save_CFLAGS"
