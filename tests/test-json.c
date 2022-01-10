@@ -180,8 +180,8 @@ json_string_benchmark_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         { 100000000, 10, 1, 10,   },
     };
 
-    printf("  SIZE      Q  S            TIME\n");
-    printf("--------------------------------------\n");
+    printf("  SIZE      Q  S         TO STRING      FROM STRING\n");
+    printf("----------------------------------------------------\n");
 
     for (int i = 0; i < ARRAY_SIZE(configs); i++) {
         int iter = configs[i].iter;
@@ -205,7 +205,8 @@ json_string_benchmark_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                                        configs[i].special_probability);
         fflush(stdout);
 
-        struct json *json = json_string_create_nocopy(str);
+        struct json *json = json_array_create_1(
+                                json_string_create_nocopy(str));
         uint64_t start = time_msec();
 
         char **res = xzalloc(iter * sizeof *res);
@@ -213,12 +214,24 @@ json_string_benchmark_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             res[j] = json_to_string(json, 0);
         }
 
-        printf("%16.3lf ms\n", (double) (time_msec() - start) / iter);
-        json_destroy(json);
+        printf("%12.3lf ms", (double) (time_msec() - start) / iter);
+
+        struct json **json_parsed = xzalloc(iter * sizeof *json_parsed);
+
+        start = time_msec();
         for (int j = 0; j < iter; j++) {
+            json_parsed[j] = json_from_string(res[j]);
+        }
+        printf("%12.3lf ms\n", (double) (time_msec() - start) / iter);
+
+        for (int j = 0; j < iter; j++) {
+            ovs_assert(json_equal(json, json_parsed[j]));
+            json_destroy(json_parsed[j]);
             free(res[j]);
         }
+        json_destroy(json);
         free(res);
+        free(json_parsed);
     }
 
     exit(0);
