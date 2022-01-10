@@ -1254,7 +1254,16 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         OVS_NOT_REACHED();
     }
 
-    ofpmp_postappend(replies, start_ofs);
+    if ((reply->size - start_ofs) > (UINT16_MAX - ofpbuf_headersize(reply))) {
+        /* When this happens, the reply will not fit in a single OFP message,
+         * and we should not append it to the queue. We will log a warning
+         * and continue with the next flow stat entry. */
+        reply->size = start_ofs;
+        VLOG_WARN_RL(&rl, "Flow exceeded the maximum flow statistics reply "
+                     "size and was excluded from the response set");
+    } else {
+        ofpmp_postappend(replies, start_ofs);
+    }
     fs_->match.flow.tunnel.metadata.tab = orig_tun_table;
 }
 
