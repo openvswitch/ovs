@@ -3252,3 +3252,22 @@ dnl because we need ovs-vswitchd to have the controller config before starting
 dnl the controller to 'snoop' the OpenFlow messages from beginning
 OVS_VSWITCHD_STOP(["/connection failed (No such file or directory)/d"])
 AT_CLEANUP
+
+
+AT_SETUP([ovs-ofctl show-flows - Oversized flow])
+OVS_VSWITCHD_START
+
+printf " priority=90,icmp,reg15=0x8005,metadata=0x1,nw_dst=11.0.0.1,icmp_type=8,icmp_code=0 actions=" > flow.txt
+for i in `seq 1 1022`; do printf "set_field:0x399->reg13,set_field:0x$i->reg15,resubmit(,39),"; done >> flow.txt
+printf "resubmit(,39)\n" >> flow.txt
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flows br0 flow.txt])
+
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip | sed '/NXST_FLOW/d' | sort], [0], [])
+OVS_WAIT_UNTIL([grep -q "ofp_flow|WARN|Flow exceeded the maximum flow statistics reply size and was excluded from the response set" ovs-vswitchd.log])
+
+cat flow.txt > expout
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort], [0], [expout])
+
+OVS_VSWITCHD_STOP(["/Flow exceeded the maximum flow statistics reply size and was excluded from the response set/d"])
+AT_CLEANUP
