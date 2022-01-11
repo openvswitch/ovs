@@ -1109,6 +1109,23 @@ ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db)
                 }
                 table->req_cond = NULL;
                 db->cond_changed = true;
+
+                /* There are two cases:
+                 * a. either the server already processed the requested monitor
+                 *    condition change but the FSM was restarted before the
+                 *    client was notified.  In this case the client should
+                 *    clear its local cache because it's out of sync with the
+                 *    monitor view on the server side.
+                 *
+                 * b. OR the server hasn't processed the requested monitor
+                 *    condition change yet.
+                 *
+                 * As there's no easy way to differentiate between the two,
+                 * and given that this condition should be rare, reset the
+                 * 'last_id', essentially flushing the local cached DB
+                 * contents.
+                 */
+                db->last_id = UUID_ZERO;
             }
         }
     }
