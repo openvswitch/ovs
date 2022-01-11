@@ -132,8 +132,10 @@ class ConditionState(object):
 
     def reset(self):
         """Reset a requested condition change back to new"""
-        if self._req_cond is not None and self._new_cond is None:
-            self._new_cond, self._req_cond = (self._req_cond, None)
+        if self._req_cond is not None:
+            if self._new_cond is None:
+                self._new_cond = self._req_cond
+            self._req_cond = None
 
 
 class Idl(object):
