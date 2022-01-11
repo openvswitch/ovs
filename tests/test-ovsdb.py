@@ -232,75 +232,87 @@ def get_singleton_table_printable_row(row):
     return "name=%s" % row.name
 
 
-def print_row(table, row, step, contents):
-    s = "%03d: table %s: %s " % (step, table, contents)
-    s += get_simple_printable_row_string(row, ["uuid"])
+def print_row(table, row, step, contents, terse):
+    if terse:
+        s = "%03d: table %s" % (step, table)
+    else:
+        s = "%03d: table %s: %s " % (step, table, contents)
+        s += get_simple_printable_row_string(row, ["uuid"])
     print(s)
 
 
-def print_idl(idl, step):
+def print_idl(idl, step, terse=False):
     n = 0
     if "simple" in idl.tables:
         simple = idl.tables["simple"].rows
         for row in simple.values():
             print_row("simple", row, step,
-                      get_simple_table_printable_row(row))
+                      get_simple_table_printable_row(row),
+                      terse)
             n += 1
 
     if "simple2" in idl.tables:
         simple2 = idl.tables["simple2"].rows
         for row in simple2.values():
             print_row("simple2", row, step,
-                      get_simple2_table_printable_row(row))
+                      get_simple2_table_printable_row(row),
+                      terse)
             n += 1
 
     if "simple3" in idl.tables:
         simple3 = idl.tables["simple3"].rows
         for row in simple3.values():
             print_row("simple3", row, step,
-                      get_simple3_table_printable_row(row))
+                      get_simple3_table_printable_row(row),
+                      terse)
             n += 1
 
     if "simple4" in idl.tables:
         simple4 = idl.tables["simple4"].rows
         for row in simple4.values():
             print_row("simple4", row, step,
-                      get_simple4_table_printable_row(row))
+                      get_simple4_table_printable_row(row),
+                      terse)
             n += 1
 
     if "simple5" in idl.tables:
         simple5 = idl.tables["simple5"].rows
         for row in simple5.values():
             print_row("simple5", row, step,
-                      get_simple5_table_printable_row(row))
+                      get_simple5_table_printable_row(row),
+                      terse)
             n += 1
 
     if "simple6" in idl.tables:
         simple6 = idl.tables["simple6"].rows
         for row in simple6.values():
             print_row("simple6", row, step,
-                      get_simple6_table_printable_row(row))
+                      get_simple6_table_printable_row(row),
+                      terse)
             n += 1
 
     if "link1" in idl.tables:
         l1 = idl.tables["link1"].rows
         for row in l1.values():
             print_row("link1", row, step,
-                      get_link1_table_printable_row(row))
+                      get_link1_table_printable_row(row),
+                      terse)
             n += 1
 
     if "link2" in idl.tables:
         l2 = idl.tables["link2"].rows
         for row in l2.values():
             print_row("link2", row, step,
-                      get_link2_table_printable_row(row))
+                      get_link2_table_printable_row(row),
+                      terse)
             n += 1
 
     if "singleton" in idl.tables:
         sng = idl.tables["singleton"].rows
         for row in sng.values():
             print_row("singleton", row, step,
-                      get_singleton_table_printable_row(row))
+                      get_singleton_table_printable_row(row),
+                      terse)
             n += 1
 
     if not n:
@@ -701,6 +713,12 @@ def do_idl(schema_file, remote, *commands):
         step += 1
 
     for command in commands:
+        terse = False
+        if command.startswith("?"):
+            # We're only interested in terse table contents.
+            terse = True
+            command = command[1:]
+
         if command.startswith("+"):
             # The previous transaction didn't change anything.
             command = command[1:]
@@ -714,7 +732,7 @@ def do_idl(schema_file, remote, *commands):
                 rpc.wait(poller)
                 poller.block()
 
-            print_idl(idl, step)
+            print_idl(idl, step, terse)
             step += 1
 
         seqno = idl.change_seqno

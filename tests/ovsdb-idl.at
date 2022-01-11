@@ -2336,7 +2336,7 @@ OVSDB_CHECK_CLUSTER_IDL([simple idl, monitor_cond_since, cluster disconnect],
     'condition simple [["i","==",2]]' \
     'condition simple [["i","==",1]]' \
     '+reconnect' \
-    '["idltest",
+    '?["idltest",
       {"op": "update",
        "table": "simple",
        "where": [["i", "==", 1]],
@@ -2347,7 +2347,7 @@ OVSDB_CHECK_CLUSTER_IDL([simple idl, monitor_cond_since, cluster disconnect],
 003: table simple: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: change conditions
 005: reconnect
-006: table simple: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: table simple
 007: {"error":null,"result":[{"count":1}]}
 008: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 009: done
