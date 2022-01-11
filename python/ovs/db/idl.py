@@ -136,6 +136,8 @@ class ConditionState(object):
             if self._new_cond is None:
                 self._new_cond = self._req_cond
             self._req_cond = None
+            return True
+        return False
 
 
 class Idl(object):
@@ -339,6 +341,19 @@ class Idl(object):
         txn-id == last_id. If there were requested condition changes in flight
         and the IDL client didn't set new conditions, then reset the requested
         conditions to new to trigger a follow-up monitor_cond_change request.
+
+        If there were changes in flight then there are two cases:
+        a. either the server already processed the requested monitor condition
+           change but the FSM was restarted before the client was notified.
+           In this case the client should clear its local cache because it's
+           out of sync with the monitor view on the server side.
+
+        b. OR the server hasn't processed the requested monitor condition
+           change yet.
+
+        As there's no easy way to differentiate between the two, and given that
+        this condition should be rare, reset the 'last_id', essentially
+        flushing the local cached DB contents.
         """
         ack_all = self.last_id == str(uuid.UUID(int=0))
         for table in self.tables.values():
@@ -346,7 +361,8 @@ class Idl(object):
                 table.condition.request()
                 table.condition.ack()
             else:
-                table.condition.reset()
+                if table.condition.reset():
+                    self.last_id = str(uuid.UUID(int=0))
                 self.cond_changed = True
 
     def restart_fsm(self):
