@@ -146,13 +146,14 @@ typedef uint16_t dpdk_port_t;
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
 
 /* List of required flags advertised by the hardware that will be used
- * if TSO is enabled. Ideally this should include DEV_TX_OFFLOAD_SCTP_CKSUM.
- * However, very few drivers supports that the moment and SCTP is not a
- * widely used protocol as TCP and UDP, so it's optional. */
-#define DPDK_TX_TSO_OFFLOAD_FLAGS (DEV_TX_OFFLOAD_TCP_TSO        \
-                                   | DEV_TX_OFFLOAD_TCP_CKSUM    \
-                                   | DEV_TX_OFFLOAD_UDP_CKSUM    \
-                                   | DEV_TX_OFFLOAD_IPV4_CKSUM)
+ * if TSO is enabled. Ideally this should include
+ * RTE_ETH_TX_OFFLOAD_SCTP_CKSUM. However, very few drivers support that
+ * at the moment and SCTP is not a widely used protocol like TCP and UDP,
+ * so it's optional. */
+#define DPDK_TX_TSO_OFFLOAD_FLAGS (RTE_ETH_TX_OFFLOAD_TCP_TSO        \
+                                   | RTE_ETH_TX_OFFLOAD_TCP_CKSUM    \
+                                   | RTE_ETH_TX_OFFLOAD_UDP_CKSUM    \
+                                   | RTE_ETH_TX_OFFLOAD_IPV4_CKSUM)
 
 
 static const struct rte_eth_conf port_conf = {
@@ -163,11 +164,11 @@ static const struct rte_eth_conf port_conf = {
     .rx_adv_conf = {
         .rss_conf = {
             .rss_key = NULL,
-            .rss_hf = ETH_RSS_IP | ETH_RSS_UDP | ETH_RSS_TCP,
+            .rss_hf = RTE_ETH_RSS_IP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_TCP,
         },
     },
     .txmode = {
-        .mq_mode = ETH_MQ_TX_NONE,
+        .mq_mode = RTE_ETH_MQ_TX_NONE,
     },
 };
 
@@ -919,7 +920,7 @@ check_link_status(struct netdev_dpdk *dev)
             VLOG_DBG_RL(&rl,
                         "Port "DPDK_PORT_ID_FMT" Link Up - speed %u Mbps - %s",
                         dev->port_id, (unsigned) dev->link.link_speed,
-                        (dev->link.link_duplex == ETH_LINK_FULL_DUPLEX)
+                        (dev->link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX)
                         ? "full-duplex" : "half-duplex");
         } else {
             VLOG_DBG_RL(&rl, "Port "DPDK_PORT_ID_FMT" Link Down",
@@ -968,25 +969,25 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
      * scatter support in the device capabilites. */
     if (dev->mtu > RTE_ETHER_MTU) {
         if (dev->hw_ol_features & NETDEV_RX_HW_SCATTER) {
-            conf.rxmode.offloads |= DEV_RX_OFFLOAD_SCATTER;
+            conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_SCATTER;
         }
     }
 
     conf.intr_conf.lsc = dev->lsc_interrupt_mode;
 
     if (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) {
-        conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
+        conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_CHECKSUM;
     }
 
     if (!(dev->hw_ol_features & NETDEV_RX_HW_CRC_STRIP)
-        && info.rx_offload_capa & DEV_RX_OFFLOAD_KEEP_CRC) {
-        conf.rxmode.offloads |= DEV_RX_OFFLOAD_KEEP_CRC;
+        && info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_KEEP_CRC) {
+        conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_KEEP_CRC;
     }
 
     if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
         conf.txmode.offloads |= DPDK_TX_TSO_OFFLOAD_FLAGS;
         if (dev->hw_ol_features & NETDEV_TX_SCTP_CHECKSUM_OFFLOAD) {
-            conf.txmode.offloads |= DEV_TX_OFFLOAD_SCTP_CKSUM;
+            conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_SCTP_CKSUM;
         }
     }
 
@@ -994,9 +995,9 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
      * by the eth device. */
     conf.rx_adv_conf.rss_conf.rss_hf &= info.flow_type_rss_offloads;
     if (conf.rx_adv_conf.rss_conf.rss_hf == 0) {
-        conf.rxmode.mq_mode = ETH_MQ_RX_NONE;
+        conf.rxmode.mq_mode = RTE_ETH_MQ_RX_NONE;
     } else {
-        conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
+        conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
     }
 
     /* A device may report more queues than it makes available (this has
@@ -1094,9 +1095,9 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     int diag;
     int n_rxq, n_txq;
     uint32_t tx_tso_offload_capa = DPDK_TX_TSO_OFFLOAD_FLAGS;
-    uint32_t rx_chksm_offload_capa = DEV_RX_OFFLOAD_UDP_CKSUM |
-                                     DEV_RX_OFFLOAD_TCP_CKSUM |
-                                     DEV_RX_OFFLOAD_IPV4_CKSUM;
+    uint32_t rx_chksm_offload_capa = RTE_ETH_RX_OFFLOAD_UDP_CKSUM |
+                                     RTE_ETH_RX_OFFLOAD_TCP_CKSUM |
+                                     RTE_ETH_RX_OFFLOAD_IPV4_CKSUM;
 
     rte_eth_dev_info_get(dev->port_id, &info);
 
@@ -1116,7 +1117,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dev->hw_ol_features |= NETDEV_RX_CHECKSUM_OFFLOAD;
     }
 
-    if (info.rx_offload_capa & DEV_RX_OFFLOAD_SCATTER) {
+    if (info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_SCATTER) {
         dev->hw_ol_features |= NETDEV_RX_HW_SCATTER;
     } else {
         /* Do not warn on lack of scatter support */
@@ -1128,7 +1129,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         if ((info.tx_offload_capa & tx_tso_offload_capa)
             == tx_tso_offload_capa) {
             dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
-            if (info.tx_offload_capa & DEV_TX_OFFLOAD_SCTP_CKSUM) {
+            if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_SCTP_CKSUM) {
                 dev->hw_ol_features |= NETDEV_TX_SCTP_CHECKSUM_OFFLOAD;
             } else {
                 VLOG_WARN("%s: Tx SCTP checksum offload is not supported, "
@@ -1884,8 +1885,8 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     bool flow_control_requested = true;
     enum rte_eth_fc_mode fc_mode;
     static const enum rte_eth_fc_mode fc_mode_set[2][2] = {
-        {RTE_FC_NONE,     RTE_FC_TX_PAUSE},
-        {RTE_FC_RX_PAUSE, RTE_FC_FULL    }
+        {RTE_ETH_FC_NONE,     RTE_ETH_FC_TX_PAUSE},
+        {RTE_ETH_FC_RX_PAUSE, RTE_ETH_FC_FULL    }
     };
     const char *new_devargs;
     const char *vf_mac;
@@ -3278,38 +3279,38 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     ovs_mutex_unlock(&dev->mutex);
 
     /* Match against OpenFlow defined link speed values. */
-    if (link.link_duplex == ETH_LINK_FULL_DUPLEX) {
+    if (link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX) {
         switch (link.link_speed) {
-        case ETH_SPEED_NUM_10M:
+        case RTE_ETH_SPEED_NUM_10M:
             feature |= NETDEV_F_10MB_FD;
             break;
-        case ETH_SPEED_NUM_100M:
+        case RTE_ETH_SPEED_NUM_100M:
             feature |= NETDEV_F_100MB_FD;
             break;
-        case ETH_SPEED_NUM_1G:
+        case RTE_ETH_SPEED_NUM_1G:
             feature |= NETDEV_F_1GB_FD;
             break;
-        case ETH_SPEED_NUM_10G:
+        case RTE_ETH_SPEED_NUM_10G:
             feature |= NETDEV_F_10GB_FD;
             break;
-        case ETH_SPEED_NUM_40G:
+        case RTE_ETH_SPEED_NUM_40G:
             feature |= NETDEV_F_40GB_FD;
             break;
-        case ETH_SPEED_NUM_100G:
+        case RTE_ETH_SPEED_NUM_100G:
             feature |= NETDEV_F_100GB_FD;
             break;
         default:
             feature |= NETDEV_F_OTHER;
         }
-    } else if (link.link_duplex == ETH_LINK_HALF_DUPLEX) {
+    } else if (link.link_duplex == RTE_ETH_LINK_HALF_DUPLEX) {
         switch (link.link_speed) {
-        case ETH_SPEED_NUM_10M:
+        case RTE_ETH_SPEED_NUM_10M:
             feature |= NETDEV_F_10MB_HD;
             break;
-        case ETH_SPEED_NUM_100M:
+        case RTE_ETH_SPEED_NUM_100M:
             feature |= NETDEV_F_100MB_HD;
             break;
-        case ETH_SPEED_NUM_1G:
+        case RTE_ETH_SPEED_NUM_1G:
             feature |= NETDEV_F_1GB_HD;
             break;
         default:
@@ -3619,19 +3620,19 @@ static const char *
 netdev_dpdk_link_speed_to_str__(uint32_t link_speed)
 {
     switch (link_speed) {
-    case ETH_SPEED_NUM_10M:    return "10Mbps";
-    case ETH_SPEED_NUM_100M:   return "100Mbps";
-    case ETH_SPEED_NUM_1G:     return "1Gbps";
-    case ETH_SPEED_NUM_2_5G:   return "2.5Gbps";
-    case ETH_SPEED_NUM_5G:     return "5Gbps";
-    case ETH_SPEED_NUM_10G:    return "10Gbps";
-    case ETH_SPEED_NUM_20G:    return "20Gbps";
-    case ETH_SPEED_NUM_25G:    return "25Gbps";
-    case ETH_SPEED_NUM_40G:    return "40Gbps";
-    case ETH_SPEED_NUM_50G:    return "50Gbps";
-    case ETH_SPEED_NUM_56G:    return "56Gbps";
-    case ETH_SPEED_NUM_100G:   return "100Gbps";
-    default:                   return "Not Defined";
+    case RTE_ETH_SPEED_NUM_10M:    return "10Mbps";
+    case RTE_ETH_SPEED_NUM_100M:   return "100Mbps";
+    case RTE_ETH_SPEED_NUM_1G:     return "1Gbps";
+    case RTE_ETH_SPEED_NUM_2_5G:   return "2.5Gbps";
+    case RTE_ETH_SPEED_NUM_5G:     return "5Gbps";
+    case RTE_ETH_SPEED_NUM_10G:    return "10Gbps";
+    case RTE_ETH_SPEED_NUM_20G:    return "20Gbps";
+    case RTE_ETH_SPEED_NUM_25G:    return "25Gbps";
+    case RTE_ETH_SPEED_NUM_40G:    return "40Gbps";
+    case RTE_ETH_SPEED_NUM_50G:    return "50Gbps";
+    case RTE_ETH_SPEED_NUM_56G:    return "56Gbps";
+    case RTE_ETH_SPEED_NUM_100G:   return "100Gbps";
+    default:                       return "Not Defined";
     }
 }
 
