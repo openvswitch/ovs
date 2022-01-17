@@ -6396,6 +6396,7 @@ ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
 
     dpif_show_support(&ofproto->backer->bt_support, &ds);
     unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void
