@@ -5,8 +5,10 @@ AT_BANNER([OVS-DPDK unit tests])
 
 m4_define([SYSTEM_DPDK_ALLOWED_LOGS],[
 \@does not exist. The Open vSwitch kernel module is probably not loaded.@d
+\@does not support MTU configuration,@d
 \@EAL: No \(available\|free\) .*hugepages reported@d
 \@Failed to enable flow control@d
+\@Rx checksum offload is not supported on@d
 \@TELEMETRY: No legacy callbacks, legacy socket not created@d
 ])
 
