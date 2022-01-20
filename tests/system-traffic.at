@@ -1127,6 +1127,46 @@ NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3  10.1.1.1 | FORMAT_PING], [0], [dnl
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - encap decap mpls_mc actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=ovs-p0 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8848,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p0
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,in_port=ovs-p1 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8848,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3  10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3  10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - multiple encap decap mpls actions])
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 
@@ -1151,6 +1191,46 @@ table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),dec
 AT_DATA([flows1.txt], [dnl
 table=0,priority=100,in_port=ovs-p1 actions=encap(mpls),set_mpls_label:3, encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
 table=0,priority=100,in_port=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=1,type=0x8847)),decap(packet_type(ns=0,type=0)),ovs-p1
+])
+
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - multiple encap decap mpls_mc actions])
+OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+AT_CHECK([ip link add patch0 type veth peer name patch1])
+on_exit 'ip link del patch0'
+
+AT_CHECK([ip link set dev patch0 up])
+AT_CHECK([ip link set dev patch1 up])
+AT_CHECK([ovs-vsctl add-port br0 patch0 -- set interface patch0 ofport_request=100])
+AT_CHECK([ovs-vsctl add-port br1 patch1 -- set interface patch1 ofport_request=100])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=ovs-p0 actions=encap(mpls_mc),set_mpls_label:3, encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8848,mpls_label=2 actions=decap(),decap(packet_type(ns=1,type=0x8848)),decap(packet_type(ns=0,type=0)),ovs-p0
+])
+
+AT_DATA([flows1.txt], [dnl
+table=0,priority=100,in_port=ovs-p1 actions=encap(mpls_mc),set_mpls_label:3, encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:100
+table=0,priority=100,in_port=100,dl_type=0x8848,mpls_label=2 actions=decap(),decap(packet_type(ns=1,type=0x8848)),decap(packet_type(ns=0,type=0)),ovs-p1
 ])
 
 AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br0 flows.txt])

@@ -6709,7 +6709,8 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
             ctx->pending_decap = true;
             /* Trigger recirculation. */
             return true;
-        case PT_MPLS: {
+        case PT_MPLS:
+        case PT_MPLS_MC: {
             int n;
             ovs_be16 ethertype;
 
