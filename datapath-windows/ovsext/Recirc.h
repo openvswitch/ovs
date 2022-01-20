@@ -41,8 +41,7 @@ NDIS_STATUS
 OvsProcessDeferredActions(POVS_SWITCH_CONTEXT switchContext,
                           OvsCompletionList *completionList,
                           UINT32 portNo,
-                          ULONG sendFlags,
-                          OVS_PACKET_HDR_INFO *layers);
+                          ULONG sendFlags);
 
 /*
  * --------------------------------------------------------------------------
