@@ -310,8 +310,7 @@ NDIS_STATUS
 OvsProcessDeferredActions(POVS_SWITCH_CONTEXT switchContext,
                           OvsCompletionList *completionList,
                           UINT32 portNo,
-                          ULONG sendFlags,
-                          OVS_PACKET_HDR_INFO *layers)
+                          ULONG sendFlags)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_DEFERRED_ACTION_QUEUE queue = OvsDeferredActionsQueueGet();
@@ -320,11 +319,7 @@ OvsProcessDeferredActions(POVS_SWITCH_CONTEXT switchContext,
 
     /* Process all deferred actions. */
     while ((deferredAction = OvsDeferredActionsQueuePop(queue)) != NULL) {
-        if (layers) {
-            layersDeferred = layers;
-         } else {
-            layersDeferred = &(deferredAction->layers);
-         }
+        layersDeferred = &(deferredAction->layers);
 
         if (deferredAction->actions) {
             status = OvsDoExecuteActions(switchContext,

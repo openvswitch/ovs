@@ -2366,7 +2366,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
 
     if (status == STATUS_SUCCESS) {
         status = OvsProcessDeferredActions(switchContext, completionList,
-                                           portNo, sendFlags, NULL);
+                                           portNo, sendFlags);
     }
 
     return status;
