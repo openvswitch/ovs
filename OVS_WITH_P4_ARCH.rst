@@ -4,7 +4,7 @@ Open vSwitch With P4 Architecture
 Introduction:
 -------------------------------------------------------------------------------
 
-P4-OVS is a a fork of Open vSwitch to support programming offloads to 
+P4-OVS is an early implementation of Open vSwitch to support programming offloads to 
 programmable pipelines via P4 language/specification. These patches will be 
 upstreamed back to the OVS community and are being hosted temporarily on 
 ipdk.io to get early feedback.
