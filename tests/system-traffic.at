@@ -1087,7 +1087,7 @@ NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([datapath - Encap Decap mpls actions])
+AT_SETUP([datapath - encap decap mpls actions])
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1119,7 +1119,6 @@ AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3  10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-
 
 NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3  10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -1160,7 +1159,6 @@ AT_CHECK([ovs-ofctl  -Oopenflow13 add-flows br1 flows1.txt])
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-
 
 NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
