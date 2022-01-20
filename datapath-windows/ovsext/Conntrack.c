@@ -626,6 +626,31 @@ OvsReverseIcmpType(UINT8 type)
     }
 }
 
+static __inline void
+OvsPickupCtTupleAsLookupKey(POVS_CT_KEY ctKey, UINT16 zone, OvsFlowKey *flowKey)
+{
+    UINT32 ipAddrSrc = 0, ipAddrDst = 0;
+
+    if (!flowKey || !ctKey) return;
+
+    if (flowKey->l2.dlType == htons(ETH_TYPE_IPV4)) {
+        ipAddrSrc = flowKey->ct.tuple_ipv4.ipv4_src;
+        ipAddrDst = flowKey->ct.tuple_ipv4.ipv4_dst;
+
+        if ((ipAddrSrc > 0 && ipAddrDst > 0) &&
+            (zone == flowKey->ct.zone)) {
+            /* if the ct tuple_ipv4 in flowKey is not null and ct.zone is same with
+             * zone parameter pickup the tuple_ipv4 value as the lookup key
+             */
+            ctKey->src.addr.ipv4 = flowKey->ct.tuple_ipv4.ipv4_src;
+            ctKey->dst.addr.ipv4 = flowKey->ct.tuple_ipv4.ipv4_dst;
+            ctKey->nw_proto = flowKey->ct.tuple_ipv4.ipv4_proto;
+            ctKey->src.port = flowKey->ct.tuple_ipv4.src_port;
+            ctKey->dst.port = flowKey->ct.tuple_ipv4.dst_port;
+        }
+   }
+}
+
 static __inline NDIS_STATUS
 OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
                     UINT16 zone,
@@ -646,6 +671,7 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
 
         ctx->key.src.port = flowKey->ipKey.l4.tpSrc;
         ctx->key.dst.port = flowKey->ipKey.l4.tpDst;
+
         if (flowKey->ipKey.nwProto == IPPROTO_ICMP) {
             ICMPHdr icmpStorage;
             const ICMPHdr *icmp;
@@ -700,6 +726,10 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
         /* Translate address first for reverse NAT */
         ctx->key = natEntry->ctEntry->key;
         OvsCtKeyReverse(&ctx->key);
+    } else {
+        if (flowKey->l2.dlType == htons(ETH_TYPE_IPV4)) {
+            OvsPickupCtTupleAsLookupKey(&(ctx->key), zone, flowKey);
+        }
     }
 
     ctx->hash = OvsCtHashKey(&ctx->key);
