@@ -1,3 +1,6 @@
+Open vSwitch With P4 Architecture
+=================================
+
 Introduction:
 -------------------------------------------------------------------------------
 
@@ -91,7 +94,7 @@ What's next:
 1. Kernel control plane enabled with linux_networking.p4 supported for VXLAN, 
 L2, Routing and ECMP.
 - Some basic use cases supported and added as a demo run.
-2. Port adds via ovs-vsctl OVS CLI and Openconfig CLIs
+2. Port adds via ovs-vsctl OVS CLI and Openconfig CLIs (TAP, Veth etc)
 3. Port counter support
 4. Hot Plug into Qemu for vhost ports
 5. Action selector support
