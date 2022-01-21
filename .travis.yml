@@ -35,19 +35,31 @@ matrix:
   include:
     - arch: arm64
       compiler: gcc
+      name: Arm64, GCC, default kernel
       env: TESTSUITE=1 DPDK=1
     - arch: arm64
       compiler: gcc
+      name: Arm64, GCC, 5.5 and 4.19 kernels
       env: KERNEL_LIST="5.5 4.19"
     - arch: arm64
       compiler: gcc
+      name: Arm64, GCC, 4.9 and 3.16 kernels
       env: KERNEL_LIST="4.9 3.16"
     - arch: arm64
       compiler: gcc
+      name: Arm64, GCC, DPDK Shared
       env: DPDK_SHARED=1
     - arch: arm64
       compiler: clang
       env: OPTS="--disable-ssl"
+    - arch: s390x
+      compiler: gcc
+      name: s390x, GCC, default kernel
+      env: TESTSUITE=1 DPDK=1
+    - arch: ppc64le
+      compiler: gcc
+      name: PPC64, GCC, default kernel
+      env: TESTSUITE=1 DPDK=1
 
 script: ./.ci/${TRAVIS_OS_NAME}-build.sh $OPTS
 
