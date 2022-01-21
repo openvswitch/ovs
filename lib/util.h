@@ -66,7 +66,12 @@ struct Bad_arg_to_ARRAY_SIZE {
 
 /* This system's cache line size, in bytes.
  * Being wrong hurts performance but not correctness. */
+#if defined(__ppc64__) || defined(__powerpc64__) || defined(__PPC64__) || defined(_ARCH_PPC64)
+/* http://lists.llvm.org/pipermail/llvm-dev/2017-March/110982.html */
+#define CACHE_LINE_SIZE 128
+#else
 #define CACHE_LINE_SIZE 64
+#endif
 BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
 
 /* Cacheline marking is typically done using zero-sized array.
