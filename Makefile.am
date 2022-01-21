@@ -121,6 +121,7 @@ EXTRA_DIST = \
 	external/PATCH-01-GRPC \
         OVS-WITH-P4-BUILD-README \
 	external/PATCH-01-TOFINO \
+	OVS_WITH_P4_ARCH.rst \
 	.mailmap
 bin_PROGRAMS =
 sbin_PROGRAMS =
