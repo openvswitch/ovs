@@ -405,6 +405,10 @@ ovsdb_monitor_columns_sort(struct ovsdb_monitor *dbmon)
     SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
 
+        if (mt->n_columns == 0) {
+            continue;
+        }
+
         qsort(mt->columns, mt->n_columns, sizeof *mt->columns,
               compare_ovsdb_monitor_column);
         for (i = 0; i < mt->n_columns; i++) {
