@@ -737,7 +737,7 @@ void
 stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 {
     struct stp *stp = p->stp;
-    const struct stp_bpdu_header *header;
+    struct stp_bpdu_header header;
 
     ovs_mutex_lock(&mutex);
     if (p->state == STP_DISABLED) {
@@ -750,19 +750,19 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
         goto out;
     }
 
-    header = bpdu;
-    if (header->protocol_id != htons(STP_PROTOCOL_ID)) {
+    memcpy(&header, bpdu, sizeof header);
+    if (header.protocol_id != htons(STP_PROTOCOL_ID)) {
         VLOG_WARN("%s: received BPDU with unexpected protocol ID %"PRIu16,
-                  stp->name, ntohs(header->protocol_id));
+                  stp->name, ntohs(header.protocol_id));
         p->error_count++;
         goto out;
     }
-    if (header->protocol_version != STP_PROTOCOL_VERSION) {
+    if (header.protocol_version != STP_PROTOCOL_VERSION) {
         VLOG_DBG("%s: received BPDU with unexpected protocol version %"PRIu8,
-                 stp->name, header->protocol_version);
+                 stp->name, header.protocol_version);
     }
 
-    switch (header->bpdu_type) {
+    switch (header.bpdu_type) {
     case STP_TYPE_CONFIG:
         if (bpdu_size < sizeof(struct stp_config_bpdu)) {
             VLOG_WARN("%s: received config BPDU with invalid size %"PRIuSIZE,
@@ -785,7 +785,7 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 
     default:
         VLOG_WARN("%s: received BPDU of unexpected type %"PRIu8,
-                  stp->name, header->bpdu_type);
+                  stp->name, header.bpdu_type);
         p->error_count++;
         goto out;
     }
