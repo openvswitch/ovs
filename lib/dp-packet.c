@@ -296,7 +296,7 @@ dp_packet_resize(struct dp_packet *b, size_t new_headroom, size_t new_tailroom)
 void
 dp_packet_prealloc_tailroom(struct dp_packet *b, size_t size)
 {
-    if (size > dp_packet_tailroom(b)) {
+    if ((size && !dp_packet_base(b)) || (size > dp_packet_tailroom(b))) {
         dp_packet_resize(b, dp_packet_headroom(b), MAX(size, 64));
     }
 }
