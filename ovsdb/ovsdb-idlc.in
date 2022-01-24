@@ -1292,7 +1292,7 @@ struct ovsdb_idl_cursor
     struct ovsdb_idl_index *index, const struct %(s)s *target)
 {
     ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
-    return ovsdb_idl_cursor_first_ge(index, &target->header_);
+    return ovsdb_idl_cursor_first_ge(index, target ? &target->header_ : NULL);
 }
 
 struct %(s)s *
