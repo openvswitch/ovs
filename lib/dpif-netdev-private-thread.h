@@ -83,7 +83,7 @@ struct dp_netdev_pmd_thread {
      * instance for cpu core NON_PMD_CORE_ID can be accessed by multiple
      * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
      * other instance will only be accessed by its own pmd thread. */
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct dfc_cache flow_cache;
+    struct dfc_cache flow_cache;
 
     /* Flow-Table and classifiers
      *
