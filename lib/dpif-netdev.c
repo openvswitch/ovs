@@ -5099,8 +5099,10 @@ dp_netdev_actions_create(const struct nlattr *actions, size_t size)
     struct dp_netdev_actions *netdev_actions;
 
     netdev_actions = xmalloc(sizeof *netdev_actions + size);
-    memcpy(netdev_actions->actions, actions, size);
     netdev_actions->size = size;
+    if (size) {
+        memcpy(netdev_actions->actions, actions, size);
+    }
 
     return netdev_actions;
 }

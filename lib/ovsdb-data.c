@@ -1967,6 +1967,10 @@ ovsdb_datum_push_unsafe(struct ovsdb_datum *dst,
                         unsigned int start_idx, unsigned int n,
                         const struct ovsdb_type *type)
 {
+    if (n == 0) {
+        return;
+    }
+
     memcpy(&dst->keys[dst->n], &src->keys[start_idx], n * sizeof src->keys[0]);
     if (type->value.type != OVSDB_TYPE_VOID) {
         memcpy(&dst->values[dst->n], &src->values[start_idx],

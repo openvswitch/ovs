@@ -156,7 +156,7 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
             && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
             && !memcmp(&a->metadata, &b->metadata, sizeof a->metadata)
             && a->stack_size == b->stack_size
-            && !memcmp(a->stack, b->stack, a->stack_size)
+            && (!a->stack_size || !memcmp(a->stack, b->stack, a->stack_size))
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
             && a->was_mpls == b->was_mpls
@@ -164,7 +164,9 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
                              b->ofpacts, b->ofpacts_len)
             && ofpacts_equal(a->action_set, a->action_set_len,
                              b->action_set, b->action_set_len)
-            && !memcmp(a->userdata, b->userdata, a->userdata_len)
+            && a->userdata_len == b->userdata_len
+            && (!a->userdata_len
+                || !memcmp(a->userdata, b->userdata, a->userdata_len))
             && uuid_equals(&a->xport_uuid, &b->xport_uuid));
 }
 

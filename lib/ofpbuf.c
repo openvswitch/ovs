@@ -384,6 +384,10 @@ ofpbuf_put_zeros(struct ofpbuf *b, size_t size)
 void *
 ofpbuf_put(struct ofpbuf *b, const void *p, size_t size)
 {
+    if (!size) {
+        return ofpbuf_tail(b);
+    }
+
     void *dst = ofpbuf_put_uninit(b, size);
     memcpy(dst, p, size);
     return dst;
