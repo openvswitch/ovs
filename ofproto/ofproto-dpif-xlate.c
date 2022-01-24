@@ -3265,7 +3265,9 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
     struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
     odp_port_t tunnel_out_port = ODPP_NONE;
 
-    if (!ipfix || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
+    if (!ipfix ||
+        (output_odp_port == ODPP_NONE &&
+         ctx->xin->flow.in_port.ofp_port == OFPP_NONE)) {
         return;
     }
 
