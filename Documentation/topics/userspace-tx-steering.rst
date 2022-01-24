@@ -33,15 +33,16 @@ Thread mode
 This mode is automatically selected when the port's ``tx-steering`` option is
 set to ``thread`` or unset.
 
-Depending on the port's number of Tx queues being greater or equal than the
-number of PMD threads, static txq mapping or XPS will be used.
+Thread mode enables static (1:1) thread-to-txq mapping when the number of Tx
+queues is greater than number of PMD threads, and dynamic (N:1) mapping if
+equal or lower.  In this mode a single thread can not use more than 1 transmit
+queue of a given port.
 
 This is the recommended mode for performance reasons if the number of Tx queues
-is greater or equal to the number of PMD threads, because the Tx lock is not
-acquired.
+is greater than the number of PMD threads, because the Tx lock is not acquired.
 
-If the number of Tx queues is greater than the number of threads, the remaining
-Tx queues will not be used.
+If the number of Tx queues is greater than the number of threads (including the
+main thread), the remaining Tx queues will not be used.
 
 This mode is enabled by default.
 
