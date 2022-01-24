@@ -131,16 +131,17 @@ enum diag {
  * |                 Required Min Echo RX Interval                 |
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ */
 struct msg {
-    uint8_t vers_diag;    /* Version and diagnostic. */
-    uint8_t flags;        /* 2bit State field followed by flags. */
-    uint8_t mult;         /* Fault detection multiplier. */
-    uint8_t length;       /* Length of this BFD message. */
-    ovs_be32 my_disc;     /* My discriminator. */
-    ovs_be32 your_disc;   /* Your discriminator. */
-    ovs_be32 min_tx;      /* Desired minimum tx interval. */
-    ovs_be32 min_rx;      /* Required minimum rx interval. */
-    ovs_be32 min_rx_echo; /* Required minimum echo rx interval. */
+    uint8_t vers_diag;              /* Version and diagnostic. */
+    uint8_t flags;                  /* 2bit State field followed by flags. */
+    uint8_t mult;                   /* Fault detection multiplier. */
+    uint8_t length;                 /* Length of this BFD message. */
+    ovs_16aligned_be32 my_disc;     /* My discriminator. */
+    ovs_16aligned_be32 your_disc;   /* Your discriminator. */
+    ovs_16aligned_be32 min_tx;      /* Desired minimum tx interval. */
+    ovs_16aligned_be32 min_rx;      /* Required minimum rx interval. */
+    ovs_16aligned_be32 min_rx_echo; /* Required minimum echo rx interval. */
 };
+
 BUILD_ASSERT_DECL(BFD_PACKET_LEN == sizeof(struct msg));
 
 #define DIAG_MASK 0x1f
@@ -631,9 +632,9 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
 
     msg->mult = bfd->mult;
     msg->length = BFD_PACKET_LEN;
-    msg->my_disc = htonl(bfd->disc);
-    msg->your_disc = htonl(bfd->rmt_disc);
-    msg->min_rx_echo = htonl(0);
+    put_16aligned_be32(&msg->my_disc, htonl(bfd->disc));
+    put_16aligned_be32(&msg->your_disc, htonl(bfd->rmt_disc));
+    put_16aligned_be32(&msg->min_rx_echo, htonl(0));
 
     if (bfd_in_poll(bfd)) {
         min_tx = bfd->poll_min_tx;
@@ -643,8 +644,8 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
         min_rx = bfd->min_rx;
     }
 
-    msg->min_tx = htonl(min_tx * 1000);
-    msg->min_rx = htonl(min_rx * 1000);
+    put_16aligned_be32(&msg->min_tx, htonl(min_tx * 1000));
+    put_16aligned_be32(&msg->min_rx, htonl(min_rx * 1000));
 
     bfd->flags &= ~FLAG_FINAL;
     *oam = bfd->oam;
@@ -771,12 +772,12 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         goto out;
     }
 
-    if (!msg->my_disc) {
+    if (!get_16aligned_be32(&msg->my_disc)) {
         log_msg(VLL_WARN, msg, "NULL my_disc", bfd);
         goto out;
     }
 
-    pkt_your_disc = ntohl(msg->your_disc);
+    pkt_your_disc = ntohl(get_16aligned_be32(&msg->your_disc));
     if (pkt_your_disc) {
         /* Technically, we should use the your discriminator field to figure
          * out which 'struct bfd' this packet is destined towards.  That way a
@@ -796,7 +797,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         bfd_status_changed(bfd);
     }
 
-    bfd->rmt_disc = ntohl(msg->my_disc);
+    bfd->rmt_disc = ntohl(get_16aligned_be32(&msg->my_disc));
     bfd->rmt_state = rmt_state;
     bfd->rmt_flags = flags;
     bfd->rmt_diag = msg->vers_diag & DIAG_MASK;
@@ -824,7 +825,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         bfd->rmt_mult = msg->mult;
     }
 
-    rmt_min_rx = MAX(ntohl(msg->min_rx) / 1000, 1);
+    rmt_min_rx = MAX(ntohl(get_16aligned_be32(&msg->min_rx)) / 1000, 1);
     if (bfd->rmt_min_rx != rmt_min_rx) {
         bfd->rmt_min_rx = rmt_min_rx;
         if (bfd->next_tx) {
@@ -833,7 +834,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         log_msg(VLL_INFO, msg, "New remote min_rx", bfd);
     }
 
-    bfd->rmt_min_tx = MAX(ntohl(msg->min_tx) / 1000, 1);
+    bfd->rmt_min_tx = MAX(ntohl(get_16aligned_be32(&msg->min_tx)) / 1000, 1);
     bfd->detect_time = bfd_rx_interval(bfd) * bfd->rmt_mult + time_msec();
 
     if (bfd->state == STATE_ADMIN_DOWN) {
@@ -1095,10 +1096,14 @@ log_msg(enum vlog_level level, const struct msg *p, const char *message,
                   bfd_diag_str(p->vers_diag & DIAG_MASK),
                   bfd_state_str(p->flags & STATE_MASK),
                   p->mult, p->length, bfd_flag_str(p->flags & FLAGS_MASK),
-                  ntohl(p->my_disc), ntohl(p->your_disc),
-                  ntohl(p->min_tx), ntohl(p->min_tx) / 1000,
-                  ntohl(p->min_rx), ntohl(p->min_rx) / 1000,
-                  ntohl(p->min_rx_echo), ntohl(p->min_rx_echo) / 1000);
+                  ntohl(get_16aligned_be32(&p->my_disc)),
+                  ntohl(get_16aligned_be32(&p->your_disc)),
+                  ntohl(get_16aligned_be32(&p->min_tx)),
+                  ntohl(get_16aligned_be32(&p->min_tx)) / 1000,
+                  ntohl(get_16aligned_be32(&p->min_rx)),
+                  ntohl(get_16aligned_be32(&p->min_rx)) / 1000,
+                  ntohl(get_16aligned_be32(&p->min_rx_echo)),
+                  ntohl(get_16aligned_be32(&p->min_rx_echo)) / 1000);
     bfd_put_details(&ds, bfd);
     VLOG(level, "%s", ds_cstr(&ds));
     ds_destroy(&ds);
