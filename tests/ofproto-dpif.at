@@ -7572,7 +7572,7 @@ dnl configure bridge IPFIX and ensure that sample action generation works at the
 dnl datapath level.
 AT_SETUP([ofproto-dpif - Bridge IPFIX sanity check])
 OVS_VSWITCHD_START
-add_of_ports br0 1 2
+add_of_ports br0 1 2 3
 
 dnl Sample every packet using bridge-based sampling.
 AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
@@ -7587,6 +7587,28 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used
 flow-dump from the main thread:
 packets:2, bytes:68, used:0.001s, actions:userspace(pid=0,ipfix(output_port=4294967295))
 ])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Check sample is performed even if only one of the ports is present.
+AT_DATA([flows.txt], [dnl
+table=0,in_port=3,tcp actions=load:0xffff->NXM_OF_IN_PORT[],ct(zone=1,table=1)
+table=1,tcp, actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:08,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no)'])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from the main thread:
+packets:2, bytes:236, used:0.001s, actions:userspace(pid=0,ipfix(output_port=2)),2
+packets:2, bytes:236, used:0.001s, actions:userspace(pid=0,ipfix(output_port=4294967295)),ct(zone=1),recirc(0x1)
+])
+
+AT_CHECK([ovs-ofctl del-flows br0 in_port=3])
+AT_CHECK([ovs-ofctl del-flows br0 table=1])
 
 AT_CHECK([ovs-appctl revalidator/purge])
 dnl
