@@ -273,7 +273,7 @@ struct dp_netdev {
     struct cmap meters OVS_GUARDED;
 
     /* Probability of EMC insertions is a factor of 'emc_insert_min'.*/
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) atomic_uint32_t emc_insert_min;
+    atomic_uint32_t emc_insert_min;
     /* Enable collection of PMD performance metrics. */
     atomic_bool pmd_perf_metrics;
     /* Enable the SMC cache from ovsdb config */
