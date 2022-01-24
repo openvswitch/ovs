@@ -114,7 +114,6 @@ static void
 calc_percentile(unsigned long long n_samples, struct percentile *pctl,
                 unsigned long long new_sample)
 {
-
     if (n_samples < P_SQUARE_MIN) {
         pctl->samples[n_samples - 1] = new_sample;
     }
@@ -228,13 +227,12 @@ add_sample(struct stopwatch *sw, unsigned long long new_sample)
         sw->min = new_sample;
     }
 
-    calc_percentile(sw->n_samples, &sw->pctl, new_sample);
-
     if (sw->n_samples++ == 0) {
         sw->short_term.average = sw->long_term.average = new_sample;
         return;
     }
 
+    calc_percentile(sw->n_samples, &sw->pctl, new_sample);
     calc_average(&sw->short_term, new_sample);
     calc_average(&sw->long_term, new_sample);
 }
