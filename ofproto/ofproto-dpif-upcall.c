@@ -2908,11 +2908,11 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         }
         ds_put_char(&ds, '\n');
 
-        for (i = 0; i < n_revalidators; i++) {
+        for (i = 0; i < udpif->n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
             int j, elements = 0;
 
-            for (j = i; j < N_UMAPS; j += n_revalidators) {
+            for (j = i; j < N_UMAPS; j += udpif->n_revalidators) {
                 elements += cmap_count(&udpif->ukeys[j].cmap);
             }
             ds_put_format(&ds, "  %u: (keys %d)\n", revalidator->id, elements);
