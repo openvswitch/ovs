@@ -77,7 +77,7 @@ dnl Checks if compiler and binutils supports AVX512.
 AC_DEFUN([OVS_CHECK_AVX512], [
   OVS_CHECK_BINUTILS_AVX512
   OVS_CHECK_CC_OPTION(
-    [-mavx512f], [ovs_have_cc_mavx512f=yes], [ovs_have_cc_mavx512f=no])
+    [-mavx512f -mavx512vpopcntdq], [ovs_have_cc_mavx512f=yes], [ovs_have_cc_mavx512f=no])
   AM_CONDITIONAL([HAVE_AVX512F], [test $ovs_have_cc_mavx512f = yes])
   if test "$ovs_have_cc_mavx512f" = yes; then
     AC_DEFINE([HAVE_AVX512F], [1],
