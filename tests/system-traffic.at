@@ -4849,7 +4849,7 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-in_port=1,ip,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.255)),2
+in_port=1,ip,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.254)),2
 in_port=2,ct_state=-trk,ip,action=ct(table=0,zone=1,nat)
 in_port=2,ct_state=+trk,ct_zone=1,ip,action=1
 dnl
@@ -4938,7 +4938,7 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-in_port=1,tcp,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.255:34567-34568,random)),2
+in_port=1,tcp,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.254:34567-34568,random)),2
 in_port=2,ct_state=-trk,tcp,tp_dst=34567,action=ct(table=0,zone=1,nat)
 in_port=2,ct_state=-trk,tcp,tp_dst=34568,action=ct(table=0,zone=1,nat)
 in_port=2,ct_state=+trk,ct_zone=1,tcp,action=1
@@ -4986,7 +4986,7 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-in_port=1,ip,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.255:20000)),2
+in_port=1,ip,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.254:20000)),2
 in_port=2,ct_state=-trk,ip,action=ct(table=0,zone=1,nat)
 in_port=2,ct_state=+trk,ct_zone=1,action=1
 dnl
@@ -5091,8 +5091,8 @@ priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubm
 priority=10 arp action=normal
 priority=0 action=drop
 dnl
-dnl Allow any traffic from ns0->ns1. SNAT ns0 to 10.1.1.240-10.1.1.255
-table=1 priority=100 in_port=1 ip ct_state=+trk+new-est action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.255)),2
+dnl Allow any traffic from ns0->ns1. SNAT ns0 to 10.1.1.240-10.1.1.254
+table=1 priority=100 in_port=1 ip ct_state=+trk+new-est action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.254)),2
 table=1 priority=100 in_port=1 ip ct_state=+trk-new+est action=2
 dnl Only allow established traffic from ns1->ns0.
 table=1 priority=100 in_port=2 ip ct_state=+trk-new+est action=1
@@ -5336,7 +5336,7 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 dnl Allow UDP traffic from ns0->ns1. Only allow related ICMP responses back.
 dnl Make sure ICMP responses are reverse-NATted.
 AT_DATA([flows.txt], [dnl
-in_port=1,udp,action=ct(commit,nat(src=10.1.1.240-10.1.1.255),exec(set_field:1->ct_mark)),2
+in_port=1,udp,action=ct(commit,nat(src=10.1.1.240-10.1.1.254),exec(set_field:1->ct_mark)),2
 in_port=2,icmp,ct_state=-trk,action=ct(table=0,nat)
 in_port=2,icmp,nw_dst=10.1.1.1,ct_state=+trk+rel,ct_mark=1,action=1
 dnl
@@ -5368,7 +5368,7 @@ NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl
  n_packets=1, n_bytes=42, priority=10,arp actions=NORMAL
- n_packets=1, n_bytes=44, udp,in_port=1 actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),exec(set_field:0x1->ct_mark)),output:2
+ n_packets=1, n_bytes=44, udp,in_port=1 actions=ct(commit,nat(src=10.1.1.240-10.1.1.254),exec(set_field:0x1->ct_mark)),output:2
  n_packets=1, n_bytes=72, ct_state=+rel+trk,ct_mark=0x1,icmp,in_port=2,nw_dst=10.1.1.1 actions=output:1
  n_packets=1, n_bytes=72, ct_state=-trk,icmp,in_port=2 actions=ct(table=0,nat)
  n_packets=2, n_bytes=84, priority=100,arp,arp_op=1 actions=move:NXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
