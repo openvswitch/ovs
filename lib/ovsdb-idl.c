@@ -5666,8 +5666,8 @@ ovsdb_idl_loop_run(struct ovsdb_idl_loop *loop)
 {
     ovsdb_idl_run(loop->idl);
 
-    /* See if we can commit the loop->committing_txn. */
-    if (loop->committing_txn) {
+    /* See if the 'committing_txn' succeeded in the meantime. */
+    if (loop->committing_txn && loop->committing_txn->status == TXN_SUCCESS) {
         ovsdb_idl_try_commit_loop_txn(loop, NULL);
     }
 
