@@ -74,6 +74,7 @@ enum raft_failure_test {
     FT_CRASH_BEFORE_SEND_EXEC_REQ,
     FT_CRASH_AFTER_SEND_EXEC_REQ,
     FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE,
+    FT_CRASH_BEFORE_SEND_SNAPSHOT_REP,
     FT_DELAY_ELECTION,
     FT_DONT_SEND_VOTE_REQUEST
 };
@@ -370,10 +371,17 @@ static bool raft_handle_write_error(struct raft *, struct ovsdb_error *);
 static void raft_run_reconfigure(struct raft *);
 
 static void raft_set_leader(struct raft *, const struct uuid *sid);
+
 static struct raft_server *
 raft_find_server(const struct raft *raft, const struct uuid *sid)
 {
     return raft_server_find(&raft->servers, sid);
+}
+
+static struct raft_server *
+raft_find_new_server(struct raft *raft, const struct uuid *uuid)
+{
+    return raft_server_find(&raft->add_servers, uuid);
 }
 
 static char *
@@ -1791,6 +1799,8 @@ raft_open_conn(struct raft *raft, const char *address, const struct uuid *sid)
 static void
 raft_conn_close(struct raft_conn *conn)
 {
+    VLOG_DBG("closing connection to server %s (%s)",
+             conn->nickname, jsonrpc_session_get_name(conn->js));
     jsonrpc_session_close(conn->js);
     ovs_list_remove(&conn->list_node);
     free(conn->nickname);
@@ -1881,15 +1891,29 @@ raft_run(struct raft *raft)
     }
 
     /* Close unneeded sessions. */
+    struct raft_server *server;
     struct raft_conn *next;
     LIST_FOR_EACH_SAFE (conn, next, list_node, &raft->conns) {
         if (!raft_conn_should_stay_open(raft, conn)) {
+            server = raft_find_new_server(raft, &conn->sid);
+            if (server) {
+                /* We only have one incoming connection from joining servers,
+                 * so if it's closed, we need to destroy the record about the
+                 * server.  This way the process can be started over on the
+                 * next join request. */
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+                VLOG_INFO_RL(&rl, "cluster "CID_FMT": server %s (%s) "
+                                  "disconnected while joining",
+                                  CID_ARGS(&raft->cid),
+                                  server->nickname, server->address);
+                hmap_remove(&raft->add_servers, &server->hmap_node);
+                raft_server_destroy(server);
+            }
             raft_conn_close(conn);
         }
     }
 
     /* Open needed sessions. */
-    struct raft_server *server;
     HMAP_FOR_EACH (server, hmap_node, &raft->servers) {
         raft_open_conn(raft, server->address, &server->sid);
     }
@@ -3276,12 +3300,6 @@ raft_find_peer(struct raft *raft, const struct uuid *uuid)
     return s && !uuid_equals(&raft->sid, &s->sid) ? s : NULL;
 }
 
-static struct raft_server *
-raft_find_new_server(struct raft *raft, const struct uuid *uuid)
-{
-    return raft_server_find(&raft->add_servers, uuid);
-}
-
 /* Figure 3.1: "If there exists an N such that N > commitIndex, a
  * majority of matchIndex[i] >= N, and log[N].term == currentTerm, set
  * commitIndex = N (sections 3.5 and 3.6)." */
@@ -4055,6 +4073,10 @@ static void
 raft_handle_install_snapshot_request(
     struct raft *raft, const struct raft_install_snapshot_request *rq)
 {
+    if (failure_test == FT_CRASH_BEFORE_SEND_SNAPSHOT_REP) {
+        ovs_fatal(0, "Raft test: crash before sending install_snapshot_reply");
+    }
+
     if (raft_handle_install_snapshot_request__(raft, rq)) {
         union raft_rpc rpy = {
             .install_snapshot_reply = {
@@ -4826,6 +4848,8 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
         failure_test = FT_CRASH_AFTER_SEND_EXEC_REQ;
     } else if (!strcmp(test, "crash-after-receiving-append-request-update")) {
         failure_test = FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE;
+    } else if (!strcmp(test, "crash-before-sending-install-snapshot-reply")) {
+        failure_test = FT_CRASH_BEFORE_SEND_SNAPSHOT_REP;
     } else if (!strcmp(test, "delay-election")) {
         failure_test = FT_DELAY_ELECTION;
         struct raft *raft;
