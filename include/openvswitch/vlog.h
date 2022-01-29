@@ -131,7 +131,9 @@ void vlog_set_verbosity(const char *arg);
 
 /* Configuring log destinations. */
 void vlog_set_pattern(enum vlog_destination, const char *pattern);
+char *vlog_get_log_file(void);
 int vlog_set_log_file(const char *file_name);
+void vlog_close_log_file(void);
 int vlog_reopen_log_file(void);
 #ifndef _WIN32
 void vlog_change_owner_unix(uid_t, gid_t);

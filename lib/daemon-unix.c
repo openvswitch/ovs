@@ -360,12 +360,15 @@ monitor_daemon(pid_t daemon_pid)
                                (unsigned long int) daemon_pid, status_msg);
 
         if (child_ready) {
+            char *log_file = vlog_get_log_file();
+            vlog_close_log_file();
             int error;
             do {
                 retval = waitpid(daemon_pid, &status, 0);
                 error = retval == -1 ? errno : 0;
             } while (error == EINTR);
-            vlog_reopen_log_file();
+            vlog_set_log_file(log_file);
+            free(log_file);
             if (error) {
                 VLOG_FATAL("waitpid failed (%s)", ovs_strerror(error));
             }
