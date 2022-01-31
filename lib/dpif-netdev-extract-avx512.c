@@ -157,7 +157,7 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
   0, 0, 0, 0, /* Src IP */                                              \
   0, 0, 0, 0, /* Dst IP */
 
-#define PATTERN_IPV4_MASK PATTERN_IPV4_GEN(0xFF, 0xFE, 0xFF, 0xFF)
+#define PATTERN_IPV4_MASK PATTERN_IPV4_GEN(0xFF, 0xBF, 0xFF, 0xFF)
 #define PATTERN_IPV4_UDP PATTERN_IPV4_GEN(0x45, 0, 0, 0x11)
 #define PATTERN_IPV4_TCP PATTERN_IPV4_GEN(0x45, 0, 0, 0x06)
 
@@ -226,6 +226,25 @@ _mm512_maskz_permutexvar_epi8_wrap(__mmask64 kmask, __m512i idx, __m512i a)
 #define PATTERN_DT1Q_IPV4_TCP_KMASK \
     (KMASK_ETHER | (KMASK_DT1Q << 16) | (KMASK_IPV4 << 24) | (KMASK_TCP << 40))
 
+/* Miniflow Strip post-processing masks.
+ * This allows unsetting specific bits from the resulting miniflow. It is used
+ * for e.g. IPv4 where the "DF" bit is never pushed to the miniflow itself.
+ * The NC define is for "No Change", allowing the bits to pass through.
+ */
+#define NC 0xFF
+
+#define PATTERN_STRIP_IPV4_MASK                                         \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, 0xBF, NC, NC, NC,   \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC
+
+#define PATTERN_STRIP_DOT1Q_IPV4_MASK                                   \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, 0xBF, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,   \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC
+
 /* This union allows initializing static data as u8, but easily loading it
  * into AVX512 registers too. The union ensures proper alignment for the zmm.
  */
@@ -250,8 +269,9 @@ struct mfex_profile {
     union mfex_data probe_mask;
     union mfex_data probe_data;
 
-    /* Required for reshaping packet into miniflow. */
+    /* Required for reshaping packet into miniflow and post-processing it. */
     union mfex_data store_shuf;
+    union mfex_data strip_mask;
     __mmask64 store_kmsk;
 
     /* Constant data to set in mf.bits and dp_packet data on hit. */
@@ -319,6 +339,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV4 PATTERN_IPV4_UDP},
 
         .store_shuf.u8_data = { PATTERN_IPV4_UDP_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV4_MASK },
         .store_kmsk = PATTERN_IPV4_UDP_KMASK,
 
         .mf_bits = { 0x18a0000000000000, 0x0000000000040401},
@@ -341,6 +362,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
 
         .store_shuf.u8_data = { PATTERN_IPV4_TCP_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV4_MASK },
         .store_kmsk = PATTERN_IPV4_TCP_KMASK,
 
         .mf_bits = { 0x18a0000000000000, 0x0000000000044401},
@@ -359,6 +381,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
 
         .store_shuf.u8_data = { PATTERN_DT1Q_IPV4_UDP_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_DOT1Q_IPV4_MASK },
         .store_kmsk = PATTERN_DT1Q_IPV4_UDP_KMASK,
 
         .mf_bits = { 0x38a0000000000000, 0x0000000000040401},
@@ -383,13 +406,14 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
 
         .store_shuf.u8_data = { PATTERN_DT1Q_IPV4_TCP_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_DOT1Q_IPV4_MASK },
         .store_kmsk = PATTERN_DT1Q_IPV4_TCP_KMASK,
 
         .mf_bits = { 0x38a0000000000000, 0x0000000000044401},
         .dp_pkt_offs = {
             14, UINT16_MAX, 18, 38,
         },
-        .dp_pkt_min_size = 46,
+        .dp_pkt_min_size = 58,
     },
 };
 
@@ -471,6 +495,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
     __m512i v_vals = _mm512_loadu_si512(&profile->probe_data);
     __m512i v_mask = _mm512_loadu_si512(&profile->probe_mask);
     __m512i v_shuf = _mm512_loadu_si512(&profile->store_shuf);
+    __m512i v_strp = _mm512_loadu_si512(&profile->strip_mask);
 
     __mmask64 k_shuf = profile->store_kmsk;
     __m128i v_bits = _mm_loadu_si128((void *) &profile->mf_bits);
@@ -498,7 +523,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
         __m512i v_pkt0_masked = _mm512_and_si512(v_pkt0, v_mask);
         __mmask64 k_cmp = _mm512_cmpeq_epi8_mask(v_pkt0_masked, v_vals);
-        if (k_cmp != UINT64_MAX) {
+        if (OVS_UNLIKELY(k_cmp != UINT64_MAX)) {
             continue;
         }
 
@@ -526,8 +551,9 @@ mfex_avx512_process(struct dp_packet_batch *packets,
             v_blk0 = _mm512_maskz_permutex2var_epi8_skx(k_shuf, v_pkt0,
                                                         v_shuf, v512_zeros);
         }
-        _mm512_storeu_si512(&blocks[2], v_blk0);
 
+        __m512i v_blk0_strip = _mm512_and_si512(v_blk0, v_strp);
+        _mm512_storeu_si512(&blocks[2], v_blk0_strip);
 
         /* Perform "post-processing" per profile, handling details not easily
          * handled in the above generic AVX512 code. Examples include TCP flag
