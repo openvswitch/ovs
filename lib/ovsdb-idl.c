@@ -1759,18 +1759,39 @@ ovsdb_idl_db_sync_condition(struct ovsdb_idl_db *db)
                 ovsdb_idl_condition_move(&table->ack_cond, &table->req_cond);
             }
         } else {
-            /* If there was no "unsent" condition but instead a
-             * monitor_cond_change request was in flight, move table->req_cond
-             * to table->new_cond and set db->cond_changed to trigger a new
-             * monitor_cond_change request.
-             *
-             * However, if a new condition has been set by the IDL client,
-             * monitor_cond_change will be sent anyway and will use the most
-             * recent table->new_cond so there's no need to update it here.
-             */
-            if (table->req_cond && !table->new_cond) {
-                ovsdb_idl_condition_move(&table->new_cond, &table->req_cond);
+            if (table->req_cond) {
+                /* There was an in-flight monitor_cond_change request.  It's no
+                 * longer relevant in the restarted FSM, so clear it. */
+                if (table->new_cond) {
+                    /* We will send a new monitor_cond_change with the new
+                     * condition.  The previously in-flight condition is
+                     * irrelevant and we can just forget about it. */
+                    ovsdb_idl_condition_destroy(table->req_cond);
+                    table->req_cond = NULL;
+                } else {
+                    /* The restarted FSM needs to again send a request for the
+                     * previously in-flight condition. */
+                    ovsdb_idl_condition_move(&table->new_cond,
+                                             &table->req_cond);
+                }
                 db->cond_changed = true;
+
+                /* There are two cases:
+                 * a. either the server already processed the requested monitor
+                 *    condition change but the FSM was restarted before the
+                 *    client was notified.  In this case the client should
+                 *    clear its local cache because it's out of sync with the
+                 *    monitor view on the server side.
+                 *
+                 * b. OR the server hasn't processed the requested monitor
+                 *    condition change yet.
+                 *
+                 * As there's no easy way to differentiate between the two,
+                 * and given that this condition should be rare, reset the
+                 * 'last_id', essentially flushing the local cached DB
+                 * contents.
+                 */
+                db->last_id = UUID_ZERO;
             }
         }
     }
