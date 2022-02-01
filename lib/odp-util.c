@@ -3208,7 +3208,7 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
 
         opts.flags = tun_key->gtpu_flags;
         opts.msgtype = tun_key->gtpu_msgtype;
-        nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
+        nl_msg_put_unspec(a, OVS_TUNNEL_KEY_ATTR_GTPU_OPTS,
                           &opts, sizeof(opts));
     }
     nl_msg_end_nested(a, tun_key_ofs);
