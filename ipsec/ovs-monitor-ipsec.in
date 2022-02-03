@@ -708,6 +708,11 @@ conn prevent_unencrypted_vxlan
                     not re.match(r".*need --listen.*", pout):
                 break
 
+        if re.match(r".*[F|f]ailed to initiate connection.*", pout):
+            vlog.err('Failed to initiate connection through'
+                    ' Interface %s.\n' % (conn.split('-')[0]))
+            vlog.err(pout)
+
     def _nss_clear_database(self):
         """Remove all OVS IPsec related state from the NSS database"""
         try:
