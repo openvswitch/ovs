@@ -2929,6 +2929,10 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
 {
     struct dp_offload_thread_item *offload;
 
+    if (!netdev_is_flow_api_enabled()) {
+        return;
+    }
+
     offload = dp_netdev_alloc_flow_offload(pmd, flow,
                                            DP_NETDEV_FLOW_OFFLOAD_OP_DEL);
     offload->timestamp = pmd->ctx.now;
@@ -3040,9 +3044,7 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     dp_netdev_simple_match_remove(pmd, flow);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     ccmap_dec(&pmd->n_flows, odp_to_u32(in_port));
-    if (flow->mark != INVALID_FLOW_MARK) {
-        queue_netdev_flow_del(pmd, flow);
-    }
+    queue_netdev_flow_del(pmd, flow);
     flow->dead = true;
 
     dp_netdev_flow_unref(flow);
