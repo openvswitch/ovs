@@ -2223,12 +2223,23 @@ static void
 do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    netdev_flow_flush(port->netdev);
-    netdev_uninit_flow_api(port->netdev);
     hmap_remove(&dp->ports, &port->node);
     seq_change(dp->port_seq);
 
     reconfigure_datapath(dp);
+
+    /* Flush and disable offloads only after 'port' has been made
+     * inaccessible through datapath reconfiguration.
+     * This prevents having PMDs enqueuing offload requests after
+     * the flush.  However, the flush doesn't provide any synchronization
+     * with the offload thread, so some requests could still be in the
+     * queue.
+     * When only this port is deleted instead of the whole datapath,
+     * revalidator threads are still active and can still enqueue
+     * offload modification or deletion.  Managing those stray requests
+     * is done in the offload threads. */
+    netdev_flow_flush(port->netdev);
+    netdev_uninit_flow_api(port->netdev);
 
     port_destroy(port);
 }
