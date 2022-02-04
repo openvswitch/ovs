@@ -348,7 +348,6 @@ enum {
 };
 
 struct dp_offload_flow_item {
-    struct dp_netdev_pmd_thread *pmd;
     struct dp_netdev_flow *flow;
     int op;
     struct match match;
@@ -358,7 +357,6 @@ struct dp_offload_flow_item {
 };
 
 struct dp_offload_flush_item {
-    struct dp_netdev *dp;
     struct netdev *netdev;
     struct ovs_barrier *barrier;
 };
@@ -372,6 +370,7 @@ struct dp_offload_thread_item {
     struct mpsc_queue_node node;
     enum dp_offload_type type;
     long long int timestamp;
+    struct dp_netdev *dp;
     union dp_offload_thread_data data[0];
 };
 
@@ -2561,10 +2560,10 @@ flow_mark_has_no_ref(uint32_t mark)
 }
 
 static int
-mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
+mark_to_flow_disassociate(struct dp_netdev *dp,
                           struct dp_netdev_flow *flow)
 {
-    const char *dpif_type_str = dpif_normalize_type(pmd->dp->class->type);
+    const char *dpif_type_str = dpif_normalize_type(dp->class->type);
     struct cmap_node *mark_node = CONST_CAST(struct cmap_node *,
                                              &flow->mark_node);
     unsigned int tid = netdev_offload_thread_id();
@@ -2593,9 +2592,9 @@ mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
         if (port) {
             /* Taking a global 'port_rwlock' to fulfill thread safety
              * restrictions regarding netdev port mapping. */
-            ovs_rwlock_rdlock(&pmd->dp->port_rwlock);
+            ovs_rwlock_rdlock(&dp->port_rwlock);
             ret = netdev_flow_del(port, &flow->mega_ufid, NULL);
-            ovs_rwlock_unlock(&pmd->dp->port_rwlock);
+            ovs_rwlock_unlock(&dp->port_rwlock);
             netdev_close(port);
         }
 
@@ -2637,7 +2636,7 @@ mark_to_flow_find(const struct dp_netdev_pmd_thread *pmd,
 }
 
 static struct dp_offload_thread_item *
-dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
+dp_netdev_alloc_flow_offload(struct dp_netdev *dp,
                              struct dp_netdev_flow *flow,
                              int op)
 {
@@ -2648,13 +2647,12 @@ dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
     flow_offload = &item->data->flow;
 
     item->type = DP_OFFLOAD_FLOW;
+    item->dp = dp;
 
-    flow_offload->pmd = pmd;
     flow_offload->flow = flow;
     flow_offload->op = op;
 
     dp_netdev_flow_ref(flow);
-    dp_netdev_pmd_try_ref(pmd);
 
     return item;
 }
@@ -2673,7 +2671,6 @@ dp_netdev_free_flow_offload(struct dp_offload_thread_item *offload)
 {
     struct dp_offload_flow_item *flow_offload = &offload->data->flow;
 
-    dp_netdev_pmd_unref(flow_offload->pmd);
     dp_netdev_flow_unref(flow_offload->flow);
     ovsrcu_postpone(dp_netdev_free_flow_offload__, offload);
 }
@@ -2716,9 +2713,9 @@ dp_netdev_offload_flow_enqueue(struct dp_offload_thread_item *item)
 }
 
 static int
-dp_netdev_flow_offload_del(struct dp_offload_flow_item *offload)
+dp_netdev_flow_offload_del(struct dp_offload_thread_item *item)
 {
-    return mark_to_flow_disassociate(offload->pmd, offload->flow);
+    return mark_to_flow_disassociate(item->dp, item->data->flow.flow);
 }
 
 /*
@@ -2733,12 +2730,13 @@ dp_netdev_flow_offload_del(struct dp_offload_flow_item *offload)
  * valid, thus only item 2 needed.
  */
 static int
-dp_netdev_flow_offload_put(struct dp_offload_flow_item *offload)
+dp_netdev_flow_offload_put(struct dp_offload_thread_item *item)
 {
-    struct dp_netdev_pmd_thread *pmd = offload->pmd;
+    struct dp_offload_flow_item *offload = &item->data->flow;
+    struct dp_netdev *dp = item->dp;
     struct dp_netdev_flow *flow = offload->flow;
     odp_port_t in_port = flow->flow.in_port.odp_port;
-    const char *dpif_type_str = dpif_normalize_type(pmd->dp->class->type);
+    const char *dpif_type_str = dpif_normalize_type(dp->class->type);
     bool modification = offload->op == DP_NETDEV_FLOW_OFFLOAD_OP_MOD
                         && flow->mark != INVALID_FLOW_MARK;
     struct offload_info info;
@@ -2784,12 +2782,12 @@ dp_netdev_flow_offload_put(struct dp_offload_flow_item *offload)
 
     /* Taking a global 'port_rwlock' to fulfill thread safety
      * restrictions regarding the netdev port mapping. */
-    ovs_rwlock_rdlock(&pmd->dp->port_rwlock);
+    ovs_rwlock_rdlock(&dp->port_rwlock);
     ret = netdev_flow_put(port, &offload->match,
                           CONST_CAST(struct nlattr *, offload->actions),
                           offload->actions_len, &flow->mega_ufid, &info,
                           NULL);
-    ovs_rwlock_unlock(&pmd->dp->port_rwlock);
+    ovs_rwlock_unlock(&dp->port_rwlock);
     netdev_close(port);
 
     if (ret) {
@@ -2806,7 +2804,7 @@ err_free:
     if (!modification) {
         flow_mark_free(mark);
     } else {
-        mark_to_flow_disassociate(pmd, flow);
+        mark_to_flow_disassociate(item->dp, flow);
     }
     return -1;
 }
@@ -2821,15 +2819,15 @@ dp_offload_flow(struct dp_offload_thread_item *item)
     switch (flow_offload->op) {
     case DP_NETDEV_FLOW_OFFLOAD_OP_ADD:
         op = "add";
-        ret = dp_netdev_flow_offload_put(flow_offload);
+        ret = dp_netdev_flow_offload_put(item);
         break;
     case DP_NETDEV_FLOW_OFFLOAD_OP_MOD:
         op = "modify";
-        ret = dp_netdev_flow_offload_put(flow_offload);
+        ret = dp_netdev_flow_offload_put(item);
         break;
     case DP_NETDEV_FLOW_OFFLOAD_OP_DEL:
         op = "delete";
-        ret = dp_netdev_flow_offload_del(flow_offload);
+        ret = dp_netdev_flow_offload_del(item);
         break;
     default:
         OVS_NOT_REACHED();
@@ -2845,9 +2843,9 @@ dp_offload_flush(struct dp_offload_thread_item *item)
 {
     struct dp_offload_flush_item *flush = &item->data->flush;
 
-    ovs_rwlock_rdlock(&flush->dp->port_rwlock);
+    ovs_rwlock_rdlock(&item->dp->port_rwlock);
     netdev_flow_flush(flush->netdev);
-    ovs_rwlock_unlock(&flush->dp->port_rwlock);
+    ovs_rwlock_unlock(&item->dp->port_rwlock);
 
     ovs_barrier_block(flush->barrier);
 
@@ -2933,7 +2931,7 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
         return;
     }
 
-    offload = dp_netdev_alloc_flow_offload(pmd, flow,
+    offload = dp_netdev_alloc_flow_offload(pmd->dp, flow,
                                            DP_NETDEV_FLOW_OFFLOAD_OP_DEL);
     offload->timestamp = pmd->ctx.now;
     dp_netdev_offload_flow_enqueue(offload);
@@ -3017,7 +3015,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
         return;
     }
 
-    item = dp_netdev_alloc_flow_offload(pmd, flow, op);
+    item = dp_netdev_alloc_flow_offload(pmd->dp, flow, op);
     flow_offload = &item->data->flow;
     flow_offload->match = *match;
     flow_offload->actions = xmalloc(actions_len);
@@ -3064,10 +3062,10 @@ dp_netdev_offload_flush_enqueue(struct dp_netdev *dp,
 
         item = xmalloc(sizeof *item + sizeof *flush);
         item->type = DP_OFFLOAD_FLUSH;
+        item->dp = dp;
         item->timestamp = now_us;
 
         flush = &item->data->flush;
-        flush->dp = dp;
         flush->netdev = netdev;
         flush->barrier = barrier;
 
