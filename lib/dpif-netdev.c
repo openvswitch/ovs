@@ -2724,6 +2724,10 @@ queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
         ovsthread_once_done(&offload_thread_once);
     }
 
+    if (!netdev_is_flow_api_enabled()) {
+        return;
+    }
+
     offload = dp_netdev_alloc_flow_offload(pmd, flow,
                                            DP_NETDEV_FLOW_OFFLOAD_OP_DEL);
     dp_netdev_append_flow_offload(offload);
@@ -2771,9 +2775,7 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     ovs_assert(cls != NULL);
     dpcls_remove(cls, &flow->cr);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
-    if (flow->mark != INVALID_FLOW_MARK) {
-        queue_netdev_flow_del(pmd, flow);
-    }
+    queue_netdev_flow_del(pmd, flow);
     flow->dead = true;
 
     dp_netdev_flow_unref(flow);
