@@ -20,8 +20,13 @@ cd sparse
 make -j4 HAVE_LLVM= HAVE_SQLITE= install
 cd ..
 
+# Installing wheel separately because it may be needed to build some
+# of the packages during dependency backtracking and pip >= 22.0 will
+# abort backtracking on build failures:
+#     https://github.com/pypa/pip/issues/10655
+pip3 install --disable-pip-version-check --user wheel
 pip3 install --disable-pip-version-check --user \
-    flake8 hacking sphinx wheel setuptools pyelftools
+    flake8 'hacking>=3.0' sphinx setuptools pyelftools
 pip3 install --user  'meson==0.49.2'
 
 if [ "$M32" ]; then
