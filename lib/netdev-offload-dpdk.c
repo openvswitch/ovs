@@ -1438,12 +1438,13 @@ parse_flow_match(struct netdev *netdev,
         spec->tci = match->flow.vlans[0].tci & ~htons(VLAN_CFI);
         mask->tci = match->wc.masks.vlans[0].tci & ~htons(VLAN_CFI);
 
-        /* Match any protocols. */
-        mask->inner_type = 0;
-
         if (eth_spec && eth_mask) {
             eth_spec->has_vlan = 1;
             eth_mask->has_vlan = 1;
+            spec->inner_type = eth_spec->type;
+            mask->inner_type = eth_mask->type;
+            eth_spec->type = match->flow.vlans[0].tpid;
+            eth_mask->type = match->wc.masks.vlans[0].tpid;
         }
 
         add_flow_pattern(patterns, RTE_FLOW_ITEM_TYPE_VLAN, spec, mask, NULL);
