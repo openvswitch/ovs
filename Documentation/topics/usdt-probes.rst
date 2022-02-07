@@ -50,6 +50,11 @@ is used ::
 
     checking whether USDT probes are enabled... yes
 
+As USDT probes internally use the ``DTRACE_PROBExx`` macros, which are part of
+the SystemTap framework, you need to install the appropriate package for your
+Linux distribution. For example, on Fedora, you need to install the
+``systemtap-sdt-devel`` package.
+
 
 Listing available probes
 ------------------------
