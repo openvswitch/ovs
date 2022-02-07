@@ -104,6 +104,7 @@ struct dp_netdev_flow {
     bool dead;
     uint32_t mark;               /* Unique flow mark for netdev offloading. */
     uint64_t simple_match_mark;  /* Unique flow mark for the simple match. */
+    odp_port_t orig_in_port;
 
     /* Statistics. */
     struct dp_netdev_flow_stats stats;

@@ -3004,7 +3004,7 @@ static void
 queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
                       struct dp_netdev_flow *flow, struct match *match,
                       const struct nlattr *actions, size_t actions_len,
-                      odp_port_t orig_in_port, int op)
+                      int op)
 {
     struct dp_offload_thread_item *item;
     struct dp_offload_flow_item *flow_offload;
@@ -3019,7 +3019,7 @@ queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
     flow_offload->actions = xmalloc(actions_len);
     memcpy(flow_offload->actions, actions, actions_len);
     flow_offload->actions_len = actions_len;
-    flow_offload->orig_in_port = orig_in_port;
+    flow_offload->orig_in_port = flow->orig_in_port;
 
     item->timestamp = pmd->ctx.now;
     dp_netdev_offload_flow_enqueue(item);
@@ -4093,6 +4093,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     flow->dead = false;
     flow->batch = NULL;
     flow->mark = INVALID_FLOW_MARK;
+    flow->orig_in_port = orig_in_port;
     *CONST_CAST(unsigned *, &flow->pmd_id) = pmd->core_id;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     *CONST_CAST(ovs_u128 *, &flow->ufid) = *ufid;
@@ -4127,7 +4128,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     }
 
     queue_netdev_flow_put(pmd, flow, match, actions, actions_len,
-                          orig_in_port, DP_NETDEV_FLOW_OFFLOAD_OP_ADD);
+                          DP_NETDEV_FLOW_OFFLOAD_OP_ADD);
     log_netdev_flow_change(flow, match, NULL, actions, actions_len);
 
     return flow;
@@ -4169,7 +4170,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
             ovsrcu_set(&netdev_flow->actions, new_actions);
 
             queue_netdev_flow_put(pmd, netdev_flow, match,
-                                  put->actions, put->actions_len, ODPP_NONE,
+                                  put->actions, put->actions_len,
                                   DP_NETDEV_FLOW_OFFLOAD_OP_MOD);
             log_netdev_flow_change(netdev_flow, match, old_actions,
                                    put->actions, put->actions_len);
