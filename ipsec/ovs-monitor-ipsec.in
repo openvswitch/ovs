@@ -337,7 +337,14 @@ conn prevent_unencrypted_vxlan
         Once strongSwan vici bindings will be distributed with major
         Linux distributions this function could be simplified."""
         vlog.info("Refreshing StrongSwan configuration")
-        subprocess.call([self.IPSEC, "update"])
+        proc = subprocess.Popen([self.IPSEC, "update"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+        outs, errs = proc.communicate()
+        if proc.returncode != 0:
+            vlog.err("StrongSwan failed to update configuration:\n"
+                           "%s \n %s" % (str(outs), str(errs)))
+
         subprocess.call([self.IPSEC, "rereadsecrets"])
         # "ipsec update" command does not remove those tunnels that were
         # updated or that disappeared from the ipsec.conf file.  So, we have
