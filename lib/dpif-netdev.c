@@ -1074,7 +1074,9 @@ dpif_netdev_subtable_lookup_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
                 if (!cls) {
                     continue;
                 }
+                ovs_mutex_lock(&pmd->flow_mutex);
                 uint32_t subtbl_changes = dpcls_subtable_lookup_reprobe(cls);
+                ovs_mutex_unlock(&pmd->flow_mutex);
                 if (subtbl_changes) {
                     lookup_dpcls_changed++;
                     lookup_subtable_changed += subtbl_changes;
@@ -9738,9 +9740,12 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
 
     /* Get the preferred subtable search function for this (u0,u1) subtable.
      * The function is guaranteed to always return a valid implementation, and
-     * possibly an ISA optimized, and/or specialized implementation.
+     * possibly an ISA optimized, and/or specialized implementation. Initialize
+     * the subtable search function atomically to avoid garbage data being read
+     * by the PMD thread.
      */
-    subtable->lookup_func = dpcls_subtable_get_best_impl(unit0, unit1);
+    atomic_init(&subtable->lookup_func,
+                dpcls_subtable_get_best_impl(unit0, unit1));
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */
@@ -9769,6 +9774,10 @@ dpcls_find_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
 /* Checks for the best available implementation for each subtable lookup
  * function, and assigns it as the lookup function pointer for each subtable.
  * Returns the number of subtables that have changed lookup implementation.
+ * This function requires holding a flow_mutex when called. This is to make
+ * sure modifications done by this function are not overwritten. This could
+ * happen if dpcls_sort_subtable_vector() is called at the same time as this
+ * function.
  */
 static uint32_t
 dpcls_subtable_lookup_reprobe(struct dpcls *cls)
@@ -9781,10 +9790,13 @@ dpcls_subtable_lookup_reprobe(struct dpcls *cls)
         uint32_t u0_bits = subtable->mf_bits_set_unit0;
         uint32_t u1_bits = subtable->mf_bits_set_unit1;
         void *old_func = subtable->lookup_func;
-        subtable->lookup_func = dpcls_subtable_get_best_impl(u0_bits, u1_bits);
+
+        /* Set the subtable lookup function atomically to avoid garbage data
+         * being read by the PMD thread. */
+        atomic_store_relaxed(&subtable->lookup_func,
+                    dpcls_subtable_get_best_impl(u0_bits, u1_bits));
         subtables_changed += (old_func != subtable->lookup_func);
     }
-    pvector_publish(pvec);
 
     return subtables_changed;
 }
