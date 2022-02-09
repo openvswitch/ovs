@@ -2265,8 +2265,16 @@ set_sport_range(const struct nat_action_info_t *ni, const struct conn_key *k,
     if (((ni->nat_action & NAT_ACTION_SNAT_ALL) == NAT_ACTION_SRC) ||
         ((ni->nat_action & NAT_ACTION_DST))) {
         *curr = ntohs(k->src.port);
-        *min = MIN_NAT_EPHEMERAL_PORT;
-        *max = MAX_NAT_EPHEMERAL_PORT;
+        if (*curr < 512) {
+            *min = 1;
+            *max = 511;
+        } else if (*curr < 1024) {
+            *min = 600;
+            *max = 1023;
+        } else {
+            *min = MIN_NAT_EPHEMERAL_PORT;
+            *max = MAX_NAT_EPHEMERAL_PORT;
+        }
     } else {
         *min = ni->min_port;
         *max = ni->max_port;
