@@ -273,7 +273,9 @@ OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packe
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@upcall: datapath reached the dynamic limit of .* flows.@d
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
