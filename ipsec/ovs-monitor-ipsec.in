@@ -1320,7 +1320,8 @@ def main():
     idl = ovs.db.idl.Idl(remote, schema_helper)
 
     ovs.daemon.daemonize()
-
+    ovs.unixctl.command_register("list-commands", "", 0, 0,
+                                 ovs.unixctl._unixctl_help, None)
     ovs.unixctl.command_register("xfrm/policies", "", 0, 0,
                                  unixctl_xfrm_policies, None)
     ovs.unixctl.command_register("xfrm/state", "", 0, 0,
