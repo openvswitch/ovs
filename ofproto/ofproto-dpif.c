@@ -2333,6 +2333,12 @@ set_ipfix(
             dpif_ipfix_unref(di);
             ofproto->ipfix = NULL;
         }
+
+        /* TODO: need to consider ipfix option changes more than
+         * enable/disable */
+        if (new_di || !ofproto->ipfix) {
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        }
     }
 
     return 0;
