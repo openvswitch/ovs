@@ -3958,6 +3958,10 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
             simap_put(&ofproto->backer->tnl_backers,
                       dp_port_name, odp_to_u32(port_no));
         }
+    } else {
+        struct dpif *dpif = ofproto->backer->dpif;
+        const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
+        netdev_set_dpif_type(netdev, dpif_type_str);
     }
 
     if (netdev_get_tunnel_config(netdev)) {
