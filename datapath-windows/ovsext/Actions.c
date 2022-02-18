@@ -1712,6 +1712,15 @@ OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
         ipHdr->ttl = ipAttr->ipv4_ttl;
         key->ipKey.nwTtl = ipAttr->ipv4_ttl;
     }
+    if (ipHdr->dscp != (ipAttr->ipv4_tos & 0xfc)) {
+        /* ECN + DSCP */
+        UINT8 newTos = (ipHdr->tos & 0x3) | (ipAttr->ipv4_tos & 0xfc);
+        if (ipHdr->check != 0) {
+            ipHdr->check = ChecksumUpdate16(ipHdr->check, ipHdr->tos, newTos);
+        }
+        ipHdr->tos = newTos;
+        key->ipKey.nwTos = newTos;
+    }
 
     return NDIS_STATUS_SUCCESS;
 }
