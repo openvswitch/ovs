@@ -143,6 +143,8 @@ struct ofproto {
     /* Variable length mf_field mapping. Stores all configured variable length
      * meta-flow fields (struct mf_field) in a switch. */
     struct vl_mff_map vl_mff_map;
+    /* refcount to this ofproto, held by rule/group/xlate_caches */
+    struct ovs_refcount refcount;
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
