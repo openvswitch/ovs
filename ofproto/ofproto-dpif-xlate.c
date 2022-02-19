@@ -3024,12 +3024,14 @@ xlate_normal(struct xlate_ctx *ctx)
         struct xc_entry *entry;
 
         /* Save just enough info to update mac learning table later. */
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
-        entry->normal.ofproto = ctx->xbridge->ofproto;
-        entry->normal.in_port = flow->in_port.ofp_port;
-        entry->normal.dl_src = flow->dl_src;
-        entry->normal.vlan = vlan;
-        entry->normal.is_gratuitous_arp = is_grat_arp;
+        if (ofproto_try_ref(&ctx->xbridge->ofproto->up)) {
+            entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
+            entry->normal.ofproto = ctx->xbridge->ofproto;
+            entry->normal.in_port = flow->in_port.ofp_port;
+            entry->normal.dl_src = flow->dl_src;
+            entry->normal.vlan = vlan;
+            entry->normal.is_gratuitous_arp = is_grat_arp;
+        }
     }
 
     /* Determine output bundle. */
