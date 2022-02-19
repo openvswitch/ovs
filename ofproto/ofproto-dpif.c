@@ -4477,12 +4477,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                 atomic_add_relaxed(&tbl->n_matched, stats->n_packets, &orig);
             }
             if (xcache) {
-                struct xc_entry *entry;
+                if (ofproto_try_ref(&ofproto->up)) {
+                    struct xc_entry *entry;
 
-                entry = xlate_cache_add_entry(xcache, XC_TABLE);
-                entry->table.ofproto = ofproto;
-                entry->table.id = *table_id;
-                entry->table.match = true;
+                    entry = xlate_cache_add_entry(xcache, XC_TABLE);
+                    entry->table.ofproto = ofproto;
+                    entry->table.id = *table_id;
+                    entry->table.match = true;
+                }
             }
             return rule;
         }
@@ -4513,12 +4515,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                                stats->n_packets, &orig);
         }
         if (xcache) {
-            struct xc_entry *entry;
+            if (ofproto_try_ref(&ofproto->up)) {
+                struct xc_entry *entry;
 
-            entry = xlate_cache_add_entry(xcache, XC_TABLE);
-            entry->table.ofproto = ofproto;
-            entry->table.id = next_id;
-            entry->table.match = (rule != NULL);
+                entry = xlate_cache_add_entry(xcache, XC_TABLE);
+                entry->table.ofproto = ofproto;
+                entry->table.id = next_id;
+                entry->table.match = (rule != NULL);
+            }
         }
         if (rule) {
             goto out;   /* Match. */
