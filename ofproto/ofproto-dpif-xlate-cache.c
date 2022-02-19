@@ -209,6 +209,7 @@ xlate_cache_clear_entry(struct xc_entry *entry)
 {
     switch (entry->type) {
     case XC_TABLE:
+        ofproto_unref(&(entry->table.ofproto->up));
         break;
     case XC_RULE:
         ofproto_rule_unref(&entry->rule->up);
@@ -231,6 +232,7 @@ xlate_cache_clear_entry(struct xc_entry *entry)
         free(entry->learn.ofm);
         break;
     case XC_NORMAL:
+        ofproto_unref(&(entry->normal.ofproto->up));
         break;
     case XC_FIN_TIMEOUT:
         /* 'u.fin.rule' is always already held as a XC_RULE, which
