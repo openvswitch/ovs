@@ -549,6 +549,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 
     ovs_mutex_init(&ofproto->vl_mff_map.mutex);
     cmap_init(&ofproto->vl_mff_map.cmap);
+    ovs_refcount_init(&ofproto->refcount);
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -1695,14 +1696,58 @@ ofproto_destroy__(struct ofproto *ofproto)
     ofproto->ofproto_class->dealloc(ofproto);
 }
 
-/* Destroying rules is doubly deferred, must have 'ofproto' around for them.
- * - 1st we defer the removal of the rules from the classifier
- * - 2nd we defer the actual destruction of the rules. */
+/*
+ * Rule destruction requires ofproto to remain accessible.
+ * Depending on the rule destruction call (shown in below), it can take several
+ * RCU grace periods before the ofproto reference is not needed anymore.
+ * The ofproto destruction callback is thus protected by a refcount,
+ * and such destruction is itself deferred.
+ *
+ * remove_rules_postponed (one grace period)
+ *       -> remove_rule_rcu
+ *           -> remove_rule_rcu__
+ *               -> ofproto_rule_unref -> ref count != 1
+ *                   -> ... more grace periods.
+ *                   -> rule_destroy_cb (> 2 grace periods)
+ *                       -> free
+ *
+ * NOTE: The original ofproto destruction is only deferred by two grace
+ * periods to keep ofproto accessible. By using refcount together the
+ * destruction can be deferred for longer time. Now ofproto has 3 states:
+ *
+ * state 1: alive, with refcount >= 1
+ * state 2: dying, with refcount == 0, however pointer is valid
+ * state 3: died, memory freed, pointer might be dangling.
+ *
+ * We only need to add refcount to certain objects whose destruction can
+ * take several RCU grace periods (rule, group, xlate_cache). Other
+ * references to ofproto must be cleared before the 2 RCU grace periods.
+ */
 static void
 ofproto_destroy_defer__(struct ofproto *ofproto)
     OVS_EXCLUDED(ofproto_mutex)
 {
     ovsrcu_postpone(ofproto_destroy__, ofproto);
+}
+
+void
+ofproto_ref(struct ofproto *ofproto)
+{
+    ovs_refcount_ref(&ofproto->refcount);
+}
+
+bool
+ofproto_try_ref(struct ofproto *ofproto)
+{
+    return ovs_refcount_try_ref_rcu(&ofproto->refcount);
+}
+
+void
+ofproto_unref(struct ofproto *ofproto)
+{
+    if (ofproto && ovs_refcount_unref(&ofproto->refcount) == 1) {
+        ovsrcu_postpone(ofproto_destroy_defer__, ofproto);
+    }
 }
 
 void
@@ -1736,8 +1781,7 @@ ofproto_destroy(struct ofproto *p, bool del)
     p->connmgr = NULL;
     ovs_mutex_unlock(&ofproto_mutex);
 
-    /* Destroying rules is deferred, must have 'ofproto' around for them. */
-    ovsrcu_postpone(ofproto_destroy_defer__, p);
+    ofproto_unref(p);
 }
 
 /* Destroys the datapath with the respective 'name' and 'type'.  With the Linux
@@ -2929,6 +2973,9 @@ ofproto_rule_destroy__(struct rule *rule)
     cls_rule_destroy(CONST_CAST(struct cls_rule *, &rule->cr));
     rule_actions_destroy(rule_get_actions(rule));
     ovs_mutex_destroy(&rule->mutex);
+    /* ofproto_unref() must be called first. It is possible because ofproto
+     * destruction is deferred by an RCU grace period. */
+    ofproto_unref(rule->ofproto);
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
@@ -3069,6 +3116,9 @@ group_destroy_cb(struct ofgroup *group)
                                                 &group->props));
     ofputil_bucket_list_destroy(CONST_CAST(struct ovs_list *,
                                            &group->buckets));
+    /* ofproto_unref() must be called first. It is possible because ofproto
+     * destruction is deferred by an RCU grace period. */
+    ofproto_unref(group->ofproto);
     group->ofproto->ofproto_class->group_dealloc(group);
 }
 
@@ -5271,10 +5321,15 @@ ofproto_rule_create(struct ofproto *ofproto, struct cls_rule *cr,
     struct rule *rule;
     enum ofperr error;
 
+    if (!ofproto_try_ref(ofproto)) {
+        return OFPERR_OFPFMFC_UNKNOWN;
+    }
+
     /* Allocate new rule. */
     rule = ofproto->ofproto_class->rule_alloc();
     if (!rule) {
         cls_rule_destroy(cr);
+        ofproto_unref(ofproto);
         VLOG_WARN_RL(&rl, "%s: failed to allocate a rule.", ofproto->name);
         return OFPERR_OFPFMFC_UNKNOWN;
     }
@@ -7339,8 +7394,13 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
         return OFPERR_OFPGMFC_BAD_TYPE;
     }
 
+    if (!ofproto_try_ref(ofproto)) {
+        return OFPERR_OFPFMFC_UNKNOWN;
+    }
+
     *ofgroup = ofproto->ofproto_class->group_alloc();
     if (!*ofgroup) {
+        ofproto_unref(ofproto);
         VLOG_WARN_RL(&rl, "%s: failed to allocate group", ofproto->name);
         return OFPERR_OFPGMFC_OUT_OF_GROUPS;
     }
@@ -7377,6 +7437,7 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
                                                     &(*ofgroup)->props));
         ofputil_bucket_list_destroy(CONST_CAST(struct ovs_list *,
                                                &(*ofgroup)->buckets));
+        ofproto_unref(ofproto);
         ofproto->ofproto_class->group_dealloc(*ofgroup);
     }
     return error;
