@@ -410,10 +410,10 @@ netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
 
 static void
 parse_flower_rewrite_to_netlink_action(struct ofpbuf *buf,
-                                       struct tc_flower *flower)
+                                       struct tc_action *action)
 {
-    char *mask = (char *) &flower->rewrite.mask;
-    char *data = (char *) &flower->rewrite.key;
+    char *mask = (char *) &action->rewrite.mask;
+    char *data = (char *) &action->rewrite.key;
 
     for (int type = 0; type < ARRAY_SIZE(set_flower_map); type++) {
         char *put = NULL;
@@ -734,7 +734,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             }
             break;
             case TC_ACT_PEDIT: {
-                parse_flower_rewrite_to_netlink_action(buf, flower);
+                parse_flower_rewrite_to_netlink_action(buf, action);
             }
             break;
             case TC_ACT_ENCAP: {
@@ -1085,8 +1085,8 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     uint64_t set_stub[1024 / 8];
     struct ofpbuf set_buf = OFPBUF_STUB_INITIALIZER(set_stub);
     char *set_data, *set_mask;
-    char *key = (char *) &flower->rewrite.key;
-    char *mask = (char *) &flower->rewrite.mask;
+    char *key = (char *) &action->rewrite.key;
+    char *mask = (char *) &action->rewrite.mask;
     const struct nlattr *attr;
     int i, j, type;
     size_t size;
@@ -1128,14 +1128,6 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
         }
     }
 
-    if (!is_all_zeros(&flower->rewrite, sizeof flower->rewrite)) {
-        if (flower->rewrite.rewrite == false) {
-            flower->rewrite.rewrite = true;
-            action->type = TC_ACT_PEDIT;
-            flower->action_count++;
-        }
-    }
-
     if (hasmask && !is_all_zeros(set_mask, size)) {
         VLOG_DBG_RL(&rl, "unsupported sub attribute of set action type %d",
                     type);
@@ -1144,6 +1136,8 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     }
 
     ofpbuf_uninit(&set_buf);
+    action->type = TC_ACT_PEDIT;
+    flower->action_count++;
     return 0;
 }
 
