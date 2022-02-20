@@ -253,10 +253,22 @@ struct tc_action {
             bool force;
             bool commit;
         } ct;
+
+        struct {
+            struct tc_flower_key key;
+            struct tc_flower_key mask;
+        } rewrite;
      };
 
      enum tc_action_type type;
 };
+
+/* assert that if we overflow with a masked write of uint32_t to the last byte
+ * of action.rewrite we overflow inside struct tc_action.
+ * shouldn't happen unless someone moves rewrite to the end of action */
+BUILD_ASSERT_DECL(offsetof(struct tc_action, rewrite)
+                  + MEMBER_SIZEOF(struct tc_action, rewrite)
+                  + sizeof(uint32_t) - 2 < sizeof(struct tc_action));
 
 enum tc_offloaded_state {
     TC_OFFLOADED_STATE_UNDEFINED,
@@ -331,12 +343,6 @@ struct tc_flower {
     struct ovs_flow_stats stats_hw;
     uint64_t lastused;
 
-    struct {
-        bool rewrite;
-        struct tc_flower_key key;
-        struct tc_flower_key mask;
-    } rewrite;
-
     uint32_t csum_update_flags;
 
     bool tunnel;
@@ -349,13 +355,6 @@ struct tc_flower {
     /* Used to force skip_hw when probing tc features. */
     enum tc_offload_policy tc_policy;
 };
-
-/* assert that if we overflow with a masked write of uint32_t to the last byte
- * of flower.rewrite we overflow inside struct flower.
- * shouldn't happen unless someone moves rewrite to the end of flower */
-BUILD_ASSERT_DECL(offsetof(struct tc_flower, rewrite)
-                  + MEMBER_SIZEOF(struct tc_flower, rewrite)
-                  + sizeof(uint32_t) - 2 < sizeof(struct tc_flower));
 
 int tc_replace_flower(struct tcf_id *id, struct tc_flower *flower);
 int tc_del_filter(struct tcf_id *id);

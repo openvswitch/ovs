@@ -956,14 +956,14 @@ static const struct nl_policy pedit_policy[] = {
 static int
 nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
 {
-    struct tc_action *action;
+    struct tc_action *action = &flower->actions[flower->action_count++];
     struct nlattr *pe_attrs[ARRAY_SIZE(pedit_policy)];
     const struct tc_pedit *pe;
     const struct tc_pedit_key *keys;
     const struct nlattr *nla, *keys_ex, *ex_type;
     const void *keys_attr;
-    char *rewrite_key = (void *) &flower->rewrite.key;
-    char *rewrite_mask = (void *) &flower->rewrite.mask;
+    char *rewrite_key = (void *) &action->rewrite.key;
+    char *rewrite_mask = (void *) &action->rewrite.mask;
     size_t keys_ex_size, left;
     int type, i = 0, err;
 
@@ -1042,7 +1042,6 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
         i++;
     }
 
-    action = &flower->actions[flower->action_count++];
     action->type = TC_ACT_PEDIT;
 
     return 0;
@@ -2340,14 +2339,14 @@ nl_msg_put_act_flags(struct ofpbuf *request) {
  * first_word_mask/last_word_mask - the mask to use for the first/last read
  * (as we read entire words). */
 static void
-calc_offsets(struct tc_flower *flower, struct flower_key_to_pedit *m,
+calc_offsets(struct tc_action *action, struct flower_key_to_pedit *m,
              int *cur_offset, int *cnt, ovs_be32 *last_word_mask,
              ovs_be32 *first_word_mask, ovs_be32 **mask, ovs_be32 **data)
 {
     int start_offset, max_offset, total_size;
     int diff, right_zero_bits, left_zero_bits;
-    char *rewrite_key = (void *) &flower->rewrite.key;
-    char *rewrite_mask = (void *) &flower->rewrite.mask;
+    char *rewrite_key = (void *) &action->rewrite.key;
+    char *rewrite_mask = (void *) &action->rewrite.mask;
 
     max_offset = m->offset + m->size;
     start_offset = ROUND_DOWN(m->offset, 4);
@@ -2414,7 +2413,8 @@ csum_update_flag(struct tc_flower *flower,
 
 static int
 nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
-                                 struct tc_flower *flower)
+                                 struct tc_flower *flower,
+                                 struct tc_action *action)
 {
     struct {
         struct tc_pedit sel;
@@ -2438,7 +2438,7 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
             continue;
         }
 
-        calc_offsets(flower, m, &cur_offset, &cnt, &last_word_mask,
+        calc_offsets(action, m, &cur_offset, &cnt, &last_word_mask,
                      &first_word_mask, &mask, &data);
 
         for (j = 0; j < cnt; j++,  mask++, data++, cur_offset += 4) {
@@ -2497,6 +2497,29 @@ nl_msg_put_flower_acts_release(struct ofpbuf *request, uint16_t act_index)
     nl_msg_end_nested(request, act_offset);
 }
 
+/* Aggregates all previous successive pedit actions csum_update_flags
+ * to flower->csum_update_flags. Only append one csum action to the
+ * last pedit action. */
+static void
+nl_msg_put_csum_act(struct ofpbuf *request, struct tc_flower *flower,
+                    uint16_t *act_index)
+{
+    size_t act_offset;
+
+    /* No pedit actions or processed already. */
+    if (!flower->csum_update_flags) {
+        return;
+    }
+
+    act_offset = nl_msg_start_nested(request, (*act_index)++);
+    nl_msg_put_act_csum(request, flower->csum_update_flags);
+    nl_msg_put_act_flags(request);
+    nl_msg_end_nested(request, act_offset);
+
+    /* Clear it. So we can have another series of pedit actions. */
+    flower->csum_update_flags = 0;
+}
+
 static int
 nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
 {
@@ -2513,20 +2536,22 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
 
         action = flower->actions;
         for (i = 0; i < flower->action_count; i++, action++) {
+            if (action->type != TC_ACT_PEDIT) {
+                nl_msg_put_csum_act(request, flower, &act_index);
+            }
             switch (action->type) {
             case TC_ACT_PEDIT: {
                 act_offset = nl_msg_start_nested(request, act_index++);
-                error = nl_msg_put_flower_rewrite_pedits(request, flower);
+                error = nl_msg_put_flower_rewrite_pedits(request, flower,
+                                                         action);
                 if (error) {
                     return error;
                 }
                 nl_msg_end_nested(request, act_offset);
 
-                if (flower->csum_update_flags) {
-                    act_offset = nl_msg_start_nested(request, act_index++);
-                    nl_msg_put_act_csum(request, flower->csum_update_flags);
-                    nl_msg_put_act_flags(request);
-                    nl_msg_end_nested(request, act_offset);
+                if (i == flower->action_count - 1) {
+                    /* If this is the last action check csum calc again. */
+                    nl_msg_put_csum_act(request, flower, &act_index);
                 }
             }
             break;
