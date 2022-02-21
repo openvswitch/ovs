@@ -39,8 +39,19 @@ run
 connected
 
 # Try timeout without noting that we tried to receive.
-# (This does nothing since we never timeout in this case.)
+# Timeout should be scheduled to the next probe interval.
 timeout
+run
+
+# Once we reached the timeout, it should not expire until the receive actually
+# attempted.  However, we still need to wake up as soon as possible in order to
+# have a chance to mark the receive attempt even if nothing was received.
+timeout
+run
+
+# Short time advance past the original probe interval, but not expired still.
+timeout
+run
 
 # Now disable the receive-attempted feature and timeout again.
 receive-attempted LLONG_MAX
@@ -67,17 +78,36 @@ connected
   last connected 0 ms ago, connected 0 ms total
 
 # Try timeout without noting that we tried to receive.
-# (This does nothing since we never timeout in this case.)
-timeout
-  no timeout
-
-# Now disable the receive-attempted feature and timeout again.
-receive-attempted LLONG_MAX
+# Timeout should be scheduled to the next probe interval.
 timeout
   advance 5000 ms
 
 ### t=6000 ###
   in ACTIVE for 5000 ms (0 ms backoff)
+run
+
+# Once we reached the timeout, it should not expire until the receive actually
+# attempted.  However, we still need to wake up as soon as possible in order to
+# have a chance to mark the receive attempt even if nothing was received.
+timeout
+  advance 1 ms
+
+### t=6001 ###
+  in ACTIVE for 5001 ms (0 ms backoff)
+run
+
+# Short time advance past the original probe interval, but not expired still.
+timeout
+  advance 1 ms
+
+### t=6002 ###
+  in ACTIVE for 5002 ms (0 ms backoff)
+run
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
+timeout
+  advance 0 ms
 run
   should send probe
   in IDLE for 0 ms (0 ms backoff)
@@ -86,7 +116,7 @@ run
 timeout
   advance 5000 ms
 
-### t=11000 ###
+### t=11002 ###
   in IDLE for 5000 ms (0 ms backoff)
 run
   should disconnect
@@ -94,7 +124,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   disconnected
-  disconnected at 11000 ms (0 ms ago)
+  disconnected at 11002 ms (0 ms ago)
 ])
 
 ######################################################################
@@ -111,8 +141,19 @@ run
 connected
 
 # Try timeout without noting that we tried to receive.
-# (This does nothing since we never timeout in this case.)
+# Timeout should be scheduled to the next probe interval.
 timeout
+run
+
+# Once we reached the timeout, it should not expire until the receive actually
+# attempted.  However, we still need to wake up as soon as possible in order to
+# have a chance to mark the receive attempt even if nothing was received.
+timeout
+run
+
+# Short time advance past the original probe interval, but not expired still.
+timeout
+run
 
 # Now disable the receive-attempted feature and timeout again.
 receive-attempted LLONG_MAX
@@ -148,17 +189,36 @@ connected
   last connected 0 ms ago, connected 0 ms total
 
 # Try timeout without noting that we tried to receive.
-# (This does nothing since we never timeout in this case.)
-timeout
-  no timeout
-
-# Now disable the receive-attempted feature and timeout again.
-receive-attempted LLONG_MAX
+# Timeout should be scheduled to the next probe interval.
 timeout
   advance 5000 ms
 
 ### t=6500 ###
   in ACTIVE for 5000 ms (0 ms backoff)
+run
+
+# Once we reached the timeout, it should not expire until the receive actually
+# attempted.  However, we still need to wake up as soon as possible in order to
+# have a chance to mark the receive attempt even if nothing was received.
+timeout
+  advance 1 ms
+
+### t=6501 ###
+  in ACTIVE for 5001 ms (0 ms backoff)
+run
+
+# Short time advance past the original probe interval, but not expired still.
+timeout
+  advance 1 ms
+
+### t=6502 ###
+  in ACTIVE for 5002 ms (0 ms backoff)
+run
+
+# Now disable the receive-attempted feature and timeout again.
+receive-attempted LLONG_MAX
+timeout
+  advance 0 ms
 run
   should send probe
   in IDLE for 0 ms (0 ms backoff)
@@ -167,7 +227,7 @@ run
 timeout
   advance 5000 ms
 
-### t=11500 ###
+### t=11502 ###
   in IDLE for 5000 ms (0 ms backoff)
 run
   should disconnect
@@ -175,7 +235,7 @@ disconnected
   in BACKOFF for 0 ms (1000 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   disconnected
-  disconnected at 11500 ms (0 ms ago)
+  disconnected at 11502 ms (0 ms ago)
 ])
 
 ######################################################################
@@ -1272,13 +1332,13 @@ activity
 
 # Connection times out.
 timeout
-  no timeout
-receive-attempted LLONG_MAX
-timeout
   advance 5000 ms
 
 ### t=8000 ###
   in ACTIVE for 6000 ms (1000 ms backoff)
+receive-attempted LLONG_MAX
+timeout
+  advance 0 ms
 run
   should send probe
   in IDLE for 0 ms (1000 ms backoff)
