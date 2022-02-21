@@ -1167,9 +1167,8 @@ dpif_netdev_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
             /* Initialize DPIF function pointer to the newly configured
              * default. */
-            dp_netdev_input_func default_func = dp_netdev_impl_get_default();
-            atomic_uintptr_t *pmd_func = (void *) &pmd->netdev_input_func;
-            atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
+            atomic_store_relaxed(&pmd->netdev_input_func,
+                                 dp_netdev_impl_get_default());
         };
 
         free(pmd_list);
@@ -1358,8 +1357,7 @@ dpif_miniflow_extract_impl_set(struct unixctl_conn *conn, int argc,
             }
 
             pmd_thread_update_done = true;
-            atomic_uintptr_t *pmd_func = (void *) &pmd->miniflow_extract_opt;
-            atomic_store_relaxed(pmd_func, (uintptr_t) mfex_func);
+            atomic_store_relaxed(&pmd->miniflow_extract_opt, mfex_func);
         };
 
         free(pmd_list);
@@ -7459,14 +7457,10 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     cmap_init(&pmd->tx_bonds);
 
     /* Initialize DPIF function pointer to the default configured version. */
-    dp_netdev_input_func default_func = dp_netdev_impl_get_default();
-    atomic_uintptr_t *pmd_func = (void *) &pmd->netdev_input_func;
-    atomic_init(pmd_func, (uintptr_t) default_func);
+    atomic_init(&pmd->netdev_input_func, dp_netdev_impl_get_default());
 
     /* Init default miniflow_extract function */
-    miniflow_extract_func mfex_func = dp_mfex_impl_get_default();
-    atomic_uintptr_t *pmd_func_mfex = (void *)&pmd->miniflow_extract_opt;
-    atomic_store_relaxed(pmd_func_mfex, (uintptr_t) mfex_func);
+    atomic_init(&pmd->miniflow_extract_opt, dp_mfex_impl_get_default());
 
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */

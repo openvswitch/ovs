@@ -241,9 +241,7 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
     struct netdev_flow_key test_keys[NETDEV_MAX_BURST];
 
     if (keys_size < cnt) {
-        miniflow_extract_func default_func = NULL;
-        atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
-        atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
+        atomic_store_relaxed(&pmd->miniflow_extract_opt, NULL);
         VLOG_ERR("Invalid key size supplied, Key_size: %d less than"
                  "batch_size:  %" PRIuSIZE"\n", keys_size, cnt);
         VLOG_ERR("Autovalidatior is disabled.\n");
@@ -350,9 +348,7 @@ dpif_miniflow_extract_autovalidator(struct dp_packet_batch *packets,
 
     /* Having dumped the debug info for the batch, disable autovalidator. */
     if (batch_failed) {
-        miniflow_extract_func default_func = NULL;
-        atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
-        atomic_store_relaxed(pmd_func, (uintptr_t) default_func);
+        atomic_store_relaxed(&pmd->miniflow_extract_opt, NULL);
     }
 
     /* Preserve packet correctness by storing back the good offsets in

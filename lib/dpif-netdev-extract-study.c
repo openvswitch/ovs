@@ -120,19 +120,15 @@ mfex_study_traffic(struct dp_packet_batch *packets,
 
         /* If 50% of the packets hit, enable the function. */
         if (max_hits >= (mfex_study_pkts_count / 2)) {
-            miniflow_extract_func mf_func =
-                        miniflow_funcs[best_func_index].extract_func;
-            atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
-            atomic_store_relaxed(pmd_func, (uintptr_t) mf_func);
+            atomic_store_relaxed(&pmd->miniflow_extract_opt,
+                                 miniflow_funcs[best_func_index].extract_func);
             VLOG_INFO("MFEX study chose impl %s: (hits %u/%u pkts)",
                       miniflow_funcs[best_func_index].name, max_hits,
                       stats->pkt_count);
         } else {
             /* Set the implementation to null for default miniflow. */
-            miniflow_extract_func mf_func =
-                        miniflow_funcs[MFEX_IMPL_SCALAR].extract_func;
-            atomic_uintptr_t *pmd_func = (void *)&pmd->miniflow_extract_opt;
-            atomic_store_relaxed(pmd_func, (uintptr_t) mf_func);
+            atomic_store_relaxed(&pmd->miniflow_extract_opt,
+                    miniflow_funcs[MFEX_IMPL_SCALAR].extract_func);
             VLOG_INFO("Not enough packets matched (%u/%u), disabling"
                       " optimized MFEX.", max_hits, stats->pkt_count);
         }
