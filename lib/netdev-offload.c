@@ -409,10 +409,11 @@ netdev_set_hw_info(struct netdev *netdev, int type, int val)
 
 /* Protects below port hashmaps. */
 static struct ovs_rwlock netdev_hmap_rwlock = OVS_RWLOCK_INITIALIZER;
+static struct ovs_rwlock ifindex_hmap_rwlock = OVS_RWLOCK_INITIALIZER;
 
 static struct hmap port_to_netdev OVS_GUARDED_BY(netdev_hmap_rwlock)
     = HMAP_INITIALIZER(&port_to_netdev);
-static struct hmap ifindex_to_port OVS_GUARDED_BY(netdev_hmap_rwlock)
+static struct hmap ifindex_to_port OVS_GUARDED_BY(ifindex_hmap_rwlock)
     = HMAP_INITIALIZER(&ifindex_to_port);
 
 struct port_to_netdev_data {
@@ -661,7 +662,9 @@ netdev_ports_insert(struct netdev *netdev, struct dpif_port *dpif_port)
 
     if (ifindex >= 0) {
         data->ifindex = ifindex;
+        ovs_rwlock_wrlock(&ifindex_hmap_rwlock);
         hmap_insert(&ifindex_to_port, &data->ifindex_node, ifindex);
+        ovs_rwlock_unlock(&ifindex_hmap_rwlock);
     } else {
         data->ifindex = -1;
     }
@@ -704,7 +707,9 @@ netdev_ports_remove(odp_port_t port_no, const char *dpif_type)
         netdev_close(data->netdev); /* unref and possibly close */
         hmap_remove(&port_to_netdev, &data->portno_node);
         if (data->ifindex >= 0) {
+            ovs_rwlock_wrlock(&ifindex_hmap_rwlock);
             hmap_remove(&ifindex_to_port, &data->ifindex_node);
+            ovs_rwlock_unlock(&ifindex_hmap_rwlock);
         }
         free(data);
         ret = 0;
@@ -745,14 +750,14 @@ netdev_ifindex_to_odp_port(int ifindex)
     struct port_to_netdev_data *data;
     odp_port_t ret = 0;
 
-    ovs_rwlock_rdlock(&netdev_hmap_rwlock);
+    ovs_rwlock_rdlock(&ifindex_hmap_rwlock);
     HMAP_FOR_EACH_WITH_HASH (data, ifindex_node, ifindex, &ifindex_to_port) {
         if (data->ifindex == ifindex) {
             ret = data->dpif_port.port_no;
             break;
         }
     }
-    ovs_rwlock_unlock(&netdev_hmap_rwlock);
+    ovs_rwlock_unlock(&ifindex_hmap_rwlock);
 
     return ret;
 }
