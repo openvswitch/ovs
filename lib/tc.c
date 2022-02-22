@@ -1485,7 +1485,9 @@ nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
                 if (ipv4_max) {
                     ovs_be32 addr = nl_attr_get_be32(ipv4_max);
 
-                    action->ct.range.ipv4.max = addr;
+                    if (action->ct.range.ipv4.min != addr) {
+                        action->ct.range.ipv4.max = addr;
+                    }
                 }
             } else if (ipv6_min) {
                 action->ct.range.ip_family = AF_INET6;
@@ -1494,7 +1496,9 @@ nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
                 if (ipv6_max) {
                     struct in6_addr addr = nl_attr_get_in6_addr(ipv6_max);
 
-                    action->ct.range.ipv6.max = addr;
+                    if (!ipv6_addr_equals(&action->ct.range.ipv6.min, &addr)) {
+                        action->ct.range.ipv6.max = addr;
+                    }
                 }
             }
 
@@ -1502,6 +1506,10 @@ nl_parse_act_ct(struct nlattr *options, struct tc_flower *flower)
                 action->ct.range.port.min = nl_attr_get_be16(port_min);
                 if (port_max) {
                     action->ct.range.port.max = nl_attr_get_be16(port_max);
+                    if (action->ct.range.port.min ==
+                        action->ct.range.port.max) {
+                        action->ct.range.port.max = 0;
+                    }
                 }
             }
         }
