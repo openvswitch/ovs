@@ -2835,12 +2835,79 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     return 0;
 }
 
+static void
+log_tc_flower_match(const char *msg,
+                    const struct tc_flower *a,
+                    const struct tc_flower *b)
+{
+    uint8_t key_a[sizeof(struct tc_flower_key)];
+    uint8_t key_b[sizeof(struct tc_flower_key)];
+    struct ds s = DS_EMPTY_INITIALIZER;
+
+    for (int i = 0; i < sizeof a->key; i++) {
+        uint8_t mask_a = ((uint8_t *) &a->mask)[i];
+        uint8_t mask_b = ((uint8_t *) &b->mask)[i];
+
+        key_a[i] = ((uint8_t *) &a->key)[i] & mask_a;
+        key_b[i] = ((uint8_t *) &b->key)[i] & mask_b;
+    }
+    ds_put_cstr(&s, "\nExpected Mask:\n");
+    ds_put_hex(&s, &a->mask, sizeof a->mask);
+    ds_put_cstr(&s, "\nReceived Mask:\n");
+    ds_put_hex(&s, &b->mask, sizeof b->mask);
+    ds_put_cstr(&s, "\nExpected Key:\n");
+    ds_put_hex(&s, &a->key, sizeof a->key);
+    ds_put_cstr(&s, "\nReceived Key:\n");
+    ds_put_hex(&s, &b->key, sizeof b->key);
+    ds_put_cstr(&s, "\nExpected Masked Key:\n");
+    ds_put_hex(&s, key_a, sizeof key_a);
+    ds_put_cstr(&s, "\nReceived Masked Key:\n");
+    ds_put_hex(&s, key_b, sizeof key_b);
+
+    if (a->action_count != b->action_count) {
+        /* If action count is not equal, we print all actions to see which
+         * ones are missing. */
+        const struct tc_action *action;
+        int i;
+
+        ds_put_cstr(&s, "\nExpected Actions:\n");
+        for (i = 0, action = a->actions; i < a->action_count; i++, action++) {
+            ds_put_cstr(&s, " - ");
+            ds_put_hex(&s, action, sizeof *action);
+            ds_put_cstr(&s, "\n");
+        }
+        ds_put_cstr(&s, "Received Actions:\n");
+        for (i = 0, action = b->actions; i < b->action_count; i++, action++) {
+            ds_put_cstr(&s, " - ");
+            ds_put_hex(&s, action, sizeof *action);
+            ds_put_cstr(&s, "\n");
+        }
+    } else {
+        /* Only dump the delta in actions. */
+        const struct tc_action *action_a = a->actions;
+        const struct tc_action *action_b = b->actions;
+
+        for (int i = 0; i < a->action_count; i++, action_a++, action_b++) {
+            if (memcmp(action_a, action_b, sizeof *action_a)) {
+                ds_put_format(&s,
+                              "\nAction %d mismatch:\n - Expected Action: ",
+                              i);
+                ds_put_hex(&s, action_a, sizeof *action_a);
+                ds_put_cstr(&s, "\n - Received Action: ");
+                ds_put_hex(&s, action_b, sizeof *action_b);
+            }
+        }
+    }
+    VLOG_DBG_RL(&error_rl, "%s%s", msg, ds_cstr(&s));
+    ds_destroy(&s);
+}
+
 static bool
 cmp_tc_flower_match_action(const struct tc_flower *a,
                            const struct tc_flower *b)
 {
     if (memcmp(&a->mask, &b->mask, sizeof a->mask)) {
-        VLOG_DBG_RL(&error_rl, "tc flower compare failed mask compare");
+        log_tc_flower_match("tc flower compare failed mask compare:", a, b);
         return false;
     }
 
@@ -2853,8 +2920,8 @@ cmp_tc_flower_match_action(const struct tc_flower *a,
         uint8_t key_b = ((uint8_t *)&b->key)[i] & mask;
 
         if (key_a != key_b) {
-            VLOG_DBG_RL(&error_rl, "tc flower compare failed key compare at "
-                        "%d", i);
+            log_tc_flower_match("tc flower compare failed masked key compare:",
+                                a, b);
             return false;
         }
     }
@@ -2864,14 +2931,15 @@ cmp_tc_flower_match_action(const struct tc_flower *a,
     const struct tc_action *action_b = b->actions;
 
     if (a->action_count != b->action_count) {
-        VLOG_DBG_RL(&error_rl, "tc flower compare failed action length check");
+        log_tc_flower_match("tc flower compare failed action length check",
+                            a, b);
         return false;
     }
 
     for (int i = 0; i < a->action_count; i++, action_a++, action_b++) {
         if (memcmp(action_a, action_b, sizeof *action_a)) {
-            VLOG_DBG_RL(&error_rl, "tc flower compare failed action compare "
-                        "for %d", i);
+            log_tc_flower_match("tc flower compare failed action compare",
+                                a, b);
             return false;
         }
     }
