@@ -939,24 +939,21 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
             key->icmp_code =
                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_CODE]);
             mask->icmp_code =
-                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_CODE]);
+                nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_CODE_MASK]);
         }
         if (attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]) {
-            key->icmp_type =
-               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]);
+            key->icmp_type = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_TYPE]);
             mask->icmp_type =
                 nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV4_TYPE_MASK]);
         }
     } else if (ip_proto == IPPROTO_ICMPV6) {
         if (attrs[TCA_FLOWER_KEY_ICMPV6_CODE_MASK]) {
-            key->icmp_code =
-               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE]);
+            key->icmp_code = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE]);
             mask->icmp_code =
-                 nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE]);
+                 nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_CODE_MASK]);
         }
         if (attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]) {
-            key->icmp_type =
-               nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]);
+            key->icmp_type = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_TYPE]);
             mask->icmp_type =
                 nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ICMPV6_TYPE_MASK]);
         }
