@@ -1733,7 +1733,25 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
                 return ENODEV;
             }
+
+            if (!netdev_flow_api_equals(netdev, outdev)) {
+                VLOG_DBG_RL(&rl,
+                            "Flow API provider mismatch between ingress (%s) "
+                            "and egress (%s) ports",
+                            netdev_get_name(netdev), netdev_get_name(outdev));
+                netdev_close(outdev);
+                return EOPNOTSUPP;
+            }
+
             action->out.ifindex_out = netdev_get_ifindex(outdev);
+            if (action->out.ifindex_out < 0) {
+                VLOG_DBG_RL(&rl,
+                            "Can't find ifindex for output port %s, error %d",
+                            netdev_get_name(outdev), action->out.ifindex_out);
+                netdev_close(outdev);
+                return -action->out.ifindex_out;
+            }
+
             action->out.ingress = is_internal_port(netdev_get_type(outdev));
             action->type = TC_ACT_OUTPUT;
             flower.action_count++;
