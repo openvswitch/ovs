@@ -4521,6 +4521,11 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                     ds_put_char(ds, ',');
                 }
                 ds_put_cstr(ds, "eth()");
+            } else if (attr_type == OVS_KEY_ATTR_PACKET_TYPE && is_wildcard) {
+                /* See the above help text, however in the case where the
+                 * packet type is not shown, we still need to display the
+                 * eth() header if the packets type is wildcarded. */
+                has_packet_type_key = false;
             }
             ofpbuf_clear(&ofp);
         }
