@@ -544,16 +544,17 @@ nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
 
     flower->key.encap_eth_type[0] =
         nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ETH_TYPE]);
+    flower->mask.encap_eth_type[0] = CONSTANT_HTONS(0xffff);
 
     if (attrs[TCA_FLOWER_KEY_VLAN_ID]) {
         flower->key.vlan_id[0] =
             nl_attr_get_u16(attrs[TCA_FLOWER_KEY_VLAN_ID]);
-        flower->mask.vlan_id[0] = 0xffff;
+        flower->mask.vlan_id[0] = VLAN_VID_MASK >> VLAN_VID_SHIFT;
     }
     if (attrs[TCA_FLOWER_KEY_VLAN_PRIO]) {
         flower->key.vlan_prio[0] =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_VLAN_PRIO]);
-        flower->mask.vlan_prio[0] = 0xff;
+        flower->mask.vlan_prio[0] = VLAN_PCP_MASK >> VLAN_PCP_SHIFT;
     }
 
     if (!attrs[TCA_FLOWER_KEY_VLAN_ETH_TYPE]) {
@@ -566,17 +567,18 @@ nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
     }
 
     flower->key.encap_eth_type[1] = flower->key.encap_eth_type[0];
+    flower->mask.encap_eth_type[1] = CONSTANT_HTONS(0xffff);
     flower->key.encap_eth_type[0] = encap_ethtype;
 
     if (attrs[TCA_FLOWER_KEY_CVLAN_ID]) {
         flower->key.vlan_id[1] =
             nl_attr_get_u16(attrs[TCA_FLOWER_KEY_CVLAN_ID]);
-        flower->mask.vlan_id[1] = 0xffff;
+        flower->mask.vlan_id[1] = VLAN_VID_MASK >> VLAN_VID_SHIFT;
     }
     if (attrs[TCA_FLOWER_KEY_CVLAN_PRIO]) {
         flower->key.vlan_prio[1] =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_CVLAN_PRIO]);
-        flower->mask.vlan_prio[1] = 0xff;
+        flower->mask.vlan_prio[1] = VLAN_PCP_MASK >> VLAN_PCP_SHIFT;
     }
 }
 
