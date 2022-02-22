@@ -1441,6 +1441,12 @@ parse_match_ct_state_to_flower(struct tc_flower *flower, struct match *match)
             flower->key.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
             flower->mask.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
         }
+
+        if (flower->key.ct_state &&
+            !(flower->key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_TRACKED)) {
+            flower->key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+            flower->mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+        }
     }
 
     if (mask->ct_zone) {
