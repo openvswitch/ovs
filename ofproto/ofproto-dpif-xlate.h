@@ -176,6 +176,7 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
                        bool forward_bpdu, bool has_in_band,
                        const struct dpif_backer_support *support);
 void xlate_remove_ofproto(struct ofproto_dpif *);
+struct ofproto_dpif *xlate_ofproto_lookup(const struct uuid *uuid);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
                       const char *name, enum port_vlan_mode,
