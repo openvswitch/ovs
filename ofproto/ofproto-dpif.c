@@ -215,10 +215,6 @@ struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 static struct hmap all_ofproto_dpifs_by_name =
                           HMAP_INITIALIZER(&all_ofproto_dpifs_by_name);
 
-/* All existing ofproto_dpif instances, indexed by ->uuid. */
-static struct hmap all_ofproto_dpifs_by_uuid =
-                          HMAP_INITIALIZER(&all_ofproto_dpifs_by_uuid);
-
 static bool ofproto_use_tnl_push_pop = true;
 static void ofproto_unixctl_init(void);
 static void ct_zone_config_init(struct dpif_backer *backer);
@@ -1672,9 +1668,6 @@ construct(struct ofproto *ofproto_)
     hmap_insert(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node,
                 hash_string(ofproto->up.name, 0));
-    hmap_insert(&all_ofproto_dpifs_by_uuid,
-                &ofproto->all_ofproto_dpifs_by_uuid_node,
-                uuid_hash(&ofproto->uuid));
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
 
     ofproto_init_tables(ofproto_, N_TABLES);
@@ -1776,8 +1769,6 @@ destruct(struct ofproto *ofproto_, bool del)
 
     hmap_remove(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node);
-    hmap_remove(&all_ofproto_dpifs_by_uuid,
-                &ofproto->all_ofproto_dpifs_by_uuid_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         CLS_FOR_EACH (rule, up.cr, &table->cls) {
@@ -5749,15 +5740,7 @@ ofproto_dpif_lookup_by_name(const char *name)
 struct ofproto_dpif *
 ofproto_dpif_lookup_by_uuid(const struct uuid *uuid)
 {
-    struct ofproto_dpif *ofproto;
-
-    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_by_uuid_node,
-                             uuid_hash(uuid), &all_ofproto_dpifs_by_uuid) {
-        if (uuid_equals(&ofproto->uuid, uuid)) {
-            return ofproto;
-        }
-    }
-    return NULL;
+    return xlate_ofproto_lookup(uuid);
 }
 
 static void

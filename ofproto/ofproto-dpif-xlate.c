@@ -865,7 +865,7 @@ xlate_xbridge_init(struct xlate_cfg *xcfg, struct xbridge *xbridge)
     ovs_list_init(&xbridge->xbundles);
     hmap_init(&xbridge->xports);
     hmap_insert(&xcfg->xbridges, &xbridge->hmap_node,
-                hash_pointer(xbridge->ofproto, 0));
+                uuid_hash(&xbridge->ofproto->uuid));
 }
 
 static void
@@ -1635,7 +1635,7 @@ xbridge_lookup(struct xlate_cfg *xcfg, const struct ofproto_dpif *ofproto)
 
     xbridges = &xcfg->xbridges;
 
-    HMAP_FOR_EACH_IN_BUCKET (xbridge, hmap_node, hash_pointer(ofproto, 0),
+    HMAP_FOR_EACH_IN_BUCKET (xbridge, hmap_node, uuid_hash(&ofproto->uuid),
                              xbridges) {
         if (xbridge->ofproto == ofproto) {
             return xbridge;
@@ -1653,6 +1653,23 @@ xbridge_lookup_by_uuid(struct xlate_cfg *xcfg, const struct uuid *uuid)
         if (uuid_equals(&xbridge->ofproto->uuid, uuid)) {
             return xbridge;
         }
+    }
+    return NULL;
+}
+
+struct ofproto_dpif *
+xlate_ofproto_lookup(const struct uuid *uuid)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge;
+
+    if (!xcfg) {
+        return NULL;
+    }
+
+    xbridge = xbridge_lookup_by_uuid(xcfg, uuid);
+    if (xbridge != NULL) {
+        return xbridge->ofproto;
     }
     return NULL;
 }
