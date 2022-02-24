@@ -461,9 +461,8 @@ ovsdb_cluster_failure_test () {
 
     cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
-    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
-])
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
+    AT_CHECK([sed < stderr "/ovsdb|WARN|schema: changed .* columns in 'Open_vSwitch' database from ephemeral to persistent/d"])
 
     n=3
     join_cluster() {
@@ -674,9 +673,8 @@ ovsdb_torture_test () {
     local variant=$3            # 'kill' and restart or 'remove' and add
     cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
-    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
-])
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
+    AT_CHECK([sed < stderr "/ovsdb|WARN|schema: changed .* columns in 'Open_vSwitch' database from ephemeral to persistent/d"])
 
     join_cluster() {
         local i=$1
