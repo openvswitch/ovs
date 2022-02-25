@@ -175,6 +175,7 @@ m4_define([_OVS_VSWITCHD_START],
 /dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
 /netlink_socket|INFO|netlink: could not enable listening to all nsid/d
 /probe tc:/d
+/setting extended ack support failed/d
 /tc: Using policy/d']])
 ])
 
@@ -239,6 +240,7 @@ check_logs () {
 /timeval.*context switches: [[0-9]]* voluntary, [[0-9]]* involuntary/d
 /ovs_rcu.*blocked [[0-9]]* ms waiting for .* to quiesce/d
 /Dropped [[0-9]]* log messages/d
+/setting extended ack support failed/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" ${logs}

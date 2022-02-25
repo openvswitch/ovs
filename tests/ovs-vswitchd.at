@@ -121,6 +121,7 @@ OVS_APP_EXIT_AND_WAIT_BY_TARGET(["`pwd`"/unixctl2], [ovs-vswitchd-2.pid])
 # the process.
 AT_CHECK([sed -n "
 /|ERR|another ovs-vswitchd process is running/d
+/setting extended ack support failed/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" fakelog
@@ -148,6 +149,7 @@ AT_CHECK([grep "wakeup due to" ovs-vswitchd.log], [ignore])
 
 # check the log, should not see any WARN/ERR/EMER log.
 AT_CHECK([sed -n "
+/setting extended ack support failed/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" ovs-vswitchd.log
