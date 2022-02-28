@@ -849,7 +849,9 @@ decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
         case NXAC2PT_REASON: {
             uint8_t u8;
             error = ofpprop_parse_u8(&payload, &u8);
-            oc->reason = u8;
+            if (!error) {
+                oc->reason = u8;
+            }
             break;
         }
 
