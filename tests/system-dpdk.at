@@ -237,6 +237,10 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
 
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
+])
+
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
 Miniflow extract implementation set to autovalidator.
 ])
@@ -263,6 +267,10 @@ AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-d
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
