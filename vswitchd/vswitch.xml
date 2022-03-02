@@ -1046,7 +1046,9 @@
       <p>
         These settings control the global configuration of IPsec tunnels.  The
         <code>options</code> column of the <code>Interface</code> table
-        configures IPsec for individual tunnels.
+        configures IPsec for individual tunnels. The <code>options</code>
+        column also allows for custom options prefixed with <code>ipsec_</code>
+        to be passed to the individual connections.
       </p>
       <p>
         OVS IPsec supports the following three forms of authentication.

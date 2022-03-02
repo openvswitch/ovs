@@ -313,6 +313,10 @@ conn prevent_unencrypted_vxlan
                 tmpl = self.auth_tmpl["pki_ca"]
                 auth_section = tmpl.substitute(tunnel.conf)
 
+        if "custom_options" in tunnel.conf:
+            for key, value in tunnel.conf["custom_options"].items():
+                auth_section += "\n    " + key + "=" + value
+
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
         vals["version"] = tunnel.version
@@ -549,6 +553,10 @@ conn prevent_unencrypted_vxlan
 
         if tunnel.conf["address_family"] == "IPv6":
             auth_section = self.IPV6_CONN + auth_section
+
+        if "custom_options" in tunnel.conf:
+            for key, value in tunnel.conf["custom_options"].items():
+                auth_section += "\n    " + key + "=" + value
 
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
@@ -831,6 +839,7 @@ class IPsecTunnel(object):
   Remote name:    $remote_name
   CA cert:        $ca_cert
   PSK:            $psk
+  Custom Options: $custom_options
 """)
 
     unixctl_status_tmpl = Template("""\
@@ -874,7 +883,13 @@ class IPsecTunnel(object):
             "remote_cert": remote_cert,
             "remote_name": remote_name,
             "local_name": monitor.conf["pki"]["local_name"],
-            "psk": options.get("psk")}
+            "psk": options.get("psk"),
+            "custom_options": {}}
+
+        # add custom ipsec options to the connection
+        for key, value in options.items():
+            if key.startswith("ipsec_"):
+                new_conf["custom_options"][key[len("ipsec_"):]] = value
 
         if self.conf != new_conf:
             # Configuration was updated in OVSDB.  Validate it and figure
