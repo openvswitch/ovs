@@ -184,6 +184,7 @@ Henry Mai
 Hao Zheng
 Helmut Schaa                       helmut.schaa@googlemail.com
 Hiteshi Kalra                      hiteshi.kalra@tcs.com
+Hongzhi Guo                        guohongzhi1@huawei.com
 Huanle Han                         hanxueluo@gmail.com
 Hui Kang                           kangh@us.ibm.com
 Hyong Youb Kim                     hyonkim@cisco.com
