@@ -36,7 +36,10 @@ raft_address_validate(const char *address)
         return NULL;
     } else if (!strncmp(address, "ssl:", 4) || !strncmp(address, "tcp:", 4)) {
         struct sockaddr_storage ss;
-        if (!inet_parse_active(address + 4, -1, &ss, true)) {
+        bool dns_failure = false;
+
+        if (!inet_parse_active(address + 4, -1, &ss, true, &dns_failure)
+            && !dns_failure) {
             return ovsdb_error(NULL, "%s: syntax error in address", address);
         }
         return NULL;
