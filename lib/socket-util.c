@@ -62,7 +62,8 @@ static bool parse_sockaddr_components(struct sockaddr_storage *ss,
                                       const char *port_s,
                                       uint16_t default_port,
                                       const char *s,
-                                      bool resolve_host);
+                                      bool resolve_host,
+                                      bool *dns_failure);
 
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */
@@ -438,7 +439,7 @@ parse_sockaddr_components_dns(struct sockaddr_storage *ss OVS_UNUSED,
     dns_resolve(host_s, &tmp_host_s);
     if (tmp_host_s != NULL) {
         parse_sockaddr_components(ss, tmp_host_s, port_s,
-                                  default_port, s, false);
+                                  default_port, s, false, NULL);
         free(tmp_host_s);
         return true;
     }
@@ -450,10 +451,14 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
                           char *host_s,
                           const char *port_s, uint16_t default_port,
                           const char *s,
-                          bool resolve_host)
+                          bool resolve_host, bool *dns_failure)
 {
     struct sockaddr_in *sin = sin_cast(sa_cast(ss));
     int port;
+
+    if (dns_failure) {
+        *dns_failure = false;
+    }
 
     if (port_s && port_s[0]) {
         if (!str_to_int(port_s, 10, &port) || port < 0 || port > 65535) {
@@ -501,10 +506,15 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
     return true;
 
 resolve:
-    if (resolve_host && parse_sockaddr_components_dns(ss, host_s, port_s,
-                                                      default_port, s)) {
-        return true;
-    } else if (!resolve_host) {
+    if (resolve_host) {
+        if (parse_sockaddr_components_dns(ss, host_s, port_s,
+                                          default_port, s)) {
+            return true;
+        }
+        if (dns_failure) {
+            *dns_failure = true;
+        }
+    } else {
         VLOG_ERR("%s: bad IP address \"%s\"", s, host_s);
     }
 exit:
@@ -521,10 +531,12 @@ exit:
  * It resolves the host if 'resolve_host' is true.
  *
  * On success, returns true and stores the parsed remote address into '*ss'.
- * On failure, logs an error, stores zeros into '*ss', and returns false. */
+ * On failure, logs an error, stores zeros into '*ss', and returns false,
+ * '*dns_failure' indicates if the host resolution failed. */
 bool
 inet_parse_active(const char *target_, int default_port,
-                  struct sockaddr_storage *ss, bool resolve_host)
+                  struct sockaddr_storage *ss,
+                  bool resolve_host, bool *dns_failure)
 {
     char *target = xstrdup(target_);
     char *port, *host;
@@ -539,7 +551,7 @@ inet_parse_active(const char *target_, int default_port,
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
-                                       target_, resolve_host);
+                                       target_, resolve_host, dns_failure);
     }
     if (!ok) {
         memset(ss, 0, sizeof *ss);
@@ -576,7 +588,7 @@ inet_open_active(int style, const char *target, int default_port,
     int error;
 
     /* Parse. */
-    if (!inet_parse_active(target, default_port, &ss, true)) {
+    if (!inet_parse_active(target, default_port, &ss, true, NULL)) {
         error = EAFNOSUPPORT;
         goto exit;
     }
@@ -660,7 +672,7 @@ inet_parse_passive(const char *target_, int default_port,
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
-                                       target_, true);
+                                       target_, true, NULL);
     }
     if (!ok) {
         memset(ss, 0, sizeof *ss);
@@ -783,7 +795,8 @@ inet_parse_address(const char *target_, struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
     char *host = unbracket(target);
-    bool ok = parse_sockaddr_components(ss, host, NULL, 0, target_, false);
+    bool ok = parse_sockaddr_components(ss, host, NULL, 0,
+                                        target_, false, NULL);
     if (!ok) {
         memset(ss, 0, sizeof *ss);
     }

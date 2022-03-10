@@ -468,7 +468,8 @@ sflow_choose_agent_address(const char *agent_device,
     const char *target;
     SSET_FOR_EACH (target, targets) {
         struct sockaddr_storage ss;
-        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &ss, true)) {
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT,
+                              &ss, true, NULL)) {
             /* sFlow only supports target in default routing table with
              * packet mark zero.
              */

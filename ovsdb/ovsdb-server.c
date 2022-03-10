@@ -26,6 +26,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dns-resolve.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "file.h"
@@ -318,6 +319,7 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     process_init();
+    dns_resolve_init(true);
 
     bool active = false;
     parse_options(argc, argv, &db_filenames, &remotes, &unixctl_path,
@@ -497,6 +499,7 @@ main(int argc, char *argv[])
                       run_command, process_status_msg(status));
         }
     }
+    dns_resolve_destroy();
     perf_counters_destroy();
     service_stop();
     return 0;
