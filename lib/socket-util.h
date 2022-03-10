@@ -49,7 +49,8 @@ ovs_be32 guess_netmask(ovs_be32 ip);
 void inet_parse_host_port_tokens(char *s, char **hostp, char **portp);
 void inet_parse_port_host_tokens(char *s, char **portp, char **hostp);
 bool inet_parse_active(const char *target, int default_port,
-                       struct sockaddr_storage *ssp, bool resolve_host);
+                       struct sockaddr_storage *ssp,
+                       bool resolve_host, bool *dns_failure);
 int inet_open_active(int style, const char *target, int default_port,
                      struct sockaddr_storage *ssp, int *fdp, uint8_t dscp);
 
