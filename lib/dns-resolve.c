@@ -253,7 +253,7 @@ resolve_callback__(void *req_, int err, struct ub_result *result)
     if (err != 0 || (result->qtype == ns_t_aaaa && !result->havedata)) {
         ub_resolve_free(result);
         req->state = RESOLVE_ERROR;
-        VLOG_ERR_RL(&rl, "%s: failed to resolve", req->name);
+        VLOG_WARN_RL(&rl, "%s: failed to resolve", req->name);
         return;
     }
 

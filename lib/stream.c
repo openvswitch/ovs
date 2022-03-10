@@ -763,7 +763,7 @@ stream_parse_target_with_default_port(const char *target, int default_port,
                                       struct sockaddr_storage *ss)
 {
     return ((!strncmp(target, "tcp:", 4) || !strncmp(target, "ssl:", 4))
-            && inet_parse_active(target + 4, default_port, ss, true));
+            && inet_parse_active(target + 4, default_port, ss, true, NULL));
 }
 
 /* Attempts to guess the content type of a stream whose first few bytes were
