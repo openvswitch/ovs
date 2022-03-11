@@ -3032,7 +3032,7 @@ xlate_normal(struct xlate_ctx *ctx)
     bool is_grat_arp = is_gratuitous_arp(flow, wc);
     if (ctx->xin->allow_side_effects
         && flow->packet_type == htonl(PT_ETH)
-        && in_port->pt_mode != NETDEV_PT_LEGACY_L3
+        && in_port && in_port->pt_mode != NETDEV_PT_LEGACY_L3
     ) {
         update_learning_table(ctx, in_xbundle, flow->dl_src, vlan,
                               is_grat_arp);
