@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 #include <netinet/ip6.h>
+#include <rte_ethdev.h>
 #include <rte_flow.h>
 #include <rte_gre.h>
 
@@ -1714,7 +1715,7 @@ add_flow_mark_rss_actions(struct flow_actions *actions,
         .conf = (struct rte_flow_action_rss) {
             .func = RTE_ETH_HASH_FUNCTION_DEFAULT,
             .level = 0,
-            .types = 0,
+            .types = RTE_ETH_RSS_IP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_TCP,
             .queue_num = netdev_n_rxq(netdev),
             .queue = rss_data->queue,
             .key_len = 0,
