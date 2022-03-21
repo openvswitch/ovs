@@ -356,6 +356,9 @@ class Idl(object):
         flushing the local cached DB contents.
         """
         ack_all = self.last_id == str(uuid.UUID(int=0))
+        if ack_all:
+            self.cond_changed = False
+
         for table in self.tables.values():
             if ack_all:
                 table.condition.request()
