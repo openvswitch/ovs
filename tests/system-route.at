@@ -14,10 +14,9 @@ dnl Add ip address.
 AT_CHECK([ip addr add 10.0.0.17/24 dev p1-route], [0], [stdout])
 
 dnl Check that OVS catches route updates.
-OVS_WAIT_UNTIL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [0], [dnl
-Cached: 10.0.0.17/24 dev p1-route SRC 10.0.0.17
-Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local
-])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local])
 
 dnl Delete ip address.
 AT_CHECK([ip addr del 10.0.0.17/24 dev p1-route], [0], [stdout])
