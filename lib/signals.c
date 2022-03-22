@@ -56,6 +56,11 @@ signal_name(int signum, char *namebuf, size_t bufsize)
             return name;
         }
     }
+#elif HAVE_SIGDESCR_NP
+    const char *name = sigdescr_np(signum);
+    if (name) {
+        return name;
+    }
 #endif
 
     snprintf(namebuf, bufsize, "signal %d", signum);
