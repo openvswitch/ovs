@@ -1640,7 +1640,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     if (mask->vlans[0].tpid && eth_type_vlan(key->vlans[0].tpid)) {
         flower.key.encap_eth_type[0] = flower.key.eth_type;
-        flower.mask.encap_eth_type[0] = flower.mask.eth_type;
+        flower.mask.encap_eth_type[0] = CONSTANT_HTONS(0xffff);
         flower.key.eth_type = key->vlans[0].tpid;
         flower.mask.eth_type = mask->vlans[0].tpid;
     }
