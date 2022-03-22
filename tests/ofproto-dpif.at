@@ -81,11 +81,12 @@ recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:
 
 ovs-appctl netdev-dummy/set-admin-state p1 up
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: off
@@ -99,7 +100,6 @@ member p1: enabled
 
 member p2: enabled
   may_enable: true
-
 ])
 
 OVS_VSWITCHD_STOP
@@ -129,11 +129,12 @@ ovs-appctl time/warp 100
 OVS_WAIT_UNTIL([test -n "`ovs-appctl bond/show | fgrep 'member p1: disabled'`"])
 ovs-appctl netdev-dummy/set-admin-state p1 up
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: off
@@ -150,7 +151,6 @@ member p2: enabled
 
 member p3: enabled
   may_enable: true
-
 ])
 
 dnl Now delete the primary and verify that the output shows that the
@@ -171,11 +171,12 @@ ovs-vsctl \
    --id=@p1 create Interface name=p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 -- \
    set Port bond0 interfaces="$uuids, @p1]"
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: off
@@ -192,17 +193,17 @@ member p2: enabled
 
 member p3: enabled
   may_enable: true
-
 ])
 
 dnl Switch to another primary
 ovs-vsctl set port bond0 other_config:bond-primary=p2
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: off
@@ -211,25 +212,25 @@ active-backup primary: p2
 <active member mac del>
 
 member p1: enabled
-  active member
   may_enable: true
 
 member p2: enabled
+  active member
   may_enable: true
 
 member p3: enabled
   may_enable: true
-
 ])
 
 dnl Remove the "bond-primary" config directive from the bond.
 AT_CHECK([ovs-vsctl remove Port bond0 other_config bond-primary])
 ovs-appctl time/warp 100
-OVS_WAIT_UNTIL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [0], [dnl
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show | STRIP_RECIRC_ID | STRIP_ACTIVE_MEMBER_MAC], [dnl
 ---- bond0 ----
 bond_mode: active-backup
 bond may use recirculation: no, <del>
 bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: off
@@ -238,15 +239,14 @@ active-backup primary: <none>
 <active member mac del>
 
 member p1: enabled
-  active member
   may_enable: true
 
 member p2: enabled
+  active member
   may_enable: true
 
 member p3: enabled
   may_enable: true
-
 ])
 
 OVS_VSWITCHD_STOP
