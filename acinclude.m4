@@ -1431,7 +1431,7 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
    : ${SPARSE=sparse}
    AC_SUBST([SPARSE])
    AC_CONFIG_COMMANDS_PRE(
-     [CC='$(if $(C:0=),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) $(SPARSE_WERROR) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])
+     [CC='$(if $(C:0=),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) $(SPARSE_WERROR) -I $(top_srcdir)/include/sparse -I $(top_srcdir)/include $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])
 
    AC_ARG_ENABLE(
      [sparse],
