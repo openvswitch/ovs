@@ -96,6 +96,52 @@ OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ALB - cross-numa])
+OVS_VSWITCHD_START([add-port br0 p0 \
+                    -- set Interface p0 type=dummy-pmd options:n_rxq=4 \
+                    -- set Interface p0 options:numa_id=0 \
+                    -- set Open_vSwitch . other_config:pmd-cpu-mask=0x3 \
+                    -- set open_vswitch . other_config:pmd-rxq-assign=group \
+                    -- set open_vswitch . other_config:pmd-rxq-isolate=false \
+                    -- set open_vswitch . other_config:pmd-auto-lb="true" \
+                    -- set open_vswitch . other_config:pmd-auto-lb-load-threshold=0],
+                   [], [], [--dummy-numa 1,2,1,2])
+OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+
+# no pinned rxqs - cross-numa pmd could change
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
+
+# all pinned rxqs - cross-numa pmd will not change
+AT_CHECK([ovs-vsctl set Interface p0 other_config:pmd-rxq-affinity='0:0,1:0,2:1,3:1'])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "Variance improvement 0%."])
+
+# mix of pinned (non-isolated) and non-pinned rxqs - cross-numa pmd could change
+AT_CHECK([ovs-vsctl remove Interface p0 other_config pmd-rxq-affinity])
+AT_CHECK([ovs-vsctl set Interface p0 other_config:pmd-rxq-affinity='0:0,1:0,2:1'])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
+
+# mix of pinned (isolated) and non-pinned rxqs - cross-numa pmd could change
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0xf])
+AT_CHECK([ovs-vsctl set Interface p0 options:n_rxq=6])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-isolate=true])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ALB - PMD/RxQ assignment type])
 OVS_VSWITCHD_START([add-port br0 p0 \
                     -- set Interface p0 type=dummy-pmd options:n_rxq=3 \
