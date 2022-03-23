@@ -1100,14 +1100,14 @@ cmd_emer_reset(struct ctl_context *ctx)
     const struct ovsrec_bridge *br;
     const struct ovsrec_port *port;
     const struct ovsrec_interface *iface;
-    const struct ovsrec_mirror *mirror, *next_mirror;
-    const struct ovsrec_controller *ctrl, *next_ctrl;
-    const struct ovsrec_manager *mgr, *next_mgr;
-    const struct ovsrec_netflow *nf, *next_nf;
-    const struct ovsrec_ssl *ssl, *next_ssl;
-    const struct ovsrec_sflow *sflow, *next_sflow;
-    const struct ovsrec_ipfix *ipfix, *next_ipfix;
-    const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
+    const struct ovsrec_mirror *mirror;
+    const struct ovsrec_controller *ctrl;
+    const struct ovsrec_manager *mgr;
+    const struct ovsrec_netflow *nf;
+    const struct ovsrec_ssl *ssl;
+    const struct ovsrec_sflow *sflow;
+    const struct ovsrec_ipfix *ipfix;
+    const struct ovsrec_flow_sample_collector_set *fscset;
 
     /* Reset the Open_vSwitch table. */
     ovsrec_open_vswitch_set_manager_options(vsctl_ctx->ovs, NULL, 0);
@@ -1145,35 +1145,35 @@ cmd_emer_reset(struct ctl_context *ctx)
         ovsrec_interface_set_ingress_policing_burst(iface, 0);
     }
 
-    OVSREC_MIRROR_FOR_EACH_SAFE (mirror, next_mirror, idl) {
+    OVSREC_MIRROR_FOR_EACH_SAFE (mirror, idl) {
         ovsrec_mirror_delete(mirror);
     }
 
-    OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
+    OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, idl) {
         ovsrec_controller_delete(ctrl);
     }
 
-    OVSREC_MANAGER_FOR_EACH_SAFE (mgr, next_mgr, idl) {
+    OVSREC_MANAGER_FOR_EACH_SAFE (mgr, idl) {
         ovsrec_manager_delete(mgr);
     }
 
-    OVSREC_NETFLOW_FOR_EACH_SAFE (nf, next_nf, idl) {
+    OVSREC_NETFLOW_FOR_EACH_SAFE (nf, idl) {
         ovsrec_netflow_delete(nf);
     }
 
-    OVSREC_SSL_FOR_EACH_SAFE (ssl, next_ssl, idl) {
+    OVSREC_SSL_FOR_EACH_SAFE (ssl, idl) {
         ovsrec_ssl_delete(ssl);
     }
 
-    OVSREC_SFLOW_FOR_EACH_SAFE (sflow, next_sflow, idl) {
+    OVSREC_SFLOW_FOR_EACH_SAFE (sflow, idl) {
         ovsrec_sflow_delete(sflow);
     }
 
-    OVSREC_IPFIX_FOR_EACH_SAFE (ipfix, next_ipfix, idl) {
+    OVSREC_IPFIX_FOR_EACH_SAFE (ipfix, idl) {
         ovsrec_ipfix_delete(ipfix);
     }
 
-    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset, next_fscset, idl) {
+    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset, idl) {
         ovsrec_flow_sample_collector_set_delete(fscset);
     }
 
@@ -1527,7 +1527,7 @@ del_bridge(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *br)
 {
     struct vsctl_bridge *child;
     struct vsctl_port *port;
-    const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
+    const struct ovsrec_flow_sample_collector_set *fscset;
 
     HMAP_FOR_EACH_SAFE (child, children_node, &br->children) {
         del_bridge(vsctl_ctx, child);
@@ -1537,7 +1537,7 @@ del_bridge(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *br)
         del_port(vsctl_ctx, port);
     }
 
-    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset, next_fscset,
+    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset,
                                                     vsctl_ctx->base.idl) {
         if (fscset->bridge == br->br_cfg) {
             ovsrec_flow_sample_collector_set_delete(fscset);

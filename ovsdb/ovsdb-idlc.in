@@ -251,10 +251,18 @@ const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
         for ((ROW) = %(s)s_table_first(TABLE); \\
              (ROW); \\
              (ROW) = %(s)s_next(ROW))
-#define %(S)s_TABLE_FOR_EACH_SAFE(ROW, NEXT, TABLE) \\
+#define %(S)s_TABLE_FOR_EACH_SAFE_LONG(ROW, NEXT, TABLE) \\
         for ((ROW) = %(s)s_table_first(TABLE); \\
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
+#define %(S)s_TABLE_FOR_EACH_SAFE_SHORT(ROW, TABLE) \\
+        for (const struct %(s)s * ROW__next = ((ROW) = %(s)s_table_first(TABLE), NULL); \\
+             (ROW) ? (ROW__next = %(s)s_next(ROW), 1) : (ROW__next = NULL, 0); \\
+             (ROW) = ROW__next)
+#define %(S)s_TABLE_FOR_EACH_SAFE(...)                                        \\
+        OVERLOAD_SAFE_MACRO(%(S)s_TABLE_FOR_EACH_SAFE_LONG,                   \\
+                            %(S)s_TABLE_FOR_EACH_SAFE_SHORT, 3, __VA_ARGS__)
+
 
 const struct %(s)s *%(s)s_get_for_uuid(const struct ovsdb_idl *, const struct uuid *);
 const struct %(s)s *%(s)s_table_get_for_uuid(const struct %(s)s_table *, const struct uuid *);
@@ -264,10 +272,17 @@ const struct %(s)s *%(s)s_next(const struct %(s)s *);
         for ((ROW) = %(s)s_first(IDL); \\
              (ROW); \\
              (ROW) = %(s)s_next(ROW))
-#define %(S)s_FOR_EACH_SAFE(ROW, NEXT, IDL) \\
+#define %(S)s_FOR_EACH_SAFE_LONG(ROW, NEXT, IDL) \\
         for ((ROW) = %(s)s_first(IDL); \\
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
+#define %(S)s_FOR_EACH_SAFE_SHORT(ROW, IDL) \\
+        for (const struct %(s)s * ROW__next = ((ROW) = %(s)s_first(IDL), NULL); \\
+             (ROW) ? (ROW__next = %(s)s_next(ROW), 1) : (ROW__next = NULL, 0); \\
+             (ROW) = ROW__next)
+#define %(S)s_FOR_EACH_SAFE(...)                                         \\
+        OVERLOAD_SAFE_MACRO(%(S)s_FOR_EACH_SAFE_LONG,                    \\
+                            %(S)s_FOR_EACH_SAFE_SHORT, 3, __VA_ARGS__)
 
 unsigned int %(s)s_get_seqno(const struct ovsdb_idl *);
 unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change);
