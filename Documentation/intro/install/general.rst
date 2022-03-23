@@ -169,7 +169,7 @@ other than plain text, only if you have the following:
 If you are going to extensively modify Open vSwitch, consider installing the
 following to obtain better warnings:
 
-- "sparse" version 0.5.1 or later
+- "sparse" version 0.6.2 or later
   (https://git.kernel.org/pub/scm/devel/sparse/sparse.git/).
 
 - GNU make.
