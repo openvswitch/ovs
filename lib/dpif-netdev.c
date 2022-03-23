@@ -5070,23 +5070,28 @@ sched_numa_list_put_in_place(struct sched_numa_list *numa_list)
     }
 }
 
+/* Returns 'true' if OVS rxq scheduling algorithm assigned any unpinned rxq to
+ * a PMD thread core on a non-local numa node. */
 static bool
 sched_numa_list_cross_numa_polling(struct sched_numa_list *numa_list)
 {
     struct sched_numa *numa;
 
-    /* For each numa */
     HMAP_FOR_EACH (numa, node, &numa_list->numas) {
-        /* For each pmd */
         for (int i = 0; i < numa->n_pmds; i++) {
             struct sched_pmd *sched_pmd;
 
             sched_pmd = &numa->pmds[i];
-            /* For each rxq. */
+            if (sched_pmd->isolated) {
+                /* All rxqs on this PMD thread core are pinned. */
+                continue;
+            }
             for (unsigned k = 0; k < sched_pmd->n_rxq; k++) {
                 struct dp_netdev_rxq *rxq = sched_pmd->rxqs[k];
-
-                if (!sched_pmd->isolated &&
+                /* Check if the rxq is not pinned to a specific PMD thread core
+                 * by the user AND the PMD thread core that OVS assigned is
+                 * non-local to the rxq port. */
+                if (rxq->core_id == OVS_CORE_UNSPEC &&
                     rxq->pmd->numa_id !=
                         netdev_get_numa_id(rxq->port->netdev)) {
                     return true;
