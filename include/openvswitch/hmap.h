@@ -199,26 +199,33 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
          CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);            \
          UPDATE_MULTIVAR(NODE, hmap_next(HMAP, ITER_VAR(NODE))))
 
-static inline struct hmap_node *
-hmap_pop_helper__(struct hmap *hmap, size_t *bucket) {
+struct hmap_pop_helper_iter__ {
+    size_t bucket;
+    struct hmap_node *node;
+};
 
-    for (; *bucket <= hmap->mask; (*bucket)++) {
-        struct hmap_node *node = hmap->buckets[*bucket];
+static inline void
+hmap_pop_helper__(struct hmap *hmap, struct hmap_pop_helper_iter__ *iter) {
+
+    for (; iter->bucket <= hmap->mask; (iter->bucket)++) {
+        struct hmap_node *node = hmap->buckets[iter->bucket];
 
         if (node) {
             hmap_remove(hmap, node);
-            return node;
+            iter->node = node;
+            return;
         }
     }
-
-    return NULL;
+    iter->node = NULL;
 }
 
-#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                               \
-    for (size_t bucket__ = 0;                                               \
-         INIT_CONTAINER(NODE, hmap_pop_helper__(HMAP, &bucket__), MEMBER),  \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                    \
-         || ((NODE = NULL), false);)
+#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                                 \
+    for (struct hmap_pop_helper_iter__ ITER_VAR(NODE) = { 0, NULL };          \
+         hmap_pop_helper__(HMAP, &ITER_VAR(NODE)),                            \
+         (ITER_VAR(NODE).node != NULL) ?                                      \
+            (((NODE) = OBJECT_CONTAINING(ITER_VAR(NODE).node,                 \
+                                         NODE, MEMBER)),1):                   \
+            (((NODE) = NULL), 0);)
 
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,
