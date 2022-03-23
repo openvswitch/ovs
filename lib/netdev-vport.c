@@ -1245,7 +1245,8 @@ netdev_vport_tunnel_register(void)
               .type = "erspan",
               .build_header = netdev_erspan_build_header,
               .push_header = netdev_erspan_push_header,
-              .pop_header = netdev_erspan_pop_header
+              .pop_header = netdev_erspan_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX
           },
           {{NULL, NULL, 0, 0}}
         },
@@ -1255,7 +1256,8 @@ netdev_vport_tunnel_register(void)
               .type = "ip6erspan",
               .build_header = netdev_erspan_build_header,
               .push_header = netdev_erspan_push_header,
-              .pop_header = netdev_erspan_pop_header
+              .pop_header = netdev_erspan_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX
           },
           {{NULL, NULL, 0, 0}}
         },
