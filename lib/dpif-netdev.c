@@ -6112,7 +6112,7 @@ sched_numa_list_variance(struct sched_numa_list *numa_list)
  * pmd_rebalance_dry_run() can be avoided when it is not needed.
  */
 static bool
-pmd_reblance_dry_run_needed(struct dp_netdev *dp)
+pmd_rebalance_dry_run_needed(struct dp_netdev *dp)
     OVS_REQ_RDLOCK(dp->port_rwlock)
 {
     struct dp_netdev_pmd_thread *pmd;
@@ -6682,7 +6682,7 @@ dpif_netdev_run(struct dpif *dpif)
             if (pmd_rebalance &&
                 !dp_netdev_is_reconf_required(dp) &&
                 !ports_require_restart(dp) &&
-                pmd_reblance_dry_run_needed(dp) &&
+                pmd_rebalance_dry_run_needed(dp) &&
                 pmd_rebalance_dry_run(dp)) {
                 VLOG_INFO("PMD auto load balance dry run. "
                           "Requesting datapath reconfigure.");
