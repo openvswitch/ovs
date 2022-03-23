@@ -269,9 +269,9 @@ ovsdb_relay_clear(struct ovsdb *db)
 
     SHASH_FOR_EACH (table_node, &db->tables) {
         struct ovsdb_table *table = table_node->data;
-        struct ovsdb_row *row, *next;
+        struct ovsdb_row *row;
 
-        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &table->rows) {
             ovsdb_txn_row_delete(txn, row);
         }
     }

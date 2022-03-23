@@ -150,8 +150,8 @@ raft_server_destroy(struct raft_server *s)
 void
 raft_servers_destroy(struct hmap *servers)
 {
-    struct raft_server *s, *next;
-    HMAP_FOR_EACH_SAFE (s, next, hmap_node, servers) {
+    struct raft_server *s;
+    HMAP_FOR_EACH_SAFE (s, hmap_node, servers) {
         hmap_remove(servers, &s->hmap_node);
         raft_server_destroy(s);
     }

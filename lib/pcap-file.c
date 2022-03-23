@@ -344,9 +344,9 @@ tcp_reader_open(void)
 void
 tcp_reader_close(struct tcp_reader *r)
 {
-    struct tcp_stream *stream, *next_stream;
+    struct tcp_stream *stream;
 
-    HMAP_FOR_EACH_SAFE (stream, next_stream, hmap_node, &r->streams) {
+    HMAP_FOR_EACH_SAFE (stream, hmap_node, &r->streams) {
         tcp_stream_destroy(r, stream);
     }
     hmap_destroy(&r->streams);

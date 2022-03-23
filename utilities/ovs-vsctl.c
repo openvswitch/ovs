@@ -1525,11 +1525,11 @@ del_port(struct vsctl_context *vsctl_ctx, struct vsctl_port *port)
 static void
 del_bridge(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *br)
 {
-    struct vsctl_bridge *child, *next_child;
+    struct vsctl_bridge *child;
     struct vsctl_port *port;
     const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
 
-    HMAP_FOR_EACH_SAFE (child, next_child, children_node, &br->children) {
+    HMAP_FOR_EACH_SAFE (child, children_node, &br->children) {
         del_bridge(vsctl_ctx, child);
     }
 

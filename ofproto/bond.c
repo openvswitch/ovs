@@ -338,7 +338,7 @@ static void
 update_recirc_rules__(struct bond *bond)
 {
     struct match match;
-    struct bond_pr_rule_op *pr_op, *next_op;
+    struct bond_pr_rule_op *pr_op;
     uint64_t ofpacts_stub[128 / 8];
     struct ofpbuf ofpacts;
     int i;
@@ -372,7 +372,7 @@ update_recirc_rules__(struct bond *bond)
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
 
-    HMAP_FOR_EACH_SAFE(pr_op, next_op, hmap_node, &bond->pr_rule_ops) {
+    HMAP_FOR_EACH_SAFE (pr_op, hmap_node, &bond->pr_rule_ops) {
         int error;
         switch (pr_op->op) {
         case ADD:

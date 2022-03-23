@@ -543,13 +543,13 @@ bridge_exit(bool delete_datapath)
     if_notifier_destroy(ifnotifier);
     seq_destroy(ifaces_changed);
 
-    struct datapath *dp, *next;
-    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+    struct datapath *dp;
+    HMAP_FOR_EACH_SAFE (dp, node, &all_datapaths) {
         datapath_destroy(dp);
     }
 
-    struct bridge *br, *next_br;
-    HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
+    struct bridge *br;
+    HMAP_FOR_EACH_SAFE (br, node, &all_bridges) {
         bridge_destroy(br, delete_datapath);
     }
 
@@ -716,8 +716,8 @@ static void
 datapath_destroy(struct datapath *dp)
 {
     if (dp) {
-        struct ct_zone *ct_zone, *next;
-        HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+        struct ct_zone *ct_zone;
+        HMAP_FOR_EACH_SAFE (ct_zone, node, &dp->ct_zones) {
             ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
             ct_zone_remove_and_destroy(dp, ct_zone);
         }
@@ -733,7 +733,7 @@ datapath_destroy(struct datapath *dp)
 static void
 ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
 {
-    struct ct_zone *ct_zone, *next;
+    struct ct_zone *ct_zone;
 
     /* Add new 'ct_zone's or update existing 'ct_zone's based on the database
      * state. */
@@ -760,7 +760,7 @@ ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
     }
 
     /* Purge 'ct_zone's no longer found in the database. */
-    HMAP_FOR_EACH_SAFE (ct_zone, next, node, &dp->ct_zones) {
+    HMAP_FOR_EACH_SAFE (ct_zone, node, &dp->ct_zones) {
         if (ct_zone->last_used != idl_seqno) {
             ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
             ct_zone_remove_and_destroy(dp, ct_zone);
@@ -788,7 +788,7 @@ dp_capability_reconfigure(struct datapath *dp,
 static void
 datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
 {
-    struct datapath *dp, *next;
+    struct datapath *dp;
 
     /* Add new 'datapath's or update existing ones. */
     for (size_t i = 0; i < cfg->n_datapaths; i++) {
@@ -805,7 +805,7 @@ datapath_reconfigure(const struct ovsrec_open_vswitch *cfg)
     }
 
     /* Purge deleted 'datapath's. */
-    HMAP_FOR_EACH_SAFE (dp, next, node, &all_datapaths) {
+    HMAP_FOR_EACH_SAFE (dp, node, &all_datapaths) {
         if (dp->last_used != idl_seqno) {
             datapath_destroy(dp);
         }
@@ -816,7 +816,7 @@ static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
     struct sockaddr_in *managers;
-    struct bridge *br, *next;
+    struct bridge *br;
     int sflow_bridge_number;
     size_t n_managers;
 
@@ -875,7 +875,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      *     - Create ofprotos that are missing.
      *
      *     - Add ports that are missing. */
-    HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
+    HMAP_FOR_EACH_SAFE (br, node, &all_bridges) {
         if (!br->ofproto) {
             int error;
 
@@ -1020,7 +1020,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
     struct ofproto_port_dump dump;
 
     struct sset ofproto_ports;
-    struct port *port, *port_next;
+    struct port *port;
 
     /* List of "ofp_port"s to delete.  We make a list instead of deleting them
      * right away because ofproto implementations aren't necessarily able to
@@ -1132,7 +1132,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
      *       device destroyed via "tunctl -d", a physical Ethernet device
      *       whose module was just unloaded via "rmmod", or a virtual NIC for a
      *       VM whose VM was just terminated. */
-    HMAP_FOR_EACH_SAFE (port, port_next, hmap_node, &br->ports) {
+    HMAP_FOR_EACH_SAFE (port, hmap_node, &br->ports) {
         struct iface *iface;
 
         LIST_FOR_EACH_SAFE (iface, port_elem, &port->ifaces) {
@@ -1967,7 +1967,7 @@ port_is_bond_fake_iface(const struct port *port)
 static void
 add_del_bridges(const struct ovsrec_open_vswitch *cfg)
 {
-    struct bridge *br, *next;
+    struct bridge *br;
     struct shash_node *node;
     struct shash new_br;
     size_t i;
@@ -1993,7 +1993,7 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
 
     /* Get rid of deleted bridges or those whose types have changed.
      * Update 'cfg' of bridges that still exist. */
-    HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
+    HMAP_FOR_EACH_SAFE (br, node, &all_bridges) {
         br->cfg = shash_find_data(&new_br, br->name);
         if (!br->cfg || strcmp(br->type, ofproto_normalize_type(
                                    br->cfg->datapath_type))) {
@@ -3266,13 +3266,13 @@ bridge_run(void)
 
     if (ovsdb_idl_is_lock_contended(idl)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        struct bridge *br, *next_br;
+        struct bridge *br;
 
         VLOG_ERR_RL(&rl, "another ovs-vswitchd process is running, "
                     "disabling this process (pid %ld) until it goes away",
                     (long int) getpid());
 
-        HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
+        HMAP_FOR_EACH_SAFE (br, node, &all_bridges) {
             bridge_destroy(br, false);
         }
         /* Since we will not be running system_stats_run() in this process
@@ -3594,13 +3594,13 @@ static void
 bridge_destroy(struct bridge *br, bool del)
 {
     if (br) {
-        struct mirror *mirror, *next_mirror;
-        struct port *port, *next_port;
+        struct mirror *mirror;
+        struct port *port;
 
-        HMAP_FOR_EACH_SAFE (port, next_port, hmap_node, &br->ports) {
+        HMAP_FOR_EACH_SAFE (port, hmap_node, &br->ports) {
             port_destroy(port);
         }
-        HMAP_FOR_EACH_SAFE (mirror, next_mirror, hmap_node, &br->mirrors) {
+        HMAP_FOR_EACH_SAFE (mirror, hmap_node, &br->mirrors) {
             mirror_destroy(mirror);
         }
 
@@ -3746,11 +3746,11 @@ static void
 bridge_del_ports(struct bridge *br, const struct shash *wanted_ports)
 {
     struct shash_node *port_node;
-    struct port *port, *next;
+    struct port *port;
 
     /* Get rid of deleted ports.
      * Get rid of deleted interfaces on ports that still exist. */
-    HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
+    HMAP_FOR_EACH_SAFE (port, hmap_node, &br->ports) {
         port->cfg = shash_find_data(wanted_ports, port->name);
         if (!port->cfg) {
             port_destroy(port);
@@ -4211,7 +4211,7 @@ bridge_configure_aa(struct bridge *br)
     const struct ovsdb_datum *mc;
     struct ovsrec_autoattach *auto_attach = br->cfg->auto_attach;
     struct aa_settings aa_s;
-    struct aa_mapping *m, *next;
+    struct aa_mapping *m;
     size_t i;
 
     if (!auto_attach) {
@@ -4227,7 +4227,7 @@ bridge_configure_aa(struct bridge *br)
     mc = ovsrec_autoattach_get_mappings(auto_attach,
                                         OVSDB_TYPE_INTEGER,
                                         OVSDB_TYPE_INTEGER);
-    HMAP_FOR_EACH_SAFE (m, next, hmap_node, &br->mappings) {
+    HMAP_FOR_EACH_SAFE (m, hmap_node, &br->mappings) {
         union ovsdb_atom atom;
 
         atom.integer = m->isid;
@@ -5013,12 +5013,12 @@ bridge_configure_mirrors(struct bridge *br)
 {
     const struct ovsdb_datum *mc;
     unsigned long *flood_vlans;
-    struct mirror *m, *next;
+    struct mirror *m;
     size_t i;
 
     /* Get rid of deleted mirrors. */
     mc = ovsrec_bridge_get_mirrors(br->cfg, OVSDB_TYPE_UUID);
-    HMAP_FOR_EACH_SAFE (m, next, hmap_node, &br->mirrors) {
+    HMAP_FOR_EACH_SAFE (m, hmap_node, &br->mirrors) {
         union ovsdb_atom atom;
 
         atom.uuid = m->uuid;

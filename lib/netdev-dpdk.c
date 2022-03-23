@@ -4686,11 +4686,11 @@ trtcm_policer_qos_construct(const struct smap *details,
 static void
 trtcm_policer_qos_destruct(struct qos_conf *conf)
 {
-    struct trtcm_policer_queue *queue, *next_queue;
+    struct trtcm_policer_queue *queue;
     struct trtcm_policer *policer = CONTAINER_OF(conf, struct trtcm_policer,
                                                  qos_conf);
 
-    HMAP_FOR_EACH_SAFE (queue, next_queue, hmap_node, &policer->queues) {
+    HMAP_FOR_EACH_SAFE (queue, hmap_node, &policer->queues) {
         hmap_remove(&policer->queues, &queue->hmap_node);
         free(queue);
     }

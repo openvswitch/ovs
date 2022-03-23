@@ -1096,8 +1096,8 @@ ovsdb_txn_destroy_cloned(struct ovsdb_txn *txn)
     ovs_assert(!txn->db);
     struct ovsdb_txn_table *t;
     LIST_FOR_EACH_SAFE (t, node, &txn->txn_tables) {
-        struct ovsdb_txn_row *r, *next_txn_row;
-        HMAP_FOR_EACH_SAFE (r, next_txn_row, hmap_node, &t->txn_rows) {
+        struct ovsdb_txn_row *r;
+        HMAP_FOR_EACH_SAFE (r, hmap_node, &t->txn_rows) {
             if (r->old) {
                 ovsdb_row_destroy(r->old);
             }
@@ -1559,9 +1559,9 @@ for_each_txn_row(struct ovsdb_txn *txn,
             }
 
             while (t->n_processed < hmap_count(&t->txn_rows)) {
-                struct ovsdb_txn_row *r, *next_txn_row;
+                struct ovsdb_txn_row *r;
 
-                HMAP_FOR_EACH_SAFE (r, next_txn_row, hmap_node, &t->txn_rows) {
+                HMAP_FOR_EACH_SAFE (r, hmap_node, &t->txn_rows) {
                     if (r->serial != serial) {
                         struct ovsdb_error *error;
 

@@ -310,8 +310,8 @@ connmgr_destroy(struct connmgr *mgr)
         return;
     }
 
-    struct ofservice *ofservice, *next_ofservice;
-    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, hmap_node, &mgr->services) {
+    struct ofservice *ofservice;
+    HMAP_FOR_EACH_SAFE (ofservice, hmap_node, &mgr->services) {
         ofservice_destroy(ofservice);
     }
     hmap_destroy(&mgr->services);
@@ -592,8 +592,8 @@ connmgr_set_controllers(struct connmgr *mgr, struct shash *controllers)
 
     /* Delete services that are no longer configured.
      * Update configuration of all now-existing services. */
-    struct ofservice *ofservice, *next_ofservice;
-    HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, hmap_node, &mgr->services) {
+    struct ofservice *ofservice;
+    HMAP_FOR_EACH_SAFE (ofservice, hmap_node, &mgr->services) {
         const char *target = ofservice->target;
         struct ofproto_controller *c = shash_find_data(controllers, target);
         if (!c) {
@@ -1137,9 +1137,9 @@ ofconn_remove_bundle(struct ofconn *ofconn, struct ofp_bundle *bundle)
 static void
 bundle_remove_all(struct ofconn *ofconn)
 {
-    struct ofp_bundle *b, *next;
+    struct ofp_bundle *b;
 
-    HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
+    HMAP_FOR_EACH_SAFE (b, node, &ofconn->bundles) {
         ofp_bundle_remove__(ofconn, b);
     }
 }
@@ -1149,8 +1149,8 @@ bundle_remove_expired(struct ofconn *ofconn, long long int now)
 {
     long long int limit = now - bundle_idle_timeout;
 
-    struct ofp_bundle *b, *next;
-    HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
+    struct ofp_bundle *b;
+    HMAP_FOR_EACH_SAFE (b, node, &ofconn->bundles) {
         if (b->used <= limit) {
             ofconn_send_error(ofconn, b->msg, OFPERR_OFPBFC_TIMEOUT);
             ofp_bundle_remove__(ofconn, b);
@@ -1247,8 +1247,8 @@ ofconn_destroy(struct ofconn *ofconn)
 
     free(ofconn->async_cfg);
 
-    struct ofmonitor *monitor, *next_monitor;
-    HMAP_FOR_EACH_SAFE (monitor, next_monitor, ofconn_node,
+    struct ofmonitor *monitor;
+    HMAP_FOR_EACH_SAFE (monitor, ofconn_node,
                         &ofconn->monitors) {
         ofmonitor_destroy(monitor);
     }

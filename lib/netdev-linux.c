@@ -5331,11 +5331,11 @@ static void
 hfsc_tc_destroy(struct tc *tc)
 {
     struct hfsc *hfsc;
-    struct hfsc_class *hc, *next;
+    struct hfsc_class *hc;
 
     hfsc = CONTAINER_OF(tc, struct hfsc, tc);
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &hfsc->tc.queues) {
+    HMAP_FOR_EACH_SAFE (hc, tc_queue.hmap_node, &hfsc->tc.queues) {
         hmap_remove(&hfsc->tc.queues, &hc->tc_queue.hmap_node);
         free(hc);
     }

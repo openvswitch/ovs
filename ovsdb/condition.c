@@ -220,13 +220,13 @@ ovsdb_condition_optimize(struct ovsdb_condition *cnd)
 static void
 ovsdb_condition_optimize_destroy(struct ovsdb_condition *cnd)
 {
-     struct shash_node *node, *next;
+     struct shash_node *node;
 
-     SHASH_FOR_EACH_SAFE (node, next, &cnd->o_columns) {
+     SHASH_FOR_EACH_SAFE (node, &cnd->o_columns) {
          struct ovsdb_o_column *o_column = node->data;
-         struct ovsdb_o_clause *c, *c_next;
+         struct ovsdb_o_clause *c;
 
-         HMAP_FOR_EACH_SAFE(c, c_next, hmap_node, &o_column->o_clauses) {
+         HMAP_FOR_EACH_SAFE (c, hmap_node, &o_column->o_clauses) {
              hmap_remove(&o_column->o_clauses, &c->hmap_node);
              free(c);
          }

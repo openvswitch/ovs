@@ -178,14 +178,14 @@ perf_counters_clear(void)
 void
 perf_counters_destroy(void)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
     if (fd__ != -1) {
         ioctl(fd__, PERF_EVENT_IOC_DISABLE, 0);
         close(fd__);
     }
 
-    SHASH_FOR_EACH_SAFE (node, next, &perf_counters) {
+    SHASH_FOR_EACH_SAFE (node, &perf_counters) {
         shash_delete(&perf_counters, node);
     }
 

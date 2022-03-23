@@ -67,10 +67,20 @@ bool hmapx_equals(const struct hmapx *, const struct hmapx *);
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash map but its members remain accessible and intact). */
-#define HMAPX_FOR_EACH_SAFE(NODE, NEXT, HMAPX)                          \
-    HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, hmap_node, &(HMAPX)->map,       \
+#define HMAPX_FOR_EACH_SAFE_SHORT(NODE, HMAPX)                            \
+    HMAP_FOR_EACH_SAFE_SHORT_INIT (NODE, hmap_node, &(HMAPX)->map,        \
+                            BUILD_ASSERT_TYPE(NODE, struct hmapx_node *), \
+                            BUILD_ASSERT_TYPE(HMAPX, struct hmapx *))
+
+#define HMAPX_FOR_EACH_SAFE_LONG(NODE, NEXT, HMAPX)                       \
+    HMAP_FOR_EACH_SAFE_LONG_INIT (NODE, NEXT, hmap_node, &(HMAPX)->map,   \
                             BUILD_ASSERT_TYPE(NODE, struct hmapx_node *), \
                             BUILD_ASSERT_TYPE(NEXT, struct hmapx_node *), \
                             BUILD_ASSERT_TYPE(HMAPX, struct hmapx *))
+
+#define HMAPX_FOR_EACH_SAFE(...)                                              \
+    OVERLOAD_SAFE_MACRO(HMAPX_FOR_EACH_SAFE_LONG,                             \
+                        HMAPX_FOR_EACH_SAFE_SHORT,                            \
+                        3, __VA_ARGS__)
 
 #endif /* hmapx.h */

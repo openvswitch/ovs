@@ -68,9 +68,9 @@ shash_moved(struct shash *sh)
 void
 shash_clear(struct shash *sh)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, sh) {
+    SHASH_FOR_EACH_SAFE (node, sh) {
         hmap_remove(&sh->map, &node->node);
         free(node->name);
         free(node);
@@ -81,9 +81,9 @@ shash_clear(struct shash *sh)
 void
 shash_clear_free_data(struct shash *sh)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, sh) {
+    SHASH_FOR_EACH_SAFE (node, sh) {
         hmap_remove(&sh->map, &node->node);
         free(node->data);
         free(node->name);

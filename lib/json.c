@@ -397,9 +397,9 @@ json_destroy__(struct json *json)
 static void
 json_destroy_object(struct shash *object)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, object) {
+    SHASH_FOR_EACH_SAFE (node, object) {
         struct json *value = node->data;
 
         json_destroy(value);

@@ -700,8 +700,8 @@ static void
 raft_set_servers(struct raft *raft, const struct hmap *new_servers,
                  enum vlog_level level)
 {
-    struct raft_server *s, *next;
-    HMAP_FOR_EACH_SAFE (s, next, hmap_node, &raft->servers) {
+    struct raft_server *s;
+    HMAP_FOR_EACH_SAFE (s, hmap_node, &raft->servers) {
         if (!raft_server_find(new_servers, &s->sid)) {
             ovs_assert(s != raft->remove_server);
 
@@ -711,7 +711,7 @@ raft_set_servers(struct raft *raft, const struct hmap *new_servers,
         }
     }
 
-    HMAP_FOR_EACH_SAFE (s, next, hmap_node, new_servers) {
+    HMAP_FOR_EACH_SAFE (s, hmap_node, new_servers) {
         if (!raft_find_server(raft, &s->sid)) {
             VLOG(level, "server %s added to configuration", s->nickname);
 
@@ -2062,8 +2062,8 @@ raft_run(struct raft *raft)
          * commands becomes new leader: the pending commands can still complete
          * if the crashed leader has replicated the transactions to majority of
          * followers before it crashed. */
-        struct raft_command *cmd, *next_cmd;
-        HMAP_FOR_EACH_SAFE (cmd, next_cmd, hmap_node, &raft->commands) {
+        struct raft_command *cmd;
+        HMAP_FOR_EACH_SAFE (cmd, hmap_node, &raft->commands) {
             if (cmd->timestamp
                 && now - cmd->timestamp > raft->election_timer * 2) {
                 raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
@@ -2266,8 +2266,8 @@ raft_command_initiate(struct raft *raft,
 static void
 log_all_commands(struct raft *raft)
 {
-    struct raft_command *cmd, *next;
-    HMAP_FOR_EACH_SAFE (cmd, next, hmap_node, &raft->commands) {
+    struct raft_command *cmd;
+    HMAP_FOR_EACH_SAFE (cmd, hmap_node, &raft->commands) {
         VLOG_DBG("raft command eid: "UUID_FMT, UUID_ARGS(&cmd->eid));
     }
 }
@@ -2421,8 +2421,8 @@ raft_command_complete(struct raft *raft,
 static void
 raft_complete_all_commands(struct raft *raft, enum raft_command_status status)
 {
-    struct raft_command *cmd, *next;
-    HMAP_FOR_EACH_SAFE (cmd, next, hmap_node, &raft->commands) {
+    struct raft_command *cmd;
+    HMAP_FOR_EACH_SAFE (cmd, hmap_node, &raft->commands) {
         raft_command_complete(raft, cmd, status);
     }
 }

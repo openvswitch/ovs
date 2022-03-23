@@ -299,7 +299,7 @@ static void
 netflow_run__(struct netflow *nf) OVS_REQUIRES(mutex)
 {
     long long int now = time_msec();
-    struct netflow_flow *nf_flow, *next;
+    struct netflow_flow *nf_flow;
 
     if (nf->packet.size) {
         collectors_send(nf->collectors, nf->packet.data, nf->packet.size);
@@ -312,7 +312,7 @@ netflow_run__(struct netflow *nf) OVS_REQUIRES(mutex)
 
     nf->next_timeout = now + 1000;
 
-    HMAP_FOR_EACH_SAFE (nf_flow, next, hmap_node, &nf->flows) {
+    HMAP_FOR_EACH_SAFE (nf_flow, hmap_node, &nf->flows) {
         if (now > nf_flow->last_expired + nf->active_timeout) {
             bool idle = nf_flow->used < nf_flow->last_expired;
             netflow_expire__(nf, nf_flow);
@@ -416,8 +416,8 @@ netflow_unref(struct netflow *nf)
         collectors_destroy(nf->collectors);
         ofpbuf_uninit(&nf->packet);
 
-        struct netflow_flow *nf_flow, *next;
-        HMAP_FOR_EACH_SAFE (nf_flow, next, hmap_node, &nf->flows) {
+        struct netflow_flow *nf_flow;
+        HMAP_FOR_EACH_SAFE (nf_flow, hmap_node, &nf->flows) {
             hmap_remove(&nf->flows, &nf_flow->hmap_node);
             free(nf_flow);
         }

@@ -167,9 +167,9 @@ ovsdb_txn_forward_cancel(struct ovsdb *db, struct ovsdb_txn_forward *txn_fwd)
 void
 ovsdb_txn_forward_cancel_all(struct ovsdb *db, bool sent_only)
 {
-    struct ovsdb_txn_forward *t, *next;
+    struct ovsdb_txn_forward *t;
 
-    HMAP_FOR_EACH_SAFE (t, next, sent_node, &db->txn_forward_sent) {
+    HMAP_FOR_EACH_SAFE (t, sent_node, &db->txn_forward_sent) {
         ovsdb_txn_forward_cancel(db, t);
     }
 

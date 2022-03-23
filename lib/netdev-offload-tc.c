@@ -417,11 +417,11 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
 static int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
-    struct ufid_tc_data *data, *next;
+    struct ufid_tc_data *data;
     int err;
 
     ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH_SAFE (data, next, tc_to_ufid_node, &tc_to_ufid) {
+    HMAP_FOR_EACH_SAFE (data, tc_to_ufid_node, &tc_to_ufid) {
         if (data->netdev != netdev) {
             continue;
         }

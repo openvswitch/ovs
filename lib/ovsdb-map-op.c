@@ -91,8 +91,8 @@ map_op_list_create(void)
 void
 map_op_list_destroy(struct map_op_list *list, const struct ovsdb_type *type)
 {
-    struct map_op *map_op, *next;
-    HMAP_FOR_EACH_SAFE (map_op, next, node, &list->hmap) {
+    struct map_op *map_op;
+    HMAP_FOR_EACH_SAFE (map_op, node, &list->hmap) {
         map_op_destroy(map_op, type);
     }
     hmap_destroy(&list->hmap);

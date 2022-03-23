@@ -591,10 +591,10 @@ void
 dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 {
     if (ds && ovs_refcount_unref_relaxed(&ds->ref_cnt) == 1) {
-        struct dpif_sflow_port *dsp, *next;
+        struct dpif_sflow_port *dsp;
 
         dpif_sflow_clear(ds);
-        HMAP_FOR_EACH_SAFE (dsp, next, hmap_node, &ds->ports) {
+        HMAP_FOR_EACH_SAFE (dsp, hmap_node, &ds->ports) {
             dpif_sflow_del_port__(ds, dsp);
         }
         hmap_destroy(&ds->ports);

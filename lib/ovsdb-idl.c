@@ -389,13 +389,13 @@ ovsdb_idl_clear(struct ovsdb_idl *db)
      */
     for (size_t i = 0; i < db->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &db->tables[i];
-        struct ovsdb_idl_row *row, *next_row;
+        struct ovsdb_idl_row *row;
 
         if (hmap_is_empty(&table->rows)) {
             continue;
         }
 
-        HMAP_FOR_EACH_SAFE (row, next_row, hmap_node, &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &table->rows) {
             struct ovsdb_idl_arc *arc;
 
             if (!ovsdb_idl_row_is_orphan(row)) {
@@ -1041,8 +1041,8 @@ ovsdb_idl_condition_destroy(struct ovsdb_idl_condition *cond)
 void
 ovsdb_idl_condition_clear(struct ovsdb_idl_condition *cond)
 {
-    struct ovsdb_idl_clause *clause, *next;
-    HMAP_FOR_EACH_SAFE (clause, next, hmap_node, &cond->clauses) {
+    struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH_SAFE (clause, hmap_node, &cond->clauses) {
         hmap_remove(&cond->clauses, &clause->hmap_node);
         ovsdb_idl_clause_destroy(clause);
     }
@@ -2729,7 +2729,7 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
 void
 ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
-    struct ovsdb_idl_txn_insert *insert, *next;
+    struct ovsdb_idl_txn_insert *insert;
 
     if (txn->status == TXN_INCOMPLETE) {
         ovsdb_cs_forget_transaction(txn->idl->cs, txn->request_id);
@@ -2739,7 +2739,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     ovsdb_idl_txn_abort(txn);
     ds_destroy(&txn->comment);
     free(txn->error);
-    HMAP_FOR_EACH_SAFE (insert, next, hmap_node, &txn->inserted_rows) {
+    HMAP_FOR_EACH_SAFE (insert, hmap_node, &txn->inserted_rows) {
         free(insert);
     }
     hmap_destroy(&txn->inserted_rows);
@@ -2824,7 +2824,7 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
 static void
 ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 {
-    struct ovsdb_idl_row *row, *next;
+    struct ovsdb_idl_row *row;
 
     /* This must happen early.  Otherwise, ovsdb_idl_row_parse() will call an
      * ovsdb_idl_column's 'parse' function, which will call
@@ -2832,7 +2832,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
      * transaction and fail to update the graph.  */
     txn->idl->txn = NULL;
 
-    HMAP_FOR_EACH_SAFE (row, next, txn_node, &txn->txn_rows) {
+    HMAP_FOR_EACH_SAFE (row, txn_node, &txn->txn_rows) {
         enum { INSERTED, MODIFIED, DELETED } op
             = (!row->new_datum ? DELETED
                : !row->old_datum ? INSERTED

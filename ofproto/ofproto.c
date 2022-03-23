@@ -1754,7 +1754,7 @@ void
 ofproto_destroy(struct ofproto *p, bool del)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofport *ofport, *next_ofport;
+    struct ofport *ofport;
     struct ofport_usage *usage;
 
     if (!p) {
@@ -1762,7 +1762,7 @@ ofproto_destroy(struct ofproto *p, bool del)
     }
 
     ofproto_flush__(p, del);
-    HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
+    HMAP_FOR_EACH_SAFE (ofport, hmap_node, &p->ports) {
         ofport_destroy(ofport, del);
     }
 
@@ -2826,7 +2826,7 @@ init_ports(struct ofproto *p)
 {
     struct ofproto_port_dump dump;
     struct ofproto_port ofproto_port;
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, p) {
         const char *name = ofproto_port.name;
@@ -2857,7 +2857,7 @@ init_ports(struct ofproto *p)
         }
     }
 
-    SHASH_FOR_EACH_SAFE(node, next, &init_ofp_ports) {
+    SHASH_FOR_EACH_SAFE (node, &init_ofp_ports) {
         struct iface_hint *iface_hint = node->data;
 
         if (!strcmp(iface_hint->br_name, p->name)) {
@@ -6852,9 +6852,9 @@ static void
 meter_delete_all(struct ofproto *ofproto)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct meter *meter, *next;
+    struct meter *meter;
 
-    HMAP_FOR_EACH_SAFE (meter, next, node, &ofproto->meters) {
+    HMAP_FOR_EACH_SAFE (meter, node, &ofproto->meters) {
         hmap_remove(&ofproto->meters, &meter->node);
         meter_destroy(ofproto, meter);
     }
@@ -9199,8 +9199,8 @@ oftable_configure_eviction(struct oftable *table, unsigned int eviction,
 
     /* Destroy existing eviction groups, then destroy and recreate data
      * structures to recover memory. */
-    struct eviction_group *evg, *next;
-    HMAP_FOR_EACH_SAFE (evg, next, id_node, &table->eviction_groups_by_id) {
+    struct eviction_group *evg;
+    HMAP_FOR_EACH_SAFE (evg, id_node, &table->eviction_groups_by_id) {
         eviction_group_destroy(table, evg);
     }
     hmap_destroy(&table->eviction_groups_by_id);
