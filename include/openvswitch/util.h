@@ -145,6 +145,49 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 #define INIT_CONTAINER(OBJECT, POINTER, MEMBER) \
     ((OBJECT) = NULL, ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER))
 
+/* Multi-variable container iterators.
+ *
+ * The following macros facilitate safe iteration over data structures
+ * contained in objects. It does so by using an internal iterator variable of
+ * the type of the member object pointer (i.e: pointer to the data structure).
+ */
+
+/* Multi-variable iterator variable name.
+ * Returns the name of the internal iterator variable.
+ */
+#define ITER_VAR(NAME) NAME ## __iterator__
+
+/* Multi-variable initialization. Creates an internal iterator variable that
+ * points to the provided pointer. The type of the iterator variable is
+ * ITER_TYPE*. It must be the same type as &VAR->MEMBER.
+ *
+ * The _EXP version evaluates the extra expressions once.
+ */
+#define INIT_MULTIVAR(VAR, MEMBER, POINTER, ITER_TYPE)                  \
+    INIT_MULTIVAR_EXP(VAR, MEMBER, POINTER, ITER_TYPE, (void) 0)
+
+#define INIT_MULTIVAR_EXP(VAR, MEMBER, POINTER, ITER_TYPE, ...)         \
+    ITER_TYPE *ITER_VAR(VAR) = ( __VA_ARGS__ , (ITER_TYPE *) POINTER)
+
+/* Multi-variable condition.
+ * Evaluates the condition expression (that must be based on the internal
+ * iterator variable). Only if the result of expression is true, the OBJECT is
+ * set to the object containing the current value of the iterator variable.
+ *
+ * It is up to the caller to make sure it is safe to run OBJECT_CONTAINING on
+ * the pointers that verify the condition.
+ */
+#define CONDITION_MULTIVAR(VAR, MEMBER, EXPR)                                 \
+    ((EXPR) ?                                                                 \
+     (((VAR) = OBJECT_CONTAINING(ITER_VAR(VAR), VAR, MEMBER)), 1) :           \
+     (((VAR) = NULL), 0))
+
+/* Multi-variable update.
+ * Sets the iterator value to NEXT_ITER.
+ */
+#define UPDATE_MULTIVAR(VAR, NEXT_ITER)                                       \
+    (ITER_VAR(VAR) = NEXT_ITER)
+
 /* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) __ARRAY_SIZE(ARRAY)
 
