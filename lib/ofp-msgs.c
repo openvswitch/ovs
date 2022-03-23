@@ -1290,8 +1290,8 @@ ofpmp_assembler_execute(struct hmap *assembler, struct ofpbuf *msg,
      * on either side by parts with 0-byte bodies.  We remove the 0-byte
      * ones here to simplify processing later.
      */
-    struct ofpbuf *b, *next;
-    LIST_FOR_EACH_SAFE (b, next, list_node, out) {
+    struct ofpbuf *b;
+    LIST_FOR_EACH_SAFE (b, list_node, out) {
         if (b->size <= min_len && !ovs_list_is_short(out)) {
             ovs_list_remove(&b->list_node);
             ofpbuf_delete(b);

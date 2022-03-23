@@ -1936,7 +1936,7 @@ run(struct ofproto *ofproto_)
 
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));
     if (ofproto->dump_seq != new_dump_seq) {
-        struct rule *rule, *next_rule;
+        struct rule *rule;
         long long now = time_msec();
 
         /* We know stats are relatively fresh, so now is a good time to do some
@@ -1946,7 +1946,7 @@ run(struct ofproto *ofproto_)
         /* Expire OpenFlow flows whose idle_timeout or hard_timeout
          * has passed. */
         ovs_mutex_lock(&ofproto_mutex);
-        LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
+        LIST_FOR_EACH_SAFE (rule, expirable,
                             &ofproto->up.expirable) {
             rule_expire(rule_dpif_cast(rule), now);
         }
@@ -3103,11 +3103,11 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
 {
     struct ofproto_dpif *ofproto = bundle->ofproto;
     struct mac_learning *ml = ofproto->ml;
-    struct mac_entry *mac, *next_mac;
+    struct mac_entry *mac;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&ml->rwlock);
-    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+    LIST_FOR_EACH_SAFE (mac, lru_node, &ml->lrus) {
         if (mac_entry_get_port(ml, mac) == bundle) {
             if (all_ofprotos) {
                 struct ofproto_dpif *o;
@@ -3138,13 +3138,13 @@ bundle_move(struct ofbundle *old, struct ofbundle *new)
 {
     struct ofproto_dpif *ofproto = old->ofproto;
     struct mac_learning *ml = ofproto->ml;
-    struct mac_entry *mac, *next_mac;
+    struct mac_entry *mac;
 
     ovs_assert(new->ofproto == old->ofproto);
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&ml->rwlock);
-    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+    LIST_FOR_EACH_SAFE (mac, lru_node, &ml->lrus) {
         if (mac_entry_get_port(ml, mac) == old) {
             mac_entry_set_port(ml, mac, new);
         }
@@ -3241,7 +3241,7 @@ static void
 bundle_destroy(struct ofbundle *bundle)
 {
     struct ofproto_dpif *ofproto;
-    struct ofport_dpif *port, *next_port;
+    struct ofport_dpif *port;
 
     if (!bundle) {
         return;
@@ -3254,7 +3254,7 @@ bundle_destroy(struct ofbundle *bundle)
     xlate_bundle_remove(bundle);
     xlate_txn_commit();
 
-    LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+    LIST_FOR_EACH_SAFE (port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
     }
 
@@ -3344,9 +3344,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
     }
     if (!ok || ovs_list_size(&bundle->ports) != s->n_members) {
-        struct ofport_dpif *next_port;
-
-        LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+        LIST_FOR_EACH_SAFE (port, bundle_node, &bundle->ports) {
             for (i = 0; i < s->n_members; i++) {
                 if (s->members[i] == port->up.ofp_port) {
                     goto found;
@@ -5551,9 +5549,9 @@ ct_zone_timeout_policy_sweep(struct dpif_backer *backer)
 {
     if (!ovs_list_is_empty(&backer->ct_tp_kill_list)
         && time_msec() >= timeout_policy_cleanup_timer) {
-        struct ct_timeout_policy *ct_tp, *next;
+        struct ct_timeout_policy *ct_tp;
 
-        LIST_FOR_EACH_SAFE (ct_tp, next, list_node, &backer->ct_tp_kill_list) {
+        LIST_FOR_EACH_SAFE (ct_tp, list_node, &backer->ct_tp_kill_list) {
             if (!ct_dpif_del_timeout_policy(backer->dpif, ct_tp->tp_id)) {
                 ovs_list_remove(&ct_tp->list_node);
                 ct_timeout_policy_destroy(ct_tp, backer->tp_ids);

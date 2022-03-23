@@ -559,9 +559,9 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
                               struct lldpd_hardware *hw,
                               struct aa_mapping_internal *m)
 {
-    struct lldpd_aa_isid_vlan_maps_tlv *lm, *lm_next;
+    struct lldpd_aa_isid_vlan_maps_tlv *lm;
 
-    LIST_FOR_EACH_SAFE (lm, lm_next, m_entries,
+    LIST_FOR_EACH_SAFE (lm, m_entries,
                         &hw->h_lport.p_isid_vlan_maps) {
         uint32_t isid = lm->isid_vlan_data.isid;
 
@@ -953,8 +953,8 @@ lldp_ref(const struct lldp *lldp_)
 void
 lldp_destroy_dummy(struct lldp *lldp)
 {
-    struct lldpd_hardware *hw, *hw_next;
-    struct lldpd_chassis *chassis, *chassis_next;
+    struct lldpd_hardware *hw;
+    struct lldpd_chassis *chassis;
     struct lldpd *cfg;
 
     if (!lldp) {
@@ -963,13 +963,13 @@ lldp_destroy_dummy(struct lldp *lldp)
 
     cfg = lldp->lldpd;
 
-    LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware) {
+    LIST_FOR_EACH_SAFE (hw, h_entries, &cfg->g_hardware) {
         ovs_list_remove(&hw->h_entries);
         free(hw->h_lport.p_lastframe);
         free(hw);
     }
 
-    LIST_FOR_EACH_SAFE (chassis, chassis_next, list, &cfg->g_chassis) {
+    LIST_FOR_EACH_SAFE (chassis, list, &cfg->g_chassis) {
         ovs_list_remove(&chassis->list);
         free(chassis);
     }

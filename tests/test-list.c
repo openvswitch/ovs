@@ -164,6 +164,35 @@ test_list_for_each_safe(void)
                 }
             }
             assert(n == n_remaining);
+
+            /* Test short version (without next variable). */
+            make_list(&list, elements, values, n);
+
+            i = 0;
+            values_idx = 0;
+            n_remaining = n;
+            LIST_FOR_EACH_SAFE (e, node, &list) {
+                assert(i < n);
+                if (pattern & (1ul << i)) {
+                    ovs_list_remove(&e->node);
+                    n_remaining--;
+                    memmove(&values[values_idx], &values[values_idx + 1],
+                            sizeof *values * (n_remaining - values_idx));
+                } else {
+                    values_idx++;
+                }
+
+                check_list(&list, values, n_remaining);
+                i++;
+            }
+            assert(i == n);
+            assert(e == NULL);
+
+            for (i = 0; i < n; i++) {
+                if (pattern & (1ul << i)) {
+                    n_remaining++;
+                }
+            }
         }
     }
 }

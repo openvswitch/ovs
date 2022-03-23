@@ -1510,13 +1510,13 @@ cmd_add_br(struct ctl_context *ctx)
 static void
 del_port(struct vsctl_context *vsctl_ctx, struct vsctl_port *port)
 {
-    struct vsctl_iface *iface, *next_iface;
+    struct vsctl_iface *iface;
 
     bridge_delete_port((port->bridge->parent
                         ? port->bridge->parent->br_cfg
                         : port->bridge->br_cfg), port->port_cfg);
 
-    LIST_FOR_EACH_SAFE (iface, next_iface, ifaces_node, &port->ifaces) {
+    LIST_FOR_EACH_SAFE (iface, ifaces_node, &port->ifaces) {
         del_cached_iface(vsctl_ctx, iface);
     }
     del_cached_port(vsctl_ctx, port);
@@ -1526,14 +1526,14 @@ static void
 del_bridge(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *br)
 {
     struct vsctl_bridge *child, *next_child;
-    struct vsctl_port *port, *next_port;
+    struct vsctl_port *port;
     const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
 
     HMAP_FOR_EACH_SAFE (child, next_child, children_node, &br->children) {
         del_bridge(vsctl_ctx, child);
     }
 
-    LIST_FOR_EACH_SAFE (port, next_port, ports_node, &br->ports) {
+    LIST_FOR_EACH_SAFE (port, ports_node, &br->ports) {
         del_port(vsctl_ctx, port);
     }
 

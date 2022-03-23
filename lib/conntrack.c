@@ -1526,14 +1526,14 @@ set_label(struct dp_packet *pkt, struct conn *conn,
 static long long
 ct_sweep(struct conntrack *ct, long long now, size_t limit)
 {
-    struct conn *conn, *next;
+    struct conn *conn;
     long long min_expiration = LLONG_MAX;
     size_t count = 0;
 
     ovs_mutex_lock(&ct->ct_lock);
 
     for (unsigned i = 0; i < N_CT_TM; i++) {
-        LIST_FOR_EACH_SAFE (conn, next, exp_node, &ct->exp_lists[i]) {
+        LIST_FOR_EACH_SAFE (conn, exp_node, &ct->exp_lists[i]) {
             ovs_mutex_lock(&conn->lock);
             if (now < conn->expiration || count >= limit) {
                 min_expiration = MIN(min_expiration, conn->expiration);

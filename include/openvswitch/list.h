@@ -92,7 +92,8 @@ static inline bool ovs_list_is_short(const struct ovs_list *);
          CONDITION_MULTIVAR(VAR, MEMBER, ITER_VAR(VAR) != (LIST));            \
          UPDATE_MULTIVAR(VAR, ITER_VAR(VAR)->prev))
 
-#define LIST_FOR_EACH_REVERSE_SAFE(VAR, PREV, MEMBER, LIST)                   \
+/* LONG version of SAFE iterators. */
+#define LIST_FOR_EACH_REVERSE_SAFE_LONG(VAR, PREV, MEMBER, LIST)              \
     for (INIT_MULTIVAR_SAFE_LONG(VAR, PREV, MEMBER, (LIST)->prev,             \
                                  struct ovs_list);                            \
          CONDITION_MULTIVAR_SAFE_LONG(VAR, PREV, MEMBER,                      \
@@ -101,7 +102,7 @@ static inline bool ovs_list_is_short(const struct ovs_list *);
                                       ITER_VAR(PREV) != (LIST));              \
          UPDATE_MULTIVAR_SAFE_LONG(VAR, PREV))
 
-#define LIST_FOR_EACH_SAFE(VAR, NEXT, MEMBER, LIST)                           \
+#define LIST_FOR_EACH_SAFE_LONG(VAR, NEXT, MEMBER, LIST)                      \
     for (INIT_MULTIVAR_SAFE_LONG(VAR, NEXT, MEMBER, (LIST)->next,             \
                                  struct ovs_list);                            \
          CONDITION_MULTIVAR_SAFE_LONG(VAR, NEXT, MEMBER,                      \
@@ -109,6 +110,31 @@ static inline bool ovs_list_is_short(const struct ovs_list *);
                                       ITER_VAR(NEXT) = ITER_VAR(VAR)->next,   \
                                       ITER_VAR(NEXT) != (LIST));              \
          UPDATE_MULTIVAR_SAFE_LONG(VAR, NEXT))
+
+/* SHORT version of SAFE iterators. */
+#define LIST_FOR_EACH_REVERSE_SAFE_SHORT(VAR, MEMBER, LIST)                   \
+    for (INIT_MULTIVAR_SAFE_SHORT(VAR, MEMBER, (LIST)->prev, struct ovs_list);\
+         CONDITION_MULTIVAR_SAFE_SHORT(VAR, MEMBER,                           \
+                                       ITER_VAR(VAR) != (LIST),               \
+                                 ITER_NEXT_VAR(VAR) = ITER_VAR(VAR)->prev);   \
+         UPDATE_MULTIVAR_SAFE_SHORT(VAR))
+
+#define LIST_FOR_EACH_SAFE_SHORT(VAR, MEMBER, LIST)                           \
+    for (INIT_MULTIVAR_SAFE_SHORT(VAR, MEMBER, (LIST)->next, struct ovs_list);\
+         CONDITION_MULTIVAR_SAFE_SHORT(VAR, MEMBER,                           \
+                                       ITER_VAR(VAR) != (LIST),               \
+                                 ITER_NEXT_VAR(VAR) = ITER_VAR(VAR)->next);   \
+         UPDATE_MULTIVAR_SAFE_SHORT(VAR))
+
+#define LIST_FOR_EACH_SAFE(...)                      \
+    OVERLOAD_SAFE_MACRO(LIST_FOR_EACH_SAFE_LONG,     \
+                        LIST_FOR_EACH_SAFE_SHORT,    \
+                        4, __VA_ARGS__)
+
+#define LIST_FOR_EACH_REVERSE_SAFE(...)                        \
+    OVERLOAD_SAFE_MACRO(LIST_FOR_EACH_REVERSE_SAFE_LONG,       \
+                        LIST_FOR_EACH_REVERSE_SAFE_SHORT,      \
+                        4, __VA_ARGS__)
 
 #define LIST_FOR_EACH_POP(ITER, MEMBER, LIST)                                 \
     while (!ovs_list_is_empty(LIST) ?                                         \

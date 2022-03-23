@@ -259,14 +259,14 @@ ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 tp_port, uint8_t nw_proto)
 void
 tnl_port_map_delete(odp_port_t port, const char type[])
 {
-    struct tnl_port *p, *next;
+    struct tnl_port *p;
     struct ip_device *ip_dev;
     uint8_t nw_proto;
 
     nw_proto = tnl_type_to_nw_proto(type);
 
     ovs_mutex_lock(&mutex);
-    LIST_FOR_EACH_SAFE(p, next, node, &port_list) {
+    LIST_FOR_EACH_SAFE (p, node, &port_list) {
         if (p->port == port && p->nw_proto == nw_proto &&
                     ovs_refcount_unref_relaxed(&p->ref_cnt) == 1) {
             ovs_list_remove(&p->node);
@@ -444,11 +444,11 @@ delete_ipdev(struct ip_device *ip_dev)
 void
 tnl_port_map_insert_ipdev(const char dev_name[])
 {
-    struct ip_device *ip_dev, *next;
+    struct ip_device *ip_dev;
 
     ovs_mutex_lock(&mutex);
 
-    LIST_FOR_EACH_SAFE(ip_dev, next, node, &addr_list) {
+    LIST_FOR_EACH_SAFE (ip_dev, node, &addr_list) {
         if (!strcmp(netdev_get_name(ip_dev->dev), dev_name)) {
             if (ip_dev->change_seq == netdev_get_change_seq(ip_dev->dev)) {
                 goto out;
@@ -466,10 +466,10 @@ out:
 void
 tnl_port_map_delete_ipdev(const char dev_name[])
 {
-    struct ip_device *ip_dev, *next;
+    struct ip_device *ip_dev;
 
     ovs_mutex_lock(&mutex);
-    LIST_FOR_EACH_SAFE(ip_dev, next, node, &addr_list) {
+    LIST_FOR_EACH_SAFE (ip_dev, node, &addr_list) {
         if (!strcmp(netdev_get_name(ip_dev->dev), dev_name)) {
             delete_ipdev(ip_dev);
         }
@@ -480,10 +480,10 @@ tnl_port_map_delete_ipdev(const char dev_name[])
 void
 tnl_port_map_run(void)
 {
-    struct ip_device *ip_dev, *next;
+    struct ip_device *ip_dev;
 
     ovs_mutex_lock(&mutex);
-    LIST_FOR_EACH_SAFE(ip_dev, next, node, &addr_list) {
+    LIST_FOR_EACH_SAFE (ip_dev, node, &addr_list) {
         char dev_name[IFNAMSIZ];
 
         if (ip_dev->change_seq == netdev_get_change_seq(ip_dev->dev)) {

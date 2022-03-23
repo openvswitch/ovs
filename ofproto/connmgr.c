@@ -351,8 +351,8 @@ connmgr_run(struct connmgr *mgr,
         }
     }
 
-    struct ofconn *ofconn, *next_ofconn;
-    LIST_FOR_EACH_SAFE (ofconn, next_ofconn, connmgr_node, &mgr->conns) {
+    struct ofconn *ofconn;
+    LIST_FOR_EACH_SAFE (ofconn, connmgr_node, &mgr->conns) {
         ofconn_run(ofconn, handle_openflow);
     }
     ofmonitor_run(mgr);
@@ -1953,8 +1953,8 @@ static void
 ofservice_close_all(struct ofservice *ofservice)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofconn *ofconn, *next;
-    LIST_FOR_EACH_SAFE (ofconn, next, ofservice_node, &ofservice->conns) {
+    struct ofconn *ofconn;
+    LIST_FOR_EACH_SAFE (ofconn, ofservice_node, &ofservice->conns) {
         ofconn_destroy(ofconn);
     }
 }

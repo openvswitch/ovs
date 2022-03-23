@@ -64,11 +64,11 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
                                    struct lldpd_port *),
                      bool all)
 {
-    struct lldpd_port *port, *port_next;
+    struct lldpd_port *port;
     time_t now = time_now();
 
     VLOG_DBG("cleanup remote port on %s", hw->h_ifname);
-    LIST_FOR_EACH_SAFE (port, port_next, p_entries, &hw->h_rports) {
+    LIST_FOR_EACH_SAFE (port, p_entries, &hw->h_rports) {
         bool del = all;
         if (!all && expire &&
             (now >= port->p_lastupdate + port->p_chassis->c_ttl)) {
@@ -99,11 +99,10 @@ static void
 lldpd_aa_maps_cleanup(struct lldpd_port *port)
 {
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
-    struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map_next = NULL;
 
     if (!ovs_list_is_empty(&port->p_isid_vlan_maps)) {
 
-        LIST_FOR_EACH_SAFE (isid_vlan_map, isid_vlan_map_next, m_entries,
+        LIST_FOR_EACH_SAFE (isid_vlan_map, m_entries,
                             &port->p_isid_vlan_maps) {
 
             ovs_list_remove(&isid_vlan_map->m_entries);

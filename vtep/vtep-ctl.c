@@ -808,9 +808,9 @@ vtep_ctl_context_invalidate_cache(struct ctl_context *ctx)
 
         SHASH_FOR_EACH_SAFE (node2, next_node2, &ls->mcast_local) {
             struct vtep_ctl_mcast_mac *mcast_mac = node2->data;
-            struct vtep_ctl_ploc *ploc, *next_ploc;
+            struct vtep_ctl_ploc *ploc;
 
-            LIST_FOR_EACH_SAFE (ploc, next_ploc, locators_node,
+            LIST_FOR_EACH_SAFE (ploc, locators_node,
                                 &mcast_mac->locators) {
                 free(ploc);
             }
@@ -820,9 +820,9 @@ vtep_ctl_context_invalidate_cache(struct ctl_context *ctx)
 
         SHASH_FOR_EACH_SAFE (node2, next_node2, &ls->mcast_remote) {
             struct vtep_ctl_mcast_mac *mcast_mac = node2->data;
-            struct vtep_ctl_ploc *ploc, *next_ploc;
+            struct vtep_ctl_ploc *ploc;
 
-            LIST_FOR_EACH_SAFE (ploc, next_ploc, locators_node,
+            LIST_FOR_EACH_SAFE (ploc, locators_node,
                                 &mcast_mac->locators) {
                 free(ploc);
             }
@@ -1229,9 +1229,9 @@ del_port(struct vtep_ctl_context *vtepctl_ctx, struct vtep_ctl_port *port)
 static void
 del_pswitch(struct vtep_ctl_context *vtepctl_ctx, struct vtep_ctl_pswitch *ps)
 {
-    struct vtep_ctl_port *port, *next_port;
+    struct vtep_ctl_port *port;
 
-    LIST_FOR_EACH_SAFE (port, next_port, ports_node, &ps->ports) {
+    LIST_FOR_EACH_SAFE (port, ports_node, &ps->ports) {
         del_port(vtepctl_ctx, port);
     }
 

@@ -730,12 +730,12 @@ static void
 bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests,
                     const char *vconn_name)
 {
-    struct ofpbuf *error, *next;
+    struct ofpbuf *error;
     struct ofpbuf *bmsg;
 
     INIT_CONTAINER(bmsg, requests, list_node);
 
-    LIST_FOR_EACH_SAFE (error, next, list_node, errors) {
+    LIST_FOR_EACH_SAFE (error, list_node, errors) {
         const struct ofp_header *error_oh = error->data;
         ovs_be32 error_xid = error_oh->xid;
         enum ofperr ofperr;

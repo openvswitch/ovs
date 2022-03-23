@@ -297,9 +297,9 @@ static void
 seq_thread_woke(struct seq_thread *thread)
     OVS_REQUIRES(seq_mutex)
 {
-    struct seq_waiter *waiter, *next_waiter;
+    struct seq_waiter *waiter;
 
-    LIST_FOR_EACH_SAFE (waiter, next_waiter, list_node, &thread->waiters) {
+    LIST_FOR_EACH_SAFE (waiter, list_node, &thread->waiters) {
         ovs_assert(waiter->thread == thread);
         seq_waiter_destroy(waiter);
     }

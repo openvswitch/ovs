@@ -638,8 +638,8 @@ ovsdb_monitor_change_set_destroy(struct ovsdb_monitor_change_set *mcs)
 {
     ovs_list_remove(&mcs->list_node);
 
-    struct ovsdb_monitor_change_set_for_table *mcst, *next_mcst;
-    LIST_FOR_EACH_SAFE (mcst, next_mcst, list_in_change_set,
+    struct ovsdb_monitor_change_set_for_table *mcst;
+    LIST_FOR_EACH_SAFE (mcst, list_in_change_set,
                         &mcs->change_set_for_tables) {
         ovs_list_remove(&mcst->list_in_change_set);
         ovs_list_remove(&mcst->list_in_mt);
@@ -1711,8 +1711,8 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
     ovsdb_monitor_json_cache_flush(dbmon);
     hmap_destroy(&dbmon->json_cache);
 
-    struct ovsdb_monitor_change_set *cs, *cs_next;
-    LIST_FOR_EACH_SAFE (cs, cs_next, list_node, &dbmon->change_sets) {
+    struct ovsdb_monitor_change_set *cs;
+    LIST_FOR_EACH_SAFE (cs, list_node, &dbmon->change_sets) {
         ovsdb_monitor_change_set_destroy(cs);
     }
 
@@ -1760,14 +1760,14 @@ ovsdb_monitors_commit(struct ovsdb *db, const struct ovsdb_txn *txn)
 void
 ovsdb_monitors_remove(struct ovsdb *db)
 {
-    struct ovsdb_monitor *m, *next_m;
+    struct ovsdb_monitor *m;
 
-    LIST_FOR_EACH_SAFE (m, next_m, list_node, &db->monitors) {
-        struct jsonrpc_monitor_node *jm, *next_jm;
+    LIST_FOR_EACH_SAFE (m, list_node, &db->monitors) {
+        struct jsonrpc_monitor_node *jm;
 
         /* Delete all front-end monitors.  Removing the last front-end monitor
          * will also destroy the corresponding ovsdb_monitor. */
-        LIST_FOR_EACH_SAFE (jm, next_jm, node, &m->jsonrpc_monitors) {
+        LIST_FOR_EACH_SAFE (jm, node, &m->jsonrpc_monitors) {
             ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor, false);
         }
     }
@@ -1789,14 +1789,14 @@ ovsdb_monitor_get_memory_usage(struct simap *usage)
 void
 ovsdb_monitor_prereplace_db(struct ovsdb *db)
 {
-    struct ovsdb_monitor *m, *next_m;
+    struct ovsdb_monitor *m;
 
-    LIST_FOR_EACH_SAFE (m, next_m, list_node, &db->monitors) {
-        struct jsonrpc_monitor_node *jm, *next_jm;
+    LIST_FOR_EACH_SAFE (m, list_node, &db->monitors) {
+        struct jsonrpc_monitor_node *jm;
 
         /* Delete all front-end monitors.  Removing the last front-end monitor
          * will also destroy the corresponding ovsdb_monitor. */
-        LIST_FOR_EACH_SAFE (jm, next_jm, node, &m->jsonrpc_monitors) {
+        LIST_FOR_EACH_SAFE (jm, node, &m->jsonrpc_monitors) {
             ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor, true);
         }
     }

@@ -1384,8 +1384,8 @@ raft_close__(struct raft *raft)
         raft->remove_server = NULL;
     }
 
-    struct raft_conn *conn, *next;
-    LIST_FOR_EACH_SAFE (conn, next, list_node, &raft->conns) {
+    struct raft_conn *conn;
+    LIST_FOR_EACH_SAFE (conn, list_node, &raft->conns) {
         raft_conn_close(conn);
     }
 }
@@ -1721,8 +1721,8 @@ raft_waiters_run(struct raft *raft)
     }
 
     uint64_t cur = ovsdb_log_commit_progress(raft->log);
-    struct raft_waiter *w, *next;
-    LIST_FOR_EACH_SAFE (w, next, list_node, &raft->waiters) {
+    struct raft_waiter *w;
+    LIST_FOR_EACH_SAFE (w, list_node, &raft->waiters) {
         if (cur < w->commit_ticket) {
             break;
         }
@@ -1744,8 +1744,8 @@ raft_waiters_wait(struct raft *raft)
 static void
 raft_waiters_destroy(struct raft *raft)
 {
-    struct raft_waiter *w, *next;
-    LIST_FOR_EACH_SAFE (w, next, list_node, &raft->waiters) {
+    struct raft_waiter *w;
+    LIST_FOR_EACH_SAFE (w, list_node, &raft->waiters) {
         raft_waiter_destroy(w);
     }
 }
@@ -1968,8 +1968,7 @@ raft_run(struct raft *raft)
 
     /* Close unneeded sessions. */
     struct raft_server *server;
-    struct raft_conn *next;
-    LIST_FOR_EACH_SAFE (conn, next, list_node, &raft->conns) {
+    LIST_FOR_EACH_SAFE (conn, list_node, &raft->conns) {
         if (!raft_conn_should_stay_open(raft, conn)) {
             server = raft_find_new_server(raft, &conn->sid);
             if (server) {

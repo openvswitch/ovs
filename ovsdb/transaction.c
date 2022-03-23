@@ -159,15 +159,15 @@ ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
         hmap_replace(&new->table->rows, &new->hmap_node, &old->hmap_node);
     }
 
-    struct ovsdb_weak_ref *weak, *next;
-    LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->deleted_refs) {
+    struct ovsdb_weak_ref *weak;
+    LIST_FOR_EACH_SAFE (weak, src_node, &txn_row->deleted_refs) {
         ovs_list_remove(&weak->src_node);
         ovs_list_init(&weak->src_node);
         if (hmap_node_is_null(&weak->dst_node)) {
             ovsdb_weak_ref_destroy(weak);
         }
     }
-    LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->added_refs) {
+    LIST_FOR_EACH_SAFE (weak, src_node, &txn_row->added_refs) {
         ovs_list_remove(&weak->src_node);
         ovs_list_init(&weak->src_node);
         if (hmap_node_is_null(&weak->dst_node)) {
@@ -508,11 +508,11 @@ static struct ovsdb_error *
 ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
                            struct ovsdb_txn_row *txn_row)
 {
-    struct ovsdb_weak_ref *weak, *next, *dst_weak;
+    struct ovsdb_weak_ref *weak, *dst_weak;
     struct ovsdb_row *dst_row;
 
     /* Find and clean up deleted references from destination rows. */
-    LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->deleted_refs) {
+    LIST_FOR_EACH_SAFE (weak, src_node, &txn_row->deleted_refs) {
         dst_row = CONST_CAST(struct ovsdb_row *,
                     ovsdb_table_get_row(weak->dst_table, &weak->dst));
         if (dst_row) {
@@ -529,7 +529,7 @@ ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
     }
 
     /* Insert the weak references added in the new version of the row. */
-    LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->added_refs) {
+    LIST_FOR_EACH_SAFE (weak, src_node, &txn_row->added_refs) {
         dst_row = CONST_CAST(struct ovsdb_row *,
                     ovsdb_table_get_row(weak->dst_table, &weak->dst));
 
@@ -597,7 +597,7 @@ find_and_add_weak_ref(struct ovsdb_txn_row *txn_row,
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
-    struct ovsdb_weak_ref *weak, *next;
+    struct ovsdb_weak_ref *weak;
     struct ovsdb_table *table;
     struct shash_node *node;
 
@@ -642,7 +642,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 
         /* Collecting all key-value pairs that references deleted rows. */
         ovsdb_datum_init_empty(&deleted_refs);
-        LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->deleted_refs) {
+        LIST_FOR_EACH_SAFE (weak, src_node, &txn_row->deleted_refs) {
             if (column->index == weak->column_idx) {
                 ovsdb_datum_add_unsafe(&deleted_refs, &weak->key, &weak->value,
                                        &column->type, NULL);
@@ -1094,8 +1094,8 @@ static void
 ovsdb_txn_destroy_cloned(struct ovsdb_txn *txn)
 {
     ovs_assert(!txn->db);
-    struct ovsdb_txn_table *t, *next_txn_table;
-    LIST_FOR_EACH_SAFE (t, next_txn_table, node, &txn->txn_tables) {
+    struct ovsdb_txn_table *t;
+    LIST_FOR_EACH_SAFE (t, node, &txn->txn_tables) {
         struct ovsdb_txn_row *r, *next_txn_row;
         HMAP_FOR_EACH_SAFE (r, next_txn_row, hmap_node, &t->txn_rows) {
             if (r->old) {
@@ -1549,10 +1549,10 @@ for_each_txn_row(struct ovsdb_txn *txn,
     serial++;
 
     do {
-        struct ovsdb_txn_table *t, *next_txn_table;
+        struct ovsdb_txn_table *t;
 
         any_work = false;
-        LIST_FOR_EACH_SAFE (t, next_txn_table, node, &txn->txn_tables) {
+        LIST_FOR_EACH_SAFE (t, node, &txn->txn_tables) {
             if (t->serial != serial) {
                 t->serial = serial;
                 t->n_processed = 0;
@@ -1629,8 +1629,8 @@ ovsdb_txn_history_destroy(struct ovsdb *db)
         return;
     }
 
-    struct ovsdb_txn_history_node *txn_h_node, *next;
-    LIST_FOR_EACH_SAFE (txn_h_node, next, node, &db->txn_history) {
+    struct ovsdb_txn_history_node *txn_h_node;
+    LIST_FOR_EACH_SAFE (txn_h_node, node, &db->txn_history) {
         ovs_list_remove(&txn_h_node->node);
         ovsdb_txn_destroy_cloned(txn_h_node->txn);
         free(txn_h_node);

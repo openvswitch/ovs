@@ -1282,7 +1282,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
 static void
 xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 {
-    struct xbundle *xbundle, *next_xbundle;
+    struct xbundle *xbundle;
     struct xport *xport, *next_xport;
 
     if (!xbridge) {
@@ -1293,7 +1293,7 @@ xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
         xlate_xport_remove(xcfg, xport);
     }
 
-    LIST_FOR_EACH_SAFE (xbundle, next_xbundle, list_node, &xbridge->xbundles) {
+    LIST_FOR_EACH_SAFE (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_remove(xcfg, xbundle);
     }
 
