@@ -317,6 +317,7 @@ test_hmap_for_each_pop(hash_func *hash)
             i++;
         }
         assert(i == n);
+        assert(e == NULL);
 
         hmap_destroy(&hmap);
     }
