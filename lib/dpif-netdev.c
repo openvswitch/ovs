@@ -5386,10 +5386,10 @@ sched_numa_list_schedule(struct sched_numa_list *numa_list,
             /* Find any numa with available PMDs. */
             for (int j = 0; j < n_numa; j++) {
                 numa = sched_numa_list_next(numa_list, last_cross_numa);
+                last_cross_numa = numa;
                 if (sched_numa_noniso_pmd_count(numa)) {
                     break;
                 }
-                last_cross_numa = numa;
                 numa = NULL;
             }
         }
