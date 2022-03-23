@@ -135,15 +135,31 @@ void hindex_remove(struct hindex *, struct hindex_node *);
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash map but its members remain accessible and intact). */
-#define HINDEX_FOR_EACH_WITH_HASH_SAFE(NODE, NEXT, MEMBER, HASH, HINDEX)    \
-    for (INIT_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                        \
-                                hindex_node_with_hash(HINDEX, HASH),        \
-                                struct hindex_node);                        \
-         CONDITION_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                   \
-                                      ITER_VAR(NODE) != NULL,               \
-                                      ITER_VAR(NEXT) = ITER_VAR(NODE)->s,   \
-                                      ITER_VAR(NEXT) != NULL);              \
+#define HINDEX_FOR_EACH_WITH_HASH_SAFE_LONG(NODE, NEXT, MEMBER, HASH, HINDEX) \
+    for (INIT_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                          \
+                                hindex_node_with_hash(HINDEX, HASH),          \
+                                struct hindex_node);                          \
+         CONDITION_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                     \
+                                      ITER_VAR(NODE) != NULL,                 \
+                                      ITER_VAR(NEXT) = ITER_VAR(NODE)->s,     \
+                                      ITER_VAR(NEXT) != NULL);                \
          UPDATE_MULTIVAR_SAFE_LONG(NODE, NEXT))
+
+/* Short version of HINDEX_FOR_EACH_WITH_HASH_SAFE. */
+#define HINDEX_FOR_EACH_WITH_HASH_SAFE_SHORT(NODE, MEMBER, HASH, HINDEX)      \
+    for (INIT_MULTIVAR_SAFE_SHORT(NODE, MEMBER,                               \
+                            hindex_node_with_hash(HINDEX, HASH),              \
+                            struct hindex_node);                              \
+         CONDITION_MULTIVAR_SAFE_SHORT(NODE, MEMBER,                          \
+                                       ITER_VAR(NODE) != NULL,                \
+                                 ITER_NEXT_VAR(NODE) = ITER_VAR(NODE)->s);    \
+         UPDATE_MULTIVAR_SAFE_SHORT(NODE))
+
+#define HINDEX_FOR_EACH_WITH_HASH_SAFE(...)                                   \
+    OVERLOAD_SAFE_MACRO(HINDEX_FOR_EACH_WITH_HASH_SAFE_LONG,                  \
+                        HINDEX_FOR_EACH_WITH_HASH_SAFE_SHORT,                 \
+                        5, __VA_ARGS__)
+
 
 /* Returns the head node in 'hindex' with the given 'hash', or a null pointer
  * if no nodes have that hash value. */
@@ -169,7 +185,7 @@ hindex_node_with_hash(const struct hindex *hindex, size_t hash)
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash index but its members remain accessible and intact). */
-#define HINDEX_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HINDEX)                      \
+#define HINDEX_FOR_EACH_SAFE_LONG(NODE, NEXT, MEMBER, HINDEX)                 \
     for (INIT_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER, hindex_first(HINDEX),    \
                                  struct hindex_node);                         \
          CONDITION_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                     \
@@ -177,6 +193,20 @@ hindex_node_with_hash(const struct hindex *hindex, size_t hash)
                         ITER_VAR(NEXT) = hindex_next(HINDEX, ITER_VAR(NODE)), \
                                       ITER_VAR(NEXT) != NULL);                \
          UPDATE_MULTIVAR_SAFE_LONG(NODE, NEXT))
+
+/* Short version of HINDEX_FOR_EACH_SAFE. */
+#define HINDEX_FOR_EACH_SAFE_SHORT(NODE, MEMBER, HINDEX)                      \
+    for (INIT_MULTIVAR_SAFE_SHORT(NODE, MEMBER, hindex_first(HINDEX),         \
+                                  struct hindex_node);                        \
+         CONDITION_MULTIVAR_SAFE_SHORT(NODE, MEMBER,                          \
+                                       ITER_VAR(NODE) != NULL,                \
+              ITER_NEXT_VAR(NODE) = hindex_next(HINDEX, ITER_VAR(NODE)));     \
+         UPDATE_MULTIVAR_SAFE_SHORT(NODE))
+
+#define HINDEX_FOR_EACH_SAFE(...)                                             \
+    OVERLOAD_SAFE_MACRO(HINDEX_FOR_EACH_SAFE_LONG,                            \
+                        HINDEX_FOR_EACH_SAFE_SHORT,                           \
+                        4, __VA_ARGS__)
 
 struct hindex_node *hindex_first(const struct hindex *);
 struct hindex_node *hindex_next(const struct hindex *,

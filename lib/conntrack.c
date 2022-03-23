@@ -2896,8 +2896,8 @@ expectation_clean(struct conntrack *ct, const struct conn_key *parent_key)
 {
     ovs_rwlock_wrlock(&ct->resources_lock);
 
-    struct alg_exp_node *node, *next;
-    HINDEX_FOR_EACH_WITH_HASH_SAFE (node, next, node_ref,
+    struct alg_exp_node *node;
+    HINDEX_FOR_EACH_WITH_HASH_SAFE (node, node_ref,
                                     conn_key_hash(parent_key, ct->hash_basis),
                                     &ct->alg_expectation_refs) {
         if (!conn_key_cmp(&node->parent_key, parent_key)) {
