@@ -199,7 +199,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([PMD - pmd-cpu-mask - NUMA])
+AT_SETUP([PMD - pmd-cpu-mask - dual NUMA])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd options:n_rxq=8 options:numa_id=1 -- set Open_vSwitch . other_config:pmd-cpu-mask=1],
                    [], [], [--dummy-numa 1,1,0,0])
 
@@ -355,6 +355,44 @@ pmd thread numa_id 1 core_id 0:
   port: p0                queue-id:  7 (enabled)   pmd usage: NOT AVAIL
   overhead: NOT AVAIL
 ])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - pmd-cpu-mask - multi NUMA])
+OVS_VSWITCHD_START([add-port br0 p0 \
+                    -- set Interface p0 type=dummy-pmd options:n_rxq=4 \
+                    -- set Interface p0 options:numa_id=0 \
+                    -- set Open_vSwitch . other_config:pmd-cpu-mask=0xf \
+                    -- set open_vswitch . other_config:pmd-rxq-assign=cycles],
+                   [], [], [--dummy-numa 1,2,1,2])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using group algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using cycles algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using roundrobin algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
