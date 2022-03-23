@@ -1229,7 +1229,7 @@ insert_bal(struct ovs_list *bals, struct bond_slave *slave)
             break;
         }
     }
-    ovs_list_insert(&pos->bal_node, &slave->bal_node);
+    ovs_list_insert(pos ? &pos->bal_node : bals, &slave->bal_node);
 }
 
 /* Removes 'slave' from its current list and then inserts it into 'bals' so
