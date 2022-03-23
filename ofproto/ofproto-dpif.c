@@ -1659,7 +1659,7 @@ static int
 construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct shash_node *node, *next;
+    struct shash_node *node;
     int error;
 
     /* Tunnel module can get used right after the udpif threads are running. */
@@ -1697,7 +1697,7 @@ construct(struct ofproto *ofproto_)
     ofproto->ams_seqno = seq_read(ofproto->ams_seq);
 
 
-    SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
+    SHASH_FOR_EACH_SAFE (node, &init_ofp_ports) {
         struct iface_hint *iface_hint = node->data;
 
         if (!strcmp(iface_hint->br_name, ofproto->up.name)) {

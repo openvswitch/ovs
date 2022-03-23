@@ -185,9 +185,9 @@ smap_steal(struct smap *smap, struct smap_node *node,
 void
 smap_clear(struct smap *smap)
 {
-    struct smap_node *node, *next;
+    struct smap_node *node;
 
-    SMAP_FOR_EACH_SAFE (node, next, smap) {
+    SMAP_FOR_EACH_SAFE (node, smap) {
         smap_remove_node(smap, node);
     }
 }

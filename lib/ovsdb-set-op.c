@@ -90,8 +90,8 @@ set_op_list_create(void)
 void
 set_op_list_destroy(struct set_op_list *list, const struct ovsdb_type *type)
 {
-    struct set_op *set_op, *next;
-    HMAP_FOR_EACH_SAFE (set_op, next, node, &list->hmap) {
+    struct set_op *set_op;
+    HMAP_FOR_EACH_SAFE (set_op, node, &list->hmap) {
         set_op_destroy(set_op, type);
     }
     hmap_destroy(&list->hmap);

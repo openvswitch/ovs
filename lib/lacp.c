@@ -280,10 +280,10 @@ void
 lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
     if (lacp && ovs_refcount_unref_relaxed(&lacp->ref_cnt) == 1) {
-        struct member *member, *next;
+        struct member *member;
 
         lacp_lock();
-        HMAP_FOR_EACH_SAFE (member, next, node, &lacp->members) {
+        HMAP_FOR_EACH_SAFE (member, node, &lacp->members) {
             member_destroy(member);
         }
 

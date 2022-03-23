@@ -1123,8 +1123,8 @@ ofpmp_partial_error(struct hmap *assembler, struct ofpmp_partial *p,
 void
 ofpmp_assembler_clear(struct hmap *assembler)
 {
-    struct ofpmp_partial *p, *next;
-    HMAP_FOR_EACH_SAFE (p, next, hmap_node, assembler) {
+    struct ofpmp_partial *p;
+    HMAP_FOR_EACH_SAFE (p, hmap_node, assembler) {
         ofpmp_partial_destroy(assembler, p);
     }
 }

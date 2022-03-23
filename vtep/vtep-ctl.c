@@ -801,12 +801,12 @@ vtep_ctl_context_invalidate_cache(struct ctl_context *ctx)
 
     SHASH_FOR_EACH (node, &vtepctl_ctx->lswitches) {
         struct vtep_ctl_lswitch *ls = node->data;
-        struct shash_node *node2, *next_node2;
+        struct shash_node *node2;
 
         shash_destroy(&ls->ucast_local);
         shash_destroy(&ls->ucast_remote);
 
-        SHASH_FOR_EACH_SAFE (node2, next_node2, &ls->mcast_local) {
+        SHASH_FOR_EACH_SAFE (node2, &ls->mcast_local) {
             struct vtep_ctl_mcast_mac *mcast_mac = node2->data;
             struct vtep_ctl_ploc *ploc;
 
@@ -818,7 +818,7 @@ vtep_ctl_context_invalidate_cache(struct ctl_context *ctx)
         }
         shash_destroy(&ls->mcast_local);
 
-        SHASH_FOR_EACH_SAFE (node2, next_node2, &ls->mcast_remote) {
+        SHASH_FOR_EACH_SAFE (node2, &ls->mcast_remote) {
             struct vtep_ctl_mcast_mac *mcast_mac = node2->data;
             struct vtep_ctl_ploc *ploc;
 

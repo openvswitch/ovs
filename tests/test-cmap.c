@@ -584,7 +584,7 @@ benchmark_hmap(void)
 {
     struct helement *elements;
     struct hmap hmap;
-    struct helement *e, *next;
+    struct helement *e;
     struct timeval start;
     pthread_t *threads;
     struct hmap_aux aux;
@@ -622,7 +622,7 @@ benchmark_hmap(void)
 
     /* Destruction. */
     xgettimeofday(&start);
-    HMAP_FOR_EACH_SAFE (e, next, node, &hmap) {
+    HMAP_FOR_EACH_SAFE (e, node, &hmap) {
         hmap_remove(&hmap, &e->node);
     }
     hmap_destroy(&hmap);

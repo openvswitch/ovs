@@ -123,9 +123,9 @@ hmapx_add_assert(struct hmapx *map, void *data)
 void
 hmapx_clear(struct hmapx *map)
 {
-    struct hmapx_node *node, *next;
+    struct hmapx_node *node;
 
-    HMAPX_FOR_EACH_SAFE (node, next, map) {
+    HMAPX_FOR_EACH_SAFE (node, map) {
         hmapx_delete(map, node);
     }
 }

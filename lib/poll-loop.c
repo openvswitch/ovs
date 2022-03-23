@@ -298,9 +298,9 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 static void
 free_poll_nodes(struct poll_loop *loop)
 {
-    struct poll_node *node, *next;
+    struct poll_node *node;
 
-    HMAP_FOR_EACH_SAFE (node, next, hmap_node, &loop->poll_nodes) {
+    HMAP_FOR_EACH_SAFE (node, hmap_node, &loop->poll_nodes) {
         hmap_remove(&loop->poll_nodes, &node->hmap_node);
 #ifdef _WIN32
         if (node->wevent && node->pollfd.fd) {

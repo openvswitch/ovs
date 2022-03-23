@@ -1078,7 +1078,7 @@ dpif_ipfix_set_options(
 {
     int i;
     struct ofproto_ipfix_flow_exporter_options *options;
-    struct dpif_ipfix_flow_exporter_map_node *node, *next;
+    struct dpif_ipfix_flow_exporter_map_node *node;
 
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
@@ -1103,7 +1103,7 @@ dpif_ipfix_set_options(
     }
 
     /* Remove dropped flow exporters, if any needs to be removed. */
-    HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
+    HMAP_FOR_EACH_SAFE (node, node, &di->flow_exporter_map) {
         /* This is slow but doesn't take any extra memory, and
          * this table is not supposed to contain many rows anyway. */
         options = (struct ofproto_ipfix_flow_exporter_options *)
@@ -1215,7 +1215,7 @@ static void
 dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *exp_node;
-    struct dpif_ipfix_port *dip, *next;
+    struct dpif_ipfix_port *dip;
 
     dpif_ipfix_bridge_exporter_clear(&di->bridge_exporter);
 
@@ -1224,7 +1224,7 @@ dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
         free(exp_node);
     }
 
-    HMAP_FOR_EACH_SAFE (dip, next, hmap_node, &di->ports) {
+    HMAP_FOR_EACH_SAFE (dip, hmap_node, &di->ports) {
         dpif_ipfix_del_port__(di, dip);
     }
 }

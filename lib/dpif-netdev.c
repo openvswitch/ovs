@@ -1930,13 +1930,13 @@ static void
 dp_netdev_free(struct dp_netdev *dp)
     OVS_REQUIRES(dp_netdev_mutex)
 {
-    struct dp_netdev_port *port, *next;
+    struct dp_netdev_port *port;
     struct tx_bond *bond;
 
     shash_find_and_delete(&dp_netdevs, dp->name);
 
     ovs_rwlock_wrlock(&dp->port_rwlock);
-    HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
+    HMAP_FOR_EACH_SAFE (port, node, &dp->ports) {
         do_del_port(dp, port);
     }
     ovs_rwlock_unlock(&dp->port_rwlock);
@@ -6341,11 +6341,11 @@ pmd_remove_stale_ports(struct dp_netdev *dp,
     OVS_EXCLUDED(pmd->port_mutex)
     OVS_REQ_RDLOCK(dp->port_rwlock)
 {
-    struct rxq_poll *poll, *poll_next;
-    struct tx_port *tx, *tx_next;
+    struct rxq_poll *poll;
+    struct tx_port *tx;
 
     ovs_mutex_lock(&pmd->port_mutex);
-    HMAP_FOR_EACH_SAFE (poll, poll_next, node, &pmd->poll_list) {
+    HMAP_FOR_EACH_SAFE (poll, node, &pmd->poll_list) {
         struct dp_netdev_port *port = poll->rxq->port;
 
         if (port->need_reconfigure
@@ -6353,7 +6353,7 @@ pmd_remove_stale_ports(struct dp_netdev *dp,
             dp_netdev_del_rxq_from_pmd(pmd, poll);
         }
     }
-    HMAP_FOR_EACH_SAFE (tx, tx_next, node, &pmd->tx_ports) {
+    HMAP_FOR_EACH_SAFE (tx, node, &pmd->tx_ports) {
         struct dp_netdev_port *port = tx->port;
 
         if (port->need_reconfigure
@@ -6429,8 +6429,7 @@ reconfigure_datapath(struct dp_netdev *dp)
     /* We only reconfigure the ports that we determined above, because they're
      * not being used by any pmd thread at the moment.  If a port fails to
      * reconfigure we remove it from the datapath. */
-    struct dp_netdev_port *next_port;
-    HMAP_FOR_EACH_SAFE (port, next_port, node, &dp->ports) {
+    HMAP_FOR_EACH_SAFE (port, node, &dp->ports) {
         int err;
 
         if (!port->need_reconfigure) {
@@ -6486,10 +6485,10 @@ reconfigure_datapath(struct dp_netdev *dp)
     }
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        struct rxq_poll *poll, *poll_next;
+        struct rxq_poll *poll;
 
         ovs_mutex_lock(&pmd->port_mutex);
-        HMAP_FOR_EACH_SAFE (poll, poll_next, node, &pmd->poll_list) {
+        HMAP_FOR_EACH_SAFE (poll, node, &pmd->poll_list) {
             if (poll->rxq->pmd != pmd) {
                 dp_netdev_del_rxq_from_pmd(pmd, poll);
 

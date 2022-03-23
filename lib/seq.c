@@ -319,9 +319,9 @@ static void
 seq_wake_waiters(struct seq *seq)
     OVS_REQUIRES(seq_mutex)
 {
-    struct seq_waiter *waiter, *next_waiter;
+    struct seq_waiter *waiter;
 
-    HMAP_FOR_EACH_SAFE (waiter, next_waiter, hmap_node, &seq->waiters) {
+    HMAP_FOR_EACH_SAFE (waiter, hmap_node, &seq->waiters) {
         latch_set(&waiter->thread->latch);
         seq_waiter_destroy(waiter);
     }

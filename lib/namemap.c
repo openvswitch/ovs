@@ -90,9 +90,9 @@ void
 namemap_destroy(struct namemap *map)
 {
     if (map) {
-        struct namemap_node *node, *next;
+        struct namemap_node *node;
 
-        HMAP_FOR_EACH_SAFE (node, next, name_node, &map->by_name) {
+        HMAP_FOR_EACH_SAFE (node, name_node, &map->by_name) {
             hmap_remove(&map->by_name, &node->name_node);
             hmap_remove(&map->by_number, &node->number_node);
             free(node->name);

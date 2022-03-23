@@ -900,8 +900,8 @@ ovsdb_cs_db_get_table(struct ovsdb_cs_db *db, const char *table)
 static void
 ovsdb_cs_db_destroy_tables(struct ovsdb_cs_db *db)
 {
-    struct ovsdb_cs_db_table *table, *next;
-    HMAP_FOR_EACH_SAFE (table, next, hmap_node, &db->tables) {
+    struct ovsdb_cs_db_table *table;
+    HMAP_FOR_EACH_SAFE (table, hmap_node, &db->tables) {
         json_destroy(table->ack_cond);
         json_destroy(table->req_cond);
         json_destroy(table->new_cond);
@@ -1794,8 +1794,8 @@ ovsdb_cs_update_server_row(struct server_row *row,
 static void
 ovsdb_cs_clear_server_rows(struct ovsdb_cs *cs)
 {
-    struct server_row *row, *next;
-    HMAP_FOR_EACH_SAFE (row, next, hmap_node, &cs->server_rows) {
+    struct server_row *row;
+    HMAP_FOR_EACH_SAFE (row, hmap_node, &cs->server_rows) {
         ovsdb_cs_delete_server_row(cs, row);
     }
 }
@@ -2129,9 +2129,9 @@ void
 ovsdb_cs_free_schema(struct shash *schema)
 {
     if (schema) {
-        struct shash_node *node, *next;
+        struct shash_node *node;
 
-        SHASH_FOR_EACH_SAFE (node, next, schema) {
+        SHASH_FOR_EACH_SAFE (node, schema) {
             struct sset *sset = node->data;
             sset_destroy(sset);
             free(sset);

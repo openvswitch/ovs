@@ -1222,13 +1222,13 @@ xlate_txn_start(void)
 static void
 xlate_xcfg_free(struct xlate_cfg *xcfg)
 {
-    struct xbridge *xbridge, *next_xbridge;
+    struct xbridge *xbridge;
 
     if (!xcfg) {
         return;
     }
 
-    HMAP_FOR_EACH_SAFE (xbridge, next_xbridge, hmap_node, &xcfg->xbridges) {
+    HMAP_FOR_EACH_SAFE (xbridge, hmap_node, &xcfg->xbridges) {
         xlate_xbridge_remove(xcfg, xbridge);
     }
 
@@ -1283,13 +1283,13 @@ static void
 xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 {
     struct xbundle *xbundle;
-    struct xport *xport, *next_xport;
+    struct xport *xport;
 
     if (!xbridge) {
         return;
     }
 
-    HMAP_FOR_EACH_SAFE (xport, next_xport, ofp_node, &xbridge->xports) {
+    HMAP_FOR_EACH_SAFE (xport, ofp_node, &xbridge->xports) {
         xlate_xport_remove(xcfg, xport);
     }
 

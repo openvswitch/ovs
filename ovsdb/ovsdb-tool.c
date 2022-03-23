@@ -1579,15 +1579,14 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
     }
     free(c.servers);
 
-    struct commit *next_commit;
-    HMAP_FOR_EACH_SAFE (commit, next_commit, hmap_node, &c.commits) {
+    HMAP_FOR_EACH_SAFE (commit, hmap_node, &c.commits) {
         hmap_remove(&c.commits, &commit->hmap_node);
         free(commit);
     }
     hmap_destroy(&c.commits);
 
-    struct leader *leader, *next_leader;
-    HMAP_FOR_EACH_SAFE (leader, next_leader, hmap_node, &c.leaders) {
+    struct leader *leader;
+    HMAP_FOR_EACH_SAFE (leader, hmap_node, &c.leaders) {
         hmap_remove(&c.leaders, &leader->hmap_node);
         free(leader);
     }

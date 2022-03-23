@@ -178,17 +178,35 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash map but its members remain accessible and intact). */
-#define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP) \
-    HMAP_FOR_EACH_SAFE_INIT (NODE, NEXT, MEMBER, HMAP, (void) NEXT)
+#define HMAP_FOR_EACH_SAFE_LONG(NODE, NEXT, MEMBER, HMAP) \
+    HMAP_FOR_EACH_SAFE_LONG_INIT (NODE, NEXT, MEMBER, HMAP, (void) NEXT)
 
-#define HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, ...)                \
+#define HMAP_FOR_EACH_SAFE_LONG_INIT(NODE, NEXT, MEMBER, HMAP, ...)           \
     for (INIT_MULTIVAR_SAFE_LONG_EXP(NODE, NEXT, MEMBER, hmap_first(HMAP),    \
-                                      struct hmap_node, __VA_ARGS__);         \
+                                     struct hmap_node, __VA_ARGS__);          \
          CONDITION_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                     \
                                       ITER_VAR(NODE) != NULL,                 \
                             ITER_VAR(NEXT) = hmap_next(HMAP, ITER_VAR(NODE)), \
                                       ITER_VAR(NEXT) != NULL);                \
          UPDATE_MULTIVAR_SAFE_LONG(NODE, NEXT))
+
+/* Short versions of HMAP_FOR_EACH_SAFE. */
+#define HMAP_FOR_EACH_SAFE_SHORT(NODE, MEMBER, HMAP)                          \
+    HMAP_FOR_EACH_SAFE_SHORT_INIT (NODE, MEMBER, HMAP, (void) 0)
+
+#define HMAP_FOR_EACH_SAFE_SHORT_INIT(NODE, MEMBER, HMAP, ...)                \
+    for (INIT_MULTIVAR_SAFE_SHORT_EXP(NODE, MEMBER, hmap_first(HMAP),         \
+                                      struct hmap_node, __VA_ARGS__);         \
+         CONDITION_MULTIVAR_SAFE_SHORT(NODE, MEMBER,                          \
+                                       ITER_VAR(NODE) != NULL,                \
+                      ITER_NEXT_VAR(NODE) = hmap_next(HMAP, ITER_VAR(NODE))); \
+         UPDATE_MULTIVAR_SAFE_SHORT(NODE))
+
+#define HMAP_FOR_EACH_SAFE(...)                                               \
+    OVERLOAD_SAFE_MACRO(HMAP_FOR_EACH_SAFE_LONG,                              \
+                        HMAP_FOR_EACH_SAFE_SHORT,                             \
+                        4, __VA_ARGS__)
+
 
 /* Continues an iteration from just after NODE. */
 #define HMAP_FOR_EACH_CONTINUE(NODE, MEMBER, HMAP) \

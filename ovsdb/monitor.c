@@ -644,8 +644,8 @@ ovsdb_monitor_change_set_destroy(struct ovsdb_monitor_change_set *mcs)
         ovs_list_remove(&mcst->list_in_change_set);
         ovs_list_remove(&mcst->list_in_mt);
 
-        struct ovsdb_monitor_row *row, *next;
-        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &mcst->rows) {
+        struct ovsdb_monitor_row *row;
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &mcst->rows) {
             hmap_remove(&mcst->rows, &row->hmap_node);
             ovsdb_monitor_row_destroy(mcst->mt, row, mcst->n_columns);
         }
@@ -700,13 +700,13 @@ void
 ovsdb_monitor_session_condition_destroy(
                            struct ovsdb_monitor_session_condition *condition)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
     if (!condition) {
         return;
     }
 
-    SHASH_FOR_EACH_SAFE (node, next, &condition->tables) {
+    SHASH_FOR_EACH_SAFE (node, &condition->tables) {
         struct ovsdb_monitor_table_condition *mtc = node->data;
 
         ovsdb_condition_destroy(&mtc->new_condition);
@@ -1122,11 +1122,11 @@ ovsdb_monitor_compose_update(
     json = NULL;
     struct ovsdb_monitor_change_set_for_table *mcst;
     LIST_FOR_EACH (mcst, list_in_change_set, &mcs->change_set_for_tables) {
-        struct ovsdb_monitor_row *row, *next;
+        struct ovsdb_monitor_row *row;
         struct json *table_json = NULL;
         struct ovsdb_monitor_table *mt = mcst->mt;
 
-        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &mcst->rows) {
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &mcst->rows) {
             struct json *row_json;
             row_json = (*row_update)(mt, condition, OVSDB_MONITOR_ROW, row,
                                      initial, changed, mcst->n_columns);
