@@ -268,6 +268,27 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 #define UPDATE_MULTIVAR_SAFE_LONG(VAR, NEXT_VAR)                              \
     UPDATE_MULTIVAR(VAR, ITER_VAR(NEXT_VAR))
 
+/* Helpers to allow overloading the *_SAFE iterator macros and select either
+ * the LONG or the SHORT version depending on the number of arguments.
+ */
+#define GET_SAFE_MACRO2(_1, _2, NAME, ...) NAME
+#define GET_SAFE_MACRO3(_1, _2, _3, NAME, ...) NAME
+#define GET_SAFE_MACRO4(_1, _2, _3, _4, NAME, ...) NAME
+#define GET_SAFE_MACRO5(_1, _2, _3, _4, _5, NAME, ...) NAME
+#define GET_SAFE_MACRO6(_1, _2, _3, _4, _5, _6, NAME, ...) NAME
+#define GET_SAFE_MACRO(MAX_ARGS) GET_SAFE_MACRO ## MAX_ARGS
+
+/* MSVC treats __VA_ARGS__ as a simple token in argument lists. Introduce
+ * a level of indirection to work around that. */
+#define EXPAND_MACRO(name, args) name args
+
+/* Overload the LONG and the SHORT version of the macros. MAX_ARGS is the
+ * maximum number of arguments (i.e: the number of arguments of the LONG
+ * version). */
+#define OVERLOAD_SAFE_MACRO(LONG, SHORT, MAX_ARGS, ...) \
+        EXPAND_MACRO(GET_SAFE_MACRO(MAX_ARGS), \
+                     (__VA_ARGS__, LONG, SHORT))(__VA_ARGS__)
+
 /* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) __ARRAY_SIZE(ARRAY)
 
