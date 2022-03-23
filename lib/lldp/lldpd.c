@@ -134,12 +134,12 @@ lldpd_hardware_cleanup(struct lldpd *cfg, struct lldpd_hardware *hardware)
 void
 lldpd_cleanup(struct lldpd *cfg)
 {
-    struct lldpd_hardware *hw, *hw_next;
-    struct lldpd_chassis *chassis, *chassis_next;
+    struct lldpd_hardware *hw;
+    struct lldpd_chassis *chassis;
 
     VLOG_DBG("cleanup all ports");
 
-    LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware) {
+    LIST_FOR_EACH_SAFE (hw, h_entries, &cfg->g_hardware) {
         if (!hw->h_flags) {
             ovs_list_remove(&hw->h_entries);
             lldpd_remote_cleanup(hw, NULL, true);
@@ -151,7 +151,7 @@ lldpd_cleanup(struct lldpd *cfg)
 
     VLOG_DBG("cleanup all chassis");
 
-    LIST_FOR_EACH_SAFE (chassis, chassis_next, list, &cfg->g_chassis) {
+    LIST_FOR_EACH_SAFE (chassis, list, &cfg->g_chassis) {
         if (chassis->c_refcount == 0) {
             ovs_list_remove(&chassis->list);
             lldpd_chassis_cleanup(chassis, 1);

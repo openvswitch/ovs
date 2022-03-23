@@ -585,9 +585,9 @@ ovsdb_jsonrpc_session_set_options(struct ovsdb_jsonrpc_session *session,
 static void
 ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *remote)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         int error = ovsdb_jsonrpc_session_run(s);
         if (error) {
             ovsdb_jsonrpc_session_close(s);
@@ -642,9 +642,9 @@ ovsdb_jsonrpc_session_get_memory_usage_all(
 static void
 ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *remote)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         ovsdb_jsonrpc_session_close(s);
     }
 }
@@ -660,9 +660,9 @@ static void
 ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote,
                                     bool force, const char *comment)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         if (force || !s->db_change_aware) {
             jsonrpc_session_force_reconnect(s->js);
             if (comment && jsonrpc_session_is_connected(s->js)) {
@@ -1226,8 +1226,8 @@ ovsdb_jsonrpc_trigger_complete_all(struct ovsdb_jsonrpc_session *s)
 static void
 ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 {
-    struct ovsdb_jsonrpc_trigger *trigger, *next;
-    LIST_FOR_EACH_SAFE (trigger, next, trigger.node, &s->up.completions) {
+    struct ovsdb_jsonrpc_trigger *trigger;
+    LIST_FOR_EACH_SAFE (trigger, trigger.node, &s->up.completions) {
         ovsdb_jsonrpc_trigger_complete(trigger);
     }
 }

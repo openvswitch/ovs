@@ -1058,9 +1058,9 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     }
 
     ovs_mutex_lock(&ipf->ipf_lock);
-    struct ipf_list *ipf_list, *next;
+    struct ipf_list *ipf_list;
 
-    LIST_FOR_EACH_SAFE (ipf_list, next, list_node, &ipf->frag_complete_list) {
+    LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_complete_list) {
         if (ipf_send_frags_in_list(ipf, ipf_list, pb, IPF_FRAG_COMPLETED_LIST,
                                    v6, now)) {
             ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
@@ -1090,10 +1090,10 @@ ipf_send_expired_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     }
 
     ovs_mutex_lock(&ipf->ipf_lock);
-    struct ipf_list *ipf_list, *next;
+    struct ipf_list *ipf_list;
     size_t lists_removed = 0;
 
-    LIST_FOR_EACH_SAFE (ipf_list, next, list_node, &ipf->frag_exp_list) {
+    LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_exp_list) {
         if (now <= ipf_list->expiration ||
             lists_removed >= IPF_FRAG_LIST_MAX_EXPIRED) {
             break;
@@ -1121,9 +1121,9 @@ ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb)
     }
 
     ovs_mutex_lock(&ipf->ipf_lock);
-    struct reassembled_pkt *rp, *next;
+    struct reassembled_pkt *rp;
 
-    LIST_FOR_EACH_SAFE (rp, next, rp_list_node, &ipf->reassembled_pkt_list) {
+    LIST_FOR_EACH_SAFE (rp, rp_list_node, &ipf->reassembled_pkt_list) {
         if (!rp->list->reass_execute_ctx &&
             ipf_dp_packet_batch_add(pb, rp->pkt, false)) {
             rp->list->reass_execute_ctx = rp->pkt;
@@ -1144,9 +1144,9 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
     }
 
     ovs_mutex_lock(&ipf->ipf_lock);
-    struct reassembled_pkt *rp, *next;
+    struct reassembled_pkt *rp;
 
-    LIST_FOR_EACH_SAFE (rp, next, rp_list_node, &ipf->reassembled_pkt_list) {
+    LIST_FOR_EACH_SAFE (rp, rp_list_node, &ipf->reassembled_pkt_list) {
         const size_t pb_cnt = dp_packet_batch_size(pb);
         int pb_idx;
         struct dp_packet *pkt;
@@ -1271,15 +1271,15 @@ ipf_clean_thread_main(void *f)
 
             ovs_mutex_lock(&ipf->ipf_lock);
 
-            struct ipf_list *ipf_list, *next;
-            LIST_FOR_EACH_SAFE (ipf_list, next, list_node,
+            struct ipf_list *ipf_list;
+            LIST_FOR_EACH_SAFE (ipf_list, list_node,
                                 &ipf->frag_exp_list) {
                 if (ipf_purge_list_check(ipf, ipf_list, now)) {
                     ipf_expiry_list_clean(&ipf->frag_lists, ipf_list);
                 }
             }
 
-            LIST_FOR_EACH_SAFE (ipf_list, next, list_node,
+            LIST_FOR_EACH_SAFE (ipf_list, list_node,
                                 &ipf->frag_complete_list) {
                 if (ipf_purge_list_check(ipf, ipf_list, now)) {
                     ipf_completed_list_clean(&ipf->frag_lists, ipf_list);

@@ -235,11 +235,11 @@ netdev_afxdp_cleanup_unused_pool(struct unused_pool *pool)
 static void
 netdev_afxdp_sweep_unused_pools(void *aux OVS_UNUSED)
 {
-    struct unused_pool *pool, *next;
+    struct unused_pool *pool;
     unsigned int count;
 
     ovs_mutex_lock(&unused_pools_mutex);
-    LIST_FOR_EACH_SAFE (pool, next, list_node, &unused_pools) {
+    LIST_FOR_EACH_SAFE (pool, list_node, &unused_pools) {
 
         count = umem_pool_count(&pool->umem_info->mpool);
         ovs_assert(count + pool->lost_in_rings <= NUM_FRAMES);

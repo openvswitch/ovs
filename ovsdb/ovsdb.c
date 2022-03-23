@@ -571,8 +571,8 @@ ovsdb_replace(struct ovsdb *dst, struct ovsdb *src)
     ovsdb_monitor_prereplace_db(dst);
 
     /* Cancel triggers. */
-    struct ovsdb_trigger *trigger, *next;
-    LIST_FOR_EACH_SAFE (trigger, next, node, &dst->triggers) {
+    struct ovsdb_trigger *trigger;
+    LIST_FOR_EACH_SAFE (trigger, node, &dst->triggers) {
         ovsdb_trigger_prereplace_db(trigger);
     }
 

@@ -2799,7 +2799,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
                         bool forced_end, const uint64_t export_time_usec,
                         const uint32_t export_time_sec)
 {
-    struct ipfix_flow_cache_entry *entry, *next_entry;
+    struct ipfix_flow_cache_entry *entry;
     uint64_t max_flow_start_timestamp_usec;
     bool template_msg_sent = false;
     enum ipfix_flow_end_reason flow_end_reason;
@@ -2811,7 +2811,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
     max_flow_start_timestamp_usec = export_time_usec -
         1000000LL * exporter->cache_active_timeout;
 
-    LIST_FOR_EACH_SAFE (entry, next_entry, cache_flow_start_timestamp_list_node,
+    LIST_FOR_EACH_SAFE (entry, cache_flow_start_timestamp_list_node,
                         &exporter->cache_flow_start_timestamp_list) {
         if (forced_end) {
             flow_end_reason = FORCED_END;

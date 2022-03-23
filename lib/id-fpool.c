@@ -166,11 +166,10 @@ void
 id_fpool_destroy(struct id_fpool *pool)
 {
     struct id_slab *slab;
-    struct id_slab *next;
     size_t i;
 
     id_fpool_lock(&pool->pool_lock);
-    LIST_FOR_EACH_SAFE (slab, next, node, &pool->free_slabs) {
+    LIST_FOR_EACH_SAFE (slab, node, &pool->free_slabs) {
         free(slab);
     }
     ovs_list_poison(&pool->free_slabs);

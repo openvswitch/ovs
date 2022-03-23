@@ -623,9 +623,9 @@ dpdk_mp_full(const struct rte_mempool *mp) OVS_REQUIRES(dpdk_mp_mutex)
 static void
 dpdk_mp_sweep(void) OVS_REQUIRES(dpdk_mp_mutex)
 {
-    struct dpdk_mp *dmp, *next;
+    struct dpdk_mp *dmp;
 
-    LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_list) {
+    LIST_FOR_EACH_SAFE (dmp, list_node, &dpdk_mp_list) {
         if (!dmp->refcount && dpdk_mp_full(dmp->mp)) {
             VLOG_DBG("Freeing mempool \"%s\"", dmp->mp->name);
             ovs_list_remove(&dmp->list_node);

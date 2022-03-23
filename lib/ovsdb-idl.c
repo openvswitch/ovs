@@ -396,18 +396,18 @@ ovsdb_idl_clear(struct ovsdb_idl *db)
         }
 
         HMAP_FOR_EACH_SAFE (row, next_row, hmap_node, &table->rows) {
-            struct ovsdb_idl_arc *arc, *next_arc;
+            struct ovsdb_idl_arc *arc;
 
             if (!ovsdb_idl_row_is_orphan(row)) {
                 ovsdb_idl_remove_from_indexes(row);
                 ovsdb_idl_row_unparse(row);
             }
-            LIST_FOR_EACH_SAFE (arc, next_arc, src_node, &row->src_arcs) {
+            LIST_FOR_EACH_SAFE (arc, src_node, &row->src_arcs) {
                 ovs_list_remove(&arc->src_node);
                 ovs_list_remove(&arc->dst_node);
                 free(arc);
             }
-            LIST_FOR_EACH_SAFE (arc, next_arc, dst_node, &row->dst_arcs) {
+            LIST_FOR_EACH_SAFE (arc, dst_node, &row->dst_arcs) {
                 ovs_list_remove(&arc->src_node);
                 ovs_list_remove(&arc->dst_node);
                 free(arc);
@@ -1345,9 +1345,9 @@ ovsdb_idl_track_clear__(struct ovsdb_idl *idl, bool flush_all)
         struct ovsdb_idl_table *table = &idl->tables[i];
 
         if (!ovs_list_is_empty(&table->track_list)) {
-            struct ovsdb_idl_row *row, *next;
+            struct ovsdb_idl_row *row;
 
-            LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+            LIST_FOR_EACH_SAFE (row, track_node, &table->track_list) {
                 if (row->updated) {
                     free(row->updated);
                     row->updated = NULL;
@@ -1480,9 +1480,9 @@ ovsdb_idl_parse_update(struct ovsdb_idl *idl,
 static void
 ovsdb_idl_reparse_deleted(struct ovsdb_idl *db)
 {
-    struct ovsdb_idl_row *row, *next;
+    struct ovsdb_idl_row *row;
 
-    LIST_FOR_EACH_SAFE (row, next, track_node, &db->deleted_untracked_rows) {
+    LIST_FOR_EACH_SAFE (row, track_node, &db->deleted_untracked_rows) {
         ovsdb_idl_row_untrack_change(row);
         add_tracked_change_for_references(row);
         ovsdb_idl_row_reparse_backrefs(row);
@@ -1906,8 +1906,8 @@ ovsdb_idl_index_create2(struct ovsdb_idl *idl,
 static void
 ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *table)
 {
-    struct ovsdb_idl_index *index, *next;
-    LIST_FOR_EACH_SAFE (index, next, node, &table->indexes) {
+    struct ovsdb_idl_index *index;
+    LIST_FOR_EACH_SAFE (index, node, &table->indexes) {
         skiplist_destroy(index->skiplist, NULL);
         free(index->columns);
         free(index);
@@ -2145,12 +2145,12 @@ ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
 static void
 ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
 {
-    struct ovsdb_idl_arc *arc, *next;
+    struct ovsdb_idl_arc *arc;
 
     /* Delete all forward arcs.  If 'destroy_dsts', destroy any orphaned rows
      * that this causes to be unreferenced.
      */
-    LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
+    LIST_FOR_EACH_SAFE (arc, src_node, &row->src_arcs) {
         ovs_list_remove(&arc->dst_node);
         if (destroy_dsts
             && ovsdb_idl_row_is_orphan(arc->dst)
@@ -2166,7 +2166,7 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
 static void
 ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row)
 {
-    struct ovsdb_idl_arc *arc, *next;
+    struct ovsdb_idl_arc *arc;
 
     /* This is trickier than it looks.  ovsdb_idl_row_clear_arcs() will destroy
      * 'arc', so we need to use the "safe" variant of list traversal.  However,
@@ -2178,7 +2178,7 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row)
      * (If duplicate arcs were possible then we would need to make sure that
      * 'next' didn't also point into 'arc''s destination, but we forbid
      * duplicate arcs.) */
-    LIST_FOR_EACH_SAFE (arc, next, dst_node, &row->dst_arcs) {
+    LIST_FOR_EACH_SAFE (arc, dst_node, &row->dst_arcs) {
         struct ovsdb_idl_row *ref = arc->src;
 
         ovsdb_idl_row_unparse(ref);
@@ -2329,9 +2329,9 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
         struct ovsdb_idl_table *table = &idl->tables[i];
 
         if (!ovs_list_is_empty(&table->track_list)) {
-            struct ovsdb_idl_row *row, *next;
+            struct ovsdb_idl_row *row;
 
-            LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+            LIST_FOR_EACH_SAFE (row, track_node, &table->track_list) {
                 if (!ovsdb_idl_track_is_set(row->table)) {
                     ovs_list_remove(&row->track_node);
                     ovsdb_idl_row_unparse(row);

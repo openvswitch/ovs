@@ -1133,9 +1133,9 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
      *       whose module was just unloaded via "rmmod", or a virtual NIC for a
      *       VM whose VM was just terminated. */
     HMAP_FOR_EACH_SAFE (port, port_next, hmap_node, &br->ports) {
-        struct iface *iface, *iface_next;
+        struct iface *iface;
 
-        LIST_FOR_EACH_SAFE (iface, iface_next, port_elem, &port->ifaces) {
+        LIST_FOR_EACH_SAFE (iface, port_elem, &port->ifaces) {
             if (!sset_contains(&ofproto_ports, iface->name)) {
                 iface_destroy__(iface);
             }
@@ -4341,12 +4341,12 @@ static void
 bridge_aa_refresh_queued(struct bridge *br)
 {
     struct ovs_list *list = xmalloc(sizeof *list);
-    struct bridge_aa_vlan *node, *next;
+    struct bridge_aa_vlan *node;
 
     ovs_list_init(list);
     ofproto_aa_vlan_get_queued(br->ofproto, list);
 
-    LIST_FOR_EACH_SAFE (node, next, list_node, list) {
+    LIST_FOR_EACH_SAFE (node, list_node, list) {
         struct port *port;
 
         VLOG_INFO("ifname=%s, vlan=%u, oper=%u", node->port_name, node->vlan,
@@ -4387,7 +4387,7 @@ port_create(struct bridge *br, const struct ovsrec_port *cfg)
 static void
 port_del_ifaces(struct port *port)
 {
-    struct iface *iface, *next;
+    struct iface *iface;
     struct sset new_ifaces;
     size_t i;
 
@@ -4398,7 +4398,7 @@ port_del_ifaces(struct port *port)
     }
 
     /* Get rid of deleted interfaces. */
-    LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
+    LIST_FOR_EACH_SAFE (iface, port_elem, &port->ifaces) {
         if (!sset_contains(&new_ifaces, iface->name)) {
             iface_destroy(iface);
         }
@@ -4412,13 +4412,13 @@ port_destroy(struct port *port)
 {
     if (port) {
         struct bridge *br = port->bridge;
-        struct iface *iface, *next;
+        struct iface *iface;
 
         if (br->ofproto) {
             ofproto_bundle_unregister(br->ofproto, port);
         }
 
-        LIST_FOR_EACH_SAFE (iface, next, port_elem, &port->ifaces) {
+        LIST_FOR_EACH_SAFE (iface, port_elem, &port->ifaces) {
             iface_destroy__(iface);
         }
 
