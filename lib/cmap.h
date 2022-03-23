@@ -108,6 +108,8 @@ size_t cmap_replace(struct cmap *, struct cmap_node *old_node,
  *
  * CMAP and HASH are evaluated only once.  NODE is evaluated many times.
  *
+ * After a normal exit of the loop (not through a "break;" statement) NODE is
+ * NULL.
  *
  * Thread-safety
  * =============
@@ -128,15 +130,15 @@ size_t cmap_replace(struct cmap *, struct cmap_node *old_node,
  * CMAP_FOR_EACH_WITH_HASH_PROTECTED may only be used if CMAP is guaranteed not
  * to change during iteration.  It may be very slightly faster.
  */
-#define CMAP_NODE_FOR_EACH(NODE, MEMBER, CMAP_NODE)                     \
-    for (INIT_CONTAINER(NODE, CMAP_NODE, MEMBER);                       \
-         (NODE) != OBJECT_CONTAINING(NULL, NODE, MEMBER);               \
-         ASSIGN_CONTAINER(NODE, cmap_node_next(&(NODE)->MEMBER), MEMBER))
-#define CMAP_NODE_FOR_EACH_PROTECTED(NODE, MEMBER, CMAP_NODE)           \
-    for (INIT_CONTAINER(NODE, CMAP_NODE, MEMBER);                       \
-         (NODE) != OBJECT_CONTAINING(NULL, NODE, MEMBER);               \
-         ASSIGN_CONTAINER(NODE, cmap_node_next_protected(&(NODE)->MEMBER), \
-                          MEMBER))
+#define CMAP_NODE_FOR_EACH(NODE, MEMBER, CMAP_NODE)                        \
+    for (INIT_MULTIVAR(NODE, MEMBER, CMAP_NODE, struct cmap_node);         \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);         \
+         UPDATE_MULTIVAR(NODE, cmap_node_next(ITER_VAR(NODE))))
+#define CMAP_NODE_FOR_EACH_PROTECTED(NODE, MEMBER, CMAP_NODE)              \
+    for (INIT_MULTIVAR(NODE, MEMBER, CMAP_NODE, struct cmap_node);         \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);         \
+         UPDATE_MULTIVAR(NODE, cmap_node_next_protected(ITER_VAR(NODE))))
+
 #define CMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, CMAP)   \
     CMAP_NODE_FOR_EACH(NODE, MEMBER, cmap_find(CMAP, HASH))
 #define CMAP_FOR_EACH_WITH_HASH_PROTECTED(NODE, MEMBER, HASH, CMAP)     \
@@ -223,7 +225,7 @@ unsigned long cmap_find_batch(const struct cmap *cmap, unsigned long map,
      ? (INIT_CONTAINER(NODE, (CURSOR)->node, MEMBER),   \
         cmap_cursor_advance(CURSOR),                    \
         true)                                           \
-     : false)
+     : (NODE = NULL, false))
 
 #define CMAP_CURSOR_FOR_EACH(NODE, MEMBER, CURSOR, CMAP)    \
     for (*(CURSOR) = cmap_cursor_start(CMAP);               \
