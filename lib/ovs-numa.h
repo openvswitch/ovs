@@ -68,9 +68,9 @@ void ovs_numa_dump_destroy(struct ovs_numa_dump *);
 int ovs_numa_thread_setaffinity_core(unsigned core_id);
 
 #define FOR_EACH_CORE_ON_DUMP(ITER, DUMP)                    \
-    HMAP_FOR_EACH((ITER), hmap_node, &(DUMP)->cores)
+    HMAP_FOR_EACH (ITER, hmap_node, &(DUMP)->cores)
 
 #define FOR_EACH_NUMA_ON_DUMP(ITER, DUMP)                    \
-    HMAP_FOR_EACH((ITER), hmap_node, &(DUMP)->numas)
+    HMAP_FOR_EACH (ITER, hmap_node, &(DUMP)->numas)
 
 #endif /* ovs-numa.h */
