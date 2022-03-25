@@ -388,17 +388,19 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6,   /* struct ovs_key_ct_tuple_ipv6 */
 	OVS_KEY_ATTR_NSH,       /* Nested set of ovs_nsh_key_* */
 
-#ifdef __KERNEL__
-	/* Only used within kernel data path. */
-	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
-#endif
-
-#ifndef __KERNEL__
-	/* Only used within userspace data path. */
-	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
+	/* User space decided to squat on types 29 and 30.  They are defined
+	 * below, but should not be sent to the kernel.
+	 *
+	 * WARNING: No new types should be added unless they are defined
+	 *          for both kernel and user space (no 'ifdef's).  It's hard
+	 *          to keep compatibility otherwise.
+	 */
+	OVS_KEY_ATTR_PACKET_TYPE,   /* be32 packet type */
 	OVS_KEY_ATTR_ND_EXTENSIONS, /* struct ovs_key_nd_extensions */
-#endif
 
+	OVS_KEY_ATTR_TUNNEL_INFO,   /* struct ip_tunnel_info.
+				     * For in-kernel use only.
+				     */
 	__OVS_KEY_ATTR_MAX
 };
 

@@ -193,6 +193,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_PACKET_TYPE: return "packet_type";
     case OVS_KEY_ATTR_NSH: return "nsh";
 
+    case OVS_KEY_ATTR_TUNNEL_INFO: return "<error: kernel-only tunnel_info>";
     case __OVS_KEY_ATTR_MAX:
     default:
         snprintf(namebuf, bufsize, "key%u", (unsigned int) attr);
@@ -3261,6 +3262,7 @@ odp_mask_is_constant__(enum ovs_key_attr attr, const void *mask, size_t size,
     switch (attr) {
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_ENCAP:
+    case OVS_KEY_ATTR_TUNNEL_INFO:
     case __OVS_KEY_ATTR_MAX:
     default:
         return false;
@@ -4412,6 +4414,7 @@ format_odp_key_attr__(const struct nlattr *a, const struct nlattr *ma,
         break;
     }
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_TUNNEL_INFO:
     case __OVS_KEY_ATTR_MAX:
     default:
         format_generic_odp_key(a, ds);
@@ -6616,6 +6619,7 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
         case OVS_KEY_ATTR_MPLS:
         case OVS_KEY_ATTR_PACKET_TYPE:
         case OVS_KEY_ATTR_NSH:
+        case OVS_KEY_ATTR_TUNNEL_INFO:
         case __OVS_KEY_ATTR_MAX:
         default:
             break;
