@@ -976,88 +976,6 @@ json_lex_string(struct json_parser *p)
     }
 }
 
-static bool
-json_lex_input(struct json_parser *p, unsigned char c)
-{
-    struct json_token token;
-
-    switch (p->lex_state) {
-    case JSON_LEX_START:
-        switch (c) {
-        case ' ': case '\t': case '\n': case '\r':
-            /* Nothing to do. */
-            return true;
-
-        case 'a': case 'b': case 'c': case 'd': case 'e':
-        case 'f': case 'g': case 'h': case 'i': case 'j':
-        case 'k': case 'l': case 'm': case 'n': case 'o':
-        case 'p': case 'q': case 'r': case 's': case 't':
-        case 'u': case 'v': case 'w': case 'x': case 'y':
-        case 'z':
-            p->lex_state = JSON_LEX_KEYWORD;
-            break;
-
-        case '[': case '{': case ']': case '}': case ':': case ',':
-            token.type = c;
-            json_parser_input(p, &token);
-            return true;
-
-        case '-':
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            p->lex_state = JSON_LEX_NUMBER;
-            break;
-
-        case '"':
-            p->lex_state = JSON_LEX_STRING;
-            return true;
-
-        default:
-            if (isprint(c)) {
-                json_error(p, "invalid character '%c'", c);
-            } else {
-                json_error(p, "invalid character U+%04x", c);
-            }
-            return true;
-        }
-        break;
-
-    case JSON_LEX_KEYWORD:
-        if (!isalpha((unsigned char) c)) {
-            json_lex_keyword(p);
-            return false;
-        }
-        break;
-
-    case JSON_LEX_NUMBER:
-        if (!strchr(".0123456789eE-+", c)) {
-            json_lex_number(p);
-            return false;
-        }
-        break;
-
-    case JSON_LEX_STRING:
-        if (c == '\\') {
-            p->lex_state = JSON_LEX_ESCAPE;
-        } else if (c == '"') {
-            json_lex_string(p);
-            return true;
-        } else if (c < 0x20) {
-            json_error(p, "U+%04X must be escaped in quoted string", c);
-            return true;
-        }
-        break;
-
-    case JSON_LEX_ESCAPE:
-        p->lex_state = JSON_LEX_STRING;
-        break;
-
-    default:
-        abort();
-    }
-    ds_put_char(&p->buffer, c);
-    return true;
-}
 
 /* Parsing. */
 
@@ -1160,21 +1078,122 @@ json_parser_create(int flags)
     return p;
 }
 
+static inline void ALWAYS_INLINE
+json_parser_account_byte(struct json_parser *p, unsigned char c)
+{
+    p->byte_number++;
+    if (OVS_UNLIKELY(c == '\n')) {
+        p->column_number = 0;
+        p->line_number++;
+    } else {
+        p->column_number++;
+    }
+}
+
 size_t
 json_parser_feed(struct json_parser *p, const char *input, size_t n)
 {
+    size_t token_start = 0;
     size_t i;
+
     for (i = 0; !p->done && i < n; ) {
-        if (json_lex_input(p, input[i])) {
-            p->byte_number++;
-            if (input[i] == '\n') {
-                p->column_number = 0;
-                p->line_number++;
-            } else {
-                p->column_number++;
+        bool consumed = true;
+
+        const char *start_p = &input[token_start];
+        unsigned char c = input[i];
+        struct json_token token;
+
+        switch (p->lex_state) {
+        case JSON_LEX_START:
+            switch (c) {
+            case ' ': case '\t': case '\n': case '\r':
+                /* Nothing to do. */
+                token_start = i + 1;
+                break;
+
+            case 'a': case 'b': case 'c': case 'd': case 'e':
+            case 'f': case 'g': case 'h': case 'i': case 'j':
+            case 'k': case 'l': case 'm': case 'n': case 'o':
+            case 'p': case 'q': case 'r': case 's': case 't':
+            case 'u': case 'v': case 'w': case 'x': case 'y':
+            case 'z':
+                p->lex_state = JSON_LEX_KEYWORD;
+                token_start = i;
+                break;
+
+            case '[': case '{': case ']': case '}': case ':': case ',':
+                token.type = c;
+                json_parser_input(p, &token);
+                token_start = i + 1;
+                break;
+
+            case '-':
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                p->lex_state = JSON_LEX_NUMBER;
+                token_start = i;
+                break;
+
+            case '"':
+                p->lex_state = JSON_LEX_STRING;
+                token_start = i + 1;
+                break;
+
+            default:
+                if (isprint(c)) {
+                    json_error(p, "invalid character '%c'", c);
+                } else {
+                    json_error(p, "invalid character U+%04x", c);
+                }
+                break;
             }
+            break;
+
+        case JSON_LEX_KEYWORD:
+            if (!isalpha((unsigned char) c)) {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_keyword(p);
+                consumed = false;
+                break;
+            }
+            break;
+
+        case JSON_LEX_NUMBER:
+            if (!strchr(".0123456789eE-+", c)) {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_number(p);
+                consumed = false;
+                break;
+            }
+            break;
+
+        case JSON_LEX_STRING:
+            if (c == '\\') {
+                p->lex_state = JSON_LEX_ESCAPE;
+            } else if (c == '"') {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_string(p);
+            } else if (c < 0x20) {
+                json_error(p, "U+%04X must be escaped in quoted string", c);
+            }
+            break;
+
+        case JSON_LEX_ESCAPE:
+            p->lex_state = JSON_LEX_STRING;
+            break;
+
+        default:
+            ovs_abort(0, "unexpected lexer state");
+        }
+
+        if (consumed) {
+            json_parser_account_byte(p, c);
             i++;
         }
+    }
+
+    if (!p->done) {
+        ds_put_buffer(&p->buffer, &input[token_start], i - token_start);
     }
     return i;
 }
@@ -1201,7 +1220,7 @@ json_parser_finish(struct json_parser *p)
 
     case JSON_LEX_NUMBER:
     case JSON_LEX_KEYWORD:
-        json_lex_input(p, ' ');
+        json_parser_feed(p, " ", 1);
         break;
     }
 
