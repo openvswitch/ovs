@@ -7369,15 +7369,15 @@ static struct dp_netdev_pmd_thread *
 dp_netdev_get_pmd(struct dp_netdev *dp, unsigned core_id)
 {
     struct dp_netdev_pmd_thread *pmd;
-    const struct cmap_node *pnode;
 
-    pnode = cmap_find(&dp->poll_threads, hash_int(core_id, 0));
-    if (!pnode) {
-        return NULL;
+    CMAP_FOR_EACH_WITH_HASH (pmd, node, hash_int(core_id, 0),
+                             &dp->poll_threads) {
+        if (pmd->core_id == core_id) {
+            return dp_netdev_pmd_try_ref(pmd) ? pmd : NULL;
+        }
     }
-    pmd = CONTAINER_OF(pnode, struct dp_netdev_pmd_thread, node);
 
-    return dp_netdev_pmd_try_ref(pmd) ? pmd : NULL;
+    return NULL;
 }
 
 /* Sets the 'struct dp_netdev_pmd_thread' for non-pmd threads. */
