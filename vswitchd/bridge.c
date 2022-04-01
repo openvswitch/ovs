@@ -3315,7 +3315,14 @@ bridge_run(void)
      *
      * We do this before bridge_reconfigure() because that function might
      * initiate SSL connections and thus requires SSL to be configured. */
-    if (cfg && cfg->ssl) {
+    const struct ovsrec_ssl *ssl = NULL;
+    for (size_t i = 0; i < cfg->n_ssls; i++) {
+        if (strcmp(cfg->ssls[i]->owner, OPENFLOW_SSL_OWNER) == 0) {
+            ssl = cfg->ssls[i];
+            break;
+        }
+    }
+    if (ssl) {
         const struct ovsrec_ssl *ssl = cfg->ssl;
 
         stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);

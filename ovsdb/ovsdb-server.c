@@ -876,13 +876,13 @@ parse_db_string_column(const struct shash *all_dbs,
 }
 
 static const char *
-query_db_string(const struct shash *all_dbs, const char *name,
-                struct ds *errors)
+query_db_ssl_string(const struct shash *all_dbs, const char *name, struct ds *errors)
 {
     if (!name || strncmp(name, "db:", 3)) {
         return name;
     } else {
         const struct ovsdb_column *column;
+        const struct ovsdb_column *owner_column;
         const struct ovsdb_table *table;
         const struct ovsdb_row *row;
         const struct db *db;
@@ -902,14 +902,19 @@ query_db_string(const struct shash *all_dbs, const char *name,
             return NULL;
         }
 
+        owner_column = ovsdb_table_schema_get_column(table->schema, OVSDB_SSL_OWNER_COLUMN);
+        if (!owner_column) {
+            return NULL;
+        }
+
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            const struct ovsdb_datum *owner_datum;
             const struct ovsdb_datum *datum;
             size_t i;
 
             datum = &row->fields[column->index];
             for (i = 0; i < datum->n; i++) {
-                const char *key = json_string(datum->keys[i].s);
-                if (key[0]) {
+                if ((strcmp(owner_datum->keys[i].string, OVSDB_SSL_OWNER) == 0)) {
                     return key;
                 }
             }
@@ -1321,11 +1326,11 @@ reconfigure_ssl(const struct shash *all_dbs)
     const char *resolved_ssl_protocols;
     const char *resolved_ssl_ciphers;
 
-    resolved_private_key = query_db_string(all_dbs, private_key_file, &errors);
-    resolved_certificate = query_db_string(all_dbs, certificate_file, &errors);
-    resolved_ca_cert = query_db_string(all_dbs, ca_cert_file, &errors);
-    resolved_ssl_protocols = query_db_string(all_dbs, ssl_protocols, &errors);
-    resolved_ssl_ciphers = query_db_string(all_dbs, ssl_ciphers, &errors);
+    resolved_private_key = query_db_ssl_string(all_dbs, private_key_file, &errors);
+    resolved_certificate = query_db_ssl_string(all_dbs, certificate_file, &errors);
+    resolved_ca_cert = query_db_ssl_string(all_dbs, ca_cert_file, &errors);
+    resolved_ssl_protocols = query_db_ssl_string(all_dbs, ssl_protocols, &errors);
+    resolved_ssl_ciphers = query_db_ssl_string(all_dbs, ssl_ciphers, &errors);
 
     stream_ssl_set_key_and_cert(resolved_private_key, resolved_certificate);
     stream_ssl_set_ca_cert_file(resolved_ca_cert, bootstrap_ca_cert);

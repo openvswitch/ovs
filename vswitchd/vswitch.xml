@@ -63,7 +63,7 @@
         Set of bridges managed by the daemon.
       </column>
 
-      <column name="ssl">
+      <column name="ssls">
         SSL used globally by the daemon.
       </column>
 
@@ -6396,6 +6396,9 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
 
   <table name="SSL">
     SSL configuration for an Open_vSwitch.
+    <column name="owner">
+      Name of the module that SSL configuration belongs to.
+    </column>
 
     <column name="private_key">
       Name of a PEM file containing the private key used as the switch's

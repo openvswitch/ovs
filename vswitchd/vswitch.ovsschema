@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "8.3.0",
- "cksum": "3781850481 26690",
+ "cksum": "3090718775 26738",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -17,10 +17,10 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "Manager"},
                   "min": 0, "max": "unlimited"}},
-       "ssl": {
+       "ssls": {
          "type": {"key": {"type": "uuid",
                           "refTable": "SSL"},
-                  "min": 0, "max": 1}},
+                  "min": 0, "max": 2}},
        "other_config": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
@@ -692,6 +692,8 @@
                   "min": 0, "max": "unlimited"}}}},
    "SSL": {
      "columns": {
+       "owner": {
+         "type": "string"},
        "private_key": {
          "type": "string"},
        "certificate": {
@@ -703,7 +705,7 @@
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}},
-     "maxRows": 1},
+     "maxRows": 2},
    "AutoAttach": {
      "columns": {
        "system_name": {
