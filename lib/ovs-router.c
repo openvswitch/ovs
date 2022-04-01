@@ -164,9 +164,10 @@ static void rt_init_match(struct match *match, uint32_t mark,
     match->flow.pkt_mark = mark;
 }
 
-static int
-get_src_addr(const struct in6_addr *ip6_dst,
-             const char output_bridge[], struct in6_addr *psrc)
+int
+ovs_router_get_netdev_source_address(const struct in6_addr *ip6_dst,
+                                     const char output_bridge[],
+                                     struct in6_addr *psrc)
 {
     struct in6_addr *mask, *addr6;
     int err, n_in6, i, max_plen = -1;
@@ -235,9 +236,11 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
     p->plen = plen;
     p->local = local;
     p->priority = priority;
-    err = get_src_addr(ip6_dst, output_bridge, &p->src_addr);
+    err = ovs_router_get_netdev_source_address(ip6_dst, output_bridge,
+                                               &p->src_addr);
     if (err && ipv6_addr_is_set(gw)) {
-        err = get_src_addr(gw, output_bridge, &p->src_addr);
+        err = ovs_router_get_netdev_source_address(gw, output_bridge,
+                                                   &p->src_addr);
     }
     if (err) {
         struct ds ds = DS_EMPTY_INITIALIZER;

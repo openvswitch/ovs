@@ -37,6 +37,10 @@ void ovs_router_flush(void);
 
 void ovs_router_disable_system_routing_table(void);
 
+int ovs_router_get_netdev_source_address(const struct in6_addr *ip6_dst,
+                                         const char output_bridge[],
+                                         struct in6_addr *psrc);
+
 #ifdef  __cplusplus
 }
 #endif
