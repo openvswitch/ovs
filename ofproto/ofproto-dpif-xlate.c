@@ -3681,14 +3681,27 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
 
     err = tnl_neigh_lookup(out_dev->xbridge->name, &d_ip6, &dmac);
     if (err) {
+        struct in6_addr nh_s_ip6 = in6addr_any;
+
         xlate_report(ctx, OFT_DETAIL,
                      "neighbor cache miss for %s on bridge %s, "
                      "sending %s request",
                      buf_dip6, out_dev->xbridge->name, d_ip ? "ARP" : "ND");
+
+        err = ovs_router_get_netdev_source_address(&d_ip6,
+                                                   out_dev->xbridge->name,
+                                                   &nh_s_ip6);
+        if (err) {
+            nh_s_ip6 = s_ip6;
+        }
+
         if (d_ip) {
-            tnl_send_arp_request(ctx, out_dev, smac, s_ip, d_ip);
+            ovs_be32 nh_s_ip;
+
+            nh_s_ip = in6_addr_get_mapped_ipv4(&nh_s_ip6);
+            tnl_send_arp_request(ctx, out_dev, smac, nh_s_ip, d_ip);
         } else {
-            tnl_send_nd_request(ctx, out_dev, smac, &s_ip6, &d_ip6);
+            tnl_send_nd_request(ctx, out_dev, smac, &nh_s_ip6, &d_ip6);
         }
         return err;
     }
