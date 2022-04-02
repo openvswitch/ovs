@@ -366,7 +366,7 @@ class Idl(object):
             else:
                 if table.condition.reset():
                     self.last_id = str(uuid.UUID(int=0))
-                self.cond_changed = True
+                    self.cond_changed = True
 
     def restart_fsm(self):
         # Resync data DB table conditions to avoid missing updated due to
