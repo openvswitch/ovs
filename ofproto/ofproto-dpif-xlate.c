@@ -4172,6 +4172,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (xport->pt_mode == NETDEV_PT_LEGACY_L3) {
             flow->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
                                                ntohs(flow->dl_type));
+            if (ctx->pending_encap) {
+                /* The Ethernet header was not actually added yet. */
+                ctx->pending_encap = false;
+            }
         }
     }
 
