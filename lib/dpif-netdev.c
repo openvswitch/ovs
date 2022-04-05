@@ -5985,7 +5985,7 @@ sched_numa_list_schedule(struct sched_numa_list *numa_list,
         struct dp_netdev_rxq *rxq = rxqs[i];
         struct sched_pmd *sched_pmd = NULL;
         struct sched_numa *numa;
-        int numa_id;
+        int port_numa_id;
         uint64_t proc_cycles;
         char rxq_cyc_log[MAX_RXQ_CYC_STRLEN];
 
@@ -5997,9 +5997,11 @@ sched_numa_list_schedule(struct sched_numa_list *numa_list,
 
         /* Store the cycles for this rxq as we will log these later. */
         proc_cycles = dp_netdev_rxq_get_cycles(rxq, RXQ_CYCLES_PROC_HIST);
-        /* Select the numa that should be used for this rxq. */
-        numa_id = netdev_get_numa_id(rxq->port->netdev);
-        numa = sched_numa_list_lookup(numa_list, numa_id);
+
+        port_numa_id = netdev_get_numa_id(rxq->port->netdev);
+
+        /* Select numa. */
+        numa = sched_numa_list_lookup(numa_list, port_numa_id);
 
         /* Check if numa has no PMDs or no non-isolated PMDs. */
         if (!numa || !sched_numa_noniso_pmd_count(numa)) {
@@ -6017,35 +6019,40 @@ sched_numa_list_schedule(struct sched_numa_list *numa_list,
         }
 
         if (numa) {
-            if (numa->numa_id != numa_id) {
+            /* Select the PMD that should be used for this rxq. */
+            sched_pmd = sched_pmd_next(numa, algo,
+                                       proc_cycles ? true : false);
+        }
+
+        /* Check that a pmd has been selected. */
+        if (sched_pmd) {
+            int pmd_numa_id;
+
+            pmd_numa_id = sched_pmd->numa->numa_id;
+            /* Check if selected pmd numa matches port numa. */
+            if (pmd_numa_id != port_numa_id) {
                 VLOG(level, "There's no available (non-isolated) pmd thread "
                             "on numa node %d. Port \'%s\' rx queue %d will "
                             "be assigned to a pmd on numa node %d. "
                             "This may lead to reduced performance.",
-                            numa_id, netdev_rxq_get_name(rxq->rx),
-                            netdev_rxq_get_queue_id(rxq->rx), numa->numa_id);
+                            port_numa_id, netdev_rxq_get_name(rxq->rx),
+                            netdev_rxq_get_queue_id(rxq->rx), pmd_numa_id);
             }
-
-            /* Select the PMD that should be used for this rxq. */
-            sched_pmd = sched_pmd_next(numa, algo, proc_cycles ? true : false);
-            if (sched_pmd) {
-                VLOG(level, "Core %2u on numa node %d assigned port \'%s\' "
-                            "rx queue %d%s.",
-                            sched_pmd->pmd->core_id, sched_pmd->pmd->numa_id,
-                            netdev_rxq_get_name(rxq->rx),
-                            netdev_rxq_get_queue_id(rxq->rx),
-                            get_rxq_cyc_log(rxq_cyc_log, algo, proc_cycles));
-                sched_pmd_add_rxq(sched_pmd, rxq, proc_cycles);
-            }
-        }
-        if (!sched_pmd) {
+            VLOG(level, "Core %2u on numa node %d assigned port \'%s\' "
+                        "rx queue %d%s.",
+                        sched_pmd->pmd->core_id, sched_pmd->pmd->numa_id,
+                        netdev_rxq_get_name(rxq->rx),
+                        netdev_rxq_get_queue_id(rxq->rx),
+                        get_rxq_cyc_log(rxq_cyc_log, algo, proc_cycles));
+            sched_pmd_add_rxq(sched_pmd, rxq, proc_cycles);
+        } else  {
             VLOG(level == VLL_DBG ? level : VLL_WARN,
-                    "No non-isolated pmd on any numa available for "
-                    "port \'%s\' rx queue %d%s. "
-                    "This rx queue will not be polled.",
-                    netdev_rxq_get_name(rxq->rx),
-                    netdev_rxq_get_queue_id(rxq->rx),
-                    get_rxq_cyc_log(rxq_cyc_log, algo, proc_cycles));
+                 "No non-isolated pmd on any numa available for "
+                 "port \'%s\' rx queue %d%s. "
+                 "This rx queue will not be polled.",
+                 netdev_rxq_get_name(rxq->rx),
+                 netdev_rxq_get_queue_id(rxq->rx),
+                 get_rxq_cyc_log(rxq_cyc_log, algo, proc_cycles));
         }
     }
     free(rxqs);
