@@ -5744,28 +5744,43 @@ compare_rxq_cycles(const void *a, const void *b)
     }
 }
 
+static bool
+sched_pmd_new_lowest(struct sched_pmd *current_lowest, struct sched_pmd *pmd,
+                     bool has_proc)
+{
+    uint64_t current_num, pmd_num;
+
+    if (current_lowest == NULL) {
+        return true;
+    }
+
+    if (has_proc) {
+        current_num = current_lowest->pmd_proc_cycles;
+        pmd_num = pmd->pmd_proc_cycles;
+    } else {
+        current_num = current_lowest->n_rxq;
+        pmd_num = pmd->n_rxq;
+    }
+
+    if (pmd_num < current_num) {
+        return true;
+    }
+    return false;
+}
+
 static struct sched_pmd *
 sched_pmd_get_lowest(struct sched_numa *numa, bool has_cyc)
 {
     struct sched_pmd *lowest_sched_pmd = NULL;
-    uint64_t lowest_num = UINT64_MAX;
 
     for (unsigned i = 0; i < numa->n_pmds; i++) {
         struct sched_pmd *sched_pmd;
-        uint64_t pmd_num;
 
         sched_pmd = &numa->pmds[i];
         if (sched_pmd->isolated) {
             continue;
         }
-        if (has_cyc) {
-            pmd_num = sched_pmd->pmd_proc_cycles;
-        } else {
-            pmd_num = sched_pmd->n_rxq;
-        }
-
-        if (pmd_num < lowest_num) {
-            lowest_num = pmd_num;
+        if (sched_pmd_new_lowest(lowest_sched_pmd, sched_pmd, has_cyc)) {
             lowest_sched_pmd = sched_pmd;
         }
     }
