@@ -56,7 +56,7 @@ NDIS_STATUS OvsExtractLayers(const NET_BUFFER_LIST *packet,
                              POVS_PACKET_HDR_INFO layers);
 NDIS_STATUS OvsExtractFlow(const NET_BUFFER_LIST *pkt, UINT32 inPort,
                            OvsFlowKey *flow, POVS_PACKET_HDR_INFO layers,
-                           OvsIPv4TunnelKey *tunKey);
+                           OvsIPTunnelKey *tunKey);
 OvsFlow* OvsLookupFlow(OVS_DATAPATH *datapath, const OvsFlowKey *key,
                        UINT64 *hash, BOOLEAN hashValid);
 OvsFlow* OvsLookupFlowRecirc(OVS_DATAPATH *datapath,
@@ -80,13 +80,14 @@ NTSTATUS OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                 UINT32 *replyLen);
 NTSTATUS MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey,
                            UINT16 keyType, UINT16 tunKeyType);
-NTSTATUS MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey,
+NTSTATUS MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPTunnelKey *tunKey,
                               UINT16 tunKeyType);
 VOID MapTunAttrToFlowPut(PNL_ATTR *keyAttrs, PNL_ATTR *tunAttrs,
                          OvsFlowKey *destKey);
 UINT32 OvsFlowKeyAttrSize(void);
 UINT32 OvsTunKeyAttrSize(void);
-NTSTATUS OvsTunnelAttrToIPv4TunnelKey(PNL_ATTR attr, OvsIPv4TunnelKey *tunKey);
+NTSTATUS
+OvsTunnelAttrToIPTunnelKey(PNL_ATTR attr, OvsIPTunnelKey *tunKey);
 
 /* Flags for tunneling */
 #define OVS_TNL_F_DONT_FRAGMENT         (1 << 0)

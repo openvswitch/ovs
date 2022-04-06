@@ -58,7 +58,7 @@ typedef struct OvsForwardingContext {
      * - specified in actions during tunneling Tx
      * - extracted from an NBL during tunneling Rx
      */
-    OvsIPv4TunnelKey tunKey;
+    OvsIPTunnelKey tunKey;
 
     /*
      * Tunneling - Tx:

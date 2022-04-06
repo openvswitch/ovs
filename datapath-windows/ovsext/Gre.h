@@ -66,7 +66,7 @@ void OvsCleanupGreTunnel(POVS_VPORT_ENTRY vport);
 
 NDIS_STATUS OvsEncapGre(POVS_VPORT_ENTRY vport,
                         PNET_BUFFER_LIST curNbl,
-                        OvsIPv4TunnelKey *tunKey,
+                        OvsIPTunnelKey *tunKey,
                         POVS_SWITCH_CONTEXT switchContext,
                         POVS_PACKET_HDR_INFO layers,
                         PNET_BUFFER_LIST *newNbl,
@@ -74,7 +74,7 @@ NDIS_STATUS OvsEncapGre(POVS_VPORT_ENTRY vport,
 
 NDIS_STATUS OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
                         PNET_BUFFER_LIST curNbl,
-                        OvsIPv4TunnelKey *tunKey,
+                        OvsIPTunnelKey *tunKey,
                         PNET_BUFFER_LIST *newNbl);
 
 static __inline UINT16

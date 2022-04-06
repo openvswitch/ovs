@@ -701,36 +701,62 @@ Re-Add the VIF ports with the VLAN tag:
 Add tunnels
 ~~~~~~~~~~~
 
-The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
-tunnels. For example, first add the tunnel port between 172.168.201.101 <->
-172.168.201.102:
+#. IPv4 tunnel, e.g.:
 
-::
+   The Windows Open vSwitch implementation support VXLAN and STT tunnels.
+   To add tunnels. For example, first add the tunnel port between
+   172.168.201.101 <->172.168.201.102:
 
-   > ovs-vsctl add-port br-int tun-1
-   > ovs-vsctl set Interface tun-1 type=<port-type>
-   > ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
-   > ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
-   > ovs-vsctl set Interface tun-1 options:in_key=flow
-   > ovs-vsctl set Interface tun-1 options:out_key=flow
+   ::
 
-...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:
+      > ovs-vsctl add-port br-int tun-1
+      > ovs-vsctl set Interface tun-1 type=<port-type>
+      > ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
+      > ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
+      > ovs-vsctl set Interface tun-1 options:in_key=flow
+      > ovs-vsctl set Interface tun-1 options:out_key=flow
 
-::
+    ...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:
 
-   > ovs-vsctl add-port br-int tun-2
-   > ovs-vsctl set Interface tun-2 type=<port-type>
-   > ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
-   > ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
-   > ovs-vsctl set Interface tun-2 options:in_key=flow
-   > ovs-vsctl set Interface tun-2 options:out_key=flow
+   ::
 
-Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
+      > ovs-vsctl add-port br-int tun-2
+      > ovs-vsctl set Interface tun-2 type=<port-type>
+      > ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
+      > ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
+      > ovs-vsctl set Interface tun-2 options:in_key=flow
+      > ovs-vsctl set Interface tun-2 options:out_key=flow
 
-.. note::
+      Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
 
-   Any patch ports created between br-int and br-pif MUST be deleted prior
-   to adding tunnels.
+   .. note::
+
+       Any patch ports created between br-int and br-pif MUST be deleted prior
+       to adding tunnels.
+
+#. IPv6 tunnel, e.g.:
+
+   To add IPV6 Geneve tunnels. For example, add the tunnel port between
+   5000::2 <-> 5000::9.
+
+   ::
+
+      > ovs-vsctl add-port br-int tun-3 -- set interface tun-3 type=Geneve \
+        options:csum=true options:key=flow options:local_ip="5000::2"\
+        options:remote_ip=flow
+
+     add the tunnel port between 5000::2 <-> 5000::9
+
+      > ovs-ofctl add-flow br-int "table=0,priority=100,ipv6,ipv6_src=6000::2 \
+        actions=load:0x9->NXM_NX_TUN_IPV6_DST[0..63], \
+        load:0x5000000000000000->NXM_NX_TUN_IPV6_DST[64..127], output:tun-3"
+
+     add the specified flow from 6000::2 go via IPV6 Geneve tunnel
+
+   .. note::
+
+      Till the checksum offload support is complete we recommend
+      disabling TX/RX offloads for IPV6 on Windows VM.
 
 Windows Services
 ----------------

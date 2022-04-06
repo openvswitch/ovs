@@ -46,6 +46,7 @@
  * The lock must not raise the IRQL higher than PASSIVE_LEVEL in order for the
  * route manipulation functions, i.e. GetBestRoute, to work.
  */
+
 typedef struct _OVS_IPHELPER_INSTANCE
 {
     LIST_ENTRY          link;
@@ -55,15 +56,15 @@ typedef struct _OVS_IPHELPER_INSTANCE
     GUID                netCfgId;
     MIB_IF_ROW2         internalRow;
     MIB_IPINTERFACE_ROW internalIPRow;
-    UINT32              ipAddress;
-
+    SOCKADDR_INET       ipAddress;
     ERESOURCE           lock;
 } OVS_IPHELPER_INSTANCE, *POVS_IPHELPER_INSTANCE;
+
 
 typedef struct _OVS_IPNEIGH_ENTRY {
     UINT8                       macAddr[ETH_ADDR_LEN];
     UINT16                      refCount;
-    UINT32                      ipAddr;
+    SOCKADDR_INET               ipAddr;
     UINT32                      pad;
     UINT64                      timeout;
     LIST_ENTRY                  link;
@@ -74,7 +75,7 @@ typedef struct _OVS_IPNEIGH_ENTRY {
 
 typedef struct _OVS_IPFORWARD_ENTRY {
     IP_ADDRESS_PREFIX prefix;
-    UINT32            nextHop;
+    SOCKADDR_INET     nextHop;
     UINT16            refCount;
     LIST_ENTRY        link;
     LIST_ENTRY        fwdList;
@@ -82,14 +83,14 @@ typedef struct _OVS_IPFORWARD_ENTRY {
 
 typedef union _OVS_FWD_INFO {
     struct {
-        UINT32        dstIpAddr;
-        UINT32        srcIpAddr;
+        SOCKADDR_INET   dstIphAddr;
+        SOCKADDR_INET   srcIphAddr;
         UINT8         dstMacAddr[ETH_ADDR_LEN];
         UINT8         srcMacAddr[ETH_ADDR_LEN];
         UINT32        srcPortNo;
         POVS_VPORT_ENTRY   vport;
     };
-    UINT64            value[4];
+    UINT64            value[10];
 } OVS_FWD_INFO, *POVS_FWD_INFO;
 
 typedef struct _OVS_FWD_ENTRY {
@@ -100,7 +101,6 @@ typedef struct _OVS_FWD_ENTRY {
     LIST_ENTRY        ipfLink;
     LIST_ENTRY        ipnLink;
 } OVS_FWD_ENTRY, *POVS_FWD_ENTRY;
-
 
 enum {
     OVS_IP_HELPER_INTERNAL_ADAPTER_UP,
@@ -119,7 +119,7 @@ typedef VOID (*OvsIPHelperCallback)(PNET_BUFFER_LIST nbl,
 typedef struct _OVS_FWD_REQUEST_INFO {
     PNET_BUFFER_LIST  nbl;
     UINT32            inPort;
-    OvsIPv4TunnelKey  tunnelKey;
+    OvsIPTunnelKey    tunnelKey;
     OvsIPHelperCallback cb;
     PVOID             cbData1;
     PVOID             cbData2;
@@ -157,7 +157,78 @@ NTSTATUS OvsFwdIPHelperRequest(PNET_BUFFER_LIST nbl, UINT32 inPort,
                                OvsIPHelperCallback cb,
                                PVOID cbData1,
                                PVOID cbData2);
-NTSTATUS OvsLookupIPFwdInfo(UINT32 srcIp, UINT32 dstIp, POVS_FWD_INFO info);
+
 VOID OvsCancelFwdIpHelperRequest(PNET_BUFFER_LIST nbl);
 
+NTSTATUS
+OvsLookupIPhFwdInfo(SOCKADDR_INET srcIp, SOCKADDR_INET dstIp,
+                    POVS_FWD_INFO info);
+
+static __inline BOOLEAN
+OvsIphAddrEquals(const SOCKADDR_INET *src, const SOCKADDR_INET *dst)
+{
+    BOOLEAN addrEqual = FALSE;
+    if (!src || !dst) return FALSE;
+
+    if (src->si_family == AF_INET &&
+        dst->si_family == AF_INET) {
+        addrEqual = (src->Ipv4.sin_addr.s_addr == dst->Ipv4.sin_addr.s_addr);
+    } else if(src->si_family == AF_INET6 &&
+              dst->si_family == AF_INET6) {
+        if (RtlEqualMemory(&src->Ipv6.sin6_addr,
+                           &dst->Ipv6.sin6_addr,
+                           sizeof(src->Ipv6.sin6_addr))) {
+           addrEqual = TRUE;
+        }
+    }
+    return addrEqual;
+}
+
+/* check if the pointers to SOCKADDR_INET is zero*/
+static __inline BOOLEAN
+OvsIphIsZero(const SOCKADDR_INET *ipAddr)
+{
+    BOOLEAN isZero = FALSE;
+    UCHAR zeros[16] = { 0 };
+    if (!ipAddr)  return FALSE;
+
+    if (ipAddr->si_family == AF_INET ||
+        ipAddr->si_family == AF_UNSPEC) {
+        isZero = (ipAddr->Ipv4.sin_addr.s_addr == 0);
+    } else if(ipAddr->si_family == AF_INET6) {
+        if (RtlEqualMemory(&ipAddr->Ipv6.sin6_addr.u.Byte,
+                           &zeros,
+                           sizeof(ipAddr->Ipv6.sin6_addr))) {
+            isZero = TRUE;
+        }
+    }
+    return isZero;
+}
+
+/* Copy the content from the pointer to SOCKADDR_INET
+ * To the pointer to SOCKADDR_INET
+ */
+static __inline void
+OvsCopyIphAddress(SOCKADDR_INET *dstAddr, const SOCKADDR_INET *srcAddr)
+{
+    if (!srcAddr || !dstAddr) return;
+
+    dstAddr->si_family = srcAddr->si_family;
+
+    if (srcAddr->si_family == AF_INET) {
+        dstAddr->Ipv4.sin_addr.s_addr = srcAddr->Ipv4.sin_addr.s_addr;
+    } else if (srcAddr->si_family == AF_INET6) {
+        RtlCopyMemory(&dstAddr->Ipv6, &srcAddr->Ipv6,
+                      sizeof(srcAddr->Ipv6));
+    }
+    return;
+}
+
+/* compute the hash value based on SOCKADDR_INET*/
+uint32_t
+OvsJhashIphHdr(const SOCKADDR_INET *iphAddr);
+
+NTSTATUS
+OvsConvertWcharToAnsiStr(WCHAR* wStr, size_t wlen,
+                         CHAR* str, size_t maxStrLen);
 #endif /* __IP_HELPER_H_ */

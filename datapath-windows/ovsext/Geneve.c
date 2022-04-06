@@ -69,7 +69,7 @@ OvsCleanupGeneveTunnel(POVS_VPORT_ENTRY vport)
 
 NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
                            PNET_BUFFER_LIST curNbl,
-                           OvsIPv4TunnelKey *tunKey,
+                           OvsIPTunnelKey* tunKey,
                            POVS_SWITCH_CONTEXT switchContext,
                            POVS_PACKET_HDR_INFO layers,
                            PNET_BUFFER_LIST *newNbl,
@@ -80,18 +80,27 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
     PNET_BUFFER curNb;
     PMDL curMdl;
     PUINT8 bufferStart;
-    EthHdr *ethHdr;
-    IPHdr *ipHdr;
-    UDPHdr *udpHdr;
-    GeneveHdr *geneveHdr;
-    GeneveOptionHdr *optHdr;
+    EthHdr* ethHdr;
+    IPHdr* ipHdr = NULL;
+    IPv6Hdr* ipv6Hdr = NULL;
+    UDPHdr* udpHdr = NULL;
+    GeneveHdr* geneveHdr;
+    GeneveOptionHdr* optHdr;
     POVS_GENEVE_VPORT vportGeneve;
-    UINT32 headRoom = OvsGetGeneveTunHdrMinSize() + tunKey->tunOptLen;
+    UINT32 headRoom = 0;
+
     UINT32 packetLength;
     ULONG mss = 0;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
 
-    status = OvsLookupIPFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
+    if (tunKey->dst.si_family == AF_INET) {
+        headRoom = OvsGetGeneveTunHdrMinSize() + tunKey->tunOptLen;
+    }
+    else if (tunKey->dst.si_family == AF_INET6) {
+        headRoom = OvsGetGeneveIPv6TunHdrMinSize() + tunKey->tunOptLen;
+    }
+
+    status = OvsLookupIPhFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
         OvsFwdIPHelperRequest(NULL, 0, tunKey, NULL, NULL, NULL);
         // return NDIS_STATUS_PENDING;
@@ -104,7 +113,6 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
          */
         return NDIS_STATUS_FAILURE;
     }
-
     RtlCopyMemory(switchFwdInfo->value, fwdInfo.value, sizeof fwdInfo.value);
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
@@ -176,29 +184,61 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
                        sizeof ethHdr->Destination);
         NdisMoveMemory(ethHdr->Source, fwdInfo.srcMacAddr,
                        sizeof ethHdr->Source);
-        ethHdr->Type = htons(ETH_TYPE_IPV4);
 
-        /* IP header */
-        ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+        if (tunKey->dst.si_family == AF_INET) {
+            ethHdr->Type = htons(ETH_TYPE_IPV4);
+        } else if (tunKey->dst.si_family == AF_INET6) {
+            ethHdr->Type = htons(ETH_TYPE_IPV6);
+        }
 
-        ipHdr->ihl = sizeof *ipHdr / 4;
-        ipHdr->version = IPPROTO_IPV4;
-        ipHdr->tos = tunKey->tos;
-        ipHdr->tot_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr);
-        ipHdr->id = (uint16)atomic_add64(&vportGeneve->ipId,
+        if (tunKey->dst.si_family == AF_INET) {
+            /* IP header */
+            ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+
+            ipHdr->ihl = sizeof *ipHdr / 4;
+            ipHdr->version = IPPROTO_IPV4;
+            ipHdr->tos = tunKey->tos;
+            ipHdr->tot_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr);
+            ipHdr->id = (uint16)atomic_add64(&vportGeneve->ipId,
                                          NET_BUFFER_DATA_LENGTH(curNb));
-        ipHdr->frag_off = (tunKey->flags & OVS_TNL_F_DONT_FRAGMENT) ?
+            ipHdr->frag_off = (tunKey->flags & OVS_TNL_F_DONT_FRAGMENT) ?
                           IP_DF_NBO : 0;
-        ipHdr->ttl = tunKey->ttl ? tunKey->ttl : GENEVE_DEFAULT_TTL;
-        ipHdr->protocol = IPPROTO_UDP;
-        ASSERT(tunKey->dst == fwdInfo.dstIpAddr);
-        ASSERT(tunKey->src == fwdInfo.srcIpAddr || tunKey->src == 0);
-        ipHdr->saddr = fwdInfo.srcIpAddr;
-        ipHdr->daddr = fwdInfo.dstIpAddr;
-        ipHdr->check = 0;
+            ipHdr->ttl = tunKey->ttl ? tunKey->ttl : GENEVE_DEFAULT_TTL;
+            ipHdr->protocol = IPPROTO_UDP;
+            ASSERT(OvsIphAddrEquals(&tunKey->dst, &fwdInfo.dstIphAddr));
+            ASSERT(OvsIphAddrEquals(&tunKey->src, &fwdInfo.srcIphAddr) || OvsIphIsZero(&tunKey->src));
+            ipHdr->saddr = fwdInfo.srcIphAddr.Ipv4.sin_addr.s_addr;
+            ipHdr->daddr = fwdInfo.dstIphAddr.Ipv4.sin_addr.s_addr;
+            ipHdr->check = 0;
+        } else if (tunKey->dst.si_family == AF_INET6) {
+             /* IPv6 header */
+            ipv6Hdr = (IPv6Hdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+
+            ipv6Hdr->version = IPV6;
+            ipv6Hdr->priority = 0;
+            ipv6Hdr->flow_lbl[0] = 0;
+            ipv6Hdr->flow_lbl[1] = 0;
+            ipv6Hdr->flow_lbl[2] = 0;
+            ipv6Hdr->payload_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr - sizeof *ipv6Hdr);
+            ipv6Hdr->hop_limit = tunKey->ttl ? tunKey->ttl : GENEVE_DEFAULT_TTL;
+            ipv6Hdr->nexthdr = IPPROTO_UDP;
+            ASSERT(OvsIphAddrEquals(&(tunKey->dst), &(fwdInfo.dstIphAddr)));
+            ASSERT(OvsIphAddrEquals(&(tunKey->src), &(fwdInfo.srcIphAddr))  || OvsIphIsZero(&(tunKey->src)));
+            RtlCopyMemory(&ipv6Hdr->saddr, &fwdInfo.srcIphAddr.Ipv6.sin6_addr,
+                          sizeof(ipv6Hdr->saddr));
+            RtlCopyMemory(&ipv6Hdr->daddr, &fwdInfo.dstIphAddr.Ipv6.sin6_addr,
+                          sizeof(ipv6Hdr->daddr));
+        }
 
         /* UDP header */
-        udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
+
+        if (tunKey->dst.si_family == AF_INET) {
+            udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
+        } else if (tunKey->dst.si_family == AF_INET6) {
+            udpHdr = (UDPHdr *)((PCHAR)ipv6Hdr + sizeof *ipv6Hdr);
+        }
+
+        ASSERT(udpHdr);
         udpHdr->source = htons(tunKey->flow_hash | MAXINT16);
         udpHdr->dest = tunKey->dst_port ? tunKey->dst_port :
                                           htons(vportGeneve->dstPort);
@@ -206,10 +246,20 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
                             sizeof *udpHdr + sizeof *geneveHdr +
                             tunKey->tunOptLen);
         if (tunKey->flags & OVS_TNL_F_CSUM) {
-            UINT16 udpChksumLen = (UINT16) NET_BUFFER_DATA_LENGTH(curNb) -
-                                   sizeof *ipHdr - sizeof *ethHdr;
-            udpHdr->check = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
-                                             IPPROTO_UDP, udpChksumLen);
+            UINT16 udpChksumLen = 0;
+            if (tunKey->dst.si_family == AF_INET) {
+               udpChksumLen = (UINT16) NET_BUFFER_DATA_LENGTH(curNb) -
+                              sizeof *ipHdr - sizeof *ethHdr;
+               udpHdr->check = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
+                                                IPPROTO_UDP, udpChksumLen);
+           } else if (tunKey->dst.si_family == AF_INET6) {
+               udpChksumLen = (UINT16) NET_BUFFER_DATA_LENGTH(curNb) -
+                              sizeof *ipv6Hdr - sizeof *ethHdr;
+
+               udpHdr->check = IPv6PseudoChecksum((UINT32*)&ipv6Hdr->saddr,
+                                                  (UINT32*)&ipv6Hdr->daddr,
+                                                  IPPROTO_UDP, udpChksumLen);
+           }
         } else {
             udpHdr->check = 0;
         }
@@ -226,17 +276,25 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
 
         /* Geneve header options */
         optHdr = (GeneveOptionHdr *)(geneveHdr + 1);
-        memcpy(optHdr, TunnelKeyGetOptions(tunKey), tunKey->tunOptLen);
+        memcpy(optHdr, IPTunnelKeyGetOptions(tunKey), tunKey->tunOptLen);
 
         csumInfo.Value = 0;
         csumInfo.Transmit.IpHeaderChecksum = 1;
-        csumInfo.Transmit.IsIPv4 = 1;
+
+        if (tunKey->dst.si_family == AF_INET) {
+            csumInfo.Transmit.IsIPv4 = 1;
+        } else if (tunKey->dst.si_family == AF_INET6) {
+            csumInfo.Transmit.IsIPv4 = 0;
+            csumInfo.Transmit.IsIPv6 = 1;
+        }
+
         if (tunKey->flags & OVS_TNL_F_CSUM) {
             csumInfo.Transmit.UdpChecksum = 1;
         }
         NET_BUFFER_LIST_INFO(curNbl,
                              TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
     }
+
     return STATUS_SUCCESS;
 
 ret_error:
@@ -247,13 +305,14 @@ ret_error:
 
 NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
                            PNET_BUFFER_LIST curNbl,
-                           OvsIPv4TunnelKey *tunKey,
+                           OvsIPTunnelKey *tunKey,
                            PNET_BUFFER_LIST *newNbl)
 {
     PNET_BUFFER curNb;
     PMDL curMdl;
     EthHdr *ethHdr;
     IPHdr *ipHdr;
+    IPv6Hdr *ipv6Hdr;
     UDPHdr *udpHdr;
     GeneveHdr *geneveHdr;
     UINT32 tunnelSize;
@@ -300,14 +359,29 @@ NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
 
     ethHdr = (EthHdr *)bufferStart;
     /* XXX: Handle IP options. */
-    ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
-    tunKey->src = ipHdr->saddr;
-    tunKey->dst = ipHdr->daddr;
-    tunKey->tos = ipHdr->tos;
-    tunKey->ttl = ipHdr->ttl;
-    tunKey->pad = 0;
-    udpHdr = (UDPHdr *)(bufferStart + layers.l4Offset);
 
+    if (layers.isIPv4) {
+       ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
+       tunKey->src.si_family = AF_INET;
+       tunKey->src.Ipv4.sin_addr.s_addr = ipHdr->saddr;
+       tunKey->dst.si_family = AF_INET;
+       tunKey->dst.Ipv4.sin_addr.s_addr = ipHdr->daddr;
+       tunKey->tos = ipHdr->tos;
+       tunKey->ttl = ipHdr->ttl;
+       tunKey->pad = 0;
+    } else if (layers.isIPv6) {
+       ipv6Hdr = (IPv6Hdr *)(bufferStart + layers.l3Offset);
+       tunKey->src.si_family = AF_INET6;
+       RtlCopyMemory(&(tunKey->src.Ipv6.sin6_addr), &ipv6Hdr->saddr,
+                     sizeof(tunKey->src.Ipv6.sin6_addr));
+       tunKey->dst.si_family = AF_INET6;
+       RtlCopyMemory(&(tunKey->dst.Ipv6.sin6_addr), &ipv6Hdr->daddr,
+                     sizeof(tunKey->dst.Ipv6.sin6_addr));
+       tunKey->tos = 0;/*???*/
+       tunKey->ttl = ipv6Hdr->hop_limit;
+       tunKey->pad = 0;
+    }
+    udpHdr = (UDPHdr *)(bufferStart + layers.l4Offset);
     /* Validate if NIC has indicated checksum failure. */
     status = OvsValidateUDPChecksum(curNbl, udpHdr->check == 0);
     if (status != NDIS_STATUS_SUCCESS) {
@@ -316,7 +390,7 @@ NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
 
     /* Calculate and verify UDP checksum if NIC didn't do it. */
     if (udpHdr->check != 0) {
-        status = OvsCalculateUDPChecksum(curNbl, curNb, ipHdr, udpHdr,
+        status = OvsCalculateUDPChecksum(curNbl, curNb, ethHdr, udpHdr,
                                          packetLength, &layers);
         tunKey->flags |= OVS_TNL_F_CSUM;
         if (status != NDIS_STATUS_SUCCESS) {
@@ -346,17 +420,16 @@ NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
     NdisAdvanceNetBufferDataStart(curNb, tunnelSize, FALSE, NULL);
     if (tunKey->tunOptLen > 0) {
         optStart = NdisGetDataBuffer(curNb, tunKey->tunOptLen,
-                                     TunnelKeyGetOptions(tunKey), 1, 0);
+                                     IPTunnelKeyGetOptions(tunKey), 1, 0);
 
         /* If data is contiguous in the buffer, NdisGetDataBuffer will not copy
            data to the storage. Manual copy is needed. */
-        if (optStart != TunnelKeyGetOptions(tunKey)) {
-            memcpy(TunnelKeyGetOptions(tunKey), optStart, tunKey->tunOptLen);
+        if (optStart != IPTunnelKeyGetOptions(tunKey)) {
+            memcpy(IPTunnelKeyGetOptions(tunKey), optStart, tunKey->tunOptLen);
         }
         NdisAdvanceNetBufferDataStart(curNb, tunKey->tunOptLen, FALSE, NULL);
         tunKey->flags |= OVS_TNL_F_GENEVE_OPT;
     }
-
     return NDIS_STATUS_SUCCESS;
 
 dropNbl:

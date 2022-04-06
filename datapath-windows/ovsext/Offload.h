@@ -35,12 +35,13 @@ NDIS_STATUS OvsValidateIPChecksum(PNET_BUFFER_LIST curNbl,
                                   POVS_PACKET_HDR_INFO hdrInfo);
 NDIS_STATUS OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl,
                                    BOOLEAN udpCsumZero);
-NDIS_STATUS OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
-                                    PNET_BUFFER curNb,
-                                    IPHdr *ipHdr,
-                                    UDPHdr *udpHdr,
-                                    UINT32 packetLength,
-                                    POVS_PACKET_HDR_INFO layers);
+NDIS_STATUS
+OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
+                        PNET_BUFFER curNb,
+                        EthHdr *ethHdr,
+                        UDPHdr *udpHdr,
+                        UINT32 packetLength,
+                        POVS_PACKET_HDR_INFO layers);
 
 ULONG OVSGetTcpMSS(PNET_BUFFER_LIST nbl);
 

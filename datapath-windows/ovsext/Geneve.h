@@ -87,7 +87,7 @@ VOID OvsCleanupGeneveTunnel(POVS_VPORT_ENTRY vport);
 
 NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
                            PNET_BUFFER_LIST curNbl,
-                           OvsIPv4TunnelKey *tunKey,
+                           OvsIPTunnelKey *tunKey,
                            POVS_SWITCH_CONTEXT switchContext,
                            POVS_PACKET_HDR_INFO layers,
                            PNET_BUFFER_LIST *newNbl,
@@ -95,7 +95,7 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
 
 NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
                            PNET_BUFFER_LIST curNbl,
-                           OvsIPv4TunnelKey *tunKey,
+                           OvsIPTunnelKey *tunKey,
                            PNET_BUFFER_LIST *newNbl);
 
 static __inline UINT32
@@ -111,6 +111,21 @@ OvsGetGeneveTunHdrMaxSize(VOID)
 {
     /* XXX: Can L2 include VLAN at all? */
     return OvsGetGeneveTunHdrMinSize() + TUN_OPT_MAX_LEN;
+}
+
+static __inline UINT32
+OvsGetGeneveIPv6TunHdrMinSize(VOID)
+{
+    /* XXX: Can L2 include VLAN at all? */
+    return sizeof (EthHdr) + sizeof (IPv6Hdr) + sizeof (UDPHdr) +
+           sizeof (GeneveHdr);
+}
+
+static __inline UINT32
+OvsGetGeneveIPv6TunHdrMaxSize(VOID)
+{
+    /* XXX: Can L2 include VLAN at all? */
+    return OvsGetGeneveIPv6TunHdrMinSize() + TUN_OPT_MAX_LEN;
 }
 
 static __inline UINT32
