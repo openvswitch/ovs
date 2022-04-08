@@ -1,5 +1,16 @@
 v2.13.7 - xx xxx xxxx
 ---------------------
+   - libopenvswitch API change:
+     * To fix the Undefined Behavior issue causing the compiler to incorrectly
+       optimize important parts of code, container iteration macros (e.g.,
+       LIST_FOR_EACH) have been re-implemented in a UB-safe way.
+     * Backwards compatibility has mostly been preserved, however the
+       user-provided pointer is now set to NULL after the loop (unless it
+       exited via "break;")
+     * Users of libopenvswitch will need to double-check the use of such loop
+       macros before compiling with a new version.
+     * Since the change is limited to the definitions within the headers, the
+       ABI is not affected.
 
 v2.13.6 - 17 Dec 2021
 ---------------------
