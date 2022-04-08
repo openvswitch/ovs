@@ -1,3 +1,9 @@
+openvswitch (2.16.4-1) unstable; urgency=low
+   [ Open vSwitch team ]
+   * New upstream version
+
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 08 Apr 2022 14:57:43 +0200
+
 openvswitch (2.16.3-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
