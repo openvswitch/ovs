@@ -1,5 +1,6 @@
-v2.13.7 - xx xxx xxxx
+v2.13.7 - 08 Apr 2022
 ---------------------
+   - Bug fixes
    - libopenvswitch API change:
      * To fix the Undefined Behavior issue causing the compiler to incorrectly
        optimize important parts of code, container iteration macros (e.g.,
