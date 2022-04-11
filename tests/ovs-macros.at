@@ -216,6 +216,11 @@ ovs_cleanup() {
         cat asan.*
         AT_FAIL_IF([:])
     fi
+    if test "$(echo ubsan.*)" != 'ubsan.*'; then
+        echo "Undefined Behavior Sanitizer reported errors in:" ubsan.*
+        cat ubsan.*
+        AT_FAIL_IF([:])
+    fi
 }
 
 ovs_wait () {

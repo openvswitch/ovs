@@ -292,6 +292,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
 
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+
 # Start ovsdb-server, initially with one db.
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
@@ -326,6 +330,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 
 # Start ovsdb-server, initially with one db.
 ordinal_schema > schema
@@ -477,6 +485,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
 
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
@@ -511,6 +523,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
