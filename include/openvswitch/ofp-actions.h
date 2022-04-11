@@ -549,7 +549,8 @@ struct ofpact_set_field {
         const struct mf_field *field;
     );
     union mf_value value[];  /* Significant value bytes followed by
-                              * significant mask bytes. */
+                              * significant mask bytes aligned at
+                              * OFPACT_ALIGNTO bytes. */
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
                   % OFPACT_ALIGNTO == 0);
@@ -557,9 +558,10 @@ BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
                   == sizeof(struct ofpact_set_field));
 
 /* Use macro to not have to deal with constness. */
-#define ofpact_set_field_mask(SF)                               \
-    ALIGNED_CAST(union mf_value *,                              \
-                 (uint8_t *)(SF)->value + (SF)->field->n_bytes)
+#define ofpact_set_field_mask(SF)                                           \
+    ALIGNED_CAST(union mf_value *,                                          \
+                 (uint8_t *)(SF)->value +                                   \
+                            ROUND_UP((SF)->field->n_bytes, OFPACT_ALIGNTO))
 
 /* OFPACT_PUSH_VLAN/MPLS/PBB
  *

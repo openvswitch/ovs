@@ -3258,7 +3258,7 @@ AT_SETUP([ovs-ofctl show-flows - Oversized flow])
 OVS_VSWITCHD_START
 
 printf " priority=90,icmp,reg15=0x8005,metadata=0x1,nw_dst=11.0.0.1,icmp_type=8,icmp_code=0 actions=" > flow.txt
-for i in `seq 1 1022`; do printf "set_field:0x399->reg13,set_field:0x$i->reg15,resubmit(,39),"; done >> flow.txt
+for i in `seq 1 2045`; do printf "dec_ttl,resubmit(,39),"; done >> flow.txt
 printf "resubmit(,39)\n" >> flow.txt
 
 AT_CHECK([ovs-ofctl -O OpenFlow15 add-flows br0 flow.txt])

@@ -3381,21 +3381,28 @@ check_SET_FIELD(struct ofpact_set_field *a,
     return 0;
 }
 
-/* Appends an OFPACT_SET_FIELD ofpact with enough space for the value and mask
- * for the 'field' to 'ofpacts' and returns it.  Fills in the value from
- * 'value', if non-NULL, and mask from 'mask' if non-NULL.  If 'value' is
- * non-NULL and 'mask' is NULL, an all-ones mask will be filled in. */
+/* Appends an OFPACT_SET_FIELD ofpact with enough space for the value and a
+ * properly aligned mask for the 'field' to 'ofpacts' and returns it.  Fills
+ * in the value from 'value', if non-NULL, and mask from 'mask' if non-NULL.
+ * If 'value' is non-NULL and 'mask' is NULL, an all-ones mask will be
+ * filled in. */
 struct ofpact_set_field *
 ofpact_put_set_field(struct ofpbuf *ofpacts, const struct mf_field *field,
                      const void *value, const void *mask)
 {
+    /* Ensure there's enough space for:
+     * - value (8-byte aligned)
+     * - mask  (8-byte aligned)
+     * - padding (to make the whole ofpact_set_field 8-byte aligned)
+     */
+    size_t total_size = 2 * ROUND_UP(field->n_bytes, OFPACT_ALIGNTO);
     struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
     sf->field = field;
 
     /* Fill in the value and mask if given, otherwise put zeroes so that the
      * caller may fill in the value and mask itself. */
     if (value) {
-        ofpbuf_put_uninit(ofpacts, 2 * field->n_bytes);
+        ofpbuf_put_uninit(ofpacts, total_size);
         sf = ofpacts->header;
         memcpy(sf->value, value, field->n_bytes);
         if (mask) {
@@ -3404,7 +3411,7 @@ ofpact_put_set_field(struct ofpbuf *ofpacts, const struct mf_field *field,
             memset(ofpact_set_field_mask(sf), 0xff, field->n_bytes);
         }
     } else {
-        ofpbuf_put_zeros(ofpacts, 2 * field->n_bytes);
+        ofpbuf_put_zeros(ofpacts, total_size);
         sf = ofpacts->header;
     }
     /* Update length. */
