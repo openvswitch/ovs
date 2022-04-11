@@ -218,7 +218,9 @@ struct ofpact *ofpact_next_flattened(const struct ofpact *);
 static inline struct ofpact *
 ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    return ALIGNED_CAST(struct ofpact *, (uint8_t *) ofpacts + ofpacts_len);
+    return ofpacts
+           ? ALIGNED_CAST(struct ofpact *, (uint8_t *) ofpacts + ofpacts_len)
+           : NULL;
 }
 
 static inline bool

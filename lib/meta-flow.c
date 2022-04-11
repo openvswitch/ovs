@@ -3442,7 +3442,9 @@ mf_get_vl_mff(const struct mf_field *mff,
               const struct vl_mff_map *vl_mff_map)
 {
     if (mff && mff->variable_len && vl_mff_map) {
-        return &mf_get_vl_mff__(mff->id, vl_mff_map)->mf;
+        struct vl_mf_field *vl_mff = mf_get_vl_mff__(mff->id, vl_mff_map);
+
+        return vl_mff ? &vl_mff->mf : NULL;
     }
 
     return NULL;

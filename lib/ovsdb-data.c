@@ -1957,6 +1957,19 @@ ovsdb_datum_add_unsafe(struct ovsdb_datum *datum,
     }
 }
 
+void
+ovsdb_datum_add_from_index_unsafe(struct ovsdb_datum *dst,
+                                  const struct ovsdb_datum *src,
+                                  size_t idx,
+                                  const struct ovsdb_type *type)
+{
+    const union ovsdb_atom *key = &src->keys[idx];
+    const union ovsdb_atom *value = type->value.type != OVSDB_TYPE_VOID
+                                    ? &src->values[idx]
+                                    : NULL;
+    ovsdb_datum_add_unsafe(dst, key, value, type, NULL);
+}
+
 /* Adds 'n' atoms starting from index 'start_idx' from 'src' to the end of
  * 'dst'.  'dst' should have enough memory allocated to hold the additional
  * 'n' atoms.  Atoms are not cloned, i.e. 'dst' will reference the same data.
@@ -2165,12 +2178,10 @@ ovsdb_datum_added_removed(struct ovsdb_datum *added,
         int c = ovsdb_atom_compare_3way(&old->keys[oi], &new->keys[ni],
                                         type->key.type);
         if (c < 0) {
-            ovsdb_datum_add_unsafe(removed, &old->keys[oi], &old->values[oi],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(removed, old, oi, type);
             oi++;
         } else if (c > 0) {
-            ovsdb_datum_add_unsafe(added, &new->keys[ni], &new->values[ni],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(added, new, ni, type);
             ni++;
         } else {
             if (type->value.type != OVSDB_TYPE_VOID &&
@@ -2186,13 +2197,11 @@ ovsdb_datum_added_removed(struct ovsdb_datum *added,
     }
 
     for (; oi < old->n; oi++) {
-        ovsdb_datum_add_unsafe(removed, &old->keys[oi], &old->values[oi],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(removed, old, oi, type);
     }
 
     for (; ni < new->n; ni++) {
-        ovsdb_datum_add_unsafe(added, &new->keys[ni], &new->values[ni],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(added, new, ni, type);
     }
 }
 
@@ -2228,12 +2237,10 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
         int c = ovsdb_atom_compare_3way(&old->keys[oi], &new->keys[ni],
                                         type->key.type);
         if (c < 0) {
-            ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(diff, old, oi, type);
             oi++;
         } else if (c > 0) {
-            ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(diff, new, ni, type);
             ni++;
         } else {
             if (type->value.type != OVSDB_TYPE_VOID &&
@@ -2247,13 +2254,11 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
     }
 
     for (; oi < old->n; oi++) {
-        ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(diff, old, oi, type);
     }
 
     for (; ni < new->n; ni++) {
-        ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(diff, new, ni, type);
     }
 }
 

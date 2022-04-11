@@ -71,7 +71,7 @@ tnl_port_cast(const struct cls_rule *cr)
 {
     BUILD_ASSERT_DECL(offsetof(struct tnl_port_in, cr) == 0);
 
-    return CONTAINER_OF(cr, struct tnl_port_in, cr);
+    return cr ? CONTAINER_OF(cr, struct tnl_port_in, cr) : NULL;
 }
 
 static void

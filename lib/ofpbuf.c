@@ -436,6 +436,10 @@ ofpbuf_reserve(struct ofpbuf *b, size_t size)
 void *
 ofpbuf_push_uninit(struct ofpbuf *b, size_t size)
 {
+    if (!size) {
+        return b->data;
+    }
+
     ofpbuf_prealloc_headroom(b, size);
     b->data = (char*)b->data - size;
     b->size += size;
