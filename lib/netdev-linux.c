@@ -6227,7 +6227,14 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     if (ofpbuf_try_pull(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg))) {
         const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS64);
         if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats64)) {
-            netdev_stats_from_rtnl_link_stats64(stats, nl_attr_get(a));
+            const struct rtnl_link_stats64 *lstats = nl_attr_get(a);
+            struct rtnl_link_stats64 aligned_lstats;
+
+            if (!IS_PTR_ALIGNED(lstats)) {
+                memcpy(&aligned_lstats, lstats, sizeof aligned_lstats);
+                lstats = &aligned_lstats;
+            }
+            netdev_stats_from_rtnl_link_stats64(stats, lstats);
             error = 0;
         } else {
             a = nl_attr_find(reply, 0, IFLA_STATS);
