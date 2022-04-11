@@ -55,6 +55,9 @@ set_bit128(ovs_u128 *values, int bit, int n_bits)
 static uint64_t
 get_range128(ovs_u128 *value, int ofs, uint64_t mask)
 {
+    if (ofs == 0) {
+        return value->u64.lo & mask;
+    }
     return ((ofs < 64 ? (value->u64.lo >> ofs) : 0) & mask)
         | ((ofs <= 64 ? (value->u64.hi << (64 - ofs)) : (value->u64.hi >> (ofs - 64)) & mask));
 }
