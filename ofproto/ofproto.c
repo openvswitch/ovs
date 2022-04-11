@@ -8963,7 +8963,7 @@ eviction_group_hash_rule(struct rule *rule)
     hash = table->eviction_group_id_basis;
     miniflow_expand(rule->cr.match.flow, &flow);
     for (sf = table->eviction_fields;
-         sf < &table->eviction_fields[table->n_eviction_fields];
+         sf && sf < &table->eviction_fields[table->n_eviction_fields];
          sf++)
     {
         if (mf_are_prereqs_ok(sf->field, &flow, NULL)) {

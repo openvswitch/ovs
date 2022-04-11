@@ -280,6 +280,10 @@ void ovsdb_datum_add_unsafe(struct ovsdb_datum *,
                             const union ovsdb_atom *value,
                             const struct ovsdb_type *,
                             const union ovsdb_atom *range_end_atom);
+void ovsdb_datum_add_from_index_unsafe(struct ovsdb_datum *dst,
+                                       const struct ovsdb_datum *src,
+                                       size_t idx,
+                                       const struct ovsdb_type *type);
 
 /* Transactions with named-uuid row names. */
 struct json *ovsdb_datum_to_json_with_row_names(const struct ovsdb_datum *,

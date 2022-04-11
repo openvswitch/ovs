@@ -312,7 +312,9 @@ sset_at_position(const struct sset *set, struct sset_position *pos)
     struct hmap_node *hmap_node;
 
     hmap_node = hmap_at_position(&set->map, &pos->pos);
-    return SSET_NODE_FROM_HMAP_NODE(hmap_node);
+    return hmap_node
+           ? SSET_NODE_FROM_HMAP_NODE(hmap_node)
+           : NULL;
 }
 
 /* Replaces 'a' by the intersection of 'a' and 'b'.  That is, removes from 'a'

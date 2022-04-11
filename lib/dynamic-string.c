@@ -152,7 +152,10 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
 
     va_copy(args, args_);
     available = ds->string ? ds->allocated - ds->length + 1 : 0;
-    needed = vsnprintf(&ds->string[ds->length], available, format, args);
+    needed = vsnprintf(ds->string
+                       ? &ds->string[ds->length]
+                       : NULL,
+                       available, format, args);
     va_end(args);
 
     if (needed < available) {
@@ -162,7 +165,8 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
 
         va_copy(args, args_);
         available = ds->allocated - ds->length + 1;
-        needed = vsnprintf(&ds->string[ds->length], available, format, args);
+        needed = vsnprintf(&ds->string[ds->length],
+                           available, format, args);
         va_end(args);
 
         ovs_assert(needed < available);
