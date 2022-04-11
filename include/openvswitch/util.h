@@ -429,6 +429,9 @@ is_pow2(uintmax_t x)
  * segfault, so it is important to be aware of correct alignment. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
 
+#define IS_PTR_ALIGNED(OBJ) \
+    (!(OBJ) || (uintptr_t) (OBJ) % __alignof__(OVS_TYPEOF(OBJ)) == 0)
+
 #ifdef __cplusplus
 }
 #endif
