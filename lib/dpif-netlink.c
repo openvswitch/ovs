@@ -85,7 +85,7 @@ enum { MAX_PORTS = USHRT_MAX };
 #define EPOLLEXCLUSIVE (1u << 28)
 #endif
 
-#define OVS_DP_F_UNSUPPORTED (1 << 31);
+#define OVS_DP_F_UNSUPPORTED (1u << 31);
 
 /* This PID is not used by the kernel datapath when using dispatch per CPU,
  * but it is required to be set (not zero). */

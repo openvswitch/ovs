@@ -43,17 +43,16 @@ check_log_2_floor(uint32_t x, int n)
 static void
 test_log_2_floor(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
-    int n;
-
-    for (n = 0; n < 32; n++) {
+    for (uint32_t n = 0; n < 32; n++) {
         /* Check minimum x such that f(x) == n. */
-        check_log_2_floor(1 << n, n);
+        check_log_2_floor(UINT32_C(1) << n, n);
 
         /* Check maximum x such that f(x) == n. */
-        check_log_2_floor((1 << n) | ((1 << n) - 1), n);
+        check_log_2_floor((UINT32_C(1) << n) | ((UINT32_C(1) << n) - 1), n);
 
         /* Check a random value in the middle. */
-        check_log_2_floor((random_uint32() & ((1 << n) - 1)) | (1 << n), n);
+        check_log_2_floor((random_uint32() & ((UINT32_C(1) << n) - 1))
+                          | (UINT32_C(1) << n), n);
     }
 
     /* log_2_floor(0) is undefined, so don't check it. */
@@ -86,7 +85,7 @@ test_ctz(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
     for (n = 0; n < 32; n++) {
         /* Check minimum x such that f(x) == n. */
-        check_ctz32(1 << n, n);
+        check_ctz32(UINT32_C(1) << n, n);
 
         /* Check maximum x such that f(x) == n. */
         check_ctz32(UINT32_MAX << n, n);

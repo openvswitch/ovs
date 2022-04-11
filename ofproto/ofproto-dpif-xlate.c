@@ -5653,7 +5653,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
 
     /* Scale the probability from 16-bit to 32-bit while representing
      * the same percentage. */
-    uint32_t probability = (os->probability << 16) | os->probability;
+    uint32_t probability =
+        ((uint32_t) os->probability << 16) | os->probability;
 
     /* If ofp_port in flow sample action is equel to ofp_port,
      * this sample action is a input port action. */
