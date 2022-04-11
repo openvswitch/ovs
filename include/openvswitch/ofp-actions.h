@@ -203,6 +203,7 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 /* Alignment. */
 #define OFPACT_ALIGNTO 8
 #define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
+#define OFPACT_IS_ALIGNED(ADDR) ((uintptr_t) (ADDR) % OFPACT_ALIGNTO == 0)
 #define OFPACT_PADDED_MEMBERS(MEMBERS) PADDED_MEMBERS(OFPACT_ALIGNTO, MEMBERS)
 
 /* Returns the ofpact following 'ofpact'. */

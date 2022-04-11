@@ -115,6 +115,24 @@ ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
     ofpbuf_use__(b, CONST_CAST(void *, data), size, size, OFPBUF_STACK);
 }
 
+/* Initializes 'b' as an ofpbuf whose data starts at 'data' and continues for
+ * 'size' bytes.  This is appropriate for an ofpbuf that will be mostly used to
+ * inspect existing data, however, if needed, data may be occasionally changed.
+ *
+ * The first time the data is changed the provided buffer will be copied into
+ * a malloc()'d buffer.  Thus, it is wise to call ofpbuf_uninit() on an ofpbuf
+ * initialized by this function, so that if it expanded into the heap, that
+ * memory is freed.
+ *
+ * 'base' should be appropriately aligned.  Using an array of uint32_t or
+ * uint64_t for the buffer is a reasonable way to ensure appropriate alignment
+ * for 32- or 64-bit data. */
+void
+ofpbuf_use_data(struct ofpbuf *b, const void *data, size_t size)
+{
+    ofpbuf_use__(b, CONST_CAST(void *, data), size, size, OFPBUF_STUB);
+}
+
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
  * bytes. */
 void
@@ -319,6 +337,27 @@ ofpbuf_trim(struct ofpbuf *b)
     if (b->source == OFPBUF_MALLOC
         && (ofpbuf_headroom(b) || ofpbuf_tailroom(b))) {
         ofpbuf_resize__(b, 0, 0);
+    }
+}
+
+/* Re-aligns the buffer data.  Relies on malloc() to ensure proper alignment.
+ *
+ * This function should not be called for buffers of type OFPBUF_STACK.
+ */
+void
+ofpbuf_align(struct ofpbuf *b)
+{
+    switch (b->source) {
+    case OFPBUF_MALLOC:
+    case OFPBUF_STUB:
+        /* Resizing 'b' always reallocates the buffer, ensuring proper
+         * alignment.
+         */
+        ofpbuf_resize__(b, 0, 0);
+        break;
+    case OFPBUF_STACK:
+        OVS_NOT_REACHED();
+        break;
     }
 }
 

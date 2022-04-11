@@ -111,6 +111,7 @@ void ofpbuf_use_ds(struct ofpbuf *, const struct ds *);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stub(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_const(struct ofpbuf *, const void *, size_t);
+void ofpbuf_use_data(struct ofpbuf *, const void *, size_t);
 
 void ofpbuf_init(struct ofpbuf *, size_t);
 void ofpbuf_uninit(struct ofpbuf *);
@@ -149,6 +150,7 @@ static inline size_t ofpbuf_msgsize(const struct ofpbuf *);
 void ofpbuf_prealloc_headroom(struct ofpbuf *, size_t);
 void ofpbuf_prealloc_tailroom(struct ofpbuf *, size_t);
 void ofpbuf_trim(struct ofpbuf *);
+void ofpbuf_align(struct ofpbuf *);
 void ofpbuf_padto(struct ofpbuf *, size_t);
 void ofpbuf_shift(struct ofpbuf *, int);
 
