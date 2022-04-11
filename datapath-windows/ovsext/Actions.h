@@ -133,4 +133,9 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                         UINT32 newAddr, UINT16 newPort,
                         BOOLEAN isSource, BOOLEAN isTx);
 
+NDIS_STATUS
+OvsUpdateAddressAndPortForIpv6(OvsForwardingContext *ovsFwdCtx,
+                               struct in6_addr newAddr, UINT16 newPort,
+                               BOOLEAN isSource, BOOLEAN isTx);
+
 #endif /* __ACTIONS_H_ */

@@ -161,3 +161,22 @@ OvsPerCpuDataCleanup()
 {
     OvsDeferredActionsCleanup();
 }
+
+NTSTATUS
+OvsIpv6StringToAddress(const char* ip6String, struct in6_addr *ipv6Addr)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    char *terminator = NULL;
+
+    status = RtlIpv6StringToAddressA(ip6String, &terminator, ipv6Addr);
+    return status;
+}
+
+char *
+OvsIpv6AddressToString(struct in6_addr ipv6Addr, char* ip6String)
+{
+    char *returnedIpv6Str = NULL;
+
+    returnedIpv6Str = RtlIpv6AddressToStringA((&ipv6Addr), ip6String);
+    return returnedIpv6Str;
+}

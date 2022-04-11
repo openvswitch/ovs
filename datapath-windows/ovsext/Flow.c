@@ -186,6 +186,10 @@ const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4] = {.type = NL_A_UNSPEC,
                                 .minLen = sizeof(struct ovs_key_ct_tuple_ipv4),
                                 .maxLen = sizeof(struct ovs_key_ct_tuple_ipv4),
+                                .optional = TRUE},
+    [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6] = {.type = NL_A_UNSPEC,
+                                .minLen = OVS_TUPLE_IPV6,
+                                .maxLen = OVS_TUPLE_IPV6,
                                 .optional = TRUE}
 };
 const UINT32 nlFlowKeyPolicyLen = ARRAY_SIZE(nlFlowKeyPolicy);
@@ -1580,6 +1584,13 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                        sizeof(struct ovs_key_ct_tuple_ipv4));
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]) {
+        const struct ovs_key_ct_tuple_ipv6 *tuple_ipv6;
+        tuple_ipv6 = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]);
+        NdisMoveMemory(&destKey->ct.tuple_ipv6, tuple_ipv6,
+                       sizeof(struct ovs_key_ct_tuple_ipv6));
+    }
+
     /* ===== L2 headers ===== */
     if (keyAttrs[OVS_KEY_ATTR_IN_PORT]) {
         destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
@@ -2170,6 +2181,13 @@ OvsGetFlowMetadata(OvsFlowKey *key,
                        sizeof(struct ovs_key_ct_tuple_ipv4));
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]) {
+        const struct ovs_key_ct_tuple_ipv6 *tuple_ipv6;
+        tuple_ipv6 = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]);
+        NdisMoveMemory(&key->ct.tuple_ipv6, tuple_ipv6,
+                       sizeof(struct ovs_key_ct_tuple_ipv6));
+    }
+
     return status;
 }
 
@@ -2292,6 +2310,7 @@ OvsExtractLayers(const NET_BUFFER_LIST *packet,
                     if (icmp) {
                         layers->l7Offset = layers->l4Offset + sizeof *icmp;
                     }
+                    layers->isIcmp = 1;
                 }
             }
         } else {
@@ -2651,6 +2670,8 @@ FlowEqual(OvsFlow *srcFlow,
                     sizeof(struct ovs_key_ct_labels)) &&
             !memcmp(&srcFlow->key.ct.tuple_ipv4, &dstKey->ct.tuple_ipv4,
                     sizeof(struct ovs_key_ct_tuple_ipv4)) &&
+            !memcmp(&srcFlow->key.ct.tuple_ipv6, &dstKey->ct.tuple_ipv6,
+                    sizeof(struct ovs_key_ct_tuple_ipv6)) &&
             FlowMemoryEqual((UINT64 *)((UINT8 *)&srcFlow->key + offset),
                             (UINT64 *) dstStart,
                             size));
@@ -2763,11 +2784,18 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
                                            0);
             *hash = OvsJhashWords((UINT32*)hash, 1, lblHash);
         }
-        if (key->ct.tuple_ipv4.ipv4_src) {
+        if (key->ct.tuple_ipv4.ipv4_proto) {
             UINT32 tupleHash = OvsJhashBytes(
                                 &key->ct.tuple_ipv4,
                                 sizeof(struct ovs_key_ct_tuple_ipv4),
                                 0);
+            *hash = OvsJhashWords((UINT32*)hash, 1, tupleHash);
+        }
+
+        if (key->ct.tuple_ipv6.ipv6_proto) {
+            UINT32 tupleHash = OvsJhashBytes(&key->ct.tuple_ipv6,
+                                             sizeof(struct ovs_key_ct_tuple_ipv6),
+                                             0);
             *hash = OvsJhashWords((UINT32*)hash, 1, tupleHash);
         }
     }
@@ -2945,7 +2973,9 @@ ReportFlowInfo(OvsFlow *flow,
     NdisMoveMemory(&info->key.ct.tuple_ipv4,
                    &flow->key.ct.tuple_ipv4,
                    sizeof(struct ovs_key_ct_tuple_ipv4));
-
+    NdisMoveMemory(&info->key.ct.tuple_ipv6,
+                   &flow->key.ct.tuple_ipv6,
+                   sizeof(struct ovs_key_ct_tuple_ipv6));
     return status;
 }
 
@@ -3337,6 +3367,13 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
         ct_tuple_ipv4 = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4]);
         if (!ct_tuple_ipv4) {
             OVS_LOG_ERROR("Invalid ct_tuple_ipv4.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else if (keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]) {
+        const struct ovs_key_ct_tuple_ipv6 *ct_tuple_ipv6;
+        ct_tuple_ipv6 = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]);
+        if (!ct_tuple_ipv6) {
+            OVS_LOG_ERROR("Invalid ct_tuple_ipv6.");
             status = STATUS_INVALID_PARAMETER;
         }
     } else {

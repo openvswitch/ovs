@@ -189,6 +189,13 @@ OvsCtSetZoneLimit(int zone, ULONG value) {
     NdisReleaseSpinLock(&ovsCtZoneLock);
 }
 
+static uint32_t
+OvsCtEndpointHashAdd(uint32_t hash, const struct ct_endpoint *ep)
+{
+    BUILD_ASSERT_DECL(sizeof *ep % 4 == 0);
+    return OvsJhashBytes((UINT32 *)ep, sizeof *ep, hash);
+}
+
 /*
  *----------------------------------------------------------------------------
  * OvsCtHashKey
@@ -199,8 +206,10 @@ UINT32
 OvsCtHashKey(const OVS_CT_KEY *key)
 {
     UINT32 hsrc, hdst, hash;
-    hsrc = key->src.addr.ipv4 | ntohl(key->src.port);
-    hdst = key->dst.addr.ipv4 | ntohl(key->dst.port);
+    hsrc = ntohl(key->src.port);
+    hdst = ntohl(key->dst.port);
+    hsrc = OvsCtEndpointHashAdd(hsrc, &key->src);
+    hdst = OvsCtEndpointHashAdd(hdst, &key->dst);
     hash = hsrc ^ hdst; /* TO identify reverse traffic */
     hash = hash | (key->zone + key->nw_proto);
     hash = OvsJhashWords((uint32_t*) &hash, 1, hash);
@@ -341,6 +350,26 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         }
         break;
     }
+    case IPPROTO_ICMPV6:
+    {
+        ICMPHdr storage;
+        const ICMPHdr *icmp;
+        icmp = OvsGetIcmp(curNbl, layers->l4Offset, &storage);
+        if (!OvsConntrackValidateIcmp6Packet(icmp)) {
+            if(icmp) {
+                OVS_LOG_TRACE("Invalid ICMP packet detected, icmp->type %u",
+                              icmp->type);
+            }
+            state = OVS_CS_F_INVALID;
+            break;
+        }
+
+        if (commit) {
+            entry = OvsConntrackCreateIcmpEntry(currentTime);
+        }
+        break;
+    }
+
     case IPPROTO_ICMP:
     {
         ICMPHdr storage;
@@ -435,6 +464,15 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
         NdisReleaseSpinLock(&(entry->lock));
         break;
     }
+
+    case IPPROTO_ICMPV6:
+    {
+        NdisAcquireSpinLock(&(entry->lock));
+        status = OvsConntrackUpdateIcmpEntry(entry, reply, now);
+        NdisReleaseSpinLock(&(entry->lock));
+        break;
+    }
+
     case IPPROTO_UDP:
     {
         NdisAcquireSpinLock(&(entry->lock));
@@ -528,6 +566,23 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
         }
         return NDIS_STATUS_NOT_SUPPORTED;
     case ETH_TYPE_IPV6:
+        if (key->ipv6Key.nwProto == IPPROTO_ICMPV6
+            || key->ipv6Key.nwProto == IPPROTO_TCP
+            || key->ipv6Key.nwProto == IPPROTO_UDP) {
+            /** TODO fragment **/
+
+            /** Extract flow key from packet and assign it to
+             * returned parameter. **/
+            status =  OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                     &newFlowKey, &fwdCtx->layers,
+                                     !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ? &(fwdCtx->tunKey) : NULL);
+            if (status != NDIS_STATUS_SUCCESS) {
+                OVS_LOG_ERROR("Extract flow for ipv6 failed Nbl %p", fwdCtx->curNbl);
+                return status;
+            }
+            *key = newFlowKey;
+            return NDIS_STATUS_SUCCESS;
+        }
         return NDIS_STATUS_NOT_SUPPORTED;
     }
 
@@ -606,6 +661,54 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     return found;
 }
 
+const TCPHdr*
+OvsGetTcpHeader(PNET_BUFFER_LIST nbl,
+                OVS_PACKET_HDR_INFO *layers,
+                VOID *storage,
+                UINT32 *tcpPayloadLen)
+{
+    IPHdr *ipHdr;
+    IPv6Hdr *ipv6Hdr;
+    TCPHdr *tcp;
+    VOID *dest = storage;
+    uint16_t ipv6ExtLength = 0;
+
+    if (layers->isIPv6) {
+        ipv6Hdr = NdisGetDataBuffer(NET_BUFFER_LIST_FIRST_NB(nbl),
+                                    layers->l4Offset + sizeof(TCPHdr),
+                                    NULL, 1, 0);
+        if (ipv6Hdr == NULL) {
+            return NULL;
+        }
+
+        tcp = (TCPHdr *)((PCHAR)ipv6Hdr + layers->l4Offset);
+        ipv6Hdr = (IPv6Hdr *)((PCHAR)ipv6Hdr + layers->l3Offset);
+        if (tcp->doff * 4 >= sizeof *tcp) {
+            NdisMoveMemory(dest, tcp, sizeof(TCPHdr));
+            ipv6ExtLength = layers->l4Offset - layers->l3Offset - sizeof(IPv6Hdr);
+            *tcpPayloadLen = (ntohs(ipv6Hdr->payload_len) - ipv6ExtLength - TCP_HDR_LEN(tcp));
+            return storage;
+        }
+    } else {
+        ipHdr = NdisGetDataBuffer(NET_BUFFER_LIST_FIRST_NB(nbl),
+                                  layers->l4Offset + sizeof(TCPHdr),
+                                  NULL, 1 /*no align*/, 0);
+        if (ipHdr == NULL) {
+            return NULL;
+        }
+
+        ipHdr = (IPHdr *)((PCHAR)ipHdr + layers->l3Offset);
+        tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
+
+        if (tcp->doff * 4 >= sizeof *tcp) {
+            NdisMoveMemory(dest, tcp, sizeof(TCPHdr));
+            *tcpPayloadLen = TCP_DATA_LENGTH(ipHdr, tcp);
+            return storage;
+        }
+    }
+    return NULL;
+}
+
 static UINT8
 OvsReverseIcmpType(UINT8 type)
 {
@@ -622,6 +725,10 @@ OvsReverseIcmpType(UINT8 type)
         return ICMP4_INFO_REPLY;
     case ICMP4_INFO_REPLY:
         return ICMP4_INFO_REQUEST;
+    case ICMP6_ECHO_REQUEST:
+        return ICMP6_ECHO_REPLY;
+    case ICMP6_ECHO_REPLY:
+        return ICMP6_ECHO_REQUEST;
     default:
         return 0;
     }
@@ -692,8 +799,8 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
                     return NDIS_STATUS_INVALID_PACKET;
                 }
                 /* Separate ICMP connection: identified using id */
-                ctx->key.dst.icmp_id = icmp->fields.echo.id;
-                ctx->key.src.icmp_id = icmp->fields.echo.id;
+                ctx->key.dst.icmp_id = ntohs(icmp->fields.echo.id);
+                ctx->key.src.icmp_id = ntohs(icmp->fields.echo.id);
                 ctx->key.src.icmp_type = icmp->type;
                 ctx->key.dst.icmp_type = OvsReverseIcmpType(icmp->type);
                 break;
@@ -702,7 +809,6 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
             case ICMP4_PARAM_PROB:
             case ICMP4_SOURCE_QUENCH:
             case ICMP4_REDIRECT: {
-                /* XXX Handle inner packet */
                 ctx->related = TRUE;
                 break;
             }
@@ -717,7 +823,53 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
 
         ctx->key.src.port = flowKey->ipv6Key.l4.tpSrc;
         ctx->key.dst.port = flowKey->ipv6Key.l4.tpDst;
-        /* XXX Handle ICMPv6 errors*/
+        if (flowKey->ipv6Key.nwProto == IPPROTO_ICMPV6) {
+            ICMPHdr icmpStorage;
+            const ICMPHdr *icmp;
+            icmp = OvsGetIcmp(curNbl, l4Offset, &icmpStorage);
+            ASSERT(icmp);
+
+            switch (icmp->type) {
+                case ICMP6_ECHO_REQUEST:
+                case ICMP6_ECHO_REPLY: {
+                    ctx->key.dst.icmp_id = ntohs(icmp->fields.echo.id);
+                    ctx->key.src.icmp_id = ntohs(icmp->fields.echo.id);
+                    ctx->key.src.icmp_type = icmp->type;
+                    ctx->key.dst.icmp_type = OvsReverseIcmpType(icmp->type);
+                    break;
+                }
+                case ICMP6_DST_UNREACH:
+                case ICMP6_TIME_EXCEEDED:
+                case ICMP6_PARAM_PROB:
+                case ICMP6_PACKET_TOO_BIG: {
+                    Ipv6Key ipv6Key;
+                    OVS_PACKET_HDR_INFO layers;
+                    OvsExtractLayers(curNbl, &layers);
+                    layers.l3Offset = layers.l7Offset;
+                    NDIS_STATUS status = OvsParseIPv6(curNbl, &ipv6Key, &layers);
+                    if (status != NDIS_STATUS_SUCCESS) {
+                        return NDIS_STATUS_INVALID_PACKET;
+                    }
+                    ctx->key.src.addr.ipv6 = ipv6Key.ipv6Src;
+                    ctx->key.dst.addr.ipv6 = ipv6Key.ipv6Dst;
+                    ctx->key.nw_proto = ipv6Key.nwProto;
+                    if (ipv6Key.nwProto == SOCKET_IPPROTO_TCP) {
+                        OvsParseTcp(curNbl, &(ipv6Key.l4), &layers);
+                    } else if (ipv6Key.nwProto == SOCKET_IPPROTO_UDP) {
+                        OvsParseUdp(curNbl, &(ipv6Key.l4), &layers);
+                    } else if (ipv6Key.nwProto == SOCKET_IPPROTO_SCTP) {
+                        OvsParseSctp(curNbl, &ipv6Key.l4, &layers);
+                    }
+                    ctx->key.src.port = ipv6Key.l4.tpSrc;
+                    ctx->key.dst.port = ipv6Key.l4.tpDst;
+                    OvsCtKeyReverse(&ctx->key);
+                    ctx->related = TRUE;
+                    break;
+                }
+                default:
+                    ctx->related = FALSE;
+            }
+        }
     } else {
         return NDIS_STATUS_INVALID_PACKET;
     }
@@ -742,6 +894,13 @@ OvsDetectFtpPacket(OvsFlowKey *key) {
     return (key->ipKey.nwProto == IPPROTO_TCP &&
             (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP ||
             ntohs(key->ipKey.l4.tpSrc) == IPPORT_FTP));
+}
+
+static __inline BOOLEAN
+OvsDetectFtp6Packet(OvsFlowKey *key) {
+    return (key->ipv6Key.nwProto == IPPROTO_TCP &&
+            (ntohs(key->ipv6Key.l4.tpDst) == IPPORT_FTP ||
+             ntohs(key->ipv6Key.l4.tpSrc) == IPPORT_FTP));
 }
 
 /*
@@ -777,11 +936,22 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
     } else {
         CT_UPDATE_RES result;
         UINT32 bucketIdx;
-        result = OvsCtUpdateEntry(entry, curNbl, key->ipKey.nwProto, layers,
-                                  ctx->reply, currentTime);
+
+        if (layers->isIPv6) {
+            result = OvsCtUpdateEntry(entry, curNbl, key->ipv6Key.nwProto, layers,
+                                      ctx->reply, currentTime);
+        } else {
+            result = OvsCtUpdateEntry(entry, curNbl, key->ipKey.nwProto, layers,
+                                      ctx->reply, currentTime);
+        }
+
         switch (result) {
         case CT_UPDATE_VALID:
             state |= OVS_CS_F_ESTABLISHED;
+            /** when the ct state is established, at least
+             * request/reply two packets go through,
+             * so the ct_state shouldn't contain new.**/
+            state &= ~OVS_CS_F_NEW;
             if (ctx->reply) {
                 state |= OVS_CS_F_REPLY_DIR;
             }
@@ -796,9 +966,17 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
             OvsCtEntryDelete(ctx->entry, TRUE);
             NdisReleaseRWLock(ovsCtBucketLock[bucketIdx], &lockStateTable);
             ctx->entry = NULL;
-            entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto, layers,
-                                     ctx, key, natInfo, commit, currentTime,
-                                     entryCreated);
+
+            if (layers->isIPv6) {
+                entry = OvsCtEntryCreate(fwdCtx, key->ipv6Key.nwProto, layers,
+                                         ctx, key, natInfo, commit, currentTime,
+                                         entryCreated);
+            } else {
+                entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto, layers,
+                                         ctx, key, natInfo, commit, currentTime,
+                                         entryCreated);
+            }
+
             if (!entry) {
                 return NULL;
             }
@@ -810,7 +988,8 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
     }
     if (entry) {
         NdisAcquireSpinLock(&(entry->lock));
-        if (key->ipKey.nwProto == IPPROTO_TCP) {
+        if ((layers->isIPv6 && key->ipv6Key.nwProto == IPPROTO_TCP) ||
+            (!(layers->isIPv6) && key->ipKey.nwProto == IPPROTO_TCP)) {
             /* Update the related bit if there is a parent */
             if (entry->parent) {
                 state |= OVS_CS_F_RELATED;
@@ -938,6 +1117,29 @@ OvsCtUpdateTuple(OvsFlowKey *key, OVS_CT_KEY *ctKey)
                                     htons(ctKey->src.icmp_code);
 }
 
+/*
+ * --------------------------------------------------------------------------
+ *  OvsCtUpdateTupleV6 name --
+ *     Update origin tuple for ipv6 packet.
+ * --------------------------------------------------------------------------
+ */
+static __inline void
+OvsCtUpdateTupleV6(OvsFlowKey *key, OVS_CT_KEY *ctKey)
+{
+    RtlCopyMemory(&key->ct.tuple_ipv6.ipv6_src, &ctKey->src.addr.ipv6_aligned, sizeof(key->ct.tuple_ipv6.ipv6_src));
+    RtlCopyMemory(&key->ct.tuple_ipv6.ipv6_dst, &ctKey->dst.addr.ipv6_aligned, sizeof(key->ct.tuple_ipv6.ipv6_dst));
+    key->ct.tuple_ipv6.ipv6_proto = ctKey->nw_proto;
+
+    /* Orig tuple Port is overloaded to take in ICMP-Type & Code */
+    /* This mimics the behavior in lib/conntrack.c*/
+    key->ct.tuple_ipv6.src_port = ctKey->nw_proto != IPPROTO_ICMPV6 ?
+                                  ctKey->src.port :
+                                  htons(ctKey->src.icmp_type);
+    key->ct.tuple_ipv6.dst_port = ctKey->nw_proto != IPPROTO_ICMPV6 ?
+                                  ctKey->dst.port :
+                                  htons(ctKey->src.icmp_code);
+}
+
 static __inline NDIS_STATUS
 OvsCtExecute_(OvsForwardingContext *fwdCtx,
               OvsFlowKey *key,
@@ -954,6 +1156,8 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     BOOLEAN triggerUpdateEvent = FALSE;
     BOOLEAN entryCreated = FALSE;
+    BOOLEAN isFtpPacket = FALSE;
+    BOOLEAN isFtpRequestDirection = FALSE;
     POVS_CT_ENTRY entry = NULL;
     POVS_CT_ENTRY parent = NULL;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
@@ -1004,10 +1208,17 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
             return NDIS_STATUS_RESOURCES;
         }
         /* If no matching entry was found, create one and add New state */
-        entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto,
-                                 layers, &ctx,
-                                 key, natInfo, commit, currentTime,
-                                 &entryCreated);
+        if (key->l2.dlType == htons(ETH_TYPE_IPV6)) {
+            entry = OvsCtEntryCreate(fwdCtx, key->ipv6Key.nwProto,
+                                     layers, &ctx,
+                                     key, natInfo, commit, currentTime,
+                                     &entryCreated);
+        } else {
+            entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto,
+                                     layers, &ctx,
+                                     key, natInfo, commit, currentTime,
+                                     &entryCreated);
+        }
     }
 
     if (entry == NULL) {
@@ -1030,10 +1241,22 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
 
     OvsCtSetMarkLabel(key, entry, mark, labels, &triggerUpdateEvent);
 
-    if (OvsDetectFtpPacket(key)) {
+    if (layers->isIPv6) {
+        isFtpPacket = OvsDetectFtp6Packet(key);
+        if (ntohs(key->ipv6Key.l4.tpDst) == IPPORT_FTP) {
+            isFtpRequestDirection = TRUE;
+        }
+    } else {
+        isFtpPacket = OvsDetectFtpPacket(key);
+        if (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP) {
+            isFtpRequestDirection = TRUE;
+        }
+    }
+
+    if (isFtpPacket) {
         /* FTP parser will always be loaded */
         status = OvsCtHandleFtp(curNbl, key, layers, currentTime, entry,
-                                (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP));
+                                isFtpRequestDirection);
         if (status != NDIS_STATUS_SUCCESS) {
             OVS_LOG_ERROR("Error while parsing the FTP packet");
         }
@@ -1063,6 +1286,14 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
             OVS_RELEASE_SPIN_LOCK(&(parent->lock), irql);
         } else {
             OvsCtUpdateTuple(key, &entry->key);
+        }
+    } else if (entry->key.dl_type == ntohs(ETH_TYPE_IPV6)) {
+        if (parent != NULL) {
+            OVS_ACQUIRE_SPIN_LOCK(&(parent->lock), irql);
+            OvsCtUpdateTupleV6(key, &parent->key);
+            OVS_RELEASE_SPIN_LOCK(&(parent->lock), irql);
+        } else {
+            OvsCtUpdateTupleV6(key, &entry->key);
         }
     }
 
@@ -1400,13 +1631,15 @@ MapNlToCtTuple(POVS_MESSAGE msgIn, PNL_ATTR ctAttr,
     PNL_ATTR ctTupleAttrs[__CTA_MAX];
     UINT32 attrOffset;
     static const NL_POLICY ctTuplePolicy[] = {
-        [CTA_TUPLE_IP] = {.type = NL_A_NESTED, .optional = FALSE },
-        [CTA_TUPLE_PROTO] = {.type = NL_A_NESTED, .optional = FALSE},
+        [CTA_TUPLE_IP] = { .type = NL_A_NESTED, .optional = FALSE },
+        [CTA_TUPLE_PROTO] = { .type = NL_A_NESTED, .optional = FALSE},
     };
 
     static const NL_POLICY ctTupleIpPolicy[] = {
         [CTA_IP_V4_SRC] = { .type = NL_A_BE32, .optional = TRUE },
         [CTA_IP_V4_DST] = { .type = NL_A_BE32, .optional = TRUE },
+        [CTA_IP_V6_SRC] = { .type = NL_A_BE32,.optional = TRUE },
+        [CTA_IP_V6_DST] = { .type = NL_A_BE32,.optional = TRUE },
     };
 
     static const NL_POLICY ctTupleProtoPolicy[] = {
@@ -1415,6 +1648,9 @@ MapNlToCtTuple(POVS_MESSAGE msgIn, PNL_ATTR ctAttr,
         [CTA_PROTO_DST_PORT] = { .type = NL_A_BE16, .optional = TRUE },
         [CTA_PROTO_ICMP_TYPE] = { .type = NL_A_U8, .optional = TRUE },
         [CTA_PROTO_ICMP_CODE] = { .type = NL_A_U8, .optional = TRUE },
+        [CTA_PROTO_ICMPV6_ID] = { .type = NL_A_BE16,.optional = TRUE },
+        [CTA_PROTO_ICMPV6_TYPE] = { .type = NL_A_U8,.optional = TRUE },
+        [CTA_PROTO_ICMPV6_CODE] = { .type = NL_A_U8,.optional = TRUE },
     };
 
     if (!ctAttr) {
@@ -1467,8 +1703,11 @@ MapNlToCtTuple(POVS_MESSAGE msgIn, PNL_ATTR ctAttr,
                         ctTupleProtoAttrs[CTA_PROTO_ICMP_CODE] ) {
                 ct_tuple->src_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMP_TYPE]);
                 ct_tuple->dst_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMP_CODE]);
+            } else if (ctTupleProtoAttrs[CTA_PROTO_ICMPV6_TYPE] &&
+                       ctTupleProtoAttrs[CTA_PROTO_ICMPV6_CODE] ) {
+                ct_tuple->src_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMPV6_TYPE]);
+                ct_tuple->dst_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMPV6_CODE]);
             }
-
         }
     }
 
@@ -1551,15 +1790,15 @@ MapProtoTupleToNl(PNL_BUFFER nlBuf, OVS_CT_KEY *key)
                 goto done;
             }
         } else if (key->nw_proto == IPPROTO_ICMPV6) {
-            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMPV6_ID, 0)) {
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMPV6_ID, htons(key->src.icmp_id))) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }
-            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_TYPE, 0)) {
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_TYPE, key->src.icmp_type)) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }
-            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_CODE, 0)) {
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_CODE, key->src.icmp_code)) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }

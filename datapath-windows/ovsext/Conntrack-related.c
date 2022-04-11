@@ -38,10 +38,22 @@ static __inline BOOLEAN
 OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
 {
     /* FTP PASV - Client initiates the connection from unknown port */
-    if ((incomingKey.dst.addr.ipv4 == entryKey.src.addr.ipv4) &&
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV4)) &&
+        (incomingKey.dst.addr.ipv4 == entryKey.src.addr.ipv4) &&
         (incomingKey.dst.port == entryKey.src.port) &&
         (incomingKey.src.addr.ipv4 == entryKey.dst.addr.ipv4) &&
-        (incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.nw_proto == entryKey.nw_proto)) {
+        return TRUE;
+    }
+
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV6)) &&
+        !memcmp(&(incomingKey.dst.addr.ipv6), &(entryKey.src.addr.ipv6),
+               sizeof(incomingKey.dst.addr.ipv6)) &&
+        (incomingKey.dst.port == entryKey.src.port) &&
+        !memcmp(&(incomingKey.src.addr.ipv6), &(entryKey.dst.addr.ipv6),
+               sizeof(incomingKey.src.addr.ipv6)) &&
         (incomingKey.nw_proto == entryKey.nw_proto)) {
         return TRUE;
     }
@@ -51,10 +63,22 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
      * except 20. In this case, the incomingKey's src port is different with
      * entryKey's src port.
      */
-    if ((incomingKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV4)) &&
+        (incomingKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
         (incomingKey.dst.addr.ipv4 == entryKey.dst.addr.ipv4) &&
         (incomingKey.dst.port == entryKey.dst.port) &&
-        (incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.nw_proto == entryKey.nw_proto)) {
+        return TRUE;
+    }
+
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV6)) &&
+        !memcmp(&(incomingKey.src.addr.ipv6), &(entryKey.src.addr.ipv6),
+               sizeof(incomingKey.src.addr.ipv6)) &&
+        !memcmp(&(incomingKey.dst.addr.ipv6), &(entryKey.dst.addr.ipv6),
+               sizeof(incomingKey.src.addr.ipv6)) &&
+        (incomingKey.dst.port == entryKey.dst.port) &&
         (incomingKey.nw_proto == entryKey.nw_proto)) {
         return TRUE;
     }
@@ -110,8 +134,8 @@ OvsCtRelatedEntryDelete(POVS_CT_REL_ENTRY entry)
 NDIS_STATUS
 OvsCtRelatedEntryCreate(UINT8 ipProto,
                         UINT16 dl_type,
-                        UINT32 serverIp,
-                        UINT32 clientIp,
+                        struct ct_addr serverIp,
+                        struct ct_addr clientIp,
                         UINT16 serverPort,
                         UINT16 clientPort,
                         UINT64 currentTime,
@@ -127,13 +151,18 @@ OvsCtRelatedEntryCreate(UINT8 ipProto,
 
     RtlZeroMemory(entry, sizeof(struct OVS_CT_REL_ENTRY));
     entry->expiration = currentTime + (CT_INTERVAL_SEC * 60);
-    entry->key.src.addr.ipv4 = serverIp;
-    entry->key.dst.addr.ipv4 = clientIp;
     entry->key.nw_proto = ipProto;
     entry->key.dl_type = dl_type;
     entry->key.src.port = serverPort;
     entry->key.dst.port = clientPort;
     entry->parent = parent;
+    if (dl_type == htons(ETH_TYPE_IPV6)) {
+        entry->key.src.addr.ipv6 = serverIp.ipv6;
+        entry->key.dst.addr.ipv6 = clientIp.ipv6;
+    } else {
+        entry->key.src.addr.ipv4 = serverIp.ipv4;
+        entry->key.dst.addr.ipv4 = clientIp.ipv4;
+    }
 
     UINT32 hash = OvsExtractCtRelatedKeyHash(&entry->key);
 

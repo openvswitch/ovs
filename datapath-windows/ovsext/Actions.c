@@ -1618,6 +1618,180 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
     return NDIS_STATUS_SUCCESS;
 }
 
+UINT16
+OvsCalculateICMPv6Checksum(struct in6_addr srcAddr,
+                        struct in6_addr dstAddr,
+                        uint16_t totalLength,
+                        uint16_t protocol,
+                        uint16_t *icmpStart,
+                        uint16_t length)
+{
+    uint32_t checkSum = 0;
+    uint16_t *srcAddressPtr = (uint16_t *)&srcAddr;
+    uint16_t *dstAddressPtr = (uint16_t *)&dstAddr;
+    uint16_t *value = (uint16_t *)icmpStart;
+    int index = 0;
+
+    checkSum = totalLength + protocol;
+
+    for (int i = 0; i < 8; i++) {
+        checkSum += ntohs(srcAddressPtr[i]);
+        checkSum += ntohs(dstAddressPtr[i]);
+    }
+
+    for (index = length; index > 1; index -= 2) {
+        checkSum += ntohs(*value);
+        value++;
+    }
+
+    if (index > 0) {
+        checkSum += (uint16_t)(*((uint8_t *)value));
+    }
+
+    while ((checkSum >> 16) & 0xffff) {
+        checkSum = (checkSum & 0xffff) + ((checkSum >> 16) & 0xffff);
+    }
+
+    return htons(~((uint16_t)checkSum));
+}
+
+/*
+ *-----------------------------------------------------------------------------
+ *
+ * OvsUpdateAddressAndPortForIpv6--
+ *
+ *      Update ipv6 address in ovsFwdCtx.curNbl.
+ *
+ * Results:
+ *      None
+ *
+ * Side effects:
+ *      None
+ *
+ *-----------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsUpdateAddressAndPortForIpv6(OvsForwardingContext *ovsFwdCtx,
+                               struct in6_addr newAddr, UINT16 newPort,
+                               BOOLEAN isSource, BOOLEAN isTx)
+{
+    PUINT8 bufferStart;
+    UINT32 hdrSize;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    IPv6Hdr *ipHdr;
+    TCPHdr *tcpHdr = NULL;
+    UDPHdr *udpHdr = NULL;
+    struct in6_addr *addrField = NULL;
+    UINT16 *portField = NULL;
+    UINT16 *checkField = NULL;
+    BOOLEAN l4Offload = FALSE;
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+
+    ASSERT(layers->value != 0);
+
+    if (layers->isTcp || layers->isUdp) {
+        hdrSize = layers->l4Offset +
+                  layers->isTcp ? sizeof (*tcpHdr) : sizeof (*udpHdr);
+    } else {
+        hdrSize = layers->l3Offset + sizeof (*ipHdr);
+    }
+
+    csumInfo.Value = NET_BUFFER_LIST_INFO(ovsFwdCtx->curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
+
+    bufferStart = OvsGetHeaderBySize(ovsFwdCtx, hdrSize);
+    if (!bufferStart) {
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    ipHdr = (IPv6Hdr *)(bufferStart + layers->l3Offset);
+
+    if (layers->isTcp) {
+        tcpHdr = (TCPHdr *)(bufferStart + layers->l4Offset);
+    } else if (layers->isUdp) {
+        udpHdr = (UDPHdr *)(bufferStart + layers->l4Offset);
+    }
+
+    if (isSource) {
+        addrField = &ipHdr->saddr;
+        if (tcpHdr) {
+            portField = &tcpHdr->source;
+            checkField = &tcpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.TcpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.TcpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.TcpChecksumFailed);
+        } else if (udpHdr) {
+            portField = &udpHdr->source;
+            checkField = &udpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.UdpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
+        }
+        if (isTx && l4Offload) {
+            *checkField = IPv6PseudoChecksum((UINT32 *)&newAddr, (UINT32 *)&ipHdr->daddr,
+                                             tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
+                                             ntohs(ipHdr->payload_len) -
+                                                  (ovsFwdCtx->layers.l4Offset - ovsFwdCtx->layers.l3Offset));
+        }
+    } else {
+        addrField = &ipHdr->daddr;
+        if (tcpHdr) {
+            portField = &tcpHdr->dest;
+            checkField = &tcpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.TcpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.TcpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.TcpChecksumFailed);
+        } else if (udpHdr) {
+            portField = &udpHdr->dest;
+            checkField = &udpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.UdpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
+        }
+
+        if (isTx && l4Offload) {
+            *checkField = IPv6PseudoChecksum((UINT32 *)&ipHdr->saddr, (UINT32 *)&newAddr,
+                                             tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
+                                             ntohs(ipHdr->payload_len) -
+                                             (ovsFwdCtx->layers.l4Offset - ovsFwdCtx->layers.l3Offset));
+        }
+    }
+
+    if (memcmp(addrField, &newAddr, sizeof(struct in6_addr))) {
+        if ((checkField && *checkField != 0) && (!l4Offload || !isTx)) {
+            uint32_t *oldField = (uint32_t *)addrField;
+            uint32_t *newField = (uint32_t *)&newAddr;
+            *checkField = ChecksumUpdate32(*checkField, oldField[0], newField[0]);
+            *checkField = ChecksumUpdate32(*checkField, oldField[1], newField[1]);
+            *checkField = ChecksumUpdate32(*checkField, oldField[2], newField[2]);
+            *checkField = ChecksumUpdate32(*checkField, oldField[3], newField[3]);
+        }
+
+        *addrField = newAddr;
+
+        if (layers->isIcmp) {
+            ICMPHdr *icmp =(ICMPHdr *)(bufferStart + layers->l4Offset);
+            icmp->checksum = 0x00;
+            icmp->checksum = OvsCalculateICMPv6Checksum(ipHdr->saddr, ipHdr->daddr,
+                                                        ntohs(ipHdr->payload_len),
+                                                        IPPROTO_ICMPV6,
+                                                        (uint16_t *)icmp,
+                                                        ntohs(ipHdr->payload_len));
+        }
+    }
+
+    if (portField && *portField != newPort) {
+        if ((checkField) && (!l4Offload || !isTx)) {
+            /* Recompute total checksum. */
+            *checkField = ChecksumUpdate16(*checkField, *portField,
+                                           newPort);
+        }
+        *portField = newPort;
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
 /*
  *----------------------------------------------------------------------------
  * OvsUpdateIPv4Header --

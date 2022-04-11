@@ -1,3 +1,8 @@
+v2.17.0 - 27 Mar 2022
+---------------------
+   - Tcp6, Udp6, Icmp6, ftp6 conntrack support on Windows ovs.
+     * In current OVS we could use ct related state and actions for
+       Ftp6, Udp6, Icmp6, Ftp6 connection.
 Post-v2.17.0
 ---------------------
    - libopenvswitch API change:

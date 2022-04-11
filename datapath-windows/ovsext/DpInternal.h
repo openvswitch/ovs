@@ -207,6 +207,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
         UINT32 state;
         struct ovs_key_ct_labels labels;
         struct ovs_key_ct_tuple_ipv4 tuple_ipv4;
+        struct ovs_key_ct_tuple_ipv6 tuple_ipv6;
     } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 
@@ -217,6 +218,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
 #define OVS_ARP_KEY_SIZE (sizeof (ArpKey))
 #define OVS_ICMPV6_KEY_SIZE (sizeof (Icmp6Key))
 #define OVS_MPLS_KEY_SIZE (sizeof (MplsKey))
+#define OVS_TUPLE_IPV6 (sizeof (struct ovs_key_ct_tuple_ipv6))
 
 typedef struct OvsFlowStats {
     Ovs64AlignedU64 packetCount;
