@@ -282,7 +282,7 @@ can access, and as such is useful in deployments in which security is a
 concern.
 
 IOMMU support may be enabled via a global config value,
-```vhost-iommu-support```. Setting this to true enables vhost IOMMU support for
+``vhost-iommu-support``. Setting this to true enables vhost IOMMU support for
 all vhost ports when/where available::
 
     $ ovs-vsctl set Open_vSwitch . other_config:vhost-iommu-support=true

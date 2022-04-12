@@ -52,7 +52,7 @@ be aware of the memory requirements for their deployment before using this
 model and allocate the required hugepage memory.
 
 Per port mempool support may be enabled via a global config value,
-```per-port-memory```. Setting this to true enables the per port memory
+``per-port-memory``. Setting this to true enables the per port memory
 model for all DPDK devices in OVS::
 
    $ ovs-vsctl set Open_vSwitch . other_config:per-port-memory=true

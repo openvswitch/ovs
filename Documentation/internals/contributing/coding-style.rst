@@ -189,7 +189,6 @@ Example:
 
 ::
 
-    ```
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer' that are non-null.  Each value
      * is a bitmap of "enum ofp_port_features" bits, in host byte order.
@@ -202,7 +201,6 @@ Example:
     {
         ...
     }
-    ```
 
 Functions that destroy an instance of a dynamically-allocated type should
 accept and ignore a null pointer argument. Code that calls such a function
