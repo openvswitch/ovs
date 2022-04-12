@@ -1331,7 +1331,7 @@
         Human readable description of datapath.  It is a maximum 256
         byte-long free-form string to describe the datapath for
         debugging purposes, e.g. <code>switch3 in room 3120</code>.
-        The value is returned by the switch as a part of reply to OFPMP_DESC 
+        The value is returned by the switch as a part of reply to OFPMP_DESC
         request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
         the ofp_desc structure to contaion "NULL terminated ASCII strings".
         For the compatibility reasons no more than 255 ASCII characters should be used.
@@ -1893,7 +1893,7 @@
             only VLAN) must be <ref column="tag"/>, which is removed before
             egress, which exposes the inner (customer) VLAN if one is present.
           </p>
-            
+
           <p>
             If <ref column="cvlans"/> is set, only allows packets in the
             specified customer VLANs.
