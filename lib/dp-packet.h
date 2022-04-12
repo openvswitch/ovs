@@ -1085,6 +1085,38 @@ dp_packet_l4_checksum_bad(const struct dp_packet *p)
             DP_PACKET_OL_RX_L4_CKSUM_BAD;
 }
 
+static inline void ALWAYS_INLINE
+dp_packet_update_rss_hash_ipv4_tcp_udp(struct dp_packet *packet)
+{
+    if (dp_packet_rss_valid(packet)) {
+        return;
+    }
+
+    const uint8_t *pkt = dp_packet_data(packet);
+    const uint16_t l3_ofs = packet->l3_ofs;
+    const void *ipv4_src = &pkt[l3_ofs + offsetof(struct ip_header, ip_src)];
+    const void *ipv4_dst = &pkt[l3_ofs + offsetof(struct ip_header, ip_dst)];
+    const void *l4_ports = &pkt[packet->l4_ofs];
+    uint32_t ip_src, ip_dst, ports;
+    uint32_t hash = 0;
+
+    memcpy(&ip_src, ipv4_src, sizeof ip_src);
+    memcpy(&ip_dst, ipv4_dst, sizeof ip_dst);
+    memcpy(&ports,  l4_ports, sizeof ports);
+
+    /* IPv4 Src and Dst. */
+    hash = hash_add(hash, ip_src);
+    hash = hash_add(hash, ip_dst);
+    /* IPv4 proto. */
+    hash = hash_add(hash,
+                    pkt[l3_ofs + offsetof(struct ip_header, ip_proto)]);
+    /* L4 ports. */
+    hash = hash_add(hash, ports);
+    hash = hash_finish(hash, 42);
+
+    dp_packet_set_rss_hash(packet, hash);
+}
+
 #ifdef  __cplusplus
 }
 #endif

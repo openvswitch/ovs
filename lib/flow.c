@@ -1017,6 +1017,9 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                     miniflow_push_be16(mf, tp_dst, tcp->tcp_dst);
                     miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
                     miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
+                    if (dl_type == htons(ETH_TYPE_IP)) {
+                        dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                    }
                 }
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_UDP)) {
@@ -1027,6 +1030,9 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_push_be16(mf, tp_dst, udp->udp_dst);
                 miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
                 miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
+                if (dl_type == htons(ETH_TYPE_IP)) {
+                    dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                }
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_SCTP)) {
             if (OVS_LIKELY(size >= SCTP_HEADER_LEN)) {

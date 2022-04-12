@@ -48,6 +48,7 @@
 #include "dpif-netdev-private-dpcls.h"
 #include "dpif-netdev-private-extract.h"
 #include "dpif-netdev-private-flow.h"
+#include "dp-packet.h"
 
 /* AVX512-BW level permutex2var_epi8 emulation. */
 static inline __m512i
@@ -577,6 +578,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process TCP flags, and store to blocks. */
                 const struct tcp_header *tcp = (void *)&pkt[38];
                 mfex_handle_tcp_flags(tcp, &blocks[7]);
+                dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV4_UDP: {
@@ -588,6 +590,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                                               UDP_HEADER_LEN)) {
                     continue;
                 }
+                dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV4_TCP: {
@@ -602,6 +605,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                                               TCP_HEADER_LEN)) {
                     continue;
                 }
+                dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV4_UDP: {
@@ -612,7 +616,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                                               UDP_HEADER_LEN)) {
                     continue;
                 }
-
+                dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
             } break;
         default:
             break;
