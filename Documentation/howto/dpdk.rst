@@ -402,6 +402,10 @@ Supported actions for hardware offload are:
 - Clone/output (tnl_push and output) for encapsulating over a tunnel.
 - Tunnel pop, for packets received on physical ports.
 
+.. note::
+  Tunnel offloads are experimental APIs in DPDK. In order to enable it,
+  compile with -DALLOW_EXPERIMENTAL_API.
+
 Multiprocess
 ------------
 
