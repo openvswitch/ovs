@@ -2672,7 +2672,6 @@ dpdk_copy_dp_packet_to_mbuf(struct rte_mempool *mp, struct dp_packet *pkt_orig)
  * Returns the number of good packets in the batch. */
 static size_t
 dpdk_copy_batch_to_mbuf(struct netdev *netdev, struct dp_packet_batch *batch)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     size_t i, size = dp_packet_batch_size(batch);
