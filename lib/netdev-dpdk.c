@@ -2864,6 +2864,9 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
                    bool concurrent_txq)
 {
     if (OVS_UNLIKELY(!(dev->flags & NETDEV_UP))) {
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.tx_dropped += dp_packet_batch_size(batch);
+        rte_spinlock_unlock(&dev->stats_lock);
         dp_packet_delete_batch(batch, true);
         return;
     }
