@@ -159,7 +159,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         mf_mask = mfex_func(packets, keys, batch_size, in_port, pmd);
     }
 
-    uint32_t lookup_pkts_bitmask = (1ULL << batch_size) - 1;
+    uint32_t lookup_pkts_bitmask = (UINT32_C(1) << batch_size) - 1;
     uint32_t iter = lookup_pkts_bitmask;
     while (iter) {
         uint32_t i = raw_ctz(iter);
@@ -183,7 +183,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
          * classifed by vector mfex else do a scalar miniflow extract
          * for that packet.
          */
-        bool mfex_hit = !!(mf_mask & (1 << i));
+        bool mfex_hit = !!(mf_mask & (UINT32_C(1) << i));
 
         /* Check for a partial hardware offload match. */
         if (hwol_enabled) {
@@ -204,7 +204,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
 
                 pkt_meta[i].bytes = dp_packet_size(packet);
                 phwol_hits++;
-                hwol_emc_smc_hitmask |= (1 << i);
+                hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }
@@ -227,7 +227,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             if (f) {
                 rules[i] = &f->cr;
                 emc_hits++;
-                hwol_emc_smc_hitmask |= (1 << i);
+                hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }
@@ -237,7 +237,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             if (f) {
                 rules[i] = &f->cr;
                 smc_hits++;
-                smc_hitmask |= (1 << i);
+                smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }

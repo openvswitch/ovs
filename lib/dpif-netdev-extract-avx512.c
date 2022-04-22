@@ -619,7 +619,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
         };
 
         /* This packet has its miniflow created, add to hitmask. */
-        hitmask |= 1 << i;
+        hitmask |= UINT32_C(1) << i;
     }
 
     return hitmask;
