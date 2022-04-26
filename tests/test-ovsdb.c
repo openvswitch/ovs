@@ -56,6 +56,7 @@
 VLOG_DEFINE_THIS_MODULE(test_ovsdb);
 
 struct test_ovsdb_pvt_context {
+    bool write_changed_only;
     bool track;
 };
 
@@ -91,6 +92,7 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
+        {"write-changed-only", optional_argument, NULL, 'w'},
         {"magic", required_argument, NULL, OPT_MAGIC},
         {"no-rename-open-files", no_argument, NULL, OPT_NO_RENAME_OPEN_FILES},
         {"help", no_argument, NULL, 'h'},
@@ -123,6 +125,10 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 
         case 'c':
             pvt->track = true;
+            break;
+
+        case 'w':
+            pvt->write_changed_only = true;
             break;
 
         case OPT_MAGIC:
@@ -2610,6 +2616,7 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
 static void
 do_idl(struct ovs_cmdl_context *ctx)
 {
+    struct test_ovsdb_pvt_context *pvt = ctx->pvt;
     struct jsonrpc *rpc;
     struct ovsdb_idl *idl;
     unsigned int seqno = 0;
@@ -2618,9 +2625,6 @@ do_idl(struct ovs_cmdl_context *ctx)
     int step = 0;
     int error;
     int i;
-    bool track;
-
-    track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
     ovsdb_idl_set_leader_only(idl, false);
@@ -2637,8 +2641,12 @@ do_idl(struct ovs_cmdl_context *ctx)
         rpc = NULL;
     }
 
-    if (track) {
+    if (pvt->track) {
         ovsdb_idl_track_add_all(idl);
+    }
+
+    if (pvt->write_changed_only) {
+        ovsdb_idl_set_write_changed_only_all(idl, true);
     }
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -2683,7 +2691,7 @@ do_idl(struct ovs_cmdl_context *ctx)
             }
 
             /* Print update. */
-            if (track) {
+            if (pvt->track) {
                 print_idl_track(idl, step++, terse);
                 ovsdb_idl_track_clear(idl);
             } else {

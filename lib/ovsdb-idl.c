@@ -1396,6 +1396,45 @@ ovsdb_idl_track_clear(struct ovsdb_idl *idl)
 {
     ovsdb_idl_track_clear__(idl, false);
 }
+
+/* Sets or clears (depending on 'enable') OVSDB_IDL_WRITE_CHANGED_ONLY
+ * for 'column' in 'idl', ensuring that the column will be included in a
+ * transaction only if its value has actually changed locally.  Normally
+ * read/write columns that are written to are always included in the
+ * transaction but, in specific cases, when the application doesn't
+ * require atomicity of writes across different columns, the ones that
+ * don't change value may be skipped.
+ *
+ * This function should be called between ovsdb_idl_create() and
+ * the first call to ovsdb_idl_run().
+ */
+void
+ovsdb_idl_set_write_changed_only(struct ovsdb_idl *idl,
+                                 const struct ovsdb_idl_column *column,
+                                 bool enable)
+{
+    if (enable) {
+        *ovsdb_idl_get_mode(idl, column) |= OVSDB_IDL_WRITE_CHANGED_ONLY;
+    } else {
+        *ovsdb_idl_get_mode(idl, column) &= ~OVSDB_IDL_WRITE_CHANGED_ONLY;
+    }
+}
+
+/* Helper function to wrap calling ovsdb_idl_set_write_changed_only() for
+ * all columns that are part of 'idl'.
+ */
+void
+ovsdb_idl_set_write_changed_only_all(struct ovsdb_idl *idl, bool enable)
+{
+    for (size_t i = 0; i < idl->class_->n_tables; i++) {
+        const struct ovsdb_idl_table_class *tc = &idl->class_->tables[i];
+
+        for (size_t j = 0; j < tc->n_columns; j++) {
+            const struct ovsdb_idl_column *column = &tc->columns[j];
+            ovsdb_idl_set_write_changed_only(idl, column, enable);
+        }
+    }
+}
 
 static void
 log_parse_update_error(struct ovsdb_error *error)
@@ -3491,6 +3530,8 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
 {
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class;
+    unsigned char column_mode;
+    bool optimize_rewritten;
     size_t column_idx;
     bool write_only;
 
@@ -3501,12 +3542,15 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
 
     class = row->table->class_;
     column_idx = column - class->columns;
-    write_only = row->table->modes[column_idx] == OVSDB_IDL_MONITOR;
+    column_mode = row->table->modes[column_idx];
+    write_only = column_mode == OVSDB_IDL_MONITOR;
+    optimize_rewritten =
+        write_only || (column_mode & OVSDB_IDL_WRITE_CHANGED_ONLY);
+
 
     ovs_assert(row->new_datum != NULL);
     ovs_assert(column_idx < class->n_columns);
-    ovs_assert(row->old_datum == NULL ||
-               row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
+    ovs_assert(row->old_datum == NULL || column_mode & OVSDB_IDL_MONITOR);
 
     if (row->table->idl->verify_write_only && !write_only) {
         VLOG_ERR("Bug: Attempt to write to a read/write column (%s:%s) when"
@@ -3524,9 +3568,13 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
      * different value in that column since we read it.  (But if a whole
      * transaction only does writes of existing values, without making any real
      * changes, we will drop the whole transaction later in
-     * ovsdb_idl_txn_commit().) */
-    if (write_only && ovsdb_datum_equals(ovsdb_idl_read(row, column),
-                                         datum, &column->type)) {
+     * ovsdb_idl_txn_commit().)
+     *
+     * The application may choose to bypass this restriction and always
+     * optimize by setting OVSDB_IDL_WRITE_CHANGED_ONLY.
+     */
+    if (optimize_rewritten && ovsdb_datum_equals(ovsdb_idl_read(row, column),
+                                                 datum, &column->type)) {
         goto discard_datum;
     }
 
