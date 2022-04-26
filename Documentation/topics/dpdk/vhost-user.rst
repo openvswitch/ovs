@@ -233,7 +233,7 @@ vhost-user-client
 
 .. important::
 
-   Use of vhost-user ports requires QEMU >= 2.7
+   Use of vhost-user-client ports requires QEMU >= 2.7
 
 To use vhost-user-client ports, you must first add said ports to the switch.
 Like DPDK vhost-user ports, DPDK vhost-user-client ports can have mostly
