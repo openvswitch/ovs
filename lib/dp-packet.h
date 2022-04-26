@@ -824,7 +824,7 @@ dp_packet_batch_is_full(const struct dp_packet_batch *batch)
 
 #define DP_PACKET_BATCH_FOR_EACH(IDX, PACKET, BATCH)                \
     for (size_t IDX = 0; IDX < dp_packet_batch_size(BATCH); IDX++)  \
-        if (PACKET = BATCH->packets[IDX], true)
+        if (PACKET = (BATCH)->packets[IDX], true)
 
 /* Use this macro for cases where some packets in the 'BATCH' may be
  * dropped after going through each packet in the 'BATCH'.
@@ -839,7 +839,7 @@ dp_packet_batch_is_full(const struct dp_packet_batch *batch)
  * the iterator.  */
 #define DP_PACKET_BATCH_REFILL_FOR_EACH(IDX, SIZE, PACKET, BATCH)       \
     for (dp_packet_batch_refill_init(BATCH), IDX=0; IDX < SIZE; IDX++)  \
-         if (PACKET = BATCH->packets[IDX], true)
+         if (PACKET = (BATCH)->packets[IDX], true)
 
 static inline void
 dp_packet_batch_clone(struct dp_packet_batch *dst,

@@ -5210,8 +5210,8 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
         int n_txq = netdev_n_txq(p->port->netdev);
 
         /* Re-batch per txq based on packet hash. */
-        for (i = 0; i < output_cnt; i++) {
-            struct dp_packet *packet = p->output_pkts.packets[i];
+        struct dp_packet *packet;
+        DP_PACKET_BATCH_FOR_EACH (j, packet, &p->output_pkts) {
             uint32_t hash;
 
             if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
