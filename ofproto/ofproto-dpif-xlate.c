@@ -3535,6 +3535,9 @@ propagate_tunnel_data_to_flow__(struct flow *dst_flow,
     dst_flow->dl_dst = dmac;
     dst_flow->dl_src = smac;
 
+    /* Clear VLAN entries which do not apply for tunnel flows. */
+    memset(dst_flow->vlans, 0, sizeof dst_flow->vlans);
+
     dst_flow->packet_type = htonl(PT_ETH);
     dst_flow->nw_dst = src_flow->tunnel.ip_dst;
     dst_flow->nw_src = src_flow->tunnel.ip_src;
