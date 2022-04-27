@@ -159,7 +159,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         mf_mask = mfex_func(packets, keys, batch_size, in_port, pmd);
     }
 
-    uint32_t lookup_pkts_bitmask = (UINT32_C(1) << batch_size) - 1;
+    uint32_t lookup_pkts_bitmask = (UINT64_C(1) << batch_size) - 1;
     uint32_t iter = lookup_pkts_bitmask;
     while (iter) {
         uint32_t i = raw_ctz(iter);
