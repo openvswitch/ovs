@@ -267,7 +267,7 @@ Representors are multi devices created on top of one PF.
 
 For more information, refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-21.11/prog_guide/switch_representation.html
+__ https://doc.dpdk.org/guides-21.11/prog_guide/switch_representation.html#port-representors
 
 Prior to port representors there was a one-to-one relationship between the PF
 and the eth device. With port representors the relationship becomes one PF to
@@ -287,18 +287,18 @@ address in devargs. For an existing bridge called ``br0`` and PCI address
 When configuring a VF-based port, DPDK uses an extended devargs syntax which
 has the following format::
 
-    BDBF,representor=[<representor id>]
+    BDBF,representor=<representor identifier>
 
 This syntax shows that a representor is an enumerated eth device (with
-a representor ID) which uses the PF PCI address.
-The following commands add representors 3 and 5 using PCI device address
+a representor identifier) which uses the PF PCI address.
+The following commands add representors of VF 3 and 5 using PCI device address
 ``0000:08:00.0``::
 
     $ ovs-vsctl add-port br0 dpdk-rep3 -- set Interface dpdk-rep3 type=dpdk \
-       options:dpdk-devargs=0000:08:00.0,representor=[3]
+       options:dpdk-devargs=0000:08:00.0,representor=vf3
 
     $ ovs-vsctl add-port br0 dpdk-rep5 -- set Interface dpdk-rep5 type=dpdk \
-       options:dpdk-devargs=0000:08:00.0,representor=[5]
+       options:dpdk-devargs=0000:08:00.0,representor=vf5
 
 .. important::
 

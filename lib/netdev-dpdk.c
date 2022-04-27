@@ -1823,7 +1823,7 @@ static dpdk_port_t netdev_dpdk_get_port_by_devargs(const char *devargs)
 }
 
 /*
- * Normally, a PCI id (optionally followed by a representor number)
+ * Normally, a PCI id (optionally followed by a representor identifier)
  * is enough for identifying a specific DPDK port.
  * However, for some NICs having multiple ports sharing the same PCI
  * id, using PCI id won't work then.
