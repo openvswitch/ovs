@@ -760,3 +760,54 @@ NXST_FLOW reply:
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - VXLAN access port])
+
+dnl Create bridge that has a MAC address.
+OVS_VSWITCHD_START([set bridge br0 datapath_type=dummy dnl
+                    -- set Interface br0 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-vsctl add-port br0 p8 dnl
+                    -- set Interface p8 type=dummy ofport_request=8])
+
+dnl Create another bridge.
+AT_CHECK([ovs-vsctl add-br ovs-tun0 -- set bridge ovs-tun0 datapath_type=dummy])
+
+dnl Add VXLAN port to this bridge.
+AT_CHECK([ovs-vsctl add-port ovs-tun0 tun0 dnl
+            -- set int tun0 type=vxlan options:remote_ip=10.0.0.11 dnl
+            -- add-port ovs-tun0 p7 dnl
+            -- set interface p7 type=dummy ofport_request=7])
+
+dnl Set VLAN tags, so that br0 and its port p8 have the same tag,
+dnl but ovs-tun0's port p7 has a different tag.
+AT_CHECK([ovs-vsctl set port p8  tag=42 dnl
+                 -- set port br0 tag=42 dnl
+                 -- set port p7  tag=200])
+
+dnl Set IP address and route for br0.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 10.0.0.2/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 10.0.0.11/24 br0], [0], [OK
+])
+
+dnl Send an ARP reply to port b8 on br0, so that packets will be forwarded
+dnl to learned port.
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),dnl
+   eth(src=aa:55:aa:66:00:00,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),dnl
+   arp(sip=10.0.0.11,tip=10.0.0.2,op=2,sha=aa:55:aa:66:00:00,tha=00:00:00:00:00:00)'])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-tun0 in_port=p7], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,in_port=7,dl_src=00:00:00:00:00:00,dnl
+dl_dst=00:00:00:00:00:00,dl_type=0x0000
+Datapath actions: push_vlan(vid=200,pcp=0),1,clone(tnl_push(tnl_port(4789),dnl
+header(size=50,type=4,eth(dst=aa:55:aa:66:00:00,src=aa:55:aa:55:00:00,dnl
+dl_type=0x0800),ipv4(src=10.0.0.2,dst=10.0.0.11,proto=17,tos=0,ttl=64,dnl
+frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x0)),dnl
+out_port(100)),8)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
