@@ -2563,90 +2563,6 @@ netdev_dpdk_vhost_update_tx_counters(struct netdev_dpdk *dev,
 }
 
 static void
-__netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
-                         struct dp_packet **pkts, int cnt)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
-    struct netdev_dpdk_sw_stats sw_stats_add;
-    unsigned int n_packets_to_free = cnt;
-    unsigned int total_packets = cnt;
-    int i, retries = 0;
-    int max_retries = VHOST_ENQ_RETRY_MIN;
-    int vid = netdev_dpdk_get_vid(dev);
-
-    qid = dev->tx_q[qid % netdev->n_txq].map;
-
-    if (OVS_UNLIKELY(vid < 0 || !dev->vhost_reconfigured || qid < 0
-                     || !(dev->flags & NETDEV_UP))) {
-        rte_spinlock_lock(&dev->stats_lock);
-        dev->stats.tx_dropped+= cnt;
-        rte_spinlock_unlock(&dev->stats_lock);
-        goto out;
-    }
-
-    if (OVS_UNLIKELY(!rte_spinlock_trylock(&dev->tx_q[qid].tx_lock))) {
-        COVERAGE_INC(vhost_tx_contention);
-        rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
-    }
-
-    sw_stats_add.tx_invalid_hwol_drops = cnt;
-    if (userspace_tso_enabled()) {
-        cnt = netdev_dpdk_prep_hwol_batch(dev, cur_pkts, cnt);
-    }
-
-    sw_stats_add.tx_invalid_hwol_drops -= cnt;
-    sw_stats_add.tx_mtu_exceeded_drops = cnt;
-    cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
-    sw_stats_add.tx_mtu_exceeded_drops -= cnt;
-
-    /* Check has QoS has been configured for the netdev */
-    sw_stats_add.tx_qos_drops = cnt;
-    cnt = netdev_dpdk_qos_run(dev, cur_pkts, cnt, true);
-    sw_stats_add.tx_qos_drops -= cnt;
-
-    n_packets_to_free = cnt;
-
-    do {
-        int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
-        unsigned int tx_pkts;
-
-        tx_pkts = rte_vhost_enqueue_burst(vid, vhost_qid, cur_pkts, cnt);
-        if (OVS_LIKELY(tx_pkts)) {
-            /* Packets have been sent.*/
-            cnt -= tx_pkts;
-            /* Prepare for possible retry.*/
-            cur_pkts = &cur_pkts[tx_pkts];
-            if (OVS_UNLIKELY(cnt && !retries)) {
-                /*
-                 * Read max retries as there are packets not sent
-                 * and no retries have already occurred.
-                 */
-                atomic_read_relaxed(&dev->vhost_tx_retries_max, &max_retries);
-            }
-        } else {
-            /* No packets sent - do not retry.*/
-            break;
-        }
-    } while (cnt && (retries++ < max_retries));
-
-    rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
-
-    sw_stats_add.tx_failure_drops = cnt;
-    sw_stats_add.tx_retries = MIN(retries, max_retries);
-
-    rte_spinlock_lock(&dev->stats_lock);
-    netdev_dpdk_vhost_update_tx_counters(dev, pkts, total_packets,
-                                         &sw_stats_add);
-    rte_spinlock_unlock(&dev->stats_lock);
-
-out:
-    for (i = 0; i < n_packets_to_free; i++) {
-        dp_packet_delete(pkts[i]);
-    }
-}
-
-static void
 netdev_dpdk_extbuf_free(void *addr OVS_UNUSED, void *opaque)
 {
     rte_free(opaque);
@@ -2750,76 +2666,70 @@ dpdk_copy_dp_packet_to_mbuf(struct rte_mempool *mp, struct dp_packet *pkt_orig)
     return pkt_dest;
 }
 
-/* Tx function. Transmit packets indefinitely */
-static void
-dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
+/* Replace packets in a 'batch' with their corresponding copies using
+ * DPDK memory.
+ *
+ * Returns the number of good packets in the batch. */
+static size_t
+dpdk_copy_batch_to_mbuf(struct netdev *netdev, struct dp_packet_batch *batch)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    const size_t batch_cnt = dp_packet_batch_size(batch);
-#if !defined(__CHECKER__) && !defined(_WIN32)
-    const size_t PKT_ARRAY_SIZE = batch_cnt;
-#else
-    /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
-#endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct dp_packet *pkts[PKT_ARRAY_SIZE];
-    struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
-    uint32_t cnt = batch_cnt;
-    uint32_t dropped = 0;
-    uint32_t tx_failure = 0;
-    uint32_t mtu_drops = 0;
-    uint32_t qos_drops = 0;
+    size_t i, size = dp_packet_batch_size(batch);
+    struct dp_packet *packet;
 
-    if (dev->type != DPDK_DEV_VHOST) {
-        /* Check if QoS has been configured for this netdev. */
-        cnt = netdev_dpdk_qos_run(dev, (struct rte_mbuf **) batch->packets,
-                                  batch_cnt, false);
-        qos_drops = batch_cnt - cnt;
-    }
-
-    uint32_t txcnt = 0;
-
-    for (uint32_t i = 0; i < cnt; i++) {
-        struct dp_packet *packet = batch->packets[i];
-        uint32_t size = dp_packet_size(packet);
-
-        if (size > dev->max_packet_len
-            && !(packet->mbuf.ol_flags & RTE_MBUF_F_TX_TCP_SEG)) {
-            VLOG_WARN_RL(&rl, "Too big size %u max_packet_len %d", size,
-                         dev->max_packet_len);
-            mtu_drops++;
-            continue;
-        }
-
-        pkts[txcnt] = dpdk_copy_dp_packet_to_mbuf(dev->dpdk_mp->mp, packet);
-        if (OVS_UNLIKELY(!pkts[txcnt])) {
-            dropped = cnt - i;
-            break;
-        }
-
-        txcnt++;
-    }
-
-    if (OVS_LIKELY(txcnt)) {
-        if (dev->type == DPDK_DEV_VHOST) {
-            __netdev_dpdk_vhost_send(netdev, qid, pkts, txcnt);
+    DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
+        if (OVS_UNLIKELY(packet->source == DPBUF_DPDK)) {
+            dp_packet_batch_refill(batch, packet, i);
         } else {
-            tx_failure += netdev_dpdk_eth_tx_burst(dev, qid,
-                                                   (struct rte_mbuf **)pkts,
-                                                   txcnt);
+            struct dp_packet *pktcopy;
+
+            pktcopy = dpdk_copy_dp_packet_to_mbuf(dev->dpdk_mp->mp, packet);
+            if (pktcopy) {
+                dp_packet_batch_refill(batch, pktcopy, i);
+            }
+
+            dp_packet_delete(packet);
         }
     }
 
-    dropped += qos_drops + mtu_drops + tx_failure;
-    if (OVS_UNLIKELY(dropped)) {
-        rte_spinlock_lock(&dev->stats_lock);
-        dev->stats.tx_dropped += dropped;
-        sw_stats->tx_failure_drops += tx_failure;
-        sw_stats->tx_mtu_exceeded_drops += mtu_drops;
-        sw_stats->tx_qos_drops += qos_drops;
-        rte_spinlock_unlock(&dev->stats_lock);
+    return dp_packet_batch_size(batch);
+}
+
+static size_t
+netdev_dpdk_common_send(struct netdev *netdev, struct dp_packet_batch *batch,
+                        struct netdev_dpdk_sw_stats *stats)
+{
+    struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    size_t cnt, pkt_cnt = dp_packet_batch_size(batch);
+
+    memset(stats, 0, sizeof *stats);
+
+    /* Copy dp-packets to mbufs. */
+    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
+        cnt = dpdk_copy_batch_to_mbuf(netdev, batch);
+        stats->tx_failure_drops += pkt_cnt - cnt;
+        pkt_cnt = cnt;
     }
+
+    /* Drop oversized packets. */
+    cnt = netdev_dpdk_filter_packet_len(dev, pkts, pkt_cnt);
+    stats->tx_mtu_exceeded_drops += pkt_cnt - cnt;
+    pkt_cnt = cnt;
+
+    /* Prepare each mbuf for hardware offloading. */
+    if (userspace_tso_enabled()) {
+        cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, pkt_cnt);
+        stats->tx_invalid_hwol_drops += pkt_cnt - cnt;
+        pkt_cnt = cnt;
+    }
+
+    /* Apply Quality of Service policy. */
+    cnt = netdev_dpdk_qos_run(dev, pkts, pkt_cnt, true);
+    stats->tx_qos_drops += pkt_cnt - cnt;
+
+    return cnt;
 }
 
 static int
@@ -2827,25 +2737,89 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
                        struct dp_packet_batch *batch,
                        bool concurrent_txq OVS_UNUSED)
 {
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int max_retries = VHOST_ENQ_RETRY_MIN;
+    int cnt, batch_cnt, vhost_batch_cnt;
+    int vid = netdev_dpdk_get_vid(dev);
+    struct netdev_dpdk_sw_stats stats;
+    struct rte_mbuf **pkts;
+    int retries;
 
-    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
-        dpdk_do_tx_copy(netdev, qid, batch);
+    batch_cnt = cnt = dp_packet_batch_size(batch);
+    qid = dev->tx_q[qid % netdev->n_txq].map;
+    if (OVS_UNLIKELY(vid < 0 || !dev->vhost_reconfigured || qid < 0
+                     || !(dev->flags & NETDEV_UP))) {
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.tx_dropped += cnt;
+        rte_spinlock_unlock(&dev->stats_lock);
         dp_packet_delete_batch(batch, true);
-    } else {
-        __netdev_dpdk_vhost_send(netdev, qid, batch->packets,
-                                 dp_packet_batch_size(batch));
+        return 0;
     }
+
+    if (OVS_UNLIKELY(!rte_spinlock_trylock(&dev->tx_q[qid].tx_lock))) {
+        COVERAGE_INC(vhost_tx_contention);
+        rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
+    }
+
+    cnt = netdev_dpdk_common_send(netdev, batch, &stats);
+
+    pkts = (struct rte_mbuf **) batch->packets;
+    vhost_batch_cnt = cnt;
+    retries = 0;
+    do {
+        int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
+        int tx_pkts;
+
+        tx_pkts = rte_vhost_enqueue_burst(vid, vhost_qid, pkts, cnt);
+        if (OVS_LIKELY(tx_pkts)) {
+            /* Packets have been sent.*/
+            cnt -= tx_pkts;
+            /* Prepare for possible retry.*/
+            pkts = &pkts[tx_pkts];
+            if (OVS_UNLIKELY(cnt && !retries)) {
+                /*
+                 * Read max retries as there are packets not sent
+                 * and no retries have already occurred.
+                 */
+                atomic_read_relaxed(&dev->vhost_tx_retries_max, &max_retries);
+            }
+        } else {
+            /* No packets sent - do not retry.*/
+            break;
+        }
+    } while (cnt && (retries++ < max_retries));
+
+    rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
+
+    stats.tx_failure_drops += cnt;
+    stats.tx_retries = MIN(retries, max_retries);
+
+    rte_spinlock_lock(&dev->stats_lock);
+    netdev_dpdk_vhost_update_tx_counters(dev, batch->packets, batch_cnt,
+                                         &stats);
+    rte_spinlock_unlock(&dev->stats_lock);
+
+    pkts = (struct rte_mbuf **) batch->packets;
+    for (int i = 0; i < vhost_batch_cnt; i++) {
+        rte_pktmbuf_free(pkts[i]);
+    }
+
     return 0;
 }
 
-static inline void
-netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
-                   struct dp_packet_batch *batch,
-                   bool concurrent_txq)
+static int
+netdev_dpdk_eth_send(struct netdev *netdev, int qid,
+                     struct dp_packet_batch *batch, bool concurrent_txq)
 {
+    struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int batch_cnt = dp_packet_batch_size(batch);
+    struct netdev_dpdk_sw_stats stats;
+    int cnt, dropped;
+
     if (OVS_UNLIKELY(!(dev->flags & NETDEV_UP))) {
         dp_packet_delete_batch(batch, true);
-        return;
+        return 0;
     }
 
     if (OVS_UNLIKELY(concurrent_txq)) {
@@ -2853,56 +2827,27 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
     }
 
-    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
-        struct netdev *netdev = &dev->up;
+    cnt = netdev_dpdk_common_send(netdev, batch, &stats);
 
-        dpdk_do_tx_copy(netdev, qid, batch);
-        dp_packet_delete_batch(batch, true);
-    } else {
+    dropped = batch_cnt - cnt;
+
+    dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
+    if (OVS_UNLIKELY(dropped)) {
         struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
-        int dropped;
-        int tx_failure, mtu_drops, qos_drops, hwol_drops;
-        int batch_cnt = dp_packet_batch_size(batch);
-        struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
 
-        hwol_drops = batch_cnt;
-        if (userspace_tso_enabled()) {
-            batch_cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, batch_cnt);
-        }
-        hwol_drops -= batch_cnt;
-        mtu_drops = batch_cnt;
-        batch_cnt = netdev_dpdk_filter_packet_len(dev, pkts, batch_cnt);
-        mtu_drops -= batch_cnt;
-        qos_drops = batch_cnt;
-        batch_cnt = netdev_dpdk_qos_run(dev, pkts, batch_cnt, true);
-        qos_drops -= batch_cnt;
-
-        tx_failure = netdev_dpdk_eth_tx_burst(dev, qid, pkts, batch_cnt);
-
-        dropped = tx_failure + mtu_drops + qos_drops + hwol_drops;
-        if (OVS_UNLIKELY(dropped)) {
-            rte_spinlock_lock(&dev->stats_lock);
-            dev->stats.tx_dropped += dropped;
-            sw_stats->tx_failure_drops += tx_failure;
-            sw_stats->tx_mtu_exceeded_drops += mtu_drops;
-            sw_stats->tx_qos_drops += qos_drops;
-            sw_stats->tx_invalid_hwol_drops += hwol_drops;
-            rte_spinlock_unlock(&dev->stats_lock);
-        }
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.tx_dropped += dropped;
+        sw_stats->tx_failure_drops += stats.tx_failure_drops;
+        sw_stats->tx_mtu_exceeded_drops += stats.tx_mtu_exceeded_drops;
+        sw_stats->tx_qos_drops += stats.tx_qos_drops;
+        sw_stats->tx_invalid_hwol_drops += stats.tx_invalid_hwol_drops;
+        rte_spinlock_unlock(&dev->stats_lock);
     }
 
     if (OVS_UNLIKELY(concurrent_txq)) {
         rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
     }
-}
 
-static int
-netdev_dpdk_eth_send(struct netdev *netdev, int qid,
-                     struct dp_packet_batch *batch, bool concurrent_txq)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-
-    netdev_dpdk_send__(dev, qid, batch, concurrent_txq);
     return 0;
 }
 
