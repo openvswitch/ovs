@@ -132,12 +132,12 @@ Q: Are all features available with all datapaths?
     Feature                    Linux upstream Linux OVS tree Userspace Hyper-V
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            2.5          2.6      YES
-    Connection tracking-IPv6        YES            YES          YES      YES
+    Connection tracking-IPv6        YES            YES          YES      2.18
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
     Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
-    Conntrack NAT6                  4.6            2.6          2.8      YES
+    Conntrack NAT6                  4.6            2.6          2.8      2.18
     Tunnel - LISP                   NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
@@ -145,7 +145,7 @@ Q: Are all features available with all datapaths?
     Tunnel - Geneve                 3.18           2.4          2.4      YES
     Tunnel - GRE-IPv6               4.18           2.6          2.6      NO
     Tunnel - VXLAN-IPv6             4.3            2.6          2.6      NO
-    Tunnel - Geneve-IPv6            4.4            2.6          2.6      YES
+    Tunnel - Geneve-IPv6            4.4            2.6          2.6      2.18
     Tunnel - ERSPAN                 4.18           2.10         2.10     NO
     Tunnel - ERSPAN-IPv6            4.18           2.10         2.10     NO
     Tunnel - GTP-U                  NO             NO           2.14     NO
