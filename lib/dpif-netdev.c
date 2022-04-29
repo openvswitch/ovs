@@ -2412,9 +2412,10 @@ dp_netdev_pmd_find_dpcls(struct dp_netdev_pmd_thread *pmd,
     OVS_REQUIRES(pmd->flow_mutex)
 {
     struct dpcls *cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
-    uint32_t hash = hash_port_no(in_port);
 
     if (!cls) {
+        uint32_t hash = hash_port_no(in_port);
+
         /* Create new classifier for in_port */
         cls = xmalloc(sizeof(*cls));
         dpcls_init(cls);
