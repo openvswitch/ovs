@@ -3065,7 +3065,6 @@ xlate_normal(struct xlate_ctx *ctx)
              */
             ctx->xout->slow |= SLOW_ACTION;
 
-            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
                 if (ctx->xin->allow_side_effects && ctx->xin->packet) {
