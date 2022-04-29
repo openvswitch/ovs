@@ -7653,6 +7653,10 @@ xlate_wc_finish(struct xlate_ctx *ctx)
             ctx->wc->masks.vlans[i].tci = 0;
         }
     }
+    /* Clear tunnel wc bits if original packet is non-tunnel. */
+    if (!flow_tnl_dst_is_set(&ctx->xin->upcall_flow->tunnel)) {
+        memset(&ctx->wc->masks.tunnel, 0, sizeof ctx->wc->masks.tunnel);
+    }
 }
 
 /* Translates the flow, actions, or rule in 'xin' into datapath actions in
