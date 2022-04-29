@@ -134,6 +134,21 @@ strip_ufid () {
     sed 's/mega_ufid:[[-0-9a-f]]* //
     s/ufid:[[-0-9a-f]]* //'
 }
+
+# Strips packets: and bytes: from output
+strip_stats () {
+    sed 's/packets:[[0-9]]*/packets:0/
+    s/bytes:[[0-9]]*/bytes:0/'
+}
+
+# Changes all 'recirc(...)' and 'recirc=...' to say 'recirc(<recirc_id>)' and
+# 'recirc=<recirc_id>' respectively.  This should make output easier to
+# compare.
+strip_recirc() {
+   sed 's/recirc_id([[x0-9]]*)/recirc_id(<recirc>)/
+        s/recirc_id=[[x0-9]]*/recirc_id=<recirc>/
+        s/recirc([[x0-9]]*)/recirc(<recirc>)/'
+}
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
