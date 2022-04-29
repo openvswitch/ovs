@@ -847,19 +847,20 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
     case OFPRAW_ONFST13_FLOW_MONITOR_REPLY:
     case OFPRAW_NXST_FLOW_MONITOR_REPLY: {
         struct nx_flow_update_header *nfuh;
+        enum nx_flow_update_event nx_event;
 
         if (msg->size < sizeof(struct nx_flow_update_header)) {
             goto bad_len;
         }
 
         nfuh = msg->data;
-        update->event = nx_to_ofp_flow_update_event(ntohs(nfuh->event));
         length = ntohs(nfuh->length);
         if (length > msg->size || length % 8) {
             goto bad_len;
         }
 
-        if (update->event == OFPFME_ABBREV) {
+        nx_event = ntohs(nfuh->event);
+        if (nx_event == NXFME_ABBREV) {
             struct nx_flow_update_abbrev *nfua;
 
             if (length != sizeof *nfua) {
@@ -868,10 +869,9 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
 
             nfua = ofpbuf_pull(msg, sizeof *nfua);
             update->xid = nfua->xid;
-            return 0;
-        } else if (update->event == OFPFME_ADDED
-                   || update->event == OFPFME_REMOVED
-                   || update->event == OFPFME_MODIFIED) {
+        } else if (nx_event == NXFME_ADDED
+                   || nx_event == NXFME_DELETED
+                   || nx_event == NXFME_MODIFIED) {
             struct nx_flow_update_full *nfuf;
             unsigned int actions_len;
             unsigned int match_len;
@@ -926,12 +926,14 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
 
             update->ofpacts = ofpacts->data;
             update->ofpacts_len = ofpacts->size;
-            return 0;
         } else {
             VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR reply has bad event %"PRIu16,
                          ntohs(nfuh->event));
             return OFPERR_NXBRC_FM_BAD_EVENT;
         }
+
+        update->event = nx_to_ofp_flow_update_event(nx_event);
+        return 0;
     }
     case OFPRAW_OFPST14_FLOW_MONITOR_REPLY: {
         struct ofp_flow_update_header *ofuh;
@@ -1017,8 +1019,8 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         OVS_NOT_REACHED();
     }
 bad_len:
-    VLOG_WARN_RL(&rl, "%s reply has %"PRIu32" leftover bytes at end",
-                ofpraw_get_name(raw), msg->size);
+    VLOG_WARN_RL(&rl, "%s has %"PRIu32" leftover bytes at end",
+                 ofpraw_get_name(raw), msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
