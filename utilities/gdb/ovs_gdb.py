@@ -1391,7 +1391,8 @@ class CmdDumpPackets(gdb.Command):
             print("Error, unsupported argument type: {}".format(str(val.type)))
             return
 
-        tcpdump(pkt_list, args=tcpdump_args)
+        stdout = tcpdump(pkt_list, args=tcpdump_args, getfd=True, quiet=True)
+        gdb.write(stdout.read().decode("utf8", "replace"))
 
     def extract_pkt(self, pkt):
         pkt_fields = pkt.type.keys()
