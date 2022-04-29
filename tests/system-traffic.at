@@ -6315,6 +6315,85 @@ AT_CHECK([ovs-ofctl dump-flows br0 | grep table=2, | OFPROTO_CLEAR_DURATION_IDLE
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_BANNER([IGMP])
+
+AT_SETUP([IGMP - flood under normal action])
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p1, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p2, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=NORMAL"])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p1 01 00 5e 01 01 03 dnl
+f0 00 00 01 01 01 08 00 46 c0 00 28 00 00 40 00 01 02 d3 49 45 65 eb 4a e0 dnl
+00 00 16 94 04 00 00 22 00 f9 02 00 00 00 01 04 00 00 00 e0 00 00 fb 00 00 dnl
+00 00 00 00 > /dev/null])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows --names | grep -e .*ipv4 | sort | dnl
+          strip_stats | strip_used | strip_recirc | dnl
+          sed 's/,packet_type(ns=[[0-9]]*,id=[[0-9]]*),/,/'],
+                     [0], [dnl
+recirc_id(<recirc>),in_port(ovs-p1),eth(src=f0:00:00:01:01:01,dst=01:00:5e:01:01:03),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:br0,ovs-p2
+])
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([IGMP - forward with ICMP])
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p1, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p2, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+
+AT_DATA([flows.txt], [dnl
+table=0, arp actions=NORMAL
+table=0, ip,in_port=1 actions=ct(table=1,zone=64000)
+table=0, in_port=2 actions=output:1
+table=1, ip,ct_state=+trk+inv actions=drop
+table=1  ip,in_port=1,icmp,ct_state=+trk+new actions=output:2
+table=1, in_port=1,ip,ct_state=+trk+new actions=controller(userdata=00.de.ad.be.ef.ca.fe.01)
+table=1, in_port=1,ip,ct_state=+trk+est actions=output:2
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Send the IGMP, followed by a unicast ICMP - ensure we won't black hole
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p1 f0 00 00 01 01 02 dnl
+f0 00 00 01 01 01 08 00 46 c0 00 28 00 00 40 00 01 02 d3 49 45 65 eb 4a e0 dnl
+00 00 16 94 04 00 00 22 00 f9 02 00 00 00 01 04 00 00 00 e0 00 00 fb 00 00 dnl
+00 00 00 00 > /dev/null])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p1 f0 00 00 01 01 02 dnl
+f0 00 00 01 01 01 08 00 45 00 00 1c 00 01 00 00 40 01 64 dc 0a 01 01 01 0a dnl
+01 01 02 08 00 f7 ff ff ff ff ff > /dev/null])
+
+sleep 1
+
+dnl Prefer the OpenFlow rules, because different datapaths will behave slightly
+dnl differently with respect to the exact dp rules.
+dnl
+dnl This is also why we clear n_bytes / n_packets - some kernels with ipv6
+dnl enabled will bump some of these counters non-deterministically
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep -v NXST | dnl
+          strip_duration | grep -v arp | grep -v n_packets=0 | dnl
+          grep -v 'in_port=2 actions=output:1' | dnl
+          sed 's/n_bytes=[[0-9]]*/n_bytes=0/
+               s/idle_age=[[0-9]]*/idle_age=0/
+               s/n_packets=[[1-9]]/n_packets=0/' | sort], [0], [dnl
+ cookie=0x0,  table=0, n_packets=0, n_bytes=0, idle_age=0, ip,in_port=1 actions=ct(table=1,zone=64000)
+ cookie=0x0,  table=1, n_packets=0, n_bytes=0, idle_age=0, ct_state=+new+trk,icmp,in_port=1 actions=output:2
+ cookie=0x0,  table=1, n_packets=0, n_bytes=0, idle_age=0, ct_state=+new+trk,ip,in_port=1 actions=controller(userdata=00.de.ad.be.ef.ca.fe.01)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
