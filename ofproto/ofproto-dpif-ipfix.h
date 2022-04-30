@@ -48,7 +48,7 @@ bool dpif_ipfix_get_bridge_exporter_output_sampling(const struct dpif_ipfix *);
 bool dpif_ipfix_get_flow_exporter_tunnel_sampling(const struct dpif_ipfix *,
                                                   const uint32_t);
 bool dpif_ipfix_is_tunnel_port(const struct dpif_ipfix *, odp_port_t);
-void dpif_ipfix_set_options(
+bool dpif_ipfix_set_options(
     struct dpif_ipfix *,
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);

@@ -926,17 +926,21 @@ dpif_ipfix_bridge_exporter_destroy(struct dpif_ipfix_bridge_exporter *exporter)
 static void
 dpif_ipfix_bridge_exporter_set_options(
     struct dpif_ipfix_bridge_exporter *exporter,
-    const struct ofproto_ipfix_bridge_exporter_options *options)
+    const struct ofproto_ipfix_bridge_exporter_options *options,
+    bool *options_changed)
 {
-    bool options_changed;
-
     if (!options || sset_is_empty(&options->targets)) {
         /* No point in doing any work if there are no targets. */
-        dpif_ipfix_bridge_exporter_clear(exporter);
+        if (exporter->options) {
+            dpif_ipfix_bridge_exporter_clear(exporter);
+            *options_changed = true;
+        } else {
+            *options_changed = false;
+        }
         return;
     }
 
-    options_changed = (
+    *options_changed = (
         !exporter->options
         || !ofproto_ipfix_bridge_exporter_options_equal(
             options, exporter->options));
@@ -945,7 +949,7 @@ dpif_ipfix_bridge_exporter_set_options(
      * shortchanged in collectors (which indicates that opening one or
      * more of the configured collectors failed, so that we should
      * retry). */
-    if (options_changed
+    if (*options_changed
         || collectors_count(exporter->exporter.collectors)
             < sset_count(&options->targets)) {
         if (!dpif_ipfix_exporter_set_options(
@@ -957,7 +961,7 @@ dpif_ipfix_bridge_exporter_set_options(
     }
 
     /* Avoid reconfiguring if options didn't change. */
-    if (!options_changed) {
+    if (!*options_changed) {
         return;
     }
 
@@ -1015,17 +1019,21 @@ dpif_ipfix_flow_exporter_destroy(struct dpif_ipfix_flow_exporter *exporter)
 static bool
 dpif_ipfix_flow_exporter_set_options(
     struct dpif_ipfix_flow_exporter *exporter,
-    const struct ofproto_ipfix_flow_exporter_options *options)
+    const struct ofproto_ipfix_flow_exporter_options *options,
+    bool *options_changed)
 {
-    bool options_changed;
-
     if (sset_is_empty(&options->targets)) {
         /* No point in doing any work if there are no targets. */
-        dpif_ipfix_flow_exporter_clear(exporter);
+        if (exporter->options) {
+            dpif_ipfix_flow_exporter_clear(exporter);
+            *options_changed = true;
+        } else {
+            *options_changed = false;
+        }
         return true;
     }
 
-    options_changed = (
+    *options_changed = (
         !exporter->options
         || !ofproto_ipfix_flow_exporter_options_equal(
             options, exporter->options));
@@ -1034,7 +1042,7 @@ dpif_ipfix_flow_exporter_set_options(
      * shortchanged in collectors (which indicates that opening one or
      * more of the configured collectors failed, so that we should
      * retry). */
-    if (options_changed
+    if (*options_changed
         || collectors_count(exporter->exporter.collectors)
             < sset_count(&options->targets)) {
         if (!dpif_ipfix_exporter_set_options(
@@ -1046,7 +1054,7 @@ dpif_ipfix_flow_exporter_set_options(
     }
 
     /* Avoid reconfiguring if options didn't change. */
-    if (!options_changed) {
+    if (!*options_changed) {
         return true;
     }
 
@@ -1069,7 +1077,7 @@ remove_flow_exporter(struct dpif_ipfix *di,
     free(node);
 }
 
-void
+bool
 dpif_ipfix_set_options(
     struct dpif_ipfix *di,
     const struct ofproto_ipfix_bridge_exporter_options *bridge_exporter_options,
@@ -1077,16 +1085,19 @@ dpif_ipfix_set_options(
     size_t n_flow_exporters_options) OVS_EXCLUDED(mutex)
 {
     int i;
+    bool beo_changed, feo_changed, entry_changed;
     struct ofproto_ipfix_flow_exporter_options *options;
     struct dpif_ipfix_flow_exporter_map_node *node;
 
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
-                                           bridge_exporter_options);
+                                           bridge_exporter_options,
+                                           &beo_changed);
 
     /* Add new flow exporters and update current flow exporters. */
     options = (struct ofproto_ipfix_flow_exporter_options *)
         flow_exporters_options;
+    feo_changed = false;
     for (i = 0; i < n_flow_exporters_options; i++) {
         node = dpif_ipfix_find_flow_exporter_map_node(
             di, options->collector_set_id);
@@ -1095,10 +1106,14 @@ dpif_ipfix_set_options(
             dpif_ipfix_flow_exporter_init(&node->exporter);
             hmap_insert(&di->flow_exporter_map, &node->node,
                         hash_int(options->collector_set_id, 0));
+            feo_changed = true;
         }
-        if (!dpif_ipfix_flow_exporter_set_options(&node->exporter, options)) {
+        if (!dpif_ipfix_flow_exporter_set_options(&node->exporter,
+                                                  options,
+                                                  &entry_changed)) {
             remove_flow_exporter(di, node);
         }
+        feo_changed = entry_changed ? true : feo_changed;
         options++;
     }
 
@@ -1117,10 +1132,12 @@ dpif_ipfix_set_options(
         }
         if (i == n_flow_exporters_options) {  /* Not found. */
             remove_flow_exporter(di, node);
+            feo_changed = true;
         }
     }
 
     ovs_mutex_unlock(&mutex);
+    return beo_changed || feo_changed;
 }
 
 struct dpif_ipfix *
