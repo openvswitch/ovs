@@ -2339,6 +2339,7 @@ set_ipfix(
     struct dpif_ipfix *di = ofproto->ipfix;
     bool has_options = bridge_exporter_options || flow_exporters_options;
     bool new_di = false;
+    bool options_changed = false;
 
     if (has_options && !di) {
         di = ofproto->ipfix = dpif_ipfix_create();
@@ -2348,7 +2349,7 @@ set_ipfix(
     if (di) {
         /* Call set_options in any case to cleanly flush the flow
          * caches in the last exporters that are to be destroyed. */
-        dpif_ipfix_set_options(
+        options_changed = dpif_ipfix_set_options(
             di, bridge_exporter_options, flow_exporters_options,
             n_flow_exporters_options);
 
@@ -2365,9 +2366,7 @@ set_ipfix(
             ofproto->ipfix = NULL;
         }
 
-        /* TODO: need to consider ipfix option changes more than
-         * enable/disable */
-        if (new_di || !ofproto->ipfix) {
+        if (new_di || options_changed) {
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
         }
     }
