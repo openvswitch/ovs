@@ -7426,13 +7426,28 @@ dnl configure bridge IPFIX and ensure that sample action generation works at the
 dnl datapath level.
 AT_SETUP([ofproto-dpif - Bridge IPFIX sanity check])
 OVS_VSWITCHD_START
+dnl first revalidation triggered by add interface
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+1
+])
+
 add_of_ports br0 1 2 3
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+2
+])
 
 dnl Sample every packet using bridge-based sampling.
 AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
                     --id=@fix create ipfix targets=\"127.0.0.1:4739\" \
-                              sampling=1], [0], [ignore])
+                              sampling=2], [0], [ignore])
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+3
+])
 
+AT_CHECK([ovs-vsctl set ipfix `ovs-vsctl get bridge br0 ipfix` sampling=1], [0])
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+4
+])
 dnl Send some packets that should be sampled.
 for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
