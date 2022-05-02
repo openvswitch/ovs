@@ -1299,7 +1299,12 @@ class Row(object):
 
     def _uuid_to_row(self, atom, base):
         if base.ref_table:
-            return self._idl.tables[base.ref_table.name].rows.get(atom)
+            try:
+                table = self._idl.tables[base.ref_table.name]
+            except KeyError as e:
+                msg = "Table {} is not registered".format(base.ref_table.name)
+                raise AttributeError(msg) from e
+            return table.rows.get(atom)
         else:
             return atom
 
