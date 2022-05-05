@@ -2297,7 +2297,7 @@ set_dport_range(const struct nat_action_info_t *ni, const struct conn_key *k,
     }
 }
 
-/* Gets the initial in range address based on the hash.
+/* Gets an in range address based on the hash.
  * Addresses are kept in network order. */
 static void
 get_addr_in_range(union ct_addr *min, union ct_addr *max,
@@ -2322,10 +2322,10 @@ get_addr_in_range(union ct_addr *min, union ct_addr *max,
 }
 
 static void
-get_initial_addr(const struct conn *conn, union ct_addr *min,
-                 union ct_addr *max, union ct_addr *curr,
-                 uint32_t hash, bool ipv4,
-                 const struct nat_action_info_t *nat_info)
+find_addr(const struct conn *conn, union ct_addr *min,
+          union ct_addr *max, union ct_addr *curr,
+          uint32_t hash, bool ipv4,
+          const struct nat_action_info_t *nat_info)
 {
     const union ct_addr zero_ip = {0};
 
@@ -2350,51 +2350,6 @@ store_addr_to_key(union ct_addr *addr, struct conn_key *key,
     } else {
         key->src.addr = *addr;
     }
-}
-
-static void
-next_addr_in_range(union ct_addr *curr, union ct_addr *min,
-                   union ct_addr *max, bool ipv4)
-{
-    if (ipv4) {
-        /* This check could be unified with IPv6, but let's avoid
-         * an unneeded memcmp() in case of IPv4. */
-        if (min->ipv4 == max->ipv4) {
-            return;
-        }
-
-        curr->ipv4 = (curr->ipv4 == max->ipv4) ? min->ipv4
-                                               : htonl(ntohl(curr->ipv4) + 1);
-    } else {
-        if (!memcmp(min, max, sizeof *min)) {
-            return;
-        }
-
-        if (!memcmp(curr, max, sizeof *curr)) {
-            *curr = *min;
-            return;
-        }
-
-        nat_ipv6_addr_increment(&curr->ipv6, 1);
-    }
-}
-
-static bool
-next_addr_in_range_guarded(union ct_addr *curr, union ct_addr *min,
-                           union ct_addr *max, union ct_addr *guard,
-                           bool ipv4)
-{
-    bool exhausted;
-
-    next_addr_in_range(curr, min, max, ipv4);
-
-    if (ipv4) {
-        exhausted = (curr->ipv4 == guard->ipv4);
-    } else {
-        exhausted = !memcmp(curr, guard, sizeof *curr);
-    }
-
-    return exhausted;
 }
 
 static bool
@@ -2422,7 +2377,7 @@ nat_get_unique_l4(struct conntrack *ct, struct conn *nat_conn,
  * collide with any existing one.
  *
  * In case of SNAT:
- *    - For each src IP address in the range (if any).
+ *    - Pick a src IP address in the range.
  *        - Try to find a source port in range (if any).
  *        - If no port range exists, use the whole
  *          ephemeral range (after testing the port
@@ -2430,7 +2385,7 @@ nat_get_unique_l4(struct conntrack *ct, struct conn *nat_conn,
  *          specified range.
  *
  * In case of DNAT:
- *    - For each dst IP address in the range (if any).
+ *    - Pick a dst IP address in the range.
  *        - For each dport in range (if any) tries to find
  *          an unique tuple.
  *        - Eventually, if the previous attempt fails,
@@ -2443,9 +2398,8 @@ nat_get_unique_tuple(struct conntrack *ct, const struct conn *conn,
                      struct conn *nat_conn,
                      const struct nat_action_info_t *nat_info)
 {
-    union ct_addr min_addr = {0}, max_addr = {0}, curr_addr = {0},
-                  guard_addr = {0};
     uint32_t hash = nat_range_hash(conn, ct->hash_basis, nat_info);
+    union ct_addr min_addr = {0}, max_addr = {0}, addr = {0};
     bool pat_proto = conn->key.nw_proto == IPPROTO_TCP ||
                      conn->key.nw_proto == IPPROTO_UDP;
     uint16_t min_dport, max_dport, curr_dport;
@@ -2454,12 +2408,8 @@ nat_get_unique_tuple(struct conntrack *ct, const struct conn *conn,
     min_addr = nat_info->min_addr;
     max_addr = nat_info->max_addr;
 
-    get_initial_addr(conn, &min_addr, &max_addr, &curr_addr, hash,
-                     (conn->key.dl_type == htons(ETH_TYPE_IP)), nat_info);
-
-    /* Save the address we started from so that
-     * we can stop once we reach it. */
-    guard_addr = curr_addr;
+    find_addr(conn, &min_addr, &max_addr, &addr, hash,
+              (conn->key.dl_type == htons(ETH_TYPE_IP)), nat_info);
 
     set_sport_range(nat_info, &conn->key, hash, &curr_sport,
                     &min_sport, &max_sport);
@@ -2471,8 +2421,7 @@ nat_get_unique_tuple(struct conntrack *ct, const struct conn *conn,
         nat_conn->rev_key.dst.port = htons(curr_sport);
     }
 
-another_round:
-    store_addr_to_key(&curr_addr, &nat_conn->rev_key,
+    store_addr_to_key(&addr, &nat_conn->rev_key,
                       nat_info->nat_action);
 
     if (!pat_proto) {
@@ -2481,7 +2430,7 @@ another_round:
             return true;
         }
 
-        goto next_addr;
+        return false;
     }
 
     bool found = false;
@@ -2499,16 +2448,7 @@ another_round:
         return true;
     }
 
-    /* Check if next IP is in range and respin. Otherwise, notify
-     * exhaustion to the caller. */
-next_addr:
-    if (next_addr_in_range_guarded(&curr_addr, &min_addr,
-                                   &max_addr, &guard_addr,
-                                   conn->key.dl_type == htons(ETH_TYPE_IP))) {
-        return false;
-    }
-
-    goto another_round;
+    return false;
 }
 
 static enum ct_update_res
