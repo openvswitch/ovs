@@ -2357,14 +2357,35 @@ nat_get_unique_l4(struct conntrack *ct, struct conn *nat_conn,
                   ovs_be16 *port, uint16_t curr, uint16_t min,
                   uint16_t max)
 {
+    static const unsigned int max_attempts = 128;
+    uint16_t range = max - min + 1;
+    unsigned int attempts;
     uint16_t orig = curr;
+    unsigned int i = 0;
 
+    attempts = range;
+    if (attempts > max_attempts) {
+        attempts = max_attempts;
+    }
+
+another_round:
+    i = 0;
     FOR_EACH_PORT_IN_RANGE (curr, min, max) {
+        if (i++ >= attempts) {
+            break;
+        }
+
         *port = htons(curr);
         if (!conn_lookup(ct, &nat_conn->rev_key,
                          time_msec(), NULL, NULL)) {
             return true;
         }
+    }
+
+    if (attempts < range && attempts >= 16) {
+        attempts /= 2;
+        curr = min + (random_uint32() % range);
+        goto another_round;
     }
 
     *port = htons(orig);
