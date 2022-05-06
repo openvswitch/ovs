@@ -32,6 +32,14 @@ struct test_vector {
     const uint8_t output[20];
 };
 
+struct test_api {
+    void (*sha1_init)(struct sha1_ctx *);
+    void (*sha1_update)(struct sha1_ctx *, const void *, uint32_t size);
+    void (*sha1_final)(struct sha1_ctx *, uint8_t digest[SHA1_DIGEST_SIZE]);
+    void (*sha1_bytes)(const void *, uint32_t size,
+                       uint8_t digest[SHA1_DIGEST_SIZE]);
+};
+
 static const struct test_vector vectors[] = {
     /* FIPS 180-1. */
     {
@@ -92,13 +100,13 @@ static const struct test_vector vectors[] = {
 };
 
 static void
-test_one(const struct test_vector *vec)
+test_one(const struct test_api *api, const struct test_vector *vec)
 {
     uint8_t md[SHA1_DIGEST_SIZE];
     int i;
 
     /* All at once. */
-    sha1_bytes(vec->data, vec->size, md);
+    api->sha1_bytes(vec->data, vec->size, md);
     assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
 
     /* In two pieces. */
@@ -107,10 +115,10 @@ test_one(const struct test_vector *vec)
         int n1 = vec->size - n0;
         struct sha1_ctx sha1;
 
-        sha1_init(&sha1);
-        sha1_update(&sha1, vec->data, n0);
-        sha1_update(&sha1, vec->data + n0, n1);
-        sha1_final(&sha1, md);
+        api->sha1_init(&sha1);
+        api->sha1_update(&sha1, vec->data, n0);
+        api->sha1_update(&sha1, vec->data + n0, n1);
+        api->sha1_final(&sha1, md);
         assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
     }
 
@@ -119,7 +127,7 @@ test_one(const struct test_vector *vec)
 }
 
 static void
-test_big_vector(void)
+test_big_vector(const struct test_api *api)
 {
     enum { SIZE = 1000000 };
     struct test_vector vec = {
@@ -133,12 +141,12 @@ test_big_vector(void)
     for (i = 0; i < SIZE; i++) {
         vec.data[i] = 'a';
     }
-    test_one(&vec);
+    test_one(api, &vec);
     free(vec.data);
 }
 
 static void
-test_huge_vector(void)
+test_huge_vector(const struct test_api *api)
 {
     enum { SIZE = 1000000000 };
     struct test_vector vec = {
@@ -159,13 +167,13 @@ test_huge_vector(void)
         vec.data[i] = 'a';
     }
 
-    sha1_init(&sha1);
+    api->sha1_init(&sha1);
     for (sz = 0; sz < SIZE; sz += chunk) {
         int n = sz + chunk < SIZE ? chunk : SIZE - sz;
 
-        sha1_update(&sha1, vec.data, n);
+        api->sha1_update(&sha1, vec.data, n);
     }
-    sha1_final(&sha1, md);
+    api->sha1_final(&sha1, md);
     ovs_assert(!memcmp(md, vec.output, SHA1_DIGEST_SIZE));
 
     free(vec.data);
@@ -176,15 +184,29 @@ test_huge_vector(void)
 static void
 test_shar1_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    int i;
+    struct test_api api[] = {
+        {
+            .sha1_init   = sha1_init,
+            .sha1_update = sha1_update,
+            .sha1_final  = sha1_final,
+            .sha1_bytes  = sha1_bytes,
+        },
+        {
+            .sha1_init   = ovs_sha1_init,
+            .sha1_update = ovs_sha1_update,
+            .sha1_final  = ovs_sha1_final,
+            .sha1_bytes  = ovs_sha1_bytes,
+        },
+    };
 
-    for (i = 0; i < ARRAY_SIZE(vectors); i++) {
-        test_one(&vectors[i]);
+    for (int i = 0; i < ARRAY_SIZE(api); i++) {
+        for (int j = 0; j < ARRAY_SIZE(vectors); j++) {
+            test_one(&api[i], &vectors[j]);
+        }
+
+        test_big_vector(&api[i]);
+        test_huge_vector(&api[i]);
     }
-
-    test_big_vector();
-    test_huge_vector();
-
     putchar('\n');
 }
 

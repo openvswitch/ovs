@@ -54,7 +54,7 @@ AT_CLEANUP
 
 AT_SETUP([SHA-1])
 AT_KEYWORDS([sha1])
-AT_CHECK([ovstest test-sha1], [0], [..........
+AT_CHECK([ovstest test-sha1], [0], [....................
 ])
 AT_CLEANUP
 
