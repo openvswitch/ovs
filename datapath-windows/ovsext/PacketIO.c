@@ -45,7 +45,9 @@ extern NDIS_STRING ovsExtFriendlyNameUC;
 
 static VOID OvsFinalizeCompletionList(OvsCompletionList *completionList);
 static VOID OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
-                    PNET_BUFFER_LIST netBufferLists, ULONG sendCompleteFlags);
+                                  PNET_BUFFER_LIST netBufferLists,
+                                  ULONG sendCompleteFlags,
+                                  BOOLEAN isSendComplete);
 
 VOID
 OvsInitCompletionList(OvsCompletionList *completionList,
@@ -155,7 +157,7 @@ OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
         OvsReportNBLIngressError(switchContext, netBufferLists, &filterReason,
                                  NDIS_STATUS_PAUSED);
         OvsCompleteNBLIngress(switchContext, netBufferLists,
-                              sendCompleteFlags);
+                              sendCompleteFlags, FALSE);
         return;
     }
 
@@ -175,6 +177,79 @@ OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                             NDIS_DEFAULT_PORT_NUMBER, sendFlags);
 }
 
+static __inline BOOLEAN
+OvsCheckNBLSingleSource(PNET_BUFFER_LIST netBufferLists)
+{
+    UINT32 sourcePortId = 0;
+    BOOLEAN singleSource = TRUE;
+    PNET_BUFFER_LIST curNbl = netBufferLists;
+    PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO info;
+
+    while (curNbl != NULL) {
+        info = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl);
+        if (info == NULL) {
+            /* We are not able to determine the source port ID */
+            singleSource = FALSE;
+            OVS_LOG_INFO("nbl %p has no source port", curNbl);
+            break;
+        }
+        if (curNbl == netBufferLists) {
+            sourcePortId = info->SourcePortId;
+        } else if (info->SourcePortId != sourcePortId) {
+            singleSource = FALSE;
+            OVS_LOG_INFO("Source port in nbl %p is %u, not from %u",
+                         curNbl, info->SourcePortId, sourcePortId);
+            break;
+        }
+        curNbl = NET_BUFFER_LIST_NEXT_NBL(curNbl);
+    }
+
+    return singleSource;
+}
+
+/*
+ * SendNetBufferListsCompleteHandler releases the NetBufferLists with flag
+ * NDIS_SEND_COMPLETE_FLAGS_SWITCH_SINGLE_SOURCE if all the NBLs have same
+ * source port, for cloned NBLs, source port might be changed, although the
+ * cloned NBLs have same source port, there parent NBLs may have different
+ * source ports, so we should have a check before passing the flag to
+ * NdisFSendNetBufferListsComplete.
+ */
+static __inline VOID
+OvsCompleteUpperLayerNBL(NDIS_HANDLE ndisHandle,
+                         PNET_BUFFER_LIST netBufferLists,
+                         ULONG sendCompleteFlags,
+                         BOOLEAN isSendComplete)
+{
+    BOOLEAN singleSource = TRUE;
+    PNET_BUFFER_LIST curNbl, nextNbl;
+
+    /* To check whether the NBLs are from the same source port */
+    if (isSendComplete &&
+        (sendCompleteFlags & NDIS_SEND_COMPLETE_FLAGS_SWITCH_SINGLE_SOURCE)) {
+        singleSource = OvsCheckNBLSingleSource(netBufferLists);
+    }
+
+    if (singleSource) {
+        NdisFSendNetBufferListsComplete(ndisHandle,
+                                        netBufferLists,
+                                        sendCompleteFlags);
+    } else {
+        /*
+         * Not from a single source port, releasing the NBls without flag
+         * NDIS_SEND_COMPLETE_FLAGS_SWITCH_SINGLE_SOURCE doesn't help, so
+         * let's release them one by one.
+         */
+        for (curNbl = netBufferLists; curNbl != NULL; curNbl = nextNbl) {
+            nextNbl = NET_BUFFER_LIST_NEXT_NBL(curNbl);
+            NET_BUFFER_LIST_NEXT_NBL(curNbl) = NULL;
+            NdisFSendNetBufferListsComplete(ndisHandle,
+                                            curNbl,
+                                            sendCompleteFlags);
+        }
+    }
+}
+
 static __inline VOID
 OvsStartNBLIngressError(POVS_SWITCH_CONTEXT switchContext,
                         PNET_BUFFER_LIST nblList,
@@ -184,8 +259,8 @@ OvsStartNBLIngressError(POVS_SWITCH_CONTEXT switchContext,
 {
     ASSERT(error);
     OvsReportNBLIngressError(switchContext, nblList, filterReason, error);
-    NdisFSendNetBufferListsComplete(switchContext->NdisFilterHandle, nblList,
-                                    sendCompleteFlags);
+    OvsCompleteUpperLayerNBL(switchContext->NdisFilterHandle, nblList,
+                             sendCompleteFlags, FALSE);
 }
 
 static VOID
@@ -427,7 +502,8 @@ OvsExtSendNBL(NDIS_HANDLE filterModuleContext,
 static VOID
 OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                       PNET_BUFFER_LIST netBufferLists,
-                      ULONG sendCompleteFlags)
+                      ULONG sendCompleteFlags,
+                      BOOLEAN isSendComplete)
 {
     PNET_BUFFER_LIST curNbl = NULL, nextNbl = NULL;
     OvsCompletionList newList;
@@ -449,8 +525,10 @@ OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
 
     /* Complete the NBL's that were sent by the upper layer. */
     if (newList.dropNbl != NULL) {
-        NdisFSendNetBufferListsComplete(switchContext->NdisFilterHandle, newList.dropNbl,
-                                        sendCompleteFlags);
+        OvsCompleteUpperLayerNBL(switchContext->NdisFilterHandle,
+                                 newList.dropNbl,
+                                 sendCompleteFlags,
+                                 isSendComplete);
     }
 }
 
@@ -466,7 +544,7 @@ OvsExtSendNBLComplete(NDIS_HANDLE filterModuleContext,
                       ULONG sendCompleteFlags)
 {
     OvsCompleteNBLIngress((POVS_SWITCH_CONTEXT)filterModuleContext,
-                          netBufferLists, sendCompleteFlags);
+                          netBufferLists, sendCompleteFlags, TRUE);
 }
 
 
@@ -476,7 +554,8 @@ OvsFinalizeCompletionList(OvsCompletionList *completionList)
     if (completionList->dropNbl != NULL) {
         OvsCompleteNBLIngress(completionList->switchContext,
                               completionList->dropNbl,
-                              completionList->sendCompleteFlags);
+                              completionList->sendCompleteFlags,
+                              FALSE);
 
         completionList->dropNbl = NULL;
         completionList->dropNblNext = &completionList->dropNbl;
