@@ -87,6 +87,7 @@ struct dpcls_subtable {
      * can be used at any time by a PMD thread, so it's declared as an atomic
      * here to prevent garbage from being read. */
     ATOMIC(dpcls_subtable_lookup_func) lookup_func;
+    struct dpcls_subtable_lookup_info_t *lookup_func_info;
 
     /* Caches the masks to match a packet to, reducing runtime calculations. */
     uint64_t *mf_masks;

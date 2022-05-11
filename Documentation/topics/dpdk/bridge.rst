@@ -179,11 +179,11 @@ these CPU ISA additions are available, and to allow the user to enable them.
 OVS provides multiple implementations of dpcls. The following command enables
 the user to check what implementations are available in a running instance::
 
-    $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
-    Available lookup functions (priority : name)
-            0 : autovalidator
-            1 : generic
-            0 : avx512_gather
+    $ ovs-appctl dpif-netdev/subtable-lookup-info-get
+    Available dpcls implementations:
+            autovalidator (Use count: 1, Priority: 5)
+            generic (Use count: 0, Priority: 1)
+            avx512_gather (Use count: 0, Priority: 3)
 
 To set the priority of a lookup function, run the ``prio-set`` command::
 
@@ -195,11 +195,11 @@ above indicates that one subtable of one DPCLS port is has changed its lookup
 function due to the command being run. To verify the prioritization, re-run the
 get command, note the updated priority of the ``avx512_gather`` function::
 
-    $ ovs-appctl dpif-netdev/subtable-lookup-prio-get
-    Available lookup functions (priority : name)
-            0 : autovalidator
-            1 : generic
-            5 : avx512_gather
+    $ ovs-appctl dpif-netdev/subtable-lookup-info-get
+    Available dpcls implementations:
+            autovalidator (Use count: 1, Priority: 5)
+            generic (Use count: 0, Priority: 1)
+            avx512_gather (Use count: 0, Priority: 3)
 
 If two lookup functions have the same priority, the first one in the list is
 chosen, and the 2nd occurance of that priority is not used. Put in logical

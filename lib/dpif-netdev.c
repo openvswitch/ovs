@@ -1000,21 +1000,9 @@ dpif_netdev_subtable_lookup_get(struct unixctl_conn *conn, int argc OVS_UNUSED,
                                 const char *argv[] OVS_UNUSED,
                                 void *aux OVS_UNUSED)
 {
-    /* Get a list of all lookup functions. */
-    struct dpcls_subtable_lookup_info_t *lookup_funcs = NULL;
-    int32_t count = dpcls_subtable_lookup_info_get(&lookup_funcs);
-    if (count < 0) {
-        unixctl_command_reply_error(conn, "error getting lookup names");
-        return;
-    }
-
-    /* Add all lookup functions to reply string. */
     struct ds reply = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&reply, "Available lookup functions (priority : name)\n");
-    for (int i = 0; i < count; i++) {
-        ds_put_format(&reply, "  %d : %s\n", lookup_funcs[i].prio,
-                      lookup_funcs[i].name);
-    }
+
+    dpcls_impl_print_stats(&reply);
     unixctl_command_reply(conn, ds_cstr(&reply));
     ds_destroy(&reply);
 }
@@ -1617,7 +1605,7 @@ dpif_netdev_init(void)
                              "[lookup_func] [prio]",
                              2, 2, dpif_netdev_subtable_lookup_set,
                              NULL);
-    unixctl_command_register("dpif-netdev/subtable-lookup-prio-get", "",
+    unixctl_command_register("dpif-netdev/subtable-lookup-info-get", "",
                              0, 0, dpif_netdev_subtable_lookup_get,
                              NULL);
     unixctl_command_register("dpif-netdev/dpif-impl-set",
@@ -9704,6 +9692,7 @@ dpcls_destroy_subtable(struct dpcls *cls, struct dpcls_subtable *subtable)
     pvector_remove(&cls->subtables, subtable);
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 subtable->mask.hash);
+    dpcls_info_dec_usage(subtable->lookup_func_info);
     ovsrcu_postpone(dpcls_subtable_destroy_cb, subtable);
 }
 
@@ -9754,7 +9743,9 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
      * by the PMD thread.
      */
     atomic_init(&subtable->lookup_func,
-                dpcls_subtable_get_best_impl(unit0, unit1));
+                dpcls_subtable_get_best_impl(unit0, unit1,
+                                             &subtable->lookup_func_info));
+    dpcls_info_inc_usage(subtable->lookup_func_info);
 
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */
@@ -9799,12 +9790,23 @@ dpcls_subtable_lookup_reprobe(struct dpcls *cls)
         uint32_t u0_bits = subtable->mf_bits_set_unit0;
         uint32_t u1_bits = subtable->mf_bits_set_unit1;
         void *old_func = subtable->lookup_func;
-
+        struct dpcls_subtable_lookup_info_t *old_info;
+        old_info = subtable->lookup_func_info;
         /* Set the subtable lookup function atomically to avoid garbage data
          * being read by the PMD thread. */
         atomic_store_relaxed(&subtable->lookup_func,
-                    dpcls_subtable_get_best_impl(u0_bits, u1_bits));
-        subtables_changed += (old_func != subtable->lookup_func);
+                dpcls_subtable_get_best_impl(u0_bits, u1_bits,
+                                             &subtable->lookup_func_info));
+        if (old_func != subtable->lookup_func) {
+            subtables_changed += 1;
+        }
+
+        if (old_info != subtable->lookup_func_info) {
+            /* In theory, functions can be shared between implementations, so
+             * do an explicit check on the function info structures. */
+            dpcls_info_dec_usage(old_info);
+            dpcls_info_inc_usage(subtable->lookup_func_info);
+        }
     }
 
     return subtables_changed;
