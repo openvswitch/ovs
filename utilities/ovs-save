@@ -102,7 +102,7 @@ save_interfaces () {
 get_highest_ofp_version() {
     ovs-vsctl get bridge "$1" protocols | \
         sed 's/[][]//g' | sed 's/\ //g' | \
-            awk -F ',' '{ print (NF>1)? $(NF) : "OpenFlow14" }'
+            awk -F ',' '{ print (NF>0)? $(NF) : "OpenFlow14" }'
 }
 
 save_flows () {
