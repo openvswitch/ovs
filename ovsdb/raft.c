@@ -2285,8 +2285,12 @@ raft_command_initiate(struct raft *raft,
 static void
 log_all_commands(struct raft *raft)
 {
+    if (!VLOG_IS_DBG_ENABLED()) {
+        return;
+    }
+
     struct raft_command *cmd;
-    HMAP_FOR_EACH_SAFE (cmd, hmap_node, &raft->commands) {
+    HMAP_FOR_EACH (cmd, hmap_node, &raft->commands) {
         VLOG_DBG("raft command eid: "UUID_FMT, UUID_ARGS(&cmd->eid));
     }
 }
