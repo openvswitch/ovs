@@ -55,7 +55,7 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
 
 /* Compile in implementations only if the compiler ISA checks pass. */
 #if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
-    [MFEX_IMPL_VMBI_IPv4_UDP] = {
+    [MFEX_IMPL_VBMI_IPv4_UDP] = {
         .probe = mfex_avx512_vbmi_probe,
         .extract_func = mfex_avx512_vbmi_ip_udp,
         .name = "avx512_vbmi_ipv4_udp", },
@@ -65,7 +65,7 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
         .extract_func = mfex_avx512_ip_udp,
         .name = "avx512_ipv4_udp", },
 
-    [MFEX_IMPL_VMBI_IPv4_TCP] = {
+    [MFEX_IMPL_VBMI_IPv4_TCP] = {
         .probe = mfex_avx512_vbmi_probe,
         .extract_func = mfex_avx512_vbmi_ip_tcp,
         .name = "avx512_vbmi_ipv4_tcp", },
@@ -75,7 +75,7 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
         .extract_func = mfex_avx512_ip_tcp,
         .name = "avx512_ipv4_tcp", },
 
-    [MFEX_IMPL_VMBI_DOT1Q_IPv4_UDP] = {
+    [MFEX_IMPL_VBMI_DOT1Q_IPv4_UDP] = {
         .probe = mfex_avx512_vbmi_probe,
         .extract_func = mfex_avx512_vbmi_dot1q_ip_udp,
         .name = "avx512_vbmi_dot1q_ipv4_udp", },
@@ -85,7 +85,7 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
         .extract_func = mfex_avx512_dot1q_ip_udp,
         .name = "avx512_dot1q_ipv4_udp", },
 
-    [MFEX_IMPL_VMBI_DOT1Q_IPv4_TCP] = {
+    [MFEX_IMPL_VBMI_DOT1Q_IPv4_TCP] = {
         .probe = mfex_avx512_vbmi_probe,
         .extract_func = mfex_avx512_vbmi_dot1q_ip_tcp,
         .name = "avx512_vbmi_dot1q_ipv4_tcp", },
