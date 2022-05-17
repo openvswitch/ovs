@@ -179,12 +179,13 @@ Guoshuai Li                        ligs@dtdream.com
 Guolin Yang                        gyang@vmware.com
 Guru Chaitanya Perakam             gperakam@Brocade.com
 Gurucharan Shetty                  guru@ovn.org
+Han Ding                           handing@chinatelecom.cn
 Han Zhou                           zhouhan@gmail.com
+Hao Zheng
 Hariprasad Govindharajan           hariprasad.govindharajan@intel.com
 Harry Van Haaren                   harry.van.haaren@intel.com
-Henry Mai
-Hao Zheng
 Helmut Schaa                       helmut.schaa@googlemail.com
+Henry Mai
 Hiteshi Kalra                      hiteshi.kalra@tcs.com
 Hongzhi Guo                        guohongzhi1@huawei.com
 Huanle Han                         hanxueluo@gmail.com
