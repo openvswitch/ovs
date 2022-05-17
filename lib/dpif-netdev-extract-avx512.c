@@ -52,7 +52,6 @@
 
 /* AVX512-BW level permutex2var_epi8 emulation. */
 static inline __m512i
-__attribute__((target("avx512bw")))
 _mm512_maskz_permutex2var_epi8_skx(__mmask64 k_mask,
                                    __m512i v_data_0,
                                    __m512i v_shuf_idxs,
@@ -632,8 +631,6 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
 #define DECLARE_MFEX_FUNC(name, profile)                                \
 uint32_t                                                                \
-__attribute__((__target__("avx512f")))                                  \
-__attribute__((__target__("avx512vl")))                                 \
 __attribute__((__target__("avx512vbmi")))                               \
 mfex_avx512_vbmi_##name(struct dp_packet_batch *packets,                \
                         struct netdev_flow_key *keys, uint32_t keys_size,\
@@ -645,8 +642,6 @@ mfex_avx512_vbmi_##name(struct dp_packet_batch *packets,                \
 }                                                                       \
                                                                         \
 uint32_t                                                                \
-__attribute__((__target__("avx512f")))                                  \
-__attribute__((__target__("avx512vl")))                                 \
 mfex_avx512_##name(struct dp_packet_batch *packets,                     \
                    struct netdev_flow_key *keys, uint32_t keys_size,    \
                    odp_port_t in_port, struct dp_netdev_pmd_thread      \
