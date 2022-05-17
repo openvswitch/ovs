@@ -31,7 +31,6 @@ lib_LTLIBRARIES += lib/libopenvswitchavx512.la
 lib_libopenvswitch_la_LIBADD += lib/libopenvswitchavx512.la
 lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512f \
-	-mavx512bw \
 	-mbmi \
 	-mbmi2 \
 	-fPIC \
@@ -39,13 +38,18 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 lib_libopenvswitchavx512_la_SOURCES = \
 	lib/cpu.c \
 	lib/cpu.h \
-	lib/dpif-netdev-lookup-avx512-gather.c \
-	lib/dpif-netdev-extract-avx512.c \
 	lib/dpif-netdev-avx512.c
+if HAVE_AVX512BW
+lib_libopenvswitchavx512_la_CFLAGS += \
+	-mavx512bw
+lib_libopenvswitchavx512_la_SOURCES += \
+	lib/dpif-netdev-extract-avx512.c \
+	lib/dpif-netdev-lookup-avx512-gather.c
+endif # HAVE_AVX512BW
 lib_libopenvswitchavx512_la_LDFLAGS = \
 	-static
-endif
-endif
+endif # HAVE_LD_AVX512_GOOD
+endif # HAVE_AVX512F
 
 # Build core vswitch libraries as before
 lib_libopenvswitch_la_SOURCES = \
