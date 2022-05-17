@@ -32,7 +32,6 @@ lib_libopenvswitch_la_LIBADD += lib/libopenvswitchavx512.la
 lib_libopenvswitchavx512_la_CFLAGS = \
 	-mavx512f \
 	-mavx512bw \
-	-mavx512dq \
 	-mbmi \
 	-mbmi2 \
 	-fPIC \
