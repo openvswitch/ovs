@@ -155,7 +155,7 @@ netdev_rule_matches_key(const struct dpcls_rule *rule,
 static inline ALWAYS_INLINE __m512i
 avx512_blocks_gather(__m512i v_u0,
                      __m512i v_u1,
-                     const uint64_t *pkt_blocks,
+                     const void *pkt_blocks,
                      const void *tbl_blocks,
                      const void *tbl_mf_masks,
                      __mmask64 u1_bcast_msk,
