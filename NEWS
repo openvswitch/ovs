@@ -1,5 +1,8 @@
 v2.17.2 - xx xxx xxxx
 ---------------------
+   - DPDK:
+     * OVS validated with DPDK 21.11.1.  It is recommended to use this version
+       until further releases.
 
 v2.17.1 - 08 Apr 2022
 ---------------------
