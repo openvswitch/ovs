@@ -165,6 +165,9 @@ class OVSDB(object):
         self._idl_conn = idl.Idl(db_sock, schema)
         OVSDB.wait_for_db_change(self._idl_conn)  # Initial Sync with DB
 
+    def close_idl(self):
+        self._idl_conn.close()
+
     def _get_schema(self):
         error, strm = Stream.open_block(Stream.open(self._db_sock))
         if error:
@@ -500,6 +503,8 @@ def main():
             pass
         sys.exit(1)
 
+    ovsdb.close_idl()
+
     pipes = _doexec(*([dump_cmd, '-i', mirror_interface] + tcpdargs))
     try:
         while pipes.poll() is None:
@@ -512,6 +517,7 @@ def main():
         if pipes.poll() is None:
             pipes.terminate()
 
+        ovsdb = OVSDB(db_sock)
         ovsdb.destroy_mirror(interface, ovsdb.port_bridge(interface))
         ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
         if tap_created is True:
