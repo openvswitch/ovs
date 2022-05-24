@@ -141,15 +141,14 @@ struct flow {
     uint8_t nw_tos;             /* IP ToS (including DSCP and ECN). */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
+    /* L4 (64-bit aligned) */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
     struct eth_addr arp_sha;    /* ARP/ND source hardware address. */
     struct eth_addr arp_tha;    /* ARP/ND target hardware address. */
-    ovs_be16 tcp_flags;         /* TCP flags/ICMPv6 ND options type.
-                                 * With L3 to avoid matching L4. */
+    ovs_be16 tcp_flags;         /* TCP flags/ICMPv6 ND options type. */
     ovs_be16 pad2;              /* Pad to 64 bits. */
     struct ovs_key_nsh nsh;     /* Network Service Header keys */
 
-    /* L4 (64-bit aligned) */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port/ICMP type. */
     ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port/ICMP code. */
     ovs_be16 ct_tp_src;         /* CT original tuple source port/ICMP type. */
@@ -179,7 +178,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
 enum {
     FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_dst),
     FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, nw_src),
-    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
+    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, nd_target),
 };
 BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % sizeof(uint64_t) == 0);
 BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT % sizeof(uint64_t) == 0);

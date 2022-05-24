@@ -129,6 +129,31 @@ Datapath actions: 3
 OVS_VSWITCHD_STOP(["/'prefixes' with incompatible field: ipv6_label/d"])
 AT_CLEANUP
 
+AT_SETUP([flow classifier - ipv6 ND dependency])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+AT_DATA([flows.txt], [dnl
+ table=0,priority=100,ipv6,ipv6_src=1000::/10 actions=resubmit(,1)
+ table=0,priority=0 actions=NORMAL
+ table=1,priority=110,ipv6,ipv6_dst=1000::3 actions=resubmit(,2)
+ table=1,priority=100,ipv6,ipv6_dst=1000::4 actions=resubmit(,2)
+ table=1,priority=0 actions=NORMAL
+ table=2,priority=120,icmp6,nw_ttl=255,icmp_type=135,icmp_code=0,nd_target=1000::1 actions=NORMAL
+ table=2,priority=100,tcp actions=NORMAL
+ table=2,priority=100,icmp6 actions=NORMAL
+ table=2,priority=0 actions=NORMAL
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# test ICMPv6 echo request (which should have no nd_target field)
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,eth_src=f6:d2:b0:19:5e:7b,eth_dst=d2:49:19:91:78:fe,dl_type=0x86dd,ipv6_src=1000::3,ipv6_dst=1000::4,nw_proto=58,icmpv6_type=128,icmpv6_code=0"], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,icmp6,in_port=1,dl_src=f6:d2:b0:19:5e:7b,dl_dst=d2:49:19:91:78:fe,ipv6_src=1000::/10,ipv6_dst=1000::4,nw_ttl=0,nw_frag=no
+Datapath actions: 100,2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conjunctive match])
 
 AT_SETUP([single conjunctive match])
