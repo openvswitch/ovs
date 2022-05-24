@@ -243,7 +243,25 @@ get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb-rebal-interval="0"])
 CHECK_ALB_PARAM([interval], [1 mins], [+$LINENUM])
 
-# No check for above max as it is only a documented max value and not a hard limit
+# Set new value
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb-rebal-interval="100"])
+CHECK_ALB_PARAM([interval], [100 mins], [+$LINENUM])
+
+# Set above max value
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb-rebal-interval="20001"])
+CHECK_ALB_PARAM([interval], [1 mins], [+$LINENUM])
+
+# Set new value
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb-rebal-interval="1000"])
+CHECK_ALB_PARAM([interval], [1000 mins], [+$LINENUM])
+
+# Set Negative value
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb-rebal-interval="-1"])
+CHECK_ALB_PARAM([interval], [1 mins], [+$LINENUM])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
