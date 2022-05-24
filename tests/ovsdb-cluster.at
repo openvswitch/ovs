@@ -468,6 +468,7 @@ ovsdb_cluster_failure_test () {
     if test "$crash_node" == "1"; then
         new_leader=$5
     fi
+    log_grep=$6
 
     cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
@@ -488,7 +489,7 @@ ovsdb_cluster_failure_test () {
     start_server() {
         local i=$1
         printf "\ns$i: starting\n"
-        AT_CHECK([ovsdb-server -vjsonrpc -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+        AT_CHECK([ovsdb-server -vjsonrpc -vraft -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
     }
     connect_server() {
         local i=$1
@@ -514,14 +515,23 @@ ovsdb_cluster_failure_test () {
         fi
         AT_CHECK([ovs-appctl -t "`pwd`"/s$delay_election_node cluster/failure-test delay-election], [0], [ignore])
     fi
+
+    # Initializing the database separately to avoid extra 'wait' operation
+    # in later transactions.
+    AT_CHECK([ovs-vsctl -v --db="$db" --no-leader-only --no-shuffle-remotes --no-wait init], [0], [ignore], [ignore])
+
     AT_CHECK([ovs-appctl -t "`pwd`"/s$crash_node cluster/failure-test $crash_command], [0], [ignore])
     AT_CHECK([ovs-vsctl -v --db="$db" --no-leader-only --no-shuffle-remotes --no-wait create QoS type=x], [0], [ignore], [ignore])
 
-    # Make sure that the node really crashed.
-    AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
-    # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
-    if test "$remote_1" = "$crash_node"; then
-        db=unix:s$remote_2.ovsdb
+    # Make sure that the node really crashed or has specific log message.
+    if test -z "$log_grep"; then
+        AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
+        # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
+        if test "$remote_1" = "$crash_node"; then
+            db=unix:s$remote_2.ovsdb
+        fi
+    else
+        OVS_WAIT_UNTIL([grep -q "$log_grep" s${crash_node}.log])
     fi
     AT_CHECK([ovs-vsctl --db="$db" --no-leader-only --no-wait --columns=type --bare list QoS], [0], [x
 ])
@@ -615,6 +625,11 @@ AT_CLEANUP
 AT_SETUP([OVSDB cluster - txn on follower-2, follower-3 crash after receiving appendReq for the update])
 AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
 ovsdb_cluster_failure_test 2 2 3 crash-after-receiving-append-request-update
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, leader transfers leadership after sending appendReq])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn transfer])
+ovsdb_cluster_failure_test 1 2 1 transfer-leadership-after-sending-append-request -1 "Transferring leadership"
 AT_CLEANUP
 
 
