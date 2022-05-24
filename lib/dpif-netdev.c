@@ -93,7 +93,8 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 /* Auto Load Balancing Defaults */
 #define ALB_IMPROVEMENT_THRESHOLD    25
 #define ALB_LOAD_THRESHOLD           95
-#define ALB_REBALANCE_INTERVAL       1 /* 1 Min */
+#define ALB_REBALANCE_INTERVAL       1     /* 1 Min */
+#define MAX_ALB_REBALANCE_INTERVAL   20000 /* 20000 Min */
 #define MIN_TO_MSEC                  60000
 
 #define FLOW_DUMP_MAX_BATCH 50
@@ -4871,6 +4872,9 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     rebalance_intvl = smap_get_ullong(other_config,
                                       "pmd-auto-lb-rebal-interval",
                                       ALB_REBALANCE_INTERVAL);
+    if (rebalance_intvl > MAX_ALB_REBALANCE_INTERVAL) {
+        rebalance_intvl = ALB_REBALANCE_INTERVAL;
+    }
 
     /* Input is in min, convert it to msec. */
     rebalance_intvl =
