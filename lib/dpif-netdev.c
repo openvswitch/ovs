@@ -4766,8 +4766,8 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint32_t insert_min, cur_min;
     uint32_t tx_flush_interval, cur_tx_flush_interval;
     uint64_t rebalance_intvl;
-    uint8_t rebalance_load, cur_rebalance_load;
-    uint8_t rebalance_improve;
+    uint8_t cur_rebalance_load;
+    uint32_t rebalance_load, rebalance_improve;
     bool log_autolb = false;
     enum sched_assignment_type pmd_rxq_assign_type;
 
@@ -4868,8 +4868,9 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
 
     struct pmd_auto_lb *pmd_alb = &dp->pmd_alb;
 
-    rebalance_intvl = smap_get_int(other_config, "pmd-auto-lb-rebal-interval",
-                                   ALB_REBALANCE_INTERVAL);
+    rebalance_intvl = smap_get_ullong(other_config,
+                                      "pmd-auto-lb-rebal-interval",
+                                      ALB_REBALANCE_INTERVAL);
 
     /* Input is in min, convert it to msec. */
     rebalance_intvl =
@@ -4882,21 +4883,21 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
         log_autolb = true;
     }
 
-    rebalance_improve = smap_get_int(other_config,
-                                     "pmd-auto-lb-improvement-threshold",
-                                     ALB_IMPROVEMENT_THRESHOLD);
+    rebalance_improve = smap_get_uint(other_config,
+                                      "pmd-auto-lb-improvement-threshold",
+                                      ALB_IMPROVEMENT_THRESHOLD);
     if (rebalance_improve > 100) {
         rebalance_improve = ALB_IMPROVEMENT_THRESHOLD;
     }
     if (rebalance_improve != pmd_alb->rebalance_improve_thresh) {
         pmd_alb->rebalance_improve_thresh = rebalance_improve;
         VLOG_INFO("PMD auto load balance improvement threshold set to "
-                  "%"PRIu8"%%", rebalance_improve);
+                  "%"PRIu32"%%", rebalance_improve);
         log_autolb = true;
     }
 
-    rebalance_load = smap_get_int(other_config, "pmd-auto-lb-load-threshold",
-                                  ALB_LOAD_THRESHOLD);
+    rebalance_load = smap_get_uint(other_config, "pmd-auto-lb-load-threshold",
+                                   ALB_LOAD_THRESHOLD);
     if (rebalance_load > 100) {
         rebalance_load = ALB_LOAD_THRESHOLD;
     }
@@ -4904,7 +4905,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     if (rebalance_load != cur_rebalance_load) {
         atomic_store_relaxed(&pmd_alb->rebalance_load_thresh,
                              rebalance_load);
-        VLOG_INFO("PMD auto load balance load threshold set to %"PRIu8"%%",
+        VLOG_INFO("PMD auto load balance load threshold set to %"PRIu32"%%",
                   rebalance_load);
         log_autolb = true;
     }
