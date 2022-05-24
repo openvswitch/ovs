@@ -148,7 +148,7 @@ struct raw_instance {
 /* Information about a particular 'enum ofpraw'. */
 struct raw_info {
     /* All possible instantiations of this OFPRAW_* into OpenFlow headers. */
-    struct raw_instance *instances; /* min_version - max_version + 1 elems. */
+    struct raw_instance *instances; /* max_version - min_version + 1 elems. */
     uint8_t min_version;
     uint8_t max_version;
 
