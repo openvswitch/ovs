@@ -76,7 +76,9 @@ enum raft_failure_test {
     FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE,
     FT_CRASH_BEFORE_SEND_SNAPSHOT_REP,
     FT_DELAY_ELECTION,
-    FT_DONT_SEND_VOTE_REQUEST
+    FT_DONT_SEND_VOTE_REQUEST,
+    FT_TRANSFER_LEADERSHIP,
+    FT_TRANSFER_LEADERSHIP_AFTER_SEND_APPEND_REQ,
 };
 static enum raft_failure_test failure_test;
 
@@ -1855,6 +1857,13 @@ raft_run(struct raft *raft)
         return;
     }
 
+    if (failure_test == FT_TRANSFER_LEADERSHIP) {
+        /* Using this function as it conveniently implements all we need and
+         * snapshotting is the main test scenario for leadership transfer. */
+        raft_notify_snapshot_recommended(raft);
+        failure_test = FT_NO_TEST;
+    }
+
     raft_waiters_run(raft);
 
     if (!raft->listener && time_msec() >= raft->listen_backoff) {
@@ -1990,7 +1999,14 @@ raft_run(struct raft *raft)
         HMAP_FOR_EACH_SAFE (cmd, next_cmd, hmap_node, &raft->commands) {
             if (cmd->timestamp
                 && now - cmd->timestamp > raft->election_timer * 2) {
-                raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
+                if (cmd->index && raft->role != RAFT_LEADER) {
+                    /* This server lost leadership and command didn't complete
+                     * in time.  Likely, it wasn't replicated to the majority
+                     * of servers before losing the leadership. */
+                    raft_command_complete(raft, cmd, RAFT_CMD_LOST_LEADERSHIP);
+                } else {
+                    raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
+                }
             }
         }
         raft_reset_ping_timer(raft);
@@ -2179,6 +2195,9 @@ raft_command_initiate(struct raft *raft,
     }
     if (failure_test == FT_CRASH_AFTER_SEND_APPEND_REQ) {
         ovs_fatal(0, "Raft test: crash after sending append_request.");
+    }
+    if (failure_test == FT_TRANSFER_LEADERSHIP_AFTER_SEND_APPEND_REQ) {
+        failure_test = FT_TRANSFER_LEADERSHIP;
     }
     raft_reset_ping_timer(raft);
 
@@ -2546,7 +2565,13 @@ raft_become_follower(struct raft *raft)
      * configuration is already part of the log.  Possibly the configuration
      * log entry will not be committed, but until we know that we must use the
      * new configuration.  Our AppendEntries processing will properly update
-     * the server configuration later, if necessary. */
+     * the server configuration later, if necessary.
+     *
+     * Also we do not complete commands here, as they can still be completed
+     * if their log entries have already been replicated to other servers.
+     * If the entries were actually committed according to the new leader, our
+     * AppendEntries processing will complete the corresponding commands.
+     */
     struct raft_server *s;
     HMAP_FOR_EACH (s, hmap_node, &raft->add_servers) {
         raft_send_add_server_reply__(raft, &s->sid, s->address, false,
@@ -2560,8 +2585,6 @@ raft_become_follower(struct raft *raft)
         raft_server_destroy(raft->remove_server);
         raft->remove_server = NULL;
     }
-
-    raft_complete_all_commands(raft, RAFT_CMD_LOST_LEADERSHIP);
 }
 
 static void
@@ -2822,61 +2845,56 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         return false;
     }
 
-    if (raft->role == RAFT_LEADER) {
-        while (raft->commit_index < new_commit_index) {
-            uint64_t index = ++raft->commit_index;
-            const struct raft_entry *e = raft_get_entry(raft, index);
-            if (e->data) {
-                struct raft_command *cmd
-                    = raft_find_command_by_eid(raft, &e->eid);
-                if (cmd) {
-                    if (!cmd->index) {
-                        VLOG_DBG("Command completed after role change from"
-                                 " follower to leader "UUID_FMT,
-                                 UUID_ARGS(&e->eid));
-                        cmd->index = index;
-                    }
-                    raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
-                }
-            }
-            if (e->election_timer) {
-                VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
-                          raft->election_timer, e->election_timer);
-                raft->election_timer = e->election_timer;
-                raft->election_timer_new = 0;
-                raft_update_probe_intervals(raft);
-            }
-            if (e->servers) {
-                /* raft_run_reconfigure() can write a new Raft entry, which can
-                 * reallocate raft->entries, which would invalidate 'e', so
-                 * this case must be last, after the one for 'e->data'. */
-                raft_run_reconfigure(raft);
-            }
-        }
-    } else {
-        while (raft->commit_index < new_commit_index) {
-            uint64_t index = ++raft->commit_index;
-            const struct raft_entry *e = raft_get_entry(raft, index);
-            if (e->election_timer) {
-                VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
-                          raft->election_timer, e->election_timer);
-                raft->election_timer = e->election_timer;
-                raft_update_probe_intervals(raft);
-            }
-        }
-        /* Check if any pending command can be completed, and complete it.
-         * This can happen when leader fail-over before sending
-         * execute_command_reply. */
-        const struct uuid *eid = raft_get_eid(raft, new_commit_index);
-        struct raft_command *cmd = raft_find_command_by_eid(raft, eid);
-        if (cmd) {
+    while (raft->commit_index < new_commit_index) {
+        uint64_t index = ++raft->commit_index;
+        const struct raft_entry *e = raft_get_entry(raft, index);
+
+        if (e->data) {
+            struct raft_command *cmd = raft_find_command_by_eid(raft, &e->eid);
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
-            VLOG_INFO_RL(&rl,
-                         "Command completed without reply (eid: "UUID_FMT", "
-                         "commit index: %"PRIu64")",
-                         UUID_ARGS(eid), new_commit_index);
-            cmd->index = new_commit_index;
-            raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
+
+            if (cmd) {
+                if (!cmd->index && raft->role == RAFT_LEADER) {
+                    VLOG_INFO_RL(&rl,
+                        "command completed after role change from "
+                        "follower to leader (eid: "UUID_FMT", "
+                        "commit index: %"PRIu64")", UUID_ARGS(&e->eid), index);
+                } else if (!cmd->index && raft->role != RAFT_LEADER) {
+                    /* This can happen when leader fail-over before sending
+                     * execute_command_reply. */
+                    VLOG_INFO_RL(&rl,
+                        "command completed without reply (eid: "UUID_FMT", "
+                        "commit index: %"PRIu64")", UUID_ARGS(&e->eid), index);
+                } else if (cmd->index && raft->role != RAFT_LEADER) {
+                    /* This can happen if current server lost leadership after
+                     * sending append requests to the majority of servers, but
+                     * before receiving majority of append replies. */
+                    VLOG_INFO_RL(&rl,
+                        "command completed after role change from "
+                        "leader to follower (eid: "UUID_FMT", "
+                        "commit index: %"PRIu64")", UUID_ARGS(&e->eid), index);
+                    /* Clearing 'sid' to avoid sending cmd execution reply. */
+                    cmd->sid = UUID_ZERO;
+                } else {
+                    /* (cmd->index && raft->role == RAFT_LEADER)
+                     * Normal command completion on a leader. */
+                }
+                cmd->index = index;
+                raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
+            }
+        }
+        if (e->election_timer) {
+            VLOG_INFO("Election timer changed from %"PRIu64" to %"PRIu64,
+                      raft->election_timer, e->election_timer);
+            raft->election_timer = e->election_timer;
+            raft->election_timer_new = 0;
+            raft_update_probe_intervals(raft);
+        }
+        if (e->servers && raft->role == RAFT_LEADER) {
+            /* raft_run_reconfigure() can write a new Raft entry, which can
+             * reallocate raft->entries, which would invalidate 'e', so
+             * this case must be last, after the one for 'e->data'. */
+            raft_run_reconfigure(raft);
         }
     }
 
@@ -4860,6 +4878,11 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
         }
     } else if (!strcmp(test, "dont-send-vote-request")) {
         failure_test = FT_DONT_SEND_VOTE_REQUEST;
+    } else if (!strcmp(test,
+                       "transfer-leadership-after-sending-append-request")) {
+        failure_test = FT_TRANSFER_LEADERSHIP_AFTER_SEND_APPEND_REQ;
+    } else if (!strcmp(test, "transfer-leadership")) {
+        failure_test = FT_TRANSFER_LEADERSHIP;
     } else if (!strcmp(test, "clear")) {
         failure_test = FT_NO_TEST;
         unixctl_command_reply(conn, "test dismissed");
