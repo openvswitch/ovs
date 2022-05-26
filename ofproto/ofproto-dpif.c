@@ -1810,6 +1810,8 @@ destruct(struct ofproto *ofproto_, bool del)
 
     seq_destroy(ofproto->ams_seq);
 
+    /* Wait for all the meter destroy work to finish. */
+    ovsrcu_barrier();
     close_dpif_backer(ofproto->backer, del);
 }
 
