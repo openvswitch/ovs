@@ -35,7 +35,7 @@ quiescer_main(void *aux OVS_UNUSED)
 }
 
 static void
-test_rcu_quiesce(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_rcu_quiesce(void)
 {
     pthread_t quiescer;
 
@@ -48,4 +48,29 @@ test_rcu_quiesce(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     xpthread_join(quiescer, NULL);
 }
 
-OVSTEST_REGISTER("test-rcu-quiesce", test_rcu_quiesce);
+static void
+add_count(void *_count)
+{
+    unsigned *count = (unsigned *)_count;
+    (*count) ++;
+}
+
+static void
+test_rcu_barrier(void)
+{
+    unsigned count = 0;
+    for (int i = 0; i < 10; i ++) {
+        ovsrcu_postpone(add_count, &count);
+    }
+
+    ovsrcu_barrier();
+    ovs_assert(count == 10);
+}
+
+static void
+test_rcu(int argc OVS_UNUSED, char *argv[] OVS_UNUSED) {
+    test_rcu_quiesce();
+    test_rcu_barrier();
+}
+
+OVSTEST_REGISTER("test-rcu", test_rcu);
