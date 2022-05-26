@@ -252,7 +252,7 @@ AT_CHECK([ovstest test-barrier], [0], [])
 AT_CLEANUP
 
 AT_SETUP([rcu])
-AT_CHECK([ovstest test-rcu-quiesce], [0], [])
+AT_CHECK([ovstest test-rcu], [0], [])
 AT_CLEANUP
 
 AT_SETUP([stopwatch module])
