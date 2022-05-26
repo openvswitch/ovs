@@ -86,6 +86,7 @@ void lldp_run(struct lldpd *cfg);
 bool lldp_should_send_packet(struct lldp *cfg);
 bool lldp_should_process_flow(struct lldp *lldp, const struct flow *flow);
 bool lldp_configure(struct lldp *lldp, const struct smap *cfg);
+bool lldp_is_enabled(struct lldp *lldp);
 void lldp_process_packet(struct lldp *cfg, const struct dp_packet *);
 void lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
                      const struct eth_addr eth_src);
