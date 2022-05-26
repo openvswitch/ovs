@@ -444,3 +444,40 @@ ovsrcu_init_module(void)
         ovsthread_once_done(&once);
     }
 }
+
+static void
+ovsrcu_barrier_func(void *seq_)
+{
+    struct seq *seq = (struct seq *) seq_;
+    seq_change(seq);
+}
+
+/* Similar to the kernel rcu_barrier, ovsrcu_barrier waits for all outstanding
+ * RCU callbacks to complete. However, unlike the kernel rcu_barrier, which
+ * might return immediately if there are no outstanding RCU callbacks,
+ * this API will at least wait for a grace period.
+ *
+ * Another issue the caller might need to know is that the barrier is just
+ * for "one-shot", i.e. if inside some RCU callbacks, another RCU callback is
+ * registered, this API only guarantees the first round of RCU callbacks have
+ * been executed after it returns.
+ */
+void
+ovsrcu_barrier(void)
+{
+    struct seq *seq = seq_create();
+    /* First let all threads flush their cbsets. */
+    ovsrcu_synchronize();
+
+    /* Then register a new cbset, ensure this cbset
+     * is at the tail of the global list. */
+    uint64_t seqno = seq_read(seq);
+    ovsrcu_postpone__(ovsrcu_barrier_func, (void *) seq);
+
+    do {
+        seq_wait(seq, seqno);
+        poll_block();
+    } while (seqno == seq_read(seq));
+
+    seq_destroy(seq);
+}
