@@ -155,6 +155,19 @@
  *         port_delete(id);
  *     }
  *
+ * Use ovsrcu_barrier() to wait for all the outstanding RCU callbacks to
+ * finish. This is useful when you have to destroy some resources however
+ * these resources are referenced in the outstanding RCU callbacks.
+ *
+ *     void rcu_cb(void *A) {
+ *         do_something(A);
+ *     }
+ *
+ *     void destroy_A() {
+ *         ovsrcu_postpone(rcu_cb, A); // will use A later
+ *         ovsrcu_barrier(); // wait for rcu_cb done
+ *         do_destroy_A(); // free A
+ *     }
  */
 
 #include "compiler.h"
@@ -309,5 +322,7 @@ bool ovsrcu_is_quiescent(void);
 void ovsrcu_synchronize(void);
 
 void ovsrcu_exit(void);
+
+void ovsrcu_barrier(void);
 
 #endif /* ovs-rcu.h */
