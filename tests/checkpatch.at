@@ -164,10 +164,10 @@ m4_define([COMMON_PATCH_HEADER], [dnl
 
     Signed-off-by: A
     ---
-    diff --git a/A.c b/A.c
+    diff --git a/$([[ ! -z "$1" ]] && echo "$1" || echo "A.c") b/$([[ ! -z "$1" ]] && echo "$1" || echo "A.c")
     index 0000000..1111111 100644
-    --- a/A.c
-    +++ b/A.c
+    --- a/$([[ ! -z "$1" ]] && echo "$1" || echo "A.c")
+    +++ b/$([[ ! -z "$1" ]] && echo "$1" || echo "A.c")
     @@ -1,1 +1,1 @@])
 
 
@@ -345,6 +345,24 @@ try_checkpatch \
     #8 FILE: A.c:1:
          if (--mcs->n_refs==0) {
 "
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - check misuse APIs])
+try_checkpatch \
+   "COMMON_PATCH_HEADER([a.c])
+    +     ovsrcu_barrier();
+    " \
+    "WARNING: Are you sure you need to use ovsrcu_barrier(), "\
+"in most cases ovsrcu_synchronize() will be fine?
+    #8 FILE: a.c:1:
+         ovsrcu_barrier();
+"
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER([lib/ovs-rcu.c])
+    +     ovsrcu_barrier();
+    "
 
 AT_CLEANUP
 
