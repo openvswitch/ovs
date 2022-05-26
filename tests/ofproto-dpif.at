@@ -29,6 +29,39 @@ AT_CHECK([ovs-appctl revalidator/wait])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - lldp revalidator event(REV_RECONFIGURE)])
+OVS_VSWITCHD_START(
+    [add-port br0 p1 -- set interface p1 ofport_request=1 type=dummy]
+)
+dnl first revalidation triggered by add interface
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+1
+])
+
+dnl enable lldp
+AT_CHECK([ovs-vsctl set interface p1 lldp:enable=true])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+2
+])
+
+dnl disable lldp
+AT_CHECK([ovs-vsctl set interface p1 lldp:enable=false])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+3
+])
+
+dnl remove lldp, no revalidation as lldp was disabled
+AT_CHECK([ovs-vsctl remove interface p1 lldp enable])
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl coverage/read-counter rev_reconfigure], [0], [dnl
+3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - active-backup bonding (with primary)])
 
 dnl Create br0 with members p1, p2 and p7, creating bond0 with p1 and

@@ -738,6 +738,14 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
     ovs_mutex_unlock(&mutex);
 }
 
+/* Is LLDP enabled?
+ */
+bool
+lldp_is_enabled(struct lldp *lldp)
+{
+    return lldp ? lldp->enabled : false;
+}
+
 /* Configures the LLDP stack.
  */
 bool
