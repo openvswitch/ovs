@@ -140,13 +140,9 @@ lldpd_cleanup(struct lldpd *cfg)
     VLOG_DBG("cleanup all ports");
 
     LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware) {
-        if (!hw->h_flags) {
-            ovs_list_remove(&hw->h_entries);
-            lldpd_remote_cleanup(hw, NULL, true);
-            lldpd_hardware_cleanup(cfg, hw);
-        } else {
-            lldpd_remote_cleanup(hw, NULL, false);
-        }
+        ovs_list_remove(&hw->h_entries);
+        lldpd_remote_cleanup(hw, NULL, true);
+        lldpd_hardware_cleanup(cfg, hw);
     }
 
     VLOG_DBG("cleanup all chassis");
