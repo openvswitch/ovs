@@ -247,6 +247,14 @@ enum {
     VALID_NUMA_ID           = 1 << 8,
 };
 
+/* Linux 4.4 introduced the ability to skip the internal stats gathering
+ * that netlink does via an external filter mask that can be passed into
+ * a netlink request.
+ */
+#ifndef RTEXT_FILTER_SKIP_STATS
+#define RTEXT_FILTER_SKIP_STATS (1 << 3)
+#endif
+
 /* Use one for the packet buffer and another for the aux buffer to receive
  * TSO packets. */
 #define IOV_STD_SIZE 1
@@ -6579,6 +6587,9 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
     if (netdev_linux_netnsid_is_remote(netdev)) {
         nl_msg_put_u32(&request, IFLA_IF_NETNSID, netdev->netnsid);
     }
+
+    nl_msg_put_u32(&request, IFLA_EXT_MASK, RTEXT_FILTER_SKIP_STATS);
+
     error = nl_transact(NETLINK_ROUTE, &request, &reply);
     ofpbuf_uninit(&request);
     if (error) {
