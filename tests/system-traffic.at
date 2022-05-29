@@ -192,6 +192,41 @@ NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping6 between two ports with header modify])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96", e4:11:22:33:44:55)
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96", e4:11:22:33:44:54)
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::3 lladdr e4:11:22:33:44:54 dev p0])
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::2 lladdr e4:11:22:33:44:54 dev p0])
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::1 lladdr e4:11:22:33:44:55 dev p0])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+
+AT_CHECK([ovs-ofctl del-flows -OOpenFlow15 br0], [], [stdout], [stderr])
+AT_CHECK([ovs-ofctl add-flow -OOpenFlow15 br0 in_port=ovs-p0,ipv6,ipv6_dst=fc00::3,ipv6_src=fc00::1,actions=set_field:fc00::2-\>ipv6_dst,ovs-p1], [], [stdout], [stderr])
+AT_CHECK([ovs-ofctl add-flow -OOpenFlow15 br0 in_port=ovs-p1,ipv6,ipv6_dst=fc00::1,ipv6_src=fc00::2,actions=set_field:fc00::3-\>ipv6_src,ovs-p0], [], [stdout], [stderr])
+
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping over bond])
 OVS_TRAFFIC_VSWITCHD_START()
 
