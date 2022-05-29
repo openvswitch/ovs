@@ -17,7 +17,6 @@ addons:
       - libjemalloc-dev
       - libnuma-dev
       - libpcap-dev
-      - python3-openssl
       - python3-pip
       - python3-sphinx
       - libelf-dev

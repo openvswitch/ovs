@@ -207,3 +207,122 @@ AT_CHECK([tail -1 stdout], [0],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([Encap Decap MPLS xlate action])
+
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=patch \
+                                       options:peer=p3 ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p3 -- set Interface p3 type=patch \
+                                       options:peer=p2 ofport_request=3 -- \
+   add-port br1 p4 -- set Interface p4 type=dummy ofport_request=4])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (dummy)
+    p2 2/none: (patch: peer=p3)
+  br1:
+    br1 65534/101: (dummy-internal)
+    p3 3/none: (patch: peer=p2)
+    p4 4/4: (dummy)
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "in_port=p1,actions=encap(mpls),encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:p2"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br1 "in_port=p3,dl_type=0x8847 actions=decap(),decap(packet_type(ns=0,type=0)),output:p4"])
+
+# Now send two real ICMP echo request packets in on port p1
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 |sort], [0],
+[flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:add_mpls(label=0,tc=0,ttl=64,bos=1,eth_type=0x8847),push_eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),pop_eth,pop_mpls(eth_type=0x6558),recirc(0x1)
+recirc_id(0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:4
+])
+
+AT_CHECK(ovs-appctl dpif/set-dp-features br0 add_mpls false)
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 |sort], [0],
+[flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:userspace(pid=0,slow_path(action))
+recirc_id(0x2),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:4
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([Encap MPLS xlate action - max labels])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (dummy)
+    p2 2/2: (dummy)
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "in_port=p1,actions=encap(mpls),set_field:1->mpls_label,encap(mpls),set_field:2->mpls_label,encap(mpls),set_field:3->mpls_label,encap(mpls),set_field:4->mpls_label,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,output:p2"])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 |sort], [0],
+[flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:drop
+])
+
+OVS_VSWITCHD_STOP(["/ofproto_dpif_xlate|WARN|dropping packet on which an encap MPLS action can't be performed as it would have more MPLS LSEs than the 3 supported. on bridge br0 while processing mpls,in_port=1,vlan_tci=0x0000,dl_src=3a:6d:d2:09:9c:ab,dl_dst=1e:2c:e9:2a:66:9e,mpls_label=3,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=8256,mpls_lse2=4416/d"])
+AT_CLEANUP
+
+AT_SETUP([Decap MPLS xlate action - max labels])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (dummy)
+    p2 2/2: (dummy)
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847 actions=decap(),decap(packet_type(ns=0,type=0)),output:p2"])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 00000000000200000000000188470000204000002040000020400000204036b1ee7c010236b1ee7c010308004500005403444000400121610a0101010a0101020800efac7ce400035b2c1f6100000000500b020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 00000000000200000000000188470000204000002040000020400000204036b1ee7c010236b1ee7c010308004500005403444000400121610a0101010a0101020800efac7ce400035b2c1f6100000000500b020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637] ,[0], [ignore])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 |sort], [0],
+[flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8847),mpls(label=2/0x0,tc=0/0,ttl=64/0x0,bos=0/1,label=2/0x0,tc=0/0,ttl=64/0x0,bos=0/1,label=2/0x0,tc=0/0,ttl=64/0x0,bos=0/1), packets:1, bytes:128, used:0.0s, actions:drop
+])
+
+OVS_VSWITCHD_STOP(["/ofproto_dpif_xlate|WARN|dropping packet on which an MPLS decap can't be performed as it has more MPLS LSEs than the 3 supported. on bridge br0 while processing packet_type=(1,0x8847),in_port=1,mpls_label=2,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=8256,mpls_lse2=8256/d"])
+AT_CLEANUP

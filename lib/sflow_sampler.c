@@ -107,7 +107,7 @@ void sfl_sampler_resetFlowSeqNo(SFLSampler *sampler) { sampler->flowSampleSeqNo 
   -----------------___________________________------------------
 */
 
-void sfl_sampler_tick(SFLSampler *sampler, time_t now)
+void sfl_sampler_tick(SFLSampler *sampler)
 {
     if(sampler->backoffThreshold && sampler->samplesThisTick > sampler->backoffThreshold) {
 	/* automatic backoff.  If using hardware sampling then this is where you have to

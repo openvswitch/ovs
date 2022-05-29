@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ccmap.h"
 #include "cmap.h"
 
 #include "dpif-netdev-private-dfc.h"
@@ -78,20 +79,26 @@ struct dp_netdev_pmd_thread {
     struct ovs_refcount ref_cnt;    /* Every reference must be refcount'ed. */
     struct cmap_node node;          /* In 'dp->poll_threads'. */
 
-    /* Per thread exact-match cache.  Note, the instance for cpu core
-     * NON_PMD_CORE_ID can be accessed by multiple threads, and thusly
-     * need to be protected by 'non_pmd_mutex'.  Every other instance
-     * will only be accessed by its own pmd thread. */
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct dfc_cache flow_cache;
+    /* Per thread exact match cache and signature match cache.  Note, the
+     * instance for cpu core NON_PMD_CORE_ID can be accessed by multiple
+     * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
+     * other instance will only be accessed by its own pmd thread. */
+    struct dfc_cache flow_cache;
 
     /* Flow-Table and classifiers
      *
-     * Writers of 'flow_table' must take the 'flow_mutex'.  Corresponding
-     * changes to 'classifiers' must be made while still holding the
-     * 'flow_mutex'.
+     * Writers of 'flow_table'/'simple_match_table' and their n* ccmap's must
+     * take the 'flow_mutex'.  Corresponding changes to 'classifiers' must be
+     * made while still holding the 'flow_mutex'.
      */
     struct ovs_mutex flow_mutex;
     struct cmap flow_table OVS_GUARDED; /* Flow table. */
+    struct cmap simple_match_table OVS_GUARDED; /* Flow table with simple
+                                                   match flows only. */
+    /* Number of flows in the 'flow_table' per in_port. */
+    struct ccmap n_flows OVS_GUARDED;
+    /* Number of flows in the 'simple_match_table' per in_port. */
+    struct ccmap n_simple_flows OVS_GUARDED;
 
     /* One classifier per in_port polled by the pmd */
     struct cmap classifiers;

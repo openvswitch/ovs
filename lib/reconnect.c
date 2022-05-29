@@ -75,7 +75,8 @@ struct reconnect {
 
 static void reconnect_transition__(struct reconnect *, long long int now,
                                    enum state state);
-static long long int reconnect_deadline__(const struct reconnect *);
+static long long int reconnect_deadline__(const struct reconnect *,
+                                          long long int now);
 static bool reconnect_may_retry(struct reconnect *);
 
 static const char *
@@ -539,7 +540,7 @@ reconnect_transition__(struct reconnect *fsm, long long int now,
 }
 
 static long long int
-reconnect_deadline__(const struct reconnect *fsm)
+reconnect_deadline__(const struct reconnect *fsm, long long int now)
 {
     ovs_assert(fsm->state_entered != LLONG_MIN);
     switch (fsm->state) {
@@ -557,8 +558,18 @@ reconnect_deadline__(const struct reconnect *fsm)
         if (fsm->probe_interval) {
             long long int base = MAX(fsm->last_activity, fsm->state_entered);
             long long int expiration = base + fsm->probe_interval;
-            if (fsm->last_receive_attempt >= expiration) {
+            if (now < expiration || fsm->last_receive_attempt >= expiration) {
+                /* We still have time before the expiration or the time has
+                 * already passed and there was no activity.  In the first case
+                 * we need to wait for the expiration, in the second - we're
+                 * already past the deadline. */
                 return expiration;
+            } else {
+                /* Time has already passed, but we didn't attempt to receive
+                 * anything.  We need to wake up and try to receive even if
+                 * nothing is pending, so we can update the expiration time or
+                 * transition to a different state. */
+                return now + 1;
             }
         }
         return LLONG_MAX;
@@ -566,8 +577,10 @@ reconnect_deadline__(const struct reconnect *fsm)
     case S_IDLE:
         if (fsm->probe_interval) {
             long long int expiration = fsm->state_entered + fsm->probe_interval;
-            if (fsm->last_receive_attempt >= expiration) {
+            if (now < expiration || fsm->last_receive_attempt >= expiration) {
                 return expiration;
+            } else {
+                return now + 1;
             }
         }
         return LLONG_MAX;
@@ -618,7 +631,7 @@ reconnect_deadline__(const struct reconnect *fsm)
 enum reconnect_action
 reconnect_run(struct reconnect *fsm, long long int now)
 {
-    if (now >= reconnect_deadline__(fsm)) {
+    if (now >= reconnect_deadline__(fsm, now)) {
         switch (fsm->state) {
         case S_VOID:
             return 0;
@@ -671,7 +684,7 @@ reconnect_wait(struct reconnect *fsm, long long int now)
 int
 reconnect_timeout(struct reconnect *fsm, long long int now)
 {
-    long long int deadline = reconnect_deadline__(fsm);
+    long long int deadline = reconnect_deadline__(fsm, now);
     if (deadline != LLONG_MAX) {
         long long int remaining = deadline - now;
         return MAX(0, MIN(INT_MAX, remaining));

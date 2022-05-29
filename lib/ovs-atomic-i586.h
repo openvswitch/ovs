@@ -400,6 +400,11 @@ atomic_signal_fence(memory_order order)
 #define atomic_compare_exchange_weak_explicit   \
     atomic_compare_exchange_strong_explicit
 
+#define atomic_exchange_explicit(RMW, ARG, ORDER) \
+    atomic_exchange__(RMW, ARG, ORDER)
+#define atomic_exchange(RMW, ARG) \
+    atomic_exchange_explicit(RMW, ARG, memory_order_seq_cst)
+
 #define atomic_add__(RMW, ARG, CLOB)            \
     asm volatile("lock; xadd %0,%1 ; "          \
                  "# atomic_add__     "          \

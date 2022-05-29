@@ -4,14 +4,14 @@ After=ovsdb-server.service network-pre.target systemd-udev-settle.service
 Before=network.target network.service
 Requires=ovsdb-server.service
 ReloadPropagatedFrom=ovsdb-server.service
-AssertPathIsReadWrite=/var/run/openvswitch/db.sock
+AssertPathIsReadWrite=/run/openvswitch/db.sock
 PartOf=openvswitch.service
 
 [Service]
 Type=forking
-PIDFile=/var/run/openvswitch/ovs-vswitchd.pid
+PIDFile=/run/openvswitch/ovs-vswitchd.pid
 Restart=on-failure
-Environment=XDG_RUNTIME_DIR=/var/run/openvswitch
+Environment=XDG_RUNTIME_DIR=/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 EnvironmentFile=-/run/openvswitch.useropts

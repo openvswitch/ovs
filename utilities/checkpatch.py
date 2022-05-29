@@ -181,6 +181,7 @@ __regex_added_doc_rst = re.compile(
 __regex_empty_return = re.compile(r'\s*return;')
 __regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
                                __parenthesized_constructs)
+__regex_nonascii_characters = re.compile("[^\u0000-\u007f]")
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -274,9 +275,13 @@ def if_and_for_end_with_bracket_check(line):
         if not balanced_parens(line):
             return True
 
-        if __regex_ends_with_bracket.search(line) is None and \
-           __regex_if_macros.match(line) is None:
-            return False
+        if __regex_ends_with_bracket.search(line) is None:
+            if line.endswith("\\") and \
+               __regex_if_macros.match(line) is not None:
+                return True
+            else:
+                return False
+
     if __regex_conditional_else_bracing.match(line) is not None:
         return False
     if __regex_conditional_else_bracing2.match(line) is not None:
@@ -288,6 +293,11 @@ def pointer_whitespace_check(line):
     """Return TRUE if there is no space between a pointer name and the
        asterisk that denotes this is a apionter type, ie: 'struct foo*'"""
     return __regex_ptr_declaration_missing_whitespace.search(line) is not None
+
+
+def nonascii_character_check(line):
+    """Return TRUE if inappropriate Unicode characters are detected """
+    return __regex_nonascii_characters.search(line) is not None
 
 
 def cast_whitespace_check(line):
@@ -562,6 +572,11 @@ checks = [
      lambda: print_error("Inappropriate spacing in pointer declaration")},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
+     'check': lambda x: nonascii_character_check(x),
+     'print':
+     lambda: print_error("Inappropriate non-ascii characters detected.")},
+
+    {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: cast_whitespace_check(x),
      'print':
@@ -749,14 +764,28 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
     is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
                                      re.I | re.M | re.S)
 
+    tags_typos = {
+        r'^Acked by:': 'Acked-by:',
+        r'^Reported at:': 'Reported-at:',
+        r'^Reported by:': 'Reported-by:',
+        r'^Requested by:': 'Requested-by:',
+        r'^Reviewed by:': 'Reviewed-by:',
+        r'^Submitted at:': 'Submitted-at:',
+        r'^Suggested by:': 'Suggested-by:',
+    }
+
     reset_counters()
 
-    for line in text.splitlines():
+    for line in text.split("\n"):
         if current_file != previous_file:
             previous_file = current_file
 
         lineno = lineno + 1
         total_line = total_line + 1
+
+        if line == "\f":
+            # Form feed
+            continue
         if len(line) <= 0:
             continue
 
@@ -838,6 +867,11 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                 print("%d: %s\n" % (lineno, line))
             elif spellcheck:
                 check_spelling(line, False)
+            for typo, correct in tags_typos.items():
+                m = re.match(typo, line, re.I)
+                if m:
+                    print_error("%s tag is malformed." % (correct[:-1]))
+                    print("%d: %s\n" % (lineno, line))
 
         elif parse == PARSE_STATE_CHANGE_BODY:
             newfile = hunks.match(line)
@@ -920,7 +954,7 @@ def ovs_checkpatch_print_result():
 
 def ovs_checkpatch_file(filename):
     try:
-        mail = email.message_from_file(open(filename, 'r'))
+        mail = email.message_from_file(open(filename, 'r', encoding='utf8'))
     except:
         print_error("Unable to parse file '%s'. Is it a patch?" % filename)
         return -1

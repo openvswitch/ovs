@@ -118,7 +118,6 @@ using the debian packages as mentioned in step 2 of the "Requirements" section.
 
        $ ovsdb-tool create /etc/openvswitch/ovs.db vswitchd/vswitch.ovsschema
        $ ovsdb-tool create /etc/openvswitch/vtep.db vtep/vtep.ovsschema
-      ```
 
 2. Start ovsdb-server and have it handle both databases:
 

@@ -56,6 +56,7 @@
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/thread.h"
+#include "openvswitch/usdt-probes.h"
 #include "openvswitch/vlog.h"
 #include "packets.h"
 #include "random.h"
@@ -84,6 +85,8 @@ enum { MAX_PORTS = USHRT_MAX };
 #define EPOLLEXCLUSIVE (1u << 28)
 #endif
 
+#define OVS_DP_F_UNSUPPORTED (1u << 31);
+
 /* This PID is not used by the kernel datapath when using dispatch per CPU,
  * but it is required to be set (not zero). */
 #define DPIF_NETLINK_PER_CPU_PID UINT32_MAX
@@ -98,6 +101,7 @@ struct dpif_netlink_dp {
     const char *name;                  /* OVS_DP_ATTR_NAME. */
     const uint32_t *upcall_pid;        /* OVS_DP_ATTR_UPCALL_PID. */
     uint32_t user_features;            /* OVS_DP_ATTR_USER_FEATURES */
+    uint32_t cache_size;               /* OVS_DP_ATTR_MASKS_CACHE_SIZE */
     const struct ovs_dp_stats *stats;  /* OVS_DP_ATTR_STATS. */
     const struct ovs_dp_megaflow_stats *megaflow_stats;
                                        /* OVS_DP_ATTR_MEGAFLOW_STATS.*/
@@ -382,36 +386,61 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         dp_request.cmd = OVS_DP_CMD_SET;
     }
 
-    /* The Open vSwitch kernel module has two modes for dispatching upcalls:
-     * per-vport and per-cpu.
-     *
-     * When dispatching upcalls per-vport, the kernel will
-     * send the upcall via a Netlink socket that has been selected based on the
-     * vport that received the packet that is causing the upcall.
-     *
-     * When dispatching upcall per-cpu, the kernel will send the upcall via
-     * a Netlink socket that has been selected based on the cpu that received
-     * the packet that is causing the upcall.
-     *
-     * First we test to see if the kernel module supports per-cpu dispatching
-     * (the preferred method). If it does not support per-cpu dispatching, we
-     * fall back to the per-vport dispatch mode.
+    /* Some older kernels will not reject unknown features. This will cause
+     * 'ovs-vswitchd' to incorrectly assume a feature is supported. In order to
+     * test for that, we attempt to set a feature that we know is not supported
+     * by any kernel. If this feature is not rejected, we can assume we are
+     * running on one of these older kernels.
      */
     dp_request.user_features |= OVS_DP_F_UNALIGNED;
-    dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
-    dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+    dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+    dp_request.user_features |= OVS_DP_F_UNSUPPORTED;
     error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
     if (error) {
-        dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+        /* The Open vSwitch kernel module has two modes for dispatching
+         * upcalls: per-vport and per-cpu.
+         *
+         * When dispatching upcalls per-vport, the kernel will
+         * send the upcall via a Netlink socket that has been selected based on
+         * the vport that received the packet that is causing the upcall.
+         *
+         * When dispatching upcall per-cpu, the kernel will send the upcall via
+         * a Netlink socket that has been selected based on the cpu that
+         * received the packet that is causing the upcall.
+         *
+         * First we test to see if the kernel module supports per-cpu
+         * dispatching (the preferred method). If it does not support per-cpu
+         * dispatching, we fall back to the per-vport dispatch mode.
+         */
+        dp_request.user_features &= ~OVS_DP_F_UNSUPPORTED;
+        dp_request.user_features &= ~OVS_DP_F_VPORT_PIDS;
+        dp_request.user_features |= OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+        error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+        if (error == EOPNOTSUPP) {
+            dp_request.user_features &= ~OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
+            dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
+            error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+        }
+        if (error) {
+            return error;
+        }
+
+        error = open_dpif(&dp, dpifp);
+        dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
+    } else {
+        VLOG_INFO("Kernel does not correctly support feature negotiation. "
+                  "Using standard features.");
+        dp_request.cmd = OVS_DP_CMD_SET;
+        dp_request.user_features = 0;
+        dp_request.user_features |= OVS_DP_F_UNALIGNED;
         dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
         error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
-    }
-    if (error) {
-        return error;
+        if (error) {
+            return error;
+        }
+        error = open_dpif(&dp, dpifp);
     }
 
-    error = open_dpif(&dp, dpifp);
-    dpif_netlink_set_features(*dpifp, OVS_DP_F_TC_RECIRC_SHARING);
     ofpbuf_delete(buf);
 
     if (create) {
@@ -749,9 +778,18 @@ dpif_netlink_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
             stats->n_masks = dp.megaflow_stats->n_masks;
             stats->n_mask_hit = get_32aligned_u64(
                 &dp.megaflow_stats->n_mask_hit);
+            stats->n_cache_hit = get_32aligned_u64(
+                &dp.megaflow_stats->n_cache_hit);
+
+            if (!stats->n_cache_hit) {
+                /* Old kernels don't use this field and always
+                 * report zero instead.  Disable this stat. */
+                stats->n_cache_hit = UINT64_MAX;
+            }
         } else {
             stats->n_masks = UINT32_MAX;
             stats->n_mask_hit = UINT64_MAX;
+            stats->n_cache_hit = UINT64_MAX;
         }
         ofpbuf_delete(buf);
     }
@@ -2015,6 +2053,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
                 aux->txn.reply = &aux->reply;
             }
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_put,
+                           dpif, put, &flow, &aux->request);
             break;
 
         case DPIF_OP_FLOW_DEL:
@@ -2025,6 +2066,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
                 aux->txn.reply = &aux->reply;
             }
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_del,
+                           dpif, del, &flow, &aux->request);
             break;
 
         case DPIF_OP_EXECUTE:
@@ -2045,6 +2089,12 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             } else {
                 dpif_netlink_encode_execute(dpif->dp_ifindex, &op->execute,
                                             &aux->request);
+
+                OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_execute,
+                               dpif, &op->execute,
+                               dp_packet_data(op->execute.packet),
+                               dp_packet_size(op->execute.packet),
+                               &aux->request);
             }
             break;
 
@@ -2053,6 +2103,9 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             dpif_netlink_init_flow_get(dpif, get, &flow);
             aux->txn.reply = get->buffer;
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
+
+            OVS_USDT_PROBE(dpif_netlink_operate__, op_flow_get,
+                           dpif, get, &flow, &aux->request);
             break;
 
         default:
@@ -4261,6 +4314,104 @@ probe_broken_meters(struct dpif *dpif)
     }
     return broken_meters;
 }
+
+
+static int
+dpif_netlink_cache_get_supported_levels(struct dpif *dpif_, uint32_t *levels)
+{
+    struct dpif_netlink_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    /* If available, in the kernel we support one level of cache.
+     * Unfortunately, there is no way to detect if the older kernel module has
+     * the cache feature.  For now, we only report the cache information if the
+     * kernel module reports the OVS_DP_ATTR_MASKS_CACHE_SIZE attribute. */
+
+    *levels = 0;
+    error = dpif_netlink_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+
+        if (dp.cache_size != UINT32_MAX) {
+            *levels = 1;
+        }
+        ofpbuf_delete(buf);
+    }
+
+    return error;
+}
+
+static int
+dpif_netlink_cache_get_name(struct dpif *dpif_ OVS_UNUSED, uint32_t level,
+                            const char **name)
+{
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    *name = "masks-cache";
+    return 0;
+}
+
+static int
+dpif_netlink_cache_get_size(struct dpif *dpif_, uint32_t level, uint32_t *size)
+{
+    struct dpif_netlink_dp dp;
+    struct ofpbuf *buf;
+    int error;
+
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    error = dpif_netlink_dp_get(dpif_, &dp, &buf);
+    if (!error) {
+
+        ofpbuf_delete(buf);
+
+        if (dp.cache_size == UINT32_MAX) {
+            return EOPNOTSUPP;
+        }
+        *size = dp.cache_size;
+    }
+    return error;
+}
+
+static int
+dpif_netlink_cache_set_size(struct dpif *dpif_, uint32_t level, uint32_t size)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct dpif_netlink_dp request, reply;
+    struct ofpbuf *bufp;
+    int error;
+
+    size = ROUND_UP_POW2(size);
+
+    if (level != 0) {
+        return EINVAL;
+    }
+
+    dpif_netlink_dp_init(&request);
+    request.cmd = OVS_DP_CMD_SET;
+    request.name = dpif_->base_name;
+    request.dp_ifindex = dpif->dp_ifindex;
+    request.cache_size = size;
+    /* We need to set the dpif user_features, as the kernel module assumes the
+     * OVS_DP_ATTR_USER_FEATURES attribute is always present. If not, it will
+     * reset all the features. */
+    request.user_features = dpif->user_features;
+
+    error = dpif_netlink_dp_transact(&request, &reply, &bufp);
+    if (!error) {
+        ofpbuf_delete(bufp);
+        if (reply.cache_size != size) {
+            return EINVAL;
+        }
+    }
+
+    return error;
+}
+
 
 const struct dpif_class dpif_netlink_class = {
     "system",
@@ -4293,6 +4444,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_flow_dump_thread_destroy,
     dpif_netlink_flow_dump_next,
     dpif_netlink_operate,
+    NULL,                       /* offload_stats_get */
     dpif_netlink_recv_set,
     dpif_netlink_handlers_set,
     dpif_netlink_number_handlers_required,
@@ -4340,6 +4492,10 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* bond_add */
     NULL,                       /* bond_del */
     NULL,                       /* bond_stats_get */
+    dpif_netlink_cache_get_supported_levels,
+    dpif_netlink_cache_get_name,
+    dpif_netlink_cache_get_size,
+    dpif_netlink_cache_set_size,
 };
 
 static int
@@ -4603,6 +4759,9 @@ dpif_netlink_dp_from_ofpbuf(struct dpif_netlink_dp *dp, const struct ofpbuf *buf
         [OVS_DP_ATTR_USER_FEATURES] = {
                         .type = NL_A_U32,
                         .optional = true },
+        [OVS_DP_ATTR_MASKS_CACHE_SIZE] = {
+                        .type = NL_A_U32,
+                        .optional = true },
     };
 
     dpif_netlink_dp_init(dp);
@@ -4633,6 +4792,12 @@ dpif_netlink_dp_from_ofpbuf(struct dpif_netlink_dp *dp, const struct ofpbuf *buf
 
     if (a[OVS_DP_ATTR_USER_FEATURES]) {
         dp->user_features = nl_attr_get_u32(a[OVS_DP_ATTR_USER_FEATURES]);
+    }
+
+    if (a[OVS_DP_ATTR_MASKS_CACHE_SIZE]) {
+        dp->cache_size = nl_attr_get_u32(a[OVS_DP_ATTR_MASKS_CACHE_SIZE]);
+    } else {
+        dp->cache_size = UINT32_MAX;
     }
 
     return 0;
@@ -4668,6 +4833,10 @@ dpif_netlink_dp_to_ofpbuf(const struct dpif_netlink_dp *dp, struct ofpbuf *buf)
                           sizeof *dp->upcall_pids * dp->n_upcall_pids);
     }
 
+    if (dp->cache_size != UINT32_MAX) {
+        nl_msg_put_u32(buf, OVS_DP_ATTR_MASKS_CACHE_SIZE, dp->cache_size);
+    }
+
     /* Skip OVS_DP_ATTR_STATS since we never have a reason to serialize it. */
 }
 
@@ -4676,6 +4845,7 @@ static void
 dpif_netlink_dp_init(struct dpif_netlink_dp *dp)
 {
     memset(dp, 0, sizeof *dp);
+    dp->cache_size = UINT32_MAX;
 }
 
 static void

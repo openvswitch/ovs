@@ -384,6 +384,7 @@ check_pkt_len(size=200,gt(drop),le(5))
 check_pkt_len(size=200,gt(ct(nat)),le(drop))
 check_pkt_len(size=200,gt(set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15))),le(set(eth(src=00:01:02:03:04:06,dst=10:11:12:13:14:16))))
 lb_output(1)
+add_mpls(label=200,tc=7,ttl=64,bos=1,eth_type=0x8847)
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

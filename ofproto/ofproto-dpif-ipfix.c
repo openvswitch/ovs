@@ -1078,7 +1078,7 @@ dpif_ipfix_set_options(
 {
     int i;
     struct ofproto_ipfix_flow_exporter_options *options;
-    struct dpif_ipfix_flow_exporter_map_node *node, *next;
+    struct dpif_ipfix_flow_exporter_map_node *node;
 
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
@@ -1103,7 +1103,7 @@ dpif_ipfix_set_options(
     }
 
     /* Remove dropped flow exporters, if any needs to be removed. */
-    HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
+    HMAP_FOR_EACH_SAFE (node, node, &di->flow_exporter_map) {
         /* This is slow but doesn't take any extra memory, and
          * this table is not supposed to contain many rows anyway. */
         options = (struct ofproto_ipfix_flow_exporter_options *)
@@ -1215,7 +1215,7 @@ static void
 dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *exp_node;
-    struct dpif_ipfix_port *dip, *next;
+    struct dpif_ipfix_port *dip;
 
     dpif_ipfix_bridge_exporter_clear(&di->bridge_exporter);
 
@@ -1224,7 +1224,7 @@ dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
         free(exp_node);
     }
 
-    HMAP_FOR_EACH_SAFE (dip, next, hmap_node, &di->ports) {
+    HMAP_FOR_EACH_SAFE (dip, hmap_node, &di->ports) {
         dpif_ipfix_del_port__(di, dip);
     }
 }
@@ -2799,7 +2799,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
                         bool forced_end, const uint64_t export_time_usec,
                         const uint32_t export_time_sec)
 {
-    struct ipfix_flow_cache_entry *entry, *next_entry;
+    struct ipfix_flow_cache_entry *entry;
     uint64_t max_flow_start_timestamp_usec;
     bool template_msg_sent = false;
     enum ipfix_flow_end_reason flow_end_reason;
@@ -2811,7 +2811,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
     max_flow_start_timestamp_usec = export_time_usec -
         1000000LL * exporter->cache_active_timeout;
 
-    LIST_FOR_EACH_SAFE (entry, next_entry, cache_flow_start_timestamp_list_node,
+    LIST_FOR_EACH_SAFE (entry, cache_flow_start_timestamp_list_node,
                         &exporter->cache_flow_start_timestamp_list) {
         if (forced_end) {
             flow_end_reason = FORCED_END;
@@ -3018,6 +3018,7 @@ dpif_ipfix_read_actions(const struct flow *flow,
         case OVS_ACTION_ATTR_CHECK_PKT_LEN:
         case OVS_ACTION_ATTR_UNSPEC:
         case OVS_ACTION_ATTR_DROP:
+        case OVS_ACTION_ATTR_ADD_MPLS:
         case __OVS_ACTION_ATTR_MAX:
         default:
             break;

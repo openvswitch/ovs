@@ -35,6 +35,7 @@
 #include "netdev-offload-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
+#include "ovs-atomic.h"
 #include "ovs-numa.h"
 #include "smap.h"
 #include "svec.h"
@@ -50,9 +51,10 @@ static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
 static bool vhost_postcopy_enabled = false; /* Status of vHost POSTCOPY
                                              * support. */
-static bool dpdk_initialized = false; /* Indicates successful initialization
-                                       * of DPDK. */
 static bool per_port_memory = false; /* Status of per port memory support */
+
+/* Indicates successful initialization of DPDK. */
+static atomic_bool dpdk_initialized = ATOMIC_VAR_INIT(false);
 
 static int
 process_vhost_flags(char *flag, const char *default_val, int size,
@@ -405,6 +407,13 @@ dpdk_init__(const struct smap *ovs_other_config)
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
 
+#ifdef DPDK_IN_MEMORY_SUPPORTED
+    if (!args_contains(&args, "--in-memory") &&
+            !args_contains(&args, "--legacy-mem")) {
+        svec_add(&args, "--in-memory");
+    }
+#endif
+
     if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
         auto_determine = false;
     }
@@ -470,6 +479,12 @@ dpdk_init__(const struct smap *ovs_other_config)
         return false;
     }
 
+    if (!rte_mp_disable()) {
+        VLOG_EMER("Could not disable multiprocess, DPDK won't be available.");
+        rte_eal_cleanup();
+        return false;
+    }
+
     if (VLOG_IS_DBG_ENABLED()) {
         size_t size;
         char *response = NULL;
@@ -489,6 +504,8 @@ dpdk_init__(const struct smap *ovs_other_config)
         }
     }
 
+    unixctl_command_register("dpdk/lcore-list", "", 0, 0,
+                             dpdk_unixctl_mem_stream, rte_lcore_dump);
     unixctl_command_register("dpdk/log-list", "", 0, 0,
                              dpdk_unixctl_mem_stream, rte_log_dump);
     unixctl_command_register("dpdk/log-set", "{level | pattern:level}", 0,
@@ -538,7 +555,7 @@ dpdk_init(const struct smap *ovs_other_config)
     } else {
         VLOG_INFO_ONCE("DPDK Disabled - Use other_config:dpdk-init to enable");
     }
-    dpdk_initialized = enabled;
+    atomic_store_relaxed(&dpdk_initialized, enabled);
 }
 
 const char *
@@ -568,15 +585,40 @@ dpdk_per_port_memory(void)
 bool
 dpdk_available(void)
 {
-    return dpdk_initialized;
+    bool initialized;
+
+    atomic_read_relaxed(&dpdk_initialized, &initialized);
+    return initialized;
 }
 
-void
-dpdk_set_lcore_id(unsigned cpu)
+bool
+dpdk_attach_thread(unsigned cpu)
 {
     /* NON_PMD_CORE_ID is reserved for use by non pmd threads. */
     ovs_assert(cpu != NON_PMD_CORE_ID);
-    RTE_PER_LCORE(_lcore_id) = cpu;
+
+    if (!dpdk_available()) {
+        return false;
+    }
+
+    if (rte_thread_register() < 0) {
+        VLOG_WARN("DPDK max threads count has been reached. "
+                  "PMD thread performance may be impacted.");
+        return false;
+    }
+
+    VLOG_INFO("PMD thread uses DPDK lcore %u.", rte_lcore_id());
+    return true;
+}
+
+void
+dpdk_detach_thread(void)
+{
+    unsigned int lcore_id;
+
+    lcore_id = rte_lcore_id();
+    rte_thread_unregister();
+    VLOG_INFO("PMD thread released DPDK lcore %u.", lcore_id);
 }
 
 void
@@ -585,63 +627,11 @@ print_dpdk_version(void)
     puts(rte_version());
 }
 
-/* Avoid calling rte_cpu_get_flag_enabled() excessively, by caching the
- * result of the call for each CPU flag in a static variable. To avoid
- * allocating large numbers of static variables, use a uint8 as a bitfield.
- * Note the macro must only return if the ISA check is done and available.
- */
-#define ISA_CHECK_DONE_BIT (1 << 0)
-#define ISA_AVAILABLE_BIT  (1 << 1)
-
-#define CHECK_CPU_FEATURE(feature, name_str, RTE_CPUFLAG)               \
-    do {                                                                \
-        if (strncmp(feature, name_str, strlen(name_str)) == 0) {        \
-            static uint8_t isa_check_##RTE_CPUFLAG;                     \
-            int check = isa_check_##RTE_CPUFLAG & ISA_CHECK_DONE_BIT;   \
-            if (OVS_UNLIKELY(!check)) {                                 \
-                int has_isa = rte_cpu_get_flag_enabled(RTE_CPUFLAG);    \
-                VLOG_DBG("CPU flag %s, available %s\n",                 \
-                         name_str, has_isa ? "yes" : "no");             \
-                isa_check_##RTE_CPUFLAG = ISA_CHECK_DONE_BIT;           \
-                if (has_isa) {                                          \
-                    isa_check_##RTE_CPUFLAG |= ISA_AVAILABLE_BIT;       \
-                }                                                       \
-            }                                                           \
-            if (isa_check_##RTE_CPUFLAG & ISA_AVAILABLE_BIT) {          \
-                return true;                                            \
-            } else {                                                    \
-                return false;                                           \
-            }                                                           \
-        }                                                               \
-    } while (0)
-
-bool
-dpdk_get_cpu_has_isa(const char *arch, const char *feature)
-{
-    /* Ensure Arch is x86_64. */
-    if (strncmp(arch, "x86_64", 6) != 0) {
-        return false;
-    }
-
-#if __x86_64__
-    /* CPU flags only defined for the architecture that support it. */
-    CHECK_CPU_FEATURE(feature, "avx512f", RTE_CPUFLAG_AVX512F);
-    CHECK_CPU_FEATURE(feature, "avx512bw", RTE_CPUFLAG_AVX512BW);
-    CHECK_CPU_FEATURE(feature, "avx512vbmi", RTE_CPUFLAG_AVX512VBMI);
-    CHECK_CPU_FEATURE(feature, "avx512vpopcntdq", RTE_CPUFLAG_AVX512VPOPCNTDQ);
-    CHECK_CPU_FEATURE(feature, "bmi2", RTE_CPUFLAG_BMI2);
-#endif
-
-    VLOG_WARN("Unknown CPU arch,feature: %s,%s. Returning not supported.\n",
-              arch, feature);
-    return false;
-}
-
 void
 dpdk_status(const struct ovsrec_open_vswitch *cfg)
 {
     if (cfg) {
-        ovsrec_open_vswitch_set_dpdk_initialized(cfg, dpdk_initialized);
+        ovsrec_open_vswitch_set_dpdk_initialized(cfg, dpdk_available());
         ovsrec_open_vswitch_set_dpdk_version(cfg, rte_version());
     }
 }

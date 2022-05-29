@@ -146,6 +146,7 @@ json_type_to_string(enum json_type type)
     case JSON_STRING:
         return "string";
 
+    case JSON_SERIALIZED_OBJECT:
     case JSON_N_TYPES:
     default:
         return "<invalid>";
@@ -178,6 +179,14 @@ struct json *
 json_string_create(const char *s)
 {
     return json_string_create_nocopy(xstrdup(s));
+}
+
+struct json *
+json_serialized_object_create(const struct json *src)
+{
+    struct json *json = json_create(JSON_SERIALIZED_OBJECT);
+    json->string = json_to_string(src, JSSF_SORT);
+    return json;
 }
 
 struct json *
@@ -309,6 +318,13 @@ json_string(const struct json *json)
     return json->string;
 }
 
+const char *
+json_serialized_object(const struct json *json)
+{
+    ovs_assert(json->type == JSON_SERIALIZED_OBJECT);
+    return json->string;
+}
+
 struct json_array *
 json_array(const struct json *json)
 {
@@ -349,42 +365,41 @@ static void json_destroy_array(struct json_array *array);
 
 /* Frees 'json' and everything it points to, recursively. */
 void
-json_destroy(struct json *json)
+json_destroy__(struct json *json)
 {
-    if (json && !--json->count) {
-        switch (json->type) {
-        case JSON_OBJECT:
-            json_destroy_object(json->object);
-            break;
+    switch (json->type) {
+    case JSON_OBJECT:
+        json_destroy_object(json->object);
+        break;
 
-        case JSON_ARRAY:
-            json_destroy_array(&json->array);
-            break;
+    case JSON_ARRAY:
+        json_destroy_array(&json->array);
+        break;
 
-        case JSON_STRING:
-            free(json->string);
-            break;
+    case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
+        free(json->string);
+        break;
 
-        case JSON_NULL:
-        case JSON_FALSE:
-        case JSON_TRUE:
-        case JSON_INTEGER:
-        case JSON_REAL:
-            break;
+    case JSON_NULL:
+    case JSON_FALSE:
+    case JSON_TRUE:
+    case JSON_INTEGER:
+    case JSON_REAL:
+        break;
 
-        case JSON_N_TYPES:
-            OVS_NOT_REACHED();
-        }
-        free(json);
+    case JSON_N_TYPES:
+        OVS_NOT_REACHED();
     }
+    free(json);
 }
 
 static void
 json_destroy_object(struct shash *object)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, object) {
+    SHASH_FOR_EACH_SAFE (node, object) {
         struct json *value = node->data;
 
         json_destroy(value);
@@ -422,6 +437,9 @@ json_deep_clone(const struct json *json)
     case JSON_STRING:
         return json_string_create(json->string);
 
+    case JSON_SERIALIZED_OBJECT:
+        return json_serialized_object_create(json);
+
     case JSON_NULL:
     case JSON_FALSE:
     case JSON_TRUE:
@@ -437,15 +455,6 @@ json_deep_clone(const struct json *json)
     default:
         OVS_NOT_REACHED();
     }
-}
-
-/* Returns 'json', with the reference count incremented. */
-struct json *
-json_clone(const struct json *json_)
-{
-    struct json *json = CONST_CAST(struct json *, json_);
-    json->count++;
-    return json;
 }
 
 struct json *
@@ -521,6 +530,7 @@ json_hash(const struct json *json, size_t basis)
         return json_hash_array(&json->array, basis);
 
     case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
         return hash_string(json->string, basis);
 
     case JSON_NULL:
@@ -596,6 +606,7 @@ json_equal(const struct json *a, const struct json *b)
         return json_equal_array(&a->array, &b->array);
 
     case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
         return !strcmp(a->string, b->string);
 
     case JSON_NULL:
@@ -965,88 +976,6 @@ json_lex_string(struct json_parser *p)
     }
 }
 
-static bool
-json_lex_input(struct json_parser *p, unsigned char c)
-{
-    struct json_token token;
-
-    switch (p->lex_state) {
-    case JSON_LEX_START:
-        switch (c) {
-        case ' ': case '\t': case '\n': case '\r':
-            /* Nothing to do. */
-            return true;
-
-        case 'a': case 'b': case 'c': case 'd': case 'e':
-        case 'f': case 'g': case 'h': case 'i': case 'j':
-        case 'k': case 'l': case 'm': case 'n': case 'o':
-        case 'p': case 'q': case 'r': case 's': case 't':
-        case 'u': case 'v': case 'w': case 'x': case 'y':
-        case 'z':
-            p->lex_state = JSON_LEX_KEYWORD;
-            break;
-
-        case '[': case '{': case ']': case '}': case ':': case ',':
-            token.type = c;
-            json_parser_input(p, &token);
-            return true;
-
-        case '-':
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            p->lex_state = JSON_LEX_NUMBER;
-            break;
-
-        case '"':
-            p->lex_state = JSON_LEX_STRING;
-            return true;
-
-        default:
-            if (isprint(c)) {
-                json_error(p, "invalid character '%c'", c);
-            } else {
-                json_error(p, "invalid character U+%04x", c);
-            }
-            return true;
-        }
-        break;
-
-    case JSON_LEX_KEYWORD:
-        if (!isalpha((unsigned char) c)) {
-            json_lex_keyword(p);
-            return false;
-        }
-        break;
-
-    case JSON_LEX_NUMBER:
-        if (!strchr(".0123456789eE-+", c)) {
-            json_lex_number(p);
-            return false;
-        }
-        break;
-
-    case JSON_LEX_STRING:
-        if (c == '\\') {
-            p->lex_state = JSON_LEX_ESCAPE;
-        } else if (c == '"') {
-            json_lex_string(p);
-            return true;
-        } else if (c < 0x20) {
-            json_error(p, "U+%04X must be escaped in quoted string", c);
-            return true;
-        }
-        break;
-
-    case JSON_LEX_ESCAPE:
-        p->lex_state = JSON_LEX_STRING;
-        break;
-
-    default:
-        abort();
-    }
-    ds_put_char(&p->buffer, c);
-    return true;
-}
 
 /* Parsing. */
 
@@ -1070,6 +999,14 @@ json_from_string(const char *string)
     struct json_parser *p = json_parser_create(JSPF_TRAILER);
     json_parser_feed(p, string, strlen(string));
     return json_parser_finish(p);
+}
+
+/* Parses data of JSON_SERIALIZED_OBJECT to the real JSON. */
+struct json *
+json_from_serialized_object(const struct json *json)
+{
+    ovs_assert(json->type == JSON_SERIALIZED_OBJECT);
+    return json_from_string(json->string);
 }
 
 /* Reads the file named 'file_name', parses its contents as a JSON object or
@@ -1141,21 +1078,122 @@ json_parser_create(int flags)
     return p;
 }
 
+static inline void ALWAYS_INLINE
+json_parser_account_byte(struct json_parser *p, unsigned char c)
+{
+    p->byte_number++;
+    if (OVS_UNLIKELY(c == '\n')) {
+        p->column_number = 0;
+        p->line_number++;
+    } else {
+        p->column_number++;
+    }
+}
+
 size_t
 json_parser_feed(struct json_parser *p, const char *input, size_t n)
 {
+    size_t token_start = 0;
     size_t i;
+
     for (i = 0; !p->done && i < n; ) {
-        if (json_lex_input(p, input[i])) {
-            p->byte_number++;
-            if (input[i] == '\n') {
-                p->column_number = 0;
-                p->line_number++;
-            } else {
-                p->column_number++;
+        bool consumed = true;
+
+        const char *start_p = &input[token_start];
+        unsigned char c = input[i];
+        struct json_token token;
+
+        switch (p->lex_state) {
+        case JSON_LEX_START:
+            switch (c) {
+            case ' ': case '\t': case '\n': case '\r':
+                /* Nothing to do. */
+                token_start = i + 1;
+                break;
+
+            case 'a': case 'b': case 'c': case 'd': case 'e':
+            case 'f': case 'g': case 'h': case 'i': case 'j':
+            case 'k': case 'l': case 'm': case 'n': case 'o':
+            case 'p': case 'q': case 'r': case 's': case 't':
+            case 'u': case 'v': case 'w': case 'x': case 'y':
+            case 'z':
+                p->lex_state = JSON_LEX_KEYWORD;
+                token_start = i;
+                break;
+
+            case '[': case '{': case ']': case '}': case ':': case ',':
+                token.type = c;
+                json_parser_input(p, &token);
+                token_start = i + 1;
+                break;
+
+            case '-':
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                p->lex_state = JSON_LEX_NUMBER;
+                token_start = i;
+                break;
+
+            case '"':
+                p->lex_state = JSON_LEX_STRING;
+                token_start = i + 1;
+                break;
+
+            default:
+                if (isprint(c)) {
+                    json_error(p, "invalid character '%c'", c);
+                } else {
+                    json_error(p, "invalid character U+%04x", c);
+                }
+                break;
             }
+            break;
+
+        case JSON_LEX_KEYWORD:
+            if (!isalpha((unsigned char) c)) {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_keyword(p);
+                consumed = false;
+                break;
+            }
+            break;
+
+        case JSON_LEX_NUMBER:
+            if (!strchr(".0123456789eE-+", c)) {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_number(p);
+                consumed = false;
+                break;
+            }
+            break;
+
+        case JSON_LEX_STRING:
+            if (c == '\\') {
+                p->lex_state = JSON_LEX_ESCAPE;
+            } else if (c == '"') {
+                ds_put_buffer(&p->buffer, start_p, i - token_start);
+                json_lex_string(p);
+            } else if (c < 0x20) {
+                json_error(p, "U+%04X must be escaped in quoted string", c);
+            }
+            break;
+
+        case JSON_LEX_ESCAPE:
+            p->lex_state = JSON_LEX_STRING;
+            break;
+
+        default:
+            ovs_abort(0, "unexpected lexer state");
+        }
+
+        if (consumed) {
+            json_parser_account_byte(p, c);
             i++;
         }
+    }
+
+    if (!p->done) {
+        ds_put_buffer(&p->buffer, &input[token_start], i - token_start);
     }
     return i;
 }
@@ -1182,7 +1220,7 @@ json_parser_finish(struct json_parser *p)
 
     case JSON_LEX_NUMBER:
     case JSON_LEX_KEYWORD:
-        json_lex_input(p, ' ');
+        json_parser_feed(p, " ", 1);
         break;
     }
 
@@ -1563,6 +1601,10 @@ json_serialize(const struct json *json, struct json_serializer *s)
         json_serialize_string(json->string, ds);
         break;
 
+    case JSON_SERIALIZED_OBJECT:
+        ds_put_cstr(ds, json->string);
+        break;
+
     case JSON_N_TYPES:
     default:
         OVS_NOT_REACHED();
@@ -1696,14 +1738,30 @@ json_serialize_string(const char *string, struct ds *ds)
 {
     uint8_t c;
     uint8_t c2;
+    size_t count;
     const char *escape;
+    const char *start;
 
     ds_put_char(ds, '"');
+    count = 0;
+    start = string;
     while ((c = *string++) != '\0') {
-        escape = chars_escaping[c];
-        while ((c2 = *escape++) != '\0') {
-            ds_put_char(ds, c2);
+        if (c >= ' ' && c != '"' && c != '\\') {
+            count++;
+        } else {
+            if (count) {
+                ds_put_buffer(ds, start, count);
+                count = 0;
+            }
+            start = string;
+            escape = chars_escaping[c];
+            while ((c2 = *escape++) != '\0') {
+                ds_put_char(ds, c2);
+            }
         }
+    }
+    if (count) {
+        ds_put_buffer(ds, start, count);
     }
     ds_put_char(ds, '"');
 }

@@ -222,8 +222,7 @@ def inet_parse_active(target, default_port):
     return (host_name, port)
 
 
-def inet_open_active(style, target, default_port, dscp):
-    address = inet_parse_active(target, default_port)
+def inet_create_socket_active(style, address):
     try:
         is_addr_inet = is_valid_ipv4_address(address[0])
         if is_addr_inet:
@@ -235,23 +234,32 @@ def inet_open_active(style, target, default_port, dscp):
     except socket.error as e:
         return get_exception_errno(e), None
 
+    return family, sock
+
+
+def inet_connect_active(sock, address, family, dscp):
     try:
         set_nonblocking(sock)
         set_dscp(sock, family, dscp)
-        try:
-            sock.connect(address)
-        except socket.error as e:
-            error = get_exception_errno(e)
-            if sys.platform == 'win32' and error == errno.WSAEWOULDBLOCK:
-                # WSAEWOULDBLOCK would be the equivalent on Windows
-                # for EINPROGRESS on Unix.
-                error = errno.EINPROGRESS
-            if error != errno.EINPROGRESS:
-                raise
-        return 0, sock
+        error = sock.connect_ex(address)
+        if error not in (0, errno.EINPROGRESS, errno.EWOULDBLOCK):
+            sock.close()
+            return error
+        return 0
     except socket.error as e:
         sock.close()
-        return get_exception_errno(e), None
+        return get_exception_errno(e)
+
+
+def inet_open_active(style, target, default_port, dscp):
+    address = inet_parse_active(target, default_port)
+    family, sock = inet_create_socket_active(style, address)
+    if sock is None:
+        return family, sock
+    error = inet_connect_active(sock, address, family, dscp)
+    if error:
+        return error, None
+    return 0, sock
 
 
 def get_exception_errno(e):

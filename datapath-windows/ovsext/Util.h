@@ -143,6 +143,27 @@ OvsPerCpuDataInit();
 VOID
 OvsPerCpuDataCleanup();
 
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsIpv6StringToAddress --
+ *     The function was used to convert ip6string to binary ipv6 address.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsIpv6StringToAddress(const char* ip6String, struct in6_addr *ipv6Addr);
+
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsIpv6AddressToString --
+ *     The function convert bindary ipv6Addr to string.
+ * --------------------------------------------------------------------------
+ */
+char *
+OvsIpv6AddressToString(struct in6_addr ipv6Addr, char* ip6String);
+
+
 static LARGE_INTEGER seed;
 
 /*

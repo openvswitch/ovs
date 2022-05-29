@@ -74,6 +74,7 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.14.x       3.16 to 5.5
     2.15.x       3.16 to 5.8
     2.16.x       3.16 to 5.8
+    2.17.x       3.16 to 5.8
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built
@@ -131,10 +132,12 @@ Q: Are all features available with all datapaths?
     Feature                    Linux upstream Linux OVS tree Userspace Hyper-V
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            2.5          2.6      YES
+    Connection tracking-IPv6        YES            YES          YES      2.18
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
     Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
+    Conntrack NAT6                  4.6            2.6          2.8      2.18
     Tunnel - LISP                   NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
@@ -142,7 +145,7 @@ Q: Are all features available with all datapaths?
     Tunnel - Geneve                 3.18           2.4          2.4      YES
     Tunnel - GRE-IPv6               4.18           2.6          2.6      NO
     Tunnel - VXLAN-IPv6             4.3            2.6          2.6      NO
-    Tunnel - Geneve-IPv6            4.4            2.6          2.6      NO
+    Tunnel - Geneve-IPv6            4.4            2.6          2.6      2.18
     Tunnel - ERSPAN                 4.18           2.10         2.10     NO
     Tunnel - ERSPAN-IPv6            4.18           2.10         2.10     NO
     Tunnel - GTP-U                  NO             NO           2.14     NO
@@ -205,10 +208,11 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.10.x       17.11.10
     2.11.x       18.11.9
     2.12.x       18.11.9
-    2.13.x       19.11.8
-    2.14.x       19.11.8
-    2.15.x       20.11.1
-    2.16.x       20.11.1
+    2.13.x       19.11.10
+    2.14.x       19.11.10
+    2.15.x       20.11.4
+    2.16.x       20.11.4
+    2.17.x       21.11.0
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
@@ -225,7 +229,7 @@ Q: Are all the DPDK releases that OVS versions work with maintained?
     The latest information about DPDK stable and LTS releases can be found
     at `DPDK stable`_.
 
-.. _DPDK stable: http://doc.dpdk.org/guides-20.11/contributing/stable.html
+.. _DPDK stable: http://doc.dpdk.org/guides-21.11/contributing/stable.html
 
 Q: I get an error like this when I configure Open vSwitch:
 

@@ -54,7 +54,7 @@ AT_CLEANUP
 
 AT_SETUP([SHA-1])
 AT_KEYWORDS([sha1])
-AT_CHECK([ovstest test-sha1], [0], [..........
+AT_CHECK([ovstest test-sha1], [0], [....................
 ])
 AT_CLEANUP
 
@@ -246,6 +246,11 @@ AT_SETUP([ofpbuf module])
 AT_CHECK([ovstest test-ofpbuf], [0], [])
 AT_CLEANUP
 
+AT_SETUP([barrier module])
+AT_KEYWORDS([barrier])
+AT_CHECK([ovstest test-barrier], [0], [])
+AT_CLEANUP
+
 AT_SETUP([rcu])
 AT_CHECK([ovstest test-rcu-quiesce], [0], [])
 AT_CLEANUP
@@ -256,5 +261,16 @@ AT_CHECK([ovstest test-stopwatch], [0], [......
 AT_CLEANUP
 
 AT_SETUP([netlink policy])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_SKIP_IF([test "$IS_BSD" = "yes"])
 AT_CHECK([ovstest test-netlink-policy ll_addr], [0])
+AT_CLEANUP
+
+AT_SETUP([mpsc-queue module])
+AT_CHECK([ovstest test-mpsc-queue check], [0], [....
+])
+AT_CLEANUP
+
+AT_SETUP([id-fpool module])
+AT_CHECK([ovstest test-id-fpool check], [0], [])
 AT_CLEANUP

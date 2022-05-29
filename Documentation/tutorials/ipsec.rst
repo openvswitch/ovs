@@ -303,6 +303,50 @@ external IP is 1.1.1.1, and `host_2`'s external IP is 2.2.2.2. Make sure
    You should be able to see that ESP packets are being sent from `host_1` to
    `host_2`.
 
+Custom options
+--------------
+
+Any parameter prefixed with `ipsec_` will be added to the connection profile.
+For example::
+
+    # ovs-vsctl set interface tun options:ipsec_encapsulation=yes
+
+Will result in::
+
+    #  ovs-appctl -t ovs-monitor-ipsec tunnels/show
+    Interface name: tun v7 (CONFIGURED)
+    Tunnel Type:    vxlan
+    Local IP:       192.0.0.1
+    Remote IP:      192.0.0.2
+    Address Family: IPv4
+    SKB mark:       None
+    Local cert:     None
+    Local name:     None
+    Local key:      None
+    Remote cert:    None
+    Remote name:    None
+    CA cert:        None
+    PSK:            swordfish
+    Custom Options: {'encapsulation': 'yes'}
+
+And in the following connection profiles::
+
+    conn tun-in-7
+        left=192.0.0.1
+        right=192.0.0.2
+        authby=secret
+        encapsulation=yes
+        leftprotoport=udp/4789
+        rightprotoport=udp
+
+    conn tun-out-7
+        left=192.0.0.1
+        right=192.0.0.2
+        authby=secret
+        encapsulation=yes
+        leftprotoport=udp
+        rightprotoport=udp/4789
+
 Troubleshooting
 ---------------
 
@@ -329,6 +373,7 @@ For example::
    Remote name:    None
    CA cert:        None
    PSK:            swordfish
+   Custom Options: {}
    Ofport:         1          <--- Whether ovs-vswitchd has assigned Ofport
                                    number to this Tunnel Port
    CFM state:      Up         <--- Whether CFM declared this tunnel healthy

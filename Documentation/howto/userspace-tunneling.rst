@@ -98,7 +98,8 @@ Perform the following configuration on `host1`:
    accordingly, using ``vm_port0`` as the interface name::
 
        $ ovs-vsctl add-port br-int vm_port0 \
-           -- set Interface vm_port0 type=dpdkvhostuser
+         -- set Interface vm_port0 type=dpdkvhostuserclient \
+            options:vhost-server-path=/tmp/vm_port0
 
 #. Configure the IP address of the VM interface *in the VM itself*::
 
@@ -174,8 +175,16 @@ If the tunnel route is missing, adding it now::
 
     $ ovs-appctl ovs/route/add 172.168.1.1/24 br-phy
 
-Repeat these steps if necessary for `host2`, but using ``192.168.1.1`` and
-``172.168.1.2`` for the VM and tunnel interface IP addresses, respectively.
+Repeat these steps if necessary for `host2`, but using the below commands for
+the VM interface IP address::
+
+       $ ip addr add 192.168.1.2/24 dev eth0
+       $ ip link set eth0 up
+
+And the below command for the the `host2` VXLAN tunnel::
+
+       $ ovs-vsctl add-port br-int vxlan0 \
+         -- set interface vxlan0 type=vxlan options:remote_ip=172.168.1.1
 
 Testing
 -------

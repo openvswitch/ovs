@@ -233,7 +233,7 @@ vhost-user-client
 
 .. important::
 
-   Use of vhost-user ports requires QEMU >= 2.7
+   Use of vhost-user-client ports requires QEMU >= 2.7
 
 To use vhost-user-client ports, you must first add said ports to the switch.
 Like DPDK vhost-user ports, DPDK vhost-user-client ports can have mostly
@@ -282,7 +282,7 @@ can access, and as such is useful in deployments in which security is a
 concern.
 
 IOMMU support may be enabled via a global config value,
-```vhost-iommu-support```. Setting this to true enables vhost IOMMU support for
+``vhost-iommu-support``. Setting this to true enables vhost IOMMU support for
 all vhost ports when/where available::
 
     $ ovs-vsctl set Open_vSwitch . other_config:vhost-iommu-support=true
@@ -539,4 +539,4 @@ shown with::
 
 Further information can be found in the
 `DPDK documentation
-<https://doc.dpdk.org/guides-20.11/prog_guide/vhost_lib.html>`__
+<https://doc.dpdk.org/guides-21.11/prog_guide/vhost_lib.html>`__

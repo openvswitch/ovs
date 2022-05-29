@@ -44,7 +44,7 @@ class Reconnect(object):
         is_connected = False
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             return None
 
         @staticmethod
@@ -56,7 +56,7 @@ class Reconnect(object):
         is_connected = False
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             return None
 
         @staticmethod
@@ -68,7 +68,7 @@ class Reconnect(object):
         is_connected = False
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             return fsm.state_entered + fsm.backoff
 
         @staticmethod
@@ -80,7 +80,7 @@ class Reconnect(object):
         is_connected = False
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             return fsm.state_entered + max(1000, fsm.backoff)
 
         @staticmethod
@@ -92,13 +92,24 @@ class Reconnect(object):
         is_connected = True
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             if fsm.probe_interval:
                 base = max(fsm.last_activity, fsm.state_entered)
                 expiration = base + fsm.probe_interval
-                if (fsm.last_receive_attempt is None or
+                if (now < expiration or
+                    fsm.last_receive_attempt is None or
                     fsm.last_receive_attempt >= expiration):
+                    # We still have time before the expiration or the time has
+                    # already passed and there was no activity.  In the first
+                    # case we need to wait for the expiration, in the second -
+                    # we're already past the deadline. */
                     return expiration
+                else:
+                    # Time has already passed, but we didn't attempt to receive
+                    # anything.  We need to wake up and try to receive even if
+                    # nothing is pending, so we can update the expiration time
+                    # or transition to a different state.
+                    return now + 1
             return None
 
         @staticmethod
@@ -114,12 +125,15 @@ class Reconnect(object):
         is_connected = True
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             if fsm.probe_interval:
                 expiration = fsm.state_entered + fsm.probe_interval
-                if (fsm.last_receive_attempt is None or
+                if (now < expiration or
+                    fsm.last_receive_attempt is None or
                     fsm.last_receive_attempt >= expiration):
                     return expiration
+                else:
+                    return now + 1
             return None
 
         @staticmethod
@@ -134,7 +148,7 @@ class Reconnect(object):
         is_connected = False
 
         @staticmethod
-        def deadline(fsm):
+        def deadline(fsm, now):
             return fsm.state_entered
 
         @staticmethod
@@ -545,7 +559,7 @@ class Reconnect(object):
               returned if the "probe interval" is nonzero--see
               self.set_probe_interval())."""
 
-        deadline = self.state.deadline(self)
+        deadline = self.state.deadline(self, now)
         if deadline is not None and now >= deadline:
             return self.state.run(self, now)
         else:
@@ -562,7 +576,7 @@ class Reconnect(object):
         """Returns the number of milliseconds after which self.run() should be
         called if nothing else notable happens in the meantime, or None if this
         is currently unnecessary."""
-        deadline = self.state.deadline(self)
+        deadline = self.state.deadline(self, now)
         if deadline is not None:
             remaining = deadline - now
             return max(0, remaining)

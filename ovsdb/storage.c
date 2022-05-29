@@ -268,9 +268,7 @@ ovsdb_storage_read(struct ovsdb_storage *storage,
     struct json *schema_json = NULL;
     struct json *txn_json = NULL;
     if (storage->raft) {
-        bool is_snapshot;
-        json = json_nullable_clone(
-            raft_next_entry(storage->raft, txnid, &is_snapshot));
+        json = raft_next_entry(storage->raft, txnid);
         if (!json) {
             return NULL;
         } else if (json->type != JSON_ARRAY || json->array.n != 2) {
@@ -509,7 +507,11 @@ schedule_next_snapshot(struct ovsdb_storage *storage, bool quick)
 
         long long int now = time_msec();
         storage->next_snapshot_min = now + base + random_range(range);
-        storage->next_snapshot_max = now + 60LL * 60 * 24 * 1000; /* 1 day */
+        if (!quick) {
+            long long int one_day = 60LL * 60 * 24 * 1000;
+
+            storage->next_snapshot_max = now + one_day;
+        }
     } else {
         storage->next_snapshot_min = LLONG_MAX;
         storage->next_snapshot_max = LLONG_MAX;
@@ -517,7 +519,7 @@ schedule_next_snapshot(struct ovsdb_storage *storage, bool quick)
 }
 
 bool
-ovsdb_storage_should_snapshot(const struct ovsdb_storage *storage)
+ovsdb_storage_should_snapshot(struct ovsdb_storage *storage)
 {
     if (storage->raft || storage->log) {
         /* If we haven't reached the minimum snapshot time, don't snapshot. */
@@ -546,6 +548,15 @@ ovsdb_storage_should_snapshot(const struct ovsdb_storage *storage)
         }
 
         if (!snapshot_recommended) {
+            if (storage->raft) {
+                /* Re-scheduling with a quick retry in order to avoid condition
+                 * where all the raft servers passed the minimal time already,
+                 * but the log didn't grow a lot, so they are all checking on
+                 * every iteration.  This will randomize the time of the next
+                 * attempt, so all the servers will not start snapshotting at
+                 * the same time when the log reaches a critical size. */
+                schedule_next_snapshot(storage, true);
+            }
             return false;
         }
 

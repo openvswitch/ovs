@@ -422,6 +422,8 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
     ovs_list_init(&db->triggers);
     db->run_triggers_now = db->run_triggers = false;
 
+    db->n_atoms = 0;
+
     db->is_relay = false;
     ovs_list_init(&db->txn_forward_new);
     hmap_init(&db->txn_forward_sent);
@@ -518,6 +520,9 @@ ovsdb_get_memory_usage(const struct ovsdb *db, struct simap *usage)
     }
 
     simap_increase(usage, "cells", cells);
+    simap_increase(usage, "atoms", db->n_atoms);
+    simap_increase(usage, "txn-history", db->n_txn_history);
+    simap_increase(usage, "txn-history-atoms", db->n_txn_history_atoms);
 
     if (db->storage) {
         ovsdb_storage_get_memory_usage(db->storage, usage);
@@ -566,8 +571,8 @@ ovsdb_replace(struct ovsdb *dst, struct ovsdb *src)
     ovsdb_monitor_prereplace_db(dst);
 
     /* Cancel triggers. */
-    struct ovsdb_trigger *trigger, *next;
-    LIST_FOR_EACH_SAFE (trigger, next, node, &dst->triggers) {
+    struct ovsdb_trigger *trigger;
+    LIST_FOR_EACH_SAFE (trigger, node, &dst->triggers) {
         ovsdb_trigger_prereplace_db(trigger);
     }
 

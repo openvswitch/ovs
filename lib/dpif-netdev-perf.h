@@ -58,6 +58,7 @@ extern "C" {
 enum pmd_stat_type {
     PMD_STAT_PHWOL_HIT,     /* Packets that had a partial HWOL hit (phwol). */
     PMD_STAT_MFEX_OPT_HIT,  /* Packets that had miniflow optimized match. */
+    PMD_STAT_SIMPLE_HIT,    /* Packets that had a simple match hit. */
     PMD_STAT_EXACT_HIT,     /* Packets that had an exact match (emc). */
     PMD_STAT_SMC_HIT,       /* Packets that had a sig match hit (SMC). */
     PMD_STAT_MASKED_HIT,    /* Packets that matched in the flow table. */

@@ -159,6 +159,10 @@ function install_dpdk()
     # Disable building DPDK unit tests. Not needed for OVS build or tests.
     DPDK_OPTS="$DPDK_OPTS -Dtests=false"
 
+    # Disable DPDK developer mode, this results in less build checks and less
+    # meson verbose outputs.
+    DPDK_OPTS="$DPDK_OPTS -Ddeveloper_mode=disabled"
+
     # Install DPDK using prefix.
     DPDK_OPTS="$DPDK_OPTS --prefix=$(pwd)/build"
 
@@ -216,13 +220,9 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="20.11.1"
+        DPDK_VER="21.11"
     fi
     install_dpdk $DPDK_VER
-    if [ "$CC" = "clang" ]; then
-        # Disregard cast alignment errors until DPDK is fixed
-        CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-cast-align"
-    fi
 fi
 
 if [ "$CC" = "clang" ]; then
@@ -246,8 +246,14 @@ if [ "$ASAN" ]; then
     export ASAN_OPTIONS='detect_leaks=1'
     # -O2 generates few false-positive memory leak reports in test-ovsdb
     # application, so lowering optimizations to -O1 here.
-    CLFAGS_ASAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=address"
-    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CLFAGS_ASAN}"
+    CFLAGS_ASAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=address"
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CFLAGS_ASAN}"
+fi
+
+if [ "$UBSAN" ]; then
+    # Use the default options configured in tests/atlocal.in, in UBSAN_OPTIONS.
+    CFLAGS_UBSAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=undefined"
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CFLAGS_UBSAN}"
 fi
 
 save_OPTS="${OPTS} $*"

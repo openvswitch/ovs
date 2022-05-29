@@ -400,6 +400,61 @@ done
 
 AT_CLEANUP
 
+AT_BANNER([OVSDB - cluster failure while joining])
+AT_SETUP([OVSDB cluster - follower crash while joining])
+AT_KEYWORDS([ovsdb server negative unix cluster join])
+
+n=3
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db dnl
+              $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=`ovsdb-tool db-cid s1.db`
+schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
+for i in `seq 2 $n`; do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill `cat *.pid`'
+
+dnl Starting followers first, so we can configure them to crash on join.
+for j in `seq $n`; do
+    i=$(($n + 1 - $j))
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off dnl
+                           --detach --no-chdir --log-file=s$i.log dnl
+                           --pidfile=s$i.pid --unixctl=s$i dnl
+                           --remote=punix:s$i.ovsdb s$i.db])
+    if test $i != 1; then
+        OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/s$i dnl
+                            cluster/failure-test crash-before-sending-install-snapshot-reply dnl
+                            | grep -q "engaged"])
+    fi
+done
+
+dnl Make sure that followers really crashed.
+for i in `seq 2 $n`; do
+    OVS_WAIT_WHILE([test -s s$i.pid])
+done
+
+dnl Bring them back.
+for i in `seq 2 $n`; do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off dnl
+                           --detach --no-chdir --log-file=s$i.log dnl
+                           --pidfile=s$i.pid --unixctl=s$i dnl
+                           --remote=punix:s$i.ovsdb s$i.db])
+done
+
+dnl Make sure that all servers joined the cluster.
+for i in `seq $n`; do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+for i in `seq $n`; do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+
+AT_CLEANUP
+
 
 
 OVS_START_SHELL_HELPERS
@@ -413,12 +468,12 @@ ovsdb_cluster_failure_test () {
     if test "$crash_node" == "1"; then
         new_leader=$5
     fi
+    log_grep=$6
 
     cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
-    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
-])
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
+    AT_CHECK([sed < stderr "/ovsdb|WARN|schema: changed .* columns in 'Open_vSwitch' database from ephemeral to persistent/d"])
 
     n=3
     join_cluster() {
@@ -434,7 +489,7 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
     start_server() {
         local i=$1
         printf "\ns$i: starting\n"
-        AT_CHECK([ovsdb-server -vjsonrpc -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+        AT_CHECK([ovsdb-server -vjsonrpc -vraft -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
     }
     connect_server() {
         local i=$1
@@ -460,14 +515,23 @@ ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral 
         fi
         AT_CHECK([ovs-appctl -t "`pwd`"/s$delay_election_node cluster/failure-test delay-election], [0], [ignore])
     fi
+
+    # Initializing the database separately to avoid extra 'wait' operation
+    # in later transactions.
+    AT_CHECK([ovs-vsctl -v --db="$db" --no-leader-only --no-shuffle-remotes --no-wait init], [0], [ignore], [ignore])
+
     AT_CHECK([ovs-appctl -t "`pwd`"/s$crash_node cluster/failure-test $crash_command], [0], [ignore])
     AT_CHECK([ovs-vsctl -v --db="$db" --no-leader-only --no-shuffle-remotes --no-wait create QoS type=x], [0], [ignore], [ignore])
 
-    # Make sure that the node really crashed.
-    AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
-    # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
-    if test "$remote_1" = "$crash_node"; then
-        db=unix:s$remote_2.ovsdb
+    # Make sure that the node really crashed or has specific log message.
+    if test -z "$log_grep"; then
+        AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
+        # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
+        if test "$remote_1" = "$crash_node"; then
+            db=unix:s$remote_2.ovsdb
+        fi
+    else
+        OVS_WAIT_UNTIL([grep -q "$log_grep" s${crash_node}.log])
     fi
     AT_CHECK([ovs-vsctl --db="$db" --no-leader-only --no-wait --columns=type --bare list QoS], [0], [x
 ])
@@ -563,6 +627,11 @@ AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
 ovsdb_cluster_failure_test 2 2 3 crash-after-receiving-append-request-update
 AT_CLEANUP
 
+AT_SETUP([OVSDB cluster - txn on leader, leader transfers leadership after sending appendReq])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn transfer])
+ovsdb_cluster_failure_test 1 2 1 transfer-leadership-after-sending-append-request -1 "Transferring leadership"
+AT_CLEANUP
+
 
 AT_SETUP([OVSDB cluster - competing candidates])
 AT_KEYWORDS([ovsdb server negative unix cluster competing-candidates])
@@ -629,9 +698,8 @@ ovsdb_torture_test () {
     local variant=$3            # 'kill' and restart or 'remove' and add
     cp $top_srcdir/vswitchd/vswitch.ovsschema schema
     schema=`ovsdb-tool schema-name schema`
-    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
-ovsdb|WARN|schema: changed 30 columns in 'Open_vSwitch' database from ephemeral to persistent, including 'status' column in 'Manager' table, because clusters do not support ephemeral columns
-])
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
+    AT_CHECK([sed < stderr "/ovsdb|WARN|schema: changed .* columns in 'Open_vSwitch' database from ephemeral to persistent/d"])
 
     join_cluster() {
         local i=$1

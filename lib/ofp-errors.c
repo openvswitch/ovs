@@ -20,6 +20,7 @@
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-print.h"
@@ -346,6 +347,7 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
     if (error && payload) {
         ofpbuf_init(payload, b.size);
         ofpbuf_push(payload, b.data, b.size);
+        ofpbuf_trim(payload);
     }
     return error;
 }

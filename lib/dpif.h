@@ -429,6 +429,8 @@ struct dpif_dp_stats {
     uint64_t n_missed;          /* Number of flow table misses. */
     uint64_t n_lost;            /* Number of misses not sent to userspace. */
     uint64_t n_flows;           /* Number of flows present. */
+    uint64_t n_cache_hit;       /* Number of mega flow mask cache hits for
+                                   flow table matches. */
     uint64_t n_mask_hit;        /* Number of mega flow masks visited for
                                    flow table matches. */
     uint32_t n_masks;           /* Number of mega flow masks. */
@@ -787,6 +789,15 @@ struct dpif_op {
 
 void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops,
                   enum dpif_offload_type);
+
+/* Queries the datapath for hardware offloads stats.
+ *
+ * Statistics are written in 'stats' following the 'netdev_custom_stats'
+ * format. They are allocated on the heap and must be freed by the caller,
+ * using 'netdev_free_custom_stats_counters'.
+ */
+int dpif_offload_stats_get(struct dpif *dpif,
+                           struct netdev_custom_stats *stats);
 
 /* Upcalls. */
 
@@ -905,6 +916,13 @@ int dpif_bond_add(struct dpif *, uint32_t bond_id, odp_port_t *member_map);
 int dpif_bond_del(struct dpif *, uint32_t bond_id);
 int dpif_bond_stats_get(struct dpif *, uint32_t bond_id, uint64_t *n_bytes);
 bool dpif_supports_lb_output_action(const struct dpif *);
+
+
+/* Cache */
+int dpif_cache_get_supported_levels(struct dpif *dpif, uint32_t *levels);
+int dpif_cache_get_name(struct dpif *dpif, uint32_t level, const char **name);
+int dpif_cache_get_size(struct dpif *dpif, uint32_t level, uint32_t *size);
+int dpif_cache_set_size(struct dpif *dpif, uint32_t level, uint32_t size);
 
 
 /* Miscellaneous. */

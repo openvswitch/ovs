@@ -48,6 +48,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "openvswitch/usdt-probes.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "lib/vswitch-idl.h"
@@ -115,6 +116,7 @@ main(int argc, char *argv[])
     exiting = false;
     cleanup = false;
     while (!exiting) {
+        OVS_USDT_PROBE(main, run_start);
         memory_run();
         if (memory_should_report()) {
             struct simap usage;
@@ -135,6 +137,7 @@ main(int argc, char *argv[])
         if (exiting) {
             poll_immediate_wake();
         }
+        OVS_USDT_PROBE(main, poll_block);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

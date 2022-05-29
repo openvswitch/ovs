@@ -173,7 +173,7 @@ OvsCleanupVxlanTunnel(PIRP irp,
 static __inline NDIS_STATUS
 OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
                 PNET_BUFFER_LIST curNbl,
-                OvsIPv4TunnelKey *tunKey,
+                OvsIPTunnelKey *tunKey,
                 POVS_FWD_INFO fwdInfo,
                 POVS_PACKET_HDR_INFO layers,
                 POVS_SWITCH_CONTEXT switchContext,
@@ -188,10 +188,15 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
     UDPHdr *udpHdr;
     VXLANHdr *vxlanHdr;
     POVS_VXLAN_VPORT vportVxlan;
-    UINT32 headRoom = OvsGetVxlanTunHdrSize();
     UINT32 packetLength;
     ULONG mss = 0;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    UINT32 headRoom =
+        OvsGetVxlanTunHdrSize(fwdInfo->dstIphAddr.si_family == AF_INET ?
+                              TRUE : FALSE);
+    ASSERT(OvsIphAddrEquals(&tunKey->dst, &fwdInfo->dstIphAddr));
+    ASSERT(OvsIphAddrEquals(&tunKey->src, &fwdInfo->srcIphAddr) ||
+           OvsIphIsZero(&tunKey->src));
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
@@ -265,54 +270,65 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
         ethHdr->Type = htons(ETH_TYPE_IPV4);
 
         /* IP header */
-        ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+        if (fwdInfo->dstIphAddr.si_family == AF_INET) {
+           ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
 
-        ipHdr->ihl = sizeof *ipHdr / 4;
-        ipHdr->version = IPPROTO_IPV4;
-        ipHdr->tos = tunKey->tos;
-        ipHdr->tot_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr);
-        ipHdr->id = (uint16)atomic_add64(&vportVxlan->ipId,
-                                         NET_BUFFER_DATA_LENGTH(curNb));
-        ipHdr->frag_off = (tunKey->flags & OVS_TNL_F_DONT_FRAGMENT) ?
-                          IP_DF_NBO : 0;
-        ipHdr->ttl = tunKey->ttl ? tunKey->ttl : VXLAN_DEFAULT_TTL;
-        ipHdr->protocol = IPPROTO_UDP;
-        ASSERT(tunKey->dst == fwdInfo->dstIpAddr);
-        ASSERT(tunKey->src == fwdInfo->srcIpAddr || tunKey->src == 0);
-        ipHdr->saddr = fwdInfo->srcIpAddr;
-        ipHdr->daddr = fwdInfo->dstIpAddr;
+           ipHdr->ihl = sizeof *ipHdr / 4;
+           ipHdr->version = IPPROTO_IPV4;
+           ipHdr->tos = tunKey->tos;
+           ipHdr->tot_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr);
+           ipHdr->id = (uint16)atomic_add64(&vportVxlan->ipId,
+                                            NET_BUFFER_DATA_LENGTH(curNb));
+           ipHdr->frag_off = (tunKey->flags & OVS_TNL_F_DONT_FRAGMENT) ?
+                             IP_DF_NBO : 0;
+           ipHdr->ttl = tunKey->ttl ? tunKey->ttl : VXLAN_DEFAULT_TTL;
+           ipHdr->protocol = IPPROTO_UDP;
+           ASSERT(OvsIphAddrEquals(&tunKey->dst, &fwdInfo->dstIphAddr));
+           ASSERT(OvsIphAddrEquals(&tunKey->src, &fwdInfo->srcIphAddr) ||
+                  OvsIphIsZero(&tunKey->src));
 
-        ipHdr->check = 0;
+           ipHdr->saddr = fwdInfo->srcIphAddr.Ipv4.sin_addr.s_addr;
+           ipHdr->daddr = fwdInfo->dstIphAddr.Ipv4.sin_addr.s_addr;
 
-        /* UDP header */
-        udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
-        udpHdr->source = htons(tunKey->flow_hash | MAXINT16);
-        udpHdr->dest = tunKey->dst_port ? tunKey->dst_port :
-                                          htons(vportVxlan->dstPort);
-        udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
-                            sizeof *udpHdr + sizeof *vxlanHdr);
+           ipHdr->check = 0;
 
-        if (tunKey->flags & OVS_TNL_F_CSUM) {
-            udpHdr->check = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
-                                             IPPROTO_UDP, ntohs(udpHdr->len));
-        } else {
-            udpHdr->check = 0;
-        }
+           /* UDP header */
+           udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
+           udpHdr->source = htons(tunKey->flow_hash | MAXINT16);
+           udpHdr->dest = tunKey->dst_port ? tunKey->dst_port :
+                                            htons(vportVxlan->dstPort);
+           udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
+                               sizeof *udpHdr + sizeof *vxlanHdr);
 
-        /* VXLAN header */
-        vxlanHdr = (VXLANHdr *)((PCHAR)udpHdr + sizeof *udpHdr);
-        vxlanHdr->flags1 = 0;
-        vxlanHdr->locallyReplicate = 0;
-        vxlanHdr->flags2 = 0;
-        vxlanHdr->reserved1 = 0;
-        vxlanHdr->vxlanID = VXLAN_TUNNELID_TO_VNI(tunKey->tunnelId);
-        vxlanHdr->instanceID = 1;
-        vxlanHdr->reserved2 = 0;
+           if (tunKey->flags & OVS_TNL_F_CSUM) {
+               udpHdr->check = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
+                                                IPPROTO_UDP, ntohs(udpHdr->len));
+           } else {
+               udpHdr->check = 0;
+           }
+
+           /* VXLAN header */
+           vxlanHdr = (VXLANHdr *)((PCHAR)udpHdr + sizeof *udpHdr);
+           vxlanHdr->flags1 = 0;
+           vxlanHdr->locallyReplicate = 0;
+           vxlanHdr->flags2 = 0;
+           vxlanHdr->reserved1 = 0;
+           vxlanHdr->vxlanID = VXLAN_TUNNELID_TO_VNI(tunKey->tunnelId);
+           vxlanHdr->instanceID = 1;
+           vxlanHdr->reserved2 = 0;
+       } else {
+          status = NDIS_STATUS_FAILURE;
+          goto ret_error;
+       }
     }
 
     csumInfo.Value = 0;
-    csumInfo.Transmit.IpHeaderChecksum = 1;
-    csumInfo.Transmit.IsIPv4 = 1;
+    if (fwdInfo->dstIphAddr.si_family == AF_INET) {
+        csumInfo.Transmit.IpHeaderChecksum = 1;
+        csumInfo.Transmit.IsIPv4 = 1;
+    } else {
+        csumInfo.Transmit.IsIPv6 = 1;
+    }
     if (tunKey->flags & OVS_TNL_F_CSUM) {
         csumInfo.Transmit.UdpChecksum = 1;
     }
@@ -339,7 +355,7 @@ ret_error:
 NDIS_STATUS
 OvsEncapVxlan(POVS_VPORT_ENTRY vport,
               PNET_BUFFER_LIST curNbl,
-              OvsIPv4TunnelKey *tunKey,
+              OvsIPTunnelKey *tunKey,
               POVS_SWITCH_CONTEXT switchContext,
               POVS_PACKET_HDR_INFO layers,
               PNET_BUFFER_LIST *newNbl,
@@ -348,7 +364,12 @@ OvsEncapVxlan(POVS_VPORT_ENTRY vport,
     NTSTATUS status;
     OVS_FWD_INFO fwdInfo;
 
-    status = OvsLookupIPFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
+    if (tunKey->dst.si_family != AF_INET) {
+        /*V6 tunnel support will be supported later*/
+        return NDIS_STATUS_FAILURE;
+    }
+
+    status = OvsLookupIPhFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
         OvsFwdIPHelperRequest(NULL, 0, tunKey, NULL, NULL, NULL);
         /*
@@ -377,7 +398,7 @@ OvsEncapVxlan(POVS_VPORT_ENTRY vport,
 NDIS_STATUS
 OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
               PNET_BUFFER_LIST curNbl,
-              OvsIPv4TunnelKey *tunKey,
+              OvsIPTunnelKey *tunKey,
               PNET_BUFFER_LIST *newNbl)
 {
     PNET_BUFFER curNb;
@@ -390,6 +411,11 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     PUINT8 bufferStart;
     NDIS_STATUS status;
     OVS_PACKET_HDR_INFO layers = { 0 };
+
+    if (tunKey->dst.si_family != AF_INET) {
+        /*V6 tunnel support will be supported later*/
+        return NDIS_STATUS_FAILURE;
+    }
 
     status = OvsExtractLayers(curNbl, &layers);
     if (status != NDIS_STATUS_SUCCESS) {
@@ -427,13 +453,29 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     }
 
     ethHdr = (EthHdr *)bufferStart;
-    /* XXX: Handle IP options. */
-    ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
-    tunKey->src = ipHdr->saddr;
-    tunKey->dst = ipHdr->daddr;
-    tunKey->tos = ipHdr->tos;
-    tunKey->ttl = ipHdr->ttl;
-    tunKey->pad = 0;
+    if (ethHdr->Type == ETH_TYPE_IPV4_NBO) {
+       /* XXX: Handle IP options. */
+       ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
+       tunKey->src.Ipv4.sin_addr.s_addr = ipHdr->saddr;
+       tunKey->src.si_family = AF_INET;
+       tunKey->dst.Ipv4.sin_addr.s_addr = ipHdr->daddr;
+       tunKey->dst.si_family = AF_INET;
+       tunKey->tos = ipHdr->tos;
+       tunKey->ttl = ipHdr->ttl;
+       tunKey->pad = 0;
+   } else {
+        IPv6Hdr *ipv6Hdr;
+        ASSERT(ethHdr->Type == ETH_TYPE_IPV6_NBO);
+        ipv6Hdr = (IPv6Hdr *)((PCHAR)ethHdr + sizeof(*ethHdr));
+        RtlCopyMemory(&tunKey->src.Ipv6.sin6_addr, &ipv6Hdr->saddr, sizeof(ipv6Hdr->saddr));
+        tunKey->src.si_family = AF_INET6;
+        RtlCopyMemory(&tunKey->dst.Ipv6.sin6_addr, &ipv6Hdr->daddr, sizeof(ipv6Hdr->saddr));
+        tunKey->dst.si_family = AF_INET6;
+        tunKey->tos = (ipv6Hdr->priority << 4) |
+                      ((ipv6Hdr->flow_lbl[0] & 0xF0) >> 4);
+        tunKey->ttl = ipv6Hdr->hop_limit;
+        tunKey->pad = 0;
+   }
     udpHdr = (UDPHdr *)(bufferStart + layers.l4Offset);
 
     /* Validate if NIC has indicated checksum failure. */
@@ -445,7 +487,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     /* Calculate and verify UDP checksum if NIC didn't do it. */
     if (udpHdr->check != 0) {
         tunKey->flags |= OVS_TNL_F_CSUM;
-        status = OvsCalculateUDPChecksum(curNbl, curNb, ipHdr, udpHdr,
+        status = OvsCalculateUDPChecksum(curNbl, curNb, ethHdr, udpHdr,
                                          packetLength, &layers);
         if (status != NDIS_STATUS_SUCCESS) {
             goto dropNbl;
@@ -475,7 +517,7 @@ dropNbl:
 
 NDIS_STATUS
 OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
-                   OvsIPv4TunnelKey *tunnelKey)
+                      OvsIPTunnelKey *tunnelKey)
 {
     NDIS_STATUS status = NDIS_STATUS_FAILURE;
     UDPHdr udpStorage;
@@ -514,8 +556,10 @@ OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
                                                     &VxlanHeaderBuffer);
 
         if (VxlanHeader) {
-            tunnelKey->src = nh->saddr;
-            tunnelKey->dst = nh->daddr;
+            tunnelKey->src.Ipv4.sin_addr.s_addr = nh->saddr;
+            tunnelKey->src.si_family = AF_INET;
+            tunnelKey->dst.Ipv4.sin_addr.s_addr = nh->daddr;
+            tunnelKey->dst.si_family = AF_INET;
             tunnelKey->ttl = nh->ttl;
             tunnelKey->tos = nh->tos;
             if (VxlanHeader->instanceID) {

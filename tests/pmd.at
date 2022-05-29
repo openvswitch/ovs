@@ -199,7 +199,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([PMD - pmd-cpu-mask - NUMA])
+AT_SETUP([PMD - pmd-cpu-mask - dual NUMA])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd options:n_rxq=8 options:numa_id=1 -- set Open_vSwitch . other_config:pmd-cpu-mask=1],
                    [], [], [--dummy-numa 1,1,0,0])
 
@@ -359,6 +359,44 @@ pmd thread numa_id 1 core_id 0:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([PMD - pmd-cpu-mask - multi NUMA])
+OVS_VSWITCHD_START([add-port br0 p0 \
+                    -- set Interface p0 type=dummy-pmd options:n_rxq=4 \
+                    -- set Interface p0 options:numa_id=0 \
+                    -- set Open_vSwitch . other_config:pmd-cpu-mask=0xf \
+                    -- set open_vswitch . other_config:pmd-rxq-assign=cycles],
+                   [], [], [--dummy-numa 1,2,1,2])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using group algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using cycles algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
+
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
+
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using roundrobin algorithm"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "There's no available (non-isolated) pmd thread on numa node 0."])
+
+# check all pmds from both non-local numas are assigned an rxq
+AT_CHECK([test `ovs-appctl dpif-netdev/pmd-rxq-show | awk '/AVAIL$/ { printf("%s\t", $0); next } 1' | parse_pmd_rxq_show_group | wc -l` -eq 4])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([PMD - stats])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 ofport_request=7 type=dummy-pmd options:n_rxq=4],
                    [], [], [DUMMY_NUMA])
@@ -380,13 +418,14 @@ dummy@ovs-dummy: hit:0 missed:0
     p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 11], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 12], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   packets received: 0
   packet recirculations: 0
   avg. datapath passes per packet: 0.00
   phwol hits: 0
   mfex opt hits: 0
+  simple match hits: 0
   emc hits: 0
   smc hits: 0
   megaflow hits: 0
@@ -413,13 +452,14 @@ AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 11], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 12], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   packets received: 20
   packet recirculations: 0
   avg. datapath passes per packet: 1.00
   phwol hits: 0
   mfex opt hits: 0
+  simple match hits: 0
   emc hits: 19
   smc hits: 0
   megaflow hits: 0
@@ -1064,6 +1104,98 @@ AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl dpctl/del-dp dummy@dp0], [0], [dnl
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - dpif configuration])
+OVS_VSWITCHD_START([], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
+
+AT_CHECK([ovs-vsctl show], [], [stdout])
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-get | grep "dpif_scalar"], [], [dnl
+  dpif_scalar (pmds: 0)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar], [0], [dnl
+DPIF implementation set to dpif_scalar.
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - dpcls configuration])
+OVS_VSWITCHD_START([], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
+
+AT_CHECK([ovs-vsctl show], [], [stdout])
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
+  generic (Use count: 0, Priority: 1)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep autovalidator], [], [dnl
+  autovalidator (Use count: 0, Priority: 0)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 3], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep autovalidator], [], [dnl
+  autovalidator (Use count: 0, Priority: 3)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic 4], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
+  generic (Use count: 0, Priority: 4)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic 8], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
+  generic (Use count: 0, Priority: 8)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 8], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep autovalidator], [], [dnl
+  autovalidator (Use count: 0, Priority: 8)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic 0], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
+  generic (Use count: 0, Priority: 0)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic 255], [0], [dnl
+Lookup priority change affected 0 dpcls ports and 0 subtables.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
+  generic (Use count: 0, Priority: 255)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic -1], [2],
+[], [dnl
+error converting priority, use integer in range 0-255
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set generic 300], [2],
+[], [dnl
+error converting priority, use integer in range 0-255
+ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
 OVS_VSWITCHD_STOP

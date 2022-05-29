@@ -112,7 +112,8 @@ OFPST_PORT reply (OF1.4): 1 ports
            tx pkts=0, bytes=0, drop=?, errs=?, coll=?
            duration=?s
            CUSTOM Statistics
-                      rx_custom_packets_1=0, rx_custom_packets_2=0,
+                      rx_custom_packets_1=0, rx_custom_packets_2=0, rx_q0_bytes=0,
+                      rx_q0_packets=0, tx_q0_bytes=0, tx_q0_packets=0,
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -4576,20 +4577,29 @@ sys.stdout.write("".join(sorted(buffer)))
 ]
 m4_divert_pop([PREPARE_TESTS])
 
-AT_SETUP([ofproto - flow monitoring])
+dnl Flow monitoring tests verified across all supported protocols
+dnl CHECK_FLOW_MONITORING(label, option, format)
+m4_define([CHECK_FLOW_MONITORING], [
+AT_SETUP([ofproto - flow monitoring - (OpenFlow $1)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
+
+# Get packet data to used as part of ofctl/send operation before doing anything else
+send_buf=$(ovs-ofctl -O $2 del-flows br0 table=0 -mmmmmm |  sed 's/0x/0/' | sed -E 's/^(.{8})(.{8})/\112345678/' )
 
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:1
 
 # Start a monitor watching the flow table and check the initial reply.
-ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl -O $2 monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
-  [NXST_FLOW_MONITOR reply:
+  [$4 reply$3:
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:1
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 # Add, delete, and modify some flows and check the updates.
@@ -4601,7 +4611,7 @@ ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,dl_vlan_pcp=1,actions=output:7
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:8
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,dl_vlan_pcp=0,actions=output:9
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,dl_vlan_pcp=1,actions=output:10
-ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,actions=output:11
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,dl_vlan_pcp=3,actions=output:11
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,dl_vlan_pcp=0,actions=output:12
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,dl_vlan_pcp=1,actions=output:13
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,actions=output:14
@@ -4619,72 +4629,75 @@ ovs-ofctl mod-flows br0 cookie=5,dl_vlan=123,actions=output:3
 ovs-ofctl del-flows br0 dl_vlan=123
 ovs-ofctl del-flows br0
 ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log | multiline_sort], [0],
-[NXST_FLOW_MONITOR reply (xid=0x0):
+[$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:5
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:6
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:7
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:8
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:9
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:10
-NXST_FLOW_MONITOR reply (xid=0x0):
- event=ADDED table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=3 actions=output:11
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=0 actions=output:12
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095 actions=output:14
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:15
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:16
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:17
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:20
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0 actions=output:23
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:3
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
  event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
  event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=DELETED reason=delete table=0 cookie=0 in_port=0 actions=output:23
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:20
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=3 actions=output:11
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095 actions=output:14
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=0 actions=output:12
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
- event=DELETED reason=delete table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 # Check that our own changes are reported as full updates.
@@ -4692,41 +4705,47 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 ovs-ofctl add-flow br0 in_port=1,actions=output:2
 ovs-ofctl add-flow br0 in_port=2,actions=output:1
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl ofctl/send 010e004812345678003fffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000ffffffffffff0000
+ovs-appctl -t ovs-ofctl ofctl/send $send_buf
 ovs-appctl -t ovs-ofctl ofctl/barrier
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [NXST_FLOW reply:
 ])
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log | multiline_sort], [0],
-[NXST_FLOW_MONITOR reply (xid=0x0):
+[$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=1 actions=output:2
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=2 actions=output:1
-OFPT_BARRIER_REPLY:
-send: OFPT_FLOW_MOD: DEL priority=0 actions=drop
-NXST_FLOW_MONITOR reply (xid=0x0):
+OFPT_BARRIER_REPLY$3:
+send: OFPT_FLOW_MOD$3: DEL actions=drop
+$4 reply$3 (xid=0x0):
  event=DELETED reason=delete table=0 cookie=0 in_port=1 actions=output:2
  event=DELETED reason=delete table=0 cookie=0 in_port=2 actions=output:1
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - flow monitoring with !own])
+AT_SETUP([ofproto - flow monitoring with !own - (OpenFlow $1)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
+
+# Get packet data to used as part of ofctl/send operation before doing anything else
+send_buf=$(ovs-ofctl -O $2 del-flows br0 table=0 -mmmmmm |  sed 's/0x/0/' | sed -E 's/^(.{8})(.{8})/\112345678/' )
 
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:1
 
 # Start a monitor watching the flow table and check the initial reply.
-ovs-ofctl monitor br0 watch:\!own --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl -O $2 monitor br0 watch:\!own --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
-  [NXST_FLOW_MONITOR reply:
+  [$4 reply$3:
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:1
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 # Check that our own changes are reported as abbreviations.
@@ -4734,27 +4753,30 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 ovs-ofctl add-flow br0 in_port=1,actions=output:2
 ovs-ofctl add-flow br0 in_port=2,actions=output:1
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl ofctl/send 010e004812345678003fffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000ffffffffffff0000
+ovs-appctl -t ovs-ofctl ofctl/send $send_buf
 ovs-appctl -t ovs-ofctl ofctl/barrier
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [NXST_FLOW reply:
 ])
+
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
-[NXST_FLOW_MONITOR reply (xid=0x0):
+[$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=1 actions=output:2
-NXST_FLOW_MONITOR reply (xid=0x0):
+$4 reply$3 (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=2 actions=output:1
-OFPT_BARRIER_REPLY:
-send: OFPT_FLOW_MOD: DEL priority=0 actions=drop
-NXST_FLOW_MONITOR reply (xid=0x0):
+OFPT_BARRIER_REPLY$3:
+send: OFPT_FLOW_MOD$3: DEL actions=drop
+$4 reply$3 (xid=0x0):
  event=ABBREV xid=0x12345678
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - flow monitoring with out_port])
+AT_SETUP([ofproto - flow monitoring with out_port - (OpenFlow $1)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
 
@@ -4763,13 +4785,16 @@ ovs-ofctl add-flow br0 in_port=0,dl_vlan=122,actions=output:1
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:2
 
 # Start a monitor watching the flow table and check the initial reply.
-ovs-ofctl monitor br0 watch:out_port=2 --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl -O $2 monitor br0 watch:out_port=2 --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/barrier
+
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
-  [NXST_FLOW_MONITOR reply:
+  [$4 reply$3:
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:2
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -4787,26 +4812,28 @@ ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-ofctl mod-flows br0 dl_vlan=123,actions=output:2
 ovs-appctl -t ovs-ofctl ofctl/barrier
 
+# For OF(1.4+), replace INITIAL to ADDED
+sed -i'.raw' -e 's|event=INITIAL|event=ADDED|' monitor.log
 AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
-[NXST_FLOW_MONITOR reply (xid=0x0):
+[$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=122 actions=output:1,output:2
-OFPT_BARRIER_REPLY:
-NXST_FLOW_MONITOR reply (xid=0x0):
+OFPT_BARRIER_REPLY$3:
+$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:1,output:2
-OFPT_BARRIER_REPLY:
-NXST_FLOW_MONITOR reply (xid=0x0):
+OFPT_BARRIER_REPLY$3:
+$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=122 actions=output:1
-OFPT_BARRIER_REPLY:
-NXST_FLOW_MONITOR reply (xid=0x0):
+OFPT_BARRIER_REPLY$3:
+$4 reply$3 (xid=0x0):
  event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:2
-OFPT_BARRIER_REPLY:
+OFPT_BARRIER_REPLY$3:
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - flow monitoring pause and resume])
+AT_SETUP([ofproto - flow monitoring pause and resume - (OpenFlow $1)])
 AT_KEYWORDS([monitor])
 
 # The maximum socket receive buffer size is important for this test, which
@@ -4837,7 +4864,7 @@ OVS_VSWITCHD_START
 
 # Start a monitor watching the flow table, then make it block.
 on_exit 'kill `cat ovs-ofctl.pid`'
-ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl -O $2 monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/block
 
@@ -4860,7 +4887,7 @@ ovs-appctl -t ovs-ofctl ofctl/unblock
 # A barrier doesn't work for this purpose.
 #    https://www.mail-archive.com/dev@openvswitch.org/msg27013.html
 #    https://www.mail-archive.com/dev@openvswitch.org/msg27675.html
-OVS_WAIT_UNTIL([grep NXT_FLOW_MONITOR_RESUMED monitor.log])
+OVS_WAIT_UNTIL([grep RESUMED monitor.log])
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
@@ -4888,49 +4915,113 @@ AT_CHECK([test $adds = $deletes])
 # and MODIFIED lines lines depends on hash order, that is, it varies
 # as we change the hash function or change architecture.  Therefore,
 # we use a couple of tests below to accept both orders.
+
+# Rename all version specific strings to a generic one
+sed -i'.raw' -e 's|NXT_FLOW_MONITOR|FLOW_MONITOR|' -e 's|ONFT_FLOW_MONITOR|FLOW_MONITOR|' monitor.log
+sed -i -z 's|OFPST_FLOW_MONITOR reply$3 (xid=0x0):\n event=PAUSED|FLOW_MONITOR_PAUSED$3:|' monitor.log
+sed -i -z 's|OFPST_FLOW_MONITOR reply$3 (xid=0x0):\n event=RESUMED|FLOW_MONITOR_RESUMED$3:|' monitor.log
+
 AT_CHECK([ofctl_strip < monitor.log | sed -n -e '
 /reg1=0x22$/p
 /cookie=0x[[23]]/p
-/NXT_FLOW_MONITOR_PAUSED:/p
-/NXT_FLOW_MONITOR_RESUMED:/p
+/FLOW_MONITOR_PAUSED$3:/p
+/FLOW_MONITOR_RESUMED$3:/p
 ' > monitor.log.subset])
 AT_CHECK([grep -v MODIFIED monitor.log.subset], [0], [dnl
  event=ADDED table=0 cookie=0x1 reg1=0x22
-NXT_FLOW_MONITOR_PAUSED:
+FLOW_MONITOR_PAUSED$3:
  event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
  event=ADDED table=0 cookie=0x3 in_port=1
-NXT_FLOW_MONITOR_RESUMED:
+FLOW_MONITOR_RESUMED$3:
 ])
 AT_CHECK([grep -v ADDED monitor.log.subset], [0], [dnl
-NXT_FLOW_MONITOR_PAUSED:
+FLOW_MONITOR_PAUSED$3:
  event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
  event=MODIFIED table=0 cookie=0x2 in_port=2 actions=output:2
-NXT_FLOW_MONITOR_RESUMED:
+FLOW_MONITOR_RESUMED$3:
 ])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - flow monitoring usable protocols])
+# Test to show flow monitoring support on different OpenFlow protocols
+AT_SETUP([ofproto - flow monitoring usable protocols (OpenFlow $1)])
 AT_KEYWORDS([monitor])
 
 OVS_VSWITCHD_START
 
 on_exit 'kill `cat ovs-ofctl.pid`'
-ovs-ofctl -OOpenFlow14 monitor br0 watch:udp,udp_dst=8 --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl -O $2 monitor br0 watch:udp,udp_dst=8 --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 
-# ovs-ofctl should exit because monitor is not supported in OpenFlow 1.4
-OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+# Wait till reply comes backs with OF Version
+OVS_WAIT_UNTIL([grep "$4 reply$3" monitor.log])
+ovs-appctl -t ovs-ofctl exit
 
-# check that only NXM flag is returned as usable protocols for sctp_dst
-# and ovs-ofctl should exit since monitor is not supported in OpenFlow 1.4
-ovs-ofctl -OOpenFlow14 monitor br0 watch:sctp,sctp_dst=9 --detach --no-chdir --pidfile >monitor.log 2>&1
-OVS_WAIT_UNTIL([grep "ovs-ofctl: none of the usable flow formats (NXM) is among the allowed flow formats (OXM-OpenFlow14)" monitor.log])
+# Make sure protocol type in messages from vswitchd, matches that of requested protocol
+ovs-ofctl -O $2 monitor br0 watch:sctp,sctp_dst=9 --detach --no-chdir --pidfile >monitor.log 2>&1
+ovs-ofctl add-flow br0 sctp,sctp_dst=9,action=normal
 
+OVS_WAIT_UNTIL([grep "event=ADDED " monitor.log])
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+$4 reply$3:
+$4 reply$3 (xid=0x0):
+ event=ADDED table=0 cookie=0 sctp,tp_dst=9 actions=NORMAL
+])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+])
+CHECK_FLOW_MONITORING([1.0], [OpenFlow10], [],         NXST_FLOW_MONITOR)
+CHECK_FLOW_MONITORING([1.1], [OpenFlow11], [ (OF1.1)], NXST_FLOW_MONITOR)
+CHECK_FLOW_MONITORING([1.2], [OpenFlow12], [ (OF1.2)], NXST_FLOW_MONITOR)
+CHECK_FLOW_MONITORING([1.3], [OpenFlow13], [ (OF1.3)], ONFST_FLOW_MONITOR)
+CHECK_FLOW_MONITORING([1.4], [OpenFlow14], [ (OF1.4)], OFPST_FLOW_MONITOR)
+CHECK_FLOW_MONITORING([1.5], [OpenFlow15], [ (OF1.5)], OFPST_FLOW_MONITOR)
 
+AT_SETUP([ofproto - OpenFlow14 flow monitoring with out_group])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 add-group br0 group_id=1,type=all,bucket=output:1])
+AT_CHECK([ovs-ofctl -O OpenFlow14 add-group br0 group_id=2,type=all,bucket=output:2])
+
+ovs-ofctl -OOpenFlow14 add-flow br0 in_port=0,dl_vlan=121,actions=output:1
+ovs-ofctl -OOpenFlow14 add-flow br0 in_port=0,dl_vlan=122,actions=group:1
+ovs-ofctl -OOpenFlow14 add-flow br0 in_port=0,dl_vlan=123,actions=group:2
+
+# Start a monitor watching the flow table and check the initial reply.
+ovs-ofctl -OOpenFlow14 monitor br0 watch:out_group=2 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+ovs-appctl -t ovs-ofctl ofctl/barrier
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+[OFPST_FLOW_MONITOR reply (OF1.4):
+ event=INITIAL table=0 cookie=0 in_port=0,dl_vlan=123 actions=group:2
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+
+# Add, modify flows and check the updates.
+ovs-ofctl -OOpenFlow14 mod-flows br0 dl_vlan=121,actions=group:2
+ovs-ofctl -OOpenFlow14 mod-flows br0 dl_vlan=122,actions=group:2
+ovs-ofctl -OOpenFlow14 mod-flows br0 dl_vlan=123,actions=group:1
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-ofctl -OOpenFlow14 add-flow br0 in_port=0,dl_vlan=124,actions=group:2
+
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+[OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=121 actions=group:2
+OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=MODIFIED table=0 cookie=0 in_port=0,dl_vlan=122 actions=group:2
+OFPT_BARRIER_REPLY (OF1.4):
+OFPST_FLOW_MONITOR reply (OF1.4) (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=124 actions=group:2
+])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto - event filtering (OpenFlow 1.3)])
 AT_KEYWORDS([monitor])

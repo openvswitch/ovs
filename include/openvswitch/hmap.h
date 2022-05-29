@@ -134,17 +134,17 @@ struct hmap_node *hmap_random_node(const struct hmap *);
  * without using 'break', NODE will be NULL.  This is true for all of the
  * HMAP_FOR_EACH_*() macros.
  */
-#define HMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HMAP)               \
-    for (INIT_CONTAINER(NODE, hmap_first_with_hash(HMAP, HASH), MEMBER); \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
-         || ((NODE = NULL), false);                                     \
-         ASSIGN_CONTAINER(NODE, hmap_next_with_hash(&(NODE)->MEMBER),   \
-                          MEMBER))
-#define HMAP_FOR_EACH_IN_BUCKET(NODE, MEMBER, HASH, HMAP)               \
-    for (INIT_CONTAINER(NODE, hmap_first_in_bucket(HMAP, HASH), MEMBER); \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
-         || ((NODE = NULL), false);                                     \
-         ASSIGN_CONTAINER(NODE, hmap_next_in_bucket(&(NODE)->MEMBER), MEMBER))
+#define HMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HMAP)                     \
+    for (INIT_MULTIVAR(NODE, MEMBER, hmap_first_with_hash(HMAP, HASH),        \
+                       struct hmap_node);                                     \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);            \
+         UPDATE_MULTIVAR(NODE, hmap_next_with_hash(ITER_VAR(NODE))))
+
+#define HMAP_FOR_EACH_IN_BUCKET(NODE, MEMBER, HASH, HMAP)                     \
+    for (INIT_MULTIVAR(NODE, MEMBER, hmap_first_in_bucket(HMAP, HASH),        \
+                       struct hmap_node);                                     \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);            \
+         UPDATE_MULTIVAR(NODE, hmap_next_in_bucket(ITER_VAR(NODE))))
 
 static inline struct hmap_node *hmap_first_with_hash(const struct hmap *,
                                                      size_t hash);
@@ -170,54 +170,80 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
 /* Iterates through every node in HMAP. */
 #define HMAP_FOR_EACH(NODE, MEMBER, HMAP) \
     HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, (void) 0)
-#define HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, ...)                     \
-    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
-         || ((NODE = NULL), false);                                     \
-         ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
+#define HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, ...)                           \
+    for (INIT_MULTIVAR_EXP(NODE, MEMBER, hmap_first(HMAP), struct hmap_node,  \
+                           __VA_ARGS__);                                      \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);            \
+         UPDATE_MULTIVAR(NODE, hmap_next(HMAP, ITER_VAR(NODE))))
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash map but its members remain accessible and intact). */
-#define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP) \
-    HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, (void) 0)
-#define HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, ...)          \
-    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
-         ((NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))               \
-          || ((NODE = NULL), false)                                     \
-          ? INIT_CONTAINER(NEXT, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 \
-          : 0);                                                         \
-         (NODE) = (NEXT))
+#define HMAP_FOR_EACH_SAFE_LONG(NODE, NEXT, MEMBER, HMAP) \
+    HMAP_FOR_EACH_SAFE_LONG_INIT (NODE, NEXT, MEMBER, HMAP, (void) NEXT)
+
+#define HMAP_FOR_EACH_SAFE_LONG_INIT(NODE, NEXT, MEMBER, HMAP, ...)           \
+    for (INIT_MULTIVAR_SAFE_LONG_EXP(NODE, NEXT, MEMBER, hmap_first(HMAP),    \
+                                     struct hmap_node, __VA_ARGS__);          \
+         CONDITION_MULTIVAR_SAFE_LONG(NODE, NEXT, MEMBER,                     \
+                                      ITER_VAR(NODE) != NULL,                 \
+                            ITER_VAR(NEXT) = hmap_next(HMAP, ITER_VAR(NODE)), \
+                                      ITER_VAR(NEXT) != NULL);                \
+         UPDATE_MULTIVAR_SAFE_LONG(NODE, NEXT))
+
+/* Short versions of HMAP_FOR_EACH_SAFE. */
+#define HMAP_FOR_EACH_SAFE_SHORT(NODE, MEMBER, HMAP)                          \
+    HMAP_FOR_EACH_SAFE_SHORT_INIT (NODE, MEMBER, HMAP, (void) 0)
+
+#define HMAP_FOR_EACH_SAFE_SHORT_INIT(NODE, MEMBER, HMAP, ...)                \
+    for (INIT_MULTIVAR_SAFE_SHORT_EXP(NODE, MEMBER, hmap_first(HMAP),         \
+                                      struct hmap_node, __VA_ARGS__);         \
+         CONDITION_MULTIVAR_SAFE_SHORT(NODE, MEMBER,                          \
+                                       ITER_VAR(NODE) != NULL,                \
+                      ITER_NEXT_VAR(NODE) = hmap_next(HMAP, ITER_VAR(NODE))); \
+         UPDATE_MULTIVAR_SAFE_SHORT(NODE))
+
+#define HMAP_FOR_EACH_SAFE(...)                                               \
+    OVERLOAD_SAFE_MACRO(HMAP_FOR_EACH_SAFE_LONG,                              \
+                        HMAP_FOR_EACH_SAFE_SHORT,                             \
+                        4, __VA_ARGS__)
+
 
 /* Continues an iteration from just after NODE. */
 #define HMAP_FOR_EACH_CONTINUE(NODE, MEMBER, HMAP) \
     HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, (void) 0)
-#define HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, ...)            \
-    for (ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), \
-         __VA_ARGS__;                                                   \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                \
-         || ((NODE = NULL), false);                                     \
-         ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
+#define HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, ...)                  \
+    for (INIT_MULTIVAR_EXP(NODE, MEMBER, hmap_next(HMAP, &(NODE)->MEMBER),    \
+                           struct hmap_node, __VA_ARGS__);                    \
+         CONDITION_MULTIVAR(NODE, MEMBER, ITER_VAR(NODE) != NULL);            \
+         UPDATE_MULTIVAR(NODE, hmap_next(HMAP, ITER_VAR(NODE))))
 
-static inline struct hmap_node *
-hmap_pop_helper__(struct hmap *hmap, size_t *bucket) {
+struct hmap_pop_helper_iter__ {
+    size_t bucket;
+    struct hmap_node *node;
+};
 
-    for (; *bucket <= hmap->mask; (*bucket)++) {
-        struct hmap_node *node = hmap->buckets[*bucket];
+static inline void
+hmap_pop_helper__(struct hmap *hmap, struct hmap_pop_helper_iter__ *iter) {
+
+    for (; iter->bucket <= hmap->mask; (iter->bucket)++) {
+        struct hmap_node *node = hmap->buckets[iter->bucket];
 
         if (node) {
             hmap_remove(hmap, node);
-            return node;
+            iter->node = node;
+            return;
         }
     }
-
-    return NULL;
+    iter->node = NULL;
 }
 
-#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                               \
-    for (size_t bucket__ = 0;                                               \
-         INIT_CONTAINER(NODE, hmap_pop_helper__(HMAP, &bucket__), MEMBER),  \
-         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER))                    \
-         || ((NODE = NULL), false);)
+#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                                 \
+    for (struct hmap_pop_helper_iter__ ITER_VAR(NODE) = { 0, NULL };          \
+         hmap_pop_helper__(HMAP, &ITER_VAR(NODE)),                            \
+         (ITER_VAR(NODE).node != NULL) ?                                      \
+            (((NODE) = OBJECT_CONTAINING(ITER_VAR(NODE).node,                 \
+                                         NODE, MEMBER)),1):                   \
+            (((NODE) = NULL), 0);)
 
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,

@@ -417,11 +417,11 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
 static int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
-    struct ufid_tc_data *data, *next;
+    struct ufid_tc_data *data;
     int err;
 
     ovs_mutex_lock(&ufid_lock);
-    HMAP_FOR_EACH_SAFE (data, next, tc_to_ufid_node, &tc_to_ufid) {
+    HMAP_FOR_EACH_SAFE (data, tc_to_ufid_node, &tc_to_ufid) {
         if (data->netdev != netdev) {
             continue;
         }
@@ -481,10 +481,10 @@ netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
 
 static void
 parse_flower_rewrite_to_netlink_action(struct ofpbuf *buf,
-                                       struct tc_flower *flower)
+                                       struct tc_action *action)
 {
-    char *mask = (char *) &flower->rewrite.mask;
-    char *data = (char *) &flower->rewrite.key;
+    char *mask = (char *) &action->rewrite.mask;
+    char *data = (char *) &action->rewrite.key;
 
     for (int type = 0; type < ARRAY_SIZE(set_flower_map); type++) {
         char *put = NULL;
@@ -585,8 +585,10 @@ parse_tc_flower_to_stats(struct tc_flower *flower,
     }
 
     memset(stats, 0, sizeof *stats);
-    stats->n_packets = get_32aligned_u64(&flower->stats.n_packets);
-    stats->n_bytes = get_32aligned_u64(&flower->stats.n_bytes);
+    stats->n_packets = get_32aligned_u64(&flower->stats_sw.n_packets);
+    stats->n_packets += get_32aligned_u64(&flower->stats_hw.n_packets);
+    stats->n_bytes = get_32aligned_u64(&flower->stats_sw.n_bytes);
+    stats->n_bytes += get_32aligned_u64(&flower->stats_hw.n_bytes);
     stats->used = flower->lastused;
 }
 
@@ -877,7 +879,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             }
             break;
             case TC_ACT_PEDIT: {
-                parse_flower_rewrite_to_netlink_action(buf, flower);
+                parse_flower_rewrite_to_netlink_action(buf, action);
             }
             break;
             case TC_ACT_ENCAP: {
@@ -1222,8 +1224,8 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     uint64_t set_stub[1024 / 8];
     struct ofpbuf set_buf = OFPBUF_STUB_INITIALIZER(set_stub);
     char *set_data, *set_mask;
-    char *key = (char *) &flower->rewrite.key;
-    char *mask = (char *) &flower->rewrite.mask;
+    char *key = (char *) &action->rewrite.key;
+    char *mask = (char *) &action->rewrite.mask;
     const struct nlattr *attr;
     int i, j, type;
     size_t size;
@@ -1265,14 +1267,6 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
         }
     }
 
-    if (!is_all_zeros(&flower->rewrite, sizeof flower->rewrite)) {
-        if (flower->rewrite.rewrite == false) {
-            flower->rewrite.rewrite = true;
-            action->type = TC_ACT_PEDIT;
-            flower->action_count++;
-        }
-    }
-
     if (hasmask && !is_all_zeros(set_mask, size)) {
         VLOG_DBG_RL(&rl, "unsupported sub attribute of set action type %d",
                     type);
@@ -1281,6 +1275,8 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     }
 
     ofpbuf_uninit(&set_buf);
+    action->type = TC_ACT_PEDIT;
+    flower->action_count++;
     return 0;
 }
 
@@ -1540,6 +1536,12 @@ parse_match_ct_state_to_flower(struct tc_flower *flower, struct match *match)
         if (flower->key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_ESTABLISHED) {
             flower->key.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
             flower->mask.ct_state &= ~(TCA_FLOWER_KEY_CT_FLAGS_NEW);
+        }
+
+        if (flower->key.ct_state &&
+            !(flower->key.ct_state & TCA_FLOWER_KEY_CT_FLAGS_TRACKED)) {
+            flower->key.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
+            flower->mask.ct_state |= TCA_FLOWER_KEY_CT_FLAGS_TRACKED;
         }
     }
 
@@ -1841,7 +1843,25 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
                 return ENODEV;
             }
+
+            if (!netdev_flow_api_equals(netdev, outdev)) {
+                VLOG_DBG_RL(&rl,
+                            "Flow API provider mismatch between ingress (%s) "
+                            "and egress (%s) ports",
+                            netdev_get_name(netdev), netdev_get_name(outdev));
+                netdev_close(outdev);
+                return EOPNOTSUPP;
+            }
+
             action->out.ifindex_out = netdev_get_ifindex(outdev);
+            if (action->out.ifindex_out < 0) {
+                VLOG_DBG_RL(&rl,
+                            "Can't find ifindex for output port %s, error %d",
+                            netdev_get_name(outdev), action->out.ifindex_out);
+                netdev_close(outdev);
+                return -action->out.ifindex_out;
+            }
+
             action->out.ingress = is_internal_port(netdev_get_type(outdev));
             action->type = TC_ACT_OUTPUT;
             flower.action_count++;
@@ -2015,9 +2035,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
     if (stats) {
         memset(stats, 0, sizeof *stats);
         if (!tc_get_flower(&id, &flower)) {
-            stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
-            stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
-            stats->used = flower.lastused;
+            parse_tc_flower_to_stats(&flower, stats);
         }
     }
 

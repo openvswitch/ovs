@@ -202,18 +202,18 @@ conn prevent_unencrypted_vxlan
 """
 
     auth_tmpl = {"psk": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     authby=psk"""),
                  "pki_remote": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     leftid=$local_name
     rightid=$remote_name
     leftcert=$certificate
     rightcert=$remote_cert"""),
                  "pki_ca": Template("""\
-    left=0.0.0.0
+    left=%any
     right=$remote_ip
     leftid=$local_name
     rightid=$remote_name
@@ -299,11 +299,11 @@ conn prevent_unencrypted_vxlan
 
     def config_tunnel(self, tunnel):
         if tunnel.conf["psk"]:
-            self.secrets_file.write('0.0.0.0 %s : PSK "%s"\n' %
+            self.secrets_file.write('%%any %s : PSK "%s"\n' %
                             (tunnel.conf["remote_ip"], tunnel.conf["psk"]))
             auth_section = self.auth_tmpl["psk"].substitute(tunnel.conf)
         else:
-            self.secrets_file.write("0.0.0.0 %s : RSA %s\n" %
+            self.secrets_file.write("%%any %s : RSA %s\n" %
                                         (tunnel.conf["remote_ip"],
                                         tunnel.conf["private_key"]))
             if tunnel.conf["remote_cert"]:
@@ -312,6 +312,10 @@ conn prevent_unencrypted_vxlan
             else:
                 tmpl = self.auth_tmpl["pki_ca"]
                 auth_section = tmpl.substitute(tunnel.conf)
+
+        if "custom_options" in tunnel.conf:
+            for key, value in tunnel.conf["custom_options"].items():
+                auth_section += "\n    " + key + "=" + value
 
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
@@ -337,7 +341,14 @@ conn prevent_unencrypted_vxlan
         Once strongSwan vici bindings will be distributed with major
         Linux distributions this function could be simplified."""
         vlog.info("Refreshing StrongSwan configuration")
-        subprocess.call([self.IPSEC, "update"])
+        proc = subprocess.Popen([self.IPSEC, "update"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+        outs, errs = proc.communicate()
+        if proc.returncode != 0:
+            vlog.err("StrongSwan failed to update configuration:\n"
+                           "%s \n %s" % (str(outs), str(errs)))
+
         subprocess.call([self.IPSEC, "rereadsecrets"])
         # "ipsec update" command does not remove those tunnels that were
         # updated or that disappeared from the ipsec.conf file.  So, we have
@@ -543,6 +554,10 @@ conn prevent_unencrypted_vxlan
         if tunnel.conf["address_family"] == "IPv6":
             auth_section = self.IPV6_CONN + auth_section
 
+        if "custom_options" in tunnel.conf:
+            for key, value in tunnel.conf["custom_options"].items():
+                auth_section += "\n    " + key + "=" + value
+
         vals = tunnel.conf.copy()
         vals["auth_section"] = auth_section
         vals["version"] = tunnel.version
@@ -708,6 +723,11 @@ conn prevent_unencrypted_vxlan
                     not re.match(r".*need --listen.*", pout):
                 break
 
+        if re.match(r".*[F|f]ailed to initiate connection.*", pout):
+            vlog.err('Failed to initiate connection through'
+                    ' Interface %s.\n' % (conn.split('-')[0]))
+            vlog.err(pout)
+
     def _nss_clear_database(self):
         """Remove all OVS IPsec related state from the NSS database"""
         try:
@@ -819,6 +839,7 @@ class IPsecTunnel(object):
   Remote name:    $remote_name
   CA cert:        $ca_cert
   PSK:            $psk
+  Custom Options: $custom_options
 """)
 
     unixctl_status_tmpl = Template("""\
@@ -862,7 +883,13 @@ class IPsecTunnel(object):
             "remote_cert": remote_cert,
             "remote_name": remote_name,
             "local_name": monitor.conf["pki"]["local_name"],
-            "psk": options.get("psk")}
+            "psk": options.get("psk"),
+            "custom_options": {}}
+
+        # add custom ipsec options to the connection
+        for key, value in options.items():
+            if key.startswith("ipsec_"):
+                new_conf["custom_options"][key[len("ipsec_"):]] = value
 
         if self.conf != new_conf:
             # Configuration was updated in OVSDB.  Validate it and figure
@@ -1308,7 +1335,8 @@ def main():
     idl = ovs.db.idl.Idl(remote, schema_helper)
 
     ovs.daemon.daemonize()
-
+    ovs.unixctl.command_register("list-commands", "", 0, 0,
+                                 ovs.unixctl._unixctl_help, None)
     ovs.unixctl.command_register("xfrm/policies", "", 0, 0,
                                  unixctl_xfrm_policies, None)
     ovs.unixctl.command_register("xfrm/state", "", 0, 0,

@@ -2,7 +2,7 @@
 Description=Open vSwitch Delete Transient Ports
 After=ovsdb-server.service
 Before=ovs-vswitchd.service
-AssertPathExists=/var/run/openvswitch/db.sock
+AssertPathExists=/run/openvswitch/db.sock
 
 [Service]
 Type=oneshot

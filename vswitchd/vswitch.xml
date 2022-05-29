@@ -247,6 +247,22 @@
         </p>
       </column>
 
+      <column name="other_config" key="n-offload-threads"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 10}'>
+        <p>
+          Set this value to the number of threads created to manage hardware
+          offloads.
+        </p>
+        <p>
+          The default value is <code>1</code>. Changing this value requires
+          restarting the daemon.
+        </p>
+        <p>
+          This is only relevant for userspace datapath and only if
+          <ref column="other_config" key="hw-offload"/> is enabled.
+        </p>
+      </column>
+
       <column name="other_config" key="tc-policy"
               type='{"type": "string",
                      "enum": ["set", ["none", "skip_sw", "skip_hw"]]}'>
@@ -1030,7 +1046,9 @@
       <p>
         These settings control the global configuration of IPsec tunnels.  The
         <code>options</code> column of the <code>Interface</code> table
-        configures IPsec for individual tunnels.
+        configures IPsec for individual tunnels. The <code>options</code>
+        column also allows for custom options prefixed with <code>ipsec_</code>
+        to be passed to the individual connections.
       </p>
       <p>
         OVS IPsec supports the following three forms of authentication.
@@ -1313,7 +1331,7 @@
         Human readable description of datapath.  It is a maximum 256
         byte-long free-form string to describe the datapath for
         debugging purposes, e.g. <code>switch3 in room 3120</code>.
-        The value is returned by the switch as a part of reply to OFPMP_DESC 
+        The value is returned by the switch as a part of reply to OFPMP_DESC
         request (ofp_desc). The OpenFlow specification (e.g. 1.3.5) describes
         the ofp_desc structure to contaion "NULL terminated ASCII strings".
         For the compatibility reasons no more than 255 ASCII characters should be used.
@@ -1875,7 +1893,7 @@
             only VLAN) must be <ref column="tag"/>, which is removed before
             egress, which exposes the inner (customer) VLAN if one is present.
           </p>
-            
+
           <p>
             If <ref column="cvlans"/> is set, only allows packets in the
             specified customer VLANs.
@@ -3375,6 +3393,29 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </ul>
         <p>This option may only be used with dpdk VF representors.</p>
       </column>
+
+      <column name="other_config" key="tx-steering"
+              type='{"type": "string",
+                     "enum": ["set", ["thread", "hash"]]}'>
+        <p>
+          Specifies the Tx steering mode for the interface.
+        </p>
+        <p>
+          <code>thread</code> enables static (1:1) thread-to-txq mapping when
+          the number of Tx queues is greater than number of PMD threads, and
+          dynamic (N:1) mapping if equal or lower. In this mode a single thread
+          can not use more than 1 transmit queue of a given port.
+        </p>
+        <p>
+          <code>hash</code> enables hash-based Tx steering, which distributes
+          the packets on all the transmit queues based on their 5-tuples
+          hashes.
+        </p>
+        <p>
+          Defaults to <code>thread</code>.
+        </p>
+      </column>
+
     </group>
 
     <group title="EMC (Exact Match Cache) Configuration">

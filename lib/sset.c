@@ -212,9 +212,9 @@ sset_add_array(struct sset *set, char **names, size_t n)
 void
 sset_clear(struct sset *set)
 {
-    const char *name, *next;
+    const char *name;
 
-    SSET_FOR_EACH_SAFE (name, next, set) {
+    SSET_FOR_EACH_SAFE (name, set) {
         sset_delete(set, SSET_NODE_FROM_NAME(name));
     }
 }
@@ -312,7 +312,9 @@ sset_at_position(const struct sset *set, struct sset_position *pos)
     struct hmap_node *hmap_node;
 
     hmap_node = hmap_at_position(&set->map, &pos->pos);
-    return SSET_NODE_FROM_HMAP_NODE(hmap_node);
+    return hmap_node
+           ? SSET_NODE_FROM_HMAP_NODE(hmap_node)
+           : NULL;
 }
 
 /* Replaces 'a' by the intersection of 'a' and 'b'.  That is, removes from 'a'
@@ -320,9 +322,9 @@ sset_at_position(const struct sset *set, struct sset_position *pos)
 void
 sset_intersect(struct sset *a, const struct sset *b)
 {
-    const char *name, *next;
+    const char *name;
 
-    SSET_FOR_EACH_SAFE (name, next, a) {
+    SSET_FOR_EACH_SAFE (name, a) {
         if (!sset_contains(b, name)) {
             sset_delete(a, SSET_NODE_FROM_NAME(name));
         }

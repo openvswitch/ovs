@@ -50,7 +50,9 @@ enum json_type {
     JSON_INTEGER,               /* 123. */
     JSON_REAL,                  /* 123.456. */
     JSON_STRING,                /* "..." */
-    JSON_N_TYPES
+    JSON_N_TYPES,
+    JSON_SERIALIZED_OBJECT,     /* Internal type to hold serialized version of
+                                 * data of other types. */
 };
 
 const char *json_type_to_string(enum json_type);
@@ -70,7 +72,7 @@ struct json {
         struct json_array array;
         long long int integer;
         double real;
-        char *string;
+        char *string; /* JSON_STRING or JSON_SERIALIZED_OBJECT. */
     };
 };
 
@@ -78,6 +80,7 @@ struct json *json_null_create(void);
 struct json *json_boolean_create(bool);
 struct json *json_string_create(const char *);
 struct json *json_string_create_nocopy(char *);
+struct json *json_serialized_object_create(const struct json *);
 struct json *json_integer_create(long long int);
 struct json *json_real_create(double);
 
@@ -99,6 +102,7 @@ void json_object_put_format(struct json *,
     OVS_PRINTF_FORMAT(3, 4);
 
 const char *json_string(const struct json *);
+const char *json_serialized_object(const struct json *);
 struct json_array *json_array(const struct json *);
 struct shash *json_object(const struct json *);
 bool json_boolean(const struct json *);
@@ -106,9 +110,9 @@ double json_real(const struct json *);
 int64_t json_integer(const struct json *);
 
 struct json *json_deep_clone(const struct json *);
-struct json *json_clone(const struct json *);
+static inline struct json *json_clone(const struct json *);
 struct json *json_nullable_clone(const struct json *);
-void json_destroy(struct json *);
+static inline void json_destroy(struct json *);
 
 size_t json_hash(const struct json *, size_t basis);
 bool json_equal(const struct json *, const struct json *);
@@ -125,6 +129,7 @@ struct json *json_parser_finish(struct json_parser *);
 void json_parser_abort(struct json_parser *);
 
 struct json *json_from_string(const char *string);
+struct json *json_from_serialized_object(const struct json *);
 struct json *json_from_file(const char *file_name);
 struct json *json_from_stream(FILE *stream);
 
@@ -141,6 +146,28 @@ void json_to_ds(const struct json *, int flags, struct ds *);
 
 bool json_string_unescape(const char *in, size_t in_len, char **outp);
 void json_string_escape(const char *in, struct ds *out);
+
+/* Inline functions. */
+
+/* Returns 'json', with the reference count incremented. */
+static inline struct json *
+json_clone(const struct json *json_)
+{
+    struct json *json = CONST_CAST(struct json *, json_);
+    json->count++;
+    return json;
+}
+
+void json_destroy__(struct json *json);
+
+/* Frees 'json' and everything it points to, recursively. */
+static inline void
+json_destroy(struct json *json)
+{
+    if (json && !--json->count) {
+        json_destroy__(json);
+    }
+}
 
 #ifdef  __cplusplus
 }

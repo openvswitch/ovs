@@ -97,14 +97,14 @@ fat_rwlock_init(struct fat_rwlock *rwlock)
 void
 fat_rwlock_destroy(struct fat_rwlock *rwlock)
 {
-    struct fat_rwlock_slot *slot, *next;
+    struct fat_rwlock_slot *slot;
 
     /* Order is important here.  By destroying the thread-specific data first,
      * before we destroy the slots, we ensure that the thread-specific
      * data destructor can't race with our loop below. */
     ovsthread_key_delete(rwlock->key);
 
-    LIST_FOR_EACH_SAFE (slot, next, list_node, &rwlock->threads) {
+    LIST_FOR_EACH_SAFE (slot, list_node, &rwlock->threads) {
         free_slot(slot);
     }
     ovs_mutex_destroy(&rwlock->mutex);

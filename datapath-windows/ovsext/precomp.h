@@ -19,6 +19,7 @@
 #include <intsafe.h>
 #include <ntintsafe.h>
 #include <ntstrsafe.h>
+#include <ip2string.h>
 
 #include "Types.h"
 

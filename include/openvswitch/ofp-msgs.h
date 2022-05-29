@@ -453,13 +453,32 @@ enum ofpraw {
 
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REQUEST,
-    /* NXST 1.0 (2): uint8_t[8][]. */
+    /* ONFST 1.3 (1870): uint8_t[8][]. */
+    OFPRAW_ONFST13_FLOW_MONITOR_REQUEST,
+    /* NXST 1.0-1.2 (2): uint8_t[8][]. */
     OFPRAW_NXST_FLOW_MONITOR_REQUEST,
 
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REPLY,
-    /* NXST 1.0 (2): uint8_t[8][]. */
+    /* ONFST 1.3 (1870): uint8_t[8][]. */
+    OFPRAW_ONFST13_FLOW_MONITOR_REPLY,
+    /* NXST 1.0-1.2 (2): uint8_t[8][]. */
     OFPRAW_NXST_FLOW_MONITOR_REPLY,
+
+    /* ONFT 1.3 (1870): struct nx_flow_monitor_cancel. */
+    OFPRAW_ONFT13_FLOW_MONITOR_CANCEL,
+    /* NXT 1.0-1.2 (21): struct nx_flow_monitor_cancel. */
+    OFPRAW_NXT_FLOW_MONITOR_CANCEL,
+
+    /* ONFT 1.3 (1871): void. */
+    OFPRAW_ONFT13_FLOW_MONITOR_PAUSED,
+    /* NXT 1.0-1.2 (22): void. */
+    OFPRAW_NXT_FLOW_MONITOR_PAUSED,
+
+    /* ONFT 1.3 (1872): void. */
+    OFPRAW_ONFT13_FLOW_MONITOR_RESUMED,
+    /* NXT 1.0-1.2 (23): void. */
+    OFPRAW_NXT_FLOW_MONITOR_RESUMED,
 
 /* Nicira extension messages.
  *
@@ -480,15 +499,6 @@ enum ofpraw {
 
     /* NXT 1.0+ (20): struct nx_controller_id. */
     OFPRAW_NXT_SET_CONTROLLER_ID,
-
-    /* NXT 1.0+ (21): struct nx_flow_monitor_cancel. */
-    OFPRAW_NXT_FLOW_MONITOR_CANCEL,
-
-    /* NXT 1.0+ (22): void. */
-    OFPRAW_NXT_FLOW_MONITOR_PAUSED,
-
-    /* NXT 1.0+ (23): void. */
-    OFPRAW_NXT_FLOW_MONITOR_RESUMED,
 
     /* NXT 1.0+ (24): struct nx_tlv_table_mod, struct nx_tlv_map[]. */
     OFPRAW_NXT_TLV_TABLE_MOD,
@@ -741,8 +751,10 @@ enum ofptype {
                                       * OFPRAW_OFPST14_PORT_DESC_REPLY. */
 
     OFPTYPE_FLOW_MONITOR_STATS_REQUEST, /* OFPRAW_OFPST14_FLOW_MONITOR_REQUEST.
+                                         * OFPRAW_ONFST13_FLOW_MONITOR_REQUEST.
                                          * OFPRAW_NXST_FLOW_MONITOR_REQUEST. */
     OFPTYPE_FLOW_MONITOR_STATS_REPLY,   /* OFPRAW_OFPST14_FLOW_MONITOR_REPLY.
+                                         * OFPRAW_ONFST13_FLOW_MONITOR_REPLY.
                                          * OFPRAW_NXST_FLOW_MONITOR_REPLY. */
 
     /* Nicira extensions. */
@@ -762,9 +774,12 @@ enum ofptype {
     OFPTYPE_CT_FLUSH_ZONE,            /* OFPRAW_NXT_CT_FLUSH_ZONE. */
 
     /* Flow monitor extension. */
-    OFPTYPE_FLOW_MONITOR_CANCEL,        /* OFPRAW_NXT_FLOW_MONITOR_CANCEL. */
-    OFPTYPE_FLOW_MONITOR_PAUSED,        /* OFPRAW_NXT_FLOW_MONITOR_PAUSED. */
-    OFPTYPE_FLOW_MONITOR_RESUMED,       /* OFPRAW_NXT_FLOW_MONITOR_RESUMED. */
+    OFPTYPE_FLOW_MONITOR_CANCEL,  /* OFPRAW_NXT_FLOW_MONITOR_CANCEL.
+                                   * OFPRAW_ONFT13_FLOW_MONITOR_CANCEL. */
+    OFPTYPE_FLOW_MONITOR_PAUSED,  /* OFPRAW_NXT_FLOW_MONITOR_PAUSED.
+                                   * OFPRAW_ONFT13_FLOW_MONITOR_PAUSED. */
+    OFPTYPE_FLOW_MONITOR_RESUMED, /* OFPRAW_NXT_FLOW_MONITOR_RESUMED.
+                                   * OFPRAW_ONFT13_FLOW_MONITOR_RESUMED */
 };
 
 /* Decoding messages into OFPTYPE_* values. */

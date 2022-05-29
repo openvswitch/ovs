@@ -29,6 +29,7 @@
 #    - ovs_dump_netdev
 #    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
+#    - ovs_dump_packets <struct dp_packet_batch|dp_packet> [tcpdump options]
 #    - ovs_dump_simap <struct simap *>
 #    - ovs_dump_smap <struct smap *>
 #    - ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
@@ -56,8 +57,15 @@
 #    ...
 #
 import gdb
+import struct
 import sys
 import uuid
+try:
+    from scapy.layers.l2 import Ether
+    from scapy.utils import tcpdump
+except ModuleNotFoundError:
+    Ether = None
+    tcpdump = None
 
 
 #
@@ -81,7 +89,7 @@ N_UMAPS = 512
 # #
 # # This work is licensed under the terms of the GNU GPL version 2.
 #
-class CachedType:
+class CachedType(object):
     def __init__(self, name):
         self._type = None
         self._name = name
@@ -138,7 +146,7 @@ def get_time_msec():
 
 def get_time_now():
     # See get_time_msec() above
-    return int(get_global_variable("coverage_run_time"))/1000, -5
+    return int(get_global_variable("coverage_run_time")) / 1000, -5
 
 
 def eth_addr_to_string(eth_addr):
@@ -156,7 +164,7 @@ def eth_addr_to_string(eth_addr):
 #
 class ProgressIndicator(object):
     def __init__(self, message=None):
-        self.spinner = "/-\|"
+        self.spinner = "/-\\|"
         self.spinner_index = 0
         self.message = message
 
@@ -295,7 +303,7 @@ class ForEachHMAP(object):
 #
 # Class that will provide an iterator over an Netlink attributes
 #
-class ForEachNL():
+class ForEachNL(object):
     def __init__(self, nlattrs, nlattrs_len):
         self.attr = nlattrs.cast(gdb.lookup_type('struct nlattr').pointer())
         self.attr_len = int(nlattrs_len)
@@ -386,7 +394,7 @@ class ForEachSMAP(ForEachHMAP):
 #
 # Class that will provide an iterator over an OVS list.
 #
-class ForEachLIST():
+class ForEachLIST(object):
     def __init__(self, list, typeobj=None, member='node'):
         self.list = list
         self.node = list
@@ -416,7 +424,7 @@ class ForEachLIST():
 #
 # Class that will provide an iterator over an OFPACTS.
 #
-class ForEachOFPACTS():
+class ForEachOFPACTS(object):
     def __init__(self, ofpacts, ofpacts_len):
         self.ofpact = ofpacts.cast(gdb.lookup_type('struct ofpact').pointer())
         self.length = int(ofpacts_len)
@@ -451,7 +459,8 @@ class ForEachOFPACTS():
 #
 class CmdDumpBridge(gdb.Command):
     """Dump all configured bridges.
-    Usage: ovs_dump_bridge {ports|wanted}
+    Usage:
+      ovs_dump_bridge {ports|wanted}
     """
     def __init__(self):
         super(CmdDumpBridge, self).__init__("ovs_dump_bridge",
@@ -500,7 +509,8 @@ class CmdDumpBridge(gdb.Command):
 #
 class CmdDumpBridgePorts(gdb.Command):
     """Dump all ports added to a specific struct bridge*.
-    Usage: ovs_dump_bridge_ports <struct bridge *>
+    Usage:
+      ovs_dump_bridge_ports <struct bridge *>
     """
     def __init__(self):
         super(CmdDumpBridgePorts, self).__init__("ovs_dump_bridge_ports",
@@ -538,7 +548,8 @@ class CmdDumpBridgePorts(gdb.Command):
 #
 class CmdDumpDpNetdev(gdb.Command):
     """Dump all registered dp_netdev structures.
-    Usage: ovs_dump_dp_netdev [ports]
+    Usage:
+      ovs_dump_dp_netdev [ports]
     """
     def __init__(self):
         super(CmdDumpDpNetdev, self).__init__("ovs_dump_dp_netdev",
@@ -575,7 +586,8 @@ class CmdDumpDpNetdev(gdb.Command):
 #
 class CmdDumpDpNetdevPollThreads(gdb.Command):
     """Dump all poll_thread info added to a specific struct dp_netdev*.
-    Usage: ovs_dump_dp_netdev_poll_threads <struct dp_netdev *>
+    Usage:
+      ovs_dump_dp_netdev_poll_threads <struct dp_netdev *>
     """
     def __init__(self):
         super(CmdDumpDpNetdevPollThreads, self).__init__(
@@ -608,7 +620,8 @@ class CmdDumpDpNetdevPollThreads(gdb.Command):
 #
 class CmdDumpDpNetdevPorts(gdb.Command):
     """Dump all ports added to a specific struct dp_netdev*.
-    Usage: ovs_dump_dp_netdev_ports <struct dp_netdev *>
+    Usage:
+      ovs_dump_dp_netdev_ports <struct dp_netdev *>
     """
     def __init__(self):
         super(CmdDumpDpNetdevPorts, self).__init__("ovs_dump_dp_netdev_ports",
@@ -646,7 +659,8 @@ class CmdDumpDpNetdevPorts(gdb.Command):
 #
 class CmdDumpDpProvider(gdb.Command):
     """Dump all registered registered_dpif_class structures.
-    Usage: ovs_dump_dp_provider
+    Usage:
+      ovs_dump_dp_provider
     """
     def __init__(self):
         super(CmdDumpDpProvider, self).__init__("ovs_dump_dp_provider",
@@ -674,7 +688,8 @@ class CmdDumpDpProvider(gdb.Command):
 #
 class CmdDumpNetdev(gdb.Command):
     """Dump all registered netdev structures.
-    Usage: ovs_dump_netdev
+    Usage:
+      ovs_dump_netdev
     """
     def __init__(self):
         super(CmdDumpNetdev, self).__init__("ovs_dump_netdev",
@@ -702,7 +717,8 @@ class CmdDumpNetdev(gdb.Command):
 #
 class CmdDumpNetdevProvider(gdb.Command):
     """Dump all registered netdev providers.
-    Usage: ovs_dump_netdev_provider
+    Usage:
+      ovs_dump_netdev_provider
     """
     def __init__(self):
         super(CmdDumpNetdevProvider, self).__init__("ovs_dump_netdev_provider",
@@ -762,34 +778,36 @@ class CmdDumpNetdevProvider(gdb.Command):
 #
 class CmdDumpOvsList(gdb.Command):
     """Dump all nodes of an ovs_list give
-    Usage: ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
+    Usage:
+      ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 
     For example dump all the none quiescent OvS RCU threads:
 
       (gdb) ovs_dump_ovs_list &ovsrcu_threads
-      (struct ovs_list *) 0x7f2a14000900
-      (struct ovs_list *) 0x7f2acc000900
-      (struct ovs_list *) 0x7f2a680668d0
+      (struct ovs_list *) 0x1400
+      (struct ovs_list *) 0xcc00
+      (struct ovs_list *) 0x6806
 
     This is not very useful, so please use this with the container_of mode:
 
-      (gdb) ovs_dump_ovs_list &ovsrcu_threads 'struct ovsrcu_perthread' list_node
-      (struct ovsrcu_perthread *) 0x7f2a14000900
-      (struct ovsrcu_perthread *) 0x7f2acc000900
-      (struct ovsrcu_perthread *) 0x7f2a680668d0
+      (gdb) set $threads = &ovsrcu_threads
+      (gdb) ovs_dump_ovs_list $threads 'struct ovsrcu_perthread' list_node
+      (struct ovsrcu_perthread *) 0x1400
+      (struct ovsrcu_perthread *) 0xcc00
+      (struct ovsrcu_perthread *) 0x6806
 
     Now you can manually use the print command to show the content, or use the
     dump option to dump the structure for all nodes:
 
-      (gdb) ovs_dump_ovs_list &ovsrcu_threads 'struct ovsrcu_perthread' list_node dump
-      (struct ovsrcu_perthread *) 0x7f2a14000900 =
-        {list_node = {prev = 0xf48e80 <ovsrcu_threads>, next = 0x7f2acc000900}, mutex...
+      (gdb) ovs_dump_ovs_list $threads 'struct ovsrcu_perthread' list_node dump
+      (struct ovsrcu_perthread *) 0x1400 =
+        {list_node = {prev = 0x48e80 <ovsrcu_threads>, next = 0xcc00}, mutex...
 
-      (struct ovsrcu_perthread *) 0x7f2acc000900 =
-        {list_node = {prev = 0x7f2a14000900, next = 0x7f2a680668d0}, mutex ...
+      (struct ovsrcu_perthread *) 0xcc00 =
+        {list_node = {prev = 0x1400, next = 0x6806}, mutex ...
 
-      (struct ovsrcu_perthread *) 0x7f2a680668d0 =
-        {list_node = {prev = 0x7f2acc000900, next = 0xf48e80 <ovsrcu_threads>}, ...
+      (struct ovsrcu_perthread *) 0x6806 =
+        {list_node = {prev = 0xcc00, next = 0x48e80 <ovsrcu_threads>}, ...
     """
     def __init__(self):
         super(CmdDumpOvsList, self).__init__("ovs_dump_ovs_list",
@@ -836,7 +854,8 @@ class CmdDumpOvsList(gdb.Command):
 #
 class CmdDumpSimap(gdb.Command):
     """Dump all key, value entries of a simap
-    Usage: ovs_dump_simap <struct simap *>
+    Usage:
+      ovs_dump_simap <struct simap *>
     """
 
     def __init__(self):
@@ -871,7 +890,8 @@ class CmdDumpSimap(gdb.Command):
 #
 class CmdDumpSmap(gdb.Command):
     """Dump all key, value pairs of a smap
-    Usage: ovs_dump_smap <struct smap *>
+    Usage:
+      ovs_dump_smap <struct smap *>
     """
 
     def __init__(self):
@@ -906,7 +926,8 @@ class CmdDumpSmap(gdb.Command):
 #
 class CmdDumpUdpifKeys(gdb.Command):
     """Dump all nodes of an ovs_list give
-    Usage: ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
+    Usage:
+      ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
 
       <udpif_name>    : Full name of the udpif's dpif to dump
       <udpif_address> : Address of the udpif structure to dump. If both the
@@ -1033,7 +1054,8 @@ class CmdDumpUdpifKeys(gdb.Command):
 #
 class CmdShowFDB(gdb.Command):
     """Show FDB information
-    Usage: ovs_show_fdb {<bridge_name> {dbg} {hash}}
+    Usage:
+      ovs_show_fdb {<bridge_name> {dbg} {hash}}
 
        <bridge_name> : Optional bridge name, if not supplied FDB summary
                        information is displayed for all bridges.
@@ -1199,7 +1221,8 @@ class CmdShowFDB(gdb.Command):
 #
 class CmdShowUpcall(gdb.Command):
     """Show upcall information
-    Usage: ovs_show_upcall {dbg}
+    Usage:
+      ovs_show_upcall {dbg}
 
       dbg  : Will show structure address information
     """
@@ -1271,7 +1294,8 @@ class CmdShowUpcall(gdb.Command):
 #
 class CmdDumpOfpacts(gdb.Command):
     """Dump all actions in an ofpacts set
-    Usage: ovs_dump_ofpacts <struct ofpact *> <ofpacts_len>
+    Usage:
+      ovs_dump_ofpacts <struct ofpact *> <ofpacts_len>
 
        <struct ofpact *> : Pointer to set of ofpact structures.
        <ofpacts_len>     : Total length of the set.
@@ -1279,12 +1303,12 @@ class CmdDumpOfpacts(gdb.Command):
     Example dumping all actions when in the clone_xlate_actions() function:
 
     (gdb) ovs_dump_ofpacts actions actions_len
-    (struct ofpact *) 0x561c7be487c8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
-    (struct ofpact *) 0x561c7be487e0: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
-    (struct ofpact *) 0x561c7be487f8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
-    (struct ofpact *) 0x561c7be48810: {type = OFPACT_SET_FIELD, raw = 255 '', len = 32}
-    (struct ofpact *) 0x561c7be48830: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
-    (struct ofpact *) 0x561c7be48848: {type = OFPACT_RESUBMIT, raw = 38 '&', len = 16}
+    (struct ofpact *) 0x87c8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x87e0: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x87f8: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x8810: {type = OFPACT_SET_FIELD, raw = 255 '', len = 32}
+    (struct ofpact *) 0x8830: {type = OFPACT_SET_FIELD, raw = 255 '', len = 24}
+    (struct ofpact *) 0x8848: {type = OFPACT_RESUBMIT, raw = 38 '&', len = 16}
     """
     def __init__(self):
         super(CmdDumpOfpacts, self).__init__("ovs_dump_ofpacts",
@@ -1307,6 +1331,111 @@ class CmdDumpOfpacts(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_packets" command
+#
+class CmdDumpPackets(gdb.Command):
+    """Dump metadata about dp_packets
+    Usage:
+      ovs_dump_packets <struct dp_packet_batch|dp_packet> [tcpdump options]
+
+    This command can take either a dp_packet_batch struct and print out
+    metadata about all packets in this batch, or a single dp_packet struct and
+    print out metadata about a single packet.
+
+    Everything after the struct reference is passed into tcpdump. If nothing
+    is passed in as a tcpdump option, the default is "-n".
+
+    (gdb) ovs_dump_packets packets_
+    12:01:05.981214 ARP, Ethernet (len 6), IPv4 (len 4), Reply 10.1.1.1 is-at
+        a6:0f:c3:f0:5f:bd (oui Unknown), length 28
+    """
+    def __init__(self):
+        super().__init__("ovs_dump_packets", gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        if Ether is None:
+            print("ERROR: This command requires scapy to be installed.")
+            return
+
+        arg_list = gdb.string_to_argv(arg)
+        if len(arg_list) == 0:
+            print("Usage: ovs_dump_packets <struct dp_packet_batch|"
+                  "dp_packet> [tcpdump options]")
+            return
+
+        symb_name = arg_list[0]
+        tcpdump_args = arg_list[1:]
+
+        if not tcpdump_args:
+            # Add a sane default
+            tcpdump_args = ["-n"]
+
+        val = gdb.parse_and_eval(symb_name)
+        while val.type.code == gdb.TYPE_CODE_PTR:
+            val = val.dereference()
+
+        pkt_list = []
+        if str(val.type).startswith("struct dp_packet_batch"):
+            for idx in range(val['count']):
+                pkt_struct = val['packets'][idx].dereference()
+                pkt = self.extract_pkt(pkt_struct)
+                if pkt is None:
+                    continue
+                pkt_list.append(pkt)
+        elif str(val.type) == "struct dp_packet":
+            pkt = self.extract_pkt(val)
+            if pkt is None:
+                return
+            pkt_list.append(pkt)
+        else:
+            print("Error, unsupported argument type: {}".format(str(val.type)))
+            return
+
+        stdout = tcpdump(pkt_list, args=tcpdump_args, getfd=True, quiet=True)
+        gdb.write(stdout.read().decode("utf8", "replace"))
+
+    def extract_pkt(self, pkt):
+        pkt_fields = pkt.type.keys()
+        if pkt['packet_type'] != 0:
+            return
+        if pkt['l3_ofs'] == 0xFFFF:
+            return
+
+        if "mbuf" in pkt_fields:
+            if pkt['mbuf']['data_off'] == 0xFFFF:
+                return
+            eth_ptr = pkt['mbuf']['buf_addr']
+            eth_off = int(pkt['mbuf']['data_off'])
+            eth_len = int(pkt['mbuf']['pkt_len'])
+        else:
+            if pkt['data_ofs'] == 0xFFFF:
+                return
+            eth_ptr = pkt['base_']
+            eth_off = int(pkt['data_ofs'])
+            eth_len = int(pkt['size_'])
+
+        if eth_ptr == 0 or eth_len < 1:
+            return
+
+        # Extract packet
+        pkt_ptr = eth_ptr.cast(
+                gdb.lookup_type('uint8_t').pointer()
+            )
+        pkt_ptr += eth_off
+
+        pkt_data = []
+        for idx in range(eth_len):
+            pkt_data.append(int(pkt_ptr[idx]))
+
+        pkt_data = struct.pack("{}B".format(eth_len), *pkt_data)
+
+        packet = Ether(pkt_data)
+        packet.len = int(eth_len)
+
+        return packet
+
+
+#
 # Initialize all GDB commands
 #
 CmdDumpBridge()
@@ -1319,6 +1448,7 @@ CmdDumpNetdev()
 CmdDumpNetdevProvider()
 CmdDumpOfpacts()
 CmdDumpOvsList()
+CmdDumpPackets()
 CmdDumpSimap()
 CmdDumpSmap()
 CmdDumpUdpifKeys()

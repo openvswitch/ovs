@@ -377,7 +377,7 @@ in_band_run(struct in_band *ib)
     uint64_t ofpacts_stub[128 / 8];
     struct ofpbuf ofpacts;
 
-    struct in_band_rule *rule, *next;
+    struct in_band_rule *rule;
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
 
@@ -391,7 +391,7 @@ in_band_run(struct in_band *ib)
 
     update_rules(ib);
 
-    HMAP_FOR_EACH_SAFE (rule, next, hmap_node, &ib->rules) {
+    HMAP_FOR_EACH_SAFE (rule, hmap_node, &ib->rules) {
         switch (rule->op) {
         case ADD:
             ofproto_add_flow(ib->ofproto, &rule->match, rule->priority,

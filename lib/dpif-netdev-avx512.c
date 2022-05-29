@@ -20,6 +20,7 @@
 
 #include <config.h>
 
+#include "cpu.h"
 #include "dpif-netdev.h"
 #include "dpif-netdev-perf.h"
 #include "dpif-netdev-private.h"
@@ -61,8 +62,8 @@ struct dpif_userdata {
 int32_t
 dp_netdev_input_outer_avx512_probe(void)
 {
-    bool avx512f_available = dpdk_get_cpu_has_isa("x86_64", "avx512f");
-    bool bmi2_available = dpdk_get_cpu_has_isa("x86_64", "bmi2");
+    bool avx512f_available = cpu_has_isa(OVS_CPU_ISA_X86_AVX512F);
+    bool bmi2_available = cpu_has_isa(OVS_CPU_ISA_X86_BMI2);
 
     if (!avx512f_available || !bmi2_available) {
         return -ENOTSUP;
@@ -158,7 +159,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         mf_mask = mfex_func(packets, keys, batch_size, in_port, pmd);
     }
 
-    uint32_t lookup_pkts_bitmask = (1ULL << batch_size) - 1;
+    uint32_t lookup_pkts_bitmask = (UINT64_C(1) << batch_size) - 1;
     uint32_t iter = lookup_pkts_bitmask;
     while (iter) {
         uint32_t i = raw_ctz(iter);
@@ -182,11 +183,11 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
          * classifed by vector mfex else do a scalar miniflow extract
          * for that packet.
          */
-        bool mfex_hit = !!(mf_mask & (1 << i));
+        bool mfex_hit = !!(mf_mask & (UINT32_C(1) << i));
 
         /* Check for a partial hardware offload match. */
         if (hwol_enabled) {
-            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, in_port, packet, &f))) {
+            if (OVS_UNLIKELY(dp_netdev_hw_flow(pmd, packet, &f))) {
                 /* Packet restoration failed and it was dropped, do not
                  * continue processing. */
                 continue;
@@ -197,12 +198,13 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                 if (mfex_hit) {
                     pkt_meta[i].tcp_flags = miniflow_get_tcp_flags(&key->mf);
                 } else {
-                    pkt_meta[i].tcp_flags = parse_tcp_flags(packet);
+                    pkt_meta[i].tcp_flags = parse_tcp_flags(packet,
+                                                            NULL, NULL, NULL);
                 }
 
                 pkt_meta[i].bytes = dp_packet_size(packet);
                 phwol_hits++;
-                hwol_emc_smc_hitmask |= (1 << i);
+                hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }
@@ -225,7 +227,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             if (f) {
                 rules[i] = &f->cr;
                 emc_hits++;
-                hwol_emc_smc_hitmask |= (1 << i);
+                hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }
@@ -235,7 +237,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
             if (f) {
                 rules[i] = &f->cr;
                 smc_hits++;
-                smc_hitmask |= (1 << i);
+                smc_hitmask |= (UINT32_C(1) << i);
                 continue;
             }
         }

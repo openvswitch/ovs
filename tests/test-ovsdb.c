@@ -56,6 +56,7 @@
 VLOG_DEFINE_THIS_MODULE(test_ovsdb);
 
 struct test_ovsdb_pvt_context {
+    bool write_changed_only;
     bool track;
 };
 
@@ -91,6 +92,7 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
+        {"write-changed-only", optional_argument, NULL, 'w'},
         {"magic", required_argument, NULL, OPT_MAGIC},
         {"no-rename-open-files", no_argument, NULL, OPT_NO_RENAME_OPEN_FILES},
         {"help", no_argument, NULL, 'h'},
@@ -123,6 +125,10 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 
         case 'c':
             pvt->track = true;
+            break;
+
+        case 'w':
+            pvt->write_changed_only = true;
             break;
 
         case OPT_MAGIC:
@@ -512,6 +518,18 @@ do_diff_data(struct ovs_cmdl_context *ctx)
             ovs_fatal(0, "failed to apply diff");
         }
 
+        /* Apply diff to 'old' in place. */
+        error = ovsdb_datum_apply_diff_in_place(&old, &diff, &type);
+        if (error) {
+            char *string = ovsdb_error_to_string_free(error);
+            ovs_fatal(0, "%s", string);
+        }
+
+        /* Test to make sure 'old' equals 'new' now.  */
+        if (!ovsdb_datum_equals(&new, &old, &type)) {
+            ovs_fatal(0, "failed to apply diff in place");
+        }
+
         /* Print diff */
         json = ovsdb_datum_to_json(&diff, &type);
         printf ("diff: ");
@@ -520,6 +538,11 @@ do_diff_data(struct ovs_cmdl_context *ctx)
         /* Print reincarnation */
         json = ovsdb_datum_to_json(&reincarnation, &type);
         printf ("apply diff: ");
+        print_and_free_json(json);
+
+        /* Print updated 'old' */
+        json = ovsdb_datum_to_json(&old, &type);
+        printf ("apply diff in place: ");
         print_and_free_json(json);
 
         ovsdb_datum_destroy(&new, &type);
@@ -1862,7 +1885,8 @@ print_and_log(const char *format, ...)
 }
 
 static char *
-format_idl_row(const struct ovsdb_idl_row *row, int step, const char *contents)
+format_idl_row(const struct ovsdb_idl_row *row, int step, const char *contents,
+               bool terse)
 {
     const char *change_str =
         !ovsdb_idl_track_is_set(row->table)
@@ -1873,9 +1897,13 @@ format_idl_row(const struct ovsdb_idl_row *row, int step, const char *contents)
             ? "deleted row: "
             : "";
 
-    return xasprintf("%03d: table %s: %s%s uuid=" UUID_FMT,
-                     step, row->table->class_->name, change_str, contents,
-                     UUID_ARGS(&row->uuid));
+    if (terse) {
+        return xasprintf("%03d: table %s", step, row->table->class_->name);
+    } else {
+        return xasprintf("%03d: table %s: %s%s uuid=" UUID_FMT,
+                         step, row->table->class_->name, change_str,
+                         contents, UUID_ARGS(&row->uuid));
+    }
 }
 
 static void
@@ -1998,7 +2026,7 @@ print_idl_row_updated_singleton(const struct idltest_singleton *sng, int step)
 }
 
 static void
-print_idl_row_simple(const struct idltest_simple *s, int step)
+print_idl_row_simple(const struct idltest_simple *s, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
@@ -2025,7 +2053,7 @@ print_idl_row_simple(const struct idltest_simple *s, int step)
     }
     ds_put_cstr(&msg, "]");
 
-    char *row_msg = format_idl_row(&s->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&s->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2034,7 +2062,7 @@ print_idl_row_simple(const struct idltest_simple *s, int step)
 }
 
 static void
-print_idl_row_link1(const struct idltest_link1 *l1, int step)
+print_idl_row_link1(const struct idltest_link1 *l1, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "i=%"PRId64" k=", l1->i);
@@ -2053,7 +2081,7 @@ print_idl_row_link1(const struct idltest_link1 *l1, int step)
         ds_put_format(&msg, "%"PRId64, l1->l2->i);
     }
 
-    char *row_msg = format_idl_row(&l1->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&l1->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2062,7 +2090,7 @@ print_idl_row_link1(const struct idltest_link1 *l1, int step)
 }
 
 static void
-print_idl_row_link2(const struct idltest_link2 *l2, int step)
+print_idl_row_link2(const struct idltest_link2 *l2, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "i=%"PRId64" l1=", l2->i);
@@ -2070,7 +2098,7 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step)
         ds_put_format(&msg, "%"PRId64, l2->l1->i);
     }
 
-    char *row_msg = format_idl_row(&l2->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&l2->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2079,7 +2107,7 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
-print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
+print_idl_row_simple3(const struct idltest_simple3 *s3, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     size_t i;
@@ -2098,7 +2126,7 @@ print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
     }
     ds_put_cstr(&msg, "]");
 
-    char *row_msg = format_idl_row(&s3->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&s3->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2107,12 +2135,12 @@ print_idl_row_simple3(const struct idltest_simple3 *s3, int step)
 }
 
 static void
-print_idl_row_simple4(const struct idltest_simple4 *s4, int step)
+print_idl_row_simple4(const struct idltest_simple4 *s4, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "name=%s", s4->name);
 
-    char *row_msg = format_idl_row(&s4->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&s4->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2121,7 +2149,7 @@ print_idl_row_simple4(const struct idltest_simple4 *s4, int step)
 }
 
 static void
-print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
+print_idl_row_simple6(const struct idltest_simple6 *s6, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "name=%s ", s6->name);
@@ -2132,7 +2160,7 @@ print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
     }
     ds_put_cstr(&msg, "]");
 
-    char *row_msg = format_idl_row(&s6->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&s6->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2141,12 +2169,13 @@ print_idl_row_simple6(const struct idltest_simple6 *s6, int step)
 }
 
 static void
-print_idl_row_singleton(const struct idltest_singleton *sng, int step)
+print_idl_row_singleton(const struct idltest_singleton *sng, int step,
+                        bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
     ds_put_format(&msg, "name=%s", sng->name);
 
-    char *row_msg = format_idl_row(&sng->header_, step, ds_cstr(&msg));
+    char *row_msg = format_idl_row(&sng->header_, step, ds_cstr(&msg), terse);
     print_and_log("%s", row_msg);
     ds_destroy(&msg);
     free(row_msg);
@@ -2155,7 +2184,7 @@ print_idl_row_singleton(const struct idltest_singleton *sng, int step)
 }
 
 static void
-print_idl(struct ovsdb_idl *idl, int step)
+print_idl(struct ovsdb_idl *idl, int step, bool terse)
 {
     const struct idltest_simple3 *s3;
     const struct idltest_simple4 *s4;
@@ -2167,31 +2196,31 @@ print_idl(struct ovsdb_idl *idl, int step)
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH (s, idl) {
-        print_idl_row_simple(s, step);
+        print_idl_row_simple(s, step, terse);
         n++;
     }
     IDLTEST_LINK1_FOR_EACH (l1, idl) {
-        print_idl_row_link1(l1, step);
+        print_idl_row_link1(l1, step, terse);
         n++;
     }
     IDLTEST_LINK2_FOR_EACH (l2, idl) {
-        print_idl_row_link2(l2, step);
+        print_idl_row_link2(l2, step, terse);
         n++;
     }
     IDLTEST_SIMPLE3_FOR_EACH (s3, idl) {
-        print_idl_row_simple3(s3, step);
+        print_idl_row_simple3(s3, step, terse);
         n++;
     }
     IDLTEST_SIMPLE4_FOR_EACH (s4, idl) {
-        print_idl_row_simple4(s4, step);
+        print_idl_row_simple4(s4, step, terse);
         n++;
     }
     IDLTEST_SIMPLE6_FOR_EACH (s6, idl) {
-        print_idl_row_simple6(s6, step);
+        print_idl_row_simple6(s6, step, terse);
         n++;
     }
     IDLTEST_SINGLETON_FOR_EACH (sng, idl) {
-        print_idl_row_singleton(sng, step);
+        print_idl_row_singleton(sng, step, terse);
         n++;
     }
     if (!n) {
@@ -2200,7 +2229,7 @@ print_idl(struct ovsdb_idl *idl, int step)
 }
 
 static void
-print_idl_track(struct ovsdb_idl *idl, int step)
+print_idl_track(struct ovsdb_idl *idl, int step, bool terse)
 {
     const struct idltest_simple3 *s3;
     const struct idltest_simple4 *s4;
@@ -2211,27 +2240,27 @@ print_idl_track(struct ovsdb_idl *idl, int step)
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
-        print_idl_row_simple(s, step);
+        print_idl_row_simple(s, step, terse);
         n++;
     }
     IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
-        print_idl_row_link1(l1, step);
+        print_idl_row_link1(l1, step, terse);
         n++;
     }
     IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
-        print_idl_row_link2(l2, step);
+        print_idl_row_link2(l2, step, terse);
         n++;
     }
     IDLTEST_SIMPLE3_FOR_EACH_TRACKED (s3, idl) {
-        print_idl_row_simple3(s3, step);
+        print_idl_row_simple3(s3, step, terse);
         n++;
     }
     IDLTEST_SIMPLE4_FOR_EACH_TRACKED (s4, idl) {
-        print_idl_row_simple4(s4, step);
+        print_idl_row_simple4(s4, step, terse);
         n++;
     }
     IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
-        print_idl_row_simple6(s6, step);
+        print_idl_row_simple6(s6, step, terse);
         n++;
     }
 
@@ -2587,6 +2616,7 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
 static void
 do_idl(struct ovs_cmdl_context *ctx)
 {
+    struct test_ovsdb_pvt_context *pvt = ctx->pvt;
     struct jsonrpc *rpc;
     struct ovsdb_idl *idl;
     unsigned int seqno = 0;
@@ -2595,9 +2625,6 @@ do_idl(struct ovs_cmdl_context *ctx)
     int step = 0;
     int error;
     int i;
-    bool track;
-
-    track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
     ovsdb_idl_set_leader_only(idl, false);
@@ -2614,8 +2641,12 @@ do_idl(struct ovs_cmdl_context *ctx)
         rpc = NULL;
     }
 
-    if (track) {
+    if (pvt->track) {
         ovsdb_idl_track_add_all(idl);
+    }
+
+    if (pvt->write_changed_only) {
+        ovsdb_idl_set_write_changed_only_all(idl, true);
     }
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -2633,6 +2664,13 @@ do_idl(struct ovs_cmdl_context *ctx)
     for (; i < ctx->argc; i++) {
         char *arg = ctx->argv[i];
         struct jsonrpc_msg *request, *reply;
+
+        bool terse = false;
+        if (*arg == '?') {
+            /* We're only interested in terse table contents. */
+            terse = true;
+            arg++;
+        }
 
         if (*arg == '+') {
             /* The previous transaction didn't change anything. */
@@ -2653,11 +2691,11 @@ do_idl(struct ovs_cmdl_context *ctx)
             }
 
             /* Print update. */
-            if (track) {
-                print_idl_track(idl, step++);
+            if (pvt->track) {
+                print_idl_track(idl, step++, terse);
                 ovsdb_idl_track_clear(idl);
             } else {
-                print_idl(idl, step++);
+                print_idl(idl, step++, terse);
             }
         }
         seqno = ovsdb_idl_get_seqno(idl);
@@ -2710,7 +2748,7 @@ do_idl(struct ovs_cmdl_context *ctx)
         ovsdb_idl_wait(idl);
         poll_block();
     }
-    print_idl(idl, step++);
+    print_idl(idl, step++, false);
     ovsdb_idl_track_clear(idl);
     ovsdb_idl_destroy(idl);
     print_and_log("%03d: done", step);
@@ -2727,13 +2765,15 @@ print_idl_row_simple2(const struct idltest_simple2 *s, int step)
     printf("%03d: name=%s smap=[",
            step, s->name);
     for (i = 0; i < smap->n; i++) {
-        printf("[%s : %s]%s", smap->keys[i].string, smap->values[i].string,
-                i < smap->n-1? ",": "");
+        printf("[%s : %s]%s",
+               json_string(smap->keys[i].s), json_string(smap->values[i].s),
+               i < smap->n - 1 ? "," : "");
     }
     printf("] imap=[");
     for (i = 0; i < imap->n; i++) {
-        printf("[%"PRId64" : %s]%s", imap->keys[i].integer, imap->values[i].string,
-                i < imap->n-1? ",":"");
+        printf("[%"PRId64" : %s]%s",
+               imap->keys[i].integer, json_string(imap->values[i].s),
+               i < imap->n - 1 ? "," : "");
     }
     printf("]\n");
 }
@@ -2802,8 +2842,9 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     myTxn = ovsdb_idl_txn_create(idl);
     smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
                                     OVSDB_TYPE_STRING);
-    strcpy(key_to_delete, smap->keys[0].string);
-    idltest_simple2_update_smap_delkey(myRow, smap->keys[0].string);
+    ovs_strlcpy(key_to_delete,
+                json_string(smap->keys[0].s), sizeof key_to_delete);
+    idltest_simple2_update_smap_delkey(myRow, json_string(smap->keys[0].s));
     ovsdb_idl_txn_commit_block(myTxn);
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);
@@ -2829,7 +2870,7 @@ dump_simple3(struct ovsdb_idl *idl,
              int step)
 {
     IDLTEST_SIMPLE3_FOR_EACH(myRow, idl) {
-        print_idl_row_simple3(myRow, step);
+        print_idl_row_simple3(myRow, step, false);
     }
 }
 
@@ -2971,7 +3012,7 @@ do_idl_compound_index_with_ref(struct ovs_cmdl_context *ctx)
     idltest_simple3_index_set_uref(equal, &myRow2, 1);
     printf("%03d: Query using index with reference\n", step++);
     IDLTEST_SIMPLE3_FOR_EACH_EQUAL (myRow, equal, index) {
-        print_idl_row_simple3(myRow, step++);
+        print_idl_row_simple3(myRow, step++, false);
     }
     idltest_simple3_index_destroy_row(equal);
 
@@ -3268,6 +3309,86 @@ do_idl_compound_index(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+static void
+do_idl_table_column_check(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int error;
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    ovsdb_idl_omit(idl, &idltest_link1_col_i);
+    ovsdb_idl_omit(idl, &idltest_simple7_col_id);
+    ovsdb_idl_set_leader_only(idl, false);
+    struct stream *stream;
+
+    error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                              DSCP_DEFAULT), -1, &stream);
+    if (error) {
+        ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+    }
+    rpc = jsonrpc_open(stream);
+
+    for (int r = 1; r <= 2; r++) {
+        ovsdb_idl_set_remote(idl, ctx->argv[r], true);
+        ovsdb_idl_force_reconnect(idl);
+
+        /* Wait for update. */
+        for (;;) {
+            ovsdb_idl_run(idl);
+            ovsdb_idl_check_consistency(idl);
+            if (ovsdb_idl_get_seqno(idl) != seqno) {
+                break;
+            }
+            jsonrpc_run(rpc);
+
+            ovsdb_idl_wait(idl);
+            jsonrpc_wait(rpc);
+            poll_block();
+        }
+
+        seqno = ovsdb_idl_get_seqno(idl);
+
+        bool has_table = idltest_server_has_simple_table(idl);
+        printf("%s remote %s table simple\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_link1_table(idl);
+        printf("%s remote %s table link1\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_link2_table(idl);
+        printf("%s remote %s table link2\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        has_table = idltest_server_has_simple5_table(idl);
+        printf("%s remote %s table simple5\n",
+               ctx->argv[r], has_table ? "has" : "doesn't have");
+
+        bool has_col = idltest_server_has_simple5_table_col_irefmap(idl);
+        printf("%s remote %s col irefmap in table simple5\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_link1_table_col_l2(idl);
+        printf("%s remote %s col l2 in table link1\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_link1_table_col_i(idl);
+        printf("%s remote %s col i in table link1\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        has_col = idltest_server_has_simple7_table_col_id(idl);
+        printf("%s remote %s col id in table simple7\n",
+               ctx->argv[r], has_col ? "has" : "doesn't have");
+
+        printf("--- remote %s done ---\n", ctx->argv[r]);
+    }
+
+    jsonrpc_close(rpc);
+    ovsdb_idl_destroy(idl);
+}
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io, OVS_RO },
     { "default-atoms", NULL, 0, 0, do_default_atoms, OVS_RO },
@@ -3306,6 +3427,8 @@ static struct ovs_cmdl_command all_commands[] = {
         do_idl_partial_update_map_column, OVS_RO },
     { "idl-partial-update-set-column", NULL, 1, INT_MAX,
         do_idl_partial_update_set_column, OVS_RO },
+    { "idl-table-column-check", NULL, 2, 2,
+        do_idl_table_column_check, OVS_RO },
     { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };

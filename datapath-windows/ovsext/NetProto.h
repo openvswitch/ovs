@@ -239,7 +239,8 @@ typedef union _OVS_PACKET_HDR_INFO {
         UINT16 tcpCsumNeeded:1;
         UINT16 udpCsumNeeded:1;
         UINT16 udpCsumZero:1;
-        UINT16 pad:8;
+        UINT16 isIcmp:1;
+        UINT16 pad:7;
     } ;
     UINT64 value;
 } OVS_PACKET_HDR_INFO, *POVS_PACKET_HDR_INFO;
@@ -299,6 +300,11 @@ typedef struct IPv6FragHdr {
     UINT16 offlg;
     UINT32 ident;
 } IPv6FragHdr;
+
+typedef struct IPv6OptHdr {
+    UINT8 nextHdr;
+    UINT8 hdrLen;
+} IPv6OptHdr;
 
 typedef struct IPv6NdOptHdr {
     UINT8 type;

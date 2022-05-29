@@ -424,7 +424,8 @@ static void put_reg_load(struct ofpbuf *openflow,
                          const struct mf_subfield *, uint64_t value);
 
 static enum ofperr ofpact_pull_raw(struct ofpbuf *, enum ofp_version,
-                                   enum ofp_raw_action_type *, uint64_t *arg);
+                                   enum ofp_raw_action_type *, uint64_t *arg,
+                                   size_t *raw_len);
 static void *ofpact_put_raw(struct ofpbuf *, enum ofp_version,
                             enum ofp_raw_action_type, uint64_t arg);
 
@@ -853,7 +854,9 @@ decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
         case NXAC2PT_REASON: {
             uint8_t u8;
             error = ofpprop_parse_u8(&payload, &u8);
-            oc->reason = u8;
+            if (!error) {
+                oc->reason = u8;
+            }
             break;
         }
 
@@ -3200,15 +3203,20 @@ set_field_split_str(char *arg, char **key, char **value, char **delim)
 {
     char *value_end;
 
+    *key = NULL;
     *value = arg;
+    if (delim) {
+        *delim = NULL;
+    }
+
     value_end = strstr(arg, "->");
+    if (!value_end) {
+        return xasprintf("%s: missing `->'", arg);
+    }
+
     *key = value_end + strlen("->");
     if (delim) {
         *delim = value_end;
-    }
-
-    if (!value_end) {
-        return xasprintf("%s: missing `->'", arg);
     }
     if (strlen(value_end) <= strlen("->")) {
         return xasprintf("%s: missing field name following `->'", arg);
@@ -3374,21 +3382,28 @@ check_SET_FIELD(struct ofpact_set_field *a,
     return 0;
 }
 
-/* Appends an OFPACT_SET_FIELD ofpact with enough space for the value and mask
- * for the 'field' to 'ofpacts' and returns it.  Fills in the value from
- * 'value', if non-NULL, and mask from 'mask' if non-NULL.  If 'value' is
- * non-NULL and 'mask' is NULL, an all-ones mask will be filled in. */
+/* Appends an OFPACT_SET_FIELD ofpact with enough space for the value and a
+ * properly aligned mask for the 'field' to 'ofpacts' and returns it.  Fills
+ * in the value from 'value', if non-NULL, and mask from 'mask' if non-NULL.
+ * If 'value' is non-NULL and 'mask' is NULL, an all-ones mask will be
+ * filled in. */
 struct ofpact_set_field *
 ofpact_put_set_field(struct ofpbuf *ofpacts, const struct mf_field *field,
                      const void *value, const void *mask)
 {
+    /* Ensure there's enough space for:
+     * - value (8-byte aligned)
+     * - mask  (8-byte aligned)
+     * - padding (to make the whole ofpact_set_field 8-byte aligned)
+     */
+    size_t total_size = 2 * ROUND_UP(field->n_bytes, OFPACT_ALIGNTO);
     struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
     sf->field = field;
 
     /* Fill in the value and mask if given, otherwise put zeroes so that the
      * caller may fill in the value and mask itself. */
     if (value) {
-        ofpbuf_put_uninit(ofpacts, 2 * field->n_bytes);
+        ofpbuf_put_uninit(ofpacts, total_size);
         sf = ofpacts->header;
         memcpy(sf->value, value, field->n_bytes);
         if (mask) {
@@ -3397,7 +3412,7 @@ ofpact_put_set_field(struct ofpbuf *ofpacts, const struct mf_field *field,
             memset(ofpact_set_field_mask(sf), 0xff, field->n_bytes);
         }
     } else {
-        ofpbuf_put_zeros(ofpacts, 2 * field->n_bytes);
+        ofpbuf_put_zeros(ofpacts, total_size);
         sf = ofpacts->header;
     }
     /* Update length. */
@@ -4468,6 +4483,8 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
     switch (ntohl(nae->new_pkt_type)) {
     case PT_ETH:
     case PT_NSH:
+    case PT_MPLS:
+    case PT_MPLS_MC:
         /* Add supported encap header types here. */
         break;
     default:
@@ -4519,6 +4536,10 @@ parse_encap_header(const char *hdr, ovs_be32 *packet_type)
         *packet_type = htonl(PT_ETH);
     } else if (strcmp(hdr, "nsh") == 0) {
         *packet_type = htonl(PT_NSH);
+    } else if (strcmp(hdr, "mpls") == 0) {
+        *packet_type = htonl(PT_MPLS);
+    } else if (strcmp(hdr, "mpls_mc") == 0) {
+        *packet_type = htonl(PT_MPLS_MC);
     } else {
         return false;
     }
@@ -4600,6 +4621,10 @@ format_encap_pkt_type(const ovs_be32 pkt_type)
         return "ethernet";
     case PT_NSH:
         return "nsh";
+    case PT_MPLS:
+        return "mpls";
+    case PT_MPLS_MC:
+        return "mpls_mc";
     default:
         return "UNKNOWN";
     }
@@ -7749,18 +7774,60 @@ check_GOTO_TABLE(const struct ofpact_goto_table *a,
 
 static void
 log_bad_action(const struct ofp_action_header *actions, size_t actions_len,
-               const struct ofp_action_header *bad_action, enum ofperr error)
+               size_t action_offset, enum ofperr error)
 {
     if (!VLOG_DROP_WARN(&rl)) {
         struct ds s;
 
         ds_init(&s);
         ds_put_hex_dump(&s, actions, actions_len, 0, false);
-        VLOG_WARN("bad action at offset %#"PRIxPTR" (%s):\n%s",
-                  (char *)bad_action - (char *)actions,
+        VLOG_WARN("bad action at offset %"PRIuSIZE" (%s):\n%s", action_offset,
                   ofperr_get_name(error), ds_cstr(&s));
         ds_destroy(&s);
     }
+}
+
+static enum ofperr
+ofpacts_decode_aligned(struct ofpbuf *openflow, enum ofp_version ofp_version,
+                       const struct vl_mff_map *vl_mff_map,
+                       uint64_t *ofpacts_tlv_bitmap, struct ofpbuf *ofpacts,
+                       size_t *bad_action_offset)
+{
+    size_t decoded_len = 0;
+    enum ofperr error = 0;
+
+    ovs_assert(OFPACT_IS_ALIGNED(openflow->data));
+    while (openflow->size) {
+        /* Ensure the next action data is properly aligned before decoding it.
+         * Some times it's valid to have to decode actions that are not
+         * properly aligned (e.g., when processing OF 1.0 statistics reply
+         * messages which have a header of 12 bytes - struct ofp10_stats_msg).
+         * In other cases the encoder might be buggy.
+         */
+        if (!OFPACT_IS_ALIGNED(openflow->data)) {
+            ofpbuf_align(openflow);
+        }
+
+        const struct ofp_action_header *action = openflow->data;
+        enum ofp_raw_action_type raw;
+        size_t act_len = 0;
+        uint64_t arg;
+
+        error = ofpact_pull_raw(openflow, ofp_version, &raw, &arg, &act_len);
+        if (!error) {
+            error = ofpact_decode(action, raw, ofp_version, arg, vl_mff_map,
+                                  ofpacts_tlv_bitmap, ofpacts);
+        }
+
+        if (error) {
+            *bad_action_offset = decoded_len;
+            goto done;
+        }
+        decoded_len += act_len;
+    }
+
+done:
+    return error;
 }
 
 static enum ofperr
@@ -7769,25 +7836,25 @@ ofpacts_decode(const void *actions, size_t actions_len,
                const struct vl_mff_map *vl_mff_map,
                uint64_t *ofpacts_tlv_bitmap, struct ofpbuf *ofpacts)
 {
-    struct ofpbuf openflow = ofpbuf_const_initializer(actions, actions_len);
-    while (openflow.size) {
-        const struct ofp_action_header *action = openflow.data;
-        enum ofp_raw_action_type raw;
-        enum ofperr error;
-        uint64_t arg;
+    size_t bad_action_offset = 0;
+    struct ofpbuf aligned_buf;
 
-        error = ofpact_pull_raw(&openflow, ofp_version, &raw, &arg);
-        if (!error) {
-            error = ofpact_decode(action, raw, ofp_version, arg, vl_mff_map,
-                                  ofpacts_tlv_bitmap, ofpacts);
-        }
-
-        if (error) {
-            log_bad_action(actions, actions_len, action, error);
-            return error;
-        }
+    if (!OFPACT_IS_ALIGNED(actions)) {
+        ofpbuf_init(&aligned_buf, actions_len);
+        ofpbuf_put(&aligned_buf, actions, actions_len);
+    } else {
+        ofpbuf_use_data(&aligned_buf, actions, actions_len);
     }
-    return 0;
+
+    enum ofperr error
+        = ofpacts_decode_aligned(&aligned_buf, ofp_version, vl_mff_map,
+                                 ofpacts_tlv_bitmap, ofpacts,
+                                 &bad_action_offset);
+    if (error) {
+        log_bad_action(actions, actions_len, bad_action_offset, error);
+    }
+    ofpbuf_uninit(&aligned_buf);
+    return error;
 }
 
 static enum ofperr
@@ -9147,7 +9214,7 @@ bool
 ofpacts_equal(const struct ofpact *a, size_t a_len,
               const struct ofpact *b, size_t b_len)
 {
-    return a_len == b_len && !memcmp(a, b, a_len);
+    return a_len == b_len && (!a_len || !memcmp(a, b, a_len));
 }
 
 /* Returns true if the 'a_len' bytes of actions in 'a' and the 'b_len' bytes of
@@ -9640,14 +9707,15 @@ ofpact_decode_raw(enum ofp_version ofp_version,
 
 static enum ofperr
 ofpact_pull_raw(struct ofpbuf *buf, enum ofp_version ofp_version,
-                enum ofp_raw_action_type *raw, uint64_t *arg)
+                enum ofp_raw_action_type *raw, uint64_t *arg,
+                size_t *raw_len)
 {
     const struct ofp_action_header *oah = buf->data;
     const struct ofpact_raw_instance *action;
     unsigned int length;
     enum ofperr error;
 
-    *raw = *arg = 0;
+    *raw = *arg = *raw_len = 0;
     error = ofpact_decode_raw(ofp_version, oah, buf->size, &action);
     if (error) {
         return error;
@@ -9690,6 +9758,7 @@ ofpact_pull_raw(struct ofpbuf *buf, enum ofp_version ofp_version,
     }
 
     ofpbuf_pull(buf, length);
+    *raw_len = length;
 
     return 0;
 }

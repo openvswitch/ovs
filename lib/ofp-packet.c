@@ -133,7 +133,9 @@ decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
         case NXPINT_FULL_LEN: {
             uint32_t u32;
             error = ofpprop_parse_u32(&payload, &u32);
-            *total_len = u32;
+            if (!error) {
+                *total_len = u32;
+            }
             break;
         }
 
@@ -152,7 +154,9 @@ decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
         case NXPINT_REASON: {
             uint8_t reason;
             error = ofpprop_parse_u8(&payload, &reason);
-            pin->reason = reason;
+            if (!error) {
+                pin->reason = reason;
+            }
             break;
         }
 
@@ -883,7 +887,9 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
         case NXCPT_ODP_PORT: {
             uint32_t value;
             error = ofpprop_parse_u32(&payload, &value);
-            pin->odp_port = u32_to_odp(value);
+            if (!error) {
+                pin->odp_port = u32_to_odp(value);
+            }
             break;
          }
 

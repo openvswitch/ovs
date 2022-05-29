@@ -70,6 +70,17 @@ OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp)
            || icmp->type == ICMP4_TIMESTAMP_REQUEST;
 }
 
+BOOLEAN
+OvsConntrackValidateIcmp6Packet(const ICMPHdr *icmp)
+{
+    if (!icmp) {
+        OVS_LOG_TRACE("Invalid ICMP packet detected, header cannot be NULL");
+        return FALSE;
+    }
+
+    return icmp->type == ICMP6_ECHO_REQUEST;
+}
+
 OVS_CT_ENTRY *
 OvsConntrackCreateIcmpEntry(UINT64 now)
 {

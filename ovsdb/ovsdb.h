@@ -90,7 +90,10 @@ struct ovsdb {
     /* History trasanctions for incremental monitor transfer. */
     bool need_txn_history;     /* Need to maintain history of transactions. */
     unsigned int n_txn_history; /* Current number of history transactions. */
+    unsigned int n_txn_history_atoms; /* Total number of atoms in history. */
     struct ovs_list txn_history; /* Contains "struct ovsdb_txn_history_node. */
+
+    size_t n_atoms;  /* Total number of ovsdb atoms in the database. */
 
     /* Relay mode. */
     bool is_relay;  /* True, if database is in relay mode. */

@@ -1,0 +1,120 @@
+#!/usr/bin/env bpftrace
+/*
+ * Copyright (c) 2021 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *
+ * Script information:
+ * -------------------
+ * bridge_loop.bt uses the USDTs in the ovs-vswitchd's main bridge loop
+ * to report how long it spends running a single loop, as well as the time
+ * it spends waiting in the poll_loop(). Once done, it will also print a
+ * histogram for the time spent.
+ *
+ * The following is an example of how to use the script on the running
+ * ovs-vswitchd process:
+ *
+ *   $ bridge_loop.bt -p `pgrep -n ovs-vswitchd`
+ *     Attaching 4 probes...
+ *     --------------------------------------------------------------
+ *     Tracing ovs-vswitchd's main() loop... Hit Ctrl-C to end.
+ *     --------------------------------------------------------------
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000230706
+ *     - [886467@ovs-vswitchd] poll_block() wait time: 0:00:00.501854292
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000266445
+ *     - [886467@ovs-vswitchd] poll_block() wait time: 0:00:00.499750288
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000254856
+ *     - [886467@ovs-vswitchd] poll_block() wait time: 0:00:00.499944280
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000267390
+ *     - [886467@ovs-vswitchd] poll_block() wait time: 0:00:00.093566288
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000316774
+ *     - [886467@ovs-vswitchd] poll_block() wait time: 0:00:00.406697754
+ *     - [886467@ovs-vswitchd] bridge run loop time  : 0:00:00.000264505
+ *     ^C
+ *     --------------------------------------------------------------
+ *     Showing run time histograms in micro seconds:
+ *     --------------------------------------------------------------
+ *
+ *     @bridge_run_time:
+ *     [0, 1000)              6 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+ *
+ *
+ *     @poll_block_wait_time:
+ *     [90000, 120000)        1 |@@@@@@@@@@@@@@@@@                         |
+ *     [120000, 150000)       0 |                                          |
+ *     [150000, 180000)       0 |                                          |
+ *     [180000, 210000)       0 |                                          |
+ *     [210000, 240000)       0 |                                          |
+ *     [240000, 270000)       0 |                                          |
+ *     [270000, 300000)       0 |                                          |
+ *     [300000, 330000)       0 |                                          |
+ *     [330000, 360000)       0 |                                          |
+ *     [360000, 390000)       0 |                                          |
+ *     [390000, 420000)       1 |@@@@@@@@@@@@@@@@@                         |
+ *     [420000, 450000)       0 |                                          |
+ *     [450000, 480000)       0 |                                          |
+ *     [480000, 510000)       3 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+ */
+
+
+BEGIN
+{
+    printf("--------------------------------------------------------------\n");
+    printf("Tracing ovs-vswitchd's main() loop... Hit Ctrl-C to end.\n");
+    printf("--------------------------------------------------------------\n");
+}
+
+
+usdt::main:poll_block
+{
+    @pb_start[tid] = nsecs;
+    if (@rs_start[tid] != 0) {
+        $delta = nsecs - @rs_start[tid];
+        printf("- [%d@%s] bridge run loop time  : %u:%2.2u:%2.2u.%9.9u\n",
+               tid, comm,
+               $delta / 3600 / 1000000000,
+               $delta / 60   / 1000000000 % 60,
+               $delta / 1000000000 % 60,
+               $delta % 1000000000);
+        @bridge_run_time = lhist($delta / 1000, 0, 1000000, 1000);
+    }
+}
+
+
+usdt::main:run_start
+{
+    @rs_start[tid] = nsecs;
+    if (@pb_start[tid] != 0) {
+        $delta = nsecs - @pb_start[tid];
+        printf("- [%d@%s] poll_block() wait time: %u:%2.2u:%2.2u.%9.9u\n",
+               tid, comm,
+               $delta / 3600 / 1000000000,
+               $delta / 60   / 1000000000 % 60,
+               $delta / 1000000000 % 60,
+               $delta % 1000000000);
+        @poll_block_wait_time = lhist($delta / 1000, 0, 30000000, 30000);
+    }
+}
+
+
+END
+{
+    clear(@rs_start);
+    clear(@pb_start);
+
+    printf("\n");
+    printf("--------------------------------------------------------------\n");
+    printf("Showing run time histograms in micro seconds:\n");
+    printf("--------------------------------------------------------------");
+}

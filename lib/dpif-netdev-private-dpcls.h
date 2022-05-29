@@ -83,8 +83,11 @@ struct dpcls_subtable {
     /* The lookup function to use for this subtable. If there is a known
      * property of the subtable (eg: only 3 bits of miniflow metadata is
      * used for the lookup) then this can point at an optimized version of
-     * the lookup function for this particular subtable. */
-    dpcls_subtable_lookup_func lookup_func;
+     * the lookup function for this particular subtable. The lookup function
+     * can be used at any time by a PMD thread, so it's declared as an atomic
+     * here to prevent garbage from being read. */
+    ATOMIC(dpcls_subtable_lookup_func) lookup_func;
+    struct dpcls_subtable_lookup_info_t *lookup_func_info;
 
     /* Caches the masks to match a packet to, reducing runtime calculations. */
     uint64_t *mf_masks;

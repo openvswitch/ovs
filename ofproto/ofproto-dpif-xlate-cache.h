@@ -61,9 +61,8 @@ enum xc_type {
  * that a flow relates to, although they may be used for other effects as well
  * (for instance, refreshing hard timeouts for learned flows).
  *
- * An explicit reference is taken to all pointers other than the ones for
- * struct ofproto_dpif.  ofproto_dpif pointers are explicitly protected by
- * destroying all xlate caches before the ofproto is destroyed. */
+ * An explicit reference is taken to all pointers.
+ */
 struct xc_entry {
     enum xc_type type;
     union {

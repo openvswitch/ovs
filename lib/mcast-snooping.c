@@ -356,11 +356,11 @@ mcast_snooping_prune_expired(struct mcast_snooping *ms,
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     int expired;
-    struct mcast_group_bundle *b, *next_b;
+    struct mcast_group_bundle *b;
     time_t timenow = time_now();
 
     expired = 0;
-    LIST_FOR_EACH_SAFE (b, next_b, bundle_node, &grp->bundle_lru) {
+    LIST_FOR_EACH_SAFE (b, bundle_node, &grp->bundle_lru) {
         /* This list is sorted on expiration time. */
         if (b->expires > timenow) {
             break;
@@ -946,15 +946,15 @@ mcast_snooping_wait(struct mcast_snooping *ms)
 void
 mcast_snooping_flush_bundle(struct mcast_snooping *ms, void *port)
 {
-    struct mcast_group *g, *next_g;
-    struct mcast_mrouter_bundle *m, *next_m;
+    struct mcast_group *g;
+    struct mcast_mrouter_bundle *m;
 
     if (!mcast_snooping_enabled(ms)) {
         return;
     }
 
     ovs_rwlock_wrlock(&ms->rwlock);
-    LIST_FOR_EACH_SAFE (g, next_g, group_node, &ms->group_lru) {
+    LIST_FOR_EACH_SAFE (g, group_node, &ms->group_lru) {
         if (mcast_group_delete_bundle(ms, g, port)) {
             ms->need_revalidate = true;
 
@@ -964,7 +964,7 @@ mcast_snooping_flush_bundle(struct mcast_snooping *ms, void *port)
         }
     }
 
-    LIST_FOR_EACH_SAFE (m, next_m, mrouter_node, &ms->mrouter_lru) {
+    LIST_FOR_EACH_SAFE (m, mrouter_node, &ms->mrouter_lru) {
         if (m->port == port) {
             mcast_snooping_flush_mrouter(m);
             ms->need_revalidate = true;

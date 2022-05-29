@@ -167,33 +167,8 @@ OvsConntrackUpdateExpiration(OVS_CT_ENTRY *ctEntry,
     ctEntry->expiration = now + interval;
 }
 
-static const TCPHdr*
-OvsGetTcpHeader(PNET_BUFFER_LIST nbl,
-                OVS_PACKET_HDR_INFO *layers,
-                VOID *storage,
-                UINT32 *tcpPayloadLen)
-{
-    IPHdr *ipHdr;
-    TCPHdr *tcp;
-    VOID *dest = storage;
-
-    ipHdr = NdisGetDataBuffer(NET_BUFFER_LIST_FIRST_NB(nbl),
-                              layers->l4Offset + sizeof(TCPHdr),
-                              NULL, 1 /*no align*/, 0);
-    if (ipHdr == NULL) {
-        return NULL;
-    }
-
-    ipHdr = (IPHdr *)((PCHAR)ipHdr + layers->l3Offset);
-    tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
-    if (tcp->doff * 4 >= sizeof *tcp) {
-        NdisMoveMemory(dest, tcp, sizeof(TCPHdr));
-        *tcpPayloadLen = TCP_DATA_LENGTH(ipHdr, tcp);
-        return storage;
-    }
-
-    return NULL;
-}
+const TCPHdr* OvsGetTcpHeader(PNET_BUFFER_LIST nbl, OVS_PACKET_HDR_INFO *layers,
+                                     VOID *storage, UINT32 *tcpPayloadLen);
 
 VOID OvsCleanupConntrack(VOID);
 NTSTATUS OvsInitConntrack(POVS_SWITCH_CONTEXT context);
@@ -203,6 +178,7 @@ NDIS_STATUS OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                                       const PNL_ATTR a);
 BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);
 BOOLEAN OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp);
+BOOLEAN OvsConntrackValidateIcmp6Packet(const ICMPHdr *icmp);
 OVS_CT_ENTRY * OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                                           UINT64 now,
                                           UINT32 tcpPayloadLen);
@@ -235,8 +211,8 @@ NTSTATUS OvsInitCtRelated(POVS_SWITCH_CONTEXT context);
 VOID OvsCleanupCtRelated(VOID);
 NDIS_STATUS OvsCtRelatedEntryCreate(UINT8 ipProto,
                                     UINT16 dl_type,
-                                    UINT32 serverIp,
-                                    UINT32 clientIp,
+                                    struct ct_addr serverIp,
+                                    struct ct_addr clientIp,
                                     UINT16 serverPort,
                                     UINT16 clientPort,
                                     UINT64 currentTime,

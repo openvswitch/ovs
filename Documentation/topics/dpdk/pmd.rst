@@ -31,17 +31,19 @@ input ports for packets, classifying packets once received, and executing
 actions on the packets once they are classified.
 
 PMD threads utilize Receive (Rx) and Transmit (Tx) queues, commonly known as
-*rxq*\s and *txq*\s. While Tx queue configuration happens automatically, Rx
-queues can be configured by the user. This can happen in one of two ways:
+*rxq*\s and *txq*\s to receive and send packets from/to an interface.
 
-- For physical interfaces, configuration is done using the
-  :program:`ovs-appctl` utility.
+- For physical interfaces, the number of Tx Queues is automatically configured
+  based on the number of PMD thread cores. The number of Rx queues can be
+  configured with::
 
-- For virtual interfaces, configuration is done using the :program:`ovs-appctl`
-  utility, but this configuration must be reflected in the guest configuration
-  (e.g. QEMU command line arguments).
+        $ ovs-vsctl set Interface <interface_name> options:n_rxq=N
 
-The :program:`ovs-appctl` utility also provides a number of commands for
+- For virtual interfaces, the number of Tx and Rx queues are configured by
+  libvirt/QEMU and enabled/disabled in the guest. Refer to :doc:'vhost-user'
+  for more information.
+
+The :program:`ovs-appctl` utility provides a number of commands for
 querying PMD threads and their respective queues. This, and all of the above,
 is discussed here.
 
@@ -57,12 +59,27 @@ To show current stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-show
 
+or::
+
+    $ ovs-appctl dpif-netdev/pmd-perf-show
+
+Detailed performance metrics for ``pmd-perf-show`` can also be enabled::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-perf-metrics=true
+
+See the `ovs-vswitchd(8)`_ manpage for more information.
+
 To clear previous stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear
 
-Port/Rx Queue Assigment to PMD Threads
---------------------------------------
+.. note::
+
+    PMD stats are cumulative so they should be cleared in order to see how the
+    PMDs are being used with current traffic.
+
+Port/Rx Queue Assignment to PMD Threads
+---------------------------------------
 
 .. todo::
 
@@ -74,10 +91,47 @@ requirement in order to achieve maximum performance. This is particularly true
 for enabling things like multiqueue for :ref:`physical <dpdk-phy-multiqueue>`
 and :ref:`vhost-user <dpdk-vhost-user>` interfaces.
 
-To show port/Rx queue assignment::
+Rx queues will be assigned to PMD threads by OVS, or they can be manually
+pinned to PMD threads by the user.
+
+To see the port/Rx queue assignment and current measured usage history of PMD
+core cycles for each Rx queue::
 
     $ ovs-appctl dpif-netdev/pmd-rxq-show
 
+.. note::
+
+   A history of one minute is recorded and shown for each Rx queue to allow for
+   traffic pattern spikes. Any changes in the Rx queue's PMD core cycles usage,
+   due to traffic pattern or reconfig changes, will take one minute to be fully
+   reflected in the stats.
+
+   .. versionchanged:: 2.6.0
+
+      The ``pmd-rxq-show`` command was added in OVS 2.6.0.
+
+.. versionchanged:: 2.16.0
+
+   A ``overhead`` statistics is shown per PMD: it represents the number of
+   cycles inherently consumed by the OVS PMD processing loop.
+
+Rx queue to PMD assignment takes place whenever there are configuration changes
+or can be triggered by using::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-rebalance
+
+.. versionchanged:: 2.9.0
+
+   Utilization-based allocation of Rx queues to PMDs and the
+   ``pmd-rxq-rebalance`` command were added in OVS 2.9.0. Prior to this,
+   allocation was round-robin and processing cycles were not taken into
+   consideration.
+
+   In addition, the output of ``pmd-rxq-show`` was modified to include
+   Rx queue utilization of the PMD as a percentage.
+
+Port/Rx Queue assignment to PMD threads by manual pinning
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Rx queues may be manually pinned to cores. This will change the default Rx
 queue assignment to PMD threads::
 
@@ -93,8 +147,8 @@ For example::
     $ ovs-vsctl set interface dpdk-p0 options:n_rxq=4 \
         other_config:pmd-rxq-affinity="0:3,1:7,3:8"
 
-This will ensure there are *4* Rx queues and that these queues are configured
-like so:
+This will ensure there are *4* Rx queues for dpdk-p0 and that these queues are
+configured like so:
 
 - Queue #0 pinned to core 3
 - Queue #1 pinned to core 7
@@ -102,7 +156,7 @@ like so:
 - Queue #3 pinned to core 8
 
 PMD threads on cores where Rx queues are *pinned* will become *isolated* by
-default. This means that this thread will only poll the *pinned* Rx queues.
+default. This means that these threads will only poll the *pinned* Rx queues.
 
 If using ``pmd-rxq-assign=group`` PMD threads with *pinned* Rxqs can be
 *non-isolated* by setting::
@@ -116,6 +170,8 @@ If using ``pmd-rxq-assign=group`` PMD threads with *pinned* Rxqs can be
    ``<core-id>`` is not in ``pmd-cpu-mask``), the RX queue will be assigned to
    a *non-isolated* PMD, that will remain *non-isolated*.
 
+Automatic Port/Rx Queue assignment to PMD threads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 If ``pmd-rxq-affinity`` is not set for Rx queues, they will be assigned to PMDs
 (cores) automatically.
 
@@ -125,9 +181,11 @@ The algorithm used to automatically assign Rxqs to PMDs can be set by::
 
 By default, ``cycles`` assignment is used where the Rxqs will be ordered by
 their measured processing cycles, and then be evenly assigned in descending
-order to PMDs based on an up/down walk of the PMDs. For example, where there
-are five Rx queues and three cores - 3, 7, and 8 - available and the measured
-usage of core cycles per Rx queue over the last interval is seen to be:
+order to PMDs. The PMD that will be selected for a given Rxq will be the next
+one in alternating ascending/descending order based on core id. For example,
+where there are five Rx queues and three cores - 3, 7, and 8 - available and
+the measured usage of core cycles per Rx queue over the last interval is seen
+to be:
 
 - Queue #0: 30%
 - Queue #1: 80%
@@ -168,7 +226,7 @@ The Rx queues will be assigned to the cores in the following order::
     Core 8: Q3 (50%) | Q0 (10%) | Q5 (10%)
 
 Alternatively, ``roundrobin`` assignment can be used, where the Rxqs are
-assigned to PMDs in a round-robined fashion. This algorithm was used by
+assigned to PMDs in a round-robin fashion. This algorithm was used by
 default prior to OVS 2.9. For example, given the following ports and queues:
 
 - Port #0 Queue #0 (P0Q0)
@@ -183,86 +241,47 @@ The Rx queues may be assigned to the cores in the following order::
     Core 7: P0Q1 | P1Q2
     Core 8: P1Q0 |
 
-To see the current measured usage history of PMD core cycles for each Rx
-queue::
+PMD Automatic Load Balance
+--------------------------
 
-    $ ovs-appctl dpif-netdev/pmd-rxq-show
+Cycle or utilization based allocation of Rx queues to PMDs is done to give an
+efficient load distribution based at the time of assignment. However, over time
+it may become less efficient due to changes in traffic. This may cause an
+uneven load among the PMDs, which in the worst case may result in packet drops
+and lower throughput.
 
-.. note::
-
-   A history of one minute is recorded and shown for each Rx queue to allow for
-   traffic pattern spikes. Any changes in the Rx queue's PMD core cycles usage,
-   due to traffic pattern or reconfig changes, will take one minute to be fully
-   reflected in the stats.
-
-.. versionchanged:: 2.16.0
-
-   A ``overhead`` statistics is shown per PMD: it represents the number of
-   cycles inherently consumed by the OVS PMD processing loop.
-
-Rx queue to PMD assignment takes place whenever there are configuration changes
-or can be triggered by using::
-
-    $ ovs-appctl dpif-netdev/pmd-rxq-rebalance
-
-.. versionchanged:: 2.6.0
-
-   The ``pmd-rxq-show`` command was added in OVS 2.6.0.
-
-.. versionchanged:: 2.9.0
-
-   Utilization-based allocation of Rx queues to PMDs and the
-   ``pmd-rxq-rebalance`` command were added in OVS 2.9.0. Prior to this,
-   allocation was round-robin and processing cycles were not taken into
-   consideration.
-
-   In addition, the output of ``pmd-rxq-show`` was modified to include
-   Rx queue utilization of the PMD as a percentage. Prior to this, tracking of
-   stats was not available.
-
-Automatic assignment of Port/Rx Queue to PMD Threads (experimental)
--------------------------------------------------------------------
-
-Cycle or utilization based allocation of Rx queues to PMDs gives efficient
-load distribution but it is not adaptive to change in traffic pattern
-occurring over the time. This causes uneven load among the PMDs which results
-in overall lower throughput.
-
-To address this automatic load balancing of PMDs can be set by::
+To address this, automatic load balancing of PMDs can be enabled by::
 
     $ ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"
 
-If pmd-auto-lb is set to true AND cycle based assignment is enabled then auto
-load balancing of PMDs is enabled provided there are 2 or more non-isolated
-PMDs and at least one of these PMDs is polling more than one RX queue. So,
-following conditions need to be met to have Auto Load balancing enabled:
+The following are minimum configuration pre-requisites needed for PMD Auto
+Load Balancing to operate:
 
-1. cycle based assignment of RX queues to PMD is enabled.
-2. pmd-auto-lb is set to true.
+1. ``pmd-auto-lb`` is enabled.
+2. ``cycle`` (default) or ``group`` based Rx queue assignment is selected.
 3. There are two or more non-isolated PMDs present.
-4. And at least one of the non-isolated PMD has more than one queue polling.
+4. At least one non-isolated PMD is polling more than one Rx queue.
 
-If any of above is not met PMD Auto Load Balancing is disabled.
+When PMD Auto Load Balance is enabled, a PMD core's CPU utilization percentage
+is measured. The PMD is considered above the threshold if that percentage
+utilization is greater than the load threshold every 10 secs for 1 minute.
 
-Once auto load balancing is set, each non-isolated PMD measures the processing
-load for each of its associated queues every 10 seconds. If the aggregated PMD
-load reaches the load threshold for 6 consecutive intervals then PMD considers
-itself to be overloaded.
-
-For example, to set the load threshold to 70%::
+The load threshold can be set by the user. For example, to set the load
+threshold to 70% utilization of a PMD core::
 
     $ ovs-vsctl set open_vswitch .\
         other_config:pmd-auto-lb-load-threshold="70"
 
 If not set, the default load threshold is 95%.
 
-If any PMD is overloaded, a dry-run of the PMD assignment algorithm is
-performed by OVS main thread. The dry-run does NOT change the existing queue
-to PMD assignments.
+If a PMD core is detected to be above the load threshold and the minimum
+pre-requisites are met, a dry-run using the current PMD assignment algorithm is
+performed.
 
-If the resultant mapping of dry-run indicates an improved distribution of the
-load by at least the variance improvement threshold then the actual
-reassignment will be performed.
+The current variance of load between the PMD cores and estimated variance from
+the dry-run are both calculated. If the estimated dry-run variance is improved
+from the current one by the variance threshold, a new Rx queue to PMD
+assignment will be performed.
 
 For example, to set the variance improvement threshold to 40%::
 
@@ -273,11 +292,12 @@ If not set, the default variance improvement threshold is 25%.
 
 .. note::
 
-    PMD Auto Load Balancing doesn't currently work if queues are assigned
-    cross NUMA as actual processing load could get worse after assignment
-    as compared to what dry run predicts. The only exception is when all
-    PMD threads are running on cores from a single NUMA node.  In this case
-    Auto Load Balancing is still possible.
+    PMD Auto Load Balancing will not operate if Rx queues are assigned to PMD
+    cores on a different NUMA. This is because the processing load could change
+    after a new assignment due to differing cross-NUMA datapaths, making it
+    difficult to estimate the loads during a dry-run. The only exception is
+    when all PMD threads are running on cores from a single NUMA node. In this
+    case cross-NUMA datapaths will not change after reassignment.
 
 The minimum time between 2 consecutive PMD auto load balancing iterations can
 also be configured by::
@@ -285,17 +305,11 @@ also be configured by::
     $ ovs-vsctl set open_vswitch .\
         other_config:pmd-auto-lb-rebal-interval="<interval>"
 
-where ``<interval>`` is a value in minutes. The default interval is 1 minute
-and setting it to 0 will also result in default value i.e. 1 min.
+where ``<interval>`` is a value in minutes. The default interval is 1 minute.
 
-A user can use this option to avoid frequent trigger of Auto Load Balancing of
-PMDs. For e.g. set this (in min) such that it occurs once in few hours or a day
-or a week.
+A user can use this option to set a minimum frequency of Rx queue to PMD
+reassignment due to PMD Auto Load Balance. For example, this could be set
+(in min) such that a reassignment is triggered at most every few hours.
 
-.. note::
-    In some scenarios it may not be desired to have Auto Load Balancing
-    triggerred. For example, if traffic profile for specific RX queue is
-    changing dramatically very frequently which in turn thrashes CPU cache
-    due to changes required in dpctl flows and EMC for newly added flows.
-    In such scenarios user should configure rebalance interval accordingly
-    to avoid frequent rebalancing happening.
+.. _ovs-vswitchd(8):
+    http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html

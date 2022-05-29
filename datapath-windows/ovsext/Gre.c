@@ -37,7 +37,7 @@
 
 static NDIS_STATUS
 OvsDoEncapGre(POVS_VPORT_ENTRY vport, PNET_BUFFER_LIST curNbl,
-              const OvsIPv4TunnelKey *tunKey,
+              const OvsIPTunnelKey *tunKey,
               const POVS_FWD_INFO fwdInfo,
               POVS_PACKET_HDR_INFO layers,
               POVS_SWITCH_CONTEXT switchContext,
@@ -93,7 +93,7 @@ OvsCleanupGreTunnel(POVS_VPORT_ENTRY vport)
 NDIS_STATUS
 OvsEncapGre(POVS_VPORT_ENTRY vport,
             PNET_BUFFER_LIST curNbl,
-            OvsIPv4TunnelKey *tunKey,
+            OvsIPTunnelKey *tunKey,
             POVS_SWITCH_CONTEXT switchContext,
             POVS_PACKET_HDR_INFO layers,
             PNET_BUFFER_LIST *newNbl,
@@ -102,7 +102,12 @@ OvsEncapGre(POVS_VPORT_ENTRY vport,
     OVS_FWD_INFO fwdInfo;
     NDIS_STATUS status;
 
-    status = OvsLookupIPFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
+    if (tunKey->dst.si_family != AF_INET) {
+        /*V6 tunnel support will be supported later*/
+        return NDIS_STATUS_FAILURE;
+    }
+
+    status = OvsLookupIPhFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
         OvsFwdIPHelperRequest(NULL, 0, tunKey, NULL, NULL, NULL);
         return NDIS_STATUS_FAILURE;
@@ -124,7 +129,7 @@ OvsEncapGre(POVS_VPORT_ENTRY vport,
 NDIS_STATUS
 OvsDoEncapGre(POVS_VPORT_ENTRY vport,
               PNET_BUFFER_LIST curNbl,
-              const OvsIPv4TunnelKey *tunKey,
+              const OvsIPTunnelKey *tunKey,
               const POVS_FWD_INFO fwdInfo,
               POVS_PACKET_HDR_INFO layers,
               POVS_SWITCH_CONTEXT switchContext,
@@ -239,10 +244,11 @@ OvsDoEncapGre(POVS_VPORT_ENTRY vport,
                           IP_DF_NBO : 0;
         ipHdr->ttl = tunKey->ttl ? tunKey->ttl : 64;
         ipHdr->protocol = IPPROTO_GRE;
-        ASSERT(tunKey->dst == fwdInfo->dstIpAddr);
-        ASSERT(tunKey->src == fwdInfo->srcIpAddr || tunKey->src == 0);
-        ipHdr->saddr = fwdInfo->srcIpAddr;
-        ipHdr->daddr = fwdInfo->dstIpAddr;
+        ASSERT(OvsIphAddrEquals(&tunKey->dst, &fwdInfo->dstIphAddr));
+        ASSERT(OvsIphAddrEquals(&tunKey->src, &fwdInfo->srcIphAddr) ||
+               OvsIphIsZero(&tunKey->src));
+        ipHdr->saddr = fwdInfo->srcIphAddr.Ipv4.sin_addr.s_addr;
+        ipHdr->daddr = fwdInfo->dstIphAddr.Ipv4.sin_addr.s_addr;
 
         ipHdr->check = 0;
         ipHdr->check = IPChecksum((UINT8 *)ipHdr, sizeof *ipHdr, 0);
@@ -306,7 +312,7 @@ ret_error:
 NDIS_STATUS
 OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
             PNET_BUFFER_LIST curNbl,
-            OvsIPv4TunnelKey *tunKey,
+            OvsIPTunnelKey *tunKey,
             PNET_BUFFER_LIST *newNbl)
 {
     PNET_BUFFER curNb;
@@ -325,6 +331,12 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
     ASSERT(*newNbl == NULL);
 
     *newNbl = NULL;
+
+    if (tunKey->dst.si_family != AF_INET) {
+        /*V6 tunnel support will be supported later*/
+        return NDIS_STATUS_FAILURE;
+    }
+
     status = OvsExtractLayers(curNbl, &layers);
     if (status != NDIS_STATUS_SUCCESS) {
         return status;
@@ -363,8 +375,11 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
     headRoom += layers.l3Offset;
 
     ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
-    tunKey->src = ipHdr->saddr;
-    tunKey->dst = ipHdr->daddr;
+    tunKey->src.Ipv4.sin_addr.s_addr = ipHdr->saddr;
+    tunKey->src.Ipv4.sin_family = AF_INET;
+    tunKey->dst.Ipv4.sin_addr.s_addr = ipHdr->daddr;
+    tunKey->dst.Ipv4.sin_family = AF_INET;
+
     tunKey->tos = ipHdr->tos;
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;

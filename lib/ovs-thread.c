@@ -299,21 +299,53 @@ ovs_spin_init(const struct ovs_spin *spin)
 }
 #endif
 
+struct ovs_barrier_impl {
+    uint32_t size;            /* Number of threads to wait. */
+    atomic_count count;       /* Number of threads already hit the barrier. */
+    struct seq *seq;
+    struct ovs_refcount refcnt;
+};
+
+static void
+ovs_barrier_impl_ref(struct ovs_barrier_impl *impl)
+{
+    ovs_refcount_ref(&impl->refcnt);
+}
+
+static void
+ovs_barrier_impl_unref(struct ovs_barrier_impl *impl)
+{
+    if (ovs_refcount_unref(&impl->refcnt) == 1) {
+        seq_destroy(impl->seq);
+        free(impl);
+    }
+}
+
 /* Initializes the 'barrier'.  'size' is the number of threads
  * expected to hit the barrier. */
 void
 ovs_barrier_init(struct ovs_barrier *barrier, uint32_t size)
 {
-    barrier->size = size;
-    atomic_count_init(&barrier->count, 0);
-    barrier->seq = seq_create();
+    struct ovs_barrier_impl *impl;
+
+    impl = xmalloc(sizeof *impl);
+    impl->size = size;
+    atomic_count_init(&impl->count, 0);
+    impl->seq = seq_create();
+    ovs_refcount_init(&impl->refcnt);
+
+    ovsrcu_set(&barrier->impl, impl);
 }
 
 /* Destroys the 'barrier'. */
 void
 ovs_barrier_destroy(struct ovs_barrier *barrier)
 {
-    seq_destroy(barrier->seq);
+    struct ovs_barrier_impl *impl;
+
+    impl = ovsrcu_get(struct ovs_barrier_impl *, &barrier->impl);
+    ovsrcu_set(&barrier->impl, NULL);
+    ovs_barrier_impl_unref(impl);
 }
 
 /* Makes the calling thread block on the 'barrier' until all
@@ -325,23 +357,30 @@ ovs_barrier_destroy(struct ovs_barrier *barrier)
 void
 ovs_barrier_block(struct ovs_barrier *barrier)
 {
-    uint64_t seq = seq_read(barrier->seq);
+    struct ovs_barrier_impl *impl;
     uint32_t orig;
+    uint64_t seq;
 
-    orig = atomic_count_inc(&barrier->count);
-    if (orig + 1 == barrier->size) {
-        atomic_count_set(&barrier->count, 0);
+    impl = ovsrcu_get(struct ovs_barrier_impl *, &barrier->impl);
+    ovs_barrier_impl_ref(impl);
+
+    seq = seq_read(impl->seq);
+    orig = atomic_count_inc(&impl->count);
+    if (orig + 1 == impl->size) {
+        atomic_count_set(&impl->count, 0);
         /* seq_change() serves as a release barrier against the other threads,
          * so the zeroed count is visible to them as they continue. */
-        seq_change(barrier->seq);
+        seq_change(impl->seq);
     } else {
         /* To prevent thread from waking up by other event,
          * keeps waiting for the change of 'barrier->seq'. */
-        while (seq == seq_read(barrier->seq)) {
-            seq_wait(barrier->seq, seq);
+        while (seq == seq_read(impl->seq)) {
+            seq_wait(impl->seq, seq);
             poll_block();
         }
     }
+
+    ovs_barrier_impl_unref(impl);
 }
 
 DEFINE_EXTERN_PER_THREAD_DATA(ovsthread_id, OVSTHREAD_ID_UNSET);

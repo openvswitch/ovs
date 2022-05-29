@@ -197,9 +197,9 @@ ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *svr,
 void
 ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *svr)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, &svr->remotes) {
+    SHASH_FOR_EACH_SAFE (node, &svr->remotes) {
         ovsdb_jsonrpc_server_del_remote(node);
     }
     shash_destroy(&svr->remotes);
@@ -227,9 +227,9 @@ void
 ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
                                  const struct shash *new_remotes)
 {
-    struct shash_node *node, *next;
+    struct shash_node *node;
 
-    SHASH_FOR_EACH_SAFE (node, next, &svr->remotes) {
+    SHASH_FOR_EACH_SAFE (node, &svr->remotes) {
         struct ovsdb_jsonrpc_remote *remote = node->data;
         struct ovsdb_jsonrpc_options *options
             = shash_find_data(new_remotes, node->name);
@@ -585,9 +585,9 @@ ovsdb_jsonrpc_session_set_options(struct ovsdb_jsonrpc_session *session,
 static void
 ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *remote)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         int error = ovsdb_jsonrpc_session_run(s);
         if (error) {
             ovsdb_jsonrpc_session_close(s);
@@ -642,9 +642,9 @@ ovsdb_jsonrpc_session_get_memory_usage_all(
 static void
 ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *remote)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         ovsdb_jsonrpc_session_close(s);
     }
 }
@@ -660,9 +660,9 @@ static void
 ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote,
                                     bool force, const char *comment)
 {
-    struct ovsdb_jsonrpc_session *s, *next;
+    struct ovsdb_jsonrpc_session *s;
 
-    LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
+    LIST_FOR_EACH_SAFE (s, node, &remote->sessions) {
         if (force || !s->db_change_aware) {
             jsonrpc_session_force_reconnect(s->js);
             if (comment && jsonrpc_session_is_connected(s->js)) {
@@ -909,9 +909,9 @@ error:
 static void
 ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *s)
 {
-    struct ovsdb_lock_waiter *waiter, *next;
+    struct ovsdb_lock_waiter *waiter;
 
-    HMAP_FOR_EACH_SAFE (waiter, next, session_node, &s->up.waiters) {
+    HMAP_FOR_EACH_SAFE (waiter, session_node, &s->up.waiters) {
         ovsdb_jsonrpc_session_unlock__(waiter);
     }
 }
@@ -1198,8 +1198,8 @@ static void
 ovsdb_jsonrpc_trigger_remove__(struct ovsdb_jsonrpc_session *s,
                                struct ovsdb *db)
 {
-    struct ovsdb_jsonrpc_trigger *t, *next;
-    HMAP_FOR_EACH_SAFE (t, next, hmap_node, &s->triggers) {
+    struct ovsdb_jsonrpc_trigger *t;
+    HMAP_FOR_EACH_SAFE (t, hmap_node, &s->triggers) {
         if (!db || t->trigger.db == db) {
             ovsdb_jsonrpc_trigger_complete(t);
         }
@@ -1226,8 +1226,8 @@ ovsdb_jsonrpc_trigger_complete_all(struct ovsdb_jsonrpc_session *s)
 static void
 ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 {
-    struct ovsdb_jsonrpc_trigger *trigger, *next;
-    LIST_FOR_EACH_SAFE (trigger, next, trigger.node, &s->up.completions) {
+    struct ovsdb_jsonrpc_trigger *trigger;
+    LIST_FOR_EACH_SAFE (trigger, trigger.node, &s->up.completions) {
         ovsdb_jsonrpc_trigger_complete(trigger);
     }
 }
@@ -1688,8 +1688,8 @@ ovsdb_jsonrpc_monitor_preremove_db(struct ovsdb_jsonrpc_session *s,
 {
     ovs_assert(db);
 
-    struct ovsdb_jsonrpc_monitor *m, *next;
-    HMAP_FOR_EACH_SAFE (m, next, node, &s->monitors) {
+    struct ovsdb_jsonrpc_monitor *m;
+    HMAP_FOR_EACH_SAFE (m, node, &s->monitors) {
         if (m->db == db) {
             ovsdb_jsonrpc_monitor_destroy(m, true);
         }
@@ -1700,9 +1700,9 @@ ovsdb_jsonrpc_monitor_preremove_db(struct ovsdb_jsonrpc_session *s,
 static void
 ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
 {
-    struct ovsdb_jsonrpc_monitor *m, *next;
+    struct ovsdb_jsonrpc_monitor *m;
 
-    HMAP_FOR_EACH_SAFE (m, next, node, &s->monitors) {
+    HMAP_FOR_EACH_SAFE (m, node, &s->monitors) {
         ovsdb_jsonrpc_monitor_destroy(m, false);
     }
 }

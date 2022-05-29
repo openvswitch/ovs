@@ -215,10 +215,6 @@ struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 static struct hmap all_ofproto_dpifs_by_name =
                           HMAP_INITIALIZER(&all_ofproto_dpifs_by_name);
 
-/* All existing ofproto_dpif instances, indexed by ->uuid. */
-static struct hmap all_ofproto_dpifs_by_uuid =
-                          HMAP_INITIALIZER(&all_ofproto_dpifs_by_uuid);
-
 static bool ofproto_use_tnl_push_pop = true;
 static void ofproto_unixctl_init(void);
 static void ct_zone_config_init(struct dpif_backer *backer);
@@ -1539,6 +1535,43 @@ check_nd_extensions(struct dpif_backer *backer)
     return !error;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_ACTION_ATTR_ADD_MPLS
+ * action. */
+static bool
+check_add_mpls(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct flow flow;
+    bool supported;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+    ofpbuf_init(&actions, 64);
+
+    struct ovs_action_add_mpls *mpls;
+
+    mpls = nl_msg_put_unspec_zero(&actions,
+                                  OVS_ACTION_ATTR_ADD_MPLS,
+                                  sizeof *mpls);
+    mpls->mpls_ethertype = htons(ETH_TYPE_MPLS);
+
+    supported = dpif_probe_feature(backer->dpif, "add_mpls", &key,
+                                   &actions, NULL);
+    ofpbuf_uninit(&actions);
+    VLOG_INFO("%s: Datapath %s add_mpls action",
+              dpif_name(backer->dpif),
+              supported ? "supports" : "does not support");
+    return supported;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1609,6 +1642,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.lb_output_action =
         dpif_supports_lb_output_action(backer->dpif);
     backer->rt_support.ct_zero_snat = dpif_supports_ct_zero_snat(backer);
+    backer->rt_support.add_mpls = check_add_mpls(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
@@ -1625,7 +1659,7 @@ static int
 construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct shash_node *node, *next;
+    struct shash_node *node;
     int error;
 
     /* Tunnel module can get used right after the udpif threads are running. */
@@ -1663,7 +1697,7 @@ construct(struct ofproto *ofproto_)
     ofproto->ams_seqno = seq_read(ofproto->ams_seq);
 
 
-    SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
+    SHASH_FOR_EACH_SAFE (node, &init_ofp_ports) {
         struct iface_hint *iface_hint = node->data;
 
         if (!strcmp(iface_hint->br_name, ofproto->up.name)) {
@@ -1682,9 +1716,6 @@ construct(struct ofproto *ofproto_)
     hmap_insert(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node,
                 hash_string(ofproto->up.name, 0));
-    hmap_insert(&all_ofproto_dpifs_by_uuid,
-                &ofproto->all_ofproto_dpifs_by_uuid_node,
-                uuid_hash(&ofproto->uuid));
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
 
     ofproto_init_tables(ofproto_, N_TABLES);
@@ -1782,8 +1813,6 @@ destruct(struct ofproto *ofproto_, bool del)
 
     hmap_remove(&all_ofproto_dpifs_by_name,
                 &ofproto->all_ofproto_dpifs_by_name_node);
-    hmap_remove(&all_ofproto_dpifs_by_uuid,
-                &ofproto->all_ofproto_dpifs_by_uuid_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         CLS_FOR_EACH (rule, up.cr, &table->cls) {
@@ -1907,7 +1936,7 @@ run(struct ofproto *ofproto_)
 
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));
     if (ofproto->dump_seq != new_dump_seq) {
-        struct rule *rule, *next_rule;
+        struct rule *rule;
         long long now = time_msec();
 
         /* We know stats are relatively fresh, so now is a good time to do some
@@ -1917,7 +1946,7 @@ run(struct ofproto *ofproto_)
         /* Expire OpenFlow flows whose idle_timeout or hard_timeout
          * has passed. */
         ovs_mutex_lock(&ofproto_mutex);
-        LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
+        LIST_FOR_EACH_SAFE (rule, expirable,
                             &ofproto->up.expirable) {
             rule_expire(rule_dpif_cast(rule), now);
         }
@@ -2332,6 +2361,12 @@ set_ipfix(
         if (!has_options) {
             dpif_ipfix_unref(di);
             ofproto->ipfix = NULL;
+        }
+
+        /* TODO: need to consider ipfix option changes more than
+         * enable/disable */
+        if (new_di || !ofproto->ipfix) {
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
         }
     }
 
@@ -3068,11 +3103,11 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
 {
     struct ofproto_dpif *ofproto = bundle->ofproto;
     struct mac_learning *ml = ofproto->ml;
-    struct mac_entry *mac, *next_mac;
+    struct mac_entry *mac;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&ml->rwlock);
-    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+    LIST_FOR_EACH_SAFE (mac, lru_node, &ml->lrus) {
         if (mac_entry_get_port(ml, mac) == bundle) {
             if (all_ofprotos) {
                 struct ofproto_dpif *o;
@@ -3103,13 +3138,13 @@ bundle_move(struct ofbundle *old, struct ofbundle *new)
 {
     struct ofproto_dpif *ofproto = old->ofproto;
     struct mac_learning *ml = ofproto->ml;
-    struct mac_entry *mac, *next_mac;
+    struct mac_entry *mac;
 
     ovs_assert(new->ofproto == old->ofproto);
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&ml->rwlock);
-    LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
+    LIST_FOR_EACH_SAFE (mac, lru_node, &ml->lrus) {
         if (mac_entry_get_port(ml, mac) == old) {
             mac_entry_set_port(ml, mac, new);
         }
@@ -3206,7 +3241,7 @@ static void
 bundle_destroy(struct ofbundle *bundle)
 {
     struct ofproto_dpif *ofproto;
-    struct ofport_dpif *port, *next_port;
+    struct ofport_dpif *port;
 
     if (!bundle) {
         return;
@@ -3219,7 +3254,7 @@ bundle_destroy(struct ofbundle *bundle)
     xlate_bundle_remove(bundle);
     xlate_txn_commit();
 
-    LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+    LIST_FOR_EACH_SAFE (port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
     }
 
@@ -3309,9 +3344,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
     }
     if (!ok || ovs_list_size(&bundle->ports) != s->n_members) {
-        struct ofport_dpif *next_port;
-
-        LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
+        LIST_FOR_EACH_SAFE (port, bundle_node, &bundle->ports) {
             for (i = 0; i < s->n_members; i++) {
                 if (s->members[i] == port->up.ofp_port) {
                     goto found;
@@ -3925,6 +3958,10 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
             simap_put(&ofproto->backer->tnl_backers,
                       dp_port_name, odp_to_u32(port_no));
         }
+    } else {
+        struct dpif *dpif = ofproto->backer->dpif;
+        const char *dpif_type_str = dpif_normalize_type(dpif_type(dpif));
+        netdev_set_dpif_type(netdev, dpif_type_str);
     }
 
     if (netdev_get_tunnel_config(netdev)) {
@@ -4433,12 +4470,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                 atomic_add_relaxed(&tbl->n_matched, stats->n_packets, &orig);
             }
             if (xcache) {
-                struct xc_entry *entry;
+                if (ofproto_try_ref(&ofproto->up)) {
+                    struct xc_entry *entry;
 
-                entry = xlate_cache_add_entry(xcache, XC_TABLE);
-                entry->table.ofproto = ofproto;
-                entry->table.id = *table_id;
-                entry->table.match = true;
+                    entry = xlate_cache_add_entry(xcache, XC_TABLE);
+                    entry->table.ofproto = ofproto;
+                    entry->table.id = *table_id;
+                    entry->table.match = true;
+                }
             }
             return rule;
         }
@@ -4469,12 +4508,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                                stats->n_packets, &orig);
         }
         if (xcache) {
-            struct xc_entry *entry;
+            if (ofproto_try_ref(&ofproto->up)) {
+                struct xc_entry *entry;
 
-            entry = xlate_cache_add_entry(xcache, XC_TABLE);
-            entry->table.ofproto = ofproto;
-            entry->table.id = next_id;
-            entry->table.match = (rule != NULL);
+                entry = xlate_cache_add_entry(xcache, XC_TABLE);
+                entry->table.ofproto = ofproto;
+                entry->table.id = next_id;
+                entry->table.match = (rule != NULL);
+            }
         }
         if (rule) {
             goto out;   /* Match. */
@@ -5152,9 +5193,9 @@ group_set_selection_method(struct group_dpif *group)
     if (selection_method[0] == '\0') {
         VLOG_DBG("No selection method specified. Trying dp_hash.");
         /* If the controller has not specified a selection method, check if
-         * the dp_hash selection method with max 64 hash values is appropriate
+         * the dp_hash selection method with max 256 hash values is appropriate
          * for the given bucket configuration. */
-        if (group_setup_dp_hash_table(group, 64)) {
+        if (group_setup_dp_hash_table(group, 256)) {
             /* Use dp_hash selection method with symmetric L4 hash. */
             group->selection_method = SEL_METHOD_DP_HASH;
             group->hash_alg = OVS_HASH_ALG_SYM_L4;
@@ -5512,9 +5553,9 @@ ct_zone_timeout_policy_sweep(struct dpif_backer *backer)
 {
     if (!ovs_list_is_empty(&backer->ct_tp_kill_list)
         && time_msec() >= timeout_policy_cleanup_timer) {
-        struct ct_timeout_policy *ct_tp, *next;
+        struct ct_timeout_policy *ct_tp;
 
-        LIST_FOR_EACH_SAFE (ct_tp, next, list_node, &backer->ct_tp_kill_list) {
+        LIST_FOR_EACH_SAFE (ct_tp, list_node, &backer->ct_tp_kill_list) {
             if (!ct_dpif_del_timeout_policy(backer->dpif, ct_tp->tp_id)) {
                 ovs_list_remove(&ct_tp->list_node);
                 ct_timeout_policy_destroy(ct_tp, backer->tp_ids);
@@ -5556,6 +5597,7 @@ ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
             ct_timeout_policy_unref(backer, ct_zone->ct_tp);
             ct_zone->ct_tp = ct_tp;
             ct_tp->ref_count++;
+            backer->need_revalidate = REV_RECONFIGURE;
         }
     } else {
         struct ct_zone *new_ct_zone = ct_zone_alloc(zone_id);
@@ -5563,6 +5605,7 @@ ct_set_zone_timeout_policy(const char *datapath_type, uint16_t zone_id,
         cmap_insert(&backer->ct_zones, &new_ct_zone->node,
                     hash_int(zone_id, 0));
         ct_tp->ref_count++;
+        backer->need_revalidate = REV_RECONFIGURE;
     }
 }
 
@@ -5579,6 +5622,7 @@ ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
     if (ct_zone) {
         ct_timeout_policy_unref(backer, ct_zone->ct_tp);
         ct_zone_remove_and_destroy(backer, ct_zone);
+        backer->need_revalidate = REV_RECONFIGURE;
     }
 }
 
@@ -5625,6 +5669,7 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
              s.explicit_drop_action ? "true" :"false");
     smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
+    smap_add(cap, "add_mpls", s.add_mpls ? "true" : "false");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and
@@ -5779,15 +5824,7 @@ ofproto_dpif_lookup_by_name(const char *name)
 struct ofproto_dpif *
 ofproto_dpif_lookup_by_uuid(const struct uuid *uuid)
 {
-    struct ofproto_dpif *ofproto;
-
-    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_by_uuid_node,
-                             uuid_hash(uuid), &all_ofproto_dpifs_by_uuid) {
-        if (uuid_equals(&ofproto->uuid, uuid)) {
-            return ofproto;
-        }
-    }
-    return NULL;
+    return xlate_ofproto_lookup(uuid);
 }
 
 static void
@@ -6496,6 +6533,7 @@ ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
 
     dpif_show_support(&ofproto->backer->bt_support, &ds);
     unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void

@@ -20,6 +20,8 @@
 
 #include "openvswitch/netdev.h"
 #include "openvswitch/types.h"
+#include "ovs-rcu.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "flow.h"
 
@@ -45,6 +47,7 @@ struct netdev_hw_info {
     bool oor;		/* Out of Offload Resources ? */
     int offload_count;  /* Pending (non-offloaded) flow count */
     int pending_count;  /* Offloaded flow count */
+    OVSRCU_TYPE(void *) offload_data; /* Offload metadata. */
 };
 
 enum hw_info_type {
@@ -79,6 +82,24 @@ struct offload_info {
     odp_port_t orig_in_port; /* Originating in_port for tnl flows. */
 };
 
+DECLARE_EXTERN_PER_THREAD_DATA(unsigned int, netdev_offload_thread_id);
+
+unsigned int netdev_offload_thread_nb(void);
+unsigned int netdev_offload_thread_init(void);
+unsigned int netdev_offload_ufid_to_thread_id(const ovs_u128 ufid);
+
+static inline unsigned int
+netdev_offload_thread_id(void)
+{
+    unsigned int id = *netdev_offload_thread_id_get();
+
+    if (OVS_UNLIKELY(id == OVSTHREAD_ID_UNSET)) {
+        id = netdev_offload_thread_init();
+    }
+
+    return id;
+}
+
 int netdev_flow_flush(struct netdev *);
 int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump,
                             bool terse);
@@ -108,8 +129,7 @@ bool netdev_is_offload_rebalance_policy_enabled(void);
 int netdev_flow_get_n_flows(struct netdev *netdev, uint64_t *n_flows);
 
 struct dpif_port;
-int netdev_ports_insert(struct netdev *, const char *dpif_type,
-                        struct dpif_port *);
+int netdev_ports_insert(struct netdev *, struct dpif_port *);
 struct netdev *netdev_ports_get(odp_port_t port, const char *dpif_type);
 int netdev_ports_remove(odp_port_t port, const char *dpif_type);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);

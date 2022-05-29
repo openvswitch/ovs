@@ -232,6 +232,22 @@ done
 AT_CLEANUP
 
 
+AT_SETUP([checkpatch - catastrophic backtracking])
+dnl Special case this rather than using the above construct because sometimes a
+dnl warning needs to be generated for line lengths (f.e. when the 'while'
+dnl keyword is used).
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (!b_ctx_in->chassis_rec || !b_ctx_in->br_int || !b_ctx_in->ovs_idl_txn)
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         if (!b_ctx_in->chassis_rec || !b_ctx_in->br_int || !b_ctx_in->ovs_idl_txn)
+"
+
+AT_CLEANUP
+
+
 AT_SETUP([checkpatch - parenthesized constructs - for])
 try_checkpatch \
    "COMMON_PATCH_HEADER
@@ -345,6 +361,88 @@ try_checkpatch \
     "ERROR: Inappropriate spacing around cast
     #8 FILE: A.c:1:
          (int)a;
+"
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - malformed tags])
+try_checkpatch \
+   "    Author: A
+
+    Acked by: foo...
+    Signed-off-by: A" \
+    "ERROR: Acked-by tag is malformed.
+    1: Acked by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reported at: foo...
+    Signed-off-by: A" \
+    "ERROR: Reported-at tag is malformed.
+    1: Reported at: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reported by: foo...
+    Signed-off-by: A" \
+    "ERROR: Reported-by tag is malformed.
+    1: Reported by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Requested by: foo...
+    Signed-off-by: A" \
+    "ERROR: Requested-by tag is malformed.
+    1: Requested by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Reviewed by: foo...
+    Signed-off-by: A" \
+    "ERROR: Reviewed-by tag is malformed.
+    1: Reviewed by: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Submitted at: foo...
+    Signed-off-by: A" \
+    "ERROR: Submitted-at tag is malformed.
+    1: Submitted at: foo...
+"
+try_checkpatch \
+   "    Author: A
+
+    Suggested by: foo...
+    Signed-off-by: A" \
+    "ERROR: Suggested-by tag is malformed.
+    1: Suggested by: foo...
+"
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - Unicode code])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (snowman == ☃️) {  /* Emoji
+    +     void НelloWorld() {  /* Homoglyph
+    +     ة /* ;C++            /* BiDi
+    " \
+    "ERROR: Inappropriate non-ascii characters detected.
+    #8 FILE: A.c:1:
+         if (snowman == ☃️) {  /* Emoji
+
+ERROR: Inappropriate non-ascii characters detected.
+    #9 FILE: A.c:2:
+         void НelloWorld() {  /* Homoglyph
+
+ERROR: Inappropriate non-ascii characters detected.
+    #10 FILE: A.c:3:
+         ة /* ;C++            /* BiDi
 "
 
 AT_CLEANUP

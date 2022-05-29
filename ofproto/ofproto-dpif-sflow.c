@@ -468,7 +468,8 @@ sflow_choose_agent_address(const char *agent_device,
     const char *target;
     SSET_FOR_EACH (target, targets) {
         struct sockaddr_storage ss;
-        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &ss, true)) {
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT,
+                              &ss, true, NULL)) {
             /* sFlow only supports target in default routing table with
              * packet mark zero.
              */
@@ -590,10 +591,10 @@ void
 dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 {
     if (ds && ovs_refcount_unref_relaxed(&ds->ref_cnt) == 1) {
-        struct dpif_sflow_port *dsp, *next;
+        struct dpif_sflow_port *dsp;
 
         dpif_sflow_clear(ds);
-        HMAP_FOR_EACH_SAFE (dsp, next, hmap_node, &ds->ports) {
+        HMAP_FOR_EACH_SAFE (dsp, hmap_node, &ds->ports) {
             dpif_sflow_del_port__(ds, dsp);
         }
         hmap_destroy(&ds->ports);
@@ -1065,6 +1066,7 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_PACKET_TYPE:
     case OVS_KEY_ATTR_NSH:
+    case OVS_KEY_ATTR_TUNNEL_INFO:
     case __OVS_KEY_ATTR_MAX:
     default:
         break;
@@ -1226,6 +1228,7 @@ dpif_sflow_read_actions(const struct flow *flow,
         case OVS_ACTION_ATTR_UNSPEC:
         case OVS_ACTION_ATTR_CHECK_PKT_LEN:
         case OVS_ACTION_ATTR_DROP:
+        case OVS_ACTION_ATTR_ADD_MPLS:
         case __OVS_ACTION_ATTR_MAX:
         default:
             break;

@@ -338,7 +338,7 @@ static void
 update_recirc_rules__(struct bond *bond)
 {
     struct match match;
-    struct bond_pr_rule_op *pr_op, *next_op;
+    struct bond_pr_rule_op *pr_op;
     uint64_t ofpacts_stub[128 / 8];
     struct ofpbuf ofpacts;
     int i;
@@ -372,7 +372,7 @@ update_recirc_rules__(struct bond *bond)
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
 
-    HMAP_FOR_EACH_SAFE(pr_op, next_op, hmap_node, &bond->pr_rule_ops) {
+    HMAP_FOR_EACH_SAFE (pr_op, hmap_node, &bond->pr_rule_ops) {
         int error;
         switch (pr_op->op) {
         case ADD:
@@ -672,8 +672,13 @@ out:
 void
 bond_member_set_may_enable(struct bond *bond, void *member_, bool may_enable)
 {
+    struct bond_member *member;
+
     ovs_rwlock_wrlock(&rwlock);
-    bond_member_lookup(bond, member_)->may_enable = may_enable;
+    member = bond_member_lookup(bond, member_);
+    if (member) {
+        member->may_enable = may_enable;
+    }
     ovs_rwlock_unlock(&rwlock);
 }
 
@@ -871,7 +876,7 @@ bond_check_admissibility(struct bond *bond, const void *member_,
         if (!member->enabled && member->may_enable) {
             VLOG_DBG_RL(&rl, "bond %s: member %s: "
                         "main thread has not yet enabled member",
-                         bond->name, bond->active_member->name);
+                        bond->name, bond->active_member->name);
         }
         goto out;
     case LACP_CONFIGURED:
@@ -908,9 +913,9 @@ bond_check_admissibility(struct bond *bond, const void *member_,
         /* Drop all packets which arrive on backup members.  This is similar to
          * how Linux bonding handles active-backup bonds. */
         if (bond->active_member != member) {
-            VLOG_DBG_RL(&rl, "active-backup bond received packet on backup"
-                        " member (%s) destined for " ETH_ADDR_FMT,
-                        member->name, ETH_ADDR_ARGS(eth_dst));
+            VLOG_DBG_RL(&rl, "bond %s: member %s: active-backup bond received "
+                        "packet on backup member destined for " ETH_ADDR_FMT,
+                        bond->name, member->name, ETH_ADDR_ARGS(eth_dst));
             goto out;
         }
         verdict = BV_ACCEPT;
@@ -930,17 +935,17 @@ bond_check_admissibility(struct bond *bond, const void *member_,
     OVS_NOT_REACHED();
 out:
     if (member && (verdict != BV_ACCEPT)) {
-        VLOG_DBG_RL(&rl, "member (%s): "
-                    "Admissibility verdict is to drop pkt %s."
-                    "active member: %s, may_enable: %s enable: %s "
-                    "LACP status:%d",
-                    member->name,
+        VLOG_DBG_RL(&rl, "bond %s: member %s: "
+                    "admissibility verdict is to drop pkt%s, "
+                    "active member: %s, may_enable: %s, enabled: %s, "
+                    "LACP status: %s",
+                    bond->name, member->name,
                     (verdict == BV_DROP_IF_MOVED) ?
-                        "as different port is learned" : "",
+                        " as different port is learned" : "",
                     (bond->active_member == member) ? "true" : "false",
                     member->may_enable ? "true" : "false",
                     member->enabled ? "true" : "false",
-                    bond->lacp_status);
+                    lacp_status_description(bond->lacp_status));
     }
 
     ovs_rwlock_unlock(&rwlock);
@@ -1253,7 +1258,7 @@ insert_bal(struct ovs_list *bals, struct bond_member *member)
             break;
         }
     }
-    ovs_list_insert(&pos->bal_node, &member->bal_node);
+    ovs_list_insert(pos ? &pos->bal_node : bals, &member->bal_node);
 }
 
 /* Removes 'member' from its current list and then inserts it into 'bals' so
@@ -1498,21 +1503,8 @@ bond_print_details(struct ds *ds, const struct bond *bond)
                       bond->next_rebalance - time_msec());
     }
 
-    ds_put_cstr(ds, "lacp_status: ");
-    switch (bond->lacp_status) {
-    case LACP_NEGOTIATED:
-        ds_put_cstr(ds, "negotiated\n");
-        break;
-    case LACP_CONFIGURED:
-        ds_put_cstr(ds, "configured\n");
-        break;
-    case LACP_DISABLED:
-        ds_put_cstr(ds, "off\n");
-        break;
-    default:
-        ds_put_cstr(ds, "<unknown>\n");
-        break;
-    }
+    ds_put_format(ds, "lacp_status: %s\n",
+                  lacp_status_description(bond->lacp_status));
 
     ds_put_format(ds, "lacp_fallback_ab: %s\n",
                   bond->lacp_fallback_ab ? "true" : "false");

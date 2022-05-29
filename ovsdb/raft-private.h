@@ -118,7 +118,10 @@ void raft_servers_format(const struct hmap *servers, struct ds *ds);
  * entry.  */
 struct raft_entry {
     uint64_t term;
-    struct json *data;
+    struct {
+        struct json *full_json;   /* Fully parsed JSON object. */
+        struct json *serialized;  /* JSON_SERIALIZED_OBJECT version of data. */
+    } data;
     struct uuid eid;
     struct json *servers;
     uint64_t election_timer;
@@ -130,6 +133,13 @@ struct json *raft_entry_to_json(const struct raft_entry *);
 struct ovsdb_error *raft_entry_from_json(struct json *, struct raft_entry *)
     OVS_WARN_UNUSED_RESULT;
 bool raft_entry_equals(const struct raft_entry *, const struct raft_entry *);
+bool raft_entry_has_data(const struct raft_entry *);
+void raft_entry_set_parsed_data(struct raft_entry *, const struct json *);
+void raft_entry_set_parsed_data_nocopy(struct raft_entry *, struct json *);
+struct json *raft_entry_steal_parsed_data(struct raft_entry *)
+    OVS_WARN_UNUSED_RESULT;
+const struct json *raft_entry_get_parsed_data(const struct raft_entry *);
+const struct json *raft_entry_get_serialized_data(const struct raft_entry *);
 
 /* On disk data serialization and deserialization. */
 

@@ -701,36 +701,234 @@ Re-Add the VIF ports with the VLAN tag:
 Add tunnels
 ~~~~~~~~~~~
 
-The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
-tunnels. For example, first add the tunnel port between 172.168.201.101 <->
-172.168.201.102:
+#. IPv4 tunnel, e.g.:
+
+   The Windows Open vSwitch implementation support VXLAN and STT tunnels.
+   To add tunnels. For example, first add the tunnel port between
+   172.168.201.101 <->172.168.201.102:
+
+   ::
+
+      > ovs-vsctl add-port br-int tun-1
+      > ovs-vsctl set Interface tun-1 type=<port-type>
+      > ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
+      > ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
+      > ovs-vsctl set Interface tun-1 options:in_key=flow
+      > ovs-vsctl set Interface tun-1 options:out_key=flow
+
+    ...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:
+
+   ::
+
+      > ovs-vsctl add-port br-int tun-2
+      > ovs-vsctl set Interface tun-2 type=<port-type>
+      > ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
+      > ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
+      > ovs-vsctl set Interface tun-2 options:in_key=flow
+      > ovs-vsctl set Interface tun-2 options:out_key=flow
+
+      Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
+
+   .. note::
+
+       Any patch ports created between br-int and br-pif MUST be deleted prior
+       to adding tunnels.
+
+#. IPv6 tunnel, e.g.:
+
+   To add IPV6 Geneve tunnels. For example, add the tunnel port between
+   5000::2 <-> 5000::9.
+
+   ::
+
+      > ovs-vsctl add-port br-int tun-3 -- set interface tun-3 type=Geneve \
+        options:csum=true options:key=flow options:local_ip="5000::2"\
+        options:remote_ip=flow
+
+     add the tunnel port between 5000::2 <-> 5000::9
+
+      > ovs-ofctl add-flow br-int "table=0,priority=100,ipv6,ipv6_src=6000::2 \
+        actions=load:0x9->NXM_NX_TUN_IPV6_DST[0..63], \
+        load:0x5000000000000000->NXM_NX_TUN_IPV6_DST[64..127], output:tun-3"
+
+     add the specified flow from 6000::2 go via IPV6 Geneve tunnel
+
+   .. note::
+
+      Till the checksum offload support is complete we recommend
+      disabling TX/RX offloads for IPV6 on Windows VM.
+
+Add conntrack for ipv6
+~~~~~~~~~~~~~~~~~~~~~~
+
+The Windows Open vSwitch implementation support conntrack ipv6. To use the
+conntrack ipv6. Using the following commands. Take tcp6(replace Protocol to
+icmp6, udp6 to other protocol) for example.
 
 ::
 
-   > ovs-vsctl add-port br-int tun-1
-   > ovs-vsctl set Interface tun-1 type=<port-type>
-   > ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
-   > ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
-   > ovs-vsctl set Interface tun-1 options:in_key=flow
-   > ovs-vsctl set Interface tun-1 options:out_key=flow
+   normal scenario
+   Vif38(20::1, ofport:2)->Vif40(20:2, ofport:3)
+   Vif38Name="podvif38"
+   Vif40Name="podvif40"
+   Vif38Port=2
+   Vif38Address="20::1"
+   Vif40Port=3
+   Vif40Address="20::2"
+   Vif40MacAddressCli="00-15-5D-F0-01-0C"
+   Vif38MacAddressCli="00-15-5D-F0-01-0b"
+   Protocol="tcp6"
+   > netsh int ipv6 set neighbors $Vif38Name $Vif40Address \
+     Vif40MacAddressCli
+   > netsh int ipv6 set neighbors $Vif40Name $Vif38Address \
+     $Vif38MacAddressCli
+   > ovs-ofctl del-flows --strict br-int "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,ip6, \
+     ipv6_dst=$Vif40Address,$Protocol,actions=ct(table=1)"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,ip6, \
+     ipv6_dst=$Vif38Address,$Protocol,actions=ct(table=1)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ip6,ct_state=+new+trk, \
+     $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=2,ip6, \
+     ct_state=-new+rpl+trk,$Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ip6, \
+     ct_state=+trk+est-new,$Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+     ipv6_dst=$Vif38Address,$Protocol,actions=output:$Vif38Port"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+     ipv6_dst=$Vif40Address,$Protocol,actions=output:$Vif40Port"
 
-...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:
 
 ::
 
-   > ovs-vsctl add-port br-int tun-2
-   > ovs-vsctl set Interface tun-2 type=<port-type>
-   > ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
-   > ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
-   > ovs-vsctl set Interface tun-2 options:in_key=flow
-   > ovs-vsctl set Interface tun-2 options:out_key=flow
+   nat scenario
+   Vif38(20::1, ofport:2) -> nat address(20::9) -> Vif42(21::3, ofport:4)
+   Due to not construct flow to return neighbor mac address,
+   we set the neighbor mac address manually.
+   Vif38Name="podvif38"
+   Vif42Name="podvif42"
+   Vif38Ip="20::1"
+   Vif38Port=2
+   Vif42Port=4
+   NatAddress="20::9"
+   NatMacAddress="aa:bb:cc:dd:ee:ff"
+   NatMacAddressForCli="aa-bb-cc-dd-ee-ff"
+   Vif42Ip="21::3"
+   Vif38MacAddress="00:15:5D:F0:01:0B"
+   Vif38MacAddressCli="00-15-5D-F0-01-0B"
+   Vif42MacAddress="00:15:5D:F0:01:0D"
+   Protocol="tcp6"
+   > netsh int ipv6 set neighbors $Vif38Name $NatAddress \
+     $NatMacAddressForCli
+   > netsh int ipv6 set neighbors $Vif42Name $Vif38Ip \
+     $Vif38MacAddressCli
+   > ovs-ofctl del-flows --strict br-int "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0, priority=2,ipv6, \
+     dl_dst=$NatMacAddress,ct_state=-trk,$Protocol \
+     actions=ct(table=1,zone=456,nat)"
+   > ovs-ofctl add-flow br-int "table=0, priority=1,ipv6,ct_state=-trk, \
+     ip6,$Protocol actions=ct(nat, zone=456,table=1)"
+   > ovs-ofctl add-flow br-int "table=1, ipv6,in_port=$Vif38Port, \
+     ipv6_dst=$NatAddress,$Protocol,ct_state=+trk+new, \
+     actions=ct(commit,nat(dst=$Vif42Ip),zone=456, \
+     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress, \
+     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=1, ipv6,ct_state=+dnat,$Protocol, \
+     action=resubmit(,2)"
+   > ovs-ofctl add-flow br-int "table=1, ipv6,ct_state=+trk+snat, \
+     $Protocol, action=resubmit(,2)"
+   > ovs-ofctl add-flow br-int "table=2, ipv6,in_port=$Vif38Port, \
+     ipv6_dst=$Vif42Ip,$Protocol, actions=mod_dl_src=$NatMacAddress, \
+     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=2, ipv6,in_port=$Vif42Port, \
+     ct_state=-new+est,ct_mark=1,ct_zone=456,$Protocol, \
+     actions=mod_dl_src=$NatMacAddress,mod_dl_dst=$Vif38MacAddress, \
+     output:$Vif38Port"
 
-Where ``<port-type>`` is one of: ``stt`` or ``vxlan``
+Ftp is a specific protocol, it contains an related flow, we need to match is
+related state.
+
+::
+
+   normal scenario
+   Vif38(20::1, ofport:2)->Vif40(20:2, ofport:3)
+   Vif38Name="podvif38"
+   Vif40Name="podvif40"
+   Vif38Port=2
+   Vif38Address="20::1"
+   Vif38MacAddressCli="00-15-5D-F0-01-0b"
+   Vif40Port=3
+   Vif40Address="20::2"
+   Vif40MacAddressCli="00-15-5D-F0-01-0C"
+   Protocol="tcp6"
+   > netsh int ipv6 set neighbors $Vif38Name $Vif40Address \
+     $Vif40MacAddressCli
+   > netsh int ipv6 set neighbors $Vif40Name $Vif38Address \
+     $Vif38MacAddressCli
+   > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,$Protocol \
+     actions=ct(table=1)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=+new+trk-est, \
+     $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1, \
+     ct_state=-new+trk+est-rel, $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1, \
+     ct_state=-new+trk+est+rel, $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+     ipv6_dst=$Vif38Address,$Protocol,actions=output:$Vif38Port"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+     ipv6_dst=$Vif40Address,$Protocol,actions=output:$Vif40Port"
+
+::
+
+   nat scenario
+   Vif38(20::1, ofport:2) -> nat address(20::9) -> Vif42(21::3, ofport:4)
+   Due to not construct flow to return neighbor mac address, we set the
+   neighbor mac address manually
+   Vif38Port=2
+   Vif42Port=4
+   Vif38Name="podvif38"
+   Vif42Name="podvif42"
+   NatAddress="20::9"
+   NatMacAddress="aa:bb:cc:dd:ee:ff"
+   NatMacAddressForCli="aa-bb-cc-dd-ee-ff"
+   Vif42Ip="21::3"
+   Vif38MacAddress="00:15:5D:F0:01:0B"
+   Vif42MacAddress="00:15:5D:F0:01:0D"
+   Protocol="tcp6"
+   > netsh int ipv6 set neighbors $Vif38Name $NatAddress \
+     $NatMacAddressForCli
+   > netsh int ipv6 set neighbors $Vif42Name $NatAddress \
+     $NatMacAddressForCli
+   > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0,priority=2,ipv6, \
+     dl_dst=$NatMacAddress,ct_state=-trk,$Protocol \
+     actions=ct(table=1,zone=456,nat)"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,ipv6, \
+     ct_state=-trk,ip6,$Protocol actions=ct(nat, zone=456,table=1)"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,in_port=$Vif38Port, \
+     ipv6_dst=$NatAddress,ct_state=+trk+new,$Protocol \
+     actions=ct(commit,nat(dst=$Vif42Ip),zone=456, \
+     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress, \
+     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+dnat,$Protocol, \
+     action=resubmit(,2)"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+snat, \
+     $Protocol,action=resubmit(,2)"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+rel,$Protocol, \
+     action=resubmit(,2)"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif38Port, \
+     ipv6_dst=$Vif42Ip,$Protocol, actions=mod_dl_src=$NatMacAddress, \
+     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif42Port, \
+     ct_state=-new+est,ct_mark=1,ct_zone=456,$Protocol, \
+     actions=mod_dl_src=$NatMacAddress,mod_dl_dst=$Vif38MacAddress, \
+     output:$Vif38Port"
 
 .. note::
 
-   Any patch ports created between br-int and br-pif MUST be deleted prior
-   to adding tunnels.
+    Till the checksum offload support is complete we recommend
+    disabling TX/RX offloads for IPV6 on Windows VM.
 
 Windows Services
 ----------------

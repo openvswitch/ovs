@@ -113,19 +113,17 @@ ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
         if (row_contains_diff
             && !ovsdb_datum_is_default(&row->fields[column->index],
                                        &column->type)) {
-            struct ovsdb_datum new_datum;
-
-            error = ovsdb_datum_apply_diff(&new_datum,
+            error = ovsdb_datum_apply_diff_in_place(
                                            &row->fields[column->index],
                                            &datum, &column->type);
             ovsdb_datum_destroy(&datum, &column->type);
             if (error) {
                 return error;
             }
-            ovsdb_datum_swap(&datum, &new_datum);
+        } else {
+            ovsdb_datum_swap(&row->fields[column->index], &datum);
+            ovsdb_datum_destroy(&datum, &column->type);
         }
-        ovsdb_datum_swap(&row->fields[column->index], &datum);
-        ovsdb_datum_destroy(&datum, &column->type);
     }
 
     return NULL;

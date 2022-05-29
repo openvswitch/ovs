@@ -19,7 +19,9 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
+#include "openvswitch/json.h"
 #include "openvswitch/shash.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -31,12 +33,24 @@ struct ds;
 struct ovsdb_symbol_table;
 struct smap;
 
+static inline struct json *
+ovsdb_atom_string_create_nocopy(char *str)
+{
+    return json_string_create_nocopy(str);
+}
+
+static inline struct json *
+ovsdb_atom_string_create(const char *str)
+{
+    return json_string_create(str);
+}
+
 /* One value of an atomic type (given by enum ovs_atomic_type). */
 union ovsdb_atom {
     int64_t integer;
     double real;
     bool boolean;
-    char *string;
+    struct json *s;
     struct uuid uuid;
 };
 
@@ -67,7 +81,7 @@ static inline void
 ovsdb_atom_destroy(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
     if (type == OVSDB_TYPE_STRING) {
-        free(atom->string);
+        json_destroy(atom->s);
     }
 }
 
@@ -209,9 +223,10 @@ bool ovsdb_datum_equals(const struct ovsdb_datum *,
                         const struct ovsdb_type *);
 
 /* Search. */
-unsigned int ovsdb_datum_find_key(const struct ovsdb_datum *,
-                                  const union ovsdb_atom *key,
-                                  enum ovsdb_atomic_type key_type);
+bool ovsdb_datum_find_key(const struct ovsdb_datum *,
+                          const union ovsdb_atom *key,
+                          enum ovsdb_atomic_type key_type,
+                          unsigned int *pos);
 unsigned int ovsdb_datum_find_key_value(const struct ovsdb_datum *,
                                         const union ovsdb_atom *key,
                                         enum ovsdb_atomic_type key_type,
@@ -227,14 +242,19 @@ bool ovsdb_datum_excludes_all(const struct ovsdb_datum *,
                               const struct ovsdb_type *);
 void ovsdb_datum_union(struct ovsdb_datum *,
                        const struct ovsdb_datum *,
-                       const struct ovsdb_type *,
-                       bool replace);
+                       const struct ovsdb_type *);
 void ovsdb_datum_subtract(struct ovsdb_datum *a,
                           const struct ovsdb_type *a_type,
                           const struct ovsdb_datum *b,
                           const struct ovsdb_type *b_type);
 
 /* Generate and apply diffs */
+void ovsdb_datum_added_removed(struct ovsdb_datum *added,
+                               struct ovsdb_datum *removed,
+                               const struct ovsdb_datum *old,
+                               const struct ovsdb_datum *new,
+                               const struct ovsdb_type *type);
+
 void ovsdb_datum_diff(struct ovsdb_datum *diff,
                       const struct ovsdb_datum *old_datum,
                       const struct ovsdb_datum *new_datum,
@@ -246,6 +266,12 @@ struct ovsdb_error *ovsdb_datum_apply_diff(struct ovsdb_datum *new_datum,
                                            const struct ovsdb_type *type)
 OVS_WARN_UNUSED_RESULT;
 
+struct ovsdb_error * ovsdb_datum_apply_diff_in_place(
+                struct ovsdb_datum *a,
+                const struct ovsdb_datum *diff,
+                const struct ovsdb_type *type)
+OVS_WARN_UNUSED_RESULT;
+
 /* Raw operations that may not maintain the invariants. */
 void ovsdb_datum_remove_unsafe(struct ovsdb_datum *, size_t idx,
                                const struct ovsdb_type *);
@@ -254,6 +280,10 @@ void ovsdb_datum_add_unsafe(struct ovsdb_datum *,
                             const union ovsdb_atom *value,
                             const struct ovsdb_type *,
                             const union ovsdb_atom *range_end_atom);
+void ovsdb_datum_add_from_index_unsafe(struct ovsdb_datum *dst,
+                                       const struct ovsdb_datum *src,
+                                       size_t idx,
+                                       const struct ovsdb_type *type);
 
 /* Transactions with named-uuid row names. */
 struct json *ovsdb_datum_to_json_with_row_names(const struct ovsdb_datum *,

@@ -173,7 +173,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_vlan(vid=100,pcp=0),push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x0,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),pop_nsh(),recirc(0x4)
-recirc_id(0x4),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=100,pcp=0),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:102, used:0.0s, actions:2
+recirc_id(0x4),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=100),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:102, used:0.0s, actions:2
 ])
 
 OVS_VSWITCHD_STOP

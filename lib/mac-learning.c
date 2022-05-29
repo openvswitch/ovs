@@ -244,10 +244,10 @@ void
 mac_learning_unref(struct mac_learning *ml)
 {
     if (ml && ovs_refcount_unref(&ml->ref_cnt) == 1) {
-        struct mac_entry *e, *next;
+        struct mac_entry *e;
 
         ovs_rwlock_wrlock(&ml->rwlock);
-        HMAP_FOR_EACH_SAFE (e, next, hmap_node, &ml->table) {
+        HMAP_FOR_EACH_SAFE (e, hmap_node, &ml->table) {
             mac_learning_expire(ml, e);
         }
         hmap_destroy(&ml->table);

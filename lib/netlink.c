@@ -55,15 +55,37 @@ nl_msg_genlmsghdr(const struct ofpbuf *msg)
     return ofpbuf_at(msg, NLMSG_HDRLEN, GENL_HDRLEN);
 }
 
+/* Parses the ext ack netlink attributes and, if successful, a pointer
+ * to the error message, if included, is stored in '*errmsg'. */
+static void
+nl_parse_ext_ack(const struct ofpbuf *msg, size_t offset, const char **errmsg)
+{
+    static const struct nl_policy policy[] = {
+        [NLMSGERR_ATTR_MSG]  = { .type = NL_A_STRING, .optional = true },
+    };
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
+
+    if (!nl_policy_parse(msg, offset, policy, attrs, ARRAY_SIZE(policy))) {
+        VLOG_ERR_RL(&rl, "Failed to parse extended ack data");
+        return;
+    }
+
+    if (attrs[NLMSGERR_ATTR_MSG]) {
+        *errmsg = nl_attr_get_string(attrs[NLMSGERR_ATTR_MSG]);
+    }
+}
+
 /* If 'buffer' is a NLMSG_ERROR message, stores 0 in '*errorp' if it is an ACK
  * message, otherwise a positive errno value, and returns true.  If 'buffer' is
  * not an NLMSG_ERROR message, returns false.
  *
  * 'msg' must be at least as large as a nlmsghdr. */
 bool
-nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp)
+nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp, const char **attr_msg)
 {
-    if (nl_msg_nlmsghdr(msg)->nlmsg_type == NLMSG_ERROR) {
+    struct nlmsghdr *nlh = nl_msg_nlmsghdr(msg);
+
+    if (nlh->nlmsg_type == NLMSG_ERROR) {
         struct nlmsgerr *err = ofpbuf_at(msg, NLMSG_HDRLEN, sizeof *err);
         int code = EPROTO;
         if (!err) {
@@ -71,6 +93,15 @@ nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp)
                         msg->size, NLMSG_HDRLEN + sizeof *err);
         } else if (err->error <= 0 && err->error > INT_MIN) {
             code = -err->error;
+            if (attr_msg && err->error != 0 &&
+                (nlh->nlmsg_flags & NLM_F_ACK_TLVS)) {
+                size_t offt =  NLMSG_HDRLEN + sizeof *err;
+
+                if (!(nlh->nlmsg_flags & NLM_F_CAPPED)) {
+                    offt += (err->msg.nlmsg_len - NLMSG_HDRLEN);
+                }
+                nl_parse_ext_ack(msg, offt, attr_msg);
+            }
         }
         if (errorp) {
             *errorp = code;

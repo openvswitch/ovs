@@ -87,6 +87,20 @@ m4_define([OVSDB_CHECK_IDL_C],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
+# same as OVSDB_CHECK_IDL but uses OVSDB_IDL_WRITE_CHANGED_ONLY.
+m4_define([OVSDB_CHECK_IDL_WRITE_CHANGED_ONLY_C],
+  [AT_SETUP([$1 - write-changed-only - C])
+   AT_KEYWORDS([ovsdb server idl positive $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
 # same as OVSDB_CHECK_IDL but uses tcp.
 m4_define([OVSDB_CHECK_IDL_TCP_C],
   [AT_SETUP([$1 - C - tcp])
@@ -225,7 +239,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
 m4_define([OVSDB_CHECK_IDL_SSL_PY],
   [AT_SETUP([$1 - Python3 - SSL])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
-   $PYTHON3 -c "import OpenSSL.SSL"
+   $PYTHON3 -c "import ssl"
    SSL_PRESENT=$?
    AT_SKIP_IF([test $SSL_PRESENT != 0])
    AT_KEYWORDS([ovsdb server idl positive Python with ssl socket $5])
@@ -257,6 +271,7 @@ m4_define([OVSDB_CHECK_IDL_SSL_PY],
 
 m4_define([OVSDB_CHECK_IDL],
   [OVSDB_CHECK_IDL_C($@)
+  OVSDB_CHECK_IDL_WRITE_CHANGED_ONLY_C($@)
    OVSDB_CHECK_IDL_TCP_C($@)
    OVSDB_CHECK_IDL_TCP6_C($@)
    OVSDB_CHECK_IDL_PY($@)
@@ -999,6 +1014,7 @@ test-ovsdb|ovsdb_idl|idltest database lacks simple5 table (database needs upgrad
 test-ovsdb|ovsdb_idl|idltest database lacks simple6 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|idltest database lacks singleton table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
+test-ovsdb|ovsdb_idl|simple7 table in idltest database lacks id column (database needs upgrade?)
 ])
 
 # Check that ovsdb-idl sent on "monitor" request and that it didn't
@@ -1165,8 +1181,22 @@ m4_define([OVSDB_CHECK_IDL_TRACK_C],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
+m4_define([OVSDB_CHECK_IDL_TRACK_WRITE_CHANGED_ONLY_C],
+  [AT_SETUP([$1 - write-changed-only - C])
+   AT_KEYWORDS([ovsdb server idl tracking positive $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c -w idl unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
 m4_define([OVSDB_CHECK_IDL_TRACK],
-  [OVSDB_CHECK_IDL_TRACK_C($@)])
+  [OVSDB_CHECK_IDL_TRACK_C($@)
+   OVSDB_CHECK_IDL_TRACK_WRITE_CHANGED_ONLY_C($@)])
 
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
   [['["idltest",
@@ -1537,6 +1567,32 @@ OVSDB_CHECK_IDL([simple idl, initially populated, strong references, conditional
 005: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
 005: table simple: i=0 r=0 b=false s=row0_s u=<3> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 006: done
+]])
+
+dnl This test checks that deleting a row that refers to a row that was inserted
+dnl in the current IDL run works properly.
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, strong references, insert and delete],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "link1",
+       "uuid-name": "uuid_l1",
+       "row": {"i": 1, "k": ["named-uuid", "uuid_l1"]}},
+      {"op": "insert",
+       "table": "link2",
+       "row": {"i": 2, "l1": ["set", [["named-uuid", "uuid_l1"]]]}}
+      ]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "link2",
+       "where": [["i", "==", 2]]}]'
+  ]],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: {"error":null,"result":[{"count":1}]}
+003: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<0>
+003: table link1: updated columns: i k
+004: done
 ]])
 
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
@@ -2292,7 +2348,7 @@ m4_define([OVSDB_CHECK_CLUSTER_IDL],
 
 # Checks that monitor_cond_since works fine when disconnects happen
 # with cond_change requests in flight (i.e., IDL is properly updated).
-OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
+OVSDB_CHECK_CLUSTER_IDL([simple idl, monitor_cond_since, cluster disconnect],
   3,
   [['["idltest",
        {"op": "insert",
@@ -2309,7 +2365,7 @@ OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
     'condition simple [["i","==",2]]' \
     'condition simple [["i","==",1]]' \
     '+reconnect' \
-    '["idltest",
+    '?["idltest",
       {"op": "update",
        "table": "simple",
        "where": [["i", "==", 1]],
@@ -2320,7 +2376,7 @@ OVSDB_CHECK_CLUSTER_IDL_C([simple idl, monitor_cond_since, cluster disconnect],
 003: table simple: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: change conditions
 005: reconnect
-006: table simple: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: table simple
 007: {"error":null,"result":[{"count":1}]}
 008: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 009: done
@@ -2372,3 +2428,41 @@ OVSDB_CHECK_CLUSTER_IDL([simple idl, initially empty, force reconnect],
 [],
 [],
 reconnect.*waiting .* seconds before reconnect)
+
+AT_SETUP([idl table and column presence check])
+AT_KEYWORDS([ovsdb server idl table column check])
+AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest2.ovsschema"])
+
+AT_CHECK(ovsdb-tool create db2 $abs_srcdir/idltest.ovsschema)
+AT_CHECK(ovsdb-server -vconsole:warn --log-file=ovsdb-server2.log --detach dnl
+           --no-chdir --pidfile=ovsdb-server2.pid --remote=punix:socket2 db2)
+on_exit 'kill `cat ovsdb-server2.pid`'
+
+dnl In this test, test-ovsdb first connects to the server with schema
+dnl idltest2.ovsschema and outputs the presence of tables and columns.
+dnl And then it connectes to the server with the schema idltest.ovsschema
+dnl and does the same.
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 dnl
+                 idl-table-column-check unix:socket unix:socket2], [0], [dnl
+unix:socket remote has table simple
+unix:socket remote has table link1
+unix:socket remote doesn't have table link2
+unix:socket remote doesn't have table simple5
+unix:socket remote doesn't have col irefmap in table simple5
+unix:socket remote doesn't have col l2 in table link1
+unix:socket remote has col i in table link1
+unix:socket remote doesn't have col id in table simple7
+--- remote unix:socket done ---
+unix:socket2 remote has table simple
+unix:socket2 remote has table link1
+unix:socket2 remote has table link2
+unix:socket2 remote has table simple5
+unix:socket2 remote has col irefmap in table simple5
+unix:socket2 remote has col l2 in table link1
+unix:socket2 remote has col i in table link1
+unix:socket2 remote has col id in table simple7
+--- remote unix:socket2 done ---
+], [stderr])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP

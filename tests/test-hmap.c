@@ -62,6 +62,7 @@ check_hmap(struct hmap *hmap, const int values[], size_t n,
         hmap_values[i++] = e->value;
     }
     assert(i == n);
+    assert(e == NULL);
 
     memcpy(sort_values, values, sizeof *sort_values * n);
     qsort(sort_values, n, sizeof *sort_values, compare_ints);
@@ -82,6 +83,7 @@ check_hmap(struct hmap *hmap, const int values[], size_t n,
             count += e->value == values[i];
         }
         assert(count == 1);
+        assert(e == NULL);
     }
 
     /* Check counters. */
@@ -243,6 +245,11 @@ test_hmap_for_each_safe(hash_func *hash)
             i = 0;
             n_remaining = n;
             HMAP_FOR_EACH_SAFE (e, next, node, &hmap) {
+                if (hmap_next(&hmap, &e->node) == NULL) {
+                    assert(next == NULL);
+                } else {
+                    assert(&next->node == hmap_next(&hmap, &e->node));
+                }
                 assert(i < n);
                 if (pattern & (1ul << e->value)) {
                     size_t j;
@@ -259,6 +266,40 @@ test_hmap_for_each_safe(hash_func *hash)
                 i++;
             }
             assert(i == n);
+            assert(next == NULL);
+            assert(e == NULL);
+
+            for (i = 0; i < n; i++) {
+                if (pattern & (1ul << i)) {
+                    n_remaining++;
+                }
+            }
+            assert(n == n_remaining);
+            hmap_destroy(&hmap);
+
+            /* Test short version (without next variable). */
+            make_hmap(&hmap, elements, values, n, hash);
+
+            i = 0;
+            n_remaining = n;
+            HMAP_FOR_EACH_SAFE (e, node, &hmap) {
+                assert(i < n);
+                if (pattern & (1ul << e->value)) {
+                    size_t j;
+                    hmap_remove(&hmap, &e->node);
+                    for (j = 0; ; j++) {
+                        assert(j < n_remaining);
+                        if (values[j] == e->value) {
+                            values[j] = values[--n_remaining];
+                            break;
+                        }
+                    }
+                }
+                check_hmap(&hmap, values, n_remaining, hash);
+                i++;
+            }
+            assert(i == n);
+            assert(e == NULL);
 
             for (i = 0; i < n; i++) {
                 if (pattern & (1ul << i)) {
@@ -308,6 +349,7 @@ test_hmap_for_each_pop(hash_func *hash)
             i++;
         }
         assert(i == n);
+        assert(e == NULL);
 
         hmap_destroy(&hmap);
     }

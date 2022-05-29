@@ -216,6 +216,11 @@ ovs_cleanup() {
         cat asan.*
         AT_FAIL_IF([:])
     fi
+    if test "$(echo ubsan.*)" != 'ubsan.*'; then
+        echo "Undefined Behavior Sanitizer reported errors in:" ubsan.*
+        cat ubsan.*
+        AT_FAIL_IF([:])
+    fi
 }
 
 ovs_wait () {
@@ -259,7 +264,20 @@ dnl Executes shell COMMAND in a loop until it returns zero.  If COMMAND does
 dnl not return zero within a reasonable time limit, executes the commands
 dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_UNTIL],
-  [OVS_WAIT([$1], [$2], [AT_LINE], [until $1])])
+  [AT_FAIL_IF([test "$#" -ge 3])
+   dnl The second argument should not be a number (confused with AT_CHECK ?).
+   AT_FAIL_IF([test "$#" -eq 2 && test "$2" -eq "$2" 2>/dev/null])
+   OVS_WAIT([$1], [$2], [AT_LINE], [until $1])])
+
+dnl OVS_WAIT_UNTIL_EQUAL(COMMAND, OUTPUT)
+dnl
+dnl Executes shell COMMAND in a loop until it returns zero and the output
+dnl equals OUTPUT.  If COMMAND does not return zero or a desired output within
+dnl a reasonable time limit, fails the test.
+m4_define([OVS_WAIT_UNTIL_EQUAL],
+  [AT_FAIL_IF([test "$#" -ge 3])
+   echo "$2" > wait_until_expected
+   OVS_WAIT_UNTIL([$1 | diff -u wait_until_expected - ])])
 
 dnl OVS_WAIT_WHILE(COMMAND, [IF-FAILED])
 dnl
@@ -267,7 +285,10 @@ dnl Executes shell COMMAND in a loop until it returns nonzero.  If COMMAND does
 dnl not return nonzero within a reasonable time limit, executes the commands
 dnl in IF-FAILED (if provided) and fails the test.
 m4_define([OVS_WAIT_WHILE],
-  [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2],
+  [AT_FAIL_IF([test "$#" -ge 3])
+   dnl The second argument should not be a number (confused with AT_CHECK ?).
+   AT_FAIL_IF([test "$#" -eq 2 && test "$2" -eq "$2" 2>/dev/null])
+   OVS_WAIT([if $1; then return 1; else return 0; fi], [$2],
             [AT_LINE], [while $1])])
 
 dnl OVS_APP_EXIT_AND_WAIT(DAEMON)

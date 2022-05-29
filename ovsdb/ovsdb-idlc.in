@@ -192,6 +192,7 @@ def printCIDLHeader(schemaFile):
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
 #include "smap.h"
@@ -236,7 +237,13 @@ extern "C" {
 
         print("\nextern struct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (structName, structName.upper()))
 
+        for columnName in table.columns:
+            print("bool %(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *); " % {
+                'p': prefix, 't': tableName.lower(),
+                'c': columnName})
+
         print('''
+bool %(p)sserver_has_%(t)s_table(const struct ovsdb_idl *);
 const struct %(s)s_table *%(s)s_table_get(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
 
@@ -244,10 +251,18 @@ const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
         for ((ROW) = %(s)s_table_first(TABLE); \\
              (ROW); \\
              (ROW) = %(s)s_next(ROW))
-#define %(S)s_TABLE_FOR_EACH_SAFE(ROW, NEXT, TABLE) \\
+#define %(S)s_TABLE_FOR_EACH_SAFE_LONG(ROW, NEXT, TABLE) \\
         for ((ROW) = %(s)s_table_first(TABLE); \\
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
+#define %(S)s_TABLE_FOR_EACH_SAFE_SHORT(ROW, TABLE) \\
+        for (const struct %(s)s * ROW__next = ((ROW) = %(s)s_table_first(TABLE), NULL); \\
+             (ROW) ? (ROW__next = %(s)s_next(ROW), 1) : (ROW__next = NULL, 0); \\
+             (ROW) = ROW__next)
+#define %(S)s_TABLE_FOR_EACH_SAFE(...)                                        \\
+        OVERLOAD_SAFE_MACRO(%(S)s_TABLE_FOR_EACH_SAFE_LONG,                   \\
+                            %(S)s_TABLE_FOR_EACH_SAFE_SHORT, 3, __VA_ARGS__)
+
 
 const struct %(s)s *%(s)s_get_for_uuid(const struct ovsdb_idl *, const struct uuid *);
 const struct %(s)s *%(s)s_table_get_for_uuid(const struct %(s)s_table *, const struct uuid *);
@@ -257,10 +272,17 @@ const struct %(s)s *%(s)s_next(const struct %(s)s *);
         for ((ROW) = %(s)s_first(IDL); \\
              (ROW); \\
              (ROW) = %(s)s_next(ROW))
-#define %(S)s_FOR_EACH_SAFE(ROW, NEXT, IDL) \\
+#define %(S)s_FOR_EACH_SAFE_LONG(ROW, NEXT, IDL) \\
         for ((ROW) = %(s)s_first(IDL); \\
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
+#define %(S)s_FOR_EACH_SAFE_SHORT(ROW, IDL) \\
+        for (const struct %(s)s * ROW__next = ((ROW) = %(s)s_first(IDL), NULL); \\
+             (ROW) ? (ROW__next = %(s)s_next(ROW), 1) : (ROW__next = NULL, 0); \\
+             (ROW) = ROW__next)
+#define %(S)s_FOR_EACH_SAFE(...)                                         \\
+        OVERLOAD_SAFE_MACRO(%(S)s_FOR_EACH_SAFE_LONG,                    \\
+                            %(S)s_FOR_EACH_SAFE_SHORT, 3, __VA_ARGS__)
 
 unsigned int %(s)s_get_seqno(const struct ovsdb_idl *);
 unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change);
@@ -349,7 +371,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
  * used to test if an uncommitted row that has been added locally has been
  * updated or it may given unexpected results. */
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
-''' % {'s': structName, 'S': structName.upper()})
+''' % {'s': structName, 'S': structName.upper(), 't': tableName.lower(), 'p': prefix})
 
         for columnName, column in sorted_columns(table):
             if column.extensions.get('synthetic'):
@@ -489,6 +511,26 @@ static struct %(s)s *
         print("")
         print("/* %s table. */" % (tableName))
 
+        for columnName in table.columns:
+            print('''
+bool
+%(p)sserver_has_%(t)s_table_col_%(c)s(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_server_has_column(idl, &%(s)s_col_%(c)s);
+}
+''' % {'s': structName, 'p': prefix, 't': tableName.lower(),
+       'P': prefix.upper(), 'T': tableName.upper(),
+       'c': columnName})
+
+        print('''
+bool
+%(p)sserver_has_%(t)s_table(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_server_has_table(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+}
+''' % {'s': structName, 'p': prefix, 't': tableName.lower(),
+       'P': prefix.upper(), 'T': tableName.upper()})
+
         print('''
 const struct %(s)s_table *
 %(s)s_table_get(const struct ovsdb_idl *idl)
@@ -551,20 +593,20 @@ static void
                 print("    smap_init(&row->%s);" % columnName)
                 print("    for (size_t i = 0; i < datum->n; i++) {")
                 print("        smap_add(&row->%s," % columnName)
-                print("                 datum->keys[i].string,")
-                print("                 datum->values[i].string);")
+                print("                 json_string(datum->keys[i].s),")
+                print("                 json_string(datum->values[i].s));")
                 print("    }")
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print("")
                 print("    if (datum->n >= 1) {")
                 if not type.key.ref_table:
-                    print("        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string()))
+                    print("        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_rvalue_string()))
                 else:
                     print("        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower()))
 
                 if valueVar:
                     if not type.value.ref_table:
-                        print("        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_string()))
+                        print("        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_rvalue_string()))
                     else:
                         print("        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower()))
                 print("    } else {")
@@ -592,7 +634,7 @@ static void
 """ % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower()))
                     keySrc = "keyRow"
                 else:
-                    keySrc = "datum->keys[i].%s" % type.key.type.to_string()
+                    keySrc = "datum->keys[i].%s" % type.key.type.to_rvalue_string()
                 if type.value and type.value.ref_table:
                     print("""\
         struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[i].uuid));
@@ -602,7 +644,7 @@ static void
 """ % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower()))
                     valueSrc = "valueRow"
                 elif valueVar:
-                    valueSrc = "datum->values[i].%s" % type.value.type.to_string()
+                    valueSrc = "datum->values[i].%s" % type.value.type.to_rvalue_string()
                 print("        if (!row->n_%s) {" % (columnName))
 
                 print("            %s = xmalloc(%s * sizeof *%s);" % (
@@ -910,45 +952,45 @@ void
         'args': ', '.join(['%(type)s%(name)s'
                            % m for m in members])})
             if type.n_min == 1 and type.n_max == 1:
-                print("    union ovsdb_atom key;")
+                print("    union ovsdb_atom *key = xmalloc(sizeof *key);")
                 if type.value:
-                    print("    union ovsdb_atom value;")
+                    print("    union ovsdb_atom *value = xmalloc(sizeof *value);")
                 print("")
                 print("    datum.n = 1;")
-                print("    datum.keys = &key;")
-                print("    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar))
+                print("    datum.keys = key;")
+                print("    " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar))
                 if type.value:
-                    print("    datum.values = &value;")
-                    print("    "+ type.value.assign_c_value_casting_away_const("value.%s" % type.value.type.to_string(), valueVar))
+                    print("    datum.values = value;")
+                    print("    " + type.value.copyCValue("value->%s" % type.value.type.to_lvalue_string(), valueVar))
                 else:
                     print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_txn_write_clone"
+                txn_write_func = "ovsdb_idl_txn_write"
             elif type.is_optional_pointer():
-                print("    union ovsdb_atom key;")
                 print("")
                 print("    if (%s) {" % keyVar)
+                print("        union ovsdb_atom *key = xmalloc(sizeof *key);")
                 print("        datum.n = 1;")
-                print("        datum.keys = &key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar))
+                print("        datum.keys = key;")
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
                 print("    }")
                 print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_txn_write_clone"
+                txn_write_func = "ovsdb_idl_txn_write"
             elif type.n_max == 1:
-                print("    union ovsdb_atom key;")
                 print("")
                 print("    if (%s) {" % nVar)
+                print("        union ovsdb_atom *key = xmalloc(sizeof *key);")
                 print("        datum.n = 1;")
-                print("        datum.keys = &key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), "*" + keyVar))
+                print("        datum.keys = key;")
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), "*" + keyVar))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
                 print("    }")
                 print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_txn_write_clone"
+                txn_write_func = "ovsdb_idl_txn_write"
             else:
                 print("")
                 print("    datum.n = %s;" % nVar)
@@ -958,9 +1000,9 @@ void
                 else:
                     print("    datum.values = NULL;")
                 print("    for (size_t i = 0; i < %s; i++) {" % nVar)
-                print("        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar))
+                print("        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_lvalue_string(), "%s[i]" % keyVar))
                 if type.value:
-                    print("        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar))
+                    print("        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_lvalue_string(), "%s[i]" % valueVar))
                 print("    }")
                 if type.value:
                     valueType = type.value.toAtomicType()
@@ -996,9 +1038,8 @@ void
 ''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
         'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName})
-
-                print("    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_key"))
-                print("    "+ type.value.copyCValue("datum->values[0].%s" % type.value.type.to_string(), "new_value"))
+                print("    " + type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_lvalue_string(), "new_key"))
+                print("    " + type.value.copyCValue("datum->values[0].%s" % type.value.type.to_lvalue_string(), "new_value"))
                 print('''
     ovsdb_idl_txn_write_partial_map(&row->header_,
                                     &%(s)s_col_%(c)s,
@@ -1022,8 +1063,7 @@ void
 ''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
         'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName})
-
-                print("    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_key"))
+                print("    " + type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_lvalue_string(), "delete_key"))
                 print('''
     ovsdb_idl_txn_delete_partial_map(&row->header_,
                                     &%(s)s_col_%(c)s,
@@ -1049,8 +1089,7 @@ void
     datum->values = NULL;
 ''' % {'s': structName, 'c': columnName,
         'valtype':column.type.key.to_const_c_type(prefix), 't': tableName})
-
-                print("    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_value"))
+                print("    " + type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_lvalue_string(), "new_value"))
                 print('''
     ovsdb_idl_txn_write_partial_set(&row->header_,
                                     &%(s)s_col_%(c)s,
@@ -1074,8 +1113,7 @@ void
 ''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
         'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName})
-
-                print("    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_value"))
+                print("    " + type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_lvalue_string(), "delete_value"))
                 print('''
     ovsdb_idl_txn_delete_partial_set(&row->header_,
                                     &%(s)s_col_%(c)s,
@@ -1143,37 +1181,36 @@ void
             print("    struct ovsdb_datum datum;")
             free = []
             if type.n_min == 1 and type.n_max == 1:
-                print("    union ovsdb_atom key;")
+                print("    union ovsdb_atom *key = xmalloc(sizeof *key);")
                 if type.value:
-                    print("    union ovsdb_atom value;")
+                    print("    union ovsdb_atom *value = xmalloc(sizeof *value);")
                 print("")
                 print("    datum.n = 1;")
-                print("    datum.keys = &key;")
-                print("    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False))
+                print("    datum.keys = key;")
+                print("    " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar, refTable=False))
                 if type.value:
-                    print("    datum.values = &value;")
-                    print("    "+ type.value.assign_c_value_casting_away_const("value.%s" % type.value.type.to_string(), valueVar, refTable=False))
+                    print("    " + type.value.copyCValue("value.%s" % type.value.type.to_lvalue_string(), valueVar, refTable=False))
                 else:
                     print("    datum.values = NULL;")
             elif type.is_optional_pointer():
-                print("    union ovsdb_atom key;")
                 print("")
                 print("    if (%s) {" % keyVar)
+                print("        union ovsdb_atom *key = xmalloc(sizeof *key);")
                 print("        datum.n = 1;")
-                print("        datum.keys = &key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False))
+                print("        datum.keys = key;")
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar, refTable=False))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
                 print("    }")
                 print("    datum.values = NULL;")
             elif type.n_max == 1:
-                print("    union ovsdb_atom key;")
                 print("")
                 print("    if (%s) {" % nVar)
+                print("        union ovsdb_atom *key = xmalloc(sizeof *key);")
                 print("        datum.n = 1;")
-                print("        datum.keys = &key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), "*" + keyVar, refTable=False))
+                print("        datum.keys = key;")
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), "*" + keyVar, refTable=False))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
@@ -1182,16 +1219,14 @@ void
             else:
                 print("    datum.n = %s;" % nVar)
                 print("    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar))
-                free += ['datum.keys']
                 if type.value:
                     print("    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar)
-                    free += ['datum.values']
                 else:
                     print("    datum.values = NULL;")
                 print("    for (size_t i = 0; i < %s; i++) {" % nVar)
-                print("        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False))
+                print("        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_lvalue_string(), "%s[i]" % keyVar, refTable=False))
                 if type.value:
-                    print("        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False))
+                    print("        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_lvalue_string(), "%s[i]" % valueVar, refTable=False))
                 print("    }")
                 if type.value:
                     valueType = type.value.toAtomicType()
@@ -1211,8 +1246,8 @@ void
        's': structName,
        'S': structName.upper(),
        'c': columnName})
-            for var in free:
-                print("    free(%s);" % var)
+            print("    ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);" \
+                  % {'s': structName, 'c': columnName})
             print("}")
 
 # Index table related functions
@@ -1272,7 +1307,7 @@ struct ovsdb_idl_cursor
     struct ovsdb_idl_index *index, const struct %(s)s *target)
 {
     ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
-    return ovsdb_idl_cursor_first_ge(index, &target->header_);
+    return ovsdb_idl_cursor_first_ge(index, target ? &target->header_ : NULL);
 }
 
 struct %(s)s *
@@ -1309,8 +1344,8 @@ struct %(s)s *
 
         i = 0;
         SMAP_FOR_EACH (node, %(c)s) {
-            datum->keys[i].string = node->key;
-            datum->values[i].string = node->value;
+            datum->keys[i].s = ovsdb_atom_string_create(node->key);
+            datum->values[i].s = ovsdb_atom_string_create(node->value);
             i++;
         }
         ovsdb_datum_sort_unique(datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
@@ -1359,10 +1394,10 @@ struct %(s)s *
                 print()
                 print("    datum.n = 1;")
                 print("    datum.keys = key;")
-                print("    " + type.key.assign_c_value_casting_away_const("key->%s" % type.key.type.to_string(), keyVar))
+                print("    " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar))
                 if type.value:
                     print("    datum.values = value;")
-                    print("    "+ type.value.assign_c_value_casting_away_const("value->%s" % type.value.type.to_string(), valueVar))
+                    print("    " + type.value.copyCValue("value->%s" % type.value.type.to_lvalue_string(), valueVar))
                 else:
                     print("    datum.values = NULL;")
                 txn_write_func = "ovsdb_idl_index_write"
@@ -1373,7 +1408,7 @@ struct %(s)s *
                 print("        key = xmalloc(sizeof (union ovsdb_atom));")
                 print("        datum.n = 1;")
                 print("        datum.keys = key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key->%s" % type.key.type.to_string(), keyVar))
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), keyVar))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
@@ -1387,7 +1422,7 @@ struct %(s)s *
                 print("        key = xmalloc(sizeof(union ovsdb_atom));")
                 print("        datum.n = 1;")
                 print("        datum.keys = key;")
-                print("        " + type.key.assign_c_value_casting_away_const("key->%s" % type.key.type.to_string(), "*" + keyVar))
+                print("        " + type.key.copyCValue("key->%s" % type.key.type.to_lvalue_string(), "*" + keyVar))
                 print("    } else {")
                 print("        datum.n = 0;")
                 print("        datum.keys = NULL;")
@@ -1404,9 +1439,9 @@ struct %(s)s *
                 else:
                     print("    datum.values = NULL;")
                 print("    for (i = 0; i < %s; i++) {" % nVar)
-                print("        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar))
+                print("        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_lvalue_string(), "%s[i]" % keyVar))
                 if type.value:
-                    print("        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar))
+                    print("        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_lvalue_string(), "%s[i]" % valueVar))
                 print("    }")
                 if type.value:
                     valueType = type.value.toAtomicType()

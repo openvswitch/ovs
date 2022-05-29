@@ -627,6 +627,7 @@ netdev_linux_notify_sock(void)
         if (!error) {
             size_t i;
 
+            nl_sock_listen_all_nsid(sock, true);
             for (i = 0; i < ARRAY_SIZE(mcgroups); i++) {
                 error = nl_sock_join_mcgroup(sock, mcgroups[i]);
                 if (error) {
@@ -636,7 +637,6 @@ netdev_linux_notify_sock(void)
                 }
             }
         }
-        nl_sock_listen_all_nsid(sock, true);
         ovsthread_once_done(&once);
     }
 
@@ -2776,8 +2776,7 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
             error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,
                                             kpkts_rate, kpkts_burst);
         }
-        ovs_mutex_unlock(&netdev->mutex);
-        return error;
+        goto out;
     }
 
     error = get_ifindex(netdev_, &ifindex);
@@ -2794,6 +2793,8 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
     }
 
     if (kbits_rate || kpkts_rate) {
+        const char *cls_name = "matchall";
+
         error = tc_add_del_qdisc(ifindex, true, 0, TC_INGRESS);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
@@ -2801,21 +2802,30 @@ netdev_linux_set_policing(struct netdev *netdev_, uint32_t kbits_rate,
             goto out;
         }
 
-        error = tc_add_policer(netdev_, kbits_rate, kbits_burst,
-                               kpkts_rate, kpkts_burst);
+        error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst,
+                                        kpkts_rate, kpkts_burst);
+        if (error == ENOENT) {
+            cls_name = "basic";
+            /* This error is returned when the matchall classifier is missing.
+             * Fall back to the basic classifier.  */
+            error = tc_add_policer(netdev_, kbits_rate, kbits_burst,
+                                   kpkts_rate, kpkts_burst);
+        }
         if (error){
-            VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
-                    netdev_name, ovs_strerror(error));
+            VLOG_WARN_RL(&rl, "%s: adding cls_%s policing action failed: %s",
+                         netdev_name, cls_name, ovs_strerror(error));
             goto out;
         }
     }
 
-    netdev->kbits_rate = kbits_rate;
-    netdev->kbits_burst = kbits_burst;
-    netdev->kpkts_rate = kpkts_rate;
-    netdev->kpkts_burst = kpkts_burst;
-
 out:
+    if (!error) {
+        netdev->kbits_rate = kbits_rate;
+        netdev->kbits_burst = kbits_burst;
+        netdev->kpkts_rate = kpkts_rate;
+        netdev->kpkts_burst = kpkts_burst;
+    }
+
     if (!error || error == ENODEV) {
         netdev->netdev_policing_error = error;
         netdev->cache_valid |= VALID_POLICING;
@@ -5321,11 +5331,11 @@ static void
 hfsc_tc_destroy(struct tc *tc)
 {
     struct hfsc *hfsc;
-    struct hfsc_class *hc, *next;
+    struct hfsc_class *hc;
 
     hfsc = CONTAINER_OF(tc, struct hfsc, tc);
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &hfsc->tc.queues) {
+    HMAP_FOR_EACH_SAFE (hc, tc_queue.hmap_node, &hfsc->tc.queues) {
         hmap_remove(&hfsc->tc.queues, &hc->tc_queue.hmap_node);
         free(hc);
     }
@@ -6285,7 +6295,14 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     if (ofpbuf_try_pull(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg))) {
         const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS64);
         if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats64)) {
-            netdev_stats_from_rtnl_link_stats64(stats, nl_attr_get(a));
+            const struct rtnl_link_stats64 *lstats = nl_attr_get(a);
+            struct rtnl_link_stats64 aligned_lstats;
+
+            if (!IS_PTR_ALIGNED(lstats)) {
+                memcpy(&aligned_lstats, lstats, sizeof aligned_lstats);
+                lstats = &aligned_lstats;
+            }
+            netdev_stats_from_rtnl_link_stats64(stats, lstats);
             error = 0;
         } else {
             a = nl_attr_find(reply, 0, IFLA_STATS);

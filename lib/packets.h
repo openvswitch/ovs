@@ -356,6 +356,8 @@ void set_mpls_lse_label(ovs_be32 *lse, ovs_be32 label);
 void set_mpls_lse_bos(ovs_be32 *lse, uint8_t bos);
 ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
                              ovs_be32 label);
+void add_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse,
+              bool l3_encap);
 
 /* Example:
  *
@@ -1492,7 +1494,7 @@ BUILD_ASSERT_DECL(sizeof(struct vxlanhdr) == 8);
 
 /* Fields in struct vxlanhdr.vx_gpe.flags */
 #define VXLAN_GPE_FLAGS_VER     0x30    /* Version. */
-#define VLXAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
+#define VXLAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
 #define VXLAN_GPE_FLAGS_O       0x01    /* OAM Bit. */
 
 /* VXLAN-GPE header flags. */

@@ -1,5 +1,47 @@
-Post-v2.16.0
+Post-v2.17.0
 ---------------------
+   - libopenvswitch API change:
+     * To fix the Undefined Behavior issue causing the compiler to incorrectly
+       optimize important parts of code, container iteration macros (e.g.,
+       LIST_FOR_EACH) have been re-implemented in a UB-safe way.
+     * Backwards compatibility has mostly been preserved, however the
+       user-provided pointer is now set to NULL after the loop (unless it
+       exited via "break;")
+     * Users of libopenvswitch will need to double-check the use of such loop
+       macros before compiling with a new version.
+     * Since the change is limited to the definitions within the headers, the
+       ABI is not affected.
+   - OVSDB:
+     * 'relay' service model now supports transaction history, i.e. honors the
+       'last-txn-id' field in 'monitor_cond_since' requests from clients.
+   - OVSDB-IDL:
+     * New monitor mode flag, OVSDB_IDL_WRITE_CHANGED_ONLY, allowing
+       applications to relax atomicity requirements when dealing with
+       columns whose value has been rewritten (but not changed).
+   - OpenFlow:
+     * Extended Flow Monitoring support for all supported OpenFlow versions:
+         OpenFlow versions 1.0-1.2 with Nicira Extensions
+         OpenFlow versions 1.3 with Open Network Foundation extension
+         OpenFlow versions 1.4+, as defined in the OpenFlow specification
+   - IPsec:
+     * Added support for custom per-tunnel options via 'options:ipsec_*' knobs.
+       See Documentation/tutorials/ipsec.rst for details.
+   - Windows:
+     * Conntrack support for TCPv6, UDPv6, ICMPv6, FTPv6.
+     * IPv6 Geneve tunnel support.
+
+
+v2.17.0 - 17 Feb 2022
+---------------------
+   - Userspace datapath:
+     * Optimized flow lookups for datapath flows with simple match criteria.
+       See 'Simple Match Lookup' in Documentation/topics/dpdk/bridge.rst.
+     * New per-interface configuration knob 'other_config:tx-steering'.  If set
+       to 'hash', enables hash-based Tx packet steering mode to utilize all the
+       Tx queues of the interface regardles of the number of PMD threads.
+     * Removed experimental tag for PMD Auto Load Balance.
+     * New configuration knob 'other_config:n-offload-threads' to change the
+       number of HW offloading threads.
    - DPDK:
      * EAL argument --socket-mem is no longer configured by default upon
        start-up.  If dpdk-socket-mem and dpdk-alloc-mem are not specified,
@@ -8,6 +50,38 @@ Post-v2.16.0
        by default.  'other_config:dpdk-socket-limit' can be set equal to
        the 'other_config:dpdk-socket-mem' to preserve the legacy memory
        limiting behavior.
+     * EAL argument --in-memory is applied by default if supported.
+     * Add hardware offload support for matching IPv4/IPv6 frag types
+       (experimental).
+     * Add hardware offload support for GRE flows (experimental).
+       Available only if DPDK experimental APIs enabled during the build.
+     * Add support for DPDK 21.11.
+     * Forbid use of DPDK multiprocess feature.
+     * Add support for running threads on cores >= RTE_MAX_LCORE.
+   - Python:
+     * For SSL support, the use of the pyOpenSSL library has been replaced
+       with the native 'ssl' module.
+   - OVSDB:
+     * Python library for OVSDB clients now also supports faster
+       resynchronization with a clustered database after a brief disconnection,
+       i.e. 'monitor_cond_since' monitoring method.
+     * Major improvement in the performance of the OVSDB server.  See the
+       "OVSDB: Performance and Scale Journey '21" talk of OVS+OVN Conf'21.
+   - ovs-dpctl and 'ovs-appctl dpctl/':
+     * New commands 'cache-get-size' and 'cache-set-size' that allows to
+       get or configure linux kernel datapath cache sizes.
+   - ovs-ofctl dump-flows no longer prints "igmp".  Instead the flag
+     "ip,nw_proto=2" is used.
+   - ovs-appctl:
+     * New command tnl/neigh/aging to read/write the neigh aging time.
+   - OpenFlow:
+     * Default selection method for select groups with up to 256 buckets is
+       now dp_hash.  Previously this was limited to 64 buckets.  This change
+       is mainly for the benefit of OVN load balancing configurations.
+     * Encap & Decap action support for MPLS packet type.
+   - Ingress policing on Linux now uses 'matchall' classifier instead of
+     'basic', if available.
+   - Add User Statically-Defined Tracing (USDT) probe framework support.
 
 
 v2.16.0 - 16 Aug 2021
@@ -77,9 +151,9 @@ v2.16.0 - 16 Aug 2021
        until further releases.
      * New debug appctl command 'dpdk/get-malloc-stats'.
      * Add hardware offload support for tunnel pop action (experimental).
-       Available only if DPDK experimantal APIs enabled during the build.
+       Available only if DPDK experimental APIs enabled during the build.
      * Add hardware offload support for VXLAN flows (experimental).
-       Available only if DPDK experimantal APIs enabled during the build.
+       Available only if DPDK experimental APIs enabled during the build.
      * EAL options --socket-mem and --socket-limit to have default values
        removed with 2.17 release. Logging added to alert users.
    - ovsdb-tool:

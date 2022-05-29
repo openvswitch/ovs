@@ -77,7 +77,7 @@ dnl Checks if compiler and binutils supports AVX512.
 AC_DEFUN([OVS_CHECK_AVX512], [
   OVS_CHECK_BINUTILS_AVX512
   OVS_CHECK_CC_OPTION(
-    [-mavx512f], [ovs_have_cc_mavx512f=yes], [ovs_have_cc_mavx512f=no])
+    [-mavx512f -mavx512vpopcntdq], [ovs_have_cc_mavx512f=yes], [ovs_have_cc_mavx512f=no])
   AM_CONDITIONAL([HAVE_AVX512F], [test $ovs_have_cc_mavx512f = yes])
   if test "$ovs_have_cc_mavx512f" = yes; then
     AC_DEFINE([HAVE_AVX512F], [1],
@@ -305,6 +305,13 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
     ])],
     [AC_DEFINE([HAVE_TCA_SKBEDIT_FLAGS], [1],
                [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/gen_stats.h>], [
+        int x = TCA_STATS_PKT64;
+    ])],
+    [AC_DEFINE([HAVE_TCA_STATS_PKT64], [1],
+               [Define to 1 if TCA_STATS_PKT64 is available.])])
 ])
 
 dnl OVS_CHECK_LINUX_SCTP_CT
@@ -446,11 +453,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       OVS_FIND_DEPENDENCY([get_mempolicy], [numa], [libnuma])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
+    AC_CHECK_DECL([RTE_NET_PCAP], [
       OVS_FIND_DEPENDENCY([pcap_dump_close], [pcap], [libpcap])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_PMD_AF_XDP], [
+    AC_CHECK_DECL([RTE_NET_AF_XDP], [
       LIBBPF_LDADD="-lbpf"
     ], [], [[#include <rte_config.h>]])
 
@@ -458,19 +465,25 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
+    AC_CHECK_DECL([RTE_NET_MLX5], [dnl found
       AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx5dv_create_wq], [mlx5], [libmlx5])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
 
-    AC_CHECK_DECL([RTE_LIBRTE_MLX4_PMD], [dnl found
+    AC_CHECK_DECL([RTE_NET_MLX4], [dnl found
       AC_CHECK_DECL([RTE_IBVERBS_LINK_DLOPEN], [], [dnl not found
         OVS_FIND_DEPENDENCY([mlx4dv_init_obj], [mlx4], [libmlx4])
         OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
+
+    AC_CHECK_DECL([MAP_HUGE_SHIFT], [
+      AC_DEFINE([DPDK_IN_MEMORY_SUPPORTED], [1], [If MAP_HUGE_SHIFT is
+                 defined, anonymous memory mapping is supported by the
+                 kernel, and --in-memory can be used.])
+    ], [], [[#include <sys/mman.h>]])
 
     # DPDK uses dlopen to load plugins.
     OVS_FIND_DEPENDENCY([dlopen], [dl], [libdl])
@@ -486,9 +499,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
        DPDKLIB_FOUND=true],
       [AC_MSG_RESULT([no])
        AC_MSG_ERROR(m4_normalize([
-          Could not find DPDK library in default search path, update
-          PKG_CONFIG_PATH for pkg-config to find the .pc file in
-          non-standard location]))
+          Failed to link with DPDK, check the config.log for more details.
+          If a working DPDK library was not found in the default search path,
+          update PKG_CONFIG_PATH for pkg-config to find the .pc file in a
+          non-standard location.]))
       ])
 
     CFLAGS="$ovs_save_CFLAGS"
@@ -1417,7 +1431,7 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
    : ${SPARSE=sparse}
    AC_SUBST([SPARSE])
    AC_CONFIG_COMMANDS_PRE(
-     [CC='$(if $(C:0=),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) $(SPARSE_WERROR) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])
+     [CC='$(if $(C:0=),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) $(SPARSE_WERROR) -I $(top_srcdir)/include/sparse -I $(top_srcdir)/include $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])
 
    AC_ARG_ENABLE(
      [sparse],

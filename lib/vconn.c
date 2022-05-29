@@ -960,8 +960,8 @@ vconn_transact_multipart(struct vconn *vconn,
     ovs_list_init(replies);
 
     /* Send all the requests. */
-    struct ofpbuf *b, *next;
-    LIST_FOR_EACH_SAFE (b, next, list_node, requests) {
+    struct ofpbuf *b;
+    LIST_FOR_EACH_SAFE (b, list_node, requests) {
         ovs_list_remove(&b->list_node);
         int error = vconn_send_block(vconn, b);
         if (error) {

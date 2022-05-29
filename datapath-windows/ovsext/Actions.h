@@ -58,7 +58,7 @@ typedef struct OvsForwardingContext {
      * - specified in actions during tunneling Tx
      * - extracted from an NBL during tunneling Rx
      */
-    OvsIPv4TunnelKey tunKey;
+    OvsIPTunnelKey tunKey;
 
     /*
      * Tunneling - Tx:
@@ -132,5 +132,10 @@ NDIS_STATUS
 OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                         UINT32 newAddr, UINT16 newPort,
                         BOOLEAN isSource, BOOLEAN isTx);
+
+NDIS_STATUS
+OvsUpdateAddressAndPortForIpv6(OvsForwardingContext *ovsFwdCtx,
+                               struct in6_addr newAddr, UINT16 newPort,
+                               BOOLEAN isSource, BOOLEAN isTx);
 
 #endif /* __ACTIONS_H_ */

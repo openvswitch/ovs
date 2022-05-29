@@ -36,8 +36,8 @@ AT_CLEANUP
 
 AT_SETUP([ALB - enable/disable])
 OVS_VSWITCHD_START([add-port br0 p0 \
-                    -- set Interface p0 type=dummy-pmd options:n_rxq=3 \
-                    -- set Open_vSwitch . other_config:pmd-cpu-mask=3 \
+                    -- set Interface p0 type=dummy-pmd options:n_rxq=1 \
+                    -- set Open_vSwitch . other_config:pmd-cpu-mask=1 \
                     -- set open_vswitch . other_config:pmd-auto-lb="true"],
                    [], [], [DUMMY_NUMA])
 OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
@@ -57,31 +57,87 @@ AT_SETUP([ALB - min num PMD/RxQ])
 OVS_VSWITCHD_START([add-port br0 p0 \
                     -- set Interface p0 type=dummy-pmd options:n_rxq=2 \
                     -- set Open_vSwitch . other_config:pmd-cpu-mask=1 \
-                    -- set open_vswitch . other_config:pmd-auto-lb="true"],
+                    -- set open_vswitch . other_config:pmd-auto-lb="true" \
+                    -- set open_vswitch . other_config:pmd-auto-lb-load-threshold=0],
                    [], [], [DUMMY_NUMA])
-OVS_WAIT_UNTIL([grep "PMD auto load balance is disabled" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
 
-# Add more PMD
+# 1 pmds 2 rxqs
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, not enough non-isolated PMDs or RxQs."])
+
+# 2 pmds 2 rxq
+get_log_next_line_num
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x3])
-OVS_WAIT_UNTIL([grep "There are 2 pmd threads on numa node" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "There are 2 pmd threads on numa node"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, not enough non-isolated PMDs or RxQs."])
 
-# Add one more rxq to have 2 rxq on a PMD
+# 2 pmds 3 rxqs
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set interface p0 options:n_rxq=3])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is enabled"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
 
-# Reduce PMD
+# 1 pmds 3 rxqs
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "There are 1 pmd threads on numa node"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, not enough non-isolated PMDs or RxQs."])
 
-# Check logs when try to enable but min PMD/RxQ prevents
+# Same config as last time
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="false"])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, no configuration changes since last check."])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ALB - cross-numa])
+OVS_VSWITCHD_START([add-port br0 p0 \
+                    -- set Interface p0 type=dummy-pmd options:n_rxq=4 \
+                    -- set Interface p0 options:numa_id=0 \
+                    -- set Open_vSwitch . other_config:pmd-cpu-mask=0x3 \
+                    -- set open_vswitch . other_config:pmd-rxq-assign=group \
+                    -- set open_vswitch . other_config:pmd-rxq-isolate=false \
+                    -- set open_vswitch . other_config:pmd-auto-lb="true" \
+                    -- set open_vswitch . other_config:pmd-auto-lb-load-threshold=0],
+                   [], [], [--dummy-numa 1,2,1,2])
+OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+
+# no pinned rxqs - cross-numa pmd could change
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
+
+# all pinned rxqs - cross-numa pmd will not change
+AT_CHECK([ovs-vsctl set Interface p0 other_config:pmd-rxq-affinity='0:0,1:0,2:1,3:1'])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "Variance improvement 0%."])
+
+# mix of pinned (non-isolated) and non-pinned rxqs - cross-numa pmd could change
+AT_CHECK([ovs-vsctl remove Interface p0 other_config pmd-rxq-affinity])
+AT_CHECK([ovs-vsctl set Interface p0 other_config:pmd-rxq-affinity='0:0,1:0,2:1'])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
+
+# mix of pinned (isolated) and non-pinned rxqs - cross-numa pmd could change
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0xf])
+AT_CHECK([ovs-vsctl set Interface p0 options:n_rxq=6])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-isolate=true])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance detected cross-numa polling"])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -90,7 +146,8 @@ AT_SETUP([ALB - PMD/RxQ assignment type])
 OVS_VSWITCHD_START([add-port br0 p0 \
                     -- set Interface p0 type=dummy-pmd options:n_rxq=3 \
                     -- set Open_vSwitch . other_config:pmd-cpu-mask=3 \
-                    -- set open_vswitch . other_config:pmd-auto-lb="true"],
+                    -- set open_vswitch . other_config:pmd-auto-lb="true" \
+                    -- set open_vswitch . other_config:pmd-auto-lb-load-threshold=0],
                    [], [], [DUMMY_NUMA])
 OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
 
@@ -98,24 +155,63 @@ OVS_WAIT_UNTIL([grep "PMD auto load balance is enabled" ovs-vswitchd.log])
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'roundrobin'"])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="false"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is enabled"])
 
 # Change back assignment type
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'cycles'"])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is enabled"])
 
-# Check logs when try to enable but assignment prevents
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="false"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'roundrobin'"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is enabled"])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'group'"])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="false"])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-auto-lb="true"])
-OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is disabled"])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance is enabled"])
+
+# Enable debug and test dryrun config checks
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+
+# Just to be sure it is still set to group
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+get_log_next_line_num
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'cycles'"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'roundrobin'"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance nothing to do, pmd-rxq-assign=roundrobin assignment type configured."])
+
+get_log_next_line_num
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=group])
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "mode changed to: 'group'"])
+ovs-appctl time/warp 600000 10000
+OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD auto load balance performing dry run."])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

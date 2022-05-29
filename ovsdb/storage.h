@@ -76,7 +76,7 @@ uint64_t ovsdb_write_get_commit_index(const struct ovsdb_write *);
 void ovsdb_write_wait(const struct ovsdb_write *);
 void ovsdb_write_destroy(struct ovsdb_write *);
 
-bool ovsdb_storage_should_snapshot(const struct ovsdb_storage *);
+bool ovsdb_storage_should_snapshot(struct ovsdb_storage *);
 struct ovsdb_error *ovsdb_storage_store_snapshot(struct ovsdb_storage *storage,
                                                  const struct json *schema,
                                                  const struct json *snapshot)

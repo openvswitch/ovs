@@ -222,7 +222,8 @@ ovsdb_relay_process_row_update(struct ovsdb_table *table,
 
 static struct ovsdb_error *
 ovsdb_relay_parse_update__(struct ovsdb *db,
-                           const struct ovsdb_cs_db_update *du)
+                           const struct ovsdb_cs_db_update *du,
+                           const struct uuid *last_id)
 {
     struct ovsdb_error *error = NULL;
     struct ovsdb_txn *txn;
@@ -254,8 +255,17 @@ exit:
         ovsdb_txn_abort(txn);
         return error;
     } else {
-        /* Commit transaction. */
-        error = ovsdb_txn_propose_commit_block(txn, false);
+        if (uuid_is_zero(last_id)) {
+            /* The relay source doesn't support unique transaction ids,
+             * disabling transaction history for relay. */
+            ovsdb_txn_history_destroy(db);
+            ovsdb_txn_history_init(db, false);
+        } else {
+            ovsdb_txn_set_txnid(last_id, txn);
+        }
+        /* Commit transaction.
+         * There is no storage, so ovsdb_txn_replay_commit() can be used. */
+        error = ovsdb_txn_replay_commit(txn);
     }
 
     return error;
@@ -266,17 +276,25 @@ ovsdb_relay_clear(struct ovsdb *db)
 {
     struct ovsdb_txn *txn = ovsdb_txn_create(db);
     struct shash_node *table_node;
+    struct ovsdb_error *error;
 
     SHASH_FOR_EACH (table_node, &db->tables) {
         struct ovsdb_table *table = table_node->data;
-        struct ovsdb_row *row, *next;
+        struct ovsdb_row *row;
 
-        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &table->rows) {
             ovsdb_txn_row_delete(txn, row);
         }
     }
 
-    return ovsdb_txn_propose_commit_block(txn, false);
+    /* There is no storage, so ovsdb_txn_replay_commit() can be used. */
+    error = ovsdb_txn_replay_commit(txn);
+
+    /* Clearing the transaction history, and re-enabling it. */
+    ovsdb_txn_history_destroy(db);
+    ovsdb_txn_history_init(db, true);
+
+    return error;
 }
 
 static void
@@ -304,7 +322,7 @@ ovsdb_relay_parse_update(struct relay_ctx *ctx,
             error = ovsdb_relay_clear(ctx->db);
         }
         if (!error) {
-            error = ovsdb_relay_parse_update__(ctx->db, du);
+            error = ovsdb_relay_parse_update__(ctx->db, du, &update->last_id);
         }
     }
     ovsdb_cs_db_update_destroy(du);

@@ -343,13 +343,25 @@ vlog_set_pattern(enum vlog_destination destination, const char *pattern)
     }
 }
 
-/* Sets the name of the log file used by VLF_FILE to 'file_name', or to the
- * default file name if 'file_name' is null.  Returns 0 if successful,
- * otherwise a positive errno value. */
-int
-vlog_set_log_file(const char *file_name)
+/* Returns a copy of the name of the log file used by VLF_FILE, or NULL if none
+ * is configured.  The caller must eventually free the returned string. */
+char *
+vlog_get_log_file(void)
 {
-    char *new_log_file_name;
+    ovs_mutex_lock(&log_file_mutex);
+    char *fn = nullable_xstrdup(log_file_name);
+    ovs_mutex_unlock(&log_file_mutex);
+
+    return fn;
+}
+
+/* Sets the name of the log file used by VLF_FILE to 'new_log_file_name', or
+ * closes the current log file if 'new_log_file_name' is NULL.  Takes ownership
+ * of 'new_log_file_name'.  Returns 0 if successful, otherwise a positive errno
+ * value. */
+static int
+vlog_set_log_file__(char *new_log_file_name)
+{
     struct vlog_module *mp;
     struct stat old_stat;
     struct stat new_stat;
@@ -358,25 +370,29 @@ vlog_set_log_file(const char *file_name)
     bool log_close;
 
     /* Open new log file. */
-    new_log_file_name = (file_name
-                         ? xstrdup(file_name)
-                         : xasprintf("%s/%s.log", ovs_logdir(), program_name));
-    new_log_fd = open(new_log_file_name, O_WRONLY | O_CREAT | O_APPEND, 0660);
-    if (new_log_fd < 0) {
-        VLOG_WARN("failed to open %s for logging: %s",
-                  new_log_file_name, ovs_strerror(errno));
-        free(new_log_file_name);
-        return errno;
+    if (new_log_file_name) {
+        new_log_fd = open(new_log_file_name, O_WRONLY | O_CREAT | O_APPEND,
+                          0660);
+        if (new_log_fd < 0) {
+            VLOG_WARN("failed to open %s for logging: %s",
+                      new_log_file_name, ovs_strerror(errno));
+            free(new_log_file_name);
+            return errno;
+        }
+    } else {
+        new_log_fd = -1;
     }
 
     /* If the new log file is the same one we already have open, bail out. */
     ovs_mutex_lock(&log_file_mutex);
-    same_file = (log_fd >= 0
-                 && new_log_fd >= 0
-                 && !fstat(log_fd, &old_stat)
-                 && !fstat(new_log_fd, &new_stat)
-                 && old_stat.st_dev == new_stat.st_dev
-                 && old_stat.st_ino == new_stat.st_ino);
+    same_file = ((log_fd < 0
+                  && new_log_fd < 0) ||
+                 (log_fd >= 0
+                  && new_log_fd >= 0
+                  && !fstat(log_fd, &old_stat)
+                  && !fstat(new_log_fd, &new_stat)
+                  && old_stat.st_dev == new_stat.st_dev
+                  && old_stat.st_ino == new_stat.st_ino));
     ovs_mutex_unlock(&log_file_mutex);
     if (same_file) {
         close(new_log_fd);
@@ -392,19 +408,18 @@ vlog_set_log_file(const char *file_name)
         VLOG_INFO("closing log file");
     }
 
-    /* Close old log file, if any, and install new one. */
+    /* Close old log file, if any. */
     ovs_mutex_lock(&log_file_mutex);
     if (log_fd >= 0) {
         close(log_fd);
-        async_append_destroy(log_writer);
     }
-
+    async_append_destroy(log_writer);
     free(log_file_name);
-    log_file_name = xstrdup(new_log_file_name);
+
+    /* Install new log file. */
+    log_file_name = nullable_xstrdup(new_log_file_name);
     log_fd = new_log_fd;
-    if (log_async) {
-        log_writer = async_append_create(new_log_fd);
-    }
+    log_writer = log_async ? async_append_create(new_log_fd) : NULL;
 
     LIST_FOR_EACH (mp, list, &vlog_modules) {
         update_min_level(mp);
@@ -416,6 +431,28 @@ vlog_set_log_file(const char *file_name)
     free(new_log_file_name);
 
     return 0;
+}
+
+/* Closes the log file, if any.
+ *
+ * If the real goal is open a new log file, use vlog_set_log_file() to directly
+ * do that: there is no need to close the old file first. */
+void
+vlog_close_log_file(void)
+{
+    vlog_set_log_file__(NULL);
+}
+
+/* Sets the name of the log file used by VLF_FILE to 'file_name', or to the
+ * default file name if 'file_name' is null.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+vlog_set_log_file(const char *file_name)
+{
+    return vlog_set_log_file__(
+        file_name
+        ? xstrdup(file_name)
+        : xasprintf("%s/%s.log", ovs_logdir(), program_name));
 }
 
 /* Closes and then attempts to re-open the current log file.  (This is useful

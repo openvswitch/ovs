@@ -44,13 +44,11 @@ This is the current list of active Open vSwitch committers:
    * - Alex Wang
      - ee07b291@gmail.com
    * - Alin Serdean
-     - aserdean@cloudbasesolutions.com
+     - aserdean@ovn.org
    * - Andy Zhou
      - azhou@ovn.org
    * - Ansis Atteka
      - aatteka@nicira.com
-   * - Ben Pfaff
-     - blp@ovn.org
    * - Daniele Di Proietto
      - daniele.di.proietto@gmail.com
    * - Gurucharan Shetty
@@ -63,8 +61,6 @@ This is the current list of active Open vSwitch committers:
      - jarno@ovn.org
    * - Jesse Gross
      - jesse@kernel.org
-   * - Joe Stringer
-     - joe@ovn.org
    * - Justin Pettit
      - jpettit@ovn.org
    * - Pravin B Shelar
@@ -89,5 +85,9 @@ More information about Emeritus Committers can be found
 
    * - Name
      - Email
+   * - Ben Pfaff
+     - blp@ovn.org
    * - Ethan J. Jackson
      - ejj@eecs.berkeley.edu
+   * - Joe Stringer
+     - joe@ovn.org

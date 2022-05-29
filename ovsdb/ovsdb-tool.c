@@ -919,7 +919,8 @@ print_raft_header(const struct raft_header *h,
         if (!uuid_is_zero(&h->snap.eid)) {
             printf(" prev_eid: %04x\n", uuid_prefix(&h->snap.eid, 4));
         }
-        print_data("prev_", h->snap.data, schemap, names);
+        print_data("prev_", raft_entry_get_parsed_data(&h->snap),
+                            schemap, names);
     }
 }
 
@@ -973,11 +974,13 @@ raft_header_to_standalone_log(const struct raft_header *h,
                               struct ovsdb_log *db_log_data)
 {
     if (h->snap_index) {
-        if (!h->snap.data || json_array(h->snap.data)->n != 2) {
+        const struct json *data = raft_entry_get_parsed_data(&h->snap);
+
+        if (!data || json_array(data)->n != 2) {
             ovs_fatal(0, "Incorrect raft header data array length");
         }
 
-        struct json_array *pa = json_array(h->snap.data);
+        struct json_array *pa = json_array(data);
         struct json *schema_json = pa->elems[0];
         struct ovsdb_error *error = NULL;
 
@@ -1373,7 +1376,7 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
                 }
                 struct raft_entry *e = &s->entries[log_idx];
                 e->term = r->term;
-                e->data = r->entry.data;
+                raft_entry_set_parsed_data_nocopy(e, r->entry.data);
                 e->eid = r->entry.eid;
                 e->servers = r->entry.servers;
                 break;
@@ -1576,15 +1579,14 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
     }
     free(c.servers);
 
-    struct commit *next_commit;
-    HMAP_FOR_EACH_SAFE (commit, next_commit, hmap_node, &c.commits) {
+    HMAP_FOR_EACH_SAFE (commit, hmap_node, &c.commits) {
         hmap_remove(&c.commits, &commit->hmap_node);
         free(commit);
     }
     hmap_destroy(&c.commits);
 
-    struct leader *leader, *next_leader;
-    HMAP_FOR_EACH_SAFE (leader, next_leader, hmap_node, &c.leaders) {
+    struct leader *leader;
+    HMAP_FOR_EACH_SAFE (leader, hmap_node, &c.leaders) {
         hmap_remove(&c.leaders, &leader->hmap_node);
         free(leader);
     }

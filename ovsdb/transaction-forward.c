@@ -126,10 +126,10 @@ ovsdb_txn_forward_steal_reply(struct ovsdb_txn_forward *txn_fwd)
 void
 ovsdb_txn_forward_run(struct ovsdb *db, struct ovsdb_cs *cs)
 {
-    struct ovsdb_txn_forward *t, *next;
+    struct ovsdb_txn_forward *t;
 
     /* Send all transactions that needs to be forwarded. */
-    LIST_FOR_EACH_SAFE (t, next, new_node, &db->txn_forward_new) {
+    LIST_FOR_EACH_SAFE (t, new_node, &db->txn_forward_new) {
         if (!ovsdb_cs_may_send_transaction(cs)) {
             break;
         }
@@ -167,9 +167,9 @@ ovsdb_txn_forward_cancel(struct ovsdb *db, struct ovsdb_txn_forward *txn_fwd)
 void
 ovsdb_txn_forward_cancel_all(struct ovsdb *db, bool sent_only)
 {
-    struct ovsdb_txn_forward *t, *next;
+    struct ovsdb_txn_forward *t;
 
-    HMAP_FOR_EACH_SAFE (t, next, sent_node, &db->txn_forward_sent) {
+    HMAP_FOR_EACH_SAFE (t, sent_node, &db->txn_forward_sent) {
         ovsdb_txn_forward_cancel(db, t);
     }
 
@@ -177,7 +177,7 @@ ovsdb_txn_forward_cancel_all(struct ovsdb *db, bool sent_only)
         return;
     }
 
-    LIST_FOR_EACH_SAFE (t, next, new_node, &db->txn_forward_new) {
+    LIST_FOR_EACH_SAFE (t, new_node, &db->txn_forward_new) {
         ovsdb_txn_forward_cancel(db, t);
     }
 }

@@ -72,37 +72,74 @@ static inline bool ovs_list_is_empty(const struct ovs_list *);
 static inline bool ovs_list_is_singleton(const struct ovs_list *);
 static inline bool ovs_list_is_short(const struct ovs_list *);
 
-#define LIST_FOR_EACH(ITER, MEMBER, LIST)                               \
-    for (INIT_CONTAINER(ITER, (LIST)->next, MEMBER);                    \
-         &(ITER)->MEMBER != (LIST);                                     \
-         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
-#define LIST_FOR_EACH_CONTINUE(ITER, MEMBER, LIST)                      \
-    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);             \
-         &(ITER)->MEMBER != (LIST);                                     \
-         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
-#define LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
-    for (INIT_CONTAINER(ITER, (LIST)->prev, MEMBER);                    \
-         &(ITER)->MEMBER != (LIST);                                     \
-         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
-#define LIST_FOR_EACH_REVERSE_SAFE(ITER, PREV, MEMBER, LIST)        \
-    for (INIT_CONTAINER(ITER, (LIST)->prev, MEMBER);                \
-         (&(ITER)->MEMBER != (LIST)                                 \
-          ? INIT_CONTAINER(PREV, (ITER)->MEMBER.prev, MEMBER), 1    \
-          : 0);                                                     \
-         (ITER) = (PREV))
-#define LIST_FOR_EACH_REVERSE_CONTINUE(ITER, MEMBER, LIST)              \
-    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER);           \
-         &(ITER)->MEMBER != (LIST);                                     \
-         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
-#define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)               \
-    for (INIT_CONTAINER(ITER, (LIST)->next, MEMBER);               \
-         (&(ITER)->MEMBER != (LIST)                                \
-          ? INIT_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER), 1   \
-          : 0);                                                    \
-         (ITER) = (NEXT))
-#define LIST_FOR_EACH_POP(ITER, MEMBER, LIST)                      \
-    while (!ovs_list_is_empty(LIST)                                    \
-           && (INIT_CONTAINER(ITER, ovs_list_pop_front(LIST), MEMBER), 1))
+#define LIST_FOR_EACH(VAR, MEMBER, LIST)                                      \
+    for (INIT_MULTIVAR(VAR, MEMBER, (LIST)->next, struct ovs_list);           \
+         CONDITION_MULTIVAR(VAR, MEMBER, ITER_VAR(VAR) != (LIST));            \
+         UPDATE_MULTIVAR(VAR, ITER_VAR(VAR)->next))
+
+#define LIST_FOR_EACH_CONTINUE(VAR, MEMBER, LIST)                             \
+    for (INIT_MULTIVAR(VAR, MEMBER, VAR->MEMBER.next, struct ovs_list);       \
+         CONDITION_MULTIVAR(VAR, MEMBER, ITER_VAR(VAR) != (LIST));            \
+         UPDATE_MULTIVAR(VAR, ITER_VAR(VAR)->next))
+
+#define LIST_FOR_EACH_REVERSE(VAR, MEMBER, LIST)                              \
+    for (INIT_MULTIVAR(VAR, MEMBER, (LIST)->prev, struct ovs_list);           \
+         CONDITION_MULTIVAR(VAR, MEMBER, ITER_VAR(VAR) != (LIST));            \
+         UPDATE_MULTIVAR(VAR, ITER_VAR(VAR)->prev))
+
+#define LIST_FOR_EACH_REVERSE_CONTINUE(VAR, MEMBER, LIST)                     \
+    for (INIT_MULTIVAR(VAR, MEMBER, VAR->MEMBER.prev, struct ovs_list);       \
+         CONDITION_MULTIVAR(VAR, MEMBER, ITER_VAR(VAR) != (LIST));            \
+         UPDATE_MULTIVAR(VAR, ITER_VAR(VAR)->prev))
+
+/* LONG version of SAFE iterators. */
+#define LIST_FOR_EACH_REVERSE_SAFE_LONG(VAR, PREV, MEMBER, LIST)              \
+    for (INIT_MULTIVAR_SAFE_LONG(VAR, PREV, MEMBER, (LIST)->prev,             \
+                                 struct ovs_list);                            \
+         CONDITION_MULTIVAR_SAFE_LONG(VAR, PREV, MEMBER,                      \
+                                      ITER_VAR(VAR) != (LIST),                \
+                                      ITER_VAR(PREV) = ITER_VAR(VAR)->prev,   \
+                                      ITER_VAR(PREV) != (LIST));              \
+         UPDATE_MULTIVAR_SAFE_LONG(VAR, PREV))
+
+#define LIST_FOR_EACH_SAFE_LONG(VAR, NEXT, MEMBER, LIST)                      \
+    for (INIT_MULTIVAR_SAFE_LONG(VAR, NEXT, MEMBER, (LIST)->next,             \
+                                 struct ovs_list);                            \
+         CONDITION_MULTIVAR_SAFE_LONG(VAR, NEXT, MEMBER,                      \
+                                      ITER_VAR(VAR) != (LIST),                \
+                                      ITER_VAR(NEXT) = ITER_VAR(VAR)->next,   \
+                                      ITER_VAR(NEXT) != (LIST));              \
+         UPDATE_MULTIVAR_SAFE_LONG(VAR, NEXT))
+
+/* SHORT version of SAFE iterators. */
+#define LIST_FOR_EACH_REVERSE_SAFE_SHORT(VAR, MEMBER, LIST)                   \
+    for (INIT_MULTIVAR_SAFE_SHORT(VAR, MEMBER, (LIST)->prev, struct ovs_list);\
+         CONDITION_MULTIVAR_SAFE_SHORT(VAR, MEMBER,                           \
+                                       ITER_VAR(VAR) != (LIST),               \
+                                 ITER_NEXT_VAR(VAR) = ITER_VAR(VAR)->prev);   \
+         UPDATE_MULTIVAR_SAFE_SHORT(VAR))
+
+#define LIST_FOR_EACH_SAFE_SHORT(VAR, MEMBER, LIST)                           \
+    for (INIT_MULTIVAR_SAFE_SHORT(VAR, MEMBER, (LIST)->next, struct ovs_list);\
+         CONDITION_MULTIVAR_SAFE_SHORT(VAR, MEMBER,                           \
+                                       ITER_VAR(VAR) != (LIST),               \
+                                 ITER_NEXT_VAR(VAR) = ITER_VAR(VAR)->next);   \
+         UPDATE_MULTIVAR_SAFE_SHORT(VAR))
+
+#define LIST_FOR_EACH_SAFE(...)                      \
+    OVERLOAD_SAFE_MACRO(LIST_FOR_EACH_SAFE_LONG,     \
+                        LIST_FOR_EACH_SAFE_SHORT,    \
+                        4, __VA_ARGS__)
+
+#define LIST_FOR_EACH_REVERSE_SAFE(...)                        \
+    OVERLOAD_SAFE_MACRO(LIST_FOR_EACH_REVERSE_SAFE_LONG,       \
+                        LIST_FOR_EACH_REVERSE_SAFE_SHORT,      \
+                        4, __VA_ARGS__)
+
+#define LIST_FOR_EACH_POP(ITER, MEMBER, LIST)                                 \
+    while (!ovs_list_is_empty(LIST) ?                                         \
+           (INIT_CONTAINER(ITER, ovs_list_pop_front(LIST), MEMBER), 1) :      \
+           (ITER = NULL, 0))
 
 /* Inline implementations. */
 

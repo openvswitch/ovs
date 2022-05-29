@@ -309,10 +309,10 @@ void
 ovsdb_table_destroy(struct ovsdb_table *table)
 {
     if (table) {
-        struct ovsdb_row *row, *next;
+        struct ovsdb_row *row;
         size_t i;
 
-        HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
+        HMAP_FOR_EACH_SAFE (row, hmap_node, &table->rows) {
             ovsdb_row_destroy(row);
         }
         hmap_destroy(&table->rows);

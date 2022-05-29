@@ -265,6 +265,43 @@ test_hindex_for_each_safe(hash_func *hash)
             i = 0;
             n_remaining = n;
             HINDEX_FOR_EACH_SAFE (e, next, node, &hindex) {
+                if (hindex_next(&hindex, &e->node) == NULL) {
+                    assert(next == NULL);
+                } else {
+                    assert(&next->node == hindex_next(&hindex, &e->node));
+                }
+                assert(i < n);
+                if (pattern & (1ul << e->value)) {
+                    size_t j;
+                    hindex_remove(&hindex, &e->node);
+                    for (j = 0; ; j++) {
+                        assert(j < n_remaining);
+                        if (values[j] == e->value) {
+                            values[j] = values[--n_remaining];
+                            break;
+                        }
+                    }
+                }
+                check_hindex(&hindex, values, n_remaining, hash);
+                i++;
+            }
+            assert(i == n);
+            assert(next == NULL);
+
+            for (i = 0; i < n; i++) {
+                if (pattern & (1ul << i)) {
+                    n_remaining++;
+                }
+            }
+            assert(n == n_remaining);
+            hindex_destroy(&hindex);
+
+            /* Test short version (without the next variable). */
+            make_hindex(&hindex, elements, values, n, hash);
+
+            i = 0;
+            n_remaining = n;
+            HINDEX_FOR_EACH_SAFE (e, node, &hindex) {
                 assert(i < n);
                 if (pattern & (1ul << e->value)) {
                     size_t j;

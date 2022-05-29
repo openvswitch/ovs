@@ -192,6 +192,7 @@ actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 ip,actions=set_field:10.4.3.77->ip_src,mod_nw_ecn:2
 sctp actions=drop
 sctp actions=drop
+ip,nw_proto=2 actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
@@ -226,6 +227,7 @@ OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.0
 OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77,load:0x2->NXM_NX_IP_ECN[]
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
+OFPT_FLOW_MOD: ADD ip,nw_proto=2 actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
@@ -257,6 +259,7 @@ udp,nw_src=192.168.0.3,tp_dst=53 actions=mod_nw_ecn:2,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 ip,actions=mod_nw_ttl:1,set_field:10.4.3.77->ip_src
+ip,nw_proto=2 actions=drop
 sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
@@ -277,6 +280,7 @@ OFPT_FLOW_MOD (OF1.1): ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=mod_nw_ecn:2
 OFPT_FLOW_MOD (OF1.1): ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD (OF1.1): ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 OFPT_FLOW_MOD (OF1.1): ADD ip actions=mod_nw_ttl:1,mod_nw_src:10.4.3.77
+OFPT_FLOW_MOD (OF1.1): ADD ip,nw_proto=2 actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD in_port=0 actions=resubmit:0
@@ -303,6 +307,7 @@ sctp actions=set_field:4445->sctp_dst
 tcp actions=mod_tp_dst:1234
 udp actions=mod_tp_src:1111
 ip actions=mod_nw_src:10.1.1.2,mod_nw_dst:192.168.10.1,mod_nw_ttl:1,mod_nw_tos:16,mod_nw_ecn:2
+ip,nw_proto=2 actions=drop
 in_port=0 actions=mod_dl_src:11:22:33:44:55:66,mod_dl_dst:10:20:30:40:50:60
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
@@ -329,6 +334,7 @@ OFPT_FLOW_MOD (OF1.2): ADD sctp actions=set_field:4445->sctp_dst
 OFPT_FLOW_MOD (OF1.2): ADD tcp actions=set_field:1234->tcp_dst
 OFPT_FLOW_MOD (OF1.2): ADD udp actions=set_field:1111->udp_src
 OFPT_FLOW_MOD (OF1.2): ADD ip actions=set_field:10.1.1.2->ip_src,set_field:192.168.10.1->ip_dst,mod_nw_ttl:1,set_field:4->ip_dscp,set_field:2->nw_ecn
+OFPT_FLOW_MOD (OF1.2): ADD ip,nw_proto=2 actions=drop
 OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=set_field:11:22:33:44:55:66->eth_src,set_field:10:20:30:40:50:60->eth_dst
 OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
@@ -3245,4 +3251,23 @@ dnl need to suppress the 'connection failed' WARN message in ovs-vswitchd
 dnl because we need ovs-vswitchd to have the controller config before starting
 dnl the controller to 'snoop' the OpenFlow messages from beginning
 OVS_VSWITCHD_STOP(["/connection failed (No such file or directory)/d"])
+AT_CLEANUP
+
+
+AT_SETUP([ovs-ofctl show-flows - Oversized flow])
+OVS_VSWITCHD_START
+
+printf " priority=90,icmp,reg15=0x8005,metadata=0x1,nw_dst=11.0.0.1,icmp_type=8,icmp_code=0 actions=" > flow.txt
+for i in `seq 1 2045`; do printf "dec_ttl,resubmit(,39),"; done >> flow.txt
+printf "resubmit(,39)\n" >> flow.txt
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flows br0 flow.txt])
+
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip | sed '/NXST_FLOW/d' | sort], [0], [])
+OVS_WAIT_UNTIL([grep -q "ofp_flow|WARN|Flow exceeded the maximum flow statistics reply size and was excluded from the response set" ovs-vswitchd.log])
+
+cat flow.txt > expout
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort], [0], [expout])
+
+OVS_VSWITCHD_STOP(["/Flow exceeded the maximum flow statistics reply size and was excluded from the response set/d"])
 AT_CLEANUP

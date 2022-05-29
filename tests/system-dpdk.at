@@ -3,6 +3,15 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 
 AT_BANNER([OVS-DPDK unit tests])
 
+m4_define([SYSTEM_DPDK_ALLOWED_LOGS],[
+\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
+\@does not support MTU configuration,@d
+\@EAL: No \(available\|free\) .*hugepages reported@d
+\@Failed to enable flow control@d
+\@Rx checksum offload is not supported on@d
+\@TELEMETRY: No legacy callbacks, legacy socket not created@d
+])
+
 dnl --------------------------------------------------------------------------
 dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK - EAL init])
@@ -12,10 +21,7 @@ OVS_DPDK_START()
 AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
-OVS_VSWITCHD_STOP(["/Global register is changed during/d
-/EAL:   Invalid NUMA socket, default to 0/d
-/EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !/d
-/EAL: No free hugepages reported in hugepages-1048576kB/d"])
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -37,12 +43,7 @@ sleep 2
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("/does not exist. The Open vSwitch kernel module is probably not loaded./d
-/Failed to enable flow control/d
-/Global register is changed during/d
-/EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !/d
-/EAL: No free hugepages reported in hugepages-1048576kB/d
-")
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -68,13 +69,9 @@ AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
-\@Failed to enable flow control@d
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
 \@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
-\@Global register is changed during@d
-\@EAL:   Invalid NUMA socket, default to 0@d
-\@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
-\@EAL: No free hugepages reported in hugepages-1048576kB@d"])
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -120,8 +117,8 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
 
-dnl Give settling time to the testpmd processes - NOTE: this is bad form.
-sleep 10
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
@@ -144,16 +141,12 @@ pkill -f -x -9 'tail -f /dev/null'
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
-\@Failed to enable flow control@d
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
 \@VHOST_CONFIG: recvmsg failed@d
 \@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostuser0: No such file or directory@d
-\@Global register is changed during@d
 \@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
 \@failed to enumerate system datapaths: No such file or directory@d
-\@EAL:   Invalid NUMA socket, default to 0@d
-\@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
-\@EAL: No free hugepages reported in hugepages-1048576kB@d"])
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -196,8 +189,8 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --vdev="net_tap0,iface=tap0" --file-prefix page0 \
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
-dnl Give settling time to the testpmd processes - NOTE: this is bad form.
-sleep 10
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
 
 dnl Move the tap devices to the namespaces
 AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
@@ -220,16 +213,12 @@ pkill -f -x -9 'tail -f /dev/null'
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
-\@Failed to enable flow control@d
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
 \@VHOST_CONFIG: recvmsg failed@d
 \@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
-\@Global register is changed during@d
 \@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
 \@failed to enumerate system datapaths: No such file or directory@d
-\@EAL:   Invalid NUMA socket, default to 0@d
-\@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
-\@EAL: No free hugepages reported in hugepages-1048576kB@d"])
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -248,6 +237,10 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
 
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
+])
+
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
 Miniflow extract implementation set to autovalidator.
 ])
@@ -256,6 +249,7 @@ OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packe
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -275,6 +269,10 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
 
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
+])
+
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
 Miniflow extract implementation set to autovalidator.
 ])
@@ -283,6 +281,9 @@ OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packe
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@upcall: datapath reached the dynamic limit of .* flows.@d
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -390,5 +391,16 @@ ovs-appctl: ovs-vswitchd: server returned an error
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@Error: unknown argument 1.@d
+\@Error: invalid study_pkt_cnt value: xyz.@d
+\@Error: unknown argument abcd.@d
+\@Error: -pmd option requires a thread id argument.@d
+\@Error: invalid study_pkt_cnt value: abcd.@d
+\@Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID.@d
+\@Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list.@d
+\@Error: unknown miniflow extract implementation superstudy.@d
+\@Error: invalid study_pkt_cnt value: -pmd.@d
+])")
 AT_CLEANUP dnl
 dnl --------------------------------------------------------------------------

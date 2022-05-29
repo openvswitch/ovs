@@ -553,6 +553,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_CT_ZONE:
     case OVS_KEY_ATTR_CT_MARK:
     case OVS_KEY_ATTR_CT_LABELS:
+    case OVS_KEY_ATTR_TUNNEL_INFO:
     case __OVS_KEY_ATTR_MAX:
     default:
         OVS_NOT_REACHED();
@@ -665,6 +666,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_TCP_FLAGS:
+    case OVS_KEY_ATTR_TUNNEL_INFO:
     case __OVS_KEY_ATTR_MAX:
     default:
         OVS_NOT_REACHED();
@@ -819,6 +821,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_POP_NSH:
     case OVS_ACTION_ATTR_CT_CLEAR:
     case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+    case OVS_ACTION_ATTR_ADD_MPLS:
     case OVS_ACTION_ATTR_DROP:
         return false;
 
@@ -1060,6 +1063,17 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 return;
             }
             break;
+
+        case OVS_ACTION_ATTR_ADD_MPLS: {
+            const struct ovs_action_add_mpls *mpls = nl_attr_get(a);
+            bool l3_flag =  mpls->tun_flags & OVS_MPLS_L3_TUNNEL_FLAG_MASK;
+
+            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                add_mpls(packet, mpls->mpls_ethertype, mpls->mpls_lse,
+                         l3_flag);
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_DROP:{
             const enum xlate_error *drop_reason = nl_attr_get(a);

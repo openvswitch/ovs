@@ -226,6 +226,20 @@ Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
 .
 .IP "\*(DX\fBdel\-flows\fR [\fIdp\fR]"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
+.SS "DATAPATH FLOW CACHE COMMANDS"
+The following commands are useful for debugging and configuring
+the datapath flow cache settings.
+.
+.TP
+\*(DX\fBcache\-get\-size\fR [\fIdp\fR]
+Prints the current cache sizes to the console.
+.
+.TP
+\*(DX\fBcache\-set\-size\fR \fIdp\fR \fIcache\fR \fIsize\fR
+Set the \fIdp\fR's specific \fIcache\fR to the given \fIsize\fR.
+The cache name can be found by using the \fBcache\-get\-size\fR
+command.
+.
 .SS "CONNECTION TRACKING TABLE COMMANDS"
 The following commands are useful for debugging and configuring
 the connection tracking table in the datapath.

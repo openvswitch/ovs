@@ -81,6 +81,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
 
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+
 # Start the daemon and wait for the pidfile to get created.
 on_exit 'kill $(cat *.pid)'
 AT_CHECK([ovsdb-server --monitor --pidfile --no-db 2>/dev/null & echo $!],
@@ -148,6 +152,10 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 
 on_exit 'kill $(cat *.pid)'
 

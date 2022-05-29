@@ -328,6 +328,98 @@ ofputil_flow_removed_format(struct ds *s,
     ds_put_format(s, " pkts%"PRIu64" bytes%"PRIu64"\n",
                   fr->packet_count, fr->byte_count);
 }
+
+static uint16_t
+nx_to_ofp_flow_monitor_flags(uint16_t flags)
+{
+    uint16_t oxm_flags = 0;
+
+    if (flags & NXFMF_INITIAL) {
+        oxm_flags |= OFPFMF_INITIAL;
+    }
+    if (flags & NXFMF_ADD) {
+        oxm_flags |= OFPFMF_ADD;
+    }
+    if (flags & NXFMF_DELETE) {
+        oxm_flags |= OFPFMF_REMOVED;
+    }
+    if (flags & NXFMF_MODIFY) {
+        oxm_flags |= OFPFMF_MODIFY;
+    }
+    if (flags & NXFMF_ACTIONS) {
+        oxm_flags |= OFPFMF_INSTRUCTIONS;
+    }
+    if (flags & NXFMF_OWN) {
+        oxm_flags |= OFPFMF_ONLY_OWN;
+    }
+
+    return oxm_flags;
+}
+
+static uint16_t
+ofp_to_nx_flow_monitor_flags(uint16_t flags)
+{
+    uint16_t nx_flags = 0;
+
+    if (flags & OFPFMF_INITIAL) {
+        nx_flags |= NXFMF_INITIAL;
+    }
+    if (flags & OFPFMF_ADD) {
+        nx_flags |= NXFMF_ADD;
+    }
+    if (flags & OFPFMF_REMOVED) {
+        nx_flags |= NXFMF_DELETE;
+    }
+    if (flags & OFPFMF_MODIFY) {
+        nx_flags |= NXFMF_MODIFY;
+    }
+    if (flags & OFPFMF_INSTRUCTIONS) {
+        nx_flags |= NXFMF_ACTIONS;
+    }
+    if (flags & OFPFMF_ONLY_OWN) {
+        nx_flags |= NXFMF_OWN;
+    }
+
+    return nx_flags;
+}
+
+static enum ofp_flow_update_event
+nx_to_ofp_flow_update_event(enum nx_flow_update_event event)
+{
+    switch (event) {
+    case NXFME_ADDED:
+        return OFPFME_ADDED;
+    case NXFME_DELETED:
+        return OFPFME_REMOVED;
+    case NXFME_MODIFIED:
+        return OFPFME_MODIFIED;
+    case NXFME_ABBREV:
+        return OFPFME_ABBREV;
+     default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static enum nx_flow_update_event
+ofp_to_nx_flow_update_event(enum ofp_flow_update_event event)
+{
+    switch (event) {
+    case OFPFME_INITIAL:
+    case OFPFME_ADDED:
+        return NXFME_ADDED;
+    case OFPFME_REMOVED:
+        return NXFME_DELETED;
+    case OFPFME_MODIFIED:
+        return NXFME_MODIFIED;
+    case OFPFME_ABBREV:
+        return NXFME_ABBREV;
+    default:
+    case OFPFME_PAUSED:
+    case OFPFME_RESUMED:
+        OVS_NOT_REACHED();
+    }
+}
+
 
 /* ofputil_flow_monitor_request */
 
@@ -345,84 +437,237 @@ int
 ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
                                     struct ofpbuf *msg)
 {
-    struct nx_flow_monitor_request *nfmr;
     uint16_t flags;
+    enum ofperr error;
+    enum ofpraw raw;
 
-    if (!msg->header) {
-        ofpraw_pull_assert(msg);
+    error = (msg->header ? ofpraw_decode(&raw, msg->header)
+             : ofpraw_pull(&raw, msg));
+    if (error) {
+        return error;
     }
 
     if (!msg->size) {
         return EOF;
     }
 
-    nfmr = ofpbuf_try_pull(msg, sizeof *nfmr);
-    if (!nfmr) {
-        VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR request has %"PRIu32" "
-                     "leftover bytes at end", msg->size);
-        return OFPERR_OFPBRC_BAD_LEN;
+    switch ((int) raw) {
+    case OFPRAW_NXST_FLOW_MONITOR_REQUEST: {
+        struct nx_flow_monitor_request *nfmr;
+
+        nfmr = ofpbuf_try_pull(msg, sizeof *nfmr);
+        if (!nfmr) {
+            VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR request has %"PRIu32" "
+                    "leftover bytes at end", msg->size);
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        flags = ntohs(nfmr->flags);
+        if (!(flags & (NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY))
+            || flags & ~(NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE
+                         | NXFMF_MODIFY | NXFMF_ACTIONS | NXFMF_OWN)) {
+            VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR has bad flags %#"PRIx16,
+                         flags);
+            return OFPERR_OFPMOFC_BAD_FLAGS;
+        }
+
+        if (!is_all_zeros(nfmr->zeros, sizeof nfmr->zeros)) {
+            return OFPERR_NXBRC_MUST_BE_ZERO;
+        }
+
+        rq->id = ntohl(nfmr->id);
+        rq->command = OFPFMC_ADD;
+        rq->flags = nx_to_ofp_flow_monitor_flags(flags);
+        rq->out_port = u16_to_ofp(ntohs(nfmr->out_port));
+        rq->table_id = nfmr->table_id;
+        rq->out_group = OFPG_ANY;
+
+        return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL,
+                NULL, false, NULL, NULL);
     }
+    case OFPRAW_ONFST13_FLOW_MONITOR_REQUEST: {
+        struct onf_flow_monitor_request *ofmr;
 
-    flags = ntohs(nfmr->flags);
-    if (!(flags & (NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY))
-        || flags & ~(NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE
-                     | NXFMF_MODIFY | NXFMF_ACTIONS | NXFMF_OWN)) {
-        VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR has bad flags %#"PRIx16, flags);
-        return OFPERR_OFPMOFC_BAD_FLAGS;
+        ofmr = ofpbuf_try_pull(msg, sizeof *ofmr);
+        if (!ofmr) {
+            VLOG_WARN_RL(&rl, "ONFST_FLOW_MONITOR request has %"PRIu32" "
+                         "leftover bytes at end", msg->size);
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        flags = ntohs(ofmr->flags);
+        if (!(flags & (ONFFMF_ADD | ONFFMF_DELETE | ONFFMF_MODIFY))
+            || flags & ~(ONFFMF_INITIAL | ONFFMF_ADD | ONFFMF_DELETE
+                         | ONFFMF_MODIFY | ONFFMF_ACTIONS | ONFFMF_OWN)) {
+            VLOG_WARN_RL(&rl, "ONFST_FLOW_MONITOR has bad flags %#"PRIx16,
+                         flags);
+            return OFPERR_OFPMOFC_BAD_FLAGS;
+        }
+
+        if (!is_all_zeros(ofmr->zeros, sizeof ofmr->zeros)) {
+            return OFPERR_NXBRC_MUST_BE_ZERO;
+        }
+
+        rq->id = ntohl(ofmr->id);
+        rq->command = OFPFMC_ADD;
+        rq->flags = nx_to_ofp_flow_monitor_flags(flags);
+        error = ofputil_port_from_ofp11(ofmr->out_port, &rq->out_port);
+        if (error) {
+            return error;
+        }
+        rq->table_id = ofmr->table_id;
+        rq->out_group = OFPG_ANY;
+
+        return ofputil_pull_ofp11_match(msg, NULL, NULL, &rq->match, NULL);
     }
+    case OFPRAW_OFPST14_FLOW_MONITOR_REQUEST: {
+        struct ofp14_flow_monitor_request *ofmr;
 
-    if (!is_all_zeros(nfmr->zeros, sizeof nfmr->zeros)) {
-        return OFPERR_NXBRC_MUST_BE_ZERO;
+        ofmr = ofpbuf_try_pull(msg, sizeof *ofmr);
+        if (!ofmr) {
+            VLOG_WARN_RL(&rl, "OFPST_FLOW_MONITOR request has %"PRIu32" "
+                    "leftover bytes at end", msg->size);
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        flags = ntohs(ofmr->flags);
+        rq->id = ntohl(ofmr->monitor_id);
+        rq->command = ofmr->command;
+
+        if (ofmr->command == OFPFMC_DELETE) {
+            return ofputil_pull_ofp11_match(msg, NULL, NULL, &rq->match, NULL);
+        }
+
+        if (!(flags & (OFPFMF_ADD | OFPFMF_REMOVED | OFPFMF_MODIFY))
+                || flags & ~(OFPFMF_INITIAL | OFPFMF_ADD | OFPFMF_REMOVED
+                    | OFPFMF_MODIFY | OFPFMF_INSTRUCTIONS | OFPFMF_ONLY_OWN)) {
+            VLOG_WARN_RL(&rl, "OFPST_FLOW_MONITOR has bad flags %#"PRIx16,
+                         flags);
+            return OFPERR_OFPMOFC_BAD_FLAGS;
+        }
+
+        rq->command = ofmr->command;
+        rq->flags = flags;
+        error = ofputil_port_from_ofp11(ofmr->out_port, &rq->out_port);
+        if (error) {
+            return error;
+        }
+        rq->out_group = ntohl(ofmr->out_group);
+        rq->table_id = ofmr->table_id;
+
+        return ofputil_pull_ofp11_match(msg, NULL, NULL, &rq->match, NULL);
     }
-
-    rq->id = ntohl(nfmr->id);
-    rq->flags = flags;
-    rq->out_port = u16_to_ofp(ntohs(nfmr->out_port));
-    rq->table_id = nfmr->table_id;
-
-    return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL,
-                         NULL, false, NULL, NULL);
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 void
 ofputil_append_flow_monitor_request(
-    const struct ofputil_flow_monitor_request *rq, struct ofpbuf *msg)
+    const struct ofputil_flow_monitor_request *rq, struct ofpbuf *msg,
+    enum ofputil_protocol protocol)
 {
-    struct nx_flow_monitor_request *nfmr;
     size_t start_ofs;
     int match_len;
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
 
     if (!msg->size) {
-        ofpraw_put(OFPRAW_NXST_FLOW_MONITOR_REQUEST, OFP10_VERSION, msg);
+        switch (version) {
+        case OFP10_VERSION:
+        case OFP11_VERSION:
+        case OFP12_VERSION: {
+            struct nx_flow_monitor_request *nfmr;
+
+            if (!msg->size) {
+                ofpraw_put(OFPRAW_NXST_FLOW_MONITOR_REQUEST, version, msg);
+            }
+
+            start_ofs = msg->size;
+            ofpbuf_put_zeros(msg, sizeof *nfmr);
+            match_len = nx_put_match(msg, &rq->match, htonll(0), htonll(0));
+
+            nfmr = ofpbuf_at_assert(msg, start_ofs, sizeof *nfmr);
+            nfmr->id = htonl(rq->id);
+            nfmr->flags = htons(ofp_to_nx_flow_monitor_flags(rq->flags));
+            nfmr->out_port = htons(ofp_to_u16(rq->out_port));
+            nfmr->match_len = htons(match_len);
+            nfmr->table_id = rq->table_id;
+            break;
+        }
+        case OFP13_VERSION: {
+            struct onf_flow_monitor_request *ofmr;
+
+            if (!msg->size) {
+                ofpraw_put(OFPRAW_ONFST13_FLOW_MONITOR_REQUEST, version, msg);
+            }
+
+            start_ofs = msg->size;
+            ofpbuf_put_zeros(msg, sizeof *ofmr);
+            match_len = oxm_put_match(msg, &rq->match, version);
+
+            ofmr = ofpbuf_at_assert(msg, start_ofs, sizeof *ofmr);
+            ofmr->id = htonl(rq->id);
+            ofmr->flags = htons(ofp_to_nx_flow_monitor_flags(rq->flags));
+            ofmr->match_len = htons(match_len);
+            ofmr->out_port = ofputil_port_to_ofp11(rq->out_port);
+            ofmr->table_id = rq->table_id;
+            break;
+        }
+        case OFP14_VERSION:
+        case OFP15_VERSION: {
+            struct ofp14_flow_monitor_request *ofmr;
+
+            if (!msg->size) {
+                ofpraw_put(OFPRAW_OFPST14_FLOW_MONITOR_REQUEST, version, msg);
+            }
+
+            start_ofs = msg->size;
+            ofpbuf_put_zeros(msg, sizeof *ofmr);
+            oxm_put_match(msg, &rq->match, version);
+
+            ofmr = ofpbuf_at_assert(msg, start_ofs, sizeof *ofmr);
+            ofmr->monitor_id = htonl(rq->id);
+            ofmr->command = OFPFMC_ADD;
+            ofmr->out_port = ofputil_port_to_ofp11(rq->out_port);
+            ofmr->out_group = htonl(rq->out_group);
+            ofmr->flags = htons(rq->flags);
+            ofmr->table_id = rq->table_id;
+            break;
+        }
+        default:
+            OVS_NOT_REACHED();
+        }
     }
-
-    start_ofs = msg->size;
-    ofpbuf_put_zeros(msg, sizeof *nfmr);
-    match_len = nx_put_match(msg, &rq->match, htonll(0), htonll(0));
-
-    nfmr = ofpbuf_at_assert(msg, start_ofs, sizeof *nfmr);
-    nfmr->id = htonl(rq->id);
-    nfmr->flags = htons(rq->flags);
-    nfmr->out_port = htons(ofp_to_u16(rq->out_port));
-    nfmr->match_len = htons(match_len);
-    nfmr->table_id = rq->table_id;
 }
 
 static const char *
-nx_flow_monitor_flags_to_name(uint32_t bit)
+ofp_flow_monitor_flags_to_name(uint32_t bit)
 {
-    enum nx_flow_monitor_flags fmf = bit;
+    enum ofp14_flow_monitor_flags fmf = bit;
 
     switch (fmf) {
-    case NXFMF_INITIAL: return "initial";
-    case NXFMF_ADD: return "add";
-    case NXFMF_DELETE: return "delete";
-    case NXFMF_MODIFY: return "modify";
-    case NXFMF_ACTIONS: return "actions";
-    case NXFMF_OWN: return "own";
+    case OFPFMF_INITIAL: return "initial";
+    case OFPFMF_ADD: return "add";
+    case OFPFMF_REMOVED: return "delete";
+    case OFPFMF_MODIFY: return "modify";
+    case OFPFMF_INSTRUCTIONS: return "actions";
+    case OFPFMF_NO_ABBREV: return "no-abbrev";
+    case OFPFMF_ONLY_OWN: return "own";
     }
 
     return NULL;
+}
+
+static const char *
+ofp_flow_monitor_command_to_string(enum ofp14_flow_monitor_command command)
+{
+    switch (command) {
+    case OFPFMC_ADD: return "add";
+    case OFPFMC_MODIFY: return "modify";
+    case OFPFMC_DELETE: return "delete";
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 void
@@ -431,12 +676,22 @@ ofputil_flow_monitor_request_format(
     const struct ofputil_port_map *port_map,
     const struct ofputil_table_map *table_map)
 {
+    if (request->command == OFPFMC_DELETE) {
+        ds_put_format(s, "\n id=%"PRIu32" command=%s", request->id,
+                      ofp_flow_monitor_command_to_string(request->command));
+        return;
+    }
     ds_put_format(s, "\n id=%"PRIu32" flags=", request->id);
-    ofp_print_bit_names(s, request->flags, nx_flow_monitor_flags_to_name, ',');
+    ofp_print_bit_names(s, request->flags,
+                        ofp_flow_monitor_flags_to_name, ',');
 
     if (request->out_port != OFPP_NONE) {
         ds_put_cstr(s, " out_port=");
         ofputil_format_port(request->out_port, port_map, s);
+    }
+
+    if (request->out_group && (request->out_group != OFPG_ANY)) {
+        ds_put_format(s, " out_group=%d", request->out_group);
     }
 
     if (request->table_id != 0xff) {
@@ -444,9 +699,11 @@ ofputil_flow_monitor_request_format(
         ofputil_format_table(request->table_id, table_map, s);
     }
 
-    ds_put_char(s, ' ');
-    match_format(&request->match, port_map, s, OFP_DEFAULT_PRIORITY);
-    ds_chomp(s, ' ');
+    if (request->command != OFPFMC_DELETE) {
+        ds_put_char(s, ' ');
+        match_format(&request->match, port_map, s, OFP_DEFAULT_PRIORITY);
+        ds_chomp(s, ' ');
+    }
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -462,9 +719,10 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
 
     fmr->id = atomic_count_inc(&id);
 
-    fmr->flags = (NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY
-                  | NXFMF_OWN | NXFMF_ACTIONS);
+    fmr->flags = (OFPFMF_INITIAL | OFPFMF_ADD | OFPFMF_REMOVED | OFPFMF_MODIFY
+                  | OFPFMF_ONLY_OWN | OFPFMF_INSTRUCTIONS);
     fmr->out_port = OFPP_NONE;
+    fmr->out_group = OFPG_ANY;
     fmr->table_id = 0xff;
     match_init_catchall(&fmr->match);
 
@@ -474,17 +732,19 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
         char *error = NULL;
 
         if (!strcmp(name, "!initial")) {
-            fmr->flags &= ~NXFMF_INITIAL;
+            fmr->flags &= ~OFPFMF_INITIAL;
         } else if (!strcmp(name, "!add")) {
-            fmr->flags &= ~NXFMF_ADD;
+            fmr->flags &= ~OFPFMF_ADD;
         } else if (!strcmp(name, "!delete")) {
-            fmr->flags &= ~NXFMF_DELETE;
+            fmr->flags &= ~OFPFMF_REMOVED;
         } else if (!strcmp(name, "!modify")) {
-            fmr->flags &= ~NXFMF_MODIFY;
+            fmr->flags &= ~OFPFMF_MODIFY;
         } else if (!strcmp(name, "!actions")) {
-            fmr->flags &= ~NXFMF_ACTIONS;
+            fmr->flags &= ~OFPFMF_INSTRUCTIONS;
+        } else if (!strcmp(name, "!abbrev")) {
+            fmr->flags &= ~OFPFMF_NO_ABBREV;
         } else if (!strcmp(name, "!own")) {
-            fmr->flags &= ~NXFMF_OWN;
+            fmr->flags &= ~OFPFMF_ONLY_OWN;
         } else if (ofp_parse_protocol(name, &p)) {
             match_set_dl_type(&fmr->match, htons(p->dl_type));
             if (p->nw_proto) {
@@ -509,6 +769,8 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                 }
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
+            } else if (!strcmp(name, "out_group")) {
+                fmr->out_group = atoi(value);
             } else {
                 return xasprintf("%s: unknown keyword %s", str_, name);
             }
@@ -517,9 +779,6 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
         if (error) {
             return error;
         }
-        /* Flow Monitor is supported in OpenFlow 1.0 or can be further reduced
-         * to a few 1.0 flavors by a match field. */
-        *usable_protocols &= OFPUTIL_P_OF10_ANY;
     }
     return NULL;
 }
@@ -563,12 +822,18 @@ int
 ofputil_decode_flow_update(struct ofputil_flow_update *update,
                            struct ofpbuf *msg, struct ofpbuf *ofpacts)
 {
-    struct nx_flow_update_header *nfuh;
     unsigned int length;
     struct ofp_header *oh;
+    enum ofperr error;
+    enum ofpraw raw;
 
     if (!msg->header) {
         ofpraw_pull_assert(msg);
+    }
+
+    error = ofpraw_decode(&raw, msg->header);
+    if (error) {
+        return error;
     }
 
     ofpbuf_clear(ofpacts);
@@ -576,109 +841,340 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         return EOF;
     }
 
-    if (msg->size < sizeof(struct nx_flow_update_header)) {
-        goto bad_len;
-    }
-
     oh = msg->header;
 
-    nfuh = msg->data;
-    update->event = ntohs(nfuh->event);
-    length = ntohs(nfuh->length);
-    if (length > msg->size || length % 8) {
-        goto bad_len;
-    }
+    switch ((int) raw) {
+    case OFPRAW_ONFST13_FLOW_MONITOR_REPLY:
+    case OFPRAW_NXST_FLOW_MONITOR_REPLY: {
+        struct nx_flow_update_header *nfuh;
+        enum nx_flow_update_event nx_event;
 
-    if (update->event == NXFME_ABBREV) {
-        struct nx_flow_update_abbrev *nfua;
-
-        if (length != sizeof *nfua) {
+        if (msg->size < sizeof(struct nx_flow_update_header)) {
             goto bad_len;
         }
 
-        nfua = ofpbuf_pull(msg, sizeof *nfua);
-        update->xid = nfua->xid;
+        nfuh = msg->data;
+        length = ntohs(nfuh->length);
+        if (length > msg->size || length % 8) {
+            goto bad_len;
+        }
+
+        nx_event = ntohs(nfuh->event);
+        if (nx_event == NXFME_ABBREV) {
+            struct nx_flow_update_abbrev *nfua;
+
+            if (length != sizeof *nfua) {
+                goto bad_len;
+            }
+
+            nfua = ofpbuf_pull(msg, sizeof *nfua);
+            update->xid = nfua->xid;
+        } else if (nx_event == NXFME_ADDED
+                   || nx_event == NXFME_DELETED
+                   || nx_event == NXFME_MODIFIED) {
+            struct nx_flow_update_full *nfuf;
+            unsigned int actions_len;
+            unsigned int match_len;
+
+            if (length < sizeof *nfuf) {
+                goto bad_len;
+            }
+
+            nfuf = ofpbuf_pull(msg, sizeof *nfuf);
+            match_len = ntohs(nfuf->match_len);
+            if (sizeof *nfuf + match_len > length) {
+                goto bad_len;
+            }
+
+            update->reason = ntohs(nfuf->reason);
+            update->idle_timeout = ntohs(nfuf->idle_timeout);
+            update->hard_timeout = ntohs(nfuf->hard_timeout);
+            update->table_id = nfuf->table_id;
+            update->cookie = nfuf->cookie;
+            update->priority = ntohs(nfuf->priority);
+
+            if (raw == OFPRAW_ONFST13_FLOW_MONITOR_REPLY) {
+                uint16_t padded_match_len = 0;
+                unsigned int instructions_len;
+
+                error = ofputil_pull_ofp11_match(
+                    msg, NULL, NULL, &update->match, &padded_match_len);
+                if (error) {
+                    return error;
+                }
+
+                instructions_len = length - sizeof *nfuf - padded_match_len;
+                error = ofpacts_pull_openflow_instructions(
+                    msg, instructions_len, oh->version, NULL, NULL, ofpacts);
+                if (error) {
+                    return error;
+                }
+            } else {
+                error = nx_pull_match(msg, match_len, &update->match, NULL,
+                                      NULL, false, NULL, NULL);
+                if (error) {
+                    return error;
+                }
+
+                actions_len = length - sizeof *nfuf - ROUND_UP(match_len, 8);
+                error = ofpacts_pull_openflow_actions(
+                    msg, actions_len, oh->version, NULL, NULL, ofpacts);
+                if (error) {
+                    return error;
+                }
+            }
+
+            update->ofpacts = ofpacts->data;
+            update->ofpacts_len = ofpacts->size;
+        } else {
+            VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR reply has bad event %"PRIu16,
+                         ntohs(nfuh->event));
+            return OFPERR_NXBRC_FM_BAD_EVENT;
+        }
+
+        update->event = nx_to_ofp_flow_update_event(nx_event);
         return 0;
-    } else if (update->event == NXFME_ADDED
-               || update->event == NXFME_DELETED
-               || update->event == NXFME_MODIFIED) {
-        struct nx_flow_update_full *nfuf;
-        unsigned int actions_len;
-        unsigned int match_len;
-        enum ofperr error;
-
-        if (length < sizeof *nfuf) {
-            goto bad_len;
-        }
-
-        nfuf = ofpbuf_pull(msg, sizeof *nfuf);
-        match_len = ntohs(nfuf->match_len);
-        if (sizeof *nfuf + match_len > length) {
-            goto bad_len;
-        }
-
-        update->reason = ntohs(nfuf->reason);
-        update->idle_timeout = ntohs(nfuf->idle_timeout);
-        update->hard_timeout = ntohs(nfuf->hard_timeout);
-        update->table_id = nfuf->table_id;
-        update->cookie = nfuf->cookie;
-        update->priority = ntohs(nfuf->priority);
-
-        error = nx_pull_match(msg, match_len, &update->match, NULL, NULL,
-                              false, NULL, NULL);
-        if (error) {
-            return error;
-        }
-
-        actions_len = length - sizeof *nfuf - ROUND_UP(match_len, 8);
-        error = ofpacts_pull_openflow_actions(msg, actions_len, oh->version,
-                                              NULL, NULL, ofpacts);
-        if (error) {
-            return error;
-        }
-
-        update->ofpacts = ofpacts->data;
-        update->ofpacts_len = ofpacts->size;
-        return 0;
-    } else {
-        VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR reply has bad event %"PRIu16,
-                     ntohs(nfuh->event));
-        return OFPERR_NXBRC_FM_BAD_EVENT;
     }
+    case OFPRAW_OFPST14_FLOW_MONITOR_REPLY: {
+        struct ofp_flow_update_header *ofuh;
+        uint16_t padded_match_len = 0;
 
+        if (msg->size < sizeof(struct ofp_flow_update_header)) {
+            goto bad_len;
+        }
+
+        ofuh = msg->data;
+        update->event = ntohs(ofuh->event);
+        length = ntohs(ofuh->length);
+        if (length > msg->size || length % 8) {
+            goto bad_len;
+        }
+
+        if (update->event == OFPFME_ABBREV) {
+            struct ofp_flow_update_abbrev *ofua;
+
+            if (length != sizeof *ofua) {
+                goto bad_len;
+            }
+
+            ofua = ofpbuf_pull(msg, sizeof *ofua);
+            update->xid = ofua->xid;
+            return 0;
+        } else if (update->event == OFPFME_PAUSED
+                   || update->event == OFPFME_RESUMED) {
+            struct ofp_flow_update_paused *ofup;
+
+            if (length != sizeof *ofup) {
+                goto bad_len;
+            }
+
+            ofup = ofpbuf_pull(msg, sizeof *ofup);
+            return 0;
+        } else if (update->event == OFPFME_INITIAL
+                   || update->event == OFPFME_ADDED
+                   || update->event == OFPFME_REMOVED
+                   || update->event == OFPFME_MODIFIED) {
+            struct ofp_flow_update_full *ofuf;
+            unsigned int instructions_len;
+
+            if (length < sizeof *ofuf) {
+                goto bad_len;
+            }
+
+            ofuf = ofpbuf_pull(msg, sizeof *ofuf);
+            if (sizeof *ofuf > length) {
+                goto bad_len;
+            }
+
+            update->reason = ofuf->reason;
+            update->idle_timeout = ntohs(ofuf->idle_timeout);
+            update->hard_timeout = ntohs(ofuf->hard_timeout);
+            update->table_id = ofuf->table_id;
+            update->cookie = ofuf->cookie;
+            update->priority = ntohs(ofuf->priority);
+
+            error = ofputil_pull_ofp11_match(
+                msg, NULL, NULL, &update->match, &padded_match_len);
+            if (error) {
+                return error;
+            }
+
+            instructions_len = length - sizeof *ofuf - padded_match_len;
+            error = ofpacts_pull_openflow_instructions(
+                msg, instructions_len, oh->version, NULL, NULL, ofpacts);
+            if (error) {
+                return error;
+            }
+
+            update->ofpacts = ofpacts->data;
+            update->ofpacts_len = ofpacts->size;
+            return 0;
+        } else {
+            VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR reply has bad event %"PRIu16,
+                         ntohs(ofuh->event));
+            return OFPERR_NXBRC_FM_BAD_EVENT;
+        }
+    }
+    default:
+        OVS_NOT_REACHED();
+    }
 bad_len:
-    VLOG_WARN_RL(&rl, "NXST_FLOW_MONITOR reply has %"PRIu32" "
-                 "leftover bytes at end", msg->size);
+    VLOG_WARN_RL(&rl, "%s has %"PRIu32" leftover bytes at end",
+                 ofpraw_get_name(raw), msg->size);
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
 uint32_t
 ofputil_decode_flow_monitor_cancel(const struct ofp_header *oh)
 {
-    const struct nx_flow_monitor_cancel *cancel = ofpmsg_body(oh);
+    enum ofperr error;
+    enum ofpraw raw;
 
-    return ntohl(cancel->id);
+    error = ofpraw_decode(&raw, oh);
+    if (error) {
+        return error;
+    }
+
+    switch ((int) raw) {
+    case OFPRAW_ONFT13_FLOW_MONITOR_CANCEL:
+    case OFPRAW_NXT_FLOW_MONITOR_CANCEL: {
+        const struct nx_flow_monitor_cancel *cancel = ofpmsg_body(oh);
+        return ntohl(cancel->id);
+    }
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 struct ofpbuf *
-ofputil_encode_flow_monitor_cancel(uint32_t id)
+ofputil_encode_flow_monitor_cancel(uint32_t id, enum ofputil_protocol protocol)
 {
     struct nx_flow_monitor_cancel *nfmc;
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
     struct ofpbuf *msg;
 
-    msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MONITOR_CANCEL, OFP10_VERSION, 0);
-    nfmc = ofpbuf_put_uninit(msg, sizeof *nfmc);
-    nfmc->id = htonl(id);
+    switch (version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION: {
+        if (version == OFP13_VERSION) {
+            msg = ofpraw_alloc(OFPRAW_ONFT13_FLOW_MONITOR_CANCEL, version, 0);
+        } else {
+            msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MONITOR_CANCEL, version, 0);
+        }
+        nfmc = ofpbuf_put_uninit(msg, sizeof *nfmc);
+        nfmc->id = htonl(id);
+        break;
+    }
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
+        struct ofp14_flow_monitor_request *ofmr;
+
+        msg = ofpbuf_new(0);
+
+        ofpraw_put(OFPRAW_OFPST14_FLOW_MONITOR_REQUEST, version, msg);
+
+        size_t start_ofs = msg->size;
+        ofpbuf_put_zeros(msg, sizeof *ofmr);
+
+        ofmr = ofpbuf_at_assert(msg, start_ofs, sizeof *ofmr);
+        ofmr->monitor_id = htonl(id);
+        ofmr->command = OFPFMC_DELETE;
+        break;
+    }
+    default:
+        OVS_NOT_REACHED();
+    }
+    return msg;
+}
+
+struct ofpbuf *
+ofputil_encode_flow_monitor_pause(enum ofp_flow_update_event command,
+                                  enum ofputil_protocol protocol)
+{
+    struct ofpbuf *msg;
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+
+    if (!(command == OFPFME_PAUSED || command == OFPFME_RESUMED)) {
+        OVS_NOT_REACHED();
+    }
+
+    switch (version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        if (command == OFPFME_PAUSED) {
+            msg = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_PAUSED,
+                                   version, htonl(0), 0);
+        } else {
+            msg = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_RESUMED,
+                                   version, htonl(0), 0);
+        }
+        break;
+    case OFP13_VERSION:
+        if (command == OFPFME_PAUSED) {
+            msg = ofpraw_alloc_xid(OFPRAW_ONFT13_FLOW_MONITOR_PAUSED,
+                                   version, htonl(0), 0);
+        } else {
+            msg = ofpraw_alloc_xid(OFPRAW_ONFT13_FLOW_MONITOR_RESUMED,
+                                   version, htonl(0), 0);
+        }
+        break;
+    case OFP14_VERSION:
+    case OFP15_VERSION: {
+        msg = ofpraw_alloc_xid(OFPRAW_OFPST14_FLOW_MONITOR_REPLY, version,
+                                                   htonl(0), 1024);
+        struct ofp_flow_update_header *ofuh;
+        size_t start_ofs = msg->size;
+
+        struct ofp_flow_update_paused *ofup;
+
+        ofpbuf_put_zeros(msg, sizeof *ofup);
+        ofup = ofpbuf_at_assert(msg, start_ofs, sizeof *ofup);
+        ofup->event = htons(command);
+        ofup->length = htons(8);
+
+        ofuh = ofpbuf_at_assert(msg, start_ofs, sizeof *ofuh);
+        ofuh->length = htons(msg->size - start_ofs);
+        ofuh->event = htons(command);
+
+        ofpmsg_update_length(msg);
+        break;
+    }
+    default:
+        OVS_NOT_REACHED();
+    }
+
     return msg;
 }
 
 void
-ofputil_start_flow_update(struct ovs_list *replies)
+ofputil_start_flow_update(struct ovs_list *replies,
+                          enum ofputil_protocol protocol)
 {
     struct ofpbuf *msg;
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
 
-    msg = ofpraw_alloc_xid(OFPRAW_NXST_FLOW_MONITOR_REPLY, OFP10_VERSION,
-                           htonl(0), 1024);
+    switch (version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        msg = ofpraw_alloc_xid(OFPRAW_NXST_FLOW_MONITOR_REPLY, version,
+                               htonl(0), 1024);
+        break;
+    case OFP13_VERSION:
+        msg = ofpraw_alloc_xid(OFPRAW_ONFST13_FLOW_MONITOR_REPLY, version,
+                               htonl(0), 1024);
+        break;
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        msg = ofpraw_alloc_xid(OFPRAW_OFPST14_FLOW_MONITOR_REPLY, version,
+                               htonl(0), 1024);
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
 
     ovs_list_init(replies);
     ovs_list_push_back(replies, &msg->list_node);
@@ -693,7 +1189,6 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
         CONST_CAST(struct ofputil_flow_update *, update);
     const struct tun_table *orig_tun_table;
     enum ofp_version version = ofpmp_version(replies);
-    struct nx_flow_update_header *nfuh;
     struct ofpbuf *msg;
     size_t start_ofs;
 
@@ -703,32 +1198,80 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     msg = ofpbuf_from_list(ovs_list_back(replies));
     start_ofs = msg->size;
 
-    if (update->event == NXFME_ABBREV) {
-        struct nx_flow_update_abbrev *nfua;
+    switch (version) {
+        case OFP10_VERSION:
+        case OFP11_VERSION:
+        case OFP12_VERSION:
+        case OFP13_VERSION: {
+             struct nx_flow_update_header *nfuh;
 
-        nfua = ofpbuf_put_zeros(msg, sizeof *nfua);
-        nfua->xid = update->xid;
-    } else {
-        struct nx_flow_update_full *nfuf;
-        int match_len;
+            if (update->event == OFPFME_ABBREV) {
+                struct nx_flow_update_abbrev *nfua;
 
-        ofpbuf_put_zeros(msg, sizeof *nfuf);
-        match_len = nx_put_match(msg, &update->match, htonll(0), htonll(0));
-        ofpacts_put_openflow_actions(update->ofpacts, update->ofpacts_len, msg,
-                                     version);
-        nfuf = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuf);
-        nfuf->reason = htons(update->reason);
-        nfuf->priority = htons(update->priority);
-        nfuf->idle_timeout = htons(update->idle_timeout);
-        nfuf->hard_timeout = htons(update->hard_timeout);
-        nfuf->match_len = htons(match_len);
-        nfuf->table_id = update->table_id;
-        nfuf->cookie = update->cookie;
+                nfua = ofpbuf_put_zeros(msg, sizeof *nfua);
+                nfua->xid = update->xid;
+            } else {
+                struct nx_flow_update_full *nfuf;
+                int match_len;
+
+                ofpbuf_put_zeros(msg, sizeof *nfuf);
+                if (version == OFP13_VERSION) {
+                    match_len = oxm_put_match(msg, &update->match, version);
+                    ofpacts_put_openflow_instructions(
+                        update->ofpacts, update->ofpacts_len, msg, version);
+                } else {
+                    match_len = nx_put_match(msg, &update->match,
+                                             htonll(0), htonll(0));
+                    ofpacts_put_openflow_actions(
+                        update->ofpacts, update->ofpacts_len, msg, version);
+                }
+                nfuf = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuf);
+                nfuf->reason = htons(update->reason);
+                nfuf->priority = htons(update->priority);
+                nfuf->idle_timeout = htons(update->idle_timeout);
+                nfuf->hard_timeout = htons(update->hard_timeout);
+                nfuf->match_len = htons(match_len);
+                nfuf->table_id = update->table_id;
+                nfuf->cookie = update->cookie;
+            }
+
+            nfuh = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuh);
+            nfuh->length = htons(msg->size - start_ofs);
+            nfuh->event = htons(ofp_to_nx_flow_update_event(update->event));
+            break;
+        }
+        case OFP14_VERSION:
+        case OFP15_VERSION: {
+            struct ofp_flow_update_header *ofuh;
+
+            if (update->event == OFPFME_ABBREV) {
+                struct ofp_flow_update_abbrev *ofua;
+
+                ofua = ofpbuf_put_zeros(msg, sizeof *ofua);
+                ofua->xid = update->xid;
+            } else {
+                struct ofp_flow_update_full *ofuf;
+
+                ofpbuf_put_zeros(msg, sizeof *ofuf);
+                oxm_put_match(msg, &update->match, version);
+                ofpacts_put_openflow_instructions(update->ofpacts,
+                                                  update->ofpacts_len,
+                                                  msg, version);
+                ofuf = ofpbuf_at_assert(msg, start_ofs, sizeof *ofuf);
+                ofuf->reason = update->reason;
+                ofuf->priority = htons(update->priority);
+                ofuf->idle_timeout = htons(update->idle_timeout);
+                ofuf->hard_timeout = htons(update->hard_timeout);
+                ofuf->table_id = update->table_id;
+                ofuf->cookie = update->cookie;
+            }
+
+            ofuh = ofpbuf_at_assert(msg, start_ofs, sizeof *ofuh);
+            ofuh->length = htons(msg->size - start_ofs);
+            ofuh->event = htons(update->event);
+            break;
+        }
     }
-
-    nfuh = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuh);
-    nfuh->length = htons(msg->size - start_ofs);
-    nfuh->event = htons(update->event);
 
     ofpmp_postappend(replies, start_ofs);
     update_->match.flow.tunnel.metadata.tab = orig_tun_table;
@@ -744,24 +1287,37 @@ ofputil_flow_update_format(struct ds *s,
 
     ds_put_cstr(s, "\n event=");
     switch (update->event) {
-    case NXFME_ADDED:
+    case OFPFME_INITIAL:
+        ds_put_cstr(s, "INITIAL");
+        break;
+
+    case OFPFME_ADDED:
         ds_put_cstr(s, "ADDED");
         break;
 
-    case NXFME_DELETED:
+    case OFPFME_REMOVED:
         ds_put_format(s, "DELETED reason=%s",
                       ofp_flow_removed_reason_to_string(update->reason,
                                                         reasonbuf,
                                                         sizeof reasonbuf));
         break;
 
-    case NXFME_MODIFIED:
+    case OFPFME_MODIFIED:
         ds_put_cstr(s, "MODIFIED");
         break;
 
-    case NXFME_ABBREV:
+    case OFPFME_ABBREV:
         ds_put_format(s, "ABBREV xid=0x%"PRIx32, ntohl(update->xid));
         return;
+
+    case OFPFME_PAUSED:
+        ds_put_cstr(s, "PAUSED");
+        return;
+
+    case OFPFME_RESUMED:
+        ds_put_cstr(s, "RESUMED");
+        return;
+
     }
 
     ds_put_format(s, " table=");

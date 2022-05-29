@@ -61,6 +61,11 @@ typedef enum {
 #define atomic_compare_exchange_weak_explicit(DST, EXP, SRC, ORD1, ORD2) \
     __atomic_compare_exchange_n(DST, EXP, SRC, true, ORD1, ORD2)
 
+#define atomic_exchange_explicit(DST, SRC, ORDER) \
+    __atomic_exchange_n(DST, SRC, ORDER)
+#define atomic_exchange(DST, SRC) \
+    atomic_exchange_explicit(DST, SRC, memory_order_seq_cst)
+
 #define atomic_add(RMW, OPERAND, ORIG) \
         atomic_add_explicit(RMW, OPERAND, ORIG, memory_order_seq_cst)
 #define atomic_sub(RMW, OPERAND, ORIG) \

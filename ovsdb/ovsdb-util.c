@@ -111,13 +111,13 @@ ovsdb_util_read_map_string_column(const struct ovsdb_row *row,
 
     for (i = 0; i < datum->n; i++) {
         atom_key = &datum->keys[i];
-        if (!strcmp(atom_key->string, key)) {
+        if (!strcmp(atom_key->s->string, key)) {
             atom_value = &datum->values[i];
             break;
         }
     }
 
-    return atom_value ? atom_value->string : NULL;
+    return atom_value ? atom_value->s->string : NULL;
 }
 
 /* Read string-uuid key-values from a map.  Returns the row associated with
@@ -143,7 +143,7 @@ ovsdb_util_read_map_string_uuid_column(const struct ovsdb_row *row,
     const struct ovsdb_datum *datum = &row->fields[column->index];
     for (size_t i = 0; i < datum->n; i++) {
         union ovsdb_atom *atom_key = &datum->keys[i];
-        if (!strcmp(atom_key->string, key)) {
+        if (!strcmp(atom_key->s->string, key)) {
             const union ovsdb_atom *atom_value = &datum->values[i];
             return ovsdb_table_get_row(ref_table, &atom_value->uuid);
         }
@@ -181,7 +181,7 @@ ovsdb_util_read_string_column(const struct ovsdb_row *row,
     const union ovsdb_atom *atom;
 
     atom = ovsdb_util_read_column(row, column_name, OVSDB_TYPE_STRING);
-    *stringp = atom ? atom->string : NULL;
+    *stringp = atom ? atom->s->string : NULL;
     return atom != NULL;
 }
 
@@ -269,8 +269,10 @@ ovsdb_util_write_string_column(struct ovsdb_row *row, const char *column_name,
                                const char *string)
 {
     if (string) {
-        const union ovsdb_atom atom = { .string = CONST_CAST(char *, string) };
+        union ovsdb_atom atom = {
+            .s = ovsdb_atom_string_create(CONST_CAST(char *, string)) };
         ovsdb_util_write_singleton(row, column_name, &atom, OVSDB_TYPE_STRING);
+        ovsdb_atom_destroy(&atom, OVSDB_TYPE_STRING);
     } else {
         ovsdb_util_clear_column(row, column_name);
     }
@@ -305,8 +307,8 @@ ovsdb_util_write_string_string_column(struct ovsdb_row *row,
     datum->values = xmalloc(n * sizeof *datum->values);
 
     for (i = 0; i < n; ++i) {
-        datum->keys[i].string = keys[i];
-        datum->values[i].string = values[i];
+        datum->keys[i].s = ovsdb_atom_string_create_nocopy(keys[i]);
+        datum->values[i].s = ovsdb_atom_string_create_nocopy(values[i]);
     }
 
     /* Sort and check constraints. */

@@ -4,8 +4,6 @@ import getopt
 import sys
 import os.path
 import re
-import xml.dom.minidom
-import build.nroff
 
 OFP_ACTION_ALIGN = 8
 
@@ -73,7 +71,6 @@ def usage():
     print('''\
 %(argv0)s, for extracting OpenFlow action data
 usage: %(argv0)s [prototypes | definitions] OFP-ACTIONS.c
-usage: %(argv0)s ovs-actions OVS-ACTIONS.XML
 
 Commands:
 
@@ -84,9 +81,6 @@ Commands:
   definitions OFP-ACTIONS.C
     Reads ofp-actions.c and prints a set of definitions to #include late in
     ofp-actions.c.
-
-  ovs-actions OVS-ACTIONS.XML
-    Reads ovs-actions.xml and prints documentation in troff format.\
 ''' % {"argv0": argv0})
     sys.exit(0)
 
@@ -388,133 +382,6 @@ static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  uint64_t *tlv_bitmap, struct ofpbuf *out);
 """)
 
-## ------------------------ ##
-## Documentation Generation ##
-## ------------------------ ##
-
-def action_to_xml(action_node, body):
-    syntax = 0
-    for node in action_node.childNodes:
-        if node.nodeType == node.ELEMENT_NODE and node.tagName == 'syntax':
-            if body[-1].strip() == '.PP':
-                del body[-1]
-            if syntax:
-                body += ['.IQ\n']
-            else:
-                body += ['.IP "\\fBSyntax:\\fR"\n']
-            body += [build.nroff.inline_xml_to_nroff(x, r'\fR')
-                     for x in node.childNodes] + ['\n']
-            syntax += 1
-        elif (node.nodeType == node.ELEMENT_NODE
-              and node.tagName == 'conformance'):
-            body += ['.IP "\\fBConformance:\\fR"\n']
-            body += [build.nroff.block_xml_to_nroff(node.childNodes)]
-        else:
-            body += [build.nroff.block_xml_to_nroff([node])]
-
-def group_xml_to_nroff(group_node):
-    title = group_node.attributes['title'].nodeValue
-
-    body = []
-    for node in group_node.childNodes:
-        if node.nodeType == node.ELEMENT_NODE and node.tagName == 'action':
-            action_to_xml(node, body)
-        else:
-            body += [build.nroff.block_xml_to_nroff([node])]
-
-    content = [
-        '.bp\n',
-        '.SH \"%s\"\n' % build.nroff.text_to_nroff(title.upper())]
-    content += body
-    return ''.join(content)
-
-def make_ovs_actions(ovs_actions_xml):
-    document = xml.dom.minidom.parse(ovs_actions_xml)
-    doc = document.documentElement
-
-    global version
-    if version == None:
-        version = "UNKNOWN"
-
-    print('''\
-'\\" tp
-.\\" -*- mode: troff; coding: utf-8 -*-
-.TH "ovs\-actions" 7 "%s" "Open vSwitch" "Open vSwitch Manual"
-.fp 5 L CR              \\" Make fixed-width font available as \\fL.
-.de ST
-.  PP
-.  RS -0.15in
-.  I "\\\\$1"
-.  RE
-..
-
-.de SU
-.  PP
-.  I "\\\\$1"
-..
-
-.de IQ
-.  br
-.  ns
-.  IP "\\\\$1"
-..
-
-.de TQ
-.  br
-.  ns
-.  TP "\\\\$1"
-..
-.de URL
-\\\\$2 \\(laURL: \\\\$1 \\(ra\\\\$3
-..
-.if \\n[.g] .mso www.tmac
-.SH NAME
-ovs\-actions \- OpenFlow actions and instructions with Open vSwitch extensions
-.
-.PP
-''' % version)
-
-    s = ''
-    for node in doc.childNodes:
-        if node.nodeType == node.ELEMENT_NODE and node.tagName == "group":
-            s += group_xml_to_nroff(node)
-        elif node.nodeType == node.TEXT_NODE:
-            assert node.data.isspace()
-        elif node.nodeType == node.COMMENT_NODE:
-            pass
-        else:
-            s += build.nroff.block_xml_to_nroff([node])
-
-    if n_errors:
-        sys.exit(1)
-
-    output = []
-    for oline in s.split("\n"):
-        oline = oline.strip()
-
-        # Life is easier with nroff if we don't try to feed it Unicode.
-        # Fortunately, we only use a few characters outside the ASCII range.
-        oline = oline.replace(u'\u2208', r'\[mo]')
-        oline = oline.replace(u'\u2260', r'\[!=]')
-        oline = oline.replace(u'\u2264', r'\[<=]')
-        oline = oline.replace(u'\u2265', r'\[>=]')
-        oline = oline.replace(u'\u00d7', r'\[mu]')
-        if len(oline):
-            output += [oline]
-
-    # nroff tends to ignore .bp requests if they come after .PP requests,
-    # so remove .PPs that precede .bp.
-    for i in range(len(output)):
-        if output[i] == '.bp':
-            j = i - 1
-            while j >= 0 and output[j] == '.PP':
-                output[j] = None
-                j -= 1
-    for i in range(len(output)):
-        if output[i] is not None:
-            print(output[i])
-
-
 ## ------------ ##
 ## Main Program ##
 ## ------------ ##
@@ -544,8 +411,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     commands = {"prototypes": (lambda fn: extract_ofp_actions(fn, False), 1),
-                "definitions": (lambda fn: extract_ofp_actions(fn, True), 1),
-                "ovs-actions": (make_ovs_actions, 1)}
+                "definitions": (lambda fn: extract_ofp_actions(fn, True), 1)}
 
     if not args[0] in commands:
         sys.stderr.write("%s: unknown command \"%s\" "

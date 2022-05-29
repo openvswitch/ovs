@@ -63,9 +63,9 @@ simap_moved(struct simap *simap)
 void
 simap_clear(struct simap *simap)
 {
-    struct simap_node *node, *next;
+    struct simap_node *node;
 
-    SIMAP_FOR_EACH_SAFE (node, next, simap) {
+    SIMAP_FOR_EACH_SAFE (node, simap) {
         hmap_remove(&simap->map, &node->node);
         free(node->name);
         free(node);

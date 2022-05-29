@@ -114,7 +114,6 @@ static void
 calc_percentile(unsigned long long n_samples, struct percentile *pctl,
                 unsigned long long new_sample)
 {
-
     if (n_samples < P_SQUARE_MIN) {
         pctl->samples[n_samples - 1] = new_sample;
     }
@@ -228,13 +227,12 @@ add_sample(struct stopwatch *sw, unsigned long long new_sample)
         sw->min = new_sample;
     }
 
-    calc_percentile(sw->n_samples, &sw->pctl, new_sample);
-
     if (sw->n_samples++ == 0) {
         sw->short_term.average = sw->long_term.average = new_sample;
         return;
     }
 
+    calc_percentile(sw->n_samples, &sw->pctl, new_sample);
     calc_average(&sw->short_term, new_sample);
     calc_average(&sw->long_term, new_sample);
 }
@@ -466,7 +464,7 @@ stopwatch_thread(void *ign OVS_UNUSED)
 static void
 stopwatch_exit(void)
 {
-    struct shash_node *node, *node_next;
+    struct shash_node *node;
     struct stopwatch_packet *pkt = stopwatch_packet_create(OP_SHUTDOWN);
     stopwatch_packet_write(pkt);
     xpthread_join(stopwatch_thread_id, NULL);
@@ -475,7 +473,7 @@ stopwatch_exit(void)
      * other competing thread. We are now the sole owners
      * of all data in the file.
      */
-    SHASH_FOR_EACH_SAFE (node, node_next, &stopwatches) {
+    SHASH_FOR_EACH_SAFE (node, &stopwatches) {
         struct stopwatch *sw = node->data;
         shash_delete(&stopwatches, node);
         free(sw);

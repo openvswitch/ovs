@@ -146,14 +146,14 @@ ovsdb_trigger_prereplace_db(struct ovsdb_trigger *trigger)
 bool
 ovsdb_trigger_run(struct ovsdb *db, long long int now)
 {
-    struct ovsdb_trigger *t, *next;
+    struct ovsdb_trigger *t;
 
     bool run_triggers = db->run_triggers;
     db->run_triggers_now = db->run_triggers = false;
 
     bool disconnect_all = false;
 
-    LIST_FOR_EACH_SAFE (t, next, node, &db->triggers) {
+    LIST_FOR_EACH_SAFE (t, node, &db->triggers) {
         if (run_triggers
             || now - t->created >= t->timeout_msec
             || t->progress || t->txn_forward) {

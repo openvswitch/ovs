@@ -13,6 +13,7 @@ jobs:
         linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
       AFXDP:       ${{ matrix.afxdp }}
       ASAN:        ${{ matrix.asan }}
+      UBSAN:       ${{ matrix.ubsan }}
       CC:          ${{ matrix.compiler }}
       DEB_PACKAGE: ${{ matrix.deb_package }}
       DPDK:        ${{ matrix.dpdk }}
@@ -44,6 +45,10 @@ jobs:
             testsuite:    test
             kernel:       3.16
             asan:         asan
+          - compiler:     clang
+            testsuite:    test
+            kernel:       3.16
+            ubsan:        ubsan
 
           - compiler:     gcc
             testsuite:    test
@@ -113,12 +118,6 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
 
-    - name: fix up /etc/hosts
-      # https://github.com/actions/virtual-environments/issues/3353
-      run:  |
-        cat /etc/hosts
-        sudo sed -i "/don't remove this line/d" /etc/hosts || true
-
     - name: update PATH
       run:  |
         echo "$HOME/bin"        >> $GITHUB_PATH
@@ -127,7 +126,7 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: '3.9'
 
     - name: create ci signature file for the dpdk cache key
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
@@ -215,7 +214,7 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: '3.9'
     - name: install dependencies
       run:  brew install automake libtool
     - name: prepare

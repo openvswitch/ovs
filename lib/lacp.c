@@ -280,10 +280,10 @@ void
 lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
 {
     if (lacp && ovs_refcount_unref_relaxed(&lacp->ref_cnt) == 1) {
-        struct member *member, *next;
+        struct member *member;
 
         lacp_lock();
-        HMAP_FOR_EACH_SAFE (member, next, node, &lacp->members) {
+        HMAP_FOR_EACH_SAFE (member, node, &lacp->members) {
             member_destroy(member);
         }
 
@@ -426,6 +426,20 @@ lacp_status(const struct lacp *lacp) OVS_EXCLUDED(mutex)
         /* Don't take 'mutex'.  It might not even be initialized, since we
          * don't know that any lacp object has been created. */
         return LACP_DISABLED;
+    }
+}
+
+const char *lacp_status_description(enum lacp_status lacp_status)
+{
+    switch (lacp_status) {
+    case LACP_NEGOTIATED:
+        return "negotiated";
+    case LACP_CONFIGURED:
+        return "configured";
+    case LACP_DISABLED:
+        return "off";
+    default:
+        return "<unknown>";
     }
 }
 

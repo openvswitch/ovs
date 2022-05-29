@@ -55,6 +55,7 @@ struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
+struct simap;
 struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
@@ -72,6 +73,8 @@ void ovsdb_idl_set_leader_only(struct ovsdb_idl *, bool leader_only);
 
 void ovsdb_idl_run(struct ovsdb_idl *);
 void ovsdb_idl_wait(struct ovsdb_idl *);
+
+void ovsdb_idl_get_memory_usage(struct ovsdb_idl *, struct simap *usage);
 
 void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
 bool ovsdb_idl_has_lock(const struct ovsdb_idl *);
@@ -94,6 +97,10 @@ void ovsdb_idl_check_consistency(const struct ovsdb_idl *);
 const struct ovsdb_idl_class *ovsdb_idl_get_class(const struct ovsdb_idl *);
 const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
     const struct ovsdb_idl_class *, const struct ovsdb_idl_column *);
+bool ovsdb_idl_server_has_table(const struct ovsdb_idl *,
+                                const struct ovsdb_idl_table_class *);
+bool ovsdb_idl_server_has_column(const struct ovsdb_idl *,
+                                 const struct ovsdb_idl_column *);
 
 /* Choosing columns and tables to replicate.
  *
@@ -151,7 +158,7 @@ const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
  * IDL will change the value returned by ovsdb_idl_get_seqno() when the
  * column's value changes in any row.
  *
- * The possible mode combinations are:
+ * Typical mode combinations are:
  *
  *   - 0, for a column that a client doesn't care about.  This is the default
  *     for every column in every table, if the client passes false for
@@ -174,10 +181,17 @@ const struct ovsdb_idl_table_class *ovsdb_idl_table_class_from_column(
  *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT | OVSDB_IDL_TRACK), for a column
  *     that a client wants to track using the change tracking
  *     ovsdb_idl_track_get_*() functions.
+ *
+ *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT | OVSDB_IDL_WRITE_CHANGED_ONLY)
+ *     is similar to (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT) except that it
+ *     only adds a written column to a transaction if the column's value
+ *     has actually changed.
  */
 #define OVSDB_IDL_MONITOR (1 << 0) /* Replicate this column? */
 #define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column changes? */
-#define OVSDB_IDL_TRACK   (1 << 2)
+#define OVSDB_IDL_TRACK   (1 << 2) /* Track column changes? */
+#define OVSDB_IDL_WRITE_CHANGED_ONLY \
+                          (1 << 3) /* Write back only changed columns? */
 
 void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_add_table(struct ovsdb_idl *,
@@ -225,6 +239,11 @@ const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row 
 bool ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
                                 const struct ovsdb_idl_column *column);
 void ovsdb_idl_track_clear(struct ovsdb_idl *);
+
+void ovsdb_idl_set_write_changed_only(struct ovsdb_idl *idl,
+                                      const struct ovsdb_idl_column *column,
+                                      bool enable);
+void ovsdb_idl_set_write_changed_only_all(struct ovsdb_idl *idl, bool enable);
 
 
 /* Reading the database replica. */

@@ -153,6 +153,8 @@ parse_ed_prop_class(const char *str OVS_UNUSED,
         *prop_class = OFPPPC_BASIC;
     } else if (!strcmp(str,"mpls")) {
         *prop_class = OFPPPC_MPLS;
+    } else if (!strcmp(str,"mpls_mc")) {
+        *prop_class = OFPPPC_MPLS;
     } else if (!strcmp(str,"gre")) {
         *prop_class = OFPPPC_GRE;
     } else if (!strcmp(str,"gtp")) {

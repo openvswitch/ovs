@@ -38,10 +38,15 @@ dpdk_init(const struct smap *ovs_other_config)
     }
 }
 
-void
-dpdk_set_lcore_id(unsigned cpu OVS_UNUSED)
+bool
+dpdk_attach_thread(unsigned cpu OVS_UNUSED)
 {
-    /* Nothing */
+    return false;
+}
+
+void
+dpdk_detach_thread(void)
+{
 }
 
 const char *
@@ -77,15 +82,6 @@ dpdk_available(void)
 void
 print_dpdk_version(void)
 {
-}
-
-bool
-dpdk_get_cpu_has_isa(const char *arch OVS_UNUSED,
-                     const char *feature OVS_UNUSED)
-{
-    VLOG_ERR_ONCE("DPDK not supported in this version of Open vSwitch, "
-                  "cannot use CPU flag based optimizations");
-    return false;
 }
 
 void

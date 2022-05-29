@@ -390,8 +390,8 @@ unixctl_server_run(struct unixctl_server *server)
         }
     }
 
-    struct unixctl_conn *conn, *next;
-    LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
+    struct unixctl_conn *conn;
+    LIST_FOR_EACH_SAFE (conn, node, &server->conns) {
         int error = run_connection(conn);
         if (error && error != EAGAIN) {
             kill_connection(conn);
@@ -422,9 +422,9 @@ void
 unixctl_server_destroy(struct unixctl_server *server)
 {
     if (server) {
-        struct unixctl_conn *conn, *next;
+        struct unixctl_conn *conn;
 
-        LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
+        LIST_FOR_EACH_SAFE (conn, node, &server->conns) {
             kill_connection(conn);
         }
 

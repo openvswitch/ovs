@@ -542,6 +542,7 @@ OvsValidateIPChecksum(PNET_BUFFER_LIST curNbl,
     const IPHdr *ipHdr;
 
     if (!hdrInfo->isIPv4) {
+        /*need check add v6 check logic*/
         return NDIS_STATUS_SUCCESS;
     }
 
@@ -610,7 +611,7 @@ OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl, BOOLEAN udpCsumZero)
 NDIS_STATUS
 OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
                         PNET_BUFFER curNb,
-                        IPHdr *ipHdr,
+                        EthHdr *ethHdr,
                         UDPHdr *udpHdr,
                         UINT32 packetLength,
                         POVS_PACKET_HDR_INFO layers)
@@ -622,18 +623,42 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
 
     /* Next check if UDP checksum has been calculated. */
     if (!csumInfo.Receive.UdpChecksumSucceeded) {
-        UINT32 l4Payload;
+        UINT32 l4Payload = packetLength - layers->l4Offset;
 
         checkSum = udpHdr->check;
 
-        l4Payload = packetLength - layers->l4Offset;
-        udpHdr->check = 0;
-        udpHdr->check =
-            IPPseudoChecksum((UINT32 *)&ipHdr->saddr,
-                             (UINT32 *)&ipHdr->daddr,
-                             IPPROTO_UDP, (UINT16)l4Payload);
-        udpHdr->check = CalculateChecksumNB(curNb, (UINT16)l4Payload,
-                                            layers->l4Offset);
+        switch (ethHdr->Type) {
+        case ETH_TYPE_IPV4_NBO: {
+            IPHdr *ipHdr = (IPHdr *)((PCHAR)ethHdr + layers->l3Offset);
+
+            udpHdr->check = 0;
+            udpHdr->check =
+                IPPseudoChecksum((UINT32 *)&ipHdr->saddr,
+                                 (UINT32 *)&ipHdr->daddr,
+                                 IPPROTO_UDP, (UINT16)l4Payload);
+            udpHdr->check =
+                CalculateChecksumNB(curNb, (UINT16)l4Payload,
+                                    layers->l4Offset);
+            break;
+        }
+        case ETH_TYPE_IPV6_NBO: {
+            IPv6Hdr *ipv6Hdr = (IPv6Hdr *)((PCHAR)ethHdr + layers->l3Offset);
+
+            udpHdr->check = 0;
+            udpHdr->check =
+                IPv6PseudoChecksum((UINT32 *)&ipv6Hdr->saddr,
+                                   (UINT32 *)&ipv6Hdr->daddr,
+                                   IPPROTO_UDP, (UINT16)l4Payload);
+            udpHdr->check =
+                CalculateChecksumNB(curNb, (UINT16)l4Payload,
+                                    layers->l4Offset);
+            break;
+        }
+        default:
+            OVS_LOG_ERROR("Invalid eth type: %d\n", ethHdr->Type);
+            ASSERT(!"Invalid eth type");
+        }
+
         if (checkSum != udpHdr->check) {
             OVS_LOG_ERROR("UDP checksum incorrect, expected %u, got %u",
                           udpHdr->check, checkSum);
@@ -645,8 +670,6 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
     NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
     return NDIS_STATUS_SUCCESS;
 }
-
-
 
 /*
  * OvsApplySWChecksumOnNB --

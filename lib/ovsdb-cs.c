@@ -900,8 +900,8 @@ ovsdb_cs_db_get_table(struct ovsdb_cs_db *db, const char *table)
 static void
 ovsdb_cs_db_destroy_tables(struct ovsdb_cs_db *db)
 {
-    struct ovsdb_cs_db_table *table, *next;
-    HMAP_FOR_EACH_SAFE (table, next, hmap_node, &db->tables) {
+    struct ovsdb_cs_db_table *table;
+    HMAP_FOR_EACH_SAFE (table, hmap_node, &db->tables) {
         json_destroy(table->ack_cond);
         json_destroy(table->req_cond);
         json_destroy(table->new_cond);
@@ -1109,6 +1109,23 @@ ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db)
                 }
                 table->req_cond = NULL;
                 db->cond_changed = true;
+
+                /* There are two cases:
+                 * a. either the server already processed the requested monitor
+                 *    condition change but the FSM was restarted before the
+                 *    client was notified.  In this case the client should
+                 *    clear its local cache because it's out of sync with the
+                 *    monitor view on the server side.
+                 *
+                 * b. OR the server hasn't processed the requested monitor
+                 *    condition change yet.
+                 *
+                 * As there's no easy way to differentiate between the two,
+                 * and given that this condition should be rare, reset the
+                 * 'last_id', essentially flushing the local cached DB
+                 * contents.
+                 */
+                db->last_id = UUID_ZERO;
             }
         }
     }
@@ -1529,6 +1546,7 @@ ovsdb_cs_db_add_update(struct ovsdb_cs_db *db,
         .clear = clear,
         .monitor_reply = monitor_reply,
         .version = version,
+        .last_id = db->last_id,
     };
 }
 
@@ -1539,12 +1557,11 @@ ovsdb_cs_db_parse_monitor_reply(struct ovsdb_cs_db *db,
     const struct json *table_updates;
     bool clear;
     if (version == 3) {
-        struct uuid last_id;
         if (result->type != JSON_ARRAY || result->array.n != 3
             || (result->array.elems[0]->type != JSON_TRUE &&
                 result->array.elems[0]->type != JSON_FALSE)
             || result->array.elems[1]->type != JSON_STRING
-            || !uuid_from_string(&last_id,
+            || !uuid_from_string(&db->last_id,
                                  json_string(result->array.elems[1]))) {
             struct ovsdb_error *error = ovsdb_syntax_error(
                 result, NULL, "bad monitor_cond_since reply format");
@@ -1777,8 +1794,8 @@ ovsdb_cs_update_server_row(struct server_row *row,
 static void
 ovsdb_cs_clear_server_rows(struct ovsdb_cs *cs)
 {
-    struct server_row *row, *next;
-    HMAP_FOR_EACH_SAFE (row, next, hmap_node, &cs->server_rows) {
+    struct server_row *row;
+    HMAP_FOR_EACH_SAFE (row, hmap_node, &cs->server_rows) {
         ovsdb_cs_delete_server_row(cs, row);
     }
 }
@@ -1833,7 +1850,7 @@ server_column_get_string(const struct server_row *row,
 {
     ovs_assert(server_columns[index].type.key.type == OVSDB_TYPE_STRING);
     const struct ovsdb_datum *d = &row->data[index];
-    return d->n == 1 ? d->keys[0].string : default_value;
+    return d->n == 1 ? d->keys[0].s->string : default_value;
 }
 
 static bool
@@ -2112,9 +2129,9 @@ void
 ovsdb_cs_free_schema(struct shash *schema)
 {
     if (schema) {
-        struct shash_node *node, *next;
+        struct shash_node *node;
 
-        SHASH_FOR_EACH_SAFE (node, next, schema) {
+        SHASH_FOR_EACH_SAFE (node, schema) {
             struct sset *sset = node->data;
             sset_destroy(sset);
             free(sset);

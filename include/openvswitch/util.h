@@ -145,6 +145,150 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 #define INIT_CONTAINER(OBJECT, POINTER, MEMBER) \
     ((OBJECT) = NULL, ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER))
 
+/* Multi-variable container iterators.
+ *
+ * The following macros facilitate safe iteration over data structures
+ * contained in objects. It does so by using an internal iterator variable of
+ * the type of the member object pointer (i.e: pointer to the data structure).
+ */
+
+/* Multi-variable iterator variable name.
+ * Returns the name of the internal iterator variable.
+ */
+#define ITER_VAR(NAME) NAME ## __iterator__
+
+/* Multi-variable initialization. Creates an internal iterator variable that
+ * points to the provided pointer. The type of the iterator variable is
+ * ITER_TYPE*. It must be the same type as &VAR->MEMBER.
+ *
+ * The _EXP version evaluates the extra expressions once.
+ */
+#define INIT_MULTIVAR(VAR, MEMBER, POINTER, ITER_TYPE)                  \
+    INIT_MULTIVAR_EXP(VAR, MEMBER, POINTER, ITER_TYPE, (void) 0)
+
+#define INIT_MULTIVAR_EXP(VAR, MEMBER, POINTER, ITER_TYPE, ...)         \
+    ITER_TYPE *ITER_VAR(VAR) = ( __VA_ARGS__ , (ITER_TYPE *) POINTER)
+
+/* Multi-variable condition.
+ * Evaluates the condition expression (that must be based on the internal
+ * iterator variable). Only if the result of expression is true, the OBJECT is
+ * set to the object containing the current value of the iterator variable.
+ *
+ * It is up to the caller to make sure it is safe to run OBJECT_CONTAINING on
+ * the pointers that verify the condition.
+ */
+#define CONDITION_MULTIVAR(VAR, MEMBER, EXPR)                                 \
+    ((EXPR) ?                                                                 \
+     (((VAR) = OBJECT_CONTAINING(ITER_VAR(VAR), VAR, MEMBER)), 1) :           \
+     (((VAR) = NULL), 0))
+
+/* Multi-variable update.
+ * Sets the iterator value to NEXT_ITER.
+ */
+#define UPDATE_MULTIVAR(VAR, NEXT_ITER)                                       \
+    (ITER_VAR(VAR) = NEXT_ITER)
+
+/* In the safe version of the multi-variable container iteration, the next
+ * value of the iterator is precalculated on the condition expression.
+ * This allows for the iterator to be freed inside the loop.
+ *
+ * Two versions of the macros are provided:
+ *
+ * * In the _SHORT version, the user does not have to provide a variable to
+ * store the next value of the iterator. Instead, a second iterator variable
+ * is declared in the INIT_ macro and its name is determined by
+ * ITER_NEXT_VAR(OBJECT).
+ *
+ * * In the _LONG version, the user provides another variable of the same type
+ * as the iterator object variable to store the next containing object.
+ * We still declare an iterator variable inside the loop but in this case it's
+ * name is derived from the name of the next containing variable.
+ * The value of the next containing object will only be set
+ * (via OBJECT_CONTAINING) if an additional condition is statisfied. This
+ * second condition must ensure it is safe to call OBJECT_CONTAINING on the
+ * next iterator variable.
+ * With respect to the value of the next containing object:
+ *  - Inside of the loop: the variable is either NULL or safe to use.
+ *  - Outside of the loop: the variable is NULL if the loop ends normally.
+ *     If the loop ends with a "break;" statement, rules of Inside the loop
+ *     apply.
+ */
+#define ITER_NEXT_VAR(NAME) NAME ## __iterator__next__
+
+/* Safe initialization declares both iterators. */
+#define INIT_MULTIVAR_SAFE_SHORT(VAR, MEMBER, POINTER, ITER_TYPE)             \
+    INIT_MULTIVAR_SAFE_SHORT_EXP(VAR, MEMBER, POINTER, ITER_TYPE, (void) 0)
+
+#define INIT_MULTIVAR_SAFE_SHORT_EXP(VAR, MEMBER, POINTER, ITER_TYPE, ...)    \
+    ITER_TYPE *ITER_VAR(VAR) = ( __VA_ARGS__ , (ITER_TYPE *) POINTER),        \
+        *ITER_NEXT_VAR(VAR) = NULL
+
+/* Evaluate the condition expression and, if satisfied, update the _next_
+ * iterator with the NEXT_EXPR.
+ * Both EXPR and NEXT_EXPR should only use ITER_VAR(VAR) and
+ * ITER_NEXT_VAR(VAR).
+ */
+#define CONDITION_MULTIVAR_SAFE_SHORT(VAR, MEMBER, EXPR, NEXT_EXPR)           \
+    ((EXPR) ?                                                                 \
+     (((VAR) = OBJECT_CONTAINING(ITER_VAR(VAR), VAR, MEMBER)),                \
+      (NEXT_EXPR), 1) :                                                       \
+     (((VAR) = NULL), 0))
+
+#define UPDATE_MULTIVAR_SAFE_SHORT(VAR)                                       \
+    UPDATE_MULTIVAR(VAR, ITER_NEXT_VAR(VAR))
+
+/* _LONG versions of the macros. */
+
+#define INIT_MULTIVAR_SAFE_LONG(VAR, NEXT_VAR, MEMBER, POINTER, ITER_TYPE)    \
+    INIT_MULTIVAR_SAFE_LONG_EXP(VAR, NEXT_VAR, MEMBER, POINTER, ITER_TYPE,    \
+                                (void) 0)                                     \
+
+#define INIT_MULTIVAR_SAFE_LONG_EXP(VAR, NEXT_VAR, MEMBER, POINTER,           \
+                                    ITER_TYPE, ...)                           \
+    ITER_TYPE  *ITER_VAR(VAR) = ( __VA_ARGS__ , (ITER_TYPE *) POINTER),       \
+        *ITER_VAR(NEXT_VAR) = NULL
+
+/* Evaluate the condition expression and, if satisfied, update the _next_
+ * iterator with the NEXT_EXPR. After, evaluate the NEXT_COND and, if
+ * satisfied, set the value to NEXT_VAR. NEXT_COND must use ITER_VAR(NEXT_VAR).
+ *
+ * Both EXPR and NEXT_EXPR should only use ITER_VAR(VAR) and
+ * ITER_VAR(NEXT_VAR).
+ */
+#define CONDITION_MULTIVAR_SAFE_LONG(VAR, NEXT_VAR, MEMBER, EXPR, NEXT_EXPR,  \
+                                     NEXT_COND)                               \
+    ((EXPR) ?                                                                 \
+     (((VAR) = OBJECT_CONTAINING(ITER_VAR(VAR), VAR, MEMBER)),                \
+      (NEXT_EXPR), ((NEXT_COND) ?                                             \
+       ((NEXT_VAR) =                                                          \
+        OBJECT_CONTAINING(ITER_VAR(NEXT_VAR), NEXT_VAR, MEMBER)) :            \
+       ((NEXT_VAR) = NULL)), 1) :                                             \
+     (((VAR) = NULL), ((NEXT_VAR) = NULL), 0))
+
+#define UPDATE_MULTIVAR_SAFE_LONG(VAR, NEXT_VAR)                              \
+    UPDATE_MULTIVAR(VAR, ITER_VAR(NEXT_VAR))
+
+/* Helpers to allow overloading the *_SAFE iterator macros and select either
+ * the LONG or the SHORT version depending on the number of arguments.
+ */
+#define GET_SAFE_MACRO2(_1, _2, NAME, ...) NAME
+#define GET_SAFE_MACRO3(_1, _2, _3, NAME, ...) NAME
+#define GET_SAFE_MACRO4(_1, _2, _3, _4, NAME, ...) NAME
+#define GET_SAFE_MACRO5(_1, _2, _3, _4, _5, NAME, ...) NAME
+#define GET_SAFE_MACRO6(_1, _2, _3, _4, _5, _6, NAME, ...) NAME
+#define GET_SAFE_MACRO(MAX_ARGS) GET_SAFE_MACRO ## MAX_ARGS
+
+/* MSVC treats __VA_ARGS__ as a simple token in argument lists. Introduce
+ * a level of indirection to work around that. */
+#define EXPAND_MACRO(name, args) name args
+
+/* Overload the LONG and the SHORT version of the macros. MAX_ARGS is the
+ * maximum number of arguments (i.e: the number of arguments of the LONG
+ * version). */
+#define OVERLOAD_SAFE_MACRO(LONG, SHORT, MAX_ARGS, ...) \
+        EXPAND_MACRO(GET_SAFE_MACRO(MAX_ARGS), \
+                     (__VA_ARGS__, LONG, SHORT))(__VA_ARGS__)
+
 /* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) __ARRAY_SIZE(ARRAY)
 
@@ -284,6 +428,9 @@ is_pow2(uintmax_t x)
  * type.  On RISC architectures, dereferencing a misaligned pointer can cause a
  * segfault, so it is important to be aware of correct alignment. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
+
+#define IS_PTR_ALIGNED(OBJ) \
+    (!(OBJ) || (uintptr_t) (OBJ) % __alignof__(OVS_TYPEOF(OBJ)) == 0)
 
 #ifdef __cplusplus
 }

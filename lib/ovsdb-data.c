@@ -74,7 +74,7 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_TYPE_STRING:
-        atom->string = xmemdup("", 1);
+        atom->s = ovsdb_atom_string_create_nocopy(xmemdup("", 1));
         break;
 
     case OVSDB_TYPE_UUID:
@@ -136,7 +136,7 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
         return atom->boolean == false;
 
     case OVSDB_TYPE_STRING:
-        return atom->string[0] == '\0';
+        return json_string(atom->s)[0] == '\0';
 
     case OVSDB_TYPE_UUID:
         return uuid_is_zero(&atom->uuid);
@@ -172,7 +172,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
         break;
 
     case OVSDB_TYPE_STRING:
-        new->string = xstrdup(old->string);
+        new->s = json_clone(old->s);
         break;
 
     case OVSDB_TYPE_UUID:
@@ -214,7 +214,7 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         return hash_boolean(atom->boolean, basis);
 
     case OVSDB_TYPE_STRING:
-        return hash_string(atom->string, basis);
+        return json_hash(atom->s, basis);
 
     case OVSDB_TYPE_UUID:
         return hash_int(uuid_hash(&atom->uuid), basis);
@@ -246,7 +246,7 @@ ovsdb_atom_compare_3way(const union ovsdb_atom *a,
         return a->boolean - b->boolean;
 
     case OVSDB_TYPE_STRING:
-        return strcmp(a->string, b->string);
+        return a->s == b->s ? 0 : strcmp(json_string(a->s), json_string(b->s));
 
     case OVSDB_TYPE_UUID:
         return uuid_compare_3way(&a->uuid, &b->uuid);
@@ -404,7 +404,7 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom,
 
     case OVSDB_TYPE_STRING:
         if (json->type == JSON_STRING) {
-            atom->string = xstrdup(json->string);
+            atom->s = json_clone(json);
             return NULL;
         }
         break;
@@ -473,7 +473,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         return json_boolean_create(atom->boolean);
 
     case OVSDB_TYPE_STRING:
-        return json_string_create(atom->string);
+        return json_clone(atom->s);
 
     case OVSDB_TYPE_UUID:
         return wrap_json("uuid", json_string_create_nocopy(
@@ -551,14 +551,18 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
             if (s_len < 2 || s[s_len - 1] != '"') {
                 return xasprintf("%s: missing quote at end of "
                                  "quoted string", s);
-            } else if (!json_string_unescape(s + 1, s_len - 2,
-                                             &atom->string)) {
-                char *error = xasprintf("%s: %s", s, atom->string);
-                free(atom->string);
-                return error;
+            } else {
+                char *res;
+                if (json_string_unescape(s + 1, s_len - 2, &res)) {
+                    atom->s = ovsdb_atom_string_create_nocopy(res);
+                } else {
+                    char *error = xasprintf("%s: %s", s, res);
+                    free(res);
+                    return error;
+                }
             }
         } else {
-            atom->string = xstrdup(s);
+            atom->s = ovsdb_atom_string_create(s);
         }
         break;
 
@@ -721,14 +725,10 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_STRING:
-        if (string_needs_quotes(atom->string)) {
-            struct json json;
-
-            json.type = JSON_STRING;
-            json.string = atom->string;
-            json_to_ds(&json, 0, out);
+        if (string_needs_quotes(json_string(atom->s))) {
+            json_to_ds(atom->s, 0, out);
         } else {
-            ds_put_cstr(out, atom->string);
+            ds_put_cstr(out, json_string(atom->s));
         }
         break;
 
@@ -750,7 +750,7 @@ ovsdb_atom_to_bare(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                    struct ds *out)
 {
     if (type == OVSDB_TYPE_STRING) {
-        ds_put_cstr(out, atom->string);
+        ds_put_cstr(out, json_string(atom->s));
     } else {
         ovsdb_atom_to_string(atom, type, out);
     }
@@ -799,7 +799,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
                              const struct ovsdb_base_type *base)
 {
     if (base->enum_
-        && ovsdb_datum_find_key(base->enum_, atom, base->type) == UINT_MAX) {
+        && !ovsdb_datum_find_key(base->enum_, atom, base->type, NULL)) {
         struct ovsdb_error *error;
         struct ds actual = DS_EMPTY_INITIALIZER;
         struct ds valid = DS_EMPTY_INITIALIZER;
@@ -877,7 +877,7 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
         return NULL;
 
     case OVSDB_TYPE_STRING:
-        return check_string_constraints(atom->string, &base->string);
+        return check_string_constraints(json_string(atom->s), &base->string);
 
     case OVSDB_TYPE_UUID:
         return NULL;
@@ -1691,8 +1691,8 @@ ovsdb_datum_from_smap(struct ovsdb_datum *datum, const struct smap *smap)
     struct smap_node *node;
     size_t i = 0;
     SMAP_FOR_EACH (node, smap) {
-        datum->keys[i].string = xstrdup(node->key);
-        datum->values[i].string = xstrdup(node->value);
+        datum->keys[i].s = ovsdb_atom_string_create(node->key);
+        datum->values[i].s = ovsdb_atom_string_create(node->value);
         i++;
     }
     ovs_assert(i == datum->n);
@@ -1784,14 +1784,16 @@ ovsdb_datum_compare_3way(const struct ovsdb_datum *a,
                                        a->n));
 }
 
-/* If 'key' is one of the keys in 'datum', returns its index within 'datum',
- * otherwise UINT_MAX.  'key.type' must be the type of the atoms stored in the
- * 'keys' array in 'datum'.
+/* If 'key' is one of the keys in 'datum', returns 'true' and sets '*pos' to
+ * its index within 'datum', otherwise returns 'false' and sets '*pos' to the
+ * index where 'key' should have been.  'key.type' must be the type of the
+ * atoms stored in the 'keys' array in 'datum'.
  */
-unsigned int
+bool
 ovsdb_datum_find_key(const struct ovsdb_datum *datum,
                      const union ovsdb_atom *key,
-                     enum ovsdb_atomic_type key_type)
+                     enum ovsdb_atomic_type key_type,
+                     unsigned int *pos)
 {
     unsigned int low = 0;
     unsigned int high = datum->n;
@@ -1803,10 +1805,16 @@ ovsdb_datum_find_key(const struct ovsdb_datum *datum,
         } else if (cmp > 0) {
             low = idx + 1;
         } else {
-            return idx;
+            if (pos) {
+                *pos = idx;
+            }
+            return true;
         }
     }
-    return UINT_MAX;
+    if (pos) {
+        *pos = low;
+    }
+    return false;
 }
 
 /* If 'key' and 'value' is one of the key-value pairs in 'datum', returns its
@@ -1821,10 +1829,11 @@ ovsdb_datum_find_key_value(const struct ovsdb_datum *datum,
                            const union ovsdb_atom *value,
                            enum ovsdb_atomic_type value_type)
 {
-    unsigned int idx = ovsdb_datum_find_key(datum, key, key_type);
-    if (idx != UINT_MAX
-        && value_type != OVSDB_TYPE_VOID
-        && !ovsdb_atom_equals(&datum->values[idx], value, value_type)) {
+    unsigned int idx;
+
+    if (!ovsdb_datum_find_key(datum, key, key_type, &idx)
+        || (value_type != OVSDB_TYPE_VOID
+            && !ovsdb_atom_equals(&datum->values[idx], value, value_type))) {
         idx = UINT_MAX;
     }
     return idx;
@@ -1949,37 +1958,84 @@ ovsdb_datum_add_unsafe(struct ovsdb_datum *datum,
 }
 
 void
-ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
-                  const struct ovsdb_type *type, bool replace)
+ovsdb_datum_add_from_index_unsafe(struct ovsdb_datum *dst,
+                                  const struct ovsdb_datum *src,
+                                  size_t idx,
+                                  const struct ovsdb_type *type)
 {
-    unsigned int n;
-    size_t bi;
+    const union ovsdb_atom *key = &src->keys[idx];
+    const union ovsdb_atom *value = type->value.type != OVSDB_TYPE_VOID
+                                    ? &src->values[idx]
+                                    : NULL;
+    ovsdb_datum_add_unsafe(dst, key, value, type, NULL);
+}
 
-    n = a->n;
-    for (bi = 0; bi < b->n; bi++) {
-        unsigned int ai;
+/* Adds 'n' atoms starting from index 'start_idx' from 'src' to the end of
+ * 'dst'.  'dst' should have enough memory allocated to hold the additional
+ * 'n' atoms.  Atoms are not cloned, i.e. 'dst' will reference the same data.
+ * Caller also should take care of the result being sorted. */
+static void
+ovsdb_datum_push_unsafe(struct ovsdb_datum *dst,
+                        const struct ovsdb_datum *src,
+                        unsigned int start_idx, unsigned int n,
+                        const struct ovsdb_type *type)
+{
+    if (n == 0) {
+        return;
+    }
 
-        ai = ovsdb_datum_find_key(a, &b->keys[bi], type->key.type);
-        if (ai == UINT_MAX) {
-            if (n == a->n) {
-                ovsdb_datum_reallocate(a, type, a->n + (b->n - bi));
-            }
-            ovsdb_atom_clone(&a->keys[n], &b->keys[bi], type->key.type);
-            if (type->value.type != OVSDB_TYPE_VOID) {
-                ovsdb_atom_clone(&a->values[n], &b->values[bi],
-                                 type->value.type);
-            }
-            n++;
-        } else if (replace && type->value.type != OVSDB_TYPE_VOID) {
-            ovsdb_atom_destroy(&a->values[ai], type->value.type);
-            ovsdb_atom_clone(&a->values[ai], &b->values[bi],
+    memcpy(&dst->keys[dst->n], &src->keys[start_idx], n * sizeof src->keys[0]);
+    if (type->value.type != OVSDB_TYPE_VOID) {
+        memcpy(&dst->values[dst->n], &src->values[start_idx],
+               n * sizeof src->values[0]);
+    }
+    dst->n += n;
+}
+
+void
+ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
+                  const struct ovsdb_type *type)
+{
+    struct ovsdb_datum result;
+    unsigned int copied, pos;
+
+    ovsdb_datum_init_empty(&result);
+
+    copied = 0;
+    for (size_t bi = 0; bi < b->n; bi++) {
+        if (ovsdb_datum_find_key(a, &b->keys[bi], type->key.type, &pos)) {
+            /* Atom with the same key already exists. */
+            continue;
+        }
+        if (!result.keys) {
+            ovsdb_datum_reallocate(&result, type, a->n + (b->n - bi));
+        }
+        if (pos > copied) {
+            /* Need to copy some atoms from 'a' first. */
+            ovsdb_datum_push_unsafe(&result, a, copied, pos - copied, type);
+            copied = pos;
+        }
+        /* Inserting new atom from 'b'. */
+        ovsdb_atom_clone(&result.keys[result.n], &b->keys[bi], type->key.type);
+        if (type->value.type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_clone(&result.values[result.n], &b->values[bi],
                              type->value.type);
         }
+        result.n++;
     }
-    if (n != a->n) {
-        a->n = n;
-        ovs_assert(!ovsdb_datum_sort(a, type->key.type));
+    if (!result.keys) {
+        /* 'a' doesn't need to be changed. */
+        return;
     }
+    if (a->n > copied) {
+        /* Copying remaining atoms. */
+        ovsdb_datum_push_unsafe(&result, a, copied, a->n - copied, type);
+    }
+    /* All atoms are copied now. */
+    a->n = 0;
+
+    ovsdb_datum_swap(&result, a);
+    ovsdb_datum_destroy(&result, type);
 }
 
 void
@@ -1987,26 +2043,55 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
                      const struct ovsdb_datum *b,
                      const struct ovsdb_type *b_type)
 {
-    bool changed = false;
-    size_t i;
+    unsigned int *idx, ai;
+    size_t n_idx;
 
     ovs_assert(a_type->key.type == b_type->key.type);
     ovs_assert(a_type->value.type == b_type->value.type
                || b_type->value.type == OVSDB_TYPE_VOID);
 
-    /* XXX The big-O of this could easily be improved. */
-    for (i = 0; i < a->n; ) {
-        unsigned int idx = ovsdb_datum_find(a, i, b, b_type);
-        if (idx != UINT_MAX) {
-            changed = true;
-            ovsdb_datum_remove_unsafe(a, i, a_type);
-        } else {
-            i++;
+    idx = xmalloc(b->n * sizeof *idx);
+    n_idx = 0;
+    for (size_t bi = 0; bi < b->n; bi++) {
+        ai = ovsdb_datum_find(b, bi, a, b_type);
+        if (ai == UINT_MAX) {
+            /* No such atom in 'a'. */
+            continue;
         }
+        /* Not destroying right away since ovsdb_datum_find() will use them. */
+        idx[n_idx++] = ai;
     }
-    if (changed) {
-        ovsdb_datum_sort_assert(a, a_type->key.type);
+    if (!n_idx) {
+        free(idx);
+        return;
     }
+
+    struct ovsdb_datum result;
+
+    ovsdb_datum_init_empty(&result);
+    ovsdb_datum_reallocate(&result, a_type, a->n - n_idx);
+
+    unsigned int start_idx = 0;
+    for (size_t i = 0; i < n_idx; i++) {
+        ai = idx[i];
+
+        /* Destroying atom. */
+        ovsdb_atom_destroy(&a->keys[ai], a_type->key.type);
+        if (a_type->value.type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_destroy(&a->values[ai], a_type->value.type);
+        }
+
+        /* Copy non-removed atoms from 'a' to result. */
+        ovsdb_datum_push_unsafe(&result, a, start_idx, ai - start_idx, a_type);
+        start_idx = idx[i] + 1;
+    }
+    /* Copying remaining atoms. */
+    ovsdb_datum_push_unsafe(&result, a, start_idx, a->n - start_idx, a_type);
+    a->n = 0;
+
+    ovsdb_datum_swap(&result, a);
+    ovsdb_datum_destroy(&result, a_type);
+    free(idx);
 }
 
 struct ovsdb_symbol_table *
@@ -2067,6 +2152,60 @@ ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
 
 /* APIs for Generating and apply diffs.  */
 
+/* Find what needs to be added to and removed from 'old' to construct 'new'.
+ *
+ * The 'added' and 'removed' datums are always safe; the orders of keys are
+ * maintained since they are added in order.   */
+void
+ovsdb_datum_added_removed(struct ovsdb_datum *added,
+                          struct ovsdb_datum *removed,
+                          const struct ovsdb_datum *old,
+                          const struct ovsdb_datum *new,
+                          const struct ovsdb_type *type)
+{
+    size_t oi, ni;
+
+    ovsdb_datum_init_empty(added);
+    ovsdb_datum_init_empty(removed);
+    if (!ovsdb_type_is_composite(type)) {
+        ovsdb_datum_clone(removed, old, type);
+        ovsdb_datum_clone(added, new, type);
+        return;
+    }
+
+    /* Generate the diff in O(n) time. */
+    for (oi = ni = 0; oi < old->n && ni < new->n;) {
+        int c = ovsdb_atom_compare_3way(&old->keys[oi], &new->keys[ni],
+                                        type->key.type);
+        if (c < 0) {
+            ovsdb_datum_add_from_index_unsafe(removed, old, oi, type);
+            oi++;
+        } else if (c > 0) {
+            ovsdb_datum_add_from_index_unsafe(added, new, ni, type);
+            ni++;
+        } else {
+            if (type->value.type != OVSDB_TYPE_VOID &&
+                ovsdb_atom_compare_3way(&old->values[oi], &new->values[ni],
+                                        type->value.type)) {
+                ovsdb_datum_add_unsafe(removed, &old->keys[oi],
+                                       &old->values[oi], type, NULL);
+                ovsdb_datum_add_unsafe(added, &new->keys[ni], &new->values[ni],
+                                       type, NULL);
+            }
+            oi++; ni++;
+        }
+    }
+
+    for (; oi < old->n; oi++) {
+        ovsdb_datum_add_from_index_unsafe(removed, old, oi, type);
+    }
+
+    for (; ni < new->n; ni++) {
+        ovsdb_datum_add_from_index_unsafe(added, new, ni, type);
+    }
+}
+
+
 /* Generate a difference ovsdb_dataum between 'old' and 'new'.
  * 'new' can be regenerated by applying the difference to the 'old'.
  *
@@ -2098,12 +2237,10 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
         int c = ovsdb_atom_compare_3way(&old->keys[oi], &new->keys[ni],
                                         type->key.type);
         if (c < 0) {
-            ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(diff, old, oi, type);
             oi++;
         } else if (c > 0) {
-            ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                                   type, NULL);
+            ovsdb_datum_add_from_index_unsafe(diff, new, ni, type);
             ni++;
         } else {
             if (type->value.type != OVSDB_TYPE_VOID &&
@@ -2117,14 +2254,112 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
     }
 
     for (; oi < old->n; oi++) {
-        ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(diff, old, oi, type);
     }
 
     for (; ni < new->n; ni++) {
-        ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                               type, NULL);
+        ovsdb_datum_add_from_index_unsafe(diff, new, ni, type);
     }
+}
+
+/* Apply 'diff' to 'a'.
+ *
+ * Return NULL if the 'a' is successfully updated, otherwise, return
+ * ovsdb_error. */
+struct ovsdb_error *
+ovsdb_datum_apply_diff_in_place(struct ovsdb_datum *a,
+                                const struct ovsdb_datum *diff,
+                                const struct ovsdb_type *type)
+{
+    struct ovsdb_error *error = NULL;
+    struct ovsdb_datum result;
+    size_t i, new_size;
+    unsigned int *idx, pos;
+    enum {
+        DIFF_OP_ADD,
+        DIFF_OP_REMOVE,
+        DIFF_OP_UPDATE,
+    } *operation;
+
+    if (!ovsdb_type_is_composite(type)) {
+        ovsdb_datum_destroy(a, type);
+        ovsdb_datum_clone(a, diff, type);
+        return NULL;
+    }
+
+    operation = xmalloc(diff->n * sizeof *operation);
+    idx = xmalloc(diff->n * sizeof *idx);
+    new_size = a->n;
+    for (i = 0; i < diff->n; i++) {
+        if (!ovsdb_datum_find_key(a, &diff->keys[i], type->key.type, &pos)) {
+            operation[i] = DIFF_OP_ADD;
+            new_size++;
+        } else if (type->value.type != OVSDB_TYPE_VOID
+                   && !ovsdb_atom_equals(&diff->values[i], &a->values[pos],
+                                         type->value.type)) {
+            operation[i] = DIFF_OP_UPDATE;
+        } else {
+            operation[i] = DIFF_OP_REMOVE;
+            new_size--;
+        }
+        idx[i] = pos;
+    }
+
+    /* Make sure member size of 'new' conforms to type. */
+    if (new_size < type->n_min || new_size > type->n_max) {
+        error = ovsdb_error(NULL, "Datum crated by diff has size error");
+        goto exit;
+    }
+
+    ovsdb_datum_init_empty(&result);
+    ovsdb_datum_reallocate(&result, type, new_size);
+
+    unsigned int copied = 0;
+    for (i = 0; i < diff->n; i++) {
+        pos = idx[i];
+
+        if (copied < pos) {
+            /* Copying all atoms that should go before the current one. */
+            ovsdb_datum_push_unsafe(&result, a, copied, pos - copied, type);
+            copied = pos;
+        }
+
+        switch (operation[i]) {
+        case DIFF_OP_UPDATE:
+        case DIFF_OP_ADD:
+            /* Inserting new atom from 'diff'. */
+            ovsdb_atom_clone(&result.keys[result.n],
+                             &diff->keys[i], type->key.type);
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_clone(&result.values[result.n],
+                                 &diff->values[i], type->value.type);
+            }
+            result.n++;
+            if (operation[i] != DIFF_OP_UPDATE) {
+                break;
+            }
+            /* fall through */
+
+        case DIFF_OP_REMOVE:
+            /* Destroying atom. */
+            ovsdb_atom_destroy(&a->keys[pos], type->key.type);
+            if (type->value.type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_destroy(&a->values[pos], type->value.type);
+            }
+            copied++; /* Skipping removed atom. */
+            break;
+        }
+    }
+    /* Copying remaining atoms. */
+    ovsdb_datum_push_unsafe(&result, a, copied, a->n - copied, type);
+    a->n = 0;
+
+    ovsdb_datum_swap(&result, a);
+    ovsdb_datum_destroy(&result, type);
+exit:
+    free(operation);
+    free(idx);
+    return error;
 }
 
 /* Apply 'diff' to 'old' to regenerate 'new'.

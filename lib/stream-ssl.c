@@ -762,18 +762,22 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
     if (sslv->txbuf) {
         return -EAGAIN;
     } else {
+        struct ofpbuf buf;
         int error;
 
-        sslv->txbuf = ofpbuf_clone_data(buffer, n);
+        ofpbuf_use_const(&buf, buffer, n);
+        sslv->txbuf = &buf;
         error = ssl_do_tx(stream);
         switch (error) {
         case 0:
-            ssl_clear_txbuf(sslv);
+            sslv->txbuf = NULL;
             return n;
         case EAGAIN:
+            /* Copy remaining data. */
+            sslv->txbuf = ofpbuf_clone_data(buf.data, buf.size);
             return n;
         default:
-            ssl_clear_txbuf(sslv);
+            sslv->txbuf = NULL;
             return -error;
         }
     }

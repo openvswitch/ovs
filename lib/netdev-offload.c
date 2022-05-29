@@ -60,6 +60,12 @@ VLOG_DEFINE_THIS_MODULE(netdev_offload);
 
 static bool netdev_flow_api_enabled = false;
 
+#define DEFAULT_OFFLOAD_THREAD_NB 1
+#define MAX_OFFLOAD_THREAD_NB 10
+
+static unsigned int offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
+DEFINE_EXTERN_PER_THREAD_DATA(netdev_offload_thread_id, OVSTHREAD_ID_UNSET);
+
 /* Protects 'netdev_flow_apis'.  */
 static struct ovs_mutex netdev_flow_api_provider_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -332,6 +338,10 @@ netdev_uninit_flow_api(struct netdev *netdev)
         return;
     }
 
+    if (flow_api->uninit_flow_api) {
+        flow_api->uninit_flow_api(netdev);
+    }
+
     ovsrcu_set(&netdev->flow_api, NULL);
     rfa = netdev_lookup_flow_api(flow_api->type);
     ovs_refcount_unref(&rfa->refcnt);
@@ -442,6 +452,64 @@ bool
 netdev_is_flow_api_enabled(void)
 {
     return netdev_flow_api_enabled;
+}
+
+unsigned int
+netdev_offload_thread_nb(void)
+{
+    return offload_thread_nb;
+}
+
+unsigned int
+netdev_offload_ufid_to_thread_id(const ovs_u128 ufid)
+{
+    uint32_t ufid_hash;
+
+    if (netdev_offload_thread_nb() == 1) {
+        return 0;
+    }
+
+    ufid_hash = hash_words64_inline(
+            (const uint64_t [2]){ ufid.u64.lo,
+                                  ufid.u64.hi }, 2, 1);
+    return ufid_hash % netdev_offload_thread_nb();
+}
+
+unsigned int
+netdev_offload_thread_init(void)
+{
+    static atomic_count next_id = ATOMIC_COUNT_INIT(0);
+    bool thread_is_hw_offload;
+    bool thread_is_rcu;
+
+    thread_is_hw_offload = !strncmp(get_subprogram_name(),
+                                    "hw_offload", strlen("hw_offload"));
+    thread_is_rcu = !strncmp(get_subprogram_name(), "urcu", strlen("urcu"));
+
+    /* Panic if any other thread besides offload and RCU tries
+     * to initialize their thread ID. */
+    ovs_assert(thread_is_hw_offload || thread_is_rcu);
+
+    if (*netdev_offload_thread_id_get() == OVSTHREAD_ID_UNSET) {
+        unsigned int id;
+
+        if (thread_is_rcu) {
+            /* RCU will compete with other threads for shared object access.
+             * Reclamation functions using a thread ID must be thread-safe.
+             * For that end, and because RCU must consider all potential shared
+             * objects anyway, its thread-id can be whichever, so return 0.
+             */
+            id = 0;
+        } else {
+            /* Only the actual offload threads have their own ID. */
+            id = atomic_count_inc(&next_id);
+        }
+        /* Panic if any offload thread is getting a spurious ID. */
+        ovs_assert(id < netdev_offload_thread_nb());
+        return *netdev_offload_thread_id_get() = id;
+    } else {
+        return *netdev_offload_thread_id_get();
+    }
 }
 
 void
@@ -573,11 +641,13 @@ netdev_ports_lookup(odp_port_t port_no, const char *dpif_type)
 }
 
 int
-netdev_ports_insert(struct netdev *netdev, const char *dpif_type,
-                    struct dpif_port *dpif_port)
+netdev_ports_insert(struct netdev *netdev, struct dpif_port *dpif_port)
 {
+    const char *dpif_type = netdev_get_dpif_type(netdev);
     struct port_to_netdev_data *data;
     int ifindex = netdev_get_ifindex(netdev);
+
+    ovs_assert(dpif_type);
 
     ovs_rwlock_wrlock(&netdev_hmap_rwlock);
     if (netdev_ports_lookup(dpif_port->port_no, dpif_type)) {
@@ -595,8 +665,6 @@ netdev_ports_insert(struct netdev *netdev, const char *dpif_type,
     } else {
         data->ifindex = -1;
     }
-
-    netdev_set_dpif_type(netdev, dpif_type);
 
     hmap_insert(&port_to_netdev, &data->portno_node,
                 netdev_ports_hash(dpif_port->port_no, dpif_type));
@@ -656,7 +724,16 @@ netdev_ports_get_n_flows(const char *dpif_type, odp_port_t port_no,
     ovs_rwlock_rdlock(&netdev_hmap_rwlock);
     data = netdev_ports_lookup(port_no, dpif_type);
     if (data) {
-        ret = netdev_flow_get_n_flows(data->netdev, n_flows);
+        uint64_t thread_n_flows[MAX_OFFLOAD_THREAD_NB] = {0};
+        unsigned int tid;
+
+        ret = netdev_flow_get_n_flows(data->netdev, thread_n_flows);
+        *n_flows = 0;
+        if (!ret) {
+            for (tid = 0; tid < netdev_offload_thread_nb(); tid++) {
+                *n_flows += thread_n_flows[tid];
+            }
+        }
     }
     ovs_rwlock_unlock(&netdev_hmap_rwlock);
     return ret;
@@ -709,7 +786,22 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
         if (ovsthread_once_start(&once)) {
             netdev_flow_api_enabled = true;
 
-            VLOG_INFO("netdev: Flow API Enabled");
+            offload_thread_nb = smap_get_ullong(ovs_other_config,
+                                                "n-offload-threads",
+                                                DEFAULT_OFFLOAD_THREAD_NB);
+            if (offload_thread_nb > MAX_OFFLOAD_THREAD_NB) {
+                VLOG_WARN("netdev: Invalid number of threads requested: %u",
+                          offload_thread_nb);
+                offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;
+            }
+
+            if (smap_get(ovs_other_config, "n-offload-threads")) {
+                VLOG_INFO("netdev: Flow API Enabled, using %u thread%s",
+                          offload_thread_nb,
+                          offload_thread_nb > 1 ? "s" : "");
+            } else {
+                VLOG_INFO("netdev: Flow API Enabled");
+            }
 
 #ifdef __linux__
             tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",

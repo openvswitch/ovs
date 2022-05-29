@@ -43,6 +43,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/tun-metadata.h \
 	include/openvswitch/type-props.h \
 	include/openvswitch/types.h \
+	include/openvswitch/usdt-probes.h \
 	include/openvswitch/util.h \
 	include/openvswitch/uuid.h \
 	include/openvswitch/version.h \

@@ -33,15 +33,26 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
+
 #define SHA1_DIGEST_SIZE 20     /* Size of the SHA1 digest. */
 #define SHA1_HEX_DIGEST_LEN 40  /* Length of SHA1 digest as hex in ASCII. */
 
 /* SHA1 context structure. */
 struct sha1_ctx {
-    uint32_t digest[5];          /* Message digest. */
-    uint32_t count_lo, count_hi; /* 64-bit bit counts. */
-    uint32_t data[16];           /* SHA data buffer */
-    int local;                   /* Unprocessed amount in data. */
+    union {
+#ifdef HAVE_OPENSSL
+        EVP_MD_CTX *ctx;                 /* OpenSSL context. */
+#endif
+        struct {
+            uint32_t digest[5];          /* Message digest. */
+            uint32_t count_lo, count_hi; /* 64-bit bit counts. */
+            uint32_t data[16];           /* SHA data buffer */
+            int local;                   /* Unprocessed amount in data. */
+        };
+    };
 };
 
 void sha1_init(struct sha1_ctx *);
@@ -62,5 +73,13 @@ void sha1_bytes(const void *, uint32_t size, uint8_t digest[SHA1_DIGEST_SIZE]);
 void sha1_to_hex(const uint8_t digest[SHA1_DIGEST_SIZE],
                  char hex[SHA1_HEX_DIGEST_LEN + 1]);
 bool sha1_from_hex(uint8_t digest[SHA1_DIGEST_SIZE], const char *hex);
+
+/* Generic implementation for the case where OpenSSL is not available.
+ * This API should not be used directly.  Exposed for unit testing. */
+void ovs_sha1_init(struct sha1_ctx *);
+void ovs_sha1_update(struct sha1_ctx *, const void *, uint32_t size);
+void ovs_sha1_final(struct sha1_ctx *, uint8_t digest[SHA1_DIGEST_SIZE]);
+void ovs_sha1_bytes(const void *, uint32_t size,
+                    uint8_t digest[SHA1_DIGEST_SIZE]);
 
 #endif  /* sha1.h */

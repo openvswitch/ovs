@@ -38,6 +38,8 @@ lib_libopenvswitchavx512_la_CFLAGS = \
 	-fPIC \
 	$(AM_CFLAGS)
 lib_libopenvswitchavx512_la_SOURCES = \
+	lib/cpu.c \
+	lib/cpu.h \
 	lib/dpif-netdev-lookup-avx512-gather.c \
 	lib/dpif-netdev-extract-avx512.c \
 	lib/dpif-netdev-avx512.c
@@ -151,6 +153,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/hmap.c \
 	lib/hmapx.c \
 	lib/hmapx.h \
+	lib/id-fpool.c \
+	lib/id-fpool.h \
 	lib/id-pool.c \
 	lib/id-pool.h \
 	lib/if-notifier-manual.c \
@@ -179,6 +183,9 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/memory.c \
 	lib/memory.h \
 	lib/meta-flow.c \
+	lib/mov-avg.h \
+	lib/mpsc-queue.c \
+	lib/mpsc-queue.h \
 	lib/multipath.c \
 	lib/multipath.h \
 	lib/namemap.c \
@@ -667,12 +674,3 @@ lib/ovs-fields.7: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/met
             $(srcdir)/lib/meta-flow.xml > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 EXTRA_DIST += lib/meta-flow.xml
-
-man_MANS += lib/ovs-actions.7
-CLEANFILES += lib/ovs-actions.7
-lib/ovs-actions.7: $(srcdir)/build-aux/extract-ofp-actions lib/ovs-actions.xml
-	$(AM_V_GEN)PYTHONIOENCODING=utf8 $(run_python) $< \
-            --ovs-version=$(VERSION) ovs-actions \
-            $(srcdir)/lib/ovs-actions.xml > $@.tmp
-	$(AM_V_at)mv $@.tmp $@
-EXTRA_DIST += lib/ovs-actions.xml

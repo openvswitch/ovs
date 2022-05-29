@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include <string.h>
 #include "Conntrack.h"
 #include "PacketParser.h"
+#include "util.h"
 
 /* Eg: 227 Entering Passive Mode (a1,a2,a3,a4,p1,p2)*/
 #define FTP_PASV_RSP_PREFIX "227"
+#define FTP_EXTEND_PASV_RSP_PREFIX "229"
+#define FTP_EXTEND_ACTIVE_RSP_PREFIX "200"
 
 typedef enum FTP_TYPE {
     FTP_TYPE_PASV = 1,
-    FTP_TYPE_ACTIVE
+    FTP_TYPE_ACTIVE,
+    FTP_EXTEND_TYPE_PASV,
+    FTP_EXTEND_TYPE_ACTIVE
 } FTP_TYPE;
 
 static __inline UINT32
@@ -123,12 +129,11 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
                POVS_CT_ENTRY entry,
                BOOLEAN request)
 {
-    NDIS_STATUS status;
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     FTP_TYPE ftpType = 0;
     const char *buf;
     char temp[256] = { 0 };
     char ftpMsg[256] = { 0 };
-
     UINT32 len;
     TCPHdr tcpStorage;
     const TCPHdr *tcp;
@@ -156,6 +161,9 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
         if ((len >= 5) && (OvsStrncmp("PORT", ftpMsg, 4) == 0)) {
             ftpType = FTP_TYPE_ACTIVE;
             req = ftpMsg + 4;
+        } else if ((len >= 5) && (OvsStrncmp("EPRT", ftpMsg, 4) == 0)) {
+            ftpType = FTP_EXTEND_TYPE_ACTIVE;
+            req = ftpMsg + 4;
         }
     } else {
         if ((len >= 4) && (OvsStrncmp(FTP_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
@@ -176,6 +184,25 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
                 /* PASV command without ( */
                 req = ftpMsg + 3;
             }
+        } else if ((len >= 4) && (OvsStrncmp(FTP_EXTEND_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
+            ftpType = FTP_EXTEND_TYPE_PASV;
+            /* The ftp extended passive mode only contain port info, ip address
+             * is same with the network protocol used by control connection.
+             * 229 Entering Extended Passive Mode (|||port|)
+             * */
+            char *paren;
+            paren = strchr(ftpMsg, '|');
+            if (paren) {
+                req = paren + 3;
+            } else {
+                /* Not a valid EPSV packet. */
+                return NDIS_STATUS_INVALID_PACKET;
+            }
+
+            if (!(*req > '0' && * req < '9')) {
+                /* Not a valid port number. */
+                return NDIS_STATUS_INVALID_PACKET;
+            }
         }
     }
 
@@ -184,28 +211,102 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
         return NDIS_STATUS_SUCCESS;
     }
 
-    UINT32 arr[6] = {0};
-    status = OvsCtExtractNumbers(req, len, arr, 6, ',');
+    struct ct_addr clientIp = {0}, serverIp = {0};
+    UINT16 port = 0;
 
-    if (status != NDIS_STATUS_SUCCESS) {
-        return status;
+    if (ftpType == FTP_TYPE_ACTIVE || ftpType == FTP_TYPE_PASV) {
+        UINT32 arr[6] = {0};
+        status = OvsCtExtractNumbers(req, len, arr, 6, ',');
+
+        if (status != NDIS_STATUS_SUCCESS) {
+            return status;
+        }
+
+        UINT32 ip = ntohl((arr[0] << 24) | (arr[1] << 16) |
+                          (arr[2] << 8) | arr[3]);
+        port = ntohs(((arr[4] << 8) | arr[5]));
+
+        serverIp.ipv4 = ip;
+        clientIp.ipv4 = key->ipKey.nwDst;
+    } else {
+        if (ftpType == FTP_EXTEND_TYPE_ACTIVE) {
+            /** In ftp active mode, we need to parse string like below:
+             * " |2|20::1|50778|", 2 represent address is ipv6, 1 represent
+             * address family is ipv4, "20::1" is ipv6 address, 50779 is port
+             * client need to listen.
+             * **/
+            char *curHdr = NULL;
+            char *nextHdr = NULL;
+            int index = 0;
+            int isIpv6AddressFamily = 0;
+            char ftpStr[1024] = {0x00};
+
+            RtlCopyMemory(ftpStr, req, strlen(req));
+            for (curHdr = ftpStr; *curHdr != '|'; curHdr++);
+            curHdr = curHdr + 1;;
+            do {
+                /** index == 0 parse address family,
+                 *  index == 1 parse address,
+                 *  index == 2 parse port **/
+                for (nextHdr = curHdr; *nextHdr != '|'; nextHdr++);
+                *nextHdr = '\0';
+
+                if (*curHdr == '0' || !curHdr || index > 2) {
+                    break;
+                }
+
+                if (index == 0 && *curHdr == '1') {
+                    isIpv6AddressFamily = 0;
+                } else if (index == 0 && *curHdr == '2') {
+                    isIpv6AddressFamily = 1;
+                }
+
+                if (index == 1 && isIpv6AddressFamily) {
+                    OvsIpv6StringToAddress(curHdr, &clientIp.ipv6);
+                }
+
+                if (index == 2) {
+                    for (char *tmp = curHdr; *tmp != '\0'; tmp++) {
+                        port = port * 10 + (*tmp - '0');
+                    }
+                    port = htons(port);
+                }
+
+                curHdr = nextHdr + 1;
+                index++;
+            } while (1);
+
+            if (index < 2) { /* Not valid packet due to less than three parameter */
+                return NDIS_STATUS_SUCCESS;
+            }
+            serverIp.ipv6 = key->ipv6Key.ipv6Dst;
+        }
+
+        if (ftpType == FTP_EXTEND_TYPE_PASV) {
+            /* Here used to parse the string "229 Entering Extended Passive Mode (|||50522|),
+             * 50522 is the port we want". */
+            char *tmp = req;
+            while (*tmp != '|' && *tmp != '\0') {
+                port = port * 10 + (*tmp - '0');
+                tmp++;
+            }
+
+            port = htons(port);
+
+            serverIp.ipv6 = key->ipv6Key.ipv6Src;
+            clientIp.ipv6 = key->ipv6Key.ipv6Dst;
+        }
     }
-
-    UINT32 ip = ntohl((arr[0] << 24) | (arr[1] << 16) |
-                      (arr[2] << 8) | arr[3]);
-    UINT16 port = ntohs(((arr[4] << 8) | arr[5]));
 
     switch (ftpType) {
     case FTP_TYPE_PASV:
         /* Ensure that the command states Server's IP address */
-        ASSERT(ip == key->ipKey.nwSrc);
-
         OvsCtRelatedEntryCreate(key->ipKey.nwProto,
                                 key->l2.dlType,
                                 /* Server's IP */
-                                ip,
+                                serverIp,
                                 /* Use intended client's IP */
-                                key->ipKey.nwDst,
+                                clientIp,
                                 /* Dynamic port opened on server */
                                 port,
                                 /* We don't know the client port */
@@ -217,9 +318,33 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
         OvsCtRelatedEntryCreate(key->ipKey.nwProto,
                                 key->l2.dlType,
                                 /* Server's default IP address */
-                                key->ipKey.nwDst,
+                                serverIp,
                                 /* Client's IP address */
-                                ip,
+                                clientIp,
+                                /* FTP Data Port is 20 */
+                                ntohs(IPPORT_FTP_DATA),
+                                /* Port opened up on Client */
+                                port,
+                                currentTime,
+                                entry);
+        break;
+    case FTP_EXTEND_TYPE_PASV:
+        OvsCtRelatedEntryCreate(key->ipv6Key.nwProto,
+                                key->l2.dlType,
+                                serverIp,
+                                clientIp,
+                                port,
+                                0,
+                                currentTime,
+                                entry);
+        break;
+    case FTP_EXTEND_TYPE_ACTIVE:
+        OvsCtRelatedEntryCreate(key->ipv6Key.nwProto,
+                                key->l2.dlType,
+                                /* Server's default IP address */
+                                serverIp,
+                                /* Client's IP address */
+                                clientIp,
                                 /* FTP Data Port is 20 */
                                 ntohs(IPPORT_FTP_DATA),
                                 /* Port opened up on Client */

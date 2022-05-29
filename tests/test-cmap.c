@@ -74,6 +74,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
         cmap_values[i++] = e->value;
     }
     assert(i == n);
+    assert(e == NULL);
 
     /* Here we test iteration with cmap_next_position() */
     i = 0;
@@ -107,6 +108,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
             count += e->value == values[i];
         }
         assert(count == 1);
+        assert(e == NULL);
     }
 
     /* Check that all the values are there in batched lookup. */
@@ -130,6 +132,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
             CMAP_NODE_FOR_EACH (e, node, nodes[k]) {
                 count += e->value == values[i + k];
             }
+            assert(e == NULL);
         }
         assert(count == j); /* j elements in a batch. */
     }
@@ -584,7 +587,7 @@ benchmark_hmap(void)
 {
     struct helement *elements;
     struct hmap hmap;
-    struct helement *e, *next;
+    struct helement *e;
     struct timeval start;
     pthread_t *threads;
     struct hmap_aux aux;
@@ -622,7 +625,7 @@ benchmark_hmap(void)
 
     /* Destruction. */
     xgettimeofday(&start);
-    HMAP_FOR_EACH_SAFE (e, next, node, &hmap) {
+    HMAP_FOR_EACH_SAFE (e, node, &hmap) {
         hmap_remove(&hmap, &e->node);
     }
     hmap_destroy(&hmap);

@@ -270,6 +270,53 @@ AT_CHECK([cat p0.pcap.txt | grep 101025d | uniq], [0], [dnl
 ffffffffffffaa55aa55000008060001080006040001aa55aa550000010102580000000000000101025d
 ])
 
+dnl Check input range
+AT_CHECK([ovs-appctl tnl/neigh/aging 0], [2], [], [dnl
+bad aging value
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 3601], [2], [], [dnl
+bad aging value
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 1], [0], [OK
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/aging 3600], [0], [OK
+])
+
+dnl Set the aging time to 5 seconds
+AT_CHECK([ovs-appctl tnl/neigh/aging 5], [0], [OK
+])
+
+dnl Read the current aging time
+AT_CHECK([ovs-appctl tnl/neigh/aging], [0], [5
+])
+
+dnl Add an entry
+AT_CHECK([ovs-appctl tnl/neigh/set br0 1.1.2.92 aa:bb:cc:00:00:01], [0], [OK
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      aa:bb:cc:00:00:01   br0
+])
+
+ovs-appctl time/warp 5000
+
+dnl Check the entry has been removed
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+])
+
+dnl Restore the aging time to 900s (default)
+AT_CHECK([ovs-appctl tnl/neigh/aging 900], [0], [OK
+])
+
+dnl Read the current aging time
+AT_CHECK([ovs-appctl tnl/neigh/aging], [0], [900
+])
+
 dnl Check ARP Snoop
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:c8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:c8,tha=00:00:00:00:00:00)'])
 
@@ -499,6 +546,28 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  [[37]]' | sort], [0], [dnl
   port  7: rx pkts=5, bytes=434, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
+dnl Send out packets received from L3GRE tunnel back to L3GRE tunnel
+AT_CHECK([ovs-ofctl del-flows int-br])
+AT_CHECK([ovs-ofctl add-flow int-br "in_port=7,actions=set_field:3->in_port,7"])
+AT_CHECK([ovs-vsctl -- set Interface br0 options:pcap=br0.pcap])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-pcap p0.pcap > p0.pcap.txt 2>&1])
+AT_CHECK([tail -6 p0.pcap.txt], [0], [dnl
+aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+001b213cab64aa55aa55000008004500007000004000402f33aa010102580101025c20000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+001b213cab64aa55aa55000008004500007000004000402f33aa010102580101025c20000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+001b213cab64aa55aa55000008004500007000004000402f33aa010102580101025c20000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+
 dnl Check decapsulation of Geneve packet with options
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor int-br 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
@@ -518,8 +587,43 @@ icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
   port  5: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
 ])
-AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)'], [0], [dnl
-tunnel(tun_id=0x7b,src=1.1.2.92,dst=1.1.2.88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(-df-csum+key)),recirc_id(0),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=2,rule_cookie=0,controller_id=0,max_len=65535))
+AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)' | sed -e 's/recirc_id=[[0-9]]*/recirc_id=<cleared>/g'], [0], [dnl
+tunnel(tun_id=0x7b,src=1.1.2.92,dst=1.1.2.88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(-df-csum+key)),recirc_id(0),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,continuation=0,recirc_id=<cleared>,rule_cookie=0,controller_id=0,max_len=65535))
+])
+
+dnl Receive VXLAN with different MAC and verify that the neigh cache gets updated
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000f8bc1244cafe08004500004e00010000401173e90101025c01010258c85312b5003a8cd40c00000300007b00ffffffffffff00000000000008004500001c0001000040117cce7f0000017f0000010035003500080172'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+dnl Check VXLAN tunnel push
+AT_CHECK([ovs-ofctl add-flow int-br action=2])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=36:b1:ee:7c:01:01,dst=36:b1:ee:7c:01:02),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:ca:fe,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x7b)),out_port(100)),1)
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:ca:fe   br0
+1.1.2.93                                      f8:bc:12:44:34:b7   br0
+])
+
+dnl Restore and check the cache entries
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000f8bc124434b608004500004e00010000401173e90101025c01010258c85312b5003a8cd40c00000300007b00ffffffffffff00000000000008004500001c0001000040117cce7f0000017f0000010035003500080172'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+dnl Check VXLAN tunnel push
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=36:b1:ee:7c:01:01,dst=36:b1:ee:7c:01:02),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x7b)),out_port(100)),1)
+])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+1.1.2.93                                      f8:bc:12:44:34:b7   br0
 ])
 
 ovs-appctl time/warp 10000
@@ -595,6 +699,64 @@ OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep 50540000000a5054000000091235 | wc 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel_push_pop - packet_out debug_slow])
+
+OVS_VSWITCHD_START(
+    [add-port br0 p0 dnl
+     -- set Interface p0 type=dummy ofport_request=1 dnl
+                         other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy])
+AT_CHECK([ovs-vsctl add-port int-br t2 dnl
+          -- set Interface t2 type=geneve options:remote_ip=1.1.2.92 dnl
+                              options:key=123 ofport_request=2])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl This ARP reply from p0 has two effects:
+dnl 1. The ARP cache will learn that 1.1.2.92 is at f8:bc:12:44:34:b6.
+dnl 2. The br0 mac learning will learn that f8:bc:12:44:34:b6 is on p0.
+AT_CHECK([
+  ovs-appctl netdev-dummy/receive p0 dnl
+      'recirc_id(0),in_port(2),dnl
+       eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),dnl
+       arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'
+])
+
+AT_CHECK([ovs-vsctl -- set Interface p0 options:tx_pcap=p0.pcap])
+
+packet=50540000000a505400000009123
+dnl Source port is based on a packet hash, so it may differ depending on the
+dnl compiler flags and CPU type.  Masked with '....'.
+encap=f8bc124434b6aa55aa5500000800450000320000400040113406010102580101025c....17c1001e00000000655800007b00
+
+dnl Output to tunnel from a int-br internal port.
+dnl Checking that the packet arrived and it was correctly encapsulated.
+AT_CHECK([ovs-ofctl add-flow int-br "in_port=LOCAL,actions=debug_slow,output:2"])
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}4" | wc -l` -ge 1])
+dnl Sending again to exercise the non-miss upcall path.
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}4" | wc -l` -ge 2])
+
+dnl Output to tunnel from the controller.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out int-br CONTROLLER "debug_slow,output:2" "${packet}5"])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}5" | wc -l` -ge 1])
+
+dnl Datapath actions should not have tunnel push action.
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -q tnl_push], [1])
+dnl There should be slow_path action instead.
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -q 'slow_path(action)'], [0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel_push_pop - underlay bridge match])
 
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
@@ -641,6 +803,114 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl)
  n_packets=1, n_bytes=42, priority=1,arp actions=NORMAL
  n_packets=1, n_bytes=60, priority=99,ip,dl_src=aa:55:aa:55:00:00,dl_dst=f8:bc:12:44:34:b6,nw_src=1.1.2.88,nw_dst=1.1.2.92,nw_proto=47,nw_tos=0 actions=NORMAL
 NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - flow translation on unrelated bridges])
+
+OVS_VSWITCHD_START(
+    [add-port br0 p0 dnl
+     -- set Interface p0 type=dummy ofport_request=1 dnl
+                         other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy])
+AT_CHECK([ovs-vsctl add-port int-br t2 dnl
+          -- set Interface t2 type=geneve options:remote_ip=1.1.2.92 dnl
+                              options:key=123 ofport_request=2])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl This ARP reply from p0 has two effects:
+dnl 1. The ARP cache will learn that 1.1.2.92 is at f8:bc:12:44:34:b6.
+dnl 2. The br0 mac learning will learn that f8:bc:12:44:34:b6 is on p0.
+AT_CHECK([
+  ovs-appctl netdev-dummy/receive p0 dnl
+      'recirc_id(0),in_port(2),dnl
+       eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),dnl
+       arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'
+])
+
+dnl Creating a separate bridge that is completely unrelated to a tunnel
+dnl configuration.  Ports in this bridge cannot be tunnel endpoints.
+AT_CHECK([ovs-vsctl add-br br-non-tunnel dnl
+          -- set bridge br-non-tunnel datapath_type=dummy fail-mode=secure])
+add_of_ports br-non-tunnel 7 8
+AT_CHECK([ovs-ofctl del-flows br-non-tunnel])
+AT_CHECK([ovs-ofctl add-flow br-non-tunnel in_port=p7,action=p8])
+AT_CHECK([ovs-ofctl add-flow br-non-tunnel in_port=p8,action=p7])
+
+dnl Checking that tunnel configuration doesn't impact flow translation
+dnl on this bridge (Megaflow should contain a bare minimum of fields
+dnl according to installed OF rules).
+AT_CHECK([ovs-appctl ofproto/trace br-non-tunnel in_port=p7], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,in_port=7,dl_type=0x0000
+Datapath actions: 8
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br-non-tunnel in_port=p8], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,in_port=8,dl_type=0x0000
+Datapath actions: 7
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - VXLAN access port])
+
+dnl Create bridge that has a MAC address.
+OVS_VSWITCHD_START([set bridge br0 datapath_type=dummy dnl
+                    -- set Interface br0 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-vsctl add-port br0 p8 dnl
+                    -- set Interface p8 type=dummy ofport_request=8])
+
+dnl Create another bridge.
+AT_CHECK([ovs-vsctl add-br ovs-tun0 -- set bridge ovs-tun0 datapath_type=dummy])
+
+dnl Add VXLAN port to this bridge.
+AT_CHECK([ovs-vsctl add-port ovs-tun0 tun0 dnl
+            -- set int tun0 type=vxlan options:remote_ip=10.0.0.11 dnl
+            -- add-port ovs-tun0 p7 dnl
+            -- set interface p7 type=dummy ofport_request=7])
+
+dnl Set VLAN tags, so that br0 and its port p8 have the same tag,
+dnl but ovs-tun0's port p7 has a different tag.
+AT_CHECK([ovs-vsctl set port p8  tag=42 dnl
+                 -- set port br0 tag=42 dnl
+                 -- set port p7  tag=200])
+
+dnl Set IP address and route for br0.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 10.0.0.2/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 10.0.0.11/24 br0], [0], [OK
+])
+
+dnl Send an ARP reply to port b8 on br0, so that packets will be forwarded
+dnl to learned port.
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),dnl
+   eth(src=aa:55:aa:66:00:00,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),dnl
+   arp(sip=10.0.0.11,tip=10.0.0.2,op=2,sha=aa:55:aa:66:00:00,tha=00:00:00:00:00:00)'])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-tun0 in_port=p7], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,in_port=7,dl_src=00:00:00:00:00:00,dnl
+dl_dst=00:00:00:00:00:00,dl_type=0x0000
+Datapath actions: push_vlan(vid=200,pcp=0),1,clone(tnl_push(tnl_port(4789),dnl
+header(size=50,type=4,eth(dst=aa:55:aa:66:00:00,src=aa:55:aa:55:00:00,dnl
+dl_type=0x0800),ipv4(src=10.0.0.2,dst=10.0.0.11,proto=17,tos=0,ttl=64,dnl
+frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x0)),dnl
+out_port(100)),8)
 ])
 
 OVS_VSWITCHD_STOP

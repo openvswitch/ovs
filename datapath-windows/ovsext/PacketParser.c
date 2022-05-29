@@ -318,6 +318,7 @@ OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
     }
 
     layers->l7Offset = ofs;
+    layers->isIcmp = 1;
     return NDIS_STATUS_SUCCESS;
 
 invalid:

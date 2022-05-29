@@ -374,4 +374,93 @@ struct ofp13_async_config {
 };
 OFP_ASSERT(sizeof(struct ofp13_async_config) == 24);
 
+struct onf_flow_monitor_request {
+    ovs_be32   id;            /* Controller-assigned ID for this monitor. */
+    ovs_be16   flags;         /* ONFFMF_*. */
+    ovs_be16   match_len;     /* Length of oxm_fields. */
+    ovs_be32   out_port;      /* Required output port, if not OFPP_NONE. */
+    uint8_t    table_id;      /* One table's ID or 0xff for all tables. */
+    uint8_t    zeros[3];      /* Align to 64 bits (must be zero). */
+    /* Followed by an ofp11_match structure. */
+};
+OFP_ASSERT(sizeof(struct onf_flow_monitor_request) == 16);
+
+/* Header for experimenter requests and replies. */
+struct onf_experimenter_header {
+    struct ofp_header header;
+    ovs_be32   vendor;        /* ONF_EXPERIMENTER_ID. */
+    ovs_be32   subtype;       /* One of ONFT_*. */
+};
+OFP_ASSERT(sizeof(struct onf_experimenter_header) == 16);
+
+enum onf_flow_monitor_msg_type {
+    ONFT_FLOW_MONITOR_CANCEL = 1870,
+    ONFT_FLOW_MONITOR_PAUSED = 1871,
+    ONFT_FLOW_MONITOR_RESUMED = 1872
+};
+
+/* 'flags' bits in struct onf_flow_monitor_request. */
+enum onf_flow_monitor_flags {
+    /* When to send updates. */
+    ONFFMF_INITIAL = 1 << 0,  /* Initially matching flows. */
+    ONFFMF_ADD = 1 << 1,      /* New matching flows as they are added. */
+    ONFFMF_DELETE = 1 << 2,   /* Old matching flows as they are removed. */
+    ONFFMF_MODIFY = 1 << 3,   /* Matching flows as they are changed. */
+
+    /* What to include in updates. */
+    ONFFMF_ACTIONS = 1 << 4,  /* If set, actions are included. */
+    ONFFMF_OWN = 1 << 5,      /* If set, include own changes in full. */
+};
+
+/* ONFST_FLOW_MONITOR reply header. */
+struct onf_flow_update_header {
+    ovs_be16   length;        /* Length of this entry. */
+    ovs_be16   event;         /* One of ONFFME_*. */
+    /* ...other data depending on 'event'... */
+};
+OFP_ASSERT(sizeof(struct onf_flow_update_header) == 4);
+
+/* 'event' values in struct onf_flow_update_header. */
+enum onf_flow_update_event {
+    /* struct onf_flow_update_full. */
+    ONFFME_ADDED = 0,         /* Flow was added. */
+    ONFFME_DELETED = 1,       /* Flow was deleted. */
+    ONFFME_MODIFIED = 2,      /* Flow (generally its actions) was changed. */
+
+    /* struct onf_flow_update_abbrev. */
+    ONFFME_ABBREV = 3,        /* Abbreviated reply. */
+};
+
+/* ONFST_FLOW_MONITOR reply for ONFFME_ADDED, ONFFME_DELETED, and
+* ONFFME_MODIFIED. */
+struct onf_flow_update_full {
+    ovs_be16   length;        /* Length is 24. */
+    ovs_be16   event;         /* One of ONFFME_*. */
+    ovs_be16   reason;        /* OFPRR_* for ONFFME_DELETED, else zero. */
+    ovs_be16   priority;      /* Priority of the entry. */
+    ovs_be16   idle_timeout;  /* Number of seconds idle before expiration. */
+    ovs_be16   hard_timeout;  /* Number of seconds before expiration. */
+    ovs_be16   match_len;     /* Length of oxm_fields. */
+    uint8_t    table_id;      /* ID of flow's table. */
+    uint8_t    pad;           /* Reserved, currently zeroed. */
+    ovs_be64   cookie;        /* Opaque controller-issued identifier. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the oxm_fields, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, then
+     *   - Instructions to fill out the remainder 'length' bytes (always a
+     *     multiple of 8). If ONFFMF_ACTIONS was not specified, or 'event' is
+     *     ONFFME_DELETED, no actions are included.
+     */
+};
+OFP_ASSERT(sizeof(struct onf_flow_update_full) == 24);
+
+/* ONFST_FLOW_MONITOR reply for ONFFME_ABBREV. */
+struct onf_flow_update_abbrev {
+    ovs_be16   length;     /* Length is 8. */
+    ovs_be16   event;      /* ONFFME_ABBREV. */
+    ovs_be32   xid;        /* Controller-specified xid from flow_mod. */
+};
+OFP_ASSERT(sizeof(struct onf_flow_update_abbrev) == 8);
+
 #endif /* openflow/openflow-1.3.h */

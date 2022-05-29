@@ -61,8 +61,10 @@ void ofputil_flow_removed_format(struct ds *,
 /* Abstract nx_flow_monitor_request. */
 struct ofputil_flow_monitor_request {
     uint32_t id;
-    enum nx_flow_monitor_flags flags;
+    enum ofp14_flow_monitor_command command;
+    enum ofp14_flow_monitor_flags flags;
     ofp_port_t out_port;
+    uint32_t out_group;
     uint8_t table_id;
     struct match match;
 };
@@ -70,7 +72,8 @@ struct ofputil_flow_monitor_request {
 int ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                         struct ofpbuf *msg);
 void ofputil_append_flow_monitor_request(
-    const struct ofputil_flow_monitor_request *, struct ofpbuf *msg);
+    const struct ofputil_flow_monitor_request *, struct ofpbuf *msg,
+    enum ofputil_protocol protocol);
 void ofputil_flow_monitor_request_format(
     struct ds *, const struct ofputil_flow_monitor_request *,
     const struct ofputil_port_map *, const struct ofputil_table_map *);
@@ -84,7 +87,7 @@ char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
 
 /* Abstract nx_flow_update. */
 struct ofputil_flow_update {
-    enum nx_flow_update_event event;
+    enum ofp_flow_update_event event;
 
     /* Used only for NXFME_ADDED, NXFME_DELETED, NXFME_MODIFIED. */
     enum ofp_flow_removed_reason reason;
@@ -103,7 +106,8 @@ struct ofputil_flow_update {
 
 int ofputil_decode_flow_update(struct ofputil_flow_update *,
                                struct ofpbuf *msg, struct ofpbuf *ofpacts);
-void ofputil_start_flow_update(struct ovs_list *replies);
+void ofputil_start_flow_update(struct ovs_list *replies,
+                               enum ofputil_protocol protocol);
 void ofputil_append_flow_update(const struct ofputil_flow_update *,
                                 struct ovs_list *replies,
                                 const struct tun_table *);
@@ -114,7 +118,11 @@ void ofputil_flow_update_format(struct ds *,
 
 /* Abstract nx_flow_monitor_cancel. */
 uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
-struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
+struct ofpbuf *ofputil_encode_flow_monitor_cancel(
+    uint32_t id, enum ofputil_protocol protocol);
+
+struct ofpbuf * ofputil_encode_flow_monitor_pause(
+    enum ofp_flow_update_event command, enum ofputil_protocol protocol);
 
 struct ofputil_requestforward {
     ovs_be32 xid;

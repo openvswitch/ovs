@@ -418,6 +418,40 @@ push_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse)
     pkt_metadata_init_conn(&packet->md);
 }
 
+void
+add_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse,
+         bool l3_encap)
+{
+    if (!eth_type_mpls(ethtype)) {
+        return;
+    }
+
+    if (!l3_encap) {
+        ovs_be32 *header = dp_packet_push_uninit(packet, MPLS_HLEN);
+
+        *header = lse;
+        packet->l2_5_ofs = 0;
+        packet->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
+                                             ntohs(ethtype));
+    } else {
+        size_t len;
+        char *header;
+
+        if (!is_mpls(packet)) {
+            /* Set MPLS label stack offset. */
+            packet->l2_5_ofs = packet->l3_ofs;
+        }
+        set_ethertype(packet, ethtype);
+
+        /* Push new MPLS shim header onto packet. */
+        len = packet->l2_5_ofs;
+        header = dp_packet_resize_l2_5(packet, MPLS_HLEN);
+        memmove(header, header + MPLS_HLEN, len);
+        memcpy(header + len, &lse, sizeof lse);
+    }
+    pkt_metadata_init_conn(&packet->md);
+}
+
 /* If 'packet' is an MPLS packet, removes its outermost MPLS label stack entry.
  * If the label that was removed was the only MPLS label, changes 'packet''s
  * Ethertype to 'ethtype' (which ordinarily should not be an MPLS
@@ -440,6 +474,18 @@ pop_mpls(struct dp_packet *packet, ovs_be16 ethtype)
         /* Invalidate offload flags as they are not valid after
          * decapsulation of MPLS header. */
         dp_packet_reset_offload(packet);
+
+        /* packet_type must be reset for the MPLS packets with no l2 header */
+        if (!len) {
+            if (ethtype == htons(ETH_TYPE_TEB)) {
+                /* The inner packet must be classified as ethernet if the
+                 * ethtype is ETH_TYPE_TEB. */
+                packet->packet_type = htonl(PT_ETH);
+            } else {
+                packet->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
+                                                     ntohs(ethtype));
+            }
+        }
     }
 }
 

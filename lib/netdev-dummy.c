@@ -101,6 +101,11 @@ struct offloaded_flow {
     uint32_t mark;
 };
 
+struct netdev_dummy_q_stats {
+    uint64_t bytes;
+    uint64_t packets;
+};
+
 /* Protects 'dummy_list'. */
 static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -121,6 +126,8 @@ struct netdev_dummy {
     int mtu OVS_GUARDED;
     struct netdev_stats stats OVS_GUARDED;
     struct netdev_custom_counter custom_stats[C_STATS_SIZE] OVS_GUARDED;
+    struct netdev_dummy_q_stats *rxq_stats OVS_GUARDED;
+    struct netdev_dummy_q_stats *txq_stats OVS_GUARDED;
     enum netdev_flags flags OVS_GUARDED;
     int ifindex OVS_GUARDED;
     int numa_id OVS_GUARDED;
@@ -707,6 +714,9 @@ netdev_dummy_construct(struct netdev *netdev_)
     ovs_strlcpy(netdev->custom_stats[1].name,
                 "rx_custom_packets_2", NETDEV_CUSTOM_STATS_NAME_SIZE);
 
+    netdev->rxq_stats = xcalloc(netdev->up.n_rxq, sizeof *netdev->rxq_stats);
+    netdev->txq_stats = xcalloc(netdev->up.n_rxq, sizeof *netdev->txq_stats);
+
     dummy_packet_conn_init(&netdev->conn);
 
     ovs_list_init(&netdev->rxes);
@@ -731,6 +741,8 @@ netdev_dummy_destruct(struct netdev *netdev_)
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
+    free(netdev->rxq_stats);
+    free(netdev->txq_stats);
     if (netdev->rxq_pcap) {
         ovs_pcap_close(netdev->rxq_pcap);
     }
@@ -954,12 +966,34 @@ static int
 netdev_dummy_reconfigure(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    int old_n_txq = netdev_->n_txq;
+    int old_n_rxq = netdev_->n_rxq;
 
     ovs_mutex_lock(&netdev->mutex);
 
     netdev_->n_txq = netdev->requested_n_txq;
     netdev_->n_rxq = netdev->requested_n_rxq;
     netdev->numa_id = netdev->requested_numa_id;
+
+    if (netdev_->n_txq != old_n_txq || netdev_->n_rxq != old_n_rxq) {
+        /* Resize the per queue stats arrays. */
+        netdev->txq_stats = xrealloc(netdev->txq_stats,
+                                     netdev_->n_txq *
+                                     sizeof *netdev->txq_stats);
+        netdev->rxq_stats = xrealloc(netdev->rxq_stats,
+                                     netdev_->n_rxq *
+                                     sizeof *netdev->rxq_stats);
+
+        /* Reset all stats for consistency between per-queue and global
+         * counters. */
+        memset(&netdev->stats, 0, sizeof netdev->stats);
+        netdev->custom_stats[0].value = 0;
+        netdev->custom_stats[1].value = 0;
+        memset(netdev->txq_stats, 0,
+               netdev_->n_txq * sizeof *netdev->txq_stats);
+        memset(netdev->rxq_stats, 0,
+               netdev_->n_rxq * sizeof *netdev->rxq_stats);
+    }
 
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
@@ -1049,7 +1083,9 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     }
     ovs_mutex_lock(&netdev->mutex);
     netdev->stats.rx_packets++;
+    netdev->rxq_stats[rxq_->queue_id].packets++;
     netdev->stats.rx_bytes += dp_packet_size(packet);
+    netdev->rxq_stats[rxq_->queue_id].bytes += dp_packet_size(packet);
     netdev->custom_stats[0].value++;
     netdev->custom_stats[1].value++;
     ovs_mutex_unlock(&netdev->mutex);
@@ -1096,7 +1132,7 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
+netdev_dummy_send(struct netdev *netdev, int qid,
                   struct dp_packet_batch *batch,
                   bool concurrent_txq OVS_UNUSED)
 {
@@ -1135,7 +1171,9 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
         ovs_mutex_lock(&dev->mutex);
         dev->stats.tx_packets++;
+        dev->txq_stats[qid].packets++;
         dev->stats.tx_bytes += size;
+        dev->txq_stats[qid].bytes += size;
 
         dummy_packet_conn_send(&dev->conn, buffer, size);
 
@@ -1252,22 +1290,53 @@ static int
 netdev_dummy_get_custom_stats(const struct netdev *netdev,
                              struct netdev_custom_stats *custom_stats)
 {
-    int i;
+    int i, j;
 
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
-    custom_stats->size = 2;
-    custom_stats->counters =
-            (struct netdev_custom_counter *) xcalloc(C_STATS_SIZE,
-                    sizeof(struct netdev_custom_counter));
-
     ovs_mutex_lock(&dev->mutex);
+
+#define DUMMY_Q_STATS      \
+    DUMMY_Q_STAT(bytes)    \
+    DUMMY_Q_STAT(packets)
+
+    custom_stats->size = C_STATS_SIZE;
+#define DUMMY_Q_STAT(NAME) + netdev->n_rxq
+    custom_stats->size += DUMMY_Q_STATS;
+#undef DUMMY_Q_STAT
+#define DUMMY_Q_STAT(NAME) + netdev->n_txq
+    custom_stats->size += DUMMY_Q_STATS;
+#undef DUMMY_Q_STAT
+
+    custom_stats->counters = xcalloc(custom_stats->size,
+                                     sizeof(struct netdev_custom_counter));
+
+    j = 0;
     for (i = 0 ; i < C_STATS_SIZE ; i++) {
-        custom_stats->counters[i].value = dev->custom_stats[i].value;
-        ovs_strlcpy(custom_stats->counters[i].name,
+        custom_stats->counters[j].value = dev->custom_stats[i].value;
+        ovs_strlcpy(custom_stats->counters[j++].name,
                     dev->custom_stats[i].name,
                     NETDEV_CUSTOM_STATS_NAME_SIZE);
     }
+
+    for (i = 0; i < netdev->n_rxq; i++) {
+#define DUMMY_Q_STAT(NAME) \
+        snprintf(custom_stats->counters[j].name, \
+                 NETDEV_CUSTOM_STATS_NAME_SIZE, "rx_q%d_"#NAME, i); \
+        custom_stats->counters[j++].value = dev->rxq_stats[i].NAME;
+        DUMMY_Q_STATS
+#undef DUMMY_Q_STAT
+    }
+
+    for (i = 0; i < netdev->n_txq; i++) {
+#define DUMMY_Q_STAT(NAME) \
+        snprintf(custom_stats->counters[j].name, \
+                 NETDEV_CUSTOM_STATS_NAME_SIZE, "tx_q%d_"#NAME, i); \
+        custom_stats->counters[j++].value = dev->txq_stats[i].NAME;
+        DUMMY_Q_STATS
+#undef DUMMY_Q_STAT
+    }
+
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

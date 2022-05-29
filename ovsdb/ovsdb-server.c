@@ -26,6 +26,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dns-resolve.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "file.h"
@@ -228,8 +229,7 @@ main_loop(struct server_config *config,
 
         ovsdb_relay_run();
 
-        struct shash_node *next;
-        SHASH_FOR_EACH_SAFE (node, next, all_dbs) {
+        SHASH_FOR_EACH_SAFE (node, all_dbs) {
             struct db *db = node->data;
             ovsdb_txn_history_run(db->db);
             ovsdb_storage_run(db->db->storage);
@@ -321,7 +321,7 @@ main(int argc, char *argv[])
     FILE *config_tmpfile;
     struct server_config server_config;
     struct shash all_dbs;
-    struct shash_node *node, *next;
+    struct shash_node *node;
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
 
     ovs_cmdl_proctitle_init(argc, argv);
@@ -329,6 +329,7 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     process_init();
+    dns_resolve_init(true);
 
     bool active = false;
     parse_options(argc, argv, &db_filenames, &remotes, &unixctl_path,
@@ -490,7 +491,7 @@ main(int argc, char *argv[])
     main_loop(&server_config, jsonrpc, &all_dbs, unixctl, &remotes,
               run_process, &exiting, &is_backup);
 
-    SHASH_FOR_EACH_SAFE(node, next, &all_dbs) {
+    SHASH_FOR_EACH_SAFE (node, &all_dbs) {
         struct db *db = node->data;
         close_db(&server_config, db, NULL);
         shash_delete(&all_dbs, node);
@@ -511,6 +512,7 @@ main(int argc, char *argv[])
                       run_command, process_status_msg(status));
         }
     }
+    dns_resolve_destroy();
     perf_counters_destroy();
     service_stop();
     return 0;
@@ -729,9 +731,11 @@ open_db(struct server_config *config, const char *filename)
     db->db = ovsdb_create(schema, storage);
     ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db);
 
-    /* Enable txn history for clustered mode. It is not enabled for other mode
-     * for now, since txn id is available for clustered mode only. */
-    ovsdb_txn_history_init(db->db, ovsdb_storage_is_clustered(storage));
+    /* Enable txn history for clustered and relay modes.  It is not enabled for
+     * other modes for now, since txn id is available for clustered and relay
+     * modes only. */
+    ovsdb_txn_history_init(db->db,
+                           is_relay || ovsdb_storage_is_clustered(storage));
 
     read_db(config, db);
 
@@ -904,8 +908,9 @@ query_db_string(const struct shash *all_dbs, const char *name,
 
             datum = &row->fields[column->index];
             for (i = 0; i < datum->n; i++) {
-                if (datum->keys[i].string[0]) {
-                    return datum->keys[i].string;
+                const char *key = json_string(datum->keys[i].s);
+                if (key[0]) {
+                    return key;
                 }
             }
         }
@@ -1018,7 +1023,7 @@ query_db_remotes(const char *name, const struct shash *all_dbs,
 
             datum = &row->fields[column->index];
             for (i = 0; i < datum->n; i++) {
-                add_remote(remotes, datum->keys[i].string);
+                add_remote(remotes, json_string(datum->keys[i].s));
             }
         }
     } else if (column->type.key.type == OVSDB_TYPE_UUID
@@ -1239,8 +1244,8 @@ update_server_status(struct shash *all_dbs)
 
     /* Update rows for databases that still exist.
      * Delete rows for databases that no longer exist. */
-    const struct ovsdb_row *row, *next_row;
-    HMAP_FOR_EACH_SAFE (row, next_row, hmap_node, &database_table->rows) {
+    const struct ovsdb_row *row;
+    HMAP_FOR_EACH_SAFE (row, hmap_node, &database_table->rows) {
         const char *name;
         ovsdb_util_read_string_column(row, "name", &name);
         struct db *db = shash_find_data(all_dbs, name);

@@ -29,3 +29,5 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
     [AT_CHECK([ethtool -K $1 sg on], [0], [ignore], [ignore])]
     [AT_CHECK([ethtool -K $1 tso on], [0], [ignore], [ignore])]
 )
+
+m4_define([CHECK_SYSTEM_TSO], [])

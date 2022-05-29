@@ -61,7 +61,7 @@ check_list(struct ovs_list *list, const int values[], size_t n)
         assert(e->value == values[i]);
         i++;
     }
-    assert(&e->node == list);
+    assert(e == NULL);
     assert(i == n);
 
     i = 0;
@@ -70,7 +70,7 @@ check_list(struct ovs_list *list, const int values[], size_t n)
         assert(e->value == values[n - i - 1]);
         i++;
     }
-    assert(&e->node == list);
+    assert(e == NULL);
     assert(i == n);
 
     assert(ovs_list_is_empty(list) == !n);
@@ -135,6 +135,13 @@ test_list_for_each_safe(void)
             values_idx = 0;
             n_remaining = n;
             LIST_FOR_EACH_SAFE (e, next, node, &list) {
+                /* "next" is valid as long as it's not pointing to &list. */
+                if (&e->node == list.prev) {
+                    assert(next == NULL);
+                } else {
+                    assert(&next->node == e->node.next);
+                }
+
                 assert(i < n);
                 if (pattern & (1ul << i)) {
                     ovs_list_remove(&e->node);
@@ -148,7 +155,8 @@ test_list_for_each_safe(void)
                 i++;
             }
             assert(i == n);
-            assert(&e->node == &list);
+            assert(e == NULL);
+            assert(next == NULL);
 
             for (i = 0; i < n; i++) {
                 if (pattern & (1ul << i)) {
@@ -156,6 +164,35 @@ test_list_for_each_safe(void)
                 }
             }
             assert(n == n_remaining);
+
+            /* Test short version (without next variable). */
+            make_list(&list, elements, values, n);
+
+            i = 0;
+            values_idx = 0;
+            n_remaining = n;
+            LIST_FOR_EACH_SAFE (e, node, &list) {
+                assert(i < n);
+                if (pattern & (1ul << i)) {
+                    ovs_list_remove(&e->node);
+                    n_remaining--;
+                    memmove(&values[values_idx], &values[values_idx + 1],
+                            sizeof *values * (n_remaining - values_idx));
+                } else {
+                    values_idx++;
+                }
+
+                check_list(&list, values, n_remaining);
+                i++;
+            }
+            assert(i == n);
+            assert(e == NULL);
+
+            for (i = 0; i < n; i++) {
+                if (pattern & (1ul << i)) {
+                    n_remaining++;
+                }
+            }
         }
     }
 }

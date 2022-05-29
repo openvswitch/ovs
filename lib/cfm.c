@@ -416,7 +416,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
     ovs_mutex_lock(&mutex);
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
-        struct remote_mp *rmp, *rmp_next;
+        struct remote_mp *rmp;
         enum cfm_fault_reason old_cfm_fault = cfm->fault;
         uint64_t old_flap_count = cfm->flap_count;
         int old_health = cfm->health;
@@ -475,7 +475,7 @@ cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
             cfm->rx_packets = rx_packets;
         }
 
-        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
+        HMAP_FOR_EACH_SAFE (rmp, node, &cfm->remote_mps) {
             if (!rmp->recv) {
                 VLOG_INFO("%s: Received no CCM from RMP %"PRIu64" in the last"
                           " %lldms", cfm->name, rmp->mpid,

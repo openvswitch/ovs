@@ -1151,6 +1151,12 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
 {
     char buf[NETDEV_VPORT_NAME_BUFSIZE];
     const char *name = netdev_vport_get_dpif_port(netdev_, buf, sizeof(buf));
+    const char *dpif_type = netdev_get_dpif_type(netdev_);
+
+    if (dpif_type && strcmp(dpif_type, "system")) {
+        /* Not a system device. */
+        return -ENODEV;
+    }
 
     return linux_get_ifindex(name);
 }
@@ -1239,7 +1245,8 @@ netdev_vport_tunnel_register(void)
               .type = "erspan",
               .build_header = netdev_erspan_build_header,
               .push_header = netdev_erspan_push_header,
-              .pop_header = netdev_erspan_pop_header
+              .pop_header = netdev_erspan_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX
           },
           {{NULL, NULL, 0, 0}}
         },
@@ -1249,7 +1256,8 @@ netdev_vport_tunnel_register(void)
               .type = "ip6erspan",
               .build_header = netdev_erspan_build_header,
               .push_header = netdev_erspan_push_header,
-              .pop_header = netdev_erspan_pop_header
+              .pop_header = netdev_erspan_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX
           },
           {{NULL, NULL, 0, 0}}
         },

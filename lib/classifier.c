@@ -916,9 +916,9 @@ free_conjunctive_matches(struct hmap *matches,
                          struct conjunctive_match *cm_stubs, size_t n_cm_stubs)
 {
     if (hmap_count(matches) > n_cm_stubs) {
-        struct conjunctive_match *cm, *next;
+        struct conjunctive_match *cm;
 
-        HMAP_FOR_EACH_SAFE (cm, next, hmap_node, matches) {
+        HMAP_FOR_EACH_SAFE (cm, hmap_node, matches) {
             if (!(cm >= cm_stubs && cm < &cm_stubs[n_cm_stubs])) {
                 free(cm);
             }

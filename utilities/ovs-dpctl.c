@@ -198,6 +198,10 @@ usage(void *userdata OVS_UNUSED)
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
            "  del-flows [DP] [FILE]      " \
                "delete all or specified flows from DP\n"
+           "  cache-get-size [DP]             " \
+               "Show the current size for all caches\n"
+           "  cache-set-size DP CACHE SIZE  " \
+               "Set cache size for a specific cache\n"
            "  dump-conntrack [DP] [zone=ZONE]  " \
                "display conntrack entries for ZONE\n"
            "  flush-conntrack [DP] [zone=ZONE] [ct-tuple]" \

@@ -152,7 +152,10 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
 
     va_copy(args, args_);
     available = ds->string ? ds->allocated - ds->length + 1 : 0;
-    needed = vsnprintf(&ds->string[ds->length], available, format, args);
+    needed = vsnprintf(ds->string
+                       ? &ds->string[ds->length]
+                       : NULL,
+                       available, format, args);
     va_end(args);
 
     if (needed < available) {
@@ -162,7 +165,8 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
 
         va_copy(args, args_);
         available = ds->allocated - ds->length + 1;
-        needed = vsnprintf(&ds->string[ds->length], available, format, args);
+        needed = vsnprintf(&ds->string[ds->length],
+                           available, format, args);
         va_end(args);
 
         ovs_assert(needed < available);
@@ -198,10 +202,11 @@ ds_put_strftime_msec(struct ds *ds, const char *template, long long int when,
         localtime_msec(when, &tm);
     }
 
+    ds_reserve(ds, 64);
     for (;;) {
-        size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
-        size_t used = strftime_msec(&ds->string[ds->length], avail, template,
-                                    &tm);
+        size_t avail = ds->allocated - ds->length + 1;
+        char *dest = &ds->string[ds->length];
+        size_t used = strftime_msec(dest, avail, template, &tm);
         if (used) {
             ds->length += used;
             return;

@@ -139,6 +139,13 @@
           "type": "string"
         }
       }
+    },
+    "simple7" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        }
+      }
     }
   }
 }

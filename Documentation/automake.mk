@@ -57,7 +57,9 @@ DOC_SOURCE = \
 	Documentation/topics/porting.rst \
 	Documentation/topics/record-replay.rst \
 	Documentation/topics/tracing.rst \
+	Documentation/topics/usdt-probes.rst \
 	Documentation/topics/userspace-tso.rst \
+	Documentation/topics/userspace-tx-steering.rst \
 	Documentation/topics/windows.rst \
 	Documentation/howto/index.rst \
 	Documentation/howto/dpdk.rst \
@@ -155,6 +157,7 @@ endif
 
 # rST formatted manpages under Documentation/ref.
 RST_MANPAGES = \
+	ovs-actions.7.rst \
 	ovs-appctl.8.rst \
 	ovs-ctl.8.rst \
 	ovs-l3ping.8.rst \

@@ -55,3 +55,5 @@ OVS
    userspace-tso
    idl-compound-indexes
    ovs-extensions
+   userspace-tx-steering
+   usdt-probes
