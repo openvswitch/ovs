@@ -332,11 +332,6 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
 
     *newNbl = NULL;
 
-    if (tunKey->dst.si_family != AF_INET) {
-        /*V6 tunnel support will be supported later*/
-        return NDIS_STATUS_FAILURE;
-    }
-
     status = OvsExtractLayers(curNbl, &layers);
     if (status != NDIS_STATUS_SUCCESS) {
         return status;
