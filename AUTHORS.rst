@@ -294,6 +294,7 @@ Mauricio Vásquez                   mauricio.vasquezbernal@studenti.polito.it
 Maxime Coquelin                    maxime.coquelin@redhat.com
 Mehak Mahajan
 Michael Arnaldi                    arnaldimichael@gmail.com
+Michael Phelan                     michael.phelan@intel.com
 Michal Kazior                      michal@plume.com
 Michal Weglicki                    michalx.weglicki@intel.com
 Michele Baldessari                 michele@acksyn.org
