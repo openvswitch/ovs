@@ -7690,6 +7690,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         goto exit;
     }
 
+    if (!xin->frozen_state
+        && xin->flow.ct_state
+        && xin->flow.ct_state & CS_TRACKED) {
+        ctx.conntracked = true;
+    }
+
     /* Tunnel metadata in udpif format must be normalized before translation. */
     if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
         const struct tun_table *tun_tab = ofproto_get_tun_tab(
