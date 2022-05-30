@@ -133,6 +133,13 @@ strip_duration () {
 strip_ufid () {
     sed 's/ufid:[[-0-9a-f]]* //'
 }
+
+# Strips packets: and bytes: from output
+strip_stats () {
+    sed 's/packets:[[0-9]]*/packets:0/
+    s/bytes:[[0-9]]*/bytes:0/'
+}
+
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
