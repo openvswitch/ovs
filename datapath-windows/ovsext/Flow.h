@@ -89,6 +89,8 @@ UINT32 OvsTunKeyAttrSize(void);
 NTSTATUS
 OvsTunnelAttrToIPTunnelKey(PNL_ATTR attr, OvsIPTunnelKey *tunKey);
 
+UINT16 OvsGetFlowIPL2Offset(const OvsIPTunnelKey *tunKey);
+
 /* Flags for tunneling */
 #define OVS_TNL_F_DONT_FRAGMENT         (1 << 0)
 #define OVS_TNL_F_CSUM                  (1 << 1)

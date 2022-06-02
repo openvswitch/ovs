@@ -88,7 +88,7 @@ static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
                                UINT32 *replyLen);
 static NTSTATUS OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
                                          PNL_ATTR keyAttr);
-static UINT16 OvsGetFlowIPL2Offset(const OvsIPTunnelKey *tunKey);
+UINT16 OvsGetFlowIPL2Offset(const OvsIPTunnelKey *tunKey);
 
 #define OVS_FLOW_TABLE_SIZE 2048
 #define OVS_FLOW_TABLE_MASK (OVS_FLOW_TABLE_SIZE -1)

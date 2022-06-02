@@ -2465,6 +2465,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
         }
         case OVS_ACTION_ATTR_SET:
         {
+            OvsIPTunnelKey pre_tunKey = { 0 };
             if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
                 || ovsFwdCtx.tunnelRxNic != NULL) {
                 status = OvsOutputBeforeSetAction(&ovsFwdCtx);
@@ -2473,13 +2474,31 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                     goto dropit;
                 }
             }
-
+            RtlCopyMemory(&pre_tunKey, &key->tunKey, sizeof key->tunKey);
             status = OvsExecuteSetAction(&ovsFwdCtx, key, hash,
                                          (const PNL_ATTR)NlAttrGet
                                          ((const PNL_ATTR)a));
             if (status != NDIS_STATUS_SUCCESS) {
                 dropReason = L"OVS-set action failed";
                 goto dropit;
+            }
+
+            if (!OvsIphIsZero(&(key->tunKey.dst)) &&
+                 key->l2.offset != OvsGetFlowIPL2Offset(&key->tunKey)) {
+                 key->l2.offset = OvsGetFlowIPL2Offset(&ovsFwdCtx.tunKey);
+            }
+            if (!OvsIphIsZero(&(pre_tunKey.dst))) {
+                 /*if pre_tunkey dst is not null in multiple IPV6 Geneve tunnels case,
+                  * for broadcast and multicast packet the flow pipeline will set different
+                  * tunnel setting on one flow. In such case, it needs to do layers update.
+                  * Elsewise it will meet BSOD issue but in IPV4 tunnel the BSOD will not
+                  * have construct case to make it happen.
+                  */
+                 status = OvsExtractLayers(ovsFwdCtx.curNbl, &ovsFwdCtx.layers);
+                 if (status != NDIS_STATUS_SUCCESS) {
+                     dropReason = L"OVS-set action ExtractLayers failed";
+                     goto dropit;
+                 }
             }
             break;
         }
