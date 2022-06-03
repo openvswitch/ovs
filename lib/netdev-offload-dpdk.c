@@ -2058,6 +2058,25 @@ parse_vlan_push_action(struct flow_actions *actions,
     return 0;
 }
 
+static void
+add_tunnel_push_action(struct flow_actions *actions,
+                       const struct ovs_action_push_tnl *tnl_push)
+{
+     struct rte_flow_action_raw_encap *raw_encap;
+
+     if (tnl_push->tnl_type == OVS_VPORT_TYPE_VXLAN &&
+         !add_vxlan_encap_action(actions, tnl_push->header)) {
+         return;
+     }
+
+     raw_encap = xzalloc(sizeof *raw_encap);
+     raw_encap->data = (uint8_t *) tnl_push->header;
+     raw_encap->preserve = NULL;
+     raw_encap->size = tnl_push->header_len;
+
+     add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RAW_ENCAP, raw_encap);
+}
+
 static int
 parse_clone_actions(struct netdev *netdev,
                     struct flow_actions *actions,
@@ -2072,20 +2091,7 @@ parse_clone_actions(struct netdev *netdev,
 
         if (clone_type == OVS_ACTION_ATTR_TUNNEL_PUSH) {
             const struct ovs_action_push_tnl *tnl_push = nl_attr_get(ca);
-            struct rte_flow_action_raw_encap *raw_encap;
-
-            if (tnl_push->tnl_type == OVS_VPORT_TYPE_VXLAN &&
-                !add_vxlan_encap_action(actions, tnl_push->header)) {
-                continue;
-            }
-
-            raw_encap = xzalloc(sizeof *raw_encap);
-            raw_encap->data = (uint8_t *) tnl_push->header;
-            raw_encap->preserve = NULL;
-            raw_encap->size = tnl_push->header_len;
-
-            add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RAW_ENCAP,
-                            raw_encap);
+            add_tunnel_push_action(actions, tnl_push);
         } else if (clone_type == OVS_ACTION_ATTR_OUTPUT) {
             if (add_output_action(netdev, actions, ca)) {
                 return -1;
@@ -2188,6 +2194,10 @@ parse_flow_actions(struct netdev *netdev,
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
             add_flow_action(actions, RTE_FLOW_ACTION_TYPE_OF_POP_VLAN, NULL);
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_TUNNEL_PUSH) {
+            const struct ovs_action_push_tnl *tnl_push = nl_attr_get(nla);
+
+            add_tunnel_push_action(actions, tnl_push);
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CLONE &&
                    left <= NLA_ALIGN(nla->nla_len)) {
             const struct nlattr *clone_actions = nl_attr_get(nla);

@@ -570,6 +570,13 @@ nl_msg_put_nested(struct ofpbuf *msg,
     nl_msg_end_nested(msg, offset);
 }
 
+/* Reset message size to offset. */
+void
+nl_msg_reset_size(struct ofpbuf *msg, size_t offset)
+{
+    msg->size = offset;
+}
+
 /* If 'buffer' begins with a valid "struct nlmsghdr", pulls the header and its
  * payload off 'buffer', stores header and payload in 'msg->data' and
  * 'msg->size', and returns a pointer to the header.
