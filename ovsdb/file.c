@@ -458,6 +458,7 @@ ovsdb_file_read__(const char *filename, bool rw,
 
         error = ovsdb_txn_replay_commit(txn);
         if (error) {
+            ovsdb_error_destroy(error);
             ovsdb_storage_unread(storage);
             break;
         }
