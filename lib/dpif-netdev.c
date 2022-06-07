@@ -1609,6 +1609,9 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/subtable-lookup-info-get", "",
                              0, 0, dpif_netdev_subtable_lookup_get,
                              NULL);
+    unixctl_command_register("dpif-netdev/subtable-lookup-prio-get", NULL,
+                             0, 0, dpif_netdev_subtable_lookup_get,
+                             NULL);
     unixctl_command_register("dpif-netdev/dpif-impl-set",
                              "dpif_implementation_name",
                              1, 1, dpif_netdev_impl_set,
