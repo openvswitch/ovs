@@ -1010,7 +1010,7 @@ packet_set_ipv4_addr(struct dp_packet *packet,
  *
  * This function assumes that L3 and L4 offsets are set in the packet. */
 static bool
-packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr)
+packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr, bool *first_frag)
 {
     const struct ovs_16aligned_ip6_hdr *nh;
     size_t len;
@@ -1060,6 +1060,8 @@ packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr)
             const struct ovs_16aligned_ip6_frag *frag_hdr
                 = ALIGNED_CAST(struct ovs_16aligned_ip6_frag *, data);
 
+            *first_frag = !(frag_hdr->ip6f_offlg & IP6F_OFF_MASK) &&
+                           (frag_hdr->ip6f_offlg & IP6F_MORE_FRAG);
             *nexthdr = frag_hdr->ip6f_nxt;
             len = sizeof *frag_hdr;
         } else if (*nexthdr == IPPROTO_ROUTING) {
@@ -1190,18 +1192,20 @@ packet_set_ipv6(struct dp_packet *packet, const struct in6_addr *src,
                 uint8_t key_hl)
 {
     struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+    bool recalc_csum = true;
     uint8_t proto = 0;
     bool rh_present;
 
-    rh_present = packet_rh_present(packet, &proto);
+    rh_present = packet_rh_present(packet, &proto, &recalc_csum);
 
     if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
-        packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32, src, true);
+        packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32,
+                             src, recalc_csum);
     }
 
     if (memcmp(&nh->ip6_dst, dst, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_dst.be32, dst,
-                             !rh_present);
+                             !rh_present && recalc_csum);
     }
 
     packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
