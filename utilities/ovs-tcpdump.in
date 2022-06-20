@@ -406,7 +406,8 @@ def py_which(executable):
 
 
 def main():
-    db_sock = 'unix:@RUNDIR@/db.sock'
+    rundir = os.environ.get('OVS_RUNDIR', '@RUNDIR@')
+    db_sock = 'unix:%s' % os.path.join(rundir, "db.sock")
     interface = None
     tcpdargs = []
 
