@@ -128,7 +128,11 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
     __m512i v512_zeros = _mm512_setzero_si512();
     __m512i v_blk0;
 #if HAVE_AVX512VBMI
+#if __GNUC__ >= 4
     if (__builtin_constant_p(use_vbmi) && use_vbmi) {
+#else
+    if (use_vbmi) {
+#endif
         /* As different AVX512 ISA levels have different implementations,
         * this specializes on the use_vbmi attribute passed in.
         */
