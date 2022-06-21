@@ -376,6 +376,11 @@ vlog_set_log_file__(char *new_log_file_name)
         if (new_log_fd < 0) {
             VLOG_WARN("failed to open %s for logging: %s",
                       new_log_file_name, ovs_strerror(errno));
+            ovs_mutex_lock(&log_file_mutex);
+            if ((log_file_name == NULL) || (strcmp(log_file_name, new_log_file_name) != 0)) {
+                log_file_name = xstrdup(new_log_file_name);
+            }
+            ovs_mutex_unlock(&log_file_mutex);
             free(new_log_file_name);
             return errno;
         }
