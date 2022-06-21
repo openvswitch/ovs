@@ -83,6 +83,9 @@ AT_CHECK([
     ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
     ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions ], [0], [ignore])
 
+ovs-appctl time/warp 15000
+AT_CHECK([ovs-appctl revalidator/wait])
+
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1 'in_port(1),packet_type(ns=0,id=0),eth(src=3a:6d:d2:09:9c:ab,dst=1e:2c:e9:2a:66:9e),ipv4(src=192.168.10.10,dst=192.168.10.30,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
 ], [0], [ignore])
