@@ -30,6 +30,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <time.h>
+#include <errno.h>
 #include <openvswitch/compiler.h>
 #include <openvswitch/list.h>
 #include <openvswitch/thread.h>
@@ -261,6 +262,9 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
             /* Exit if logfile explicitly given \
              * but cannot be opened. */         \
             if (err && optarg) {                \
+                if (err == ENOSPC) {            \
+                    break;                      \
+                }                               \
                 exit(EXIT_FAILURE);             \
             }                                   \
             break;                              \
