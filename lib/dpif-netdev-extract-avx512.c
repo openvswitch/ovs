@@ -544,7 +544,11 @@ mfex_avx512_process(struct dp_packet_batch *packets,
          */
         __m512i v512_zeros = _mm512_setzero_si512();
         __m512i v_blk0;
+#if __GNUC__ >= 4
         if (__builtin_constant_p(use_vbmi) && use_vbmi) {
+#else
+        if (use_vbmi) {
+#endif
             v_blk0 = _mm512_maskz_permutexvar_epi8_wrap(k_shuf, v_shuf,
                                                         v_pkt0);
         } else {
