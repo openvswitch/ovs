@@ -24,7 +24,7 @@
 /* LACP Protocol Implementation. */
 
 enum lacp_status {
-    LACP_NEGOTIATED,                  /* Successful LACP negotations. */
+    LACP_NEGOTIATED,                  /* Successful LACP negotiations. */
     LACP_CONFIGURED,                  /* LACP is enabled but not negotiated. */
     LACP_DISABLED                     /* LACP is not enabled. */
 };
