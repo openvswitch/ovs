@@ -498,9 +498,20 @@ ovsdb_idl_get_memory_usage(struct ovsdb_idl *idl, struct simap *usage)
         cells += n_rows * n_columns;
     }
 
-    simap_increase(usage, "idl-cells", cells);
-    simap_increase(usage, "idl-outstanding-txns",
-                   hmap_count(&idl->outstanding_txns));
+    struct {
+        const char *name;
+        unsigned int val;
+    } idl_mem_stats[] = {
+        {"idl-outstanding-txns", hmap_count(&idl->outstanding_txns)},
+        {"idl-cells", cells},
+    };
+
+    for (size_t i = 0; i < ARRAY_SIZE(idl_mem_stats); i++) {
+        char *stat_name = xasprintf("%s-%s", idl_mem_stats[i].name,
+                                             idl->class_->database);
+        simap_increase(usage, stat_name, idl_mem_stats[i].val);
+        free(stat_name);
+    }
 }
 
 /* Returns a "sequence number" that represents the state of 'idl'.  When
