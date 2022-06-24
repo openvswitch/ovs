@@ -465,6 +465,10 @@ void
 ofpbuf_reserve(struct ofpbuf *b, size_t size)
 {
     ovs_assert(!b->size);
+
+    if (!size) {
+        return;
+    }
     ofpbuf_prealloc_tailroom(b, size);
     b->data = (char*)b->data + size;
 }
