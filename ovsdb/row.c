@@ -343,6 +343,23 @@ ovsdb_row_to_json(const struct ovsdb_row *row,
     }
     return json;
 }
+
+void
+ovsdb_row_to_string(const struct ovsdb_row *row, struct ds *out)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &row->table->schema->columns) {
+        const struct ovsdb_column *column = node->data;
+
+        ds_put_format(out, "%s:", column->name);
+        ovsdb_datum_to_string(&row->fields[column->index], &column->type, out);
+        ds_put_char(out, ',');
+    }
+    if (shash_count(&row->table->schema->columns)) {
+        ds_chomp(out, ',');
+    }
+}
 
 void
 ovsdb_row_set_init(struct ovsdb_row_set *set)

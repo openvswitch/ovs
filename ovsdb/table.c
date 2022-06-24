@@ -301,8 +301,21 @@ ovsdb_table_create(struct ovsdb_table_schema *ts)
         hmap_init(&table->indexes[i]);
     }
     hmap_init(&table->rows);
+    table->log = false;
 
     return table;
+}
+
+void
+ovsdb_table_logging_enable(struct ovsdb_table *table, bool enabled)
+{
+    table->log = enabled;
+}
+
+bool
+ovsdb_table_is_logging_enabled(struct ovsdb_table *table)
+{
+    return table->log;
 }
 
 void

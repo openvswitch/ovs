@@ -273,6 +273,13 @@ again (with \fBovsdb\-server/add\-db\fR).
 Outputs a list of the currently configured databases added either through
 the command line or through the \fBovsdb\-server/add\-db\fR command.
 .
+.IP "\fBovsdb\-server/tlog\-set \fIdatabase\fR:\fItable\fR \fIon\fR|\fIoff\fR"
+Enables or disables logging of all operations executed on the specified
+database and table.  Logs are generated at INFO level and are rate limtied.
+.
+.IP "\fBovsdb\-server/tlog\-list"
+Displays the logging state for all currently configured databases and tables.
+.
 .SS "Active-Backup Commands"
 .PP
 These commands query and update the role of \fBovsdb\-server\fR within
