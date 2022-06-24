@@ -357,8 +357,8 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         const ICMPHdr *icmp;
         icmp = OvsGetIcmp(curNbl, layers->l4Offset, &storage);
         if (!OvsConntrackValidateIcmp6Packet(icmp)) {
-            if(icmp) {
-                OVS_LOG_TRACE("Invalid ICMP packet detected, icmp->type %u",
+            if (icmp) {
+                OVS_LOG_TRACE("Invalid ICMP6 packet detected, icmp->type %u",
                               icmp->type);
             }
             state = OVS_CS_F_INVALID;
