@@ -12,6 +12,21 @@ m4_define([SYSTEM_DPDK_ALLOWED_LOGS],[
 \@TELEMETRY: No legacy callbacks, legacy socket not created@d
 ])
 
+dnl CHECK_MEMPOOL_PARAM([mtu], [numa], [+line])
+dnl
+dnl Waits for logs to indicate that the user has configured a mempool
+dnl for 'mtu' on 'numa'. Checking starts from line number 'line' in
+dnl ovs-vswitchd.log.
+m4_define([CHECK_MEMPOOL_PARAM], [
+    line_st=$3
+    if [[ -z "$line_st" ]]
+    then
+        line_st="+0"
+    fi
+    OVS_WAIT_UNTIL([tail -n $line_st ovs-vswitchd.log dnl
+                   | grep "User configured shared mempool set for: MTU $1, NUMA $2."])
+])
+
 dnl --------------------------------------------------------------------------
 dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK - EAL init])
@@ -571,4 +586,23 @@ OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
 \@Error: invalid study_pkt_cnt value: -pmd.@d
 ])")
 AT_CLEANUP dnl
+dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+dnl Setup user configured mempools
+AT_SETUP([OVS-DPDK - user configured mempool])
+AT_KEYWORDS([dpdk])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START_OVSDB()
+OVS_DPDK_START_VSWITCHD()
+
+AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:shared-mempool-config=9000,6000,1500])
+AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
+
+CHECK_MEMPOOL_PARAM([9000], [ALL], [])
+CHECK_MEMPOOL_PARAM([6000], [ALL], [])
+CHECK_MEMPOOL_PARAM([1500], [ALL], [])
+
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+AT_CLEANUP
 dnl --------------------------------------------------------------------------
