@@ -427,9 +427,9 @@ add_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse,
     }
 
     if (!l3_encap) {
-        ovs_be32 *header = dp_packet_push_uninit(packet, MPLS_HLEN);
+        struct mpls_hdr *header = dp_packet_push_uninit(packet, MPLS_HLEN);
 
-        *header = lse;
+        put_16aligned_be32(&header->mpls_lse, lse);
         packet->l2_5_ofs = 0;
         packet->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
                                              ntohs(ethtype));
