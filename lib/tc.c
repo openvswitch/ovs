@@ -1312,8 +1312,8 @@ nl_parse_act_gact(struct nlattr *options, struct tc_flower *flower)
     struct nlattr *gact_attrs[ARRAY_SIZE(gact_policy)];
     const struct tc_gact *p;
     struct nlattr *gact_parms;
-    const struct tcf_t *tm;
     struct tc_action *action;
+    struct tcf_t tm;
 
     if (!nl_parse_nested(options, gact_policy, gact_attrs,
                          ARRAY_SIZE(gact_policy))) {
@@ -1333,8 +1333,9 @@ nl_parse_act_gact(struct nlattr *options, struct tc_flower *flower)
         return EINVAL;
     }
 
-    tm = nl_attr_get_unspec(gact_attrs[TCA_GACT_TM], sizeof *tm);
-    nl_parse_tcf(tm, flower);
+    memcpy(&tm, nl_attr_get_unspec(gact_attrs[TCA_GACT_TM], sizeof tm),
+           sizeof tm);
+    nl_parse_tcf(&tm, flower);
 
     return 0;
 }
@@ -1355,9 +1356,9 @@ nl_parse_act_mirred(struct nlattr *options, struct tc_flower *flower)
     struct nlattr *mirred_attrs[ARRAY_SIZE(mirred_policy)];
     const struct tc_mirred *m;
     const struct nlattr *mirred_parms;
-    const struct tcf_t *tm;
     struct nlattr *mirred_tm;
     struct tc_action *action;
+    struct tcf_t tm;
 
     if (!nl_parse_nested(options, mirred_policy, mirred_attrs,
                          ARRAY_SIZE(mirred_policy))) {
@@ -1385,8 +1386,8 @@ nl_parse_act_mirred(struct nlattr *options, struct tc_flower *flower)
     action->type = TC_ACT_OUTPUT;
 
     mirred_tm = mirred_attrs[TCA_MIRRED_TM];
-    tm = nl_attr_get_unspec(mirred_tm, sizeof *tm);
-    nl_parse_tcf(tm, flower);
+    memcpy(&tm, nl_attr_get_unspec(mirred_tm, sizeof tm), sizeof tm);
+    nl_parse_tcf(&tm, flower);
 
     return 0;
 }
@@ -1725,9 +1726,7 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
     struct nlattr *stats_attrs[ARRAY_SIZE(stats_policy)];
     struct ovs_flow_stats *stats_sw = &flower->stats_sw;
     struct ovs_flow_stats *stats_hw = &flower->stats_hw;
-    const struct gnet_stats_basic *bs_all = NULL;
-    const struct gnet_stats_basic *bs_hw = NULL;
-    struct gnet_stats_basic bs_sw = { .packets = 0, .bytes = 0, };
+    struct gnet_stats_basic bs_all, bs_hw, bs_sw;
     int err = 0;
 
     if (!nl_parse_nested(action, act_policy, action_attrs,
@@ -1783,16 +1782,19 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
         return EPROTO;
     }
 
-    bs_all = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof *bs_all);
+    memcpy(&bs_all,
+           nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof bs_all),
+           sizeof bs_all);
     if (stats_attrs[TCA_STATS_BASIC_HW]) {
-        bs_hw = nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC_HW],
-                                   sizeof *bs_hw);
+        memcpy(&bs_hw, nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC_HW],
+                                          sizeof bs_hw),
+               sizeof bs_hw);
 
-        bs_sw.packets = bs_all->packets - bs_hw->packets;
-        bs_sw.bytes = bs_all->bytes - bs_hw->bytes;
+        bs_sw.packets = bs_all.packets - bs_hw.packets;
+        bs_sw.bytes = bs_all.bytes - bs_hw.bytes;
     } else {
-        bs_sw.packets = bs_all->packets;
-        bs_sw.bytes = bs_all->bytes;
+        bs_sw.packets = bs_all.packets;
+        bs_sw.bytes = bs_all.bytes;
     }
 
     if (bs_sw.packets > get_32aligned_u64(&stats_sw->n_packets)) {
@@ -1800,9 +1802,10 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
         put_32aligned_u64(&stats_sw->n_bytes, bs_sw.bytes);
     }
 
-    if (bs_hw && bs_hw->packets > get_32aligned_u64(&stats_hw->n_packets)) {
-        put_32aligned_u64(&stats_hw->n_packets, bs_hw->packets);
-        put_32aligned_u64(&stats_hw->n_bytes, bs_hw->bytes);
+    if (stats_attrs[TCA_STATS_BASIC_HW]
+        && bs_hw.packets > get_32aligned_u64(&stats_hw->n_packets)) {
+        put_32aligned_u64(&stats_hw->n_packets, bs_hw.packets);
+        put_32aligned_u64(&stats_hw->n_bytes, bs_hw.bytes);
     }
 
     return 0;
