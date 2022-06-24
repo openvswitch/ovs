@@ -3400,16 +3400,16 @@ format_eth(struct ds *ds, const char *name, const struct eth_addr key,
 
 static void
 format_be64(struct ds *ds, const char *name, ovs_be64 key,
-            const ovs_be64 *mask, bool verbose)
+            const ovs_32aligned_be64 *mask_, bool verbose)
 {
-    bool mask_empty = mask && !*mask;
+    ovs_be64 mask = mask_ ? get_32aligned_be64(mask_) : htonll(0);
 
-    if (verbose || !mask_empty) {
-        bool mask_full = !mask || *mask == OVS_BE64_MAX;
+    if (verbose || mask) {
+        bool mask_full = !mask_ || mask == OVS_BE64_MAX;
 
         ds_put_format(ds, "%s=0x%"PRIx64, name, ntohll(key));
         if (!mask_full) { /* Partially masked. */
-            ds_put_format(ds, "/%#"PRIx64, ntohll(*mask));
+            ds_put_format(ds, "/%#"PRIx64, ntohll(mask));
         }
         ds_put_char(ds, ',');
     }
