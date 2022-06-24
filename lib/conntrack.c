@@ -2238,7 +2238,7 @@ nat_range_hash(const struct conn *conn, uint32_t basis)
     hash = ct_addr_hash_add(hash, &conn->nat_info->min_addr);
     hash = ct_addr_hash_add(hash, &conn->nat_info->max_addr);
     hash = hash_add(hash,
-                    (conn->nat_info->max_port << 16)
+                    ((uint32_t) conn->nat_info->max_port << 16)
                     | conn->nat_info->min_port);
     hash = ct_endpoint_hash_add(hash, &conn->key.src);
     hash = ct_endpoint_hash_add(hash, &conn->key.dst);
