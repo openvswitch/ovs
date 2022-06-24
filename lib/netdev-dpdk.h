@@ -20,6 +20,7 @@
 #include <config.h>
 
 #include "openvswitch/compiler.h"
+#include "smap.h"
 
 struct dp_packet;
 struct netdev;
@@ -28,7 +29,7 @@ struct netdev;
 
 #include <rte_flow.h>
 
-void netdev_dpdk_register(void);
+void netdev_dpdk_register(const struct smap *);
 void free_dpdk_buf(struct dp_packet *);
 
 bool netdev_dpdk_flow_api_supported(struct netdev *);
@@ -150,7 +151,7 @@ netdev_dpdk_rte_flow_tunnel_item_release(
 #else
 
 static inline void
-netdev_dpdk_register(void)
+netdev_dpdk_register(const struct smap *ovs_other_config OVS_UNUSED)
 {
     /* Nothing */
 }

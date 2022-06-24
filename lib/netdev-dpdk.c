@@ -53,6 +53,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/vlog.h"
@@ -370,7 +371,15 @@ struct dpdk_mp {
      int socket_id;
      int refcount;
      struct ovs_list list_node OVS_GUARDED_BY(dpdk_mp_mutex);
- };
+};
+
+struct user_mempool_config {
+    int adj_mtu;
+    int socket_id;
+};
+
+static struct user_mempool_config *user_mempools = NULL;
+static int n_user_mempools;
 
 /* There should be one 'struct dpdk_tx_queue' created for
  * each netdev tx queue. */
@@ -570,6 +579,44 @@ dpdk_buf_size(int mtu)
 {
     return ROUND_UP(MTU_TO_MAX_FRAME_LEN(mtu), NETDEV_DPDK_MBUF_ALIGN)
             + RTE_PKTMBUF_HEADROOM;
+}
+
+static int
+dpdk_get_user_adjusted_mtu(int port_adj_mtu, int port_mtu, int port_socket_id)
+{
+    int best_adj_user_mtu = INT_MAX;
+
+    for (unsigned i = 0; i < n_user_mempools; i++) {
+        int user_adj_mtu, user_socket_id;
+
+        user_adj_mtu = user_mempools[i].adj_mtu;
+        user_socket_id = user_mempools[i].socket_id;
+        if (port_adj_mtu > user_adj_mtu
+            || (user_socket_id != INT_MAX
+                && user_socket_id != port_socket_id)) {
+            continue;
+        }
+        if (user_adj_mtu < best_adj_user_mtu) {
+            /* This is the is the lowest valid user MTU. */
+            best_adj_user_mtu = user_adj_mtu;
+            if (best_adj_user_mtu == port_adj_mtu) {
+                /* Found an exact fit, no need to keep searching. */
+                break;
+            }
+        }
+    }
+    if (best_adj_user_mtu == INT_MAX) {
+        VLOG_DBG("No user configured shared mempool mbuf sizes found "
+                 "suitable for port with MTU %d, NUMA %d.", port_mtu,
+                 port_socket_id);
+        best_adj_user_mtu = port_adj_mtu;
+    } else {
+        VLOG_DBG("Found user configured shared mempool with mbufs "
+                 "of size %d, suitable for port with MTU %d, NUMA %d.",
+                 MTU_TO_FRAME_LEN(best_adj_user_mtu), port_mtu,
+                 port_socket_id);
+    }
+    return best_adj_user_mtu;
 }
 
 /* Allocates an area of 'sz' bytes from DPDK.  The memory is zero'ed.
@@ -795,6 +842,10 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     /* Check if shared memory is being used, if so check existing mempools
      * to see if reuse is possible. */
     if (!per_port_mp) {
+        /* If user has provided defined mempools, check if one is suitable
+         * and get new buffer size.*/
+        mtu = dpdk_get_user_adjusted_mtu(mtu, dev->requested_mtu,
+                                         dev->requested_socket_id);
         LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
             if (dmp->socket_id == dev->requested_socket_id
                 && dmp->mtu == mtu) {
@@ -5337,6 +5388,56 @@ netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *netdev,
 
 #endif /* ALLOW_EXPERIMENTAL_API */
 
+static void
+parse_user_mempools_list(const char *mtus)
+{
+    char *list, *copy, *key, *value;
+    int error = 0;
+
+    if (!mtus) {
+        return;
+    }
+
+    n_user_mempools = 0;
+    list = copy = xstrdup(mtus);
+
+    while (ofputil_parse_key_value(&list, &key, &value)) {
+        int socket_id, mtu, adj_mtu;
+
+        if (!str_to_int(key, 0, &mtu) || mtu < 0) {
+            error = EINVAL;
+            VLOG_WARN("Invalid user configured shared mempool MTU.");
+            break;
+        }
+
+        if (!str_to_int(value, 0, &socket_id)) {
+            /* No socket specified. It will apply for all numas. */
+            socket_id = INT_MAX;
+        } else if (socket_id < 0) {
+            error = EINVAL;
+            VLOG_WARN("Invalid user configured shared mempool NUMA.");
+            break;
+        }
+
+        user_mempools = xrealloc(user_mempools, (n_user_mempools + 1) *
+                                 sizeof(struct user_mempool_config));
+        adj_mtu = FRAME_LEN_TO_MTU(dpdk_buf_size(mtu));
+        user_mempools[n_user_mempools].adj_mtu = adj_mtu;
+        user_mempools[n_user_mempools].socket_id = socket_id;
+        n_user_mempools++;
+        VLOG_INFO("User configured shared mempool set for: MTU %d, NUMA %s.",
+                  mtu, socket_id == INT_MAX ? "ALL" : value);
+    }
+
+    if (error) {
+        VLOG_WARN("User configured shared mempools will not be used.");
+        n_user_mempools = 0;
+        free(user_mempools);
+        user_mempools = NULL;
+    }
+    free(copy);
+}
+
 #define NETDEV_DPDK_CLASS_COMMON                            \
     .is_pmd = true,                                         \
     .alloc = netdev_dpdk_alloc,                             \
@@ -5420,8 +5521,12 @@ static const struct netdev_class dpdk_vhost_client_class = {
 };
 
 void
-netdev_dpdk_register(void)
+netdev_dpdk_register(const struct smap *ovs_other_config)
 {
+    const char *mempoolcfg = smap_get(ovs_other_config,
+                                      "shared-mempool-config");
+
+    parse_user_mempools_list(mempoolcfg);
     netdev_register_provider(&dpdk_class);
     netdev_register_provider(&dpdk_vhost_class);
     netdev_register_provider(&dpdk_vhost_client_class);

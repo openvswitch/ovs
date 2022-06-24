@@ -518,7 +518,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 
     /* Finally, register the dpdk classes */
-    netdev_dpdk_register();
+    netdev_dpdk_register(ovs_other_config);
     netdev_register_flow_api_provider(&netdev_offload_dpdk);
     return true;
 }

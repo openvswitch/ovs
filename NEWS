@@ -47,6 +47,9 @@ Post-v2.17.0
      * Delay creating or reusing a mempool for vhost ports until the VM
        is started. A failure to create a mempool will now be logged only
        when the VM is started.
+     * New configuration knob 'other_config:shared-mempool-config' to set MTU
+       that shared mempool mbuf size is based on. This allows interfaces with
+       different MTU sizes to share mempools.
    - Userspace datapath:
      * Improved multi-thread scalability of the userspace connection tracking.
      * 'dpif-netdev/subtable-lookup-prio-get' appctl command renamed to

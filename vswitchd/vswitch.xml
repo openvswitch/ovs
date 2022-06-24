@@ -490,6 +490,43 @@
         </p>
       </column>
 
+      <column name="other_config" key="shared-mempool-config">
+              <p>Specifies dpdk shared mempool config.</p>
+              <p>Value should be set in the following form:</p>
+              <p>
+                <code>other_config:shared-mempool-config=&lt;
+                  user-shared-mempool-mtu-list&gt;</code>
+              </p>
+              <p>where</p>
+              <p>
+                <ul>
+                  <li>
+                    &lt;user-shared-mempool-mtu-list&gt; ::=
+                    NULL | &lt;non-empty-list&gt;
+                  </li>
+                  <li>
+                    &lt;non-empty-list&gt; ::= &lt;user-mtus&gt; |
+                                               &lt;user-mtus&gt; ,
+                                               &lt;non-empty-list&gt;
+                  </li>
+                  <li>
+                    &lt;user-mtus&gt; ::= &lt;mtu-all-socket&gt; |
+                                          &lt;mtu-socket-pair&gt;
+                  </li>
+                  <li>
+                    &lt;mtu-all-socket&gt; ::= &lt;mtu&gt;
+                  </li>
+                  <li>
+                    &lt;mtu-socket-pair&gt; ::= &lt;mtu&gt; : &lt;socket-id&gt;
+                  </li>
+                </ul>
+              </p>
+        <p>
+          Changing this value requires restarting the daemon if dpdk-init has
+          already been set to true.
+        </p>
+      </column>
+
       <column name="other_config" key="tx-flush-interval"
               type='{"type": "integer",
                      "minInteger": 0, "maxInteger": 1000000}'>

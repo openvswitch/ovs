@@ -213,3 +213,47 @@ Example 3: (2 rxq, 2 PMD, 9000 MTU)
  Number of mbufs = (2 * 2048) + (3 * 2048) + (1 * 32) + (16384) = 26656
  Mbuf size = 10176 Bytes
  Memory required = 26656 * 10176 = 271 MB
+
+Shared Mempool Configuration
+----------------------------
+
+In order to increase sharing of mempools, a user can configure the MTUs which
+mempools are based on by using ``shared-mempool-config``.
+
+An MTU configured by the user is adjusted to an mbuf size used for mempool
+creation and stored. If a port is subsequently added that has an MTU which can
+be accommodated by this mbuf size, it will be used for mempool creation/reuse.
+
+This can increase sharing by consolidating mempools for ports with different
+MTUs which would otherwise use separate mempools. It can also help to remove
+the need for mempools being created after a port is added but before it's MTU
+is changed to a different value.
+
+For example, on a 2 NUMA system::
+
+  $ ovs-vsctl ovs-vsctl --no-wait set Open_vSwitch . \
+  other_config:shared-mempool-config=9000,1500:1,6000:1
+
+
+In this case, OVS stores the mbuf sizes based on the following MTUs.
+
+* NUMA 0: 9000
+* NUMA 1: 1500, 6000, 9000
+
+Ports added will use mempools with the mbuf sizes based on the above MTUs where
+possible. If there is more than one suitable, the one closest to the MTU will
+be selected.
+
+Port added on NUMA 0:
+
+* MTU 1500, use mempool based on 9000 MTU
+* MTU 6000, use mempool based on 9000 MTU
+* MTU 9000, use mempool based on 9000 MTU
+* MTU 9300, use mempool based on 9300 MTU (existing behaviour)
+
+Port added on NUMA 1:
+
+* MTU 1500, use mempool based on 1500 MTU
+* MTU 6000, use mempool based on 6000 MTU
+* MTU 9000, use mempool based on 9000 MTU
+* MTU 9300, use mempool based on 9300 MTU (existing behaviour)
