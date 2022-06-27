@@ -117,3 +117,5 @@ $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
 	mv $@.tmp $@
 EXTRA_DIST += python/ovs/dirs.py.template
 CLEANFILES += python/ovs/dirs.py
+
+EXTRA_DIST += python/TODO.rst
