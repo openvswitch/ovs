@@ -1,0 +1,43 @@
+{
+    "name": "Local_Config",
+    "version": "1.0.0",
+    "cksum": "2048726482 1858",
+    "tables": {
+        "Config": {
+            "columns": {
+                "connections": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "Connection"},
+                                     "min": 0,
+                                     "max": "unlimited"}}},
+            "maxRows": 1,
+            "isRoot": true},
+        "Connection": {
+            "columns": {
+                "target": {"type": "string"},
+                "max_backoff": {"type": {"key": {"type": "integer",
+                                         "minInteger": 1000},
+                                         "min": 0,
+                                         "max": 1}},
+                "inactivity_probe": {"type": {"key": "integer",
+                                              "min": 0,
+                                              "max": 1}},
+                "read_only": {"type": "boolean"},
+                "role": {"type": "string"},
+                "other_config": {"type": {"key": "string",
+                                          "value": "string",
+                                          "min": 0,
+                                          "max": "unlimited"}},
+                "external_ids": {"type": {"key": "string",
+                                 "value": "string",
+                                 "min": 0,
+                                 "max": "unlimited"}},
+                "is_connected": {"type": "boolean", "ephemeral": true},
+                "status": {"type": {"key": "string",
+                                    "value": "string",
+                                    "min": 0,
+                                    "max": "unlimited"},
+                                    "ephemeral": true}},
+            "indexes": [["target"]]}
+    }
+}

@@ -1,5 +1,10 @@
 v2.17.3 - xx xxx xxxx
 ---------------------
+   - OVSDB:
+     * New Local_Config schema added to support Connections (--remote)
+       configuration in a clustered databse independently for each server.
+       E.g. for listening on unique addresses.  See the ovsdb.local-config.5
+       manpage for schema details.
 
 v2.17.2 - 15 Jun 2022
 ---------------------

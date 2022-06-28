@@ -1,5 +1,7 @@
 /_server.ovsschema.inc
 /_server.ovsschema.stamp
+/local-config.ovsschema.stamp
+/ovsdb.local-config.5
 /ovsdb-client
 /ovsdb-client.1
 /ovsdb-doc

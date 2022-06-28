@@ -1,12 +1,25 @@
 OVS_START_SHELL_HELPERS
-# ovsdb_check_cluster N_SERVERS SCHEMA_FUNC OUTPUT TRANSACTION...
+# ovsdb_check_cluster N_SERVERS SCHEMA_FUNC OUTPUT USE_LOCAL_CONFIG TRANSACTION...
 ovsdb_check_cluster () {
-    local n=$1 schema_func=$2 output=$3
-    shift; shift; shift
+    set -x
+    local n=$1 schema_func=$2 output=$3 local_config=$4
+    shift; shift; shift; shift
 
     $schema_func > schema
     schema=`ovsdb-tool schema-name schema`
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
+    if test X$local_config == X"yes"; then
+        for i in `seq $n`; do
+            AT_CHECK([ovsdb-tool create c$i.db $top_srcdir/ovsdb/local-config.ovsschema], [0], [], [stderr])
+            local ctxn="[[\"Local_Config\",
+                         {\"op\": \"insert\", \"table\": \"Config\",
+                          \"row\": {\"connections\": [\"named-uuid\",\"conn$n\"]}},
+                         {\"op\": \"insert\", \"table\": \"Connection\", \"uuid-name\": \"conn$n\",
+                          \"row\": {\"target\": \"punix:s$i.ovsdb\"}}]]"
+
+            AT_CHECK([ovsdb-tool transact c$i.db "$ctxn"], [0], [ignore], [stderr])
+        done
+    fi
     AT_CHECK([grep -v 'from ephemeral to persistent' stderr], [1])
     cid=`ovsdb-tool db-cid s1.db`
     for i in `seq 2 $n`; do
@@ -15,7 +28,13 @@ ovsdb_check_cluster () {
 
     on_exit 'kill `cat *.pid`'
     for i in `seq $n`; do
-        AT_CHECK([ovsdb-server -vraft -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+        local remote=punix:s$i.ovsdb
+        local config_db=
+        if test X$local_config == X"yes"; then
+            remote=db:Local_Config,Config,connections
+            config_db=c$i.db
+        fi
+        AT_CHECK([ovsdb-server -vraft -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=$remote s$i.db $config_db])
     done
     for i in `seq $n`; do
         AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema connected])
@@ -40,7 +59,7 @@ AT_BANNER([OVSDB - clustered transactions (1 server)])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1 - cluster of 1])
    AT_KEYWORDS([ovsdb server positive unix cluster cluster1 $5])
-   ovsdb_check_cluster 1 "$2" '$4' m4_foreach([txn], [$3], ['txn' ])
+   ovsdb_check_cluster 1 "$2" '$4' no m4_foreach([txn], [$3], ['txn' ])
    AT_CLEANUP])
 EXECUTION_EXAMPLES
 
@@ -49,7 +68,7 @@ AT_BANNER([OVSDB - clustered transactions (3 servers)])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1 - cluster of 3])
    AT_KEYWORDS([ovsdb server positive unix cluster cluster3 $5])
-   ovsdb_check_cluster 3 "$2" '$4' m4_foreach([txn], [$3], ['txn' ])
+   ovsdb_check_cluster 3 "$2" '$4' no m4_foreach([txn], [$3], ['txn' ])
    AT_CLEANUP])
 EXECUTION_EXAMPLES
 
@@ -58,7 +77,16 @@ AT_BANNER([OVSDB - clustered transactions (5 servers)])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1 - cluster of 5])
    AT_KEYWORDS([ovsdb server positive unix cluster cluster5 $5])
-   ovsdb_check_cluster 5 "$2" '$4' m4_foreach([txn], [$3], ['txn' ])
+   ovsdb_check_cluster 5 "$2" '$4' no m4_foreach([txn], [$3], ['txn' ])
+   AT_CLEANUP])
+EXECUTION_EXAMPLES
+
+# Test a 3-server cluster using a Local_Config db.
+AT_BANNER([OVSDB - clustered transactions Local_Config (3 servers)])
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1 - cluster of 3])
+   AT_KEYWORDS([ovsdb server positive unix cluster cluster3 Local_Config $5])
+   ovsdb_check_cluster 3 "$2" '$4' yes m4_foreach([txn], [$3], ['txn' ])
    AT_CLEANUP])
 EXECUTION_EXAMPLES
 
