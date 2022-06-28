@@ -1,5 +1,6 @@
 ovsdb/ovsdb-server.1
 ovsdb/ovsdb-server.5
+ovsdb/ovsdb.local-config.5
 debian/tmp/usr/share/man/man8/ovs-ctl.8
 utilities/ovs-dpctl-top.8
 utilities/ovs-dpctl.8

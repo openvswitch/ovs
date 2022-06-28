@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="utf-8"?>
+<database name="Local_Config" title="OVS Local Configuration Database">
+  <p>
+    This database is for local configuration of an ovsdb-server. The
+    database is meant to be unique, even among multiple clustered db
+    servers, so that configuration that is local to that server can
+    be configured separately (e.g. Connection information).
+  </p>
+
+  <table name="Config" title="ovsdb-server configuration">
+    <p>
+      The root local configuration table for an ovsdb-server. This table
+      must have exactly one row.
+    </p>
+    <group title="Connection Options">
+      <column name="connections">
+        Database clients to which the Open vSwitch database server should
+        connect or on which it should listen, along with options for how these
+        connections should be configured.  See the <ref table="Connection"/>
+        table for more information.
+      </column>
+    </group>
+  </table>
+
+  <table name="Connection" title="OVSDB client connections.">
+    <p>
+      Configuration for a database connection to an Open vSwitch database
+      (OVSDB) client.
+    </p>
+
+    <p>
+      This table primarily configures the Open vSwitch database server
+      (<code>ovsdb-server</code>).
+    </p>
+
+    <p>
+      The Open vSwitch database server can initiate and maintain active
+      connections to remote clients.  It can also listen for database
+      connections.
+    </p>
+
+    <group title="Core Features">
+      <column name="target">
+        <p>Connection methods for clients.</p>
+        <p>
+          The following connection methods are currently supported:
+        </p>
+        <dl>
+          <dt>
+            <code>ssl:<var>host</var></code>[<code>:<var>port</var></code>]
+          </dt>
+          <dd>
+            <p>
+              The specified SSL <var>port</var> on the host at the given
+              <var>host</var>, which can either be a DNS name (if built with
+              unbound library) or an IP address. A valid SSL configuration must
+              be provided when this form is used, this configuration can be
+              specified via command-line options or the <ref table="SSL"/>
+              table.
+            </p>
+            <p>
+              If <var>port</var> is not specified, it defaults to 6640.
+            </p>
+            <p>
+              SSL support is an optional feature that is not always
+              built as part of Open vSwitch.
+            </p>
+          </dd>
+
+          <dt>
+            <code>tcp:<var>host</var></code>[<code>:<var>port</var></code>]
+          </dt>
+          <dd>
+            <p>
+              The specified TCP <var>port</var> on the host at the given
+              <var>host</var>, which can either be a DNS name (if built with
+              unbound library) or an IP address.  If <var>host</var> is an IPv6
+              address, wrap it in square brackets, e.g.
+              <code>tcp:[::1]:6640</code>.
+            </p>
+            <p>
+              If <var>port</var> is not specified, it defaults to 6640.
+            </p>
+          </dd>
+          <dt>
+            <code>pssl:</code>[<var>port</var>][<code>:<var>host</var></code>]
+          </dt>
+          <dd>
+            <p>
+              Listens for SSL connections on the specified TCP <var>port</var>.
+              Specify 0 for <var>port</var> to have the kernel automatically
+              choose an available port.  If <var>host</var>, which can either
+              be a DNS name (if built with unbound library) or an IP address,
+              is specified, then connections are restricted to the resolved or
+              specified local IPaddress (either IPv4 or IPv6 address).  If
+              <var>host</var> is an IPv6 address, wrap in square brackets,
+              e.g. <code>pssl:6640:[::1]</code>.  If <var>host</var> is not
+              specified then it listens only on IPv4 (but not IPv6) addresses.
+              A valid SSL configuration must be provided when this form is
+              used, this can be specified either via command-line options or
+              the <ref table="SSL"/> table.
+            </p>
+            <p>
+              If <var>port</var> is not specified, it defaults to 6640.
+            </p>
+            <p>
+              SSL support is an optional feature that is not always built as
+              part of Open vSwitch.
+            </p>
+          </dd>
+          <dt>
+            <code>ptcp:</code>[<var>port</var>][<code>:<var>host</var></code>]
+          </dt>
+          <dd>
+            <p>
+              Listens for connections on the specified TCP <var>port</var>.
+              Specify 0 for <var>port</var> to have the kernel automatically
+              choose an available port.  If <var>host</var>, which can either
+              be a DNS name (if built with unbound library) or an IP address,
+              is specified, then connections are restricted to the resolved or
+              specified local IP address (either IPv4 or IPv6 address).  If
+              <var>host</var> is an IPv6 address, wrap it in square brackets,
+              e.g. <code>ptcp:6640:[::1]</code>.  If <var>host</var> is not
+              specified then it listens only on IPv4 addresses.
+            </p>
+            <p>
+              If <var>port</var> is not specified, it defaults to 6640.
+            </p>
+          </dd>
+        </dl>
+        <p>When multiple clients are configured, the <ref column="target"/>
+        values must be unique.  Duplicate <ref column="target"/> values yield
+        unspecified results.</p>
+      </column>
+
+      <column name="read_only">
+        <code>true</code> to restrict these connections to read-only
+        transactions, <code>false</code> to allow them to modify the database.
+      </column>
+
+      <column name="role">
+        String containing role name for this connection entry.
+      </column>
+    </group>
+
+    <group title="Client Failure Detection and Handling">
+      <column name="max_backoff">
+        Maximum number of milliseconds to wait between connection attempts.
+        Default is implementation-specific.
+      </column>
+
+      <column name="inactivity_probe">
+        Maximum number of milliseconds of idle time on connection to the client
+        before sending an inactivity probe message.  If Open vSwitch does not
+        communicate with the client for the specified number of seconds, it
+        will send a probe.  If a response is not received for the same
+        additional amount of time, Open vSwitch assumes the connection has been
+        broken and attempts to reconnect.  Default is implementation-specific.
+        A value of 0 disables inactivity probes.
+      </column>
+    </group>
+
+    <group title="Status">
+      <p>
+        Key-value pair of <ref column="is_connected"/> is always updated.
+        Other key-value pairs in the status columns may be updated depends
+        on the <ref column="target"/> type.
+      </p>
+
+      <p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>punix:</code>), both <ref column="n_connections"/> and
+        <ref column="is_connected"/> may also be updated while the
+        remaining key-value pairs are omitted.
+      </p>
+
+      <p>
+        On the other hand, when <ref column="target"/> specifies an
+        outbound connection, all key-value pairs may be updated, except
+        the above-mentioned two key-value pairs associated with inbound
+        connection targets. They are omitted.
+      </p>
+
+    <column name="is_connected">
+        <code>true</code> if currently connected to this client,
+        <code>false</code> otherwise.
+      </column>
+
+      <column name="status" key="last_error">
+        A human-readable description of the last error on the connection
+        to the manager; i.e. <code>strerror(errno)</code>.  This key
+        will exist only if an error has occurred.
+      </column>
+
+      <column name="status" key="state"
+              type='{"type": "string", "enum": ["set", ["VOID", "BACKOFF",
+                   "CONNECTING", "ACTIVE", "IDLE"]]}'>
+        <p>
+          The state of the connection to the manager:
+        </p>
+        <dl>
+          <dt><code>VOID</code></dt>
+          <dd>Connection is disabled.</dd>
+
+          <dt><code>BACKOFF</code></dt>
+          <dd>Attempting to reconnect at an increasing period.</dd>
+
+          <dt><code>CONNECTING</code></dt>
+          <dd>Attempting to connect.</dd>
+
+          <dt><code>ACTIVE</code></dt>
+          <dd>Connected, remote host responsive.</dd>
+
+          <dt><code>IDLE</code></dt>
+          <dd>Connection is idle.  Waiting for response to keep-alive.</dd>
+        </dl>
+        <p>
+          These values may change in the future.  They are provided only for
+          human consumption.
+        </p>
+      </column>
+
+      <column name="status" key="sec_since_connect"
+              type='{"type": "integer", "minInteger": 0}'>
+        The amount of time since this client last successfully connected
+        to the database (in seconds). Value is empty if client has never
+        successfully been connected.
+      </column>
+
+      <column name="status" key="sec_since_disconnect"
+              type='{"type": "integer", "minInteger": 0}'>
+        The amount of time since this client last disconnected from the
+        database (in seconds). Value is empty if client has never
+        disconnected.
+      </column>
+
+      <column name="status" key="locks_held">
+        Space-separated list of the names of OVSDB locks that the connection
+        holds.  Omitted if the connection does not hold any locks.
+      </column>
+
+      <column name="status" key="locks_waiting">
+        Space-separated list of the names of OVSDB locks that the connection is
+        currently waiting to acquire.  Omitted if the connection is not waiting
+        for any locks.
+      </column>
+
+      <column name="status" key="locks_lost">
+        Space-separated list of the names of OVSDB locks that the connection
+        has had stolen by another OVSDB client.  Omitted if no locks have been
+        stolen from this connection.
+      </column>
+
+      <column name="status" key="n_connections"
+              type='{"type": "integer", "minInteger": 2}'>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>pssl:</code>) and more than one connection is actually active,
+        the value is the number of active connections.  Otherwise, this
+        key-value pair is omitted.
+      </column>
+
+      <column name="status" key="bound_port" type='{"type": "integer"}'>
+        When <ref column="target"/> is <code>ptcp:</code> or
+        <code>pssl:</code>, this is the TCP port on which the OVSDB server is
+        listening.  (This is particularly useful when <ref
+        column="target"/> specifies a port of 0, allowing the kernel to
+        choose any available port.)
+      </column>
+    </group>
+
+    <group title="Connection Parameters">
+      <column name="other_config" key="dscp"
+              type='{"type": "integer"}'>
+        The Differentiated Service Code Point (DSCP) is specified using 6 bits
+        in the Type of Service (TOS) field in the IP header. DSCP provides a
+        mechanism to classify the network traffic and provide Quality of
+        Service (QoS) on IP networks.
+
+        The DSCP value specified here is used when establishing the connection
+        between the manager and the Open vSwitch.  If no value is specified, a
+        default value of 48 is chosen.  Valid DSCP values must be in the range
+        0 to 63.
+      </column>
+    </group>
+
+    <group title="Configuration">
+      External configuration options
+
+      <column name="external_ids">
+        External client-defined key-value pairs
+      </column>
+    </group>
+  </table>
+</database>

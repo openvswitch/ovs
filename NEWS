@@ -17,6 +17,10 @@ Post-v2.17.0
      * New unixctl command 'ovsdb-server/tlog-set DB:TABLE on|off".
        If turned on, ovsdb-server will log (at level INFO and rate limited)
        all operations that are committed to table TABLE in the DB database.
+     * New Local_Config schema added to support Connections (--remote)
+       configuration in a clustered databse independently for each server.
+       E.g. for listening on unique addresses.  See the ovsdb.local-config.5
+       manpage for schema details.
    - OVSDB-IDL:
      * New monitor mode flag, OVSDB_IDL_WRITE_CHANGED_ONLY, allowing
        applications to relax atomicity requirements when dealing with
