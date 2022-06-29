@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "cpu.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
@@ -32,6 +33,19 @@ enum dpif_netdev_impl_info_idx {
     DPIF_NETDEV_IMPL_SCALAR,
     DPIF_NETDEV_IMPL_AVX512
 };
+
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+static int32_t
+dp_netdev_input_outer_avx512_probe(void)
+{
+    if (!cpu_has_isa(OVS_CPU_ISA_X86_AVX512F)
+        || !cpu_has_isa(OVS_CPU_ISA_X86_BMI2)) {
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif
 
 /* Actual list of implementations goes here. */
 static struct dpif_netdev_impl_info_t dpif_impls[] = {

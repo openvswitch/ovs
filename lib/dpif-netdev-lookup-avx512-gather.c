@@ -23,7 +23,6 @@
 #include "dpif-netdev-lookup.h"
 
 #include "cmap.h"
-#include "cpu.h"
 #include "flow.h"
 #include "pvector.h"
 #include "openvswitch/vlog.h"
@@ -396,17 +395,10 @@ dpcls_avx512_gather_mf_any(struct dpcls_subtable *subtable, uint32_t keys_map,
 }
 
 dpcls_subtable_lookup_func
-dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
+dpcls_subtable_avx512_gather_probe__(uint32_t u0_bits, uint32_t u1_bits,
+                                     bool use_vpop)
 {
     dpcls_subtable_lookup_func f = NULL;
-
-    int avx512f_available = cpu_has_isa(OVS_CPU_ISA_X86_AVX512F);
-    int bmi2_available = cpu_has_isa(OVS_CPU_ISA_X86_BMI2);
-    if (!avx512f_available || !bmi2_available) {
-        return NULL;
-    }
-
-    int use_vpop = cpu_has_isa(OVS_CPU_ISA_X86_VPOPCNTDQ);
 
     CHECK_LOOKUP_FUNCTION(9, 4, use_vpop);
     CHECK_LOOKUP_FUNCTION(9, 1, use_vpop);
