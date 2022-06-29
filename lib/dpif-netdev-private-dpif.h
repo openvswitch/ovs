@@ -67,10 +67,7 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
                 struct dp_packet_batch *packets,
                 odp_port_t in_port);
 
-/* AVX512 enabled DPIF implementation and probe functions. */
-int32_t
-dp_netdev_input_outer_avx512_probe(void);
-
+/* AVX512 enabled DPIF implementation function. */
 int32_t
 dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                              struct dp_packet_batch *packets,
