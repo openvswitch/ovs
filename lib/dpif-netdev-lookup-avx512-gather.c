@@ -394,17 +394,10 @@ dpcls_avx512_gather_mf_any(struct dpcls_subtable *subtable, uint32_t keys_map,
 }
 
 dpcls_subtable_lookup_func
-dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
+dpcls_subtable_avx512_gather_probe__(uint32_t u0_bits, uint32_t u1_bits,
+                                     bool use_vpop)
 {
     dpcls_subtable_lookup_func f = NULL;
-
-    int avx512f_available = dpdk_get_cpu_has_isa("x86_64", "avx512f");
-    int bmi2_available = dpdk_get_cpu_has_isa("x86_64", "bmi2");
-    if (!avx512f_available || !bmi2_available) {
-        return NULL;
-    }
-
-    int use_vpop = dpdk_get_cpu_has_isa("x86_64", "avx512vpopcntdq");
 
     CHECK_LOOKUP_FUNCTION(9, 4, use_vpop);
     CHECK_LOOKUP_FUNCTION(9, 1, use_vpop);

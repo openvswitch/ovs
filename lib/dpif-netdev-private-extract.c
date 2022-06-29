@@ -33,6 +33,43 @@ VLOG_DEFINE_THIS_MODULE(dpif_netdev_extract);
 /* Variable to hold the default MFEX implementation. */
 static ATOMIC(miniflow_extract_func) default_mfex_func;
 
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+static int32_t
+avx512_isa_probe(bool needs_vbmi)
+{
+    static const char *isa_required[] = {
+        "avx512f",
+        "avx512bw",
+        "bmi2",
+    };
+
+    for (uint32_t i = 0; i < ARRAY_SIZE(isa_required); i++) {
+        if (!dpdk_get_cpu_has_isa("x86_64", isa_required[i])) {
+            return -ENOTSUP;
+        }
+    }
+
+    if (needs_vbmi && !dpdk_get_cpu_has_isa("x86_64", "avx512vbmi")) {
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+
+/* Probe functions to check ISA requirements. */
+static int32_t
+mfex_avx512_probe(void)
+{
+    return avx512_isa_probe(false);
+}
+
+static int32_t
+mfex_avx512_vbmi_probe(void)
+{
+    return avx512_isa_probe(true);
+}
+#endif
+
 /* Implementations of available extract options and
  * the implementations are always in order of preference.
  */

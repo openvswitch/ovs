@@ -44,7 +44,8 @@ dpcls_subtable_generic_probe(uint32_t u0_bit_count, uint32_t u1_bit_count);
 
 /* Probe function for AVX-512 gather implementation */
 dpcls_subtable_lookup_func
-dpcls_subtable_avx512_gather_probe(uint32_t u0_bit_cnt, uint32_t u1_bit_cnt);
+dpcls_subtable_avx512_gather_probe__(uint32_t u0_bit_cnt, uint32_t u1_bit_cnt,
+                                     bool use_vpop);
 
 
 /* Subtable registration and iteration helpers */

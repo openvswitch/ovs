@@ -43,7 +43,6 @@
 #include <string.h>
 
 #include "flow.h"
-#include "dpdk.h"
 
 #include "dpif-netdev-private-dpcls.h"
 #include "dpif-netdev-private-extract.h"
@@ -663,47 +662,5 @@ DECLARE_MFEX_FUNC(ip_udp, PROFILE_ETH_IPV4_UDP)
 DECLARE_MFEX_FUNC(ip_tcp, PROFILE_ETH_IPV4_TCP)
 DECLARE_MFEX_FUNC(dot1q_ip_udp, PROFILE_ETH_VLAN_IPV4_UDP)
 DECLARE_MFEX_FUNC(dot1q_ip_tcp, PROFILE_ETH_VLAN_IPV4_TCP)
-
-
-static int32_t
-avx512_isa_probe(uint32_t needs_vbmi)
-{
-    static const char *isa_required[] = {
-        "avx512f",
-        "avx512bw",
-        "bmi2",
-    };
-
-    int32_t ret = 0;
-    for (uint32_t i = 0; i < ARRAY_SIZE(isa_required); i++) {
-        if (!dpdk_get_cpu_has_isa("x86_64", isa_required[i])) {
-            ret = -ENOTSUP;
-        }
-    }
-
-    if (needs_vbmi) {
-        if (!dpdk_get_cpu_has_isa("x86_64", "avx512vbmi")) {
-            ret = -ENOTSUP;
-        }
-    }
-
-    return ret;
-}
-
-/* Probe functions to check ISA requirements. */
-int32_t
-mfex_avx512_probe(void)
-{
-    const uint32_t needs_vbmi = 0;
-    return avx512_isa_probe(needs_vbmi);
-}
-
-int32_t
-mfex_avx512_vbmi_probe(void)
-{
-    const uint32_t needs_vbmi = 1;
-    return avx512_isa_probe(needs_vbmi);
-}
-
 #endif /* __CHECKER__ */
 #endif /* __x86_64__ */

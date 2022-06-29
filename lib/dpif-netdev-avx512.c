@@ -59,19 +59,6 @@ struct dpif_userdata {
 };
 
 int32_t
-dp_netdev_input_outer_avx512_probe(void)
-{
-    bool avx512f_available = dpdk_get_cpu_has_isa("x86_64", "avx512f");
-    bool bmi2_available = dpdk_get_cpu_has_isa("x86_64", "bmi2");
-
-    if (!avx512f_available || !bmi2_available) {
-        return -ENOTSUP;
-    }
-
-    return 0;
-}
-
-int32_t
 dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                              struct dp_packet_batch *packets,
                              odp_port_t in_port)

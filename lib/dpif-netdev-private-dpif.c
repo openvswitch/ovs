@@ -33,6 +33,19 @@ enum dpif_netdev_impl_info_idx {
     DPIF_NETDEV_IMPL_AVX512
 };
 
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+static int32_t
+dp_netdev_input_outer_avx512_probe(void)
+{
+    if (!dpdk_get_cpu_has_isa("x86_64", "avx512f")
+        || !dpdk_get_cpu_has_isa("x86_64", "bmi2")) {
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif
+
 /* Actual list of implementations goes here. */
 static struct dpif_netdev_impl_info_t dpif_impls[] = {
     /* The default scalar C code implementation. */

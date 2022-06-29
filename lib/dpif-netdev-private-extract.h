@@ -176,10 +176,8 @@ mfex_study_traffic(struct dp_packet_batch *packets,
 int
 mfex_set_study_pkt_cnt(uint32_t pkt_cmp_count, const char *name);
 
-/* AVX512 MFEX Probe and Implementations functions. */
+/* AVX512 MFEX Implementation functions. */
 #ifdef __x86_64__
-int32_t mfex_avx512_probe(void);
-int32_t mfex_avx512_vbmi_probe(void);
 
 #define DECLARE_AVX512_MFEX_PROTOTYPE(name)                                 \
     uint32_t                                                                \
