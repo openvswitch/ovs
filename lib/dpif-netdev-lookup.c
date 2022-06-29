@@ -22,6 +22,19 @@
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev_lookup);
 
+#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+static dpcls_subtable_lookup_func
+dpcls_subtable_avx512_gather_probe(uint32_t u0_bits, uint32_t u1_bits)
+{
+    if (!dpdk_get_cpu_has_isa("x86_64", "avx512f")
+        || !dpdk_get_cpu_has_isa("x86_64", "bmi2")) {
+        return NULL;
+    }
+
+    return dpcls_subtable_avx512_gather_probe__(u0_bits, u1_bits);
+}
+#endif
+
 /* Actual list of implementations goes here */
 static struct dpcls_subtable_lookup_info_t subtable_lookups[] = {
     /* The autovalidator implementation will not be used by default, it must
