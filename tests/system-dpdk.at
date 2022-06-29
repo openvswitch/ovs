@@ -222,6 +222,168 @@ OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
+
+
+dnl --------------------------------------------------------------------------
+dnl Ingress policing create delete phy port
+AT_SETUP([OVS-DPDK - Ingress policing create delete phy port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_PHY_SKIP()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and add policer
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set interface phy0 ingress_policing_rate=10000 ingress_policing_burst=1000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if policer could not be created
+AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
+
+dnl remove policer
+AT_CHECK([ovs-vsctl set interface phy0 ingress_policing_rate=0 ingress_policing_burst=0])
+
+dnl check policer was removed correctly
+AT_CHECK([ovs-vsctl list interface phy0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+
+AT_CHECK([ovs-vsctl list interface phy0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Ingress policing create delete vport port
+AT_SETUP([OVS-DPDK - Ingress policing create delete vport port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and add ingress policer
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=10000 ingress_policing_burst=1000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if ingress policer could not be created
+AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
+
+dnl remove ingress policer
+AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=0 ingress_policing_burst=0])
+
+dnl check ingress policer was removed correctly
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Ingress policing no policing rate
+AT_SETUP([OVS-DPDK - Ingress policing no policing rate])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and add ingress policer
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_burst=1000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if ingress policer could not be created
+AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
+
+dnl check ingress policer was created correctly
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_burst: 1000' stdout], [], [stdout])
+
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Ingress policing no policing burst
+AT_SETUP([OVS-DPDK - Ingress policing no policing burst])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and add ingress policer
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=10000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if ingress policer could not be created
+AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
+
+dnl check ingress policer was created correctly
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+
+AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
+AT_CHECK([egrep 'ingress_policing_rate: 10000' stdout], [], [stdout])
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
 dnl --------------------------------------------------------------------------
 dnl Add standard DPDK PHY port
 AT_SETUP([OVS-DPDK - MFEX Autovalidator])
