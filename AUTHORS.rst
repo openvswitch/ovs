@@ -380,6 +380,7 @@ Saurabh Shrivastava                saurabh.shrivastava@nuagenetworks.net
 Scott Cheloha                      scottcheloha@gmail.com
 Scott Lowe                         scott.lowe@scottlowe.org
 Scott Mann                         sdmnix@gmail.com
+Seamus Ryan                        seamus.ryan@intel.com
 Selvamuthukumar                    smkumar@merunetworks.com
 Sergey Madaminov                   sergey.madaminov@gmail.com
 Sha Zhang                          zhangsha.zhang@huawei.com
