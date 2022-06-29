@@ -6793,6 +6793,7 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     seq_destroy(pmd->reload_seq);
     ovs_mutex_destroy(&pmd->port_mutex);
     ovs_mutex_destroy(&pmd->bond_mutex);
+    free(pmd->netdev_input_func_userdata);
     free(pmd);
 }
 
