@@ -12,9 +12,13 @@
 
 import sys
 
-from distutils.command.build_ext import build_ext
-from distutils.errors import CCompilerError, DistutilsExecError, \
-    DistutilsPlatformError
+from setuptools.command.build_ext import build_ext
+try:
+    from setuptools.errors import CCompilerError, ExecError, PlatformError
+except ImportError:  # Needed for setuptools < 59.0
+    from distutils.errors import CCompilerError
+    from distutils.errors import DistutilsExecError as ExecError
+    from distutils.errors import DistutilsPlatformError as PlatformError
 
 import setuptools
 
@@ -37,7 +41,7 @@ except IOError:
           file=sys.stderr)
     sys.exit(-1)
 
-ext_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError)
+ext_errors = (CCompilerError, ExecError, PlatformError)
 if sys.platform == 'win32':
     ext_errors += (IOError, ValueError)
 
@@ -53,7 +57,7 @@ class try_build_ext(build_ext):
     def run(self):
         try:
             build_ext.run(self)
-        except DistutilsPlatformError:
+        except PlatformError:
             raise BuildFailed()
 
     def build_extension(self, ext):
