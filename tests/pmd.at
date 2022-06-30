@@ -1113,13 +1113,13 @@ AT_SETUP([PMD - dpif configuration])
 OVS_VSWITCHD_START([], [], [], [--dummy-numa 0,0])
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
 
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar], [0], [dnl
+DPIF implementation set to dpif_scalar.
+])
+
 AT_CHECK([ovs-vsctl show], [], [stdout])
 AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-get | grep "dpif_scalar"], [], [dnl
   dpif_scalar (pmds: 0)
-])
-
-AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_scalar], [0], [dnl
-DPIF implementation set to dpif_scalar.
 ])
 
 OVS_VSWITCHD_STOP
@@ -1130,14 +1130,6 @@ OVS_VSWITCHD_START([], [], [], [--dummy-numa 0,0])
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
 
 AT_CHECK([ovs-vsctl show], [], [stdout])
-AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep generic], [], [dnl
-  generic (Use count: 0, Priority: 1)
-])
-
-AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-info-get | grep autovalidator], [], [dnl
-  autovalidator (Use count: 0, Priority: 0)
-])
-
 AT_CHECK([ovs-appctl dpif-netdev/subtable-lookup-prio-set autovalidator 3], [0], [dnl
 Lookup priority change affected 0 dpcls ports and 0 subtables.
 ])
