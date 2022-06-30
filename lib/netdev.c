@@ -387,25 +387,30 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     ovs_mutex_lock(&netdev_mutex);
     netdev = shash_find_data(&netdev_shash, name);
 
-    if (netdev &&
-        type && type[0] && strcmp(type, netdev->netdev_class->type)) {
+    if (netdev && type && type[0]) {
+        if (strcmp(type, netdev->netdev_class->type)) {
 
-        if (netdev->auto_classified) {
-            /* If this device was first created without a classification type,
-             * for example due to routing or tunneling code, and they keep a
-             * reference, a "classified" call to open will fail. In this case
-             * we remove the classless device, and re-add it below. We remove
-             * the netdev from the shash, and change the sequence, so owners of
-             * the old classless device can release/cleanup. */
-            if (netdev->node) {
-                shash_delete(&netdev_shash, netdev->node);
-                netdev->node = NULL;
-                netdev_change_seq_changed(netdev);
+            if (netdev->auto_classified) {
+                /* If this device was first created without a classification
+                 * type, for example due to routing or tunneling code, and they
+                 * keep a reference, a "classified" call to open will fail.
+                 * In this case we remove the classless device, and re-add it
+                 * below. We remove the netdev from the shash, and change the
+                 * sequence, so owners of the old classless device can
+                 * release/cleanup. */
+                if (netdev->node) {
+                    shash_delete(&netdev_shash, netdev->node);
+                    netdev->node = NULL;
+                    netdev_change_seq_changed(netdev);
+                }
+
+                netdev = NULL;
+            } else {
+                error = EEXIST;
             }
-
-            netdev = NULL;
-        } else {
-            error = EEXIST;
+        } else if (netdev->auto_classified) {
+            /* If netdev reopened with type "system", clear auto_classified. */
+            netdev->auto_classified = false;
         }
     }
 
