@@ -1679,6 +1679,7 @@ do_transact_set_integer(struct ovsdb_row *row, const char *column_name,
 
         column = ovsdb_table_schema_get_column(do_transact_table->schema,
                                                column_name);
+        ovsdb_datum_unshare(&row->fields[column->index], &column->type);
         row->fields[column->index].keys[0].integer = integer;
     }
 }

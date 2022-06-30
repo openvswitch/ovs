@@ -693,8 +693,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                 ovs_list_init(&weak->src_node);
             }
         }
-        ovsdb_datum_sort_unique(&deleted_refs, column->type.key.type,
-                                               column->type.value.type);
+        ovsdb_datum_sort_unique(&deleted_refs, &column->type);
 
         /* Removing elements that references deleted rows. */
         ovsdb_datum_subtract(datum, &column->type,
@@ -708,7 +707,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                                       datum, &column->type);
         } else {
             ovsdb_datum_init_empty(&removed);
-            ovsdb_datum_clone(&added, datum, &column->type);
+            ovsdb_datum_clone(&added, datum);
         }
 
         /* Checking added data and creating new references. */
@@ -732,8 +731,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         }
         if (deleted_refs.n) {
             /* Removing all the references that doesn't point to valid rows. */
-            ovsdb_datum_sort_unique(&deleted_refs, column->type.key.type,
-                                                   column->type.value.type);
+            ovsdb_datum_sort_unique(&deleted_refs, &column->type);
             ovsdb_datum_subtract(datum, &column->type,
                                  &deleted_refs, &column->type);
             ovsdb_datum_destroy(&deleted_refs, &column->type);

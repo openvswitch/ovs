@@ -1503,7 +1503,7 @@ cmd_add(struct ctl_context *ctx)
     }
 
     type = &column->type;
-    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column));
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
@@ -1588,7 +1588,7 @@ cmd_remove(struct ctl_context *ctx)
     }
 
     type = &column->type;
-    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column));
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type rm_type;
         struct ovsdb_datum rm;

@@ -189,8 +189,7 @@ ovsdb_base_type_clone(struct ovsdb_base_type *dst,
 
     if (src->enum_) {
         dst->enum_ = xmalloc(sizeof *dst->enum_);
-        ovsdb_datum_clone(dst->enum_, src->enum_,
-                          ovsdb_base_type_get_enum_type(dst->type));
+        ovsdb_datum_clone(dst->enum_, src->enum_);
     }
 
     switch (dst->type) {

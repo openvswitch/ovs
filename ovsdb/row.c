@@ -143,8 +143,7 @@ ovsdb_row_clone(const struct ovsdb_row *old)
     SHASH_FOR_EACH (node, &table->schema->columns) {
         const struct ovsdb_column *column = node->data;
         ovsdb_datum_clone(&new->fields[column->index],
-                          &old->fields[column->index],
-                          &column->type);
+                          &old->fields[column->index]);
     }
 
     struct ovsdb_weak_ref *weak, *clone;
@@ -257,8 +256,7 @@ ovsdb_row_update_columns(struct ovsdb_row *dst,
         } else {
             ovsdb_datum_destroy(&dst->fields[column->index], &column->type);
             ovsdb_datum_clone(&dst->fields[column->index],
-                              &src->fields[column->index],
-                              &column->type);
+                              &src->fields[column->index]);
         }
     }
     return NULL;

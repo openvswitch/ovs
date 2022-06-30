@@ -221,6 +221,8 @@ ovsdb_util_write_singleton(struct ovsdb_row *row, const char *column_name,
         return;
     }
 
+    ovsdb_datum_unshare(datum, &column->type);
+
     if (datum->n == 1) {
         if (ovsdb_atom_equals(&datum->keys[0], atom, type)) {
             return;
@@ -231,6 +233,7 @@ ovsdb_util_write_singleton(struct ovsdb_row *row, const char *column_name,
         datum->n = 1;
         datum->keys = xmalloc(sizeof *datum->keys);
         datum->values = NULL;
+        datum->refcnt = NULL;
     }
     ovsdb_atom_clone(&datum->keys[0], atom, type);
 }
@@ -305,6 +308,7 @@ ovsdb_util_write_string_string_column(struct ovsdb_row *row,
     datum->n = n;
     datum->keys = xmalloc(n * sizeof *datum->keys);
     datum->values = xmalloc(n * sizeof *datum->values);
+    datum->refcnt = NULL;
 
     for (i = 0; i < n; ++i) {
         datum->keys[i].s = ovsdb_atom_string_create_nocopy(keys[i]);
@@ -312,5 +316,5 @@ ovsdb_util_write_string_string_column(struct ovsdb_row *row,
     }
 
     /* Sort and check constraints. */
-    ovsdb_datum_sort_assert(datum, column->type.key.type);
+    ovsdb_datum_sort_assert(datum, &column->type);
 }

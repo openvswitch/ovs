@@ -334,9 +334,8 @@ clone_monitor_row_data(const struct ovsdb_monitor_table *mt,
         const struct ovsdb_column *c = mt->columns[i].column;
         const struct ovsdb_datum *src = &row->fields[c->index];
         struct ovsdb_datum *dst = &data[i];
-        const struct ovsdb_type *type = &c->type;
 
-        ovsdb_datum_clone(dst, src, type);
+        ovsdb_datum_clone(dst, src);
     }
     return data;
 }
@@ -359,7 +358,7 @@ update_monitor_row_data(const struct ovsdb_monitor_table *mt,
 
         if (!ovsdb_datum_equals(src, dst, type)) {
             ovsdb_datum_destroy(dst, type);
-            ovsdb_datum_clone(dst, src, type);
+            ovsdb_datum_clone(dst, src);
         }
     }
 }

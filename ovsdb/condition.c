@@ -376,9 +376,7 @@ ovsdb_clause_clone(struct ovsdb_clause *new, struct ovsdb_clause *old)
 {
     new->function = old->function;
     new->column = old->column;
-    ovsdb_datum_clone(&new->arg,
-                      &old->arg,
-                      &old->column->type);
+    ovsdb_datum_clone(&new->arg, &old->arg);
 }
 
 bool

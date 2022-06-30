@@ -1088,7 +1088,7 @@ ovsdb_idl_condition_add_clause__(struct ovsdb_idl_condition *condition,
     struct ovsdb_idl_clause *clause = xmalloc(sizeof *clause);
     clause->function = src->function;
     clause->column = src->column;
-    ovsdb_datum_clone(&clause->arg, &src->arg, &src->column->type);
+    ovsdb_datum_clone(&clause->arg, &src->arg);
     hmap_insert(&condition->clauses, &clause->hmap_node, hash);
 }
 
@@ -1128,12 +1128,14 @@ ovsdb_idl_condition_add_clause(struct ovsdb_idl_condition *condition,
         struct ovsdb_idl_clause clause = {
             .function = function,
             .column = column,
-            .arg = *arg,
         };
+        ovsdb_datum_clone(&clause.arg, arg);
+
         uint32_t hash = ovsdb_idl_clause_hash(&clause);
         if (!ovsdb_idl_condition_find_clause(condition, &clause, hash)) {
             ovsdb_idl_condition_add_clause__(condition, &clause, hash);
         }
+        ovsdb_datum_destroy(&clause.arg, &column->type);
     }
 }
 
@@ -3611,7 +3613,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     if (owns_datum) {
         row->new_datum[column_idx] = *datum;
     } else {
-        ovsdb_datum_clone(&row->new_datum[column_idx], datum, &column->type);
+        ovsdb_datum_clone(&row->new_datum[column_idx], datum);
     }
     (column->unparse)(row);
     (column->parse)(row, &row->new_datum[column_idx]);
@@ -3650,8 +3652,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row,
                     const struct ovsdb_idl_column *column,
                     struct ovsdb_datum *datum)
 {
-    ovsdb_datum_sort_unique(datum,
-                            column->type.key.type, column->type.value.type);
+    ovsdb_datum_sort_unique(datum, &column->type);
     ovsdb_idl_txn_write__(row, column, datum, true);
 }
 

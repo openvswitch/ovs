@@ -287,6 +287,8 @@ mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
     struct ovsdb_error *error;
     unsigned int i;
 
+    ovsdb_datum_unshare(dst, dst_type);
+
     if (base->type == OVSDB_TYPE_INTEGER) {
         int64_t y = arg->integer;
         for (i = 0; i < dst->n; i++) {
@@ -322,7 +324,7 @@ mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
         }
     }
 
-    error = ovsdb_datum_sort(dst, dst_type->key.type);
+    error = ovsdb_datum_sort(dst, dst_type);
     if (error) {
         ovsdb_error_destroy(error);
         return ovsdb_error("constraint violation",
