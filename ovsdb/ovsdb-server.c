@@ -80,7 +80,7 @@ static char *ssl_ciphers;
 static bool bootstrap_ca_cert;
 
 /* Try to reclaim heap memory back to system after DB compaction. */
-static bool trim_memory = false;
+static bool trim_memory = true;
 
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;

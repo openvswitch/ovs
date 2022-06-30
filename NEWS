@@ -21,6 +21,9 @@ Post-v2.17.0
        configuration in a clustered databse independently for each server.
        E.g. for listening on unique addresses.  See the ovsdb.local-config.5
        manpage for schema details.
+     * Returning unused memory to the OS after the database compaction is now
+       enabled by default.  Use 'ovsdb-server/memory-trim-on-compaction off'
+       unixctl command to disable.
    - OVSDB-IDL:
      * New monitor mode flag, OVSDB_IDL_WRITE_CHANGED_ONLY, allowing
        applications to relax atomicity requirements when dealing with
