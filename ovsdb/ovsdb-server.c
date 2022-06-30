@@ -252,7 +252,9 @@ main_loop(struct server_config *config,
                 remove_db(config, node,
                           xasprintf("removing database %s because storage "
                                     "disconnected permanently", node->name));
-            } else if (ovsdb_storage_should_snapshot(db->db->storage)) {
+            } else if (!ovsdb_snapshot_in_progress(db->db)
+                       && (ovsdb_storage_should_snapshot(db->db->storage) ||
+                           ovsdb_snapshot_ready(db->db))) {
                 log_and_free_error(ovsdb_snapshot(db->db, trim_memory));
             }
         }
@@ -287,6 +289,7 @@ main_loop(struct server_config *config,
             ovsdb_trigger_wait(db->db, time_msec());
             ovsdb_storage_wait(db->db->storage);
             ovsdb_storage_read_wait(db->db->storage);
+            ovsdb_snapshot_wait(db->db);
         }
         if (run_process) {
             process_wait(run_process);
@@ -1552,11 +1555,20 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
             ? !strcmp(node->name, db_name)
             : node->name[0] != '_') {
             if (db->db) {
+                struct ovsdb_error *error = NULL;
+
                 VLOG_INFO("compacting %s database by user request",
                           node->name);
 
-                struct ovsdb_error *error = ovsdb_snapshot(db->db,
-                                                           trim_memory);
+                error = ovsdb_snapshot(db->db, trim_memory);
+                if (!error && ovsdb_snapshot_in_progress(db->db)) {
+                    while (ovsdb_snapshot_in_progress(db->db)) {
+                        ovsdb_snapshot_wait(db->db);
+                        poll_block();
+                    }
+                    error = ovsdb_snapshot(db->db, trim_memory);
+                }
+
                 if (error) {
                     char *s = ovsdb_error_to_string(error);
                     ds_put_format(&reply, "%s\n", s);

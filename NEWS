@@ -24,6 +24,8 @@ Post-v2.17.0
      * Returning unused memory to the OS after the database compaction is now
        enabled by default.  Use 'ovsdb-server/memory-trim-on-compaction off'
        unixctl command to disable.
+     * Most of the work for the automatic database compaction in clustered
+       mode has been moved to a separate thread to avoid blocking the process.
    - OVSDB-IDL:
      * New monitor mode flag, OVSDB_IDL_WRITE_CHANGED_ONLY, allowing
        applications to relax atomicity requirements when dealing with

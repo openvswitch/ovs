@@ -155,6 +155,23 @@ ovsdb_row_clone(const struct ovsdb_row *old)
     return new;
 }
 
+struct ovsdb_row *
+ovsdb_row_datum_clone(const struct ovsdb_row *old)
+{
+    const struct ovsdb_table *table = old->table;
+    const struct shash_node *node;
+    struct ovsdb_row *new;
+
+    new = allocate_row(table);
+    SHASH_FOR_EACH (node, &table->schema->columns) {
+        const struct ovsdb_column *column = node->data;
+        ovsdb_datum_clone(&new->fields[column->index],
+                          &old->fields[column->index]);
+    }
+    return new;
+}
+
+
 /* The caller is responsible for ensuring that 'row' has been removed from its
  * table and that it is not participating in a transaction. */
 void

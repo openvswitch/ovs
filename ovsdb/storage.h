@@ -79,7 +79,8 @@ void ovsdb_write_destroy(struct ovsdb_write *);
 bool ovsdb_storage_should_snapshot(struct ovsdb_storage *);
 struct ovsdb_error *ovsdb_storage_store_snapshot(struct ovsdb_storage *storage,
                                                  const struct json *schema,
-                                                 const struct json *snapshot)
+                                                 const struct json *snapshot,
+                                                 uint64_t applied_index)
     OVS_WARN_UNUSED_RESULT;
 
 struct ovsdb_write *ovsdb_storage_write_schema_change(

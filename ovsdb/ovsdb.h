@@ -72,6 +72,24 @@ struct ovsdb_txn_history_node {
     struct ovsdb_txn *txn;
 };
 
+struct ovsdb_compaction_state {
+    pthread_t thread;          /* Thread handle. */
+
+    struct ovsdb *db;          /* Copy of a database data to compact. */
+
+    struct json *data;         /* 'db' as a serialized json. */
+    struct json *schema;       /* 'db' schema json. */
+    uint64_t applied_index;    /* Last applied index reported by the storage
+                                * at the moment of a database copy. */
+
+    /* Completion signaling. */
+    struct seq *done;
+    uint64_t seqno;
+
+    uint64_t init_time;        /* Time spent by the main thread preparing. */
+    uint64_t thread_time;      /* Time spent for compaction by the thread. */
+};
+
 struct ovsdb {
     char *name;
     struct ovsdb_schema *schema;
@@ -101,6 +119,9 @@ struct ovsdb {
     struct ovs_list txn_forward_new;
     /* Hash map for transactions that are already sent and waits for reply. */
     struct hmap txn_forward_sent;
+
+    /* Database compaction. */
+    struct ovsdb_compaction_state *snap_state;
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *, struct ovsdb_storage *);
@@ -124,6 +145,9 @@ struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
 
 struct ovsdb_error *ovsdb_snapshot(struct ovsdb *, bool trim_memory)
     OVS_WARN_UNUSED_RESULT;
+void ovsdb_snapshot_wait(struct ovsdb *);
+bool ovsdb_snapshot_in_progress(struct ovsdb *);
+bool ovsdb_snapshot_ready(struct ovsdb *);
 
 void ovsdb_replace(struct ovsdb *dst, struct ovsdb *src);
 

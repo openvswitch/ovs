@@ -4295,7 +4295,8 @@ raft_notify_snapshot_recommended(struct raft *raft)
  * only valuable to call it if raft_get_log_length() is significant and
  * especially if raft_grew_lots() returns true. */
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
+raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data,
+                    uint64_t applied_index)
 {
     if (raft->joining) {
         return ovsdb_error(NULL,
@@ -4311,11 +4312,12 @@ raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
                            "cannot store a snapshot following failure");
     }
 
-    if (raft->last_applied < raft->log_start) {
+    uint64_t new_log_start = applied_index ? applied_index + 1
+                                           : raft->last_applied + 1;
+    if (new_log_start <= raft->log_start) {
         return ovsdb_error(NULL, "not storing a duplicate snapshot");
     }
 
-    uint64_t new_log_start = raft->last_applied + 1;
     struct raft_entry new_snapshot = {
         .term = raft_get_term(raft, new_log_start - 1),
         .eid = *raft_get_eid(raft, new_log_start - 1),

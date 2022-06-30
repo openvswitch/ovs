@@ -576,7 +576,7 @@ ovsdb_storage_should_snapshot(struct ovsdb_storage *storage)
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_storage_store_snapshot__(struct ovsdb_storage *storage,
                                const struct json *schema,
-                               const struct json *data)
+                               const struct json *data, uint64_t index)
 {
     if (storage->raft) {
         struct json *entries = json_array_create_empty();
@@ -587,7 +587,7 @@ ovsdb_storage_store_snapshot__(struct ovsdb_storage *storage,
             json_array_add(entries, json_clone(data));
         }
         struct ovsdb_error *error = raft_store_snapshot(storage->raft,
-                                                        entries);
+                                                        entries, index);
         json_destroy(entries);
         return error;
     } else if (storage->log) {
@@ -611,10 +611,11 @@ ovsdb_storage_store_snapshot__(struct ovsdb_storage *storage,
 struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_storage_store_snapshot(struct ovsdb_storage *storage,
                              const struct json *schema,
-                             const struct json *data)
+                             const struct json *data, uint64_t index)
 {
     struct ovsdb_error *error = ovsdb_storage_store_snapshot__(storage,
-                                                               schema, data);
+                                                               schema, data,
+                                                               index);
     bool retry_quickly = error != NULL;
     schedule_next_snapshot(storage, retry_quickly);
     return error;
@@ -638,7 +639,7 @@ ovsdb_storage_write_schema_change(struct ovsdb_storage *storage,
                                           prereq, &result);
         json_destroy(txn_json);
     } else if (storage->log) {
-        w->error = ovsdb_storage_store_snapshot__(storage, schema, data);
+        w->error = ovsdb_storage_store_snapshot__(storage, schema, data, 0);
     } else {
         /* When 'error' and 'command' are both null, it indicates that the
          * command is complete.  This is fine since this unbacked storage drops

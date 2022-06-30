@@ -180,7 +180,8 @@ uint64_t raft_get_log_length(const struct raft *);
 bool raft_may_snapshot(const struct raft *);
 void raft_notify_snapshot_recommended(struct raft *);
 struct ovsdb_error *raft_store_snapshot(struct raft *,
-                                        const struct json *new_snapshot)
+                                        const struct json *new_snapshot,
+                                        uint64_t applied_index)
     OVS_WARN_UNUSED_RESULT;
 
 /* Cluster management. */
