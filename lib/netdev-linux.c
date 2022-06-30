@@ -684,7 +684,10 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
                 return;
             }
 
-            if (is_netdev_linux_class(master_netdev->netdev_class)) {
+            /* If LAG master is not attached to ovs, ingress block on LAG
+             * members shoud not be updated. */
+            if (!master_netdev->auto_classified &&
+                is_netdev_linux_class(master_netdev->netdev_class)) {
                 block_id = netdev_get_block_id(master_netdev);
                 if (!block_id) {
                     netdev_close(master_netdev);
