@@ -127,7 +127,7 @@ save_flows () {
         # Get the highest enabled OpenFlow version
         ofp_version=$(get_highest_ofp_version "$bridge")
 
-        printf "%s" "ovs-ofctl add-tlv-map ${bridge} '"
+        printf "%s" "ovs-ofctl -O $ofp_version add-tlv-map ${bridge} '"
         ovs-ofctl dump-tlv-map ${bridge} -O $ofp_version | \
         awk '/^  *0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
