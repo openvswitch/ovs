@@ -34,8 +34,123 @@ static int pretty = 0;
  * instead of exactly one object or array. */
 static int multiple = 0;
 
+static void test_json_equal(const struct json *a, const struct json *b,
+                            bool allow_the_same);
+
+static void
+test_json_equal_object(const struct shash *a, const struct shash *b,
+                       bool allow_the_same)
+{
+    struct shash_node *a_node;
+
+    ovs_assert(allow_the_same || a != b);
+
+    if (a == b) {
+        return;
+    }
+
+    ovs_assert(shash_count(a) == shash_count(b));
+
+    SHASH_FOR_EACH (a_node, a) {
+        struct shash_node *b_node = shash_find(b, a_node->name);
+
+        ovs_assert(b_node);
+        test_json_equal(a_node->data, b_node->data, allow_the_same);
+    }
+}
+
+static void
+test_json_equal_array(const struct json_array *a, const struct json_array *b,
+                      bool allow_the_same)
+{
+    ovs_assert(allow_the_same || a != b);
+
+    if (a == b) {
+        return;
+    }
+
+    ovs_assert(a->n == b->n);
+
+    for (size_t i = 0; i < a->n; i++) {
+        test_json_equal(a->elems[i], b->elems[i], allow_the_same);
+    }
+}
+
+static void
+test_json_equal(const struct json *a, const struct json *b,
+                bool allow_the_same)
+{
+    ovs_assert(allow_the_same || a != b);
+    ovs_assert(a && b);
+
+    if (a == b) {
+        ovs_assert(a->count > 1);
+        return;
+    }
+
+    ovs_assert(a->type == b->type);
+
+    switch (a->type) {
+    case JSON_OBJECT:
+        test_json_equal_object(a->object, b->object, allow_the_same);
+        return;
+
+    case JSON_ARRAY:
+        test_json_equal_array(&a->array, &b->array, allow_the_same);
+        return;
+
+    case JSON_STRING:
+    case JSON_SERIALIZED_OBJECT:
+        ovs_assert(a->string != b->string);
+        ovs_assert(!strcmp(a->string, b->string));
+        return;
+
+    case JSON_NULL:
+    case JSON_FALSE:
+    case JSON_TRUE:
+        return;
+
+    case JSON_INTEGER:
+        ovs_assert(a->integer == b->integer);
+        return;
+
+    case JSON_REAL:
+        ovs_assert(a->real == b->real);
+        return;
+
+    case JSON_N_TYPES:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
+test_json_clone(struct json *json)
+{
+    struct json *copy, *deep_copy;
+
+    copy = json_clone(json);
+
+    ovs_assert(json_equal(json, copy));
+    test_json_equal(json, copy, true);
+    ovs_assert(json->count == 2);
+
+    json_destroy(copy);
+    ovs_assert(json->count == 1);
+
+    deep_copy = json_deep_clone(json);
+
+    ovs_assert(json_equal(json, deep_copy));
+    test_json_equal(json, deep_copy, false);
+    ovs_assert(json->count == 1);
+    ovs_assert(deep_copy->count == 1);
+
+    json_destroy(deep_copy);
+    ovs_assert(json->count == 1);
+}
+
 static bool
-print_and_free_json(struct json *json)
+print_test_and_free_json(struct json *json)
 {
     bool ok;
     if (json->type == JSON_STRING) {
@@ -47,6 +162,7 @@ print_and_free_json(struct json *json)
         free(s);
         ok = true;
     }
+    test_json_clone(json);
     json_destroy(json);
     return ok;
 }
@@ -89,7 +205,7 @@ parse_multiple(FILE *stream)
 
             used += json_parser_feed(parser, &buffer[used], n - used);
             if (used < n) {
-                if (!print_and_free_json(json_parser_finish(parser))) {
+                if (!print_test_and_free_json(json_parser_finish(parser))) {
                     ok = false;
                 }
                 parser = NULL;
@@ -97,7 +213,7 @@ parse_multiple(FILE *stream)
         }
     }
     if (parser) {
-        if (!print_and_free_json(json_parser_finish(parser))) {
+        if (!print_test_and_free_json(json_parser_finish(parser))) {
             ok = false;
         }
     }
@@ -150,7 +266,7 @@ test_json_main(int argc, char *argv[])
     if (multiple) {
         ok = parse_multiple(stream);
     } else {
-        ok = print_and_free_json(json_from_stream(stream));
+        ok = print_test_and_free_json(json_from_stream(stream));
     }
 
     fclose(stream);
