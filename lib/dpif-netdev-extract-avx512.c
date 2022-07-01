@@ -288,6 +288,19 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define PKT_MIN_ETH_IPV4_TCP      (PKT_OFFSET_IPV4_L4 + TCP_HEADER_LEN)
 #define PKT_MIN_ETH_VLAN_IPV4_TCP (PKT_OFFSET_VLAN_IPV4_L4 + TCP_HEADER_LEN)
 
+/* MF bits. */
+#define MF_BIT(field) (MAP_1 << ((offsetof(struct flow, field) / 8) %         \
+                       MAP_T_BITS))
+
+#define MF_ETH        (MF_BIT(dp_hash) | MF_BIT(in_port) | MF_BIT(packet_type)\
+                       | MF_BIT(dl_dst) | MF_BIT(dl_src)| MF_BIT(dl_type))
+
+#define MF_ETH_VLAN   (MF_ETH | MF_BIT(vlans))
+#define MF_IPV4_UDP   (MF_BIT(nw_src) | MF_BIT(ipv6_label) | MF_BIT(tp_src) | \
+                       MF_BIT(tp_dst))
+
+#define MF_IPV4_TCP   (MF_IPV4_UDP | MF_BIT(tcp_flags) | MF_BIT(arp_tha.ea[2]))
+
 /* This union allows initializing static data as u8, but easily loading it
  * into AVX512 registers too. The union ensures proper alignment for the zmm.
  */
@@ -385,7 +398,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         .strip_mask.u8_data = { PATTERN_STRIP_IPV4_MASK },
         .store_kmsk = PATTERN_IPV4_UDP_KMASK,
 
-        .mf_bits = { 0x18a0000000000000, 0x0000000000040401},
+        .mf_bits = { MF_ETH, MF_IPV4_UDP},
         .dp_pkt_offs = {
             0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV4_L4,
         },
@@ -408,7 +421,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         .strip_mask.u8_data = { PATTERN_STRIP_IPV4_MASK },
         .store_kmsk = PATTERN_IPV4_TCP_KMASK,
 
-        .mf_bits = { 0x18a0000000000000, 0x0000000000044401},
+        .mf_bits = { MF_ETH, MF_IPV4_TCP},
         .dp_pkt_offs = {
             0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV4_L4,
         },
@@ -427,7 +440,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         .strip_mask.u8_data = { PATTERN_STRIP_DOT1Q_IPV4_MASK },
         .store_kmsk = PATTERN_DT1Q_IPV4_UDP_KMASK,
 
-        .mf_bits = { 0x38a0000000000000, 0x0000000000040401},
+        .mf_bits = { MF_ETH_VLAN, MF_IPV4_UDP},
         .dp_pkt_offs = {
             PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
             PKT_OFFSET_VLAN_IPV4_L4,
@@ -453,7 +466,7 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         .strip_mask.u8_data = { PATTERN_STRIP_DOT1Q_IPV4_MASK },
         .store_kmsk = PATTERN_DT1Q_IPV4_TCP_KMASK,
 
-        .mf_bits = { 0x38a0000000000000, 0x0000000000044401},
+        .mf_bits = { MF_ETH_VLAN, MF_IPV4_TCP},
         .dp_pkt_offs = {
             PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
             PKT_OFFSET_VLAN_IPV4_L4,
