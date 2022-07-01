@@ -277,6 +277,17 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
     NC, NC, NC, NC, 0xBF, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,   \
     NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC
 
+#define PKT_OFFSET_L2_PAD_SIZE    (ETH_HEADER_LEN)
+#define PKT_OFFSET_L3             (ETH_HEADER_LEN)
+#define PKT_OFFSET_VLAN_L3        (ETH_HEADER_LEN + VLAN_HEADER_LEN)
+#define PKT_OFFSET_IPV4_L4        (ETH_HEADER_LEN + IP_HEADER_LEN)
+#define PKT_OFFSET_VLAN_IPV4_L4   (PKT_OFFSET_IPV4_L4 + VLAN_HEADER_LEN)
+
+#define PKT_MIN_ETH_IPV4_UDP      (PKT_OFFSET_IPV4_L4 + UDP_HEADER_LEN)
+#define PKT_MIN_ETH_VLAN_IPV4_UDP (PKT_OFFSET_VLAN_IPV4_L4 + UDP_HEADER_LEN)
+#define PKT_MIN_ETH_IPV4_TCP      (PKT_OFFSET_IPV4_L4 + TCP_HEADER_LEN)
+#define PKT_MIN_ETH_VLAN_IPV4_TCP (PKT_OFFSET_VLAN_IPV4_L4 + TCP_HEADER_LEN)
+
 /* This union allows initializing static data as u8, but easily loading it
  * into AVX512 registers too. The union ensures proper alignment for the zmm.
  */
@@ -376,9 +387,9 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 
         .mf_bits = { 0x18a0000000000000, 0x0000000000040401},
         .dp_pkt_offs = {
-            0, UINT16_MAX, 14, 34,
+            0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV4_L4,
         },
-        .dp_pkt_min_size = 42,
+        .dp_pkt_min_size = PKT_MIN_ETH_IPV4_UDP,
     },
 
     [PROFILE_ETH_IPV4_TCP] = {
@@ -399,9 +410,9 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 
         .mf_bits = { 0x18a0000000000000, 0x0000000000044401},
         .dp_pkt_offs = {
-            0, UINT16_MAX, 14, 34,
+            0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV4_L4,
         },
-        .dp_pkt_min_size = 54,
+        .dp_pkt_min_size = PKT_MIN_ETH_IPV4_TCP,
     },
 
     [PROFILE_ETH_VLAN_IPV4_UDP] = {
@@ -418,9 +429,10 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 
         .mf_bits = { 0x38a0000000000000, 0x0000000000040401},
         .dp_pkt_offs = {
-            14, UINT16_MAX, 18, 38,
+            PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
+            PKT_OFFSET_VLAN_IPV4_L4,
         },
-        .dp_pkt_min_size = 46,
+        .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV4_UDP,
     },
 
     [PROFILE_ETH_VLAN_IPV4_TCP] = {
@@ -443,9 +455,10 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
 
         .mf_bits = { 0x38a0000000000000, 0x0000000000044401},
         .dp_pkt_offs = {
-            14, UINT16_MAX, 18, 38,
+            PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
+            PKT_OFFSET_VLAN_IPV4_L4,
         },
-        .dp_pkt_min_size = 58,
+        .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV4_TCP,
     },
 };
 
