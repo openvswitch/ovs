@@ -1117,6 +1117,49 @@ dp_packet_update_rss_hash_ipv4_tcp_udp(struct dp_packet *packet)
     dp_packet_set_rss_hash(packet, hash);
 }
 
+static inline void ALWAYS_INLINE
+dp_packet_update_rss_hash_ipv6_tcp_udp(struct dp_packet *packet)
+{
+    if (dp_packet_rss_valid(packet)) {
+        return;
+    }
+
+    const uint8_t *pkt = dp_packet_data(packet);
+    const uint16_t l3_ofs = packet->l3_ofs;
+    uint32_t ipv6_src_off = offsetof(struct ovs_16aligned_ip6_hdr, ip6_src);
+    uint32_t ipv6_dst_off = offsetof(struct ovs_16aligned_ip6_hdr, ip6_dst);
+    uint32_t ipv6_proto_off = offsetof(struct ovs_16aligned_ip6_hdr,
+                                       ip6_ctlun.ip6_un1.ip6_un1_nxt);
+    const void *ipv6_src_l = &pkt[l3_ofs + ipv6_src_off];
+    const void *ipv6_src_h = &pkt[l3_ofs + ipv6_src_off + 8];
+    const void *ipv6_dst_l = &pkt[l3_ofs + ipv6_dst_off];
+    const void *ipv6_dst_h = &pkt[l3_ofs + ipv6_dst_off + 8];
+    const void *l4_ports = &pkt[packet->l4_ofs];
+    uint64_t ipv6_src_lo, ipv6_src_hi;
+    uint64_t ipv6_dst_lo, ipv6_dst_hi;
+    uint32_t ports;
+    uint32_t hash = 0;
+
+    memcpy(&ipv6_src_lo, ipv6_src_l, sizeof ipv6_src_lo);
+    memcpy(&ipv6_src_hi, ipv6_src_h, sizeof ipv6_src_hi);
+    memcpy(&ipv6_dst_lo, ipv6_dst_l, sizeof ipv6_dst_lo);
+    memcpy(&ipv6_dst_hi, ipv6_dst_h, sizeof ipv6_dst_hi);
+    memcpy(&ports, l4_ports, sizeof ports);
+
+    /* IPv6 Src and Dst. */
+    hash = hash_add64(hash, ipv6_src_lo);
+    hash = hash_add64(hash, ipv6_src_hi);
+    hash = hash_add64(hash, ipv6_dst_lo);
+    hash = hash_add64(hash, ipv6_dst_hi);
+    /* IPv6 proto. */
+    hash = hash_add(hash, pkt[l3_ofs + ipv6_proto_off]);
+    /* L4 ports. */
+    hash = hash_add(hash, ports);
+    hash = hash_finish(hash, 42);
+
+    dp_packet_set_rss_hash(packet, hash);
+}
+
 #ifdef  __cplusplus
 }
 #endif

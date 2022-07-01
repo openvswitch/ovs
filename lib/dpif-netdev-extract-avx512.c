@@ -887,7 +887,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[9]);
-
+                dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_IPV6_TCP: {
@@ -910,7 +910,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[9]);
-
+                dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_TCP: {
@@ -936,7 +936,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[10]);
-
+                dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_UDP: {
@@ -957,7 +957,7 @@ mfex_avx512_process(struct dp_packet_batch *packets,
 
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[10]);
-
+                dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
             } break;
         default:
             break;
