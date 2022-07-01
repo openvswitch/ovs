@@ -213,6 +213,7 @@ Jason Wessel                       jason.wessel@windriver.com
 Jasper Capel                       jasper@capel.tv
 Jean Tourrilhes                    jt@hpl.hp.com
 Jeff Squyres                       jsquyres@cisco.com
+Jeffrey Walton                     noloader@gmail.com
 Jeremy Stribling
 Jeroen van Bemmel                  jvb127@gmail.com
 Jesse Gross                        jesse@kernel.org
