@@ -48,6 +48,7 @@
 #include "dpif-netdev-private-extract.h"
 #include "dpif-netdev-private-flow.h"
 #include "dp-packet.h"
+#include "packets.h"
 
 /* AVX512-BW level permutex2var_epi8 emulation. */
 static inline __m512i
@@ -169,6 +170,7 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define PATTERN_ETHERTYPE_MASK PATTERN_ETHERTYPE_GEN(0xFF, 0xFF)
 #define PATTERN_ETHERTYPE_IPV4 PATTERN_ETHERTYPE_GEN(0x08, 0x00)
 #define PATTERN_ETHERTYPE_DT1Q PATTERN_ETHERTYPE_GEN(0x81, 0x00)
+#define PATTERN_ETHERTYPE_IPV6 PATTERN_ETHERTYPE_GEN(0x86, 0xDD)
 
 /* VLAN (Dot1Q) patterns and masks. */
 #define PATTERN_DT1Q_MASK                                               \
@@ -233,6 +235,40 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
   NU, NU, NU, NU, NU, NU, NU, NU, 38, 39, 40, 41, NU, NU, NU, NU, /* TCP */   \
   NU, NU, NU, NU, NU, NU, NU, NU, /* Unused. */
 
+/* Generator for checking IPv6 ver. */
+#define PATTERN_IPV6_GEN(VER_TRC, PROTO)                                      \
+  VER_TRC,     /* Version: 4bits and Traffic class: 4bits. */                 \
+  0, 0, 0,     /* Traffic class: 4bits and Flow Label: 24bits. */             \
+  0, 0,        /* Payload length 16bits. */                                   \
+  PROTO, 0,    /* Next Header 8bits and Hop limit 8bits. */                   \
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* Src IP: 128bits. */      \
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* Dst IP: 128bits. */
+
+#define PATTERN_IPV6_MASK PATTERN_IPV6_GEN(0xF0, 0xFF)
+#define PATTERN_IPV6_UDP PATTERN_IPV6_GEN(0x60, 0x11)
+#define PATTERN_IPV6_TCP PATTERN_IPV6_GEN(0x60, 0x06)
+
+#define PATTERN_IPV6_SHUFFLE                                                  \
+   0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, NU, NU, /* Ether */ \
+  22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, /* IPv6 */  \
+  38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, /* IPv6 */  \
+  NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused */
+
+/* VLAN (Dot1Q) patterns and masks. */
+#define PATTERN_DT1Q_MASK                                                     \
+  0x00, 0x00, 0xFF, 0xFF,
+#define PATTERN_DT1Q_IPV6                                                     \
+  0x00, 0x00, 0x86, 0xDD,
+
+#define PATTERN_DT1Q_IPV6_SHUFFLE                                             \
+  /* Ether (2 blocks): Note that *VLAN* type is written here. */              \
+  0,  1,  2,  3,  4,  5,  6,  7, 8,  9, 10, 11, 16, 17,  0,  0,               \
+  /* VLAN (1 block): Note that the *EtherHdr->Type* is written here. */       \
+  12, 13, 14, 15, 0, 0, 0, 0,                                                 \
+  26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, /* IPv6 */  \
+  42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, /* IPv6 */  \
+  NU, NU, NU, NU, NU, NU, NU, NU,                                 /* Unused */
+
 /* Generation of K-mask bitmask values, to zero out data in result. Note that
  * these correspond 1:1 to the above "*_SHUFFLE" values, and bit used must be
  * set in this K-mask, and "NU" values must be zero in the k-mask. Each mask
@@ -245,6 +281,10 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define KMASK_IPV4      0xF0FFULL
 #define KMASK_UDP       0x000FULL
 #define KMASK_TCP       0x0F00ULL
+#define KMASK_IPV6      0xFFFFULL
+#define KMASK_ETHER_IPV6     0x3FFFULL
+#define KMASK_DT1Q_IPV6      0xFF0FULL
+#define KMASK_IPV6_NOHDR     0x00FFULL
 
 #define PATTERN_IPV4_UDP_KMASK \
     (KMASK_ETHER | (KMASK_IPV4 << 16) | (KMASK_UDP << 32))
@@ -257,6 +297,13 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 
 #define PATTERN_DT1Q_IPV4_TCP_KMASK \
     (KMASK_ETHER | (KMASK_DT1Q << 16) | (KMASK_IPV4 << 24) | (KMASK_TCP << 40))
+
+#define PATTERN_IPV6_KMASK \
+    (KMASK_ETHER_IPV6 | (KMASK_IPV6 << 16) | (KMASK_IPV6 << 32))
+
+#define PATTERN_DT1Q_IPV6_KMASK \
+    (KMASK_ETHER_IPV6 | (KMASK_DT1Q_IPV6 << 16) | (KMASK_IPV6 << 32) | \
+    (KMASK_IPV6_NOHDR << 48))
 
 /* Miniflow Strip post-processing masks.
  * This allows unsetting specific bits from the resulting miniflow. It is used
@@ -282,24 +329,42 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define PKT_OFFSET_VLAN_L3        (ETH_HEADER_LEN + VLAN_HEADER_LEN)
 #define PKT_OFFSET_IPV4_L4        (ETH_HEADER_LEN + IP_HEADER_LEN)
 #define PKT_OFFSET_VLAN_IPV4_L4   (PKT_OFFSET_IPV4_L4 + VLAN_HEADER_LEN)
+#define PKT_OFFSET_VLAN_IPV6_L4   (PKT_OFFSET_VLAN_L3 + IPV6_HEADER_LEN)
+#define PKT_OFFSET_IPV6_L4        (PKT_OFFSET_L3 + IPV6_HEADER_LEN)
 
 #define PKT_MIN_ETH_IPV4_UDP      (PKT_OFFSET_IPV4_L4 + UDP_HEADER_LEN)
 #define PKT_MIN_ETH_VLAN_IPV4_UDP (PKT_OFFSET_VLAN_IPV4_L4 + UDP_HEADER_LEN)
 #define PKT_MIN_ETH_IPV4_TCP      (PKT_OFFSET_IPV4_L4 + TCP_HEADER_LEN)
 #define PKT_MIN_ETH_VLAN_IPV4_TCP (PKT_OFFSET_VLAN_IPV4_L4 + TCP_HEADER_LEN)
+#define PKT_MIN_ETH_IPV6_UDP      (PKT_OFFSET_IPV6_L4 + UDP_HEADER_LEN)
+#define PKT_MIN_ETH_VLAN_IPV6_UDP (PKT_OFFSET_VLAN_IPV6_L4 + UDP_HEADER_LEN)
+#define PKT_MIN_ETH_IPV6_TCP      (PKT_OFFSET_IPV6_L4 + TCP_HEADER_LEN)
+#define PKT_MIN_ETH_VLAN_IPV6_TCP (PKT_OFFSET_VLAN_IPV6_L4 + TCP_HEADER_LEN)
 
 /* MF bits. */
 #define MF_BIT(field) (MAP_1 << ((offsetof(struct flow, field) / 8) %         \
                        MAP_T_BITS))
+#define MF_WORD(field, n_word)                                                \
+            (((MAP_1 << n_word) - 1) << ((offsetof(struct flow, field) / 8) % \
+             MAP_T_BITS))
 
 #define MF_ETH        (MF_BIT(dp_hash) | MF_BIT(in_port) | MF_BIT(packet_type)\
                        | MF_BIT(dl_dst) | MF_BIT(dl_src)| MF_BIT(dl_type))
-
 #define MF_ETH_VLAN   (MF_ETH | MF_BIT(vlans))
+
 #define MF_IPV4_UDP   (MF_BIT(nw_src) | MF_BIT(ipv6_label) | MF_BIT(tp_src) | \
                        MF_BIT(tp_dst))
-
 #define MF_IPV4_TCP   (MF_IPV4_UDP | MF_BIT(tcp_flags) | MF_BIT(arp_tha.ea[2]))
+
+#define MF_IPV6_UDP   (MF_BIT(ipv6_label) | MF_WORD(ipv6_src, 2) |            \
+                       MF_WORD(ipv6_dst, 2) | MF_BIT(tp_src) | MF_BIT(tp_dst))
+#define MF_IPV6_TCP   (MF_IPV6_UDP | MF_BIT(tcp_flags) | MF_BIT(arp_tha.ea[2]))
+
+#define PATTERN_STRIP_IPV6_MASK                                         \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC,     \
+    NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC, NC
 
 /* This union allows initializing static data as u8, but easily loading it
  * into AVX512 registers too. The union ensures proper alignment for the zmm.
@@ -380,6 +445,10 @@ enum MFEX_PROFILES {
     PROFILE_ETH_IPV4_TCP,
     PROFILE_ETH_VLAN_IPV4_UDP,
     PROFILE_ETH_VLAN_IPV4_TCP,
+    PROFILE_ETH_IPV6_UDP,
+    PROFILE_ETH_IPV6_TCP,
+    PROFILE_ETH_VLAN_IPV6_TCP,
+    PROFILE_ETH_VLAN_IPV6_UDP,
     PROFILE_COUNT,
 };
 
@@ -473,8 +542,137 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
         .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV4_TCP,
     },
+
+    [PROFILE_ETH_IPV6_UDP] = {
+        .probe_mask.u8_data = { PATTERN_ETHERTYPE_MASK PATTERN_IPV6_MASK },
+        .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV6 PATTERN_IPV6_UDP },
+
+        .store_shuf.u8_data = { PATTERN_IPV6_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV6_MASK },
+        .store_kmsk = PATTERN_IPV6_KMASK,
+
+        .mf_bits = { MF_ETH, MF_IPV6_UDP},
+        .dp_pkt_offs = {
+            0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV6_L4,
+        },
+        .dp_pkt_min_size = PKT_MIN_ETH_IPV6_UDP,
+    },
+
+    [PROFILE_ETH_IPV6_TCP] = {
+        .probe_mask.u8_data = { PATTERN_ETHERTYPE_MASK PATTERN_IPV6_MASK },
+        .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV6 PATTERN_IPV6_TCP },
+
+        .store_shuf.u8_data = { PATTERN_IPV6_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV6_MASK },
+        .store_kmsk = PATTERN_IPV6_KMASK,
+
+        .mf_bits = { MF_ETH, MF_IPV6_TCP},
+        .dp_pkt_offs = {
+            0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV6_L4,
+        },
+        .dp_pkt_min_size = PKT_MIN_ETH_IPV6_TCP,
+    },
+
+    [PROFILE_ETH_VLAN_IPV6_TCP] = {
+        .probe_mask.u8_data = {
+            PATTERN_ETHERTYPE_MASK PATTERN_DT1Q_MASK PATTERN_IPV6_MASK },
+        .probe_data.u8_data = {
+            PATTERN_ETHERTYPE_DT1Q PATTERN_DT1Q_IPV6 PATTERN_IPV6_TCP },
+
+        .store_shuf.u8_data = { PATTERN_DT1Q_IPV6_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV6_MASK },
+        .store_kmsk = PATTERN_DT1Q_IPV6_KMASK,
+
+        .mf_bits = { MF_ETH_VLAN, MF_IPV6_TCP},
+        .dp_pkt_offs = {
+            PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
+            PKT_OFFSET_VLAN_IPV6_L4,
+        },
+        .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV6_TCP,
+    },
+
+    [PROFILE_ETH_VLAN_IPV6_UDP] = {
+        .probe_mask.u8_data = {
+            PATTERN_ETHERTYPE_MASK PATTERN_DT1Q_MASK PATTERN_IPV6_MASK },
+        .probe_data.u8_data = {
+            PATTERN_ETHERTYPE_DT1Q PATTERN_DT1Q_IPV6 PATTERN_IPV6_UDP },
+
+        .store_shuf.u8_data = { PATTERN_DT1Q_IPV6_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV6_MASK },
+        .store_kmsk = PATTERN_DT1Q_IPV6_KMASK,
+
+        .mf_bits = { MF_ETH_VLAN, MF_IPV6_UDP},
+        .dp_pkt_offs = {
+            PKT_OFFSET_L2_PAD_SIZE, UINT16_MAX, PKT_OFFSET_VLAN_L3,
+            PKT_OFFSET_VLAN_IPV6_L4,
+        },
+        .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV6_UDP,
+    },
 };
 
+/* IPv6 header helper function to fix TC, flow label and next header. */
+static inline void ALWAYS_INLINE
+mfex_handle_ipv6_hdr_block(const uint8_t *ipv6, uint64_t *block)
+{
+    static const uint8_t data_shuf[16] = {
+        0, 1, 2, 3, /* copy IPv6 label in place, it is masked later. */
+        1, 0,       /* Byte-swap TC fields for LE usage. */
+        7, 6,       /* Move TTL and next proto to MF required locations. */
+    };
+
+    /* BE mask for IPv6 label, and mask to strip away unwanted TC bits. */
+    const uint64_t mask = 0xffff0f00 | (UINT64_MAX << 40);
+    uint64_t mask_data[2] = { mask, mask };
+
+    /* Load constant data. Is lifted to occur 1x per burst, not per packet. */
+    __m128i ipv6_hdr = _mm_loadu_si128((void *) ipv6);
+    __m128i v_mask = _mm_loadu_si128((void *) mask_data);
+    __m128i v_shuf_mask = _mm_loadu_si128((void *) data_shuf);
+
+    /* Shuffle data layout, shift 16-bits to get TC fixed, mask to cleanup. */
+    __m128i v_ipv6 = _mm_shuffle_epi8(ipv6_hdr, v_shuf_mask);
+    __m128i v_tc_shift = _mm_mask_slli_epi16(v_ipv6, 0b100, v_ipv6, 4);
+    __m128i v_ipv6_m = _mm_and_si128(v_tc_shift, v_mask);
+
+    *block = _mm_extract_epi64(v_ipv6_m, 0);
+}
+
+/* IPv6 Protocol specific helper functions, for handling L4 UDP/TCP. */
+static inline void
+mfex_handle_ipv6_l4(const uint8_t *ports, uint64_t *block)
+{
+    memcpy(block, ports, sizeof(uint32_t));
+}
+
+/* IPv6 specific helper functions, for calculating offsets/lengths. */
+static int
+mfex_ipv6_set_l2_pad_size(struct dp_packet *pkt,
+                          struct ovs_16aligned_ip6_hdr *nh,
+                          uint32_t len_from_ipv6,
+                          uint32_t next_hdr_size)
+{
+    /* Handle dynamic l2_pad_size. */
+    uint16_t p_len =  ntohs(nh->ip6_ctlun.ip6_un1.ip6_un1_plen);
+
+    /* Error if IP total length is greater than remaining packet size. */
+    bool err_ipv6_len_too_high = p_len + IPV6_HEADER_LEN > len_from_ipv6;
+
+    /* Plen must be greater then the l4 packet header. */
+    bool err_ipv6_len_too_low = p_len < next_hdr_size;
+
+    bool err_packet_size_low = len_from_ipv6 < sizeof *nh;
+
+    /* Ensure the l2 pad size will not overflow. */
+    bool err_len_u16_overflow = (len_from_ipv6 - (p_len + IPV6_HEADER_LEN))
+                                > UINT16_MAX;
+
+    if (OVS_UNLIKELY(err_ipv6_len_too_high || err_ipv6_len_too_low ||
+                     err_len_u16_overflow || err_packet_size_low)) {
+        return -1;
+    }
+    dp_packet_set_l2_pad_size(pkt, len_from_ipv6 - (p_len + IPV6_HEADER_LEN));
+    return 0;
+}
 
 /* Protocol specific helper functions, for calculating offsets/lenghts. */
 static int32_t
@@ -523,6 +721,14 @@ mfex_handle_tcp_flags(const struct tcp_header *tcp, uint64_t *block)
     uint16_t ctl = (OVS_FORCE uint16_t) TCP_FLAGS_BE16(tcp->tcp_ctl);
     uint64_t ctl_u64 = ctl;
     *block = ctl_u64 << 32;
+}
+
+static int
+mfex_check_tcp_data_offset(const struct tcp_header *tcp)
+{
+    /* we dont support TCP options, offset must be 5. */
+    bool ret = TCP_OFFSET(tcp->tcp_ctl) == 5;
+    return ret;
 }
 
 /* Generic loop to process any mfex profile. This code is specialized into
@@ -665,6 +871,94 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
             } break;
+
+        case PROFILE_ETH_IPV6_UDP: {
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv6 = size - sizeof(struct eth_header);
+                struct ovs_16aligned_ip6_hdr *nh = (void *)&pkt[sizeof
+                                                   (struct eth_header)];
+                if (mfex_ipv6_set_l2_pad_size(packet, nh, size_from_ipv6,
+                                              UDP_HEADER_LEN)) {
+                    continue;
+                }
+
+                /* Process IPv6 header for TC, flow Label and next header. */
+                mfex_handle_ipv6_hdr_block(&pkt[ETH_HEADER_LEN], &blocks[8]);
+
+                /* Process UDP header. */
+                mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[9]);
+
+            } break;
+
+        case PROFILE_ETH_IPV6_TCP: {
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv6 = size - sizeof(struct eth_header);
+                struct ovs_16aligned_ip6_hdr *nh = (void *)&pkt[sizeof
+                                                   (struct eth_header)];
+                if (mfex_ipv6_set_l2_pad_size(packet, nh, size_from_ipv6,
+                                              TCP_HEADER_LEN)) {
+                    continue;
+                }
+
+                /* Process IPv6 header for TC, flow Label and next header. */
+                mfex_handle_ipv6_hdr_block(&pkt[ETH_HEADER_LEN], &blocks[8]);
+
+                /* Process TCP header. */
+                mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[10]);
+                const struct tcp_header *tcp = (void *)&pkt[54];
+                if (!mfex_check_tcp_data_offset(tcp)) {
+                    continue;
+                }
+                mfex_handle_tcp_flags(tcp, &blocks[9]);
+
+            } break;
+
+        case PROFILE_ETH_VLAN_IPV6_TCP: {
+                mfex_vlan_pcp(pkt[14], &keys[i].buf[4]);
+
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv6 = size - VLAN_ETH_HEADER_LEN;
+                struct ovs_16aligned_ip6_hdr *nh = (void *)&pkt
+                                                   [VLAN_ETH_HEADER_LEN];
+                if (mfex_ipv6_set_l2_pad_size(packet, nh, size_from_ipv6,
+                                              TCP_HEADER_LEN)) {
+                    continue;
+                }
+
+                /* Process IPv6 header for TC, flow Label and next header. */
+                mfex_handle_ipv6_hdr_block(&pkt[VLAN_ETH_HEADER_LEN],
+                                           &blocks[9]);
+
+                /* Process TCP header. */
+                mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[11]);
+                const struct tcp_header *tcp = (void *)&pkt[58];
+                if (!mfex_check_tcp_data_offset(tcp)) {
+                    continue;
+                }
+                mfex_handle_tcp_flags(tcp, &blocks[10]);
+
+            } break;
+
+        case PROFILE_ETH_VLAN_IPV6_UDP: {
+                mfex_vlan_pcp(pkt[14], &keys[i].buf[4]);
+
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv6 = size - VLAN_ETH_HEADER_LEN;
+                struct ovs_16aligned_ip6_hdr *nh = (void *)&pkt
+                                                   [VLAN_ETH_HEADER_LEN];
+                if (mfex_ipv6_set_l2_pad_size(packet, nh, size_from_ipv6,
+                                              UDP_HEADER_LEN)) {
+                    continue;
+                }
+
+                /* Process IPv6 header for TC, flow Label and next header. */
+                mfex_handle_ipv6_hdr_block(&pkt[VLAN_ETH_HEADER_LEN],
+                                           &blocks[9]);
+
+                /* Process UDP header. */
+                mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[10]);
+
+            } break;
         default:
             break;
         };
@@ -715,5 +1009,10 @@ DECLARE_MFEX_FUNC(ip_udp, PROFILE_ETH_IPV4_UDP)
 DECLARE_MFEX_FUNC(ip_tcp, PROFILE_ETH_IPV4_TCP)
 DECLARE_MFEX_FUNC(dot1q_ip_udp, PROFILE_ETH_VLAN_IPV4_UDP)
 DECLARE_MFEX_FUNC(dot1q_ip_tcp, PROFILE_ETH_VLAN_IPV4_TCP)
+DECLARE_MFEX_FUNC(ipv6_udp, PROFILE_ETH_IPV6_UDP)
+DECLARE_MFEX_FUNC(ipv6_tcp, PROFILE_ETH_IPV6_TCP)
+DECLARE_MFEX_FUNC(dot1q_ipv6_tcp, PROFILE_ETH_VLAN_IPV6_TCP)
+DECLARE_MFEX_FUNC(dot1q_ipv6_udp, PROFILE_ETH_VLAN_IPV6_UDP)
+
 #endif /* __CHECKER__ */
 #endif /* __x86_64__ */
