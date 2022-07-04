@@ -19,6 +19,9 @@
 
 #include <sys/types.h>
 
+#define MFEX_IMPL_AVX512_CHECK (__x86_64__ && HAVE_AVX512F \
+    && HAVE_LD_AVX512_GOOD && HAVE_AVX512BW && __SSE4_2__)
+
 /* Forward declarations. */
 struct dp_packet;
 struct miniflow;
@@ -81,8 +84,7 @@ enum dpif_miniflow_extract_impl_idx {
     MFEX_IMPL_AUTOVALIDATOR,
     MFEX_IMPL_SCALAR,
     MFEX_IMPL_STUDY,
-#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && HAVE_AVX512BW \
-     && __SSE4_2__)
+#if MFEX_IMPL_AVX512_CHECK
 #if HAVE_AVX512VBMI
     MFEX_IMPL_VBMI_IPv4_UDP,
 #endif
@@ -124,9 +126,7 @@ extern struct ovs_mutex dp_netdev_mutex;
 /* Define a index which points to the first traffic optimized MFEX
  * option from the enum list else holds max value.
  */
-#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && HAVE_AVX512BW \
-     && __SSE4_2__)
-
+#if MFEX_IMPL_AVX512_CHECK
 #if HAVE_AVX512VBMI
 #define MFEX_IMPL_START_IDX MFEX_IMPL_VBMI_IPv4_UDP
 #else
