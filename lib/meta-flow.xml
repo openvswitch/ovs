@@ -4101,6 +4101,15 @@ r r c c c.
         opcodes greater than 255 are treated as 0; this works adequately
         because in practice ARP and RARP only use opcodes 1 through 4.
       </p>
+
+      <p>
+        In the case of fragmented traffic, a difference exists in the way
+        the field acts for IPv4 and IPv6 later fragments. For IPv6 fragments
+        with nonzero offset, <code>nw_proto</code> is set to the IPv6 protocol
+        type for fragments (44).
+        Conversely, for IPv4 later fragments, the field is set based on the
+        protocol type present in the header.
+      </p>
     </field>
 
     <field id="MFF_IP_TTL" title="IPv4/v6 TTL/Hop Limit">
