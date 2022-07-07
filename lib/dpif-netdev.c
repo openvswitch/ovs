@@ -639,11 +639,6 @@ static void dp_netdev_simple_match_remove(struct dp_netdev_pmd_thread *pmd,
     OVS_REQUIRES(pmd->flow_mutex);
 
 static bool dp_netdev_flow_is_simple_match(const struct match *);
-static bool dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *,
-                                           odp_port_t in_port);
-static struct dp_netdev_flow *dp_netdev_simple_match_lookup(
-    const struct dp_netdev_pmd_thread *,
-    odp_port_t in_port, ovs_be16 dp_type, uint8_t nw_frag, ovs_be16 vlan_tci);
 
 /* Updates the time in PMD threads context and should be called in three cases:
  *
@@ -3873,7 +3868,7 @@ dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
     odp_flow_key_hash(&masked_flow, sizeof masked_flow, mega_ufid);
 }
 
-static uint64_t
+uint64_t
 dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
                             uint8_t nw_frag, ovs_be16 vlan_tci)
 {
@@ -3913,7 +3908,7 @@ dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
            | (OVS_FORCE uint16_t) (vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI));
 }
 
-static struct dp_netdev_flow *
+struct dp_netdev_flow *
 dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
                               odp_port_t in_port, ovs_be16 dl_type,
                               uint8_t nw_frag, ovs_be16 vlan_tci)
@@ -3934,7 +3929,7 @@ dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
     return found ? flow : NULL;
 }
 
-static bool
+bool
 dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *pmd,
                                odp_port_t in_port)
 {

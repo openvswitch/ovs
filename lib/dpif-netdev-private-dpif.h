@@ -61,6 +61,18 @@ dp_netdev_input_func dp_netdev_impl_get_default(void);
 /* Overrides the default DPIF with the user set DPIF. */
 int32_t dp_netdev_impl_set_default_by_name(const char *name);
 
+bool
+dp_netdev_simple_match_enabled(const struct dp_netdev_pmd_thread *pmd,
+                               odp_port_t in_port);
+
+uint64_t
+dp_netdev_simple_match_mark(odp_port_t in_port, ovs_be16 dl_type,
+                            uint8_t nw_frag, ovs_be16 vlan_tci);
+struct dp_netdev_flow *
+dp_netdev_simple_match_lookup(const struct dp_netdev_pmd_thread *pmd,
+                              odp_port_t in_port, ovs_be16 dl_type,
+                              uint8_t nw_frag, ovs_be16 vlan_tci);
+
 /* Available DPIF implementations below. */
 int32_t
 dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
