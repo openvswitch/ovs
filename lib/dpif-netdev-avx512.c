@@ -82,7 +82,7 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
      */
 
     /* Stores the computed output: a rule pointer for each packet. */
-    /* Used initially for HWOL/EMC/SMC. */
+    /* Used initially for HWOL/EMC/SMC and Simple Match. */
     struct dpcls_rule *rules[NETDEV_MAX_BURST];
     /* Used for DPCLS. */
     struct dpcls_rule *dpcls_rules[NETDEV_MAX_BURST];
@@ -106,12 +106,15 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         pkt_metadata_prefetch_init(&packet->md);
     }
 
+    const bool simple_match_enabled = dp_netdev_simple_match_enabled(pmd,
+                                                                     in_port);
     /* Check if EMC or SMC are enabled. */
     struct dfc_cache *cache = &pmd->flow_cache;
     const uint32_t hwol_enabled = netdev_is_flow_api_enabled();
     const uint32_t emc_enabled = pmd->ctx.emc_insert_min != 0;
     const uint32_t smc_enabled = pmd->ctx.smc_enable_db;
 
+    uint32_t n_simple_hit = 0;
     uint32_t emc_hits = 0;
     uint32_t smc_hits = 0;
     uint32_t phwol_hits = 0;
@@ -137,6 +140,48 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
      * }
      */
 
+    uint32_t lookup_pkts_bitmask = (UINT64_C(1) << batch_size) - 1;
+
+    if (simple_match_enabled) {
+        struct dp_packet *packet;
+
+        DP_PACKET_BATCH_FOR_EACH (i, packet, packets) {
+            struct dp_netdev_flow *f = NULL;
+            ovs_be16 vlan_tci = 0;
+            ovs_be16 dl_type = 0;
+            uint8_t nw_frag = 0;
+
+            if (i + prefetch_ahead < batch_size) {
+                struct dp_packet **dp_packets = packets->packets;
+
+                /* Prefetch next packet data and metadata. */
+                OVS_PREFETCH(dp_packet_data(dp_packets[i + prefetch_ahead]));
+                pkt_metadata_prefetch_init(
+                    &dp_packets[i + prefetch_ahead]->md);
+            }
+
+            pkt_metadata_init(&packet->md, in_port);
+
+            pkt_meta[i].tcp_flags = parse_tcp_flags(packet, &dl_type, &nw_frag,
+                                                    &vlan_tci);
+
+            f = dp_netdev_simple_match_lookup(pmd, in_port, dl_type,
+                                              nw_frag, vlan_tci);
+            if (!f) {
+                /* Any miss in Simple Match means an upcall is needed. Fall
+                 * back to the scalar DPIF to do this. */
+                return -1;
+            }
+
+            pkt_meta[i].bytes = dp_packet_size(packet);
+            rules[i] = &f->cr;
+            n_simple_hit++;
+            hwol_emc_smc_hitmask |= (UINT32_C(1) << i);
+        }
+
+        goto action_stage;
+    }
+
     /* Do a batch minfilow extract into keys. */
     uint32_t mf_mask = 0;
     miniflow_extract_func mfex_func;
@@ -145,7 +190,6 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
         mf_mask = mfex_func(packets, keys, batch_size, in_port, pmd);
     }
 
-    uint32_t lookup_pkts_bitmask = (UINT64_C(1) << batch_size) - 1;
     uint32_t iter = lookup_pkts_bitmask;
     while (iter) {
         uint32_t i = raw_ctz(iter);
@@ -299,7 +343,6 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
 
     /* At this point we don't return error anymore, so commit stats here. */
     uint32_t mfex_hit_cnt = __builtin_popcountll(mf_mask);
-    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_RECV, batch_size);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_PHWOL_HIT, phwol_hits);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MFEX_OPT_HIT,
                             mfex_hit_cnt);
@@ -309,6 +352,10 @@ dp_netdev_input_outer_avx512(struct dp_netdev_pmd_thread *pmd,
                             dpcls_key_idx);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_LOOKUP,
                             dpcls_key_idx);
+action_stage:
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_RECV, batch_size);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SIMPLE_HIT,
+                            n_simple_hit);
 
     /* Initialize the "Action Batch" for each flow handled below. */
     struct dp_packet_batch action_batch;
