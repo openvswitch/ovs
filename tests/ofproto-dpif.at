@@ -591,6 +591,135 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 
+AT_SETUP([bond - discard duplicated frames])
+dnl With an active/active non-lacp bond, the default behaviour
+dnl is to discard multicast frames on the secondary interface.
+OVS_VSWITCHD_START([dnl
+        add-bond br0 bond0 p1 p2 -- dnl
+        set Port bond0 bond-mode=balance-slb other-config:bond-rebalance-interval=0 -- dnl
+        set Interface p1 type=dummy ofport_request=1 -- dnl
+        set Interface p2 type=dummy ofport_request=2 ])
+
+AT_CHECK([ovs-appctl bond/set-active-member bond0 p1], [0], [ignore])
+AT_CHECK([ovs-ofctl add-flow br0 actions=NORMAL])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show bond0 | STRIP_ACTIVE_MEMBER_MAC], [dnl
+---- bond0 ----
+bond_mode: balance-slb
+bond may use recirculation: no, Recirc-ID : -1
+bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
+all members active: false
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: <none>
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=1,dl_dst=ff:ff:ff:ff:ff:ff], [0], [dnl
+Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> no learned MAC for destination, flooding
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=1,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+Datapath actions: 100
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=2,dl_dst=ff:ff:ff:ff:ff:ff], [0], [dnl
+Flow: in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> bonding refused admissibility, dropping
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=2,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+Datapath actions: drop
+])
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
+AT_SETUP([bond - allow duplicated frames])
+dnl Receiving of duplicated multicast frames should be allowed with 'all_members_active'.
+OVS_VSWITCHD_START([dnl
+        add-bond br0 bond0 p1 p2 -- dnl
+        set Port bond0 bond-mode=balance-slb other-config:bond-rebalance-interval=0 dnl
+                        other_config:all-members-active=true -- dnl
+        set Interface p1 type=dummy ofport_request=1 -- dnl
+        set Interface p2 type=dummy ofport_request=2])
+
+AT_CHECK([ovs-appctl bond/set-active-member bond0 p1], [0], [ignore])
+AT_CHECK([ovs-ofctl add-flow br0 actions=NORMAL])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl bond/show bond0 | STRIP_ACTIVE_MEMBER_MAC], [dnl
+---- bond0 ----
+bond_mode: balance-slb
+bond may use recirculation: no, Recirc-ID : -1
+bond-hash-basis: 0
+lb_output action: disabled, bond-id: -1
+all members active: true
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: off
+lacp_fallback_ab: false
+active-backup primary: <none>
+<active member mac del>
+
+member p1: enabled
+  active member
+  may_enable: true
+
+member p2: enabled
+  may_enable: true
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=1,dl_dst=ff:ff:ff:ff:ff:ff], [0], [dnl
+Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> no learned MAC for destination, flooding
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=1,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+Datapath actions: 100
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=2,dl_dst=ff:ff:ff:ff:ff:ff], [0], [dnl
+Flow: in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> no learned MAC for destination, flooding
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=2,dl_src=00:00:00:00:00:00,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x0000
+Datapath actions: 100
+])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - resubmit])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11 12 13 14 15 16 17 18 19 20 21

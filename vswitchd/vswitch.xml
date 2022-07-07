@@ -2122,6 +2122,20 @@
         <code>true</code>).
       </column>
 
+      <column name="other_config" key="all-members-active"
+              type='{"type": "boolean"}'>
+        <p>
+          Enable/Disable delivery of broadcast/multicast packets on secondary
+          interface of a balance-slb bond.  Relevant only when
+          <ref column="lacp"/> is <code>off</code>.
+        </p>
+        <p>
+          This parameter is identical to <code>all_slaves_active</code> for
+          Linux kernel bonds.  Disabled by default as it is not a desirable
+          configuration for most users.
+        </p>
+      </column>
+
       <group title="Link Failure Detection">
         <p>
           An important part of link bonding is detecting that links are down so

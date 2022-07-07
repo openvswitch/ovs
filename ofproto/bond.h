@@ -62,6 +62,9 @@ struct bond_settings {
                                    ovs run. */
     bool use_lb_output_action;  /* Use lb_output action. Only applicable for
                                    bond mode BALANCE TCP. */
+    bool all_members_active;    /* Accept multicast packets on secondary
+                                   interface. Only applicable for non-LACP
+                                   BALANCE SLB bond mode. */
 };
 
 /* Program startup. */

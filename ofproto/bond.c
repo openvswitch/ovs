@@ -125,6 +125,8 @@ struct bond {
     uint32_t basis;             /* Basis for flow hash function. */
     bool use_lb_output_action;  /* Use lb_output action to avoid recirculation.
                                    Applicable only for Balance TCP mode. */
+    bool all_members_active;    /* Accept multicast packets on secondary
+                                   members of a non-LACP Balance SLB bond. */
     char *primary;              /* Name of the primary member. */
 
     /* SLB specific bonding info. */
@@ -479,6 +481,9 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         bond->primary = nullable_xstrdup(s->primary);
         revalidate = true;
     }
+
+    bond->all_members_active = (bond->balance == BM_SLB)
+                               ? s->all_members_active : false;
 
     if (bond->balance != BM_AB) {
         if (!bond->recirc_id) {
@@ -893,7 +898,7 @@ bond_check_admissibility(struct bond *bond, const void *member_,
 
     /* Drop all multicast packets on inactive members. */
     if (eth_addr_is_multicast(eth_dst)) {
-        if (bond->active_member != member) {
+        if (bond->active_member != member && !bond->all_members_active) {
             goto out;
         }
     }
@@ -1494,6 +1499,11 @@ bond_print_details(struct ds *ds, const struct bond *bond)
     ds_put_format(ds, "lb_output action: %s, bond-id: %d\n",
                   use_lb_output_action ? "enabled" : "disabled",
                   use_lb_output_action ? recirc_id : -1);
+
+    if (bond->balance == BM_SLB) {
+        ds_put_format(ds, "all members active: %s\n",
+                      bond->all_members_active ? "true" : "false");
+    }
 
     ds_put_format(ds, "updelay: %d ms\n", bond->updelay);
     ds_put_format(ds, "downdelay: %d ms\n", bond->downdelay);

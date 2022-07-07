@@ -4618,6 +4618,9 @@ port_configure_bond(struct port *port, struct bond_settings *s)
     s->use_lb_output_action = (s->balance == BM_TCP)
                               && smap_get_bool(&port->cfg->other_config,
                                                "lb-output-action", false);
+    /* all_members_active is disabled by default. */
+    s->all_members_active = smap_get_bool(&port->cfg->other_config,
+                                          "all-members-active", false);
 }
 
 /* Returns true if 'port' is synthetic, that is, if we constructed it locally
