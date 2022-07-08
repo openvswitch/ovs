@@ -192,6 +192,40 @@ NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping6 between two ports IPv6 later fragments])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_MIN_KERNEL(5, 19)
+
+AT_CHECK([ovs-ofctl add-flow br0 "priority=1,actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=2,tcp6,actions=drop"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns0], [ovs-appctl dpctl/dump-flows -m --names > stdout.txt])
+NS_CHECK_EXEC([at_ns0], [grep ipv6 stdout.txt | grep frag=later | grep -q proto=44], [0], [])
+NS_CHECK_EXEC([at_ns0], [grep ipv6 stdout.txt | grep frag=later | grep -v -q proto=44], [1], [])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping over bond])
 OVS_TRAFFIC_VSWITCHD_START()
 
