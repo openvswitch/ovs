@@ -168,3 +168,101 @@ matchall
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - check interface meter offloading -  offloads disabled])
+AT_KEYWORDS([dp-meter])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "actions=normal"])
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+10 packets transmitted, 10 received, 0% packet loss, time 0ms
+])
+
+NETNS_DAEMONIZE([at_ns1], [nc -u -l 5678 > /dev/null ], [nc0.pid])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=10,in_port=ovs-p0,udp actions=meter:1,normal"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=1 actions=normal"])
+
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0, used:never, actions:outputmeter(0),3
+])
+
+sleep 1
+
+for i in `seq 10`; do
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:10, bytes:470, used:0.001s, actions:outputmeter(0),3
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | sed -e 's/duration:[[0-9]].[[0-9]]*s/duration:0.001s/'], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:1 packet_in_count:11 byte_in_count:517 duration:0.001s bands:
+0: packet_count:9 byte_count:423
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([offloads - check interface meter offloading -  offloads enabled])
+AT_KEYWORDS([offload-meter])
+AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02")
+
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "actions=normal"])
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+10 packets transmitted, 10 received, 0% packet loss, time 0ms
+])
+
+NETNS_DAEMONIZE([at_ns1], [nc -u -l 5678 > /dev/null ], [nc0.pid])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=10,in_port=ovs-p0,udp actions=meter:1,normal"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=1 actions=normal"])
+
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0, used:0.001s, actions:outputmeter(0),3
+])
+
+sleep 1
+
+for i in `seq 10`; do
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
+in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:10, bytes:330, used:0.001s, actions:outputmeter(0),3
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | sed -e 's/duration:[[0-9]].[[0-9]]*s/duration:0.001s/'], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:1 packet_in_count:11 byte_in_count:377 duration:0.001s bands:
+0: packet_count:9 byte_count:0
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
