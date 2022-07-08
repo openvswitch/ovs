@@ -1340,6 +1340,54 @@ nl_parse_act_gact(struct nlattr *options, struct tc_flower *flower)
     return 0;
 }
 
+static const struct nl_policy police_policy[] = {
+    [TCA_POLICE_TBF] = { .type = NL_A_UNSPEC,
+                         .min_len = sizeof(struct tc_police),
+                         .optional = false, },
+    [TCA_POLICE_RATE] = { .type = NL_A_UNSPEC,
+                          .min_len = 1024,
+                          .optional = true, },
+    [TCA_POLICE_PEAKRATE] = { .type = NL_A_UNSPEC,
+                              .min_len = 1024,
+                              .optional = true, },
+    [TCA_POLICE_AVRATE] = { .type = NL_A_U32,
+                            .optional = true, },
+    [TCA_POLICE_RESULT] = { .type = NL_A_U32,
+                            .optional = true, },
+    [TCA_POLICE_TM] = { .type = NL_A_UNSPEC,
+                        .min_len = sizeof(struct tcf_t),
+                        .optional = true, },
+};
+
+static int
+nl_parse_act_police(const struct nlattr *options, struct tc_flower *flower)
+{
+    struct nlattr *police_attrs[ARRAY_SIZE(police_policy)] = {};
+    const struct tc_police *police;
+    struct tc_action *action;
+    struct nlattr *police_tm;
+    const struct tcf_t *tm;
+
+    if (!nl_parse_nested(options, police_policy, police_attrs,
+                         ARRAY_SIZE(police_policy))) {
+        VLOG_ERR_RL(&error_rl, "Failed to parse police action options");
+        return EPROTO;
+    }
+
+    police = nl_attr_get_unspec(police_attrs[TCA_POLICE_TBF], sizeof *police);
+    action = &flower->actions[flower->action_count++];
+    action->type = TC_ACT_POLICE;
+    action->police.index = police->index;
+
+    police_tm = police_attrs[TCA_POLICE_TM];
+    if (police_tm) {
+        tm = nl_attr_get_unspec(police_tm, sizeof *tm);
+        nl_parse_tcf(tm, flower);
+    }
+
+    return 0;
+}
+
 static const struct nl_policy mirred_policy[] = {
     [TCA_MIRRED_PARMS] = { .type = NL_A_UNSPEC,
                            .min_len = sizeof(struct tc_mirred),
@@ -1760,6 +1808,8 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
         /* Added for TC rule only (not in OvS rule) so ignore. */
     } else if (!strcmp(act_kind, "ct")) {
         nl_parse_act_ct(act_options, flower);
+    } else if (!strcmp(act_kind, "police")) {
+        nl_parse_act_police(act_options, flower);
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         err = EINVAL;
@@ -2774,6 +2824,10 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 nl_msg_put_act_ct(request, action);
                 nl_msg_put_act_cookie(request, &flower->act_cookie);
                 nl_msg_end_nested(request, act_offset);
+            }
+            break;
+            case TC_ACT_POLICE: {
+                /* Not supported yet */
             }
             break;
             }

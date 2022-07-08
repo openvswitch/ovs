@@ -174,6 +174,7 @@ enum tc_action_type {
     TC_ACT_MPLS_SET,
     TC_ACT_GOTO,
     TC_ACT_CT,
+    TC_ACT_POLICE,
 };
 
 enum nat_type {
@@ -261,6 +262,10 @@ struct tc_action {
             struct tc_flower_key key;
             struct tc_flower_key mask;
         } rewrite;
+
+        struct {
+            uint32_t index;
+        } police;
      };
 
      enum tc_action_type type;

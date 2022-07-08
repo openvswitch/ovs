@@ -1017,6 +1017,10 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 nl_msg_put_u32(buf, OVS_ACTION_ATTR_RECIRC, action->chain);
             }
             break;
+            case TC_ACT_POLICE: {
+                /* Not supported yet */
+            }
+            break;
             }
         }
     }
