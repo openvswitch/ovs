@@ -181,6 +181,10 @@ following to obtain better warnings:
   come from the "hacking" flake8 plugin. If it's not installed, the warnings
   just won't occur until it's run on a system with "hacking" installed.
 
+- the python packages listed in "python/test_requirements.txt" (compatible
+  with pip). If they are installed, the pytest-based Python unit tests will
+  be run.
+
 You may find the ovs-dev script found in ``utilities/ovs-dev.py`` useful.
 
 .. _general-install-reqs:

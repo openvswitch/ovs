@@ -42,6 +42,9 @@ if [ "$M32" ]; then
     sudo apt-get install -y $pkgs
 fi
 
+# Install python test dependencies
+pip install -r python/test_requirements.txt
+
 # IPv6 is supported by kernel but disabled in TravisCI images:
 #   https://github.com/travis-ci/travis-ci/issues/8891
 # Enable it to avoid skipping of IPv6 related tests.

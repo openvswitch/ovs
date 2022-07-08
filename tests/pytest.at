@@ -1,0 +1,8 @@
+AT_BANNER([Python unit tests])
+
+# Run pytest unit tests.
+AT_SETUP([Pytest unit tests - Python3])
+AT_KEYWORDS([python])
+AT_SKIP_IF([test "$HAVE_PYTEST" = "no"])
+AT_CHECK([$PYTHON3 -m pytest $top_srcdir/python/ovs],[0], [ignore], [ignore])
+AT_CLEANUP()

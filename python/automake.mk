@@ -53,6 +53,9 @@ ovs_pyfiles = \
 	python/ovs/vlog.py \
 	python/ovs/winutils.py
 
+ovs_pytests = \
+	python/ovs/tests/test_kv.py
+
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
@@ -65,12 +68,14 @@ EXTRA_DIST += \
 EXTRA_DIST += \
 	python/ovs/compat/sortedcontainers/LICENSE \
 	python/README.rst \
-	python/setup.py
+	python/setup.py \
+	python/test_requirements.txt
 
 # C extension support.
 EXTRA_DIST += python/ovs/_json.c
 
-PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
+PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles) $(ovs_pytests)
+
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 

@@ -238,3 +238,23 @@ export ASAN_OPTIONS
 # for the build.
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=true:log_path=ubsan:$UBSAN_OPTIONS
 export UBSAN_OPTIONS
+
+# Check whether Python test requirements are available.
+REQUIREMENT_PATH=$abs_top_srcdir/python/test_requirements.txt $PYTHON3 -c '
+import os
+import pathlib
+import pkg_resources
+import sys
+
+with pathlib.Path(os.path.join(os.getenv("REQUIREMENT_PATH"))).open() as reqs:
+    for req in pkg_resources.parse_requirements(reqs):
+        try:
+            pkg_resources.require(str(req))
+        except pkg_resources.DistributionNotFound:
+            sys.exit(2)
+'
+case $? in
+    0) HAVE_PYTEST=yes ;;
+    2) HAVE_PYTEST=no ;;
+    *) echo "$0: unexpected error probing Python unit test requirements" >&2 ;;
+esac
