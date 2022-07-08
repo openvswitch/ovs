@@ -29,6 +29,7 @@ ovs_pyfiles = \
 	python/ovs/flow/__init__.py \
 	python/ovs/flow/decoders.py \
 	python/ovs/flow/kv.py \
+	python/ovs/flow/list.py \
 	python/ovs/json.py \
 	python/ovs/jsonrpc.py \
 	python/ovs/ovsuuid.py \
