@@ -70,6 +70,11 @@ struct meter_police_mapping_data {
     uint32_t police_idx;
 };
 
+struct policer_node {
+    struct hmap_node node;
+    uint32_t police_idx;
+};
+
 #define METER_POLICE_IDS_BASE 0x10000000
 #define METER_POLICE_IDS_MAX  0x1FFFFFFF
 /* Protects below meter police ids pool. */
@@ -2256,6 +2261,84 @@ probe_tc_block_support(int ifindex)
 }
 
 static int
+tc_get_policer_action_ids(struct hmap *map)
+{
+    uint32_t police_idx[TCA_ACT_MAX_PRIO];
+    struct policer_node *policer_node;
+    struct netdev_flow_dump *dump;
+    struct ofpbuf rbuffer, reply;
+    size_t hash;
+    int i, err;
+
+    dump = xzalloc(sizeof *dump);
+    dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
+
+    ofpbuf_init(&rbuffer, NL_DUMP_BUFSIZE);
+    tc_dump_tc_action_start("police", dump->nl_dump);
+
+    while (nl_dump_next(dump->nl_dump, &reply, &rbuffer)) {
+        memset(police_idx, 0, sizeof police_idx);
+        if (parse_netlink_to_tc_policer(&reply, police_idx)) {
+            continue;
+        }
+
+        for (i = 0; i < TCA_ACT_MAX_PRIO; i++) {
+            if (!police_idx[i]) {
+                break;
+            }
+            policer_node = xzalloc(sizeof *policer_node);
+            policer_node->police_idx = police_idx[i];
+            hash = hash_int(police_idx[i], 0);
+            hmap_insert(map, &policer_node->node, hash);
+        }
+    }
+
+    err = nl_dump_done(dump->nl_dump);
+    ofpbuf_uninit(&rbuffer);
+    free(dump->nl_dump);
+    free(dump);
+
+    return err;
+}
+
+static void
+tc_cleanup_policer_actions(struct id_pool *police_ids,
+                          uint32_t id_min, uint32_t id_max)
+{
+    struct policer_node *policer_node;
+    unsigned int unusable_ids = 0;
+    uint32_t police_idx;
+    struct hmap map;
+    int err;
+
+    hmap_init(&map);
+    tc_get_policer_action_ids(&map);
+
+    HMAP_FOR_EACH_POP (policer_node, node, &map) {
+        police_idx = policer_node->police_idx;
+        if (police_idx >= id_min && police_idx <= id_max) {
+            err = tc_del_policer_action(police_idx, NULL);
+            if (err && err != ENOENT) {
+                /* Don't use this police any more. */
+                id_pool_add(police_ids, police_idx);
+
+                unusable_ids++;
+                VLOG_DBG("Policer index %u could not be freed for OVS, "
+                         "error %d", police_idx, err);
+            }
+        }
+        free(policer_node);
+    }
+
+    if (unusable_ids) {
+        VLOG_WARN("Full policer index pool allocation failed, "
+                  "%u indexes are unavailable", unusable_ids);
+    }
+
+    hmap_destroy(&map);
+}
+
+static int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
@@ -2308,6 +2391,8 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         ovs_mutex_lock(&meter_police_ids_mutex);
         meter_police_ids = id_pool_create(METER_POLICE_IDS_BASE,
                             METER_POLICE_IDS_MAX - METER_POLICE_IDS_BASE + 1);
+        tc_cleanup_policer_actions(meter_police_ids, METER_POLICE_IDS_BASE,
+                                   METER_POLICE_IDS_MAX);
         ovs_mutex_unlock(&meter_police_ids_mutex);
 
         ovsthread_once_done(&once);

@@ -2091,6 +2091,67 @@ tc_dump_tc_chain_start(struct tcf_id *id, struct nl_dump *dump)
 }
 
 int
+tc_dump_tc_action_start(char *name, struct nl_dump *dump)
+{
+    size_t offset, root_offset;
+    struct ofpbuf request;
+
+    tc_make_action_request(RTM_GETACTION, NLM_F_DUMP, &request);
+    root_offset = nl_msg_start_nested(&request, TCA_ACT_TAB);
+    offset = nl_msg_start_nested(&request, 1);
+    nl_msg_put_string(&request, TCA_ACT_KIND, name);
+    nl_msg_end_nested(&request, offset);
+    nl_msg_end_nested(&request, root_offset);
+
+    nl_dump_start(dump, NETLINK_ROUTE, &request);
+    ofpbuf_uninit(&request);
+
+    return 0;
+}
+
+int
+parse_netlink_to_tc_policer(struct ofpbuf *reply, uint32_t police_idx[])
+{
+    static struct nl_policy actions_orders_policy[TCA_ACT_MAX_PRIO] = {};
+    struct nlattr *actions_orders[ARRAY_SIZE(actions_orders_policy)];
+    const int max_size = ARRAY_SIZE(actions_orders_policy);
+    const struct nlattr *actions;
+    struct tc_flower flower;
+    struct tcamsg *tca;
+    int i, cnt = 0;
+    int err;
+
+    for (i = 0; i < max_size; i++) {
+        actions_orders_policy[i].type = NL_A_NESTED;
+        actions_orders_policy[i].optional = true;
+    }
+
+    tca = ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tca);
+    actions = nl_attr_find(reply, NLMSG_HDRLEN + sizeof *tca, TCA_ACT_TAB);
+    if (!actions || !nl_parse_nested(actions, actions_orders_policy,
+                                     actions_orders, max_size)) {
+        VLOG_ERR_RL(&error_rl,
+                    "Failed to parse actions in netlink to policer");
+        return EPROTO;
+    }
+
+    for (i = 0; i < TCA_ACT_MAX_PRIO; i++) {
+        if (actions_orders[i]) {
+            memset(&flower, 0, sizeof(struct tc_flower));
+            err = nl_parse_single_action(actions_orders[i], &flower, false);
+            if (err || flower.actions[0].type != TC_ACT_POLICE) {
+                continue;
+            }
+            if (flower.actions[0].police.index) {
+                police_idx[cnt++] = flower.actions[0].police.index;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int
 tc_del_filter(struct tcf_id *id)
 {
     struct ofpbuf request;
