@@ -81,7 +81,7 @@ setup_args = dict(
     author='Open vSwitch',
     author_email='dev@openvswitch.org',
     packages=['ovs', 'ovs.compat', 'ovs.compat.sortedcontainers',
-              'ovs.db', 'ovs.unixctl'],
+              'ovs.db', 'ovs.unixctl', 'ovs.flow'],
     keywords=['openvswitch', 'ovs', 'OVSDB'],
     license='Apache 2.0',
     classifiers=[

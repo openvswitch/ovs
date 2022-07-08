@@ -16,7 +16,6 @@ ovs_pyfiles = \
 	python/ovs/compat/sortedcontainers/sorteddict.py \
 	python/ovs/compat/sortedcontainers/sortedset.py \
 	python/ovs/daemon.py \
-	python/ovs/fcntl_win.py \
 	python/ovs/db/__init__.py \
 	python/ovs/db/custom_index.py \
 	python/ovs/db/data.py \
@@ -26,6 +25,10 @@ ovs_pyfiles = \
 	python/ovs/db/schema.py \
 	python/ovs/db/types.py \
 	python/ovs/fatal_signal.py \
+	python/ovs/fcntl_win.py \
+	python/ovs/flow/__init__.py \
+	python/ovs/flow/decoders.py \
+	python/ovs/flow/kv.py \
 	python/ovs/json.py \
 	python/ovs/jsonrpc.py \
 	python/ovs/ovsuuid.py \
@@ -42,6 +45,7 @@ ovs_pyfiles = \
 	python/ovs/version.py \
 	python/ovs/vlog.py \
 	python/ovs/winutils.py
+
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
