@@ -57,6 +57,7 @@ ovs_pytests = \
 	python/ovs/tests/test_decoders.py \
 	python/ovs/tests/test_kv.py \
 	python/ovs/tests/test_list.py \
+	python/ovs/tests/test_odp.py \
 	python/ovs/tests/test_ofp.py
 
 # These python files are used at build time but not runtime,
