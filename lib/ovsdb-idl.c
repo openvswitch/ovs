@@ -1245,7 +1245,7 @@ ovsdb_idl_row_get_seqno(const struct ovsdb_idl_row *row,
 /* Turns on OVSDB_IDL_TRACK for 'column' in 'idl', ensuring that
  * all rows whose 'column' is modified are traced. Similarly, insert
  * or delete of rows having 'column' are tracked. Clients are able
- * to retrive the tracked rows with the ovsdb_idl_track_get_*()
+ * to retrieve the tracked rows with the ovsdb_idl_track_get_*()
  * functions.
  *
  * This function should be called between ovsdb_idl_create() and

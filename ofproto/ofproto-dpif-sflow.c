@@ -67,7 +67,7 @@ enum dpif_sflow_tunnel_type {
 struct dpif_sflow_port {
     struct hmap_node hmap_node; /* In struct dpif_sflow's "ports" hmap. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
-    struct ofport *ofport;      /* To retrive port stats. */
+    struct ofport *ofport;      /* To retrieve port stats. */
     odp_port_t odp_port;
     enum dpif_sflow_tunnel_type tunnel_type;
 };

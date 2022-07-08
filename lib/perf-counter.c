@@ -124,7 +124,7 @@ perf_counters_to_ds(struct ds *ds)
 
     err_str = NULL;
     if (fd__ == -1) {
-        err_str = "performance counter is not supported on this platfrom";
+        err_str = "performance counter is not supported on this platform";
     } else if (!shash_count(&perf_counters)) {
         err_str = "performance counter has never been hit";
     }
