@@ -21,6 +21,7 @@
 
 #include "dpif.h"
 #include "hash.h"
+#include "id-pool.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofpbuf.h"
@@ -44,6 +45,7 @@
 VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
+static struct vlog_rate_limit warn_rl = VLOG_RATE_LIMIT_INIT(10, 2);
 
 static struct hmap ufid_to_tc = HMAP_INITIALIZER(&ufid_to_tc);
 static struct hmap tc_to_ufid = HMAP_INITIALIZER(&tc_to_ufid);
@@ -61,6 +63,22 @@ struct chain_node {
     struct hmap_node node;
     uint32_t chain;
 };
+
+struct meter_police_mapping_data {
+    struct hmap_node meter_id_node;
+    uint32_t meter_id;
+    uint32_t police_idx;
+};
+
+#define METER_POLICE_IDS_BASE 0x10000000
+#define METER_POLICE_IDS_MAX  0x1FFFFFFF
+/* Protects below meter police ids pool. */
+static struct ovs_mutex meter_police_ids_mutex = OVS_MUTEX_INITIALIZER;
+static struct id_pool *meter_police_ids OVS_GUARDED_BY(meter_police_ids_mutex);
+/* Protects below meter hashmaps. */
+static struct ovs_mutex meter_mutex = OVS_MUTEX_INITIALIZER;
+static struct hmap meter_id_to_police_idx OVS_GUARDED_BY(meter_mutex)
+    = HMAP_INITIALIZER(&meter_id_to_police_idx);
 
 static bool
 is_internal_port(const char *type)
@@ -2286,6 +2304,12 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
         probe_multi_mask_per_prio(ifindex);
         probe_ct_state_support(ifindex);
+
+        ovs_mutex_lock(&meter_police_ids_mutex);
+        meter_police_ids = id_pool_create(METER_POLICE_IDS_BASE,
+                            METER_POLICE_IDS_MAX - METER_POLICE_IDS_BASE + 1);
+        ovs_mutex_unlock(&meter_police_ids_mutex);
+
         ovsthread_once_done(&once);
     }
 
@@ -2302,6 +2326,181 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     return 0;
 }
 
+static struct meter_police_mapping_data *
+meter_id_find_locked(uint32_t meter_id)
+    OVS_REQUIRES(meter_mutex)
+{
+    struct meter_police_mapping_data *data;
+    size_t hash = hash_int(meter_id, 0);
+
+    HMAP_FOR_EACH_WITH_HASH (data, meter_id_node, hash,
+                             &meter_id_to_police_idx) {
+        if (data->meter_id == meter_id) {
+            return data;
+        }
+    }
+
+    return NULL;
+}
+
+static int
+meter_id_lookup(uint32_t meter_id, uint32_t *police_idx)
+{
+    struct meter_police_mapping_data *data;
+
+    ovs_mutex_lock(&meter_mutex);
+    data = meter_id_find_locked(meter_id);
+    if (data) {
+        *police_idx = data->police_idx;
+    }
+    ovs_mutex_unlock(&meter_mutex);
+
+    return data ? 0 : ENOENT;
+}
+
+static void
+meter_id_insert(uint32_t meter_id, uint32_t police_idx)
+{
+    struct meter_police_mapping_data *data;
+
+    ovs_mutex_lock(&meter_mutex);
+    data = xzalloc(sizeof *data);
+    data->meter_id = meter_id;
+    data->police_idx = police_idx;
+    hmap_insert(&meter_id_to_police_idx, &data->meter_id_node,
+                hash_int(meter_id, 0));
+    ovs_mutex_unlock(&meter_mutex);
+}
+
+static void
+meter_id_remove(uint32_t meter_id)
+{
+    struct meter_police_mapping_data *data;
+
+    ovs_mutex_lock(&meter_mutex);
+    data = meter_id_find_locked(meter_id);
+    if (data) {
+        hmap_remove(&meter_id_to_police_idx, &data->meter_id_node);
+        free(data);
+    }
+    ovs_mutex_unlock(&meter_mutex);
+}
+
+static bool
+meter_alloc_police_index(uint32_t *police_index)
+{
+    bool ret;
+
+    ovs_mutex_lock(&meter_police_ids_mutex);
+    ret = id_pool_alloc_id(meter_police_ids, police_index);
+    ovs_mutex_unlock(&meter_police_ids_mutex);
+
+    return ret;
+}
+
+static void
+meter_free_police_index(uint32_t police_index)
+{
+    ovs_mutex_lock(&meter_police_ids_mutex);
+    id_pool_free_id(meter_police_ids, police_index);
+    ovs_mutex_unlock(&meter_police_ids_mutex);
+}
+
+static int
+meter_tc_set_policer(ofproto_meter_id meter_id,
+                     struct ofputil_meter_config *config)
+{
+    uint32_t police_index;
+    uint32_t rate, burst;
+    bool add_policer;
+    int err;
+
+    if (!config->bands || config->n_bands < 1 ||
+        config->bands[0].type != OFPMBT13_DROP) {
+        return 0;
+    }
+
+    rate = config->bands[0].rate;
+    if (config->flags & OFPMF13_BURST) {
+        burst = config->bands[0].burst_size;
+    } else {
+        burst = config->bands[0].rate;
+    }
+
+    add_policer = (meter_id_lookup(meter_id.uint32, &police_index) == ENOENT);
+    if (add_policer) {
+        if (!meter_alloc_police_index(&police_index)) {
+            VLOG_WARN_RL(&warn_rl, "No free police index for meter id %u",
+                         meter_id.uint32);
+            return ENOENT;
+        }
+    }
+
+    err = tc_add_policer_action(police_index,
+                                (config->flags & OFPMF13_KBPS) ? rate : 0,
+                                (config->flags & OFPMF13_KBPS) ? burst : 0,
+                                (config->flags & OFPMF13_PKTPS) ? rate : 0,
+                                (config->flags & OFPMF13_PKTPS) ? burst : 0,
+                                !add_policer);
+    if (err) {
+        VLOG_WARN_RL(&warn_rl,
+                     "Failed to %s police %u for meter id %u: %s",
+                     add_policer ? "add" : "modify",
+                     police_index, meter_id.uint32, ovs_strerror(err));
+    }
+
+    if (add_policer) {
+        if (!err) {
+            meter_id_insert(meter_id.uint32, police_index);
+        } else {
+            meter_free_police_index(police_index);
+        }
+    }
+
+    return err;
+}
+
+static int
+meter_tc_get_policer(ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *stats)
+{
+    uint32_t police_index;
+    int err = ENOENT;
+
+    if (!meter_id_lookup(meter_id.uint32, &police_index)) {
+        err = tc_get_policer_action(police_index, stats);
+        if (err) {
+            VLOG_WARN_RL(&warn_rl,
+                         "Failed to get police %u stats for meter %u: %s",
+                         police_index, meter_id.uint32, ovs_strerror(err));
+        }
+    }
+
+    return err;
+}
+
+static int
+meter_tc_del_policer(ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *stats)
+{
+    uint32_t police_index;
+    int err = ENOENT;
+
+    if (!meter_id_lookup(meter_id.uint32, &police_index)) {
+        err = tc_del_policer_action(police_index, stats);
+        if (err && err != ENOENT) {
+            VLOG_ERR_RL(&error_rl,
+                        "Failed to del police %u for meter %u: %s",
+                        police_index, meter_id.uint32, ovs_strerror(err));
+        } else {
+            meter_free_police_index(police_index);
+        }
+        meter_id_remove(meter_id.uint32);
+    }
+
+    return err;
+}
+
 const struct netdev_flow_api netdev_offload_tc = {
    .type = "linux_tc",
    .flow_flush = netdev_tc_flow_flush,
@@ -2312,5 +2511,8 @@ const struct netdev_flow_api netdev_offload_tc = {
    .flow_get = netdev_tc_flow_get,
    .flow_del = netdev_tc_flow_del,
    .flow_get_n_flows = netdev_tc_get_n_flows,
+   .meter_set = meter_tc_set_policer,
+   .meter_get = meter_tc_get_policer,
+   .meter_del = meter_tc_del_policer,
    .init_flow_api = netdev_tc_init_flow_api,
 };
