@@ -6,6 +6,7 @@ object.
 """
 
 import netaddr
+import re
 
 
 class Decoder(object):
@@ -414,3 +415,110 @@ class IPMask(Decoder):
 
     def to_json(self):
         return str(self)
+
+
+def decode_free_output(value):
+    """The value of the output action can be found free, i.e: without the
+    'output' keyword. This decoder decodes its value when found this way."""
+    try:
+        return "output", {"port": int(value)}
+    except ValueError:
+        return "output", {"port": value.strip('"')}
+
+
+ipv4 = r"(?:\d{1,3}.?){3}\d{1,3}"
+ipv4_capture = r"({ipv4})".format(ipv4=ipv4)
+ipv6 = r"[\w:\.]+"
+ipv6_capture = r"(?:\[*)?({ipv6})(?:\]*)?".format(ipv6=ipv6)
+port_range = r":(\d+)(?:-(\d+))?"
+ip_range_regexp = r"{ip_cap}(?:-{ip_cap})?(?:{port_range})?"
+ipv4_port_regex = re.compile(
+    ip_range_regexp.format(ip_cap=ipv4_capture, port_range=port_range)
+)
+ipv6_port_regex = re.compile(
+    ip_range_regexp.format(ip_cap=ipv6_capture, port_range=port_range)
+)
+
+
+def decode_ip_port_range(value):
+    """
+    Decodes an IP and port range:
+        {ip_start}-{ip-end}:{port_start}-{port_end}
+
+    IPv6 addresses are surrounded by "[" and "]" if port ranges are also
+    present
+
+    Returns the following dictionary:
+        {
+            "addrs": {
+                "start": {ip_start}
+                "end": {ip_end}
+            }
+            "ports": {
+                "start": {port_start},
+                "end": {port_end}
+        }
+        (the "ports" key might be omitted)
+    """
+    if value.count(":") > 1:
+        match = ipv6_port_regex.match(value)
+    else:
+        match = ipv4_port_regex.match(value)
+
+    ip_start = match.group(1)
+    ip_end = match.group(2)
+    port_start = match.group(3)
+    port_end = match.group(4)
+
+    result = {
+        "addrs": {
+            "start": netaddr.IPAddress(ip_start),
+            "end": netaddr.IPAddress(ip_end or ip_start),
+        }
+    }
+    if port_start:
+        result["ports"] = {
+            "start": int(port_start),
+            "end": int(port_end or port_start),
+        }
+
+    return result
+
+
+def decode_nat(value):
+    """Decodes the 'nat' keyword of the ct action.
+
+    The format is:
+        nat
+            Flag format.
+        nat(type=addrs[:ports][,flag]...)
+            Full format where the address-port range has the same format as
+            the one described in decode_ip_port_range.
+
+    Examples:
+        nat(src=0.0.0.0)
+        nat(src=0.0.0.0,persistent)
+        nat(dst=192.168.1.0-192.168.1.253:4000-5000)
+        nat(dst=192.168.1.0-192.168.1.253,hash)
+        nat(dst=[fe80::f150]-[fe80::f15f]:255-300)
+    """
+    if not value:
+        return True  # If flag format, the value is True.
+
+    result = dict()
+    type_parts = value.split("=")
+    result["type"] = type_parts[0]
+
+    if len(type_parts) > 1:
+        value_parts = type_parts[1].split(",")
+        if len(type_parts) != 2:
+            raise ValueError("Malformed nat action: %s" % value)
+
+        ip_port_range = decode_ip_port_range(value_parts[0])
+
+        result = {"type": type_parts[0], **ip_port_range}
+
+        for flag in value_parts[1:]:
+            result[flag] = True
+
+    return result

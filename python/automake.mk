@@ -31,6 +31,8 @@ ovs_pyfiles = \
 	python/ovs/flow/flow.py \
 	python/ovs/flow/kv.py \
 	python/ovs/flow/list.py \
+	python/ovs/flow/ofp.py \
+	python/ovs/flow/ofp_act.py \
 	python/ovs/flow/ofp_fields.py \
 	python/ovs/json.py \
 	python/ovs/jsonrpc.py \
