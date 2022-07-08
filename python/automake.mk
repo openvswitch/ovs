@@ -51,6 +51,7 @@ ovs_pyfiles = \
 # so they are not installed.
 EXTRA_DIST += \
 	python/build/__init__.py \
+	python/build/extract_ofp_fields.py \
 	python/build/nroff.py \
 	python/build/soutil.py
 
@@ -69,10 +70,12 @@ PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 FLAKE8_PYFILES += \
 	$(filter-out python/ovs/compat/% python/ovs/dirs.py,$(PYFILES)) \
-	python/setup.py \
 	python/build/__init__.py \
+	python/build/extract_ofp_fields.py \
 	python/build/nroff.py \
-	python/ovs/dirs.py.template
+	python/build/soutil.py \
+	python/ovs/dirs.py.template \
+	python/setup.py
 
 nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
 ovs-install-data-local:
