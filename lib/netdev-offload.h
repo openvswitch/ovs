@@ -22,6 +22,7 @@
 #include "openvswitch/types.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
+#include "openvswitch/ofp-meter.h"
 #include "packets.h"
 #include "flow.h"
 
@@ -157,6 +158,10 @@ int netdev_ports_flow_get(const char *dpif_type, struct match *match,
                           struct ofpbuf *buf);
 int netdev_ports_get_n_flows(const char *dpif_type,
                              odp_port_t port_no, uint64_t *n_flows);
+
+void meter_offload_set(ofproto_meter_id, struct ofputil_meter_config *);
+int meter_offload_get(ofproto_meter_id, struct ofputil_meter_stats *);
+int meter_offload_del(ofproto_meter_id, struct ofputil_meter_stats *);
 
 #ifdef  __cplusplus
 }

@@ -58,6 +58,7 @@
 VLOG_DEFINE_THIS_MODULE(netdev_offload);
 
 
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static bool netdev_flow_api_enabled = false;
 
 #define DEFAULT_OFFLOAD_THREAD_NB 1
@@ -193,6 +194,64 @@ netdev_assign_flow_api(struct netdev *netdev)
     VLOG_INFO("%s: No suitable flow API found.", netdev_get_name(netdev));
 
     return -1;
+}
+
+void
+meter_offload_set(ofproto_meter_id meter_id,
+                  struct ofputil_meter_config *config)
+{
+    struct netdev_registered_flow_api *rfa;
+
+    CMAP_FOR_EACH (rfa, cmap_node, &netdev_flow_apis) {
+        if (rfa->flow_api->meter_set) {
+            int ret = rfa->flow_api->meter_set(meter_id, config);
+            if (ret) {
+                VLOG_DBG_RL(&rl, "Failed setting meter %u for flow api %s, "
+                            "error %d", meter_id.uint32, rfa->flow_api->type,
+                            ret);
+           }
+        }
+    }
+    /* Offload APIs could fail, for example, because the offload is not
+     * supported. This is fine, as the offload API should take care of this. */
+}
+
+int
+meter_offload_get(ofproto_meter_id meter_id, struct ofputil_meter_stats *stats)
+{
+    struct netdev_registered_flow_api *rfa;
+
+    CMAP_FOR_EACH (rfa, cmap_node, &netdev_flow_apis) {
+        if (rfa->flow_api->meter_get) {
+            int ret = rfa->flow_api->meter_get(meter_id, stats);
+            if (ret) {
+                VLOG_DBG_RL(&rl, "Failed getting meter %u for flow api %s, "
+                            "error %d", meter_id.uint32, rfa->flow_api->type,
+                            ret);
+           }
+        }
+    }
+
+    return 0;
+}
+
+int
+meter_offload_del(ofproto_meter_id meter_id, struct ofputil_meter_stats *stats)
+{
+    struct netdev_registered_flow_api *rfa;
+
+    CMAP_FOR_EACH (rfa, cmap_node, &netdev_flow_apis) {
+        if (rfa->flow_api->meter_del) {
+            int ret = rfa->flow_api->meter_del(meter_id, stats);
+            if (ret) {
+                VLOG_DBG_RL(&rl, "Failed deleting meter %u for flow api %s, "
+                            "error %d", meter_id.uint32, rfa->flow_api->type,
+                            ret);
+            }
+        }
+    }
+
+    return 0;
 }
 
 int
