@@ -54,8 +54,10 @@ ovs_pyfiles = \
 	python/ovs/winutils.py
 
 ovs_pytests = \
+	python/ovs/tests/test_decoders.py \
 	python/ovs/tests/test_kv.py \
-	python/ovs/tests/test_list.py
+	python/ovs/tests/test_list.py \
+	python/ovs/tests/test_ofp.py
 
 # These python files are used at build time but not runtime,
 # so they are not installed.
