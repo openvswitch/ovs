@@ -5,6 +5,7 @@ A decoder is generally a callable that accepts a string and returns the value
 object.
 """
 
+import json
 import netaddr
 import re
 
@@ -522,3 +523,16 @@ def decode_nat(value):
             result[flag] = True
 
     return result
+
+
+class FlowEncoder(json.JSONEncoder):
+    """FlowEncoder is a json.JSONEncoder instance that can be used to
+    serialize flow fields."""
+
+    def default(self, obj):
+        if isinstance(obj, Decoder):
+            return obj.to_json()
+        elif isinstance(obj, netaddr.IPAddress):
+            return str(obj)
+
+        return json.JSONEncoder.default(self, obj)
