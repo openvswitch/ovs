@@ -79,6 +79,7 @@ DOC_SOURCE = \
 	Documentation/howto/vlan.png \
 	Documentation/howto/vlan.rst \
 	Documentation/howto/vtep.rst \
+	Documentation/howto/tc-offload.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \
 	Documentation/faq/configuration.rst \

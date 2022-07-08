@@ -49,4 +49,5 @@ OVS
    vtep
    sflow
    dpdk
+   tc-offload
 
