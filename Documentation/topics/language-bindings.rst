@@ -40,6 +40,15 @@ the bindings using ``pip``:
 
    $ pip install ovs
 
+The Python bindings include an optional flow parsing library. To install it's
+required dependencies, run:
+
+::
+
+   $ pip install ovs[flow]
+
+or install `python3-netaddr`.
+
 __ https://github.com/openvswitch/ovs/tree/master/python/ovs
 
 Third-Party Bindings
