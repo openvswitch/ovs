@@ -199,6 +199,20 @@ tc_make_request(int ifindex, int type, unsigned int flags,
     return tcmsg;
 }
 
+struct tcamsg *
+tc_make_action_request(int type, unsigned int flags,
+                       struct ofpbuf *request)
+{
+    struct tcamsg *tcamsg;
+
+    ofpbuf_init(request, 512);
+    nl_msg_put_nlmsghdr(request, sizeof *tcamsg, type, NLM_F_REQUEST | flags);
+    tcamsg = ofpbuf_put_zeros(request, sizeof *tcamsg);
+    tcamsg->tca_family = AF_UNSPEC;
+
+    return tcamsg;
+}
+
 static void request_from_tcf_id(struct tcf_id *id, uint16_t eth_type,
                                 int type, unsigned int flags,
                                 struct ofpbuf *request)
@@ -1760,21 +1774,69 @@ static const struct nl_policy stats_policy[] = {
     [TCA_STATS_BASIC_HW] = { .type = NL_A_UNSPEC,
                              .min_len = sizeof(struct gnet_stats_basic),
                              .optional = true, },
+    [TCA_STATS_QUEUE] = { .type = NL_A_UNSPEC,
+                          .min_len = sizeof(struct gnet_stats_queue),
+                          .optional = true, },
 };
+
+static int
+nl_parse_action_stats(struct nlattr *act_stats,
+                      struct ovs_flow_stats *stats_sw,
+                      struct ovs_flow_stats *stats_hw,
+                      struct ovs_flow_stats *stats_dropped)
+{
+    struct nlattr *stats_attrs[ARRAY_SIZE(stats_policy)];
+    struct gnet_stats_basic bs_all, bs_sw, bs_hw;
+    const struct gnet_stats_queue *qs;
+
+    if (!nl_parse_nested(act_stats, stats_policy, stats_attrs,
+                         ARRAY_SIZE(stats_policy))) {
+        VLOG_ERR_RL(&error_rl, "Failed to parse action stats policy");
+        return EPROTO;
+    }
+
+    memcpy(&bs_all,
+           nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof bs_all),
+           sizeof bs_all);
+    if (stats_attrs[TCA_STATS_BASIC_HW]) {
+        memcpy(&bs_hw, nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC_HW],
+                                          sizeof bs_hw),
+               sizeof bs_hw);
+
+        bs_sw.packets = bs_all.packets - bs_hw.packets;
+        bs_sw.bytes = bs_all.bytes - bs_hw.bytes;
+    } else {
+        bs_sw.packets = bs_all.packets;
+        bs_sw.bytes = bs_all.bytes;
+    }
+
+    if (bs_sw.packets > get_32aligned_u64(&stats_sw->n_packets)) {
+        put_32aligned_u64(&stats_sw->n_packets, bs_sw.packets);
+        put_32aligned_u64(&stats_sw->n_bytes, bs_sw.bytes);
+    }
+
+    if (stats_attrs[TCA_STATS_BASIC_HW]
+        && bs_hw.packets > get_32aligned_u64(&stats_hw->n_packets)) {
+        put_32aligned_u64(&stats_hw->n_packets, bs_hw.packets);
+        put_32aligned_u64(&stats_hw->n_bytes, bs_hw.bytes);
+    }
+
+    if (stats_dropped && stats_attrs[TCA_STATS_QUEUE]) {
+        qs = nl_attr_get_unspec(stats_attrs[TCA_STATS_QUEUE], sizeof *qs);
+        put_32aligned_u64(&stats_dropped->n_packets, qs->drops);
+    }
+
+    return 0;
+}
 
 static int
 nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
                        bool terse)
 {
     struct nlattr *act_options;
-    struct nlattr *act_stats;
     struct nlattr *act_cookie;
     const char *act_kind;
     struct nlattr *action_attrs[ARRAY_SIZE(act_policy)];
-    struct nlattr *stats_attrs[ARRAY_SIZE(stats_policy)];
-    struct ovs_flow_stats *stats_sw = &flower->stats_sw;
-    struct ovs_flow_stats *stats_hw = &flower->stats_hw;
-    struct gnet_stats_basic bs_all, bs_hw, bs_sw;
     int err = 0;
 
     if (!nl_parse_nested(action, act_policy, action_attrs,
@@ -1824,41 +1886,25 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
         flower->act_cookie.len = nl_attr_get_size(act_cookie);
     }
 
-    act_stats = action_attrs[TCA_ACT_STATS];
+    return nl_parse_action_stats(action_attrs[TCA_ACT_STATS],
+                                 &flower->stats_sw, &flower->stats_hw, NULL);
+}
 
-    if (!nl_parse_nested(act_stats, stats_policy, stats_attrs,
-                         ARRAY_SIZE(stats_policy))) {
-        VLOG_ERR_RL(&error_rl, "failed to parse action stats policy");
+int
+tc_parse_action_stats(struct nlattr *action, struct ovs_flow_stats *stats_sw,
+                      struct ovs_flow_stats *stats_hw,
+                      struct ovs_flow_stats *stats_dropped)
+{
+    struct nlattr *action_attrs[ARRAY_SIZE(act_policy)];
+
+    if (!nl_parse_nested(action, act_policy, action_attrs,
+                         ARRAY_SIZE(act_policy))) {
+        VLOG_ERR_RL(&error_rl, "Failed to parse single action options");
         return EPROTO;
     }
 
-    memcpy(&bs_all,
-           nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC], sizeof bs_all),
-           sizeof bs_all);
-    if (stats_attrs[TCA_STATS_BASIC_HW]) {
-        memcpy(&bs_hw, nl_attr_get_unspec(stats_attrs[TCA_STATS_BASIC_HW],
-                                          sizeof bs_hw),
-               sizeof bs_hw);
-
-        bs_sw.packets = bs_all.packets - bs_hw.packets;
-        bs_sw.bytes = bs_all.bytes - bs_hw.bytes;
-    } else {
-        bs_sw.packets = bs_all.packets;
-        bs_sw.bytes = bs_all.bytes;
-    }
-
-    if (bs_sw.packets > get_32aligned_u64(&stats_sw->n_packets)) {
-        put_32aligned_u64(&stats_sw->n_packets, bs_sw.packets);
-        put_32aligned_u64(&stats_sw->n_bytes, bs_sw.bytes);
-    }
-
-    if (stats_attrs[TCA_STATS_BASIC_HW]
-        && bs_hw.packets > get_32aligned_u64(&stats_hw->n_packets)) {
-        put_32aligned_u64(&stats_hw->n_packets, bs_hw.packets);
-        put_32aligned_u64(&stats_hw->n_bytes, bs_hw.bytes);
-    }
-
-    return 0;
+    return nl_parse_action_stats(action_attrs[TCA_ACT_STATS], stats_sw,
+                                 stats_hw, stats_dropped);
 }
 
 #define TCA_ACT_MIN_PRIO 1

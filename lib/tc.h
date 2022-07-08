@@ -23,6 +23,7 @@
 #include <linux/pkt_cls.h>
 #include <linux/pkt_sched.h>
 
+#include "netlink.h"
 #include "netlink-socket.h"
 #include "odp-netlink.h"
 #include "openvswitch/ofpbuf.h"
@@ -80,6 +81,8 @@ tc_get_minor(unsigned int handle)
 
 struct tcmsg *tc_make_request(int ifindex, int type,
                               unsigned int flags, struct ofpbuf *);
+struct tcamsg *tc_make_action_request(int type, unsigned int flags,
+                                      struct ofpbuf *request);
 int tc_transact(struct ofpbuf *request, struct ofpbuf **replyp);
 int tc_add_del_qdisc(int ifindex, bool add, uint32_t block_id,
                      enum tc_qdisc_hook hook);
@@ -375,5 +378,9 @@ int parse_netlink_to_tc_flower(struct ofpbuf *reply,
                                bool terse);
 int parse_netlink_to_tc_chain(struct ofpbuf *reply, uint32_t *chain);
 void tc_set_policy(const char *policy);
+int tc_parse_action_stats(struct nlattr *action,
+                          struct ovs_flow_stats *stats_sw,
+                          struct ovs_flow_stats *stats_hw,
+                          struct ovs_flow_stats *stats_dropped);
 
 #endif /* tc.h */
