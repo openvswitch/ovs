@@ -1950,7 +1950,7 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     }
 
     /* IPv4 or IPv6. */
-    WC_MASK_FIELD(wc, nw_frag);
+    WC_MASK_FIELD_MASK(wc, nw_frag, FLOW_NW_FRAG_MASK);
     WC_MASK_FIELD(wc, nw_tos);
     WC_MASK_FIELD(wc, nw_ttl);
     WC_MASK_FIELD(wc, nw_proto);

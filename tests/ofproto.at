@@ -3108,7 +3108,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     ovs-ofctl packet-out br0 "in_port=controller packet=002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00 actions=dec_ttl"
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=CONTROLLER (via invalid_ttl) data_len=76 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
+udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_ADD
@@ -3211,7 +3211,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     ovs-ofctl -O OpenFlow12 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.2): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
+udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_ADD
@@ -3325,7 +3325,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     ovs-ofctl -O OpenFlow13 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.3): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
+udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_ADD
@@ -3459,7 +3459,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     ovs_ofctl -O OpenFlow14 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
+udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
 # OFPT_PORT_STATUS, OFPPR_ADD
@@ -4434,7 +4434,7 @@ ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.3): total_len=32 packet_type=(1,0x800),metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=32 (unbuffered)
-packet_type=(1,0x800),nw_src=10.0.0.20,nw_dst=10.0.0.30,nw_proto=17,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=100,tp_dst=200 udp_csum:ea78
+packet_type=(1,0x800),nw_src=10.0.0.20,nw_dst=10.0.0.30,nw_proto=17,nw_tos=0,nw_ecn=0,nw_ttl=255,nw_frag=no,tp_src=100,tp_dst=200 udp_csum:ea78
 OFPT_BARRIER_REPLY (OF1.3):
 ])
 

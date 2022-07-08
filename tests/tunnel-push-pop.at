@@ -581,7 +581,7 @@ OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=98 tun_id=0x7b,tun_src=1.1.2.92,tun_dst=1.1.2.88,tun_metadata0=0xa,in_port=5 (via action) data_len=98 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30.0.0.1,nw_dst=30.0.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=0,icmp_code=0 icmp_csum:4227
+icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30.0.0.1,nw_dst=30.0.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,icmp_type=0,icmp_code=0 icmp_csum:4227
 ])
 
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl

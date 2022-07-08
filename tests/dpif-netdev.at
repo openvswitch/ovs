@@ -439,7 +439,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 
    # Check for succesfull packet matching with installed offloaded flow.
    AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000/0x1fff,nw_frag=no with mark: 1
+p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000/0x1fff,nw_frag=no with mark: 1
 ])
 
    ovs-appctl revalidator/wait
@@ -506,7 +506,7 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=
 
    # Check for succesfull packet matching with installed offloaded flow.
    AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
-p1: packet: udp,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82 dnl
+p1: packet: udp,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=82 dnl
 matches with flow: recirc_id=0,eth,udp,dl_vlan=99,nw_src=127.0.0.1,nw_frag=no,tp_dst=82 with mark: 1
 ])
 
@@ -530,10 +530,10 @@ p1: flow del: mark: 1
 
    # Check that ip address and udp port were correctly modified in output packets.
    AT_CHECK([ovs-ofctl parse-pcap p1.pcap], [0], [dnl
-udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82
-udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=3773
-udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=82
-udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=81,tp_dst=3773
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=82
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=3773
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=82
+udp,in_port=ANY,dl_vlan=99,dl_vlan_pcp=7,vlan_tci1=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=192.168.0.7,nw_dst=127.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=81,tp_dst=3773
 ])
 
    OVS_VSWITCHD_STOP
