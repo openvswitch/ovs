@@ -760,7 +760,7 @@
          iterations.
         </p>
         <p>
-         The defaul value is 1 min. If configured to 0 then it would be
+         The default value is 1 min. If configured to 0 then it would be
          converted to default value i.e. 1 min
         </p>
         <p>
@@ -6078,7 +6078,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <code>recirc</code> actions with new action <code>lb_output</code>
         and avoids recirculation of packet in datapath. It is supported
         only for balance-tcp bond mode in netdev datapath. The new action
-        gives higer performance by using bond buckets instead of post
+        gives higher performance by using bond buckets instead of post
         recirculation flows for selection of slave port from bond. By default
         this new action is disabled, however it can be enabled by setting
         <ref column="other-config" key="lb-output-action"/> in

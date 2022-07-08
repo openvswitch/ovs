@@ -32,7 +32,7 @@ square brackets may optionally enclose other non-empty sets or single
 values as well. For a column accepting a set of integers, database commands
 accept a range. A range is represented by two integers separated by
 \fB-\fR. A range is inclusive. A range has a maximum size of 4096
-elements. If more elements are needed, they can be specified in seperate
+elements. If more elements are needed, they can be specified in separate
 ranges.
 .PP
 A few database columns are ``maps'' of key-value pairs, where the key

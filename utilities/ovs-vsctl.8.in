@@ -692,7 +692,7 @@ the NetFlow record (since it is now unreferenced):
 .SS "sFlow"
 .PP
 Configure bridge \fBbr0\fR to send sFlow records to a collector on
-10.0.0.1 at port 6343, using \fBeth1\fR\'s IP address as the source,
+10.0.0.1 at port 6343, using \fBeth1\fR's IP address as the source,
 with specific sampling parameters:
 .IP
 .B "ovs\-vsctl \-\- \-\-id=@s create sFlow agent=eth1 target=\(rs\(dq10.0.0.1:6343\(rs\(dq header=128 sampling=64 polling=10 \(rs"
