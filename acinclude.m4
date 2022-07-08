@@ -111,6 +111,10 @@ AC_DEFUN([OVS_ENABLE_WERROR],
    fi
    AC_SUBST([SPARSE_WERROR])])
 
+dnl Version for a top level invocation, since AC_REQUIRE can not be used
+dnl outside of AC_DEFUN, but needed to protect against double expansion.
+AC_DEFUN([OVS_ENABLE_WERROR_TOP], [AC_REQUIRE([OVS_ENABLE_WERROR])])
+
 dnl OVS_CHECK_LINUX
 dnl
 dnl Configure linux kernel source tree
