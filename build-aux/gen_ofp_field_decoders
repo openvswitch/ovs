@@ -1,0 +1,67 @@
+#!/bin/env python
+
+import argparse
+
+import build.extract_ofp_fields as extract_fields
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Tool to generate python ofproto field decoders from"
+        "meta-flow information"
+    )
+    parser.add_argument(
+        "metaflow",
+        metavar="FILE",
+        type=str,
+        help="Read meta-flow info from file",
+    )
+
+    args = parser.parse_args()
+
+    fields = extract_fields.extract_ofp_fields(args.metaflow)
+
+    field_decoders = {}
+    for field in fields:
+        decoder = get_decoder(field)
+        field_decoders[field.get("name")] = decoder
+        if field.get("extra_name"):
+            field_decoders[field.get("extra_name")] = decoder
+
+    code = """
+# This file is auto-generated. Do not edit!
+
+from ovs.flow import decoders
+
+field_decoders = {{
+{decoders}
+}}""".format(
+        decoders="\n".join(
+            [
+                "    '{name}': {decoder},".format(name=name, decoder=decoder)
+                for name, decoder in field_decoders.items()
+            ]
+        )
+    )
+    print(code)
+
+
+def get_decoder(field):
+    formatting = field.get("formatting")
+    if formatting in ["decimal", "hexadecimal"]:
+        if field.get("mask") == "MFM_NONE":
+            return "decoders.decode_int"
+        else:
+            if field.get("n_bits") in [8, 16, 32, 64, 128, 992]:
+                return "decoders.Mask{}".format(field.get("n_bits"))
+            return "decoders.decode_mask({})".format(field.get("n_bits"))
+    elif formatting in ["IPv4", "IPv6"]:
+        return "decoders.IPMask"
+    elif formatting == "Ethernet":
+        return "decoders.EthMask"
+    else:
+        return "decoders.decode_default"
+
+
+if __name__ == "__main__":
+    main()

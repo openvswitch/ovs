@@ -30,6 +30,7 @@ ovs_pyfiles = \
 	python/ovs/flow/decoders.py \
 	python/ovs/flow/kv.py \
 	python/ovs/flow/list.py \
+	python/ovs/flow/ofp_fields.py \
 	python/ovs/json.py \
 	python/ovs/jsonrpc.py \
 	python/ovs/ovsuuid.py \
@@ -127,3 +128,9 @@ EXTRA_DIST += python/ovs/dirs.py.template
 CLEANFILES += python/ovs/dirs.py
 
 EXTRA_DIST += python/TODO.rst
+
+$(srcdir)/python/ovs/flow/ofp_fields.py: $(srcdir)/build-aux/gen_ofp_field_decoders include/openvswitch/meta-flow.h
+	$(AM_V_GEN)$(run_python) $< $(srcdir)/include/openvswitch/meta-flow.h > $@.tmp
+	$(AM_V_at)mv $@.tmp $@
+EXTRA_DIST += python/ovs/flow/ofp_fields.py
+CLEANFILES += python/ovs/flow/ofp_fields.py

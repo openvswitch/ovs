@@ -5,6 +5,7 @@ EXTRA_DIST += \
 	build-aux/dist-docs \
 	build-aux/dpdkstrip.py \
 	build-aux/generate-dhparams-c \
+	build-aux/gen_ofp_field_decoders \
 	build-aux/initial-tab-allowed-files \
 	build-aux/sodepends.py \
 	build-aux/soexpand.py \
@@ -12,7 +13,8 @@ EXTRA_DIST += \
 	build-aux/xml2nroff
 
 FLAKE8_PYFILES += \
-    $(srcdir)/build-aux/xml2nroff \
     build-aux/dpdkstrip.py \
+    build-aux/gen_ofp_field_decoders \
     build-aux/sodepends.py \
-    build-aux/soexpand.py
+    build-aux/soexpand.py \
+    build-aux/xml2nroff
