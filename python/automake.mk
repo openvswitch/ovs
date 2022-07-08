@@ -55,6 +55,7 @@ ovs_pyfiles = \
 
 ovs_pytests = \
 	python/ovs/tests/test_decoders.py \
+	python/ovs/tests/test_filter.py \
 	python/ovs/tests/test_kv.py \
 	python/ovs/tests/test_list.py \
 	python/ovs/tests/test_odp.py \
