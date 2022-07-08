@@ -1737,7 +1737,7 @@ match_format(const struct match *match,
     format_be32_masked(s, "mpls_lse1", f->mpls_lse[1], wc->masks.mpls_lse[1]);
     format_be32_masked(s, "mpls_lse2", f->mpls_lse[2], wc->masks.mpls_lse[2]);
 
-    switch (wc->masks.nw_frag) {
+    switch (wc->masks.nw_frag & FLOW_NW_FRAG_MASK) {
     case FLOW_NW_FRAG_ANY | FLOW_NW_FRAG_LATER:
         ds_put_format(s, "%snw_frag=%s%s,", colors.param, colors.end,
                       f->nw_frag & FLOW_NW_FRAG_ANY

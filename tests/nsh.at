@@ -27,7 +27,7 @@ AT_CHECK([
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=1,dl_type=0x894f,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00'
 ], [0], [dnl
-Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 
 bridge("br0")
 -------------
@@ -37,7 +37,7 @@ bridge("br0")
     set_field:0x44332211->nsh_c1
     output:2
 
-Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=2,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=254,nsh_c1=0x44332211,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=2,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=254,nsh_c1=0x44332211,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 Megaflow: recirc_id=0,eth,in_port=1,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344
 Datapath actions: set(nsh(flags=2,ttl=63,spi=0x123456,si=254,c1=0x44332211)),2
 ])
@@ -85,7 +85,7 @@ AT_CHECK([
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
 ], [0], [dnl
-Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,icmp_type=0,icmp_code=0
 
 bridge("br0")
 -------------
@@ -103,7 +103,7 @@ bridge("br0")
     decap()
     decap()
 
-Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
 Datapath actions: push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x1)
 ])
@@ -111,7 +111,7 @@ Datapath actions: push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x1
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344'
 ], [0], [dnl
-Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 
 bridge("br0")
 -------------
@@ -213,7 +213,7 @@ AT_CHECK([
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
 ], [0], [dnl
-Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,icmp_type=0,icmp_code=0
 
 bridge("br0")
 -------------
@@ -230,7 +230,7 @@ bridge("br0")
     decap()
     decap()
 
-Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_ttl=63,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
 Datapath actions: push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x1)
 ])
@@ -238,7 +238,7 @@ Datapath actions: push_nsh(flags=0,ttl=63,mdtype=2,np=3,spi=0x1234,si=255,md2=0x
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234'
 ], [0], [dnl
-Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=0,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_ttl=0,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 
 bridge("br0")
 -------------
@@ -325,7 +325,7 @@ AT_CHECK([
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
 ], [0], [dnl
-Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no,icmp_type=0,icmp_code=0
 
 bridge("br0")
 -------------
@@ -381,7 +381,7 @@ Datapath actions: pop_nsh(),recirc(0x2)
 AT_CHECK([
     ovs-appctl ofproto/trace br0 'recirc_id=2,in_port=4,ip'
 ], [0], [dnl
-Flow: recirc_id=0x2,eth,ip,in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,nw_src=0.0.0.0,nw_dst=0.0.0.0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Flow: recirc_id=0x2,eth,ip,in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,nw_src=0.0.0.0,nw_dst=0.0.0.0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0,nw_frag=no
 
 bridge("br0")
 -------------
