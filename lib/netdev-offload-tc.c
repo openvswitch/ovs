@@ -66,6 +66,7 @@ struct chain_node {
 
 struct meter_police_mapping_data {
     struct hmap_node meter_id_node;
+    struct hmap_node police_idx_node;
     uint32_t meter_id;
     uint32_t police_idx;
 };
@@ -84,6 +85,11 @@ static struct id_pool *meter_police_ids OVS_GUARDED_BY(meter_police_ids_mutex);
 static struct ovs_mutex meter_mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap meter_id_to_police_idx OVS_GUARDED_BY(meter_mutex)
     = HMAP_INITIALIZER(&meter_id_to_police_idx);
+static struct hmap police_idx_to_meter_id OVS_GUARDED_BY(meter_mutex)
+    = HMAP_INITIALIZER(&police_idx_to_meter_id);
+
+static int meter_id_lookup(uint32_t meter_id, uint32_t *police_idx);
+static int police_idx_lookup(uint32_t police_idx, uint32_t *meter_id);
 
 static bool
 is_internal_port(const char *type)
@@ -1041,7 +1047,12 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             }
             break;
             case TC_ACT_POLICE: {
-                /* Not supported yet */
+                uint32_t meter_id;
+
+                if (police_idx_lookup(action->police.index, &meter_id)) {
+                    return ENOENT;
+                }
+                nl_msg_put_u32(buf, OVS_ACTION_ATTR_METER, meter_id);
             }
             break;
             }
@@ -1964,6 +1975,16 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             action->type = TC_ACT_GOTO;
             action->chain = 0;  /* 0 is reserved and not used by recirc. */
             flower.action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_METER) {
+            uint32_t police_index, meter_id;
+
+            meter_id = nl_attr_get_u32(nla);
+            if (meter_id_lookup(meter_id, &police_index)) {
+                return EOPNOTSUPP;
+            }
+            action->type = TC_ACT_POLICE;
+            action->police.index = police_index;
+            flower.action_count++;
         } else {
             VLOG_DBG_RL(&rl, "unsupported put action type: %d",
                         nl_attr_type(nla));
@@ -2443,6 +2464,27 @@ meter_id_lookup(uint32_t meter_id, uint32_t *police_idx)
     return data ? 0 : ENOENT;
 }
 
+static int
+police_idx_lookup(uint32_t police_idx, uint32_t *meter_id)
+{
+    struct meter_police_mapping_data *data;
+    size_t hash = hash_int(police_idx, 0);
+    int err = ENOENT;
+
+    ovs_mutex_lock(&meter_mutex);
+    HMAP_FOR_EACH_WITH_HASH (data, police_idx_node, hash,
+                             &police_idx_to_meter_id) {
+        if (data->police_idx == police_idx) {
+            *meter_id = data->meter_id;
+            err = 0;
+            break;
+        }
+    }
+    ovs_mutex_unlock(&meter_mutex);
+
+    return err;
+}
+
 static void
 meter_id_insert(uint32_t meter_id, uint32_t police_idx)
 {
@@ -2454,6 +2496,8 @@ meter_id_insert(uint32_t meter_id, uint32_t police_idx)
     data->police_idx = police_idx;
     hmap_insert(&meter_id_to_police_idx, &data->meter_id_node,
                 hash_int(meter_id, 0));
+    hmap_insert(&police_idx_to_meter_id, &data->police_idx_node,
+                hash_int(police_idx, 0));
     ovs_mutex_unlock(&meter_mutex);
 }
 
@@ -2466,6 +2510,7 @@ meter_id_remove(uint32_t meter_id)
     data = meter_id_find_locked(meter_id);
     if (data) {
         hmap_remove(&meter_id_to_police_idx, &data->meter_id_node);
+        hmap_remove(&police_idx_to_meter_id, &data->police_idx_node);
         free(data);
     }
     ovs_mutex_unlock(&meter_mutex);
