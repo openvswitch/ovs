@@ -1,6 +1,6 @@
 """ Global flow library entrypoint.
 """
-for libname in ["netaddr"]:
+for libname in ["netaddr", "pyparsing"]:
     try:
         lib = __import__(libname)
     except ModuleNotFoundError as e:

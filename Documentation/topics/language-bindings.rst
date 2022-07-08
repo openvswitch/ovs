@@ -47,7 +47,7 @@ required dependencies, run:
 
    $ pip install ovs[flow]
 
-or install `python3-netaddr`.
+or install `python3-netaddr` and `python3-pyparsing`.
 
 __ https://github.com/openvswitch/ovs/tree/master/python/ovs
 
