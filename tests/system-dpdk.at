@@ -257,10 +257,10 @@ sleep 2
 dnl Fail if policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
 
-dnl remove policer
+dnl Remove policer
 AT_CHECK([ovs-vsctl set interface phy0 ingress_policing_rate=0 ingress_policing_burst=0])
 
-dnl check policer was removed correctly
+dnl Check policer was removed correctly
 AT_CHECK([ovs-vsctl list interface phy0], [], [stdout])
 AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
 
@@ -293,10 +293,10 @@ sleep 2
 dnl Fail if ingress policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
 
-dnl remove ingress policer
+dnl Remove ingress policer
 AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=0 ingress_policing_burst=0])
 
-dnl check ingress policer was removed correctly
+dnl Check ingress policer was removed correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
 
@@ -336,7 +336,7 @@ sleep 2
 dnl Fail if ingress policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
 
-dnl check ingress policer was created correctly
+dnl Check ingress policer was created correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([egrep 'ingress_policing_burst: 1000' stdout], [], [stdout])
 
@@ -377,7 +377,7 @@ sleep 2
 dnl Fail if ingress policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.log], [], [stdout])
 
-dnl check ingress policer was created correctly
+dnl Check ingress policer was created correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
 
@@ -920,7 +920,7 @@ dnl --------------------------------------------------------------------------
 
 
 dnl --------------------------------------------------------------------------
-dnl Add standard DPDK PHY port
+dnl MFEX Autovalidator
 AT_SETUP([OVS-DPDK - MFEX Autovalidator])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
@@ -953,7 +953,7 @@ AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
 dnl --------------------------------------------------------------------------
-dnl Add standard DPDK PHY port
+dnl MFEX Autovalidator Fuzzy
 AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
