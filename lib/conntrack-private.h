@@ -29,6 +29,7 @@
 #include "openvswitch/list.h"
 #include "openvswitch/types.h"
 #include "packets.h"
+#include "rculist.h"
 #include "unaligned.h"
 #include "dp-packet.h"
 
@@ -86,52 +87,6 @@ struct alg_exp_node {
     bool nat_rpl_dst;
 };
 
-enum OVS_PACKED_ENUM ct_conn_type {
-    CT_CONN_TYPE_DEFAULT,
-    CT_CONN_TYPE_UN_NAT,
-};
-
-struct conn {
-    /* Immutable data. */
-    struct conn_key key;
-    struct conn_key rev_key;
-    struct conn_key parent_key; /* Only used for orig_tuple support. */
-    struct ovs_list exp_node;
-    struct cmap_node cm_node;
-    uint16_t nat_action;
-    char *alg;
-    struct conn *nat_conn; /* The NAT 'conn' context, if there is one. */
-
-    /* Mutable data. */
-    struct ovs_mutex lock; /* Guards all mutable fields. */
-    ovs_u128 label;
-    long long expiration;
-    uint32_t mark;
-    int seq_skew;
-
-    /* Immutable data. */
-    int32_t admit_zone; /* The zone for managing zone limit counts. */
-    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
-
-    /* Mutable data. */
-    bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
-                        * control messages; true if reply direction. */
-    bool cleaned; /* True if cleaned from expiry lists. */
-
-    /* Immutable data. */
-    bool alg_related; /* True if alg data connection. */
-    enum ct_conn_type conn_type;
-
-    uint32_t tp_id; /* Timeout policy ID. */
-};
-
-enum ct_update_res {
-    CT_UPDATE_INVALID,
-    CT_UPDATE_VALID,
-    CT_UPDATE_NEW,
-    CT_UPDATE_VALID_NEW,
-};
-
 /* Timeouts: all the possible timeout states passed to update_expiration()
  * are listed here. The name will be prefix by CT_TM_ and the value is in
  * milliseconds */
@@ -147,6 +102,65 @@ enum ct_update_res {
     CT_TIMEOUT(OTHER_BIDIR) \
     CT_TIMEOUT(ICMP_FIRST) \
     CT_TIMEOUT(ICMP_REPLY)
+
+enum ct_timeout {
+#define CT_TIMEOUT(NAME) CT_TM_##NAME,
+    CT_TIMEOUTS
+#undef CT_TIMEOUT
+    N_CT_TM
+};
+
+#define N_EXP_LISTS 100
+
+enum OVS_PACKED_ENUM ct_conn_type {
+    CT_CONN_TYPE_DEFAULT,
+    CT_CONN_TYPE_UN_NAT,
+};
+
+struct conn {
+    /* Immutable data. */
+    struct conn_key key;
+    struct conn_key rev_key;
+    struct conn_key parent_key; /* Only used for orig_tuple support. */
+    struct cmap_node cm_node;
+    uint16_t nat_action;
+    char *alg;
+    struct conn *nat_conn; /* The NAT 'conn' context, if there is one. */
+    atomic_flag reclaimed; /* False during the lifetime of the connection,
+                            * True as soon as a thread has started freeing
+                            * its memory. */
+
+    /* Inserted once by a PMD, then managed by the 'ct_clean' thread. */
+    struct rculist node;
+
+    /* Mutable data. */
+    struct ovs_mutex lock; /* Guards all mutable fields. */
+    ovs_u128 label;
+    long long expiration;
+    uint32_t mark;
+    int seq_skew;
+
+    /* Immutable data. */
+    int32_t admit_zone; /* The zone for managing zone limit counts. */
+    uint32_t zone_limit_seq; /* Used to disambiguate zone limit counts. */
+
+    /* Mutable data. */
+    bool seq_skew_dir; /* TCP sequence skew direction due to NATTing of FTP
+                        * control messages; true if reply direction. */
+
+    /* Immutable data. */
+    bool alg_related; /* True if alg data connection. */
+    enum ct_conn_type conn_type;
+
+    uint32_t tp_id; /* Timeout policy ID. */
+};
+
+enum ct_update_res {
+    CT_UPDATE_INVALID,
+    CT_UPDATE_VALID,
+    CT_UPDATE_NEW,
+    CT_UPDATE_VALID_NEW,
+};
 
 #define NAT_ACTION_SNAT_ALL (NAT_ACTION_SRC | NAT_ACTION_SRC_PORT)
 #define NAT_ACTION_DNAT_ALL (NAT_ACTION_DST | NAT_ACTION_DST_PORT)
@@ -181,22 +195,19 @@ enum ct_ephemeral_range {
 #define FOR_EACH_PORT_IN_RANGE(curr, min, max) \
     FOR_EACH_PORT_IN_RANGE__(curr, min, max, OVS_JOIN(idx, __COUNTER__))
 
-enum ct_timeout {
-#define CT_TIMEOUT(NAME) CT_TM_##NAME,
-    CT_TIMEOUTS
-#undef CT_TIMEOUT
-    N_CT_TM
-};
-
 struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
     struct cmap conns OVS_GUARDED;
-    struct ovs_list exp_lists[N_CT_TM] OVS_GUARDED;
+    struct rculist exp_lists[N_EXP_LISTS];
     struct cmap zone_limits OVS_GUARDED;
     struct cmap timeout_policies OVS_GUARDED;
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */
     struct latch clean_thread_exit; /* To destroy the 'clean_thread'. */
+    unsigned int next_list; /* Next list where the newly created connection
+                             * gets inserted. */
+    unsigned int next_sweep; /* List from which the gc thread will resume
+                              * the sweeping. */
 
     /* Counting connections. */
     atomic_count n_conn; /* Number of connections currently tracked. */
@@ -216,8 +227,8 @@ struct conntrack {
 };
 
 /* Lock acquisition order:
- *    1. 'ct_lock'
- *    2. 'conn->lock'
+ *    1. 'conn->lock'
+ *    2. 'ct_lock'
  *    3. 'resources_lock'
  */
 

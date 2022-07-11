@@ -39,12 +39,12 @@
 #include "ovs-thread.h"
 #include "openvswitch/poll-loop.h"
 #include "random.h"
+#include "rculist.h"
 #include "timeval.h"
 
 VLOG_DEFINE_THIS_MODULE(conntrack);
 
 COVERAGE_DEFINE(conntrack_full);
-COVERAGE_DEFINE(conntrack_long_cleanup);
 COVERAGE_DEFINE(conntrack_l3csum_err);
 COVERAGE_DEFINE(conntrack_l4csum_err);
 COVERAGE_DEFINE(conntrack_lookup_natted_miss);
@@ -94,14 +94,14 @@ static bool valid_new(struct dp_packet *pkt, struct conn_key *);
 static struct conn *new_conn(struct conntrack *ct, struct dp_packet *pkt,
                              struct conn_key *, long long now,
                              uint32_t tp_id);
-static void delete_conn_cmn(struct conn *);
+static void delete_conn__(struct conn *);
 static void delete_conn(struct conn *);
-static void delete_conn_one(struct conn *conn);
 static enum ct_update_res conn_update(struct conntrack *ct, struct conn *conn,
                                       struct dp_packet *pkt,
                                       struct conn_lookup_ctx *ctx,
                                       long long now);
 static bool conn_expired(struct conn *, long long now);
+static void conn_expire_push_front(struct conntrack *ct, struct conn *conn);
 static void set_mark(struct dp_packet *, struct conn *,
                      uint32_t val, uint32_t mask);
 static void set_label(struct dp_packet *, struct conn *,
@@ -309,7 +309,7 @@ conntrack_init(void)
     ovs_mutex_lock(&ct->ct_lock);
     cmap_init(&ct->conns);
     for (unsigned i = 0; i < ARRAY_SIZE(ct->exp_lists); i++) {
-        ovs_list_init(&ct->exp_lists[i]);
+        rculist_init(&ct->exp_lists[i]);
     }
     cmap_init(&ct->zone_limits);
     ct->zone_limit_seq = 0;
@@ -467,52 +467,57 @@ zone_limit_delete(struct conntrack *ct, uint16_t zone)
 }
 
 static void
-conn_clean_cmn(struct conntrack *ct, struct conn *conn)
+conn_clean__(struct conntrack *ct, struct conn *conn)
     OVS_REQUIRES(ct->ct_lock)
 {
+    uint32_t hash;
+
     if (conn->alg) {
         expectation_clean(ct, &conn->key);
     }
 
-    uint32_t hash = conn_key_hash(&conn->key, ct->hash_basis);
+    hash = conn_key_hash(&conn->key, ct->hash_basis);
     cmap_remove(&ct->conns, &conn->cm_node, hash);
 
-    struct zone_limit *zl = zone_limit_lookup(ct, conn->admit_zone);
-    if (zl && zl->czl.zone_limit_seq == conn->zone_limit_seq) {
-        atomic_count_dec(&zl->czl.count);
+    if (conn->nat_conn) {
+        hash = conn_key_hash(&conn->nat_conn->key, ct->hash_basis);
+        cmap_remove(&ct->conns, &conn->nat_conn->cm_node, hash);
     }
+
+    rculist_remove(&conn->node);
 }
 
 /* Must be called with 'conn' of 'conn_type' CT_CONN_TYPE_DEFAULT.  Also
  * removes the associated nat 'conn' from the lookup datastructures. */
 static void
 conn_clean(struct conntrack *ct, struct conn *conn)
-    OVS_REQUIRES(ct->ct_lock)
+    OVS_EXCLUDED(conn->lock, ct->ct_lock)
 {
     ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
 
-    conn_clean_cmn(ct, conn);
-    if (conn->nat_conn) {
-        uint32_t hash = conn_key_hash(&conn->nat_conn->key, ct->hash_basis);
-        cmap_remove(&ct->conns, &conn->nat_conn->cm_node, hash);
+    if (atomic_flag_test_and_set(&conn->reclaimed)) {
+        return;
     }
-    ovs_list_remove(&conn->exp_node);
-    conn->cleaned = true;
+
+    ovs_mutex_lock(&ct->ct_lock);
+    conn_clean__(ct, conn);
+    ovs_mutex_unlock(&ct->ct_lock);
+
+    struct zone_limit *zl = zone_limit_lookup(ct, conn->admit_zone);
+    if (zl && zl->czl.zone_limit_seq == conn->zone_limit_seq) {
+        atomic_count_dec(&zl->czl.count);
+    }
+
     ovsrcu_postpone(delete_conn, conn);
     atomic_count_dec(&ct->n_conn);
 }
 
 static void
-conn_clean_one(struct conntrack *ct, struct conn *conn)
-    OVS_REQUIRES(ct->ct_lock)
+conn_force_expire(struct conn *conn)
 {
-    conn_clean_cmn(ct, conn);
-    if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
-        ovs_list_remove(&conn->exp_node);
-        conn->cleaned = true;
-        atomic_count_dec(&ct->n_conn);
-    }
-    ovsrcu_postpone(delete_conn_one, conn);
+    ovs_mutex_lock(&conn->lock);
+    conn->expiration = 0;
+    ovs_mutex_unlock(&conn->lock);
 }
 
 /* Destroys the connection tracker 'ct' and frees all the allocated memory.
@@ -522,15 +527,16 @@ void
 conntrack_destroy(struct conntrack *ct)
 {
     struct conn *conn;
+
     latch_set(&ct->clean_thread_exit);
     pthread_join(ct->clean_thread, NULL);
     latch_destroy(&ct->clean_thread_exit);
 
-    ovs_mutex_lock(&ct->ct_lock);
-    CMAP_FOR_EACH (conn, cm_node, &ct->conns) {
-        conn_clean_one(ct, conn);
+    for (unsigned i = 0; i < N_EXP_LISTS; i++) {
+        RCULIST_FOR_EACH (conn, node, &ct->exp_lists[i]) {
+            conn_clean(ct, conn);
+        }
     }
-    cmap_destroy(&ct->conns);
 
     struct zone_limit *zl;
     CMAP_FOR_EACH (zl, node, &ct->zone_limits) {
@@ -539,7 +545,6 @@ conntrack_destroy(struct conntrack *ct)
         cmap_remove(&ct->zone_limits, &zl->node, hash);
         ovsrcu_postpone(free, zl);
     }
-    cmap_destroy(&ct->zone_limits);
 
     struct timeout_policy *tp;
     CMAP_FOR_EACH (tp, node, &ct->timeout_policies) {
@@ -548,6 +553,11 @@ conntrack_destroy(struct conntrack *ct)
         cmap_remove(&ct->timeout_policies, &tp->node, hash);
         ovsrcu_postpone(free, tp);
     }
+
+    ovs_mutex_lock(&ct->ct_lock);
+
+    cmap_destroy(&ct->conns);
+    cmap_destroy(&ct->zone_limits);
     cmap_destroy(&ct->timeout_policies);
 
     ovs_mutex_unlock(&ct->ct_lock);
@@ -1087,7 +1097,9 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
         nc->nat_conn = nat_conn;
         ovs_mutex_init_adaptive(&nc->lock);
         nc->conn_type = CT_CONN_TYPE_DEFAULT;
+        atomic_flag_clear(&nc->reclaimed);
         cmap_insert(&ct->conns, &nc->cm_node, ctx->hash);
+        conn_expire_push_front(ct, nc);
         atomic_count_inc(&ct->n_conn);
         ctx->conn = nc; /* For completeness. */
         if (zl) {
@@ -1108,8 +1120,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
      * can limit DoS impact. */
 nat_res_exhaustion:
     free(nat_conn);
-    ovs_list_remove(&nc->exp_node);
-    delete_conn_cmn(nc);
+    delete_conn__(nc);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
     VLOG_WARN_RL(&rl, "Unable to NAT due to tuple space exhaustion - "
                  "if DoS attack, use firewalling and/or zone partitioning.");
@@ -1148,11 +1159,9 @@ conn_update_state(struct conntrack *ct, struct dp_packet *pkt,
             pkt->md.ct_state = CS_INVALID;
             break;
         case CT_UPDATE_NEW:
-            ovs_mutex_lock(&ct->ct_lock);
             if (conn_lookup(ct, &conn->key, now, NULL, NULL)) {
-                conn_clean(ct, conn);
+                conn_force_expire(conn);
             }
-            ovs_mutex_unlock(&ct->ct_lock);
             create_new_conn = true;
             break;
         case CT_UPDATE_VALID_NEW:
@@ -1363,11 +1372,9 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
     /* Delete found entry if in wrong direction. 'force' implies commit. */
     if (OVS_UNLIKELY(force && ctx->reply && conn)) {
-        ovs_mutex_lock(&ct->ct_lock);
         if (conn_lookup(ct, &conn->key, now, NULL, NULL)) {
-            conn_clean(ct, conn);
+            conn_force_expire(conn);
         }
-        ovs_mutex_unlock(&ct->ct_lock);
         conn = NULL;
     }
 
@@ -1548,58 +1555,50 @@ set_label(struct dp_packet *pkt, struct conn *conn,
 }
 
 
-/* Delete the expired connections from 'ctb', up to 'limit'. Returns the
- * earliest expiration time among the remaining connections in 'ctb'.  Returns
- * LLONG_MAX if 'ctb' is empty.  The return value might be smaller than 'now',
- * if 'limit' is reached */
-static long long
-ct_sweep(struct conntrack *ct, long long now, size_t limit)
+static size_t
+ct_sweep(struct conntrack *ct, struct rculist *list, long long now)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct conn *conn;
-    long long min_expiration = LLONG_MAX;
     size_t count = 0;
 
-    ovs_mutex_lock(&ct->ct_lock);
-
-    for (unsigned i = 0; i < N_CT_TM; i++) {
-        LIST_FOR_EACH_SAFE (conn, exp_node, &ct->exp_lists[i]) {
-            ovs_mutex_lock(&conn->lock);
-            if (now < conn->expiration || count >= limit) {
-                min_expiration = MIN(min_expiration, conn->expiration);
-                ovs_mutex_unlock(&conn->lock);
-                if (count >= limit) {
-                    /* Do not check other lists. */
-                    COVERAGE_INC(conntrack_long_cleanup);
-                    goto out;
-                }
-                break;
-            } else {
-                ovs_mutex_unlock(&conn->lock);
-                conn_clean(ct, conn);
-            }
-            count++;
+    RCULIST_FOR_EACH (conn, node, list) {
+        if (conn_expired(conn, now)) {
+            conn_clean(ct, conn);
         }
+
+        count++;
     }
 
-out:
-    VLOG_DBG("conntrack cleanup %"PRIuSIZE" entries in %lld msec", count,
-             time_msec() - now);
-    ovs_mutex_unlock(&ct->ct_lock);
-    return min_expiration;
+    return count;
 }
 
-/* Cleans up old connection entries from 'ct'.  Returns the time when the
- * next expiration might happen.  The return value might be smaller than
- * 'now', meaning that an internal limit has been reached, and some expired
- * connections have not been deleted. */
+/* Cleans up old connection entries from 'ct'.  Returns the time
+ * when the next wake will happen. The return value might be zero,
+ * meaning that an internal limit has been reached. */
 static long long
 conntrack_clean(struct conntrack *ct, long long now)
 {
-    unsigned int n_conn_limit;
+    long long next_wakeup = now + 20 * 1000;
+    unsigned int n_conn_limit, i;
+    size_t clean_end, count = 0;
+
     atomic_read_relaxed(&ct->n_conn_limit, &n_conn_limit);
-    size_t clean_max = n_conn_limit > 10 ? n_conn_limit / 10 : 1;
-    long long min_exp = ct_sweep(ct, now, clean_max);
-    long long next_wakeup = MIN(min_exp, now + CT_DPIF_NETDEV_TP_MIN);
+    clean_end = n_conn_limit / 64;
+
+    for (i = ct->next_sweep; i < N_EXP_LISTS; i++) {
+        count += ct_sweep(ct, &ct->exp_lists[i], now);
+
+        if (count > clean_end) {
+            next_wakeup = 0;
+            break;
+        }
+    }
+
+    ct->next_sweep = (i < N_EXP_LISTS) ? i : 0;
+
+    VLOG_DBG("conntrack cleanup %"PRIuSIZE" entries in %lld msec", count,
+             time_msec() - now);
 
     return next_wakeup;
 }
@@ -1607,27 +1606,12 @@ conntrack_clean(struct conntrack *ct, long long now)
 /* Cleanup:
  *
  * We must call conntrack_clean() periodically.  conntrack_clean() return
- * value gives an hint on when the next cleanup must be done (either because
- * there is an actual connection that expires, or because a new connection
- * might be created with the minimum timeout).
- *
- * The logic below has two goals:
- *
- * - We want to reduce the number of wakeups and batch connection cleanup
- *   when the load is not very high.  CT_CLEAN_INTERVAL ensures that if we
- *   are coping with the current cleanup tasks, then we wait at least
- *   5 seconds to do further cleanup.
- *
- * - We don't want to keep the map locked too long, as we might prevent
- *   traffic from flowing.  CT_CLEAN_MIN_INTERVAL ensures that if cleanup is
- *   behind, there is at least some 200ms blocks of time when the map will be
- *   left alone, so the datapath can operate unhindered.
- */
-#define CT_CLEAN_INTERVAL 5000 /* 5 seconds */
-#define CT_CLEAN_MIN_INTERVAL 200  /* 0.2 seconds */
+ * value gives an hint on when the next cleanup must be done. */
+#define CT_CLEAN_MIN_INTERVAL_MS 200
 
 static void *
 clean_thread_main(void *f_)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct conntrack *ct = f_;
 
@@ -1637,9 +1621,9 @@ clean_thread_main(void *f_)
         next_wake = conntrack_clean(ct, now);
 
         if (next_wake < now) {
-            poll_timer_wait_until(now + CT_CLEAN_MIN_INTERVAL);
+            poll_timer_wait_until(now + CT_CLEAN_MIN_INTERVAL_MS);
         } else {
-            poll_timer_wait_until(MAX(next_wake, now + CT_CLEAN_INTERVAL));
+            poll_timer_wait_until(next_wake);
         }
         latch_wait(&ct->clean_thread_exit);
         poll_block();
@@ -2513,6 +2497,16 @@ conn_update(struct conntrack *ct, struct conn *conn, struct dp_packet *pkt,
     return update_res;
 }
 
+static void
+conn_expire_push_front(struct conntrack *ct, struct conn *conn)
+    OVS_REQUIRES(ct->ct_lock)
+{
+    unsigned int curr = ct->next_list;
+
+    ct->next_list = (ct->next_list + 1) % N_EXP_LISTS;
+    rculist_push_front(&ct->exp_lists[curr], &conn->node);
+}
+
 static bool
 conn_expired(struct conn *conn, long long now)
 {
@@ -2539,7 +2533,7 @@ new_conn(struct conntrack *ct, struct dp_packet *pkt, struct conn_key *key,
 }
 
 static void
-delete_conn_cmn(struct conn *conn)
+delete_conn__(struct conn *conn)
 {
     free(conn->alg);
     free(conn);
@@ -2551,18 +2545,9 @@ delete_conn(struct conn *conn)
     ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
     ovs_mutex_destroy(&conn->lock);
     free(conn->nat_conn);
-    delete_conn_cmn(conn);
+    delete_conn__(conn);
 }
 
-/* Only used by conn_clean_one(). */
-static void
-delete_conn_one(struct conn *conn)
-{
-    if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
-        ovs_mutex_destroy(&conn->lock);
-    }
-    delete_conn_cmn(conn);
-}
 
 /* Convert a conntrack address 'a' into an IP address 'b' based on 'dl_type'.
  *
@@ -2714,6 +2699,11 @@ conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
         }
         struct conn *conn;
         INIT_CONTAINER(conn, cm_node, cm_node);
+
+        if (conn_expired(conn, now)) {
+            continue;
+        }
+
         if ((!dump->filter_zone || conn->key.zone == dump->zone) &&
             (conn->conn_type != CT_CONN_TYPE_UN_NAT)) {
             conn_to_ct_dpif_entry(conn, entry, now);
@@ -2735,13 +2725,15 @@ conntrack_flush(struct conntrack *ct, const uint16_t *zone)
 {
     struct conn *conn;
 
-    ovs_mutex_lock(&ct->ct_lock);
     CMAP_FOR_EACH (conn, cm_node, &ct->conns) {
+        if (conn->conn_type != CT_CONN_TYPE_DEFAULT) {
+            continue;
+        }
+
         if (!zone || *zone == conn->key.zone) {
-            conn_clean_one(ct, conn);
+            conn_clean(ct, conn);
         }
     }
-    ovs_mutex_unlock(&ct->ct_lock);
 
     return 0;
 }
@@ -2756,7 +2748,6 @@ conntrack_flush_tuple(struct conntrack *ct, const struct ct_dpif_tuple *tuple,
 
     memset(&key, 0, sizeof(key));
     tuple_to_conn_key(tuple, zone, &key);
-    ovs_mutex_lock(&ct->ct_lock);
     conn_lookup(ct, &key, time_msec(), &conn, NULL);
 
     if (conn && conn->conn_type == CT_CONN_TYPE_DEFAULT) {
@@ -2766,7 +2757,6 @@ conntrack_flush_tuple(struct conntrack *ct, const struct ct_dpif_tuple *tuple,
         error = ENOENT;
     }
 
-    ovs_mutex_unlock(&ct->ct_lock);
     return error;
 }
 
