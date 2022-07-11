@@ -192,7 +192,7 @@ struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
     struct cmap conns OVS_GUARDED;
     struct ovs_list exp_lists[N_CT_TM] OVS_GUARDED;
-    struct hmap zone_limits OVS_GUARDED;
+    struct cmap zone_limits OVS_GUARDED;
     struct hmap timeout_policies OVS_GUARDED;
     uint32_t hash_basis; /* Salt for hashing a connection key. */
     pthread_t clean_thread; /* Periodically cleans up connection tracker. */

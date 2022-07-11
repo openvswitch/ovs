@@ -81,7 +81,7 @@ enum ct_alg_ctl_type {
 };
 
 struct zone_limit {
-    struct hmap_node node;
+    struct cmap_node node;
     struct conntrack_zone_limit czl;
 };
 
@@ -311,7 +311,7 @@ conntrack_init(void)
     for (unsigned i = 0; i < ARRAY_SIZE(ct->exp_lists); i++) {
         ovs_list_init(&ct->exp_lists[i]);
     }
-    hmap_init(&ct->zone_limits);
+    cmap_init(&ct->zone_limits);
     ct->zone_limit_seq = 0;
     timeout_policy_init(ct);
     ovs_mutex_unlock(&ct->ct_lock);
@@ -346,12 +346,25 @@ zone_key_hash(int32_t zone, uint32_t basis)
 }
 
 static struct zone_limit *
-zone_limit_lookup(struct conntrack *ct, int32_t zone)
+zone_limit_lookup_protected(struct conntrack *ct, int32_t zone)
     OVS_REQUIRES(ct->ct_lock)
 {
     uint32_t hash = zone_key_hash(zone, ct->hash_basis);
     struct zone_limit *zl;
-    HMAP_FOR_EACH_IN_BUCKET (zl, node, hash, &ct->zone_limits) {
+    CMAP_FOR_EACH_WITH_HASH_PROTECTED (zl, node, hash, &ct->zone_limits) {
+        if (zl->czl.zone == zone) {
+            return zl;
+        }
+    }
+    return NULL;
+}
+
+static struct zone_limit *
+zone_limit_lookup(struct conntrack *ct, int32_t zone)
+{
+    uint32_t hash = zone_key_hash(zone, ct->hash_basis);
+    struct zone_limit *zl;
+    CMAP_FOR_EACH_WITH_HASH (zl, node, hash, &ct->zone_limits) {
         if (zl->czl.zone == zone) {
             return zl;
         }
@@ -361,7 +374,6 @@ zone_limit_lookup(struct conntrack *ct, int32_t zone)
 
 static struct zone_limit *
 zone_limit_lookup_or_default(struct conntrack *ct, int32_t zone)
-    OVS_REQUIRES(ct->ct_lock)
 {
     struct zone_limit *zl = zone_limit_lookup(ct, zone);
     return zl ? zl : zone_limit_lookup(ct, DEFAULT_ZONE);
@@ -370,13 +382,16 @@ zone_limit_lookup_or_default(struct conntrack *ct, int32_t zone)
 struct conntrack_zone_limit
 zone_limit_get(struct conntrack *ct, int32_t zone)
 {
-    ovs_mutex_lock(&ct->ct_lock);
-    struct conntrack_zone_limit czl = {DEFAULT_ZONE, 0, 0, 0};
+    struct conntrack_zone_limit czl = {
+        .zone = DEFAULT_ZONE,
+        .limit = 0,
+        .count = ATOMIC_COUNT_INIT(0),
+        .zone_limit_seq = 0,
+    };
     struct zone_limit *zl = zone_limit_lookup_or_default(ct, zone);
     if (zl) {
         czl = zl->czl;
     }
-    ovs_mutex_unlock(&ct->ct_lock);
     return czl;
 }
 
@@ -384,13 +399,19 @@ static int
 zone_limit_create(struct conntrack *ct, int32_t zone, uint32_t limit)
     OVS_REQUIRES(ct->ct_lock)
 {
+    struct zone_limit *zl = zone_limit_lookup_protected(ct, zone);
+
+    if (zl) {
+        return 0;
+    }
+
     if (zone >= DEFAULT_ZONE && zone <= MAX_ZONE) {
-        struct zone_limit *zl = xzalloc(sizeof *zl);
+        zl = xzalloc(sizeof *zl);
         zl->czl.limit = limit;
         zl->czl.zone = zone;
         zl->czl.zone_limit_seq = ct->zone_limit_seq++;
         uint32_t hash = zone_key_hash(zone, ct->hash_basis);
-        hmap_insert(&ct->zone_limits, &zl->node, hash);
+        cmap_insert(&ct->zone_limits, &zl->node, hash);
         return 0;
     } else {
         return EINVAL;
@@ -401,13 +422,14 @@ int
 zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit)
 {
     int err = 0;
-    ovs_mutex_lock(&ct->ct_lock);
     struct zone_limit *zl = zone_limit_lookup(ct, zone);
     if (zl) {
         zl->czl.limit = limit;
         VLOG_INFO("Changed zone limit of %u for zone %d", limit, zone);
     } else {
+        ovs_mutex_lock(&ct->ct_lock);
         err = zone_limit_create(ct, zone, limit);
+        ovs_mutex_unlock(&ct->ct_lock);
         if (!err) {
             VLOG_INFO("Created zone limit of %u for zone %d", limit, zone);
         } else {
@@ -415,7 +437,6 @@ zone_limit_update(struct conntrack *ct, int32_t zone, uint32_t limit)
                       zone);
         }
     }
-    ovs_mutex_unlock(&ct->ct_lock);
     return err;
 }
 
@@ -423,23 +444,25 @@ static void
 zone_limit_clean(struct conntrack *ct, struct zone_limit *zl)
     OVS_REQUIRES(ct->ct_lock)
 {
-    hmap_remove(&ct->zone_limits, &zl->node);
-    free(zl);
+    uint32_t hash = zone_key_hash(zl->czl.zone, ct->hash_basis);
+    cmap_remove(&ct->zone_limits, &zl->node, hash);
+    ovsrcu_postpone(free, zl);
 }
 
 int
 zone_limit_delete(struct conntrack *ct, uint16_t zone)
 {
     ovs_mutex_lock(&ct->ct_lock);
-    struct zone_limit *zl = zone_limit_lookup(ct, zone);
+    struct zone_limit *zl = zone_limit_lookup_protected(ct, zone);
     if (zl) {
         zone_limit_clean(ct, zl);
+        ovs_mutex_unlock(&ct->ct_lock);
         VLOG_INFO("Deleted zone limit for zone %d", zone);
     } else {
+        ovs_mutex_unlock(&ct->ct_lock);
         VLOG_INFO("Attempted delete of non-existent zone limit: zone %d",
                   zone);
     }
-    ovs_mutex_unlock(&ct->ct_lock);
     return 0;
 }
 
@@ -456,7 +479,7 @@ conn_clean_cmn(struct conntrack *ct, struct conn *conn)
 
     struct zone_limit *zl = zone_limit_lookup(ct, conn->admit_zone);
     if (zl && zl->czl.zone_limit_seq == conn->zone_limit_seq) {
-        zl->czl.count--;
+        atomic_count_dec(&zl->czl.count);
     }
 }
 
@@ -510,10 +533,13 @@ conntrack_destroy(struct conntrack *ct)
     cmap_destroy(&ct->conns);
 
     struct zone_limit *zl;
-    HMAP_FOR_EACH_POP (zl, node, &ct->zone_limits) {
-        free(zl);
+    CMAP_FOR_EACH (zl, node, &ct->zone_limits) {
+        uint32_t hash = zone_key_hash(zl->czl.zone, ct->hash_basis);
+
+        cmap_remove(&ct->zone_limits, &zl->node, hash);
+        ovsrcu_postpone(free, zl);
     }
-    hmap_destroy(&ct->zone_limits);
+    cmap_destroy(&ct->zone_limits);
 
     struct timeout_policy *tp;
     HMAP_FOR_EACH_POP (tp, node, &ct->timeout_policies) {
@@ -991,7 +1017,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
     if (commit) {
         struct zone_limit *zl = zone_limit_lookup_or_default(ct,
                                                              ctx->key.zone);
-        if (zl && zl->czl.count >= zl->czl.limit) {
+        if (zl && atomic_count_get(&zl->czl.count) >= zl->czl.limit) {
             return nc;
         }
 
@@ -1064,7 +1090,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
         if (zl) {
             nc->admit_zone = zl->czl.zone;
             nc->zone_limit_seq = zl->czl.zone_limit_seq;
-            zl->czl.count++;
+            atomic_count_inc(&zl->czl.count);
         } else {
             nc->admit_zone = INVALID_ZONE;
         }
