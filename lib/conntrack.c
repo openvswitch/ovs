@@ -586,14 +586,17 @@ conn_key_lookup(struct conntrack *ct, const struct conn_key *key,
     bool found = false;
 
     CMAP_FOR_EACH_WITH_HASH (conn, cm_node, hash, &ct->conns) {
-        if (!conn_key_cmp(&conn->key, key) && !conn_expired(conn, now)) {
+        if (conn_expired(conn, now)) {
+            continue;
+        }
+        if (!conn_key_cmp(&conn->key, key)) {
             found = true;
             if (reply) {
                 *reply = false;
             }
             break;
         }
-        if (!conn_key_cmp(&conn->rev_key, key) && !conn_expired(conn, now)) {
+        if (!conn_key_cmp(&conn->rev_key, key)) {
             found = true;
             if (reply) {
                 *reply = true;
