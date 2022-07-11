@@ -113,7 +113,7 @@ struct conntrack_zone_limit {
 };
 
 struct timeout_policy {
-    struct hmap_node node;
+    struct cmap_node node;
     struct ct_dpif_timeout_policy policy;
 };
 
