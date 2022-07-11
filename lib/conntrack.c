@@ -100,6 +100,7 @@ static enum ct_update_res conn_update(struct conntrack *ct, struct conn *conn,
                                       struct dp_packet *pkt,
                                       struct conn_lookup_ctx *ctx,
                                       long long now);
+static long long int conn_expiration(const struct conn *);
 static bool conn_expired(struct conn *, long long now);
 static void conn_expire_push_front(struct conntrack *ct, struct conn *conn);
 static void set_mark(struct dp_packet *, struct conn *,
@@ -515,9 +516,7 @@ conn_clean(struct conntrack *ct, struct conn *conn)
 static void
 conn_force_expire(struct conn *conn)
 {
-    ovs_mutex_lock(&conn->lock);
-    conn->expiration = 0;
-    ovs_mutex_unlock(&conn->lock);
+    atomic_store_relaxed(&conn->expiration, 0);
 }
 
 /* Destroys the connection tracker 'ct' and frees all the allocated memory.
@@ -972,13 +971,10 @@ un_nat_packet(struct dp_packet *pkt, const struct conn *conn,
 static void
 conn_seq_skew_set(struct conntrack *ct, const struct conn *conn_in,
                   long long now, int seq_skew, bool seq_skew_dir)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct conn *conn;
-    ovs_mutex_unlock(&conn_in->lock);
-    conn_lookup(ct, &conn_in->key, now, &conn, NULL);
-    ovs_mutex_lock(&conn_in->lock);
 
+    conn_lookup(ct, &conn_in->key, now, &conn, NULL);
     if (conn && seq_skew) {
         conn->seq_skew = seq_skew;
         conn->seq_skew_dir = seq_skew_dir;
@@ -2507,14 +2503,21 @@ conn_expire_push_front(struct conntrack *ct, struct conn *conn)
     rculist_push_front(&ct->exp_lists[curr], &conn->node);
 }
 
+static long long int
+conn_expiration(const struct conn *conn)
+{
+    long long int expiration;
+
+    atomic_read_relaxed(&CONST_CAST(struct conn *, conn)->expiration,
+                        &expiration);
+    return expiration;
+}
+
 static bool
 conn_expired(struct conn *conn, long long now)
 {
     if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
-        ovs_mutex_lock(&conn->lock);
-        bool expired = now >= conn->expiration ? true : false;
-        ovs_mutex_unlock(&conn->lock);
-        return expired;
+        return now >= conn_expiration(conn);
     }
     return false;
 }
@@ -2647,7 +2650,7 @@ conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
     entry->mark = conn->mark;
     memcpy(&entry->labels, &conn->label, sizeof entry->labels);
 
-    long long expiration = conn->expiration - now;
+    long long expiration = conn_expiration(conn) - now;
 
     struct ct_l4_proto *class = l4_protos[conn->key.nw_proto];
     if (class->conn_get_protoinfo) {

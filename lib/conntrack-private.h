@@ -136,7 +136,7 @@ struct conn {
     /* Mutable data. */
     struct ovs_mutex lock; /* Guards all mutable fields. */
     ovs_u128 label;
-    long long expiration;
+    atomic_llong expiration;
     uint32_t mark;
     int seq_skew;
 

@@ -255,7 +255,7 @@ conn_update_expiration(struct conntrack *ct, struct conn *conn,
                 "val=%u sec.",
                 ct_timeout_str[tm], conn->key.zone, conn->tp_id, val);
 
-    conn->expiration = now + val * 1000;
+    atomic_store_relaxed(&conn->expiration, now + val * 1000);
 }
 
 void
