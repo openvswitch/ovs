@@ -1100,6 +1100,7 @@ static void execute_hash(struct sk_buff *skb, struct sw_flow_key *key,
 	u32 hash = 0;
 
 	/* OVS_HASH_ALG_L4 is the only possible hash algorithm.  */
+	skb->l4_hash = 0;
 	hash = skb_get_hash(skb);
 	hash = jhash_1word(hash, hash_act->hash_basis);
 	if (!hash)
