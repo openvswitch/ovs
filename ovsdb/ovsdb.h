@@ -21,6 +21,7 @@
 #include "openvswitch/list.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/uuid.h"
+#include "ovs-thread.h"
 
 struct json;
 struct ovsdb_log;
