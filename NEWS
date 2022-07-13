@@ -52,6 +52,7 @@ Post-v2.17.0
        The old variant is kept for backward compatibility.
    - Linux datapath:
      * Add offloading meter tc police.
+     * Add support for offloading the check_pkt_len action.
 
 
 v2.17.0 - 17 Feb 2022
