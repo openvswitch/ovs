@@ -4,7 +4,7 @@
 # appropriate type and properties
 m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15 fail-mode=secure ]])
 
-# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [dbinit-aux-args])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -12,10 +12,12 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" protoco
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
 # specifies the expected output after filtering through uuidfilt.
+# 'dbinit-aux-args' are passed as additional commands to 'ovs-vsctl init'
+# before starting ovs-vswitchd.
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [
    OVS_WAIT_WHILE([ip link show ovs-netdev])
-   _OVS_VSWITCHD_START([--disable-system])
+   _OVS_VSWITCHD_START([--disable-system], [$3])
    dnl Add bridges, ports, etc.
    OVS_WAIT_WHILE([ip link show br0])
    AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:userspace-tso-enable=true])

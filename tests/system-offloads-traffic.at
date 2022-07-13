@@ -39,9 +39,8 @@ AT_CLEANUP
 
 
 AT_SETUP([offloads - ping between two ports - offloads enabled])
-OVS_TRAFFIC_VSWITCHD_START()
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -97,8 +96,7 @@ AT_CLEANUP
 AT_SETUP([offloads - set ingress_policing_rate and ingress_policing_burst - offloads enabled])
 AT_KEYWORDS([ingress_policing])
 AT_SKIP_IF([test $HAVE_TC = "no"])
-OVS_TRAFFIC_VSWITCHD_START()
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 ADD_NAMESPACES(at_ns0)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
@@ -146,8 +144,7 @@ AT_CLEANUP
 AT_SETUP([offloads - set ingress_policing_kpkts_rate and ingress_policing_kpkts_burst - offloads enabled])
 AT_KEYWORDS([ingress_policing_kpkts])
 AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
-OVS_TRAFFIC_VSWITCHD_START()
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 ADD_NAMESPACES(at_ns0)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
@@ -220,9 +217,8 @@ AT_CLEANUP
 AT_SETUP([offloads - check interface meter offloading -  offloads enabled])
 AT_KEYWORDS([offload-meter])
 AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
-OVS_TRAFFIC_VSWITCHD_START()
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
 
 ADD_NAMESPACES(at_ns0, at_ns1)

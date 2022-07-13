@@ -4,7 +4,7 @@
 # appropriate type and properties
 m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15 fail-mode=secure ]])
 
-# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [dbinit-aux-args]])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -12,6 +12,8 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow1
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
 # specifies the expected output after filtering through uuidfilt.
+# 'dbinit-aux-args' are passed as additional commands to 'ovs-vsctl init'
+# before starting ovs-vswitchd.
 #
 # Best-effort loading of all available vport modules is performed.
 #
@@ -24,7 +26,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
               ])
    on_exit 'ovs-dpctl del-dp ovs-system'
    on_exit 'ovs-appctl dpctl/flush-conntrack'
-   _OVS_VSWITCHD_START([])
+   _OVS_VSWITCHD_START([], [$3])
    dnl Add bridges, ports, etc.
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
