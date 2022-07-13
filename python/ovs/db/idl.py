@@ -1031,7 +1031,8 @@ class Row(object):
         return "{table}({data})".format(
             table=self._table.name,
             data=", ".join("{col}={val}".format(col=c, val=getattr(self, c))
-                           for c in sorted(self._table.columns)))
+                           for c in sorted(self._table.columns)
+                           if hasattr(self, c)))
 
     def __getattr__(self, column_name):
         assert self._changes is not None
