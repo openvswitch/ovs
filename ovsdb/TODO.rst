@@ -21,23 +21,23 @@
 
       Avoid deeper levels because they do not render well.
 
-===========================
-OVSDB Clustering To-do List
-===========================
+================
+OVSDB To-do List
+================
 
-* Ephemeral columns.
+* Clustered:
 
-* Locks.
+  * Ephemeral columns.
 
-* Tons of unit tests.
+  * Locks.
 
-* Increase exponential backoff cap.  Introduce randomization.
+  * Tons of unit tests.
 
-* Include index with monitor update?
+  * Include index with monitor update?
 
-* Testing with replication.
+  * Testing with replication.
 
-* Handling bad transactions in read_db().  (Kill the database?)
+  * Handling bad transactions in read_db().  (Kill the database?)
 
 * Documentation:
 
@@ -45,8 +45,28 @@ OVSDB Clustering To-do List
 
   * Overall diagram explaining the cluster and ovsdb protocol pieces
 
-* Future work:
+  * How-To guide for the Local_Config database.
 
-  * File format with diff support.
+* General:
 
-  * Future work: DNS or directory support
+  * Increase exponential backoff cap.  Introduce randomization.
+
+  * Non-blocking (not blocking the main thread) ovsdb-server/compact unixctl.
+
+* Local_Config database extension:
+
+  * Add a configuration tool to configure remotes.
+
+  * Allow configuration of relays.
+
+  * Allow configuration of active-backup replication.
+
+* Relay:
+
+  * Try to inherit min_index from the relay source?
+
+* Standalone:
+
+  * Add support for parallel snapshot JSON generation.
+
+  * Add support for transaction history?
