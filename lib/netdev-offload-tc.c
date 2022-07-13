@@ -1603,6 +1603,149 @@ parse_match_ct_state_to_flower(struct tc_flower *flower, struct match *match)
 }
 
 static int
+netdev_tc_parse_nl_actions(struct netdev *netdev, struct tc_flower *flower,
+                           struct offload_info *info,
+                           const struct nlattr *actions, size_t actions_len,
+                           bool *recirc_act)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    const struct nlattr *nla;
+    size_t left;
+
+    NL_ATTR_FOR_EACH (nla, left, actions, actions_len) {
+        struct tc_action *action;
+        int err;
+
+        if (flower->action_count >= TCA_ACT_MAX_NUM) {
+            VLOG_DBG_RL(&rl, "Can only support %d actions", TCA_ACT_MAX_NUM);
+            return EOPNOTSUPP;
+        }
+
+        action = &flower->actions[flower->action_count];
+
+        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+            odp_port_t port = nl_attr_get_odp_port(nla);
+            struct netdev *outdev = netdev_ports_get(
+                                        port, netdev_get_dpif_type(netdev));
+
+            if (!outdev) {
+                VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
+                return ENODEV;
+            }
+
+            if (!netdev_flow_api_equals(netdev, outdev)) {
+                VLOG_DBG_RL(&rl,
+                            "Flow API provider mismatch between ingress (%s) "
+                            "and egress (%s) ports",
+                            netdev_get_name(netdev), netdev_get_name(outdev));
+                netdev_close(outdev);
+                return EOPNOTSUPP;
+            }
+
+            action->out.ifindex_out = netdev_get_ifindex(outdev);
+            if (action->out.ifindex_out < 0) {
+                VLOG_DBG_RL(&rl,
+                            "Can't find ifindex for output port %s, error %d",
+                            netdev_get_name(outdev), action->out.ifindex_out);
+                netdev_close(outdev);
+                return -action->out.ifindex_out;
+            }
+
+            action->out.ingress = is_internal_port(netdev_get_type(outdev));
+            action->type = TC_ACT_OUTPUT;
+            flower->action_count++;
+            netdev_close(outdev);
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_VLAN) {
+            const struct ovs_action_push_vlan *vlan_push = nl_attr_get(nla);
+
+            action->vlan.vlan_push_tpid = vlan_push->vlan_tpid;
+            action->vlan.vlan_push_id = vlan_tci_to_vid(vlan_push->vlan_tci);
+            action->vlan.vlan_push_prio = vlan_tci_to_pcp(vlan_push->vlan_tci);
+            action->type = TC_ACT_VLAN_PUSH;
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
+            action->type = TC_ACT_VLAN_POP;
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_MPLS) {
+            const struct ovs_action_push_mpls *mpls_push = nl_attr_get(nla);
+
+            action->mpls.proto = mpls_push->mpls_ethertype;
+            action->mpls.label = mpls_lse_to_label(mpls_push->mpls_lse);
+            action->mpls.tc = mpls_lse_to_tc(mpls_push->mpls_lse);
+            action->mpls.ttl = mpls_lse_to_ttl(mpls_push->mpls_lse);
+            action->mpls.bos = mpls_lse_to_bos(mpls_push->mpls_lse);
+            action->type = TC_ACT_MPLS_PUSH;
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_MPLS) {
+            action->mpls.proto = nl_attr_get_be16(nla);
+            action->type = TC_ACT_MPLS_POP;
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET) {
+            const struct nlattr *set = nl_attr_get(nla);
+            const size_t set_len = nl_attr_get_size(nla);
+
+            err = parse_put_flow_set_action(flower, action, set, set_len);
+            if (err) {
+                return err;
+            }
+            if (action->type == TC_ACT_ENCAP) {
+                action->encap.tp_dst = info->tp_dst_port;
+                action->encap.no_csum = !info->tunnel_csum_on;
+            }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
+            const struct nlattr *set = nl_attr_get(nla);
+            const size_t set_len = nl_attr_get_size(nla);
+
+            err = parse_put_flow_set_masked_action(flower, action, set,
+                                                   set_len, true);
+            if (err) {
+                return err;
+            }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT) {
+            const struct nlattr *ct = nl_attr_get(nla);
+            const size_t ct_len = nl_attr_get_size(nla);
+
+            if (!ct_state_support) {
+                return -EOPNOTSUPP;
+            }
+
+            err = parse_put_flow_ct_action(flower, action, ct, ct_len);
+            if (err) {
+                return err;
+            }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT_CLEAR) {
+            action->type = TC_ACT_CT;
+            action->ct.clear = true;
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_RECIRC) {
+            action->type = TC_ACT_GOTO;
+            action->chain = nl_attr_get_u32(nla);
+            flower->action_count++;
+            *recirc_act = true;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_DROP) {
+            action->type = TC_ACT_GOTO;
+            action->chain = 0;  /* 0 is reserved and not used by recirc. */
+            flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_METER) {
+            uint32_t police_index, meter_id;
+
+            meter_id = nl_attr_get_u32(nla);
+            if (meter_id_lookup(meter_id, &police_index)) {
+                return EOPNOTSUPP;
+            }
+            action->type = TC_ACT_POLICE;
+            action->police.index = police_index;
+            flower->action_count++;
+        } else {
+            VLOG_DBG_RL(&rl, "unsupported put action type: %d",
+                        nl_attr_type(nla));
+            return EOPNOTSUPP;
+        }
+    }
+    return 0;
+}
+
+static int
 netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                    struct nlattr *actions, size_t actions_len,
                    const ovs_u128 *ufid, struct offload_info *info,
@@ -1615,13 +1758,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     struct flow *mask = &match->wc.masks;
     const struct flow_tnl *tnl = &match->flow.tunnel;
     const struct flow_tnl *tnl_mask = &mask->tunnel;
-    struct tc_action *action;
     bool recirc_act = false;
     uint32_t block_id = 0;
-    struct nlattr *nla;
     struct tcf_id id;
     uint32_t chain;
-    size_t left;
     int prio = 0;
     int ifindex;
     int err;
@@ -1866,130 +2006,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         return err;
     }
 
-    NL_ATTR_FOR_EACH(nla, left, actions, actions_len) {
-        if (flower.action_count >= TCA_ACT_MAX_NUM) {
-            VLOG_DBG_RL(&rl, "Can only support %d actions", TCA_ACT_MAX_NUM);
-            return EOPNOTSUPP;
-        }
-        action = &flower.actions[flower.action_count];
-        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
-            odp_port_t port = nl_attr_get_odp_port(nla);
-            struct netdev *outdev = netdev_ports_get(
-                                        port, netdev_get_dpif_type(netdev));
-
-            if (!outdev) {
-                VLOG_DBG_RL(&rl, "Can't find netdev for output port %d", port);
-                return ENODEV;
-            }
-
-            if (!netdev_flow_api_equals(netdev, outdev)) {
-                VLOG_DBG_RL(&rl,
-                            "Flow API provider mismatch between ingress (%s) "
-                            "and egress (%s) ports",
-                            netdev_get_name(netdev), netdev_get_name(outdev));
-                netdev_close(outdev);
-                return EOPNOTSUPP;
-            }
-
-            action->out.ifindex_out = netdev_get_ifindex(outdev);
-            if (action->out.ifindex_out < 0) {
-                VLOG_DBG_RL(&rl,
-                            "Can't find ifindex for output port %s, error %d",
-                            netdev_get_name(outdev), action->out.ifindex_out);
-                netdev_close(outdev);
-                return -action->out.ifindex_out;
-            }
-
-            action->out.ingress = is_internal_port(netdev_get_type(outdev));
-            action->type = TC_ACT_OUTPUT;
-            flower.action_count++;
-            netdev_close(outdev);
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_VLAN) {
-            const struct ovs_action_push_vlan *vlan_push = nl_attr_get(nla);
-
-            action->vlan.vlan_push_tpid = vlan_push->vlan_tpid;
-            action->vlan.vlan_push_id = vlan_tci_to_vid(vlan_push->vlan_tci);
-            action->vlan.vlan_push_prio = vlan_tci_to_pcp(vlan_push->vlan_tci);
-            action->type = TC_ACT_VLAN_PUSH;
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
-            action->type = TC_ACT_VLAN_POP;
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_MPLS) {
-            const struct ovs_action_push_mpls *mpls_push = nl_attr_get(nla);
-
-            action->mpls.proto = mpls_push->mpls_ethertype;
-            action->mpls.label = mpls_lse_to_label(mpls_push->mpls_lse);
-            action->mpls.tc = mpls_lse_to_tc(mpls_push->mpls_lse);
-            action->mpls.ttl = mpls_lse_to_ttl(mpls_push->mpls_lse);
-            action->mpls.bos = mpls_lse_to_bos(mpls_push->mpls_lse);
-            action->type = TC_ACT_MPLS_PUSH;
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_MPLS) {
-            action->mpls.proto = nl_attr_get_be16(nla);
-            action->type = TC_ACT_MPLS_POP;
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET) {
-            const struct nlattr *set = nl_attr_get(nla);
-            const size_t set_len = nl_attr_get_size(nla);
-
-            err = parse_put_flow_set_action(&flower, action, set, set_len);
-            if (err) {
-                return err;
-            }
-            if (action->type == TC_ACT_ENCAP) {
-                action->encap.tp_dst = info->tp_dst_port;
-                action->encap.no_csum = !info->tunnel_csum_on;
-            }
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
-            const struct nlattr *set = nl_attr_get(nla);
-            const size_t set_len = nl_attr_get_size(nla);
-
-            err = parse_put_flow_set_masked_action(&flower, action, set,
-                                                   set_len, true);
-            if (err) {
-                return err;
-            }
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT) {
-            const struct nlattr *ct = nl_attr_get(nla);
-            const size_t ct_len = nl_attr_get_size(nla);
-
-            if (!ct_state_support) {
-                return -EOPNOTSUPP;
-            }
-
-            err = parse_put_flow_ct_action(&flower, action, ct, ct_len);
-            if (err) {
-                return err;
-            }
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CT_CLEAR) {
-            action->type = TC_ACT_CT;
-            action->ct.clear = true;
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_RECIRC) {
-            action->type = TC_ACT_GOTO;
-            action->chain = nl_attr_get_u32(nla);
-            flower.action_count++;
-            recirc_act = true;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_DROP) {
-            action->type = TC_ACT_GOTO;
-            action->chain = 0;  /* 0 is reserved and not used by recirc. */
-            flower.action_count++;
-        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_METER) {
-            uint32_t police_index, meter_id;
-
-            meter_id = nl_attr_get_u32(nla);
-            if (meter_id_lookup(meter_id, &police_index)) {
-                return EOPNOTSUPP;
-            }
-            action->type = TC_ACT_POLICE;
-            action->police.index = police_index;
-            flower.action_count++;
-        } else {
-            VLOG_DBG_RL(&rl, "unsupported put action type: %d",
-                        nl_attr_type(nla));
-            return EOPNOTSUPP;
-        }
+    /* Parse all (nested) actions. */
+    err = netdev_tc_parse_nl_actions(netdev, &flower, info,
+                                     actions, actions_len, &recirc_act);
+    if (err) {
+        return err;
     }
 
     if ((chain || recirc_act) && !info->recirc_id_shared_with_tc) {
