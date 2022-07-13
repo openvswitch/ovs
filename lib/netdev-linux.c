@@ -5711,22 +5711,24 @@ tc_update_policer_action_stats(struct ofpbuf *msg,
     const struct nlattr *act;
     struct nlattr *prio;
     struct tcamsg *tca;
-    int error;
+    int error = 0;
 
     if (!stats) {
-        return 0;
+        goto exit;
     }
 
     if (NLMSG_HDRLEN + sizeof *tca > msg->size) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, size error");
-        return EPROTO;
+        error = EPROTO;
+        goto exit;
     }
 
     tca = ofpbuf_at_assert(msg, NLMSG_HDRLEN, sizeof *tca);
     act = nl_attr_find(msg, NLMSG_HDRLEN + sizeof *tca, TCA_ACT_TAB);
     if (!act) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, can't find attribute");
-        return EPROTO;
+        error = EPROTO;
+        goto exit;
     }
 
     prio = (struct nlattr *) act + 1;
@@ -5747,6 +5749,8 @@ tc_update_policer_action_stats(struct ofpbuf *msg,
         }
     }
 
+exit:
+    ofpbuf_delete(msg);
     return error;
 }
 
