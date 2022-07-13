@@ -2876,8 +2876,8 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
                      &first_word_mask, &mask, &data);
 
         for (j = 0; j < cnt; j++,  mask++, data++, cur_offset += 4) {
-            ovs_be32 mask_word = *mask;
-            ovs_be32 data_word = *data;
+            ovs_be32 mask_word = get_unaligned_be32(mask);
+            ovs_be32 data_word = get_unaligned_be32(data);
 
             if (j == 0) {
                 mask_word &= first_word_mask;
