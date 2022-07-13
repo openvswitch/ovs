@@ -1295,7 +1295,8 @@ class Row(object):
         return "{table}({data})".format(
             table=self._table.name,
             data=", ".join("{col}={val}".format(col=c, val=getattr(self, c))
-                           for c in sorted(self._table.columns)))
+                           for c in sorted(self._table.columns)
+                           if hasattr(self, c)))
 
     def _uuid_to_row(self, atom, base):
         if base.ref_table:
