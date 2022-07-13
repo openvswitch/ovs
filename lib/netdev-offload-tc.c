@@ -76,8 +76,6 @@ struct policer_node {
     uint32_t police_idx;
 };
 
-#define METER_POLICE_IDS_BASE 0x10000000
-#define METER_POLICE_IDS_MAX  0x1FFFFFFF
 /* Protects below meter police ids pool. */
 static struct ovs_mutex meter_police_ids_mutex = OVS_MUTEX_INITIALIZER;
 static struct id_pool *meter_police_ids OVS_GUARDED_BY(meter_police_ids_mutex);
@@ -90,6 +88,14 @@ static struct hmap police_idx_to_meter_id OVS_GUARDED_BY(meter_mutex)
 
 static int meter_id_lookup(uint32_t meter_id, uint32_t *police_idx);
 static int police_idx_lookup(uint32_t police_idx, uint32_t *meter_id);
+
+static int netdev_tc_parse_nl_actions(struct netdev *netdev,
+                                      struct tc_flower *flower,
+                                      struct offload_info *info,
+                                      const struct nlattr *actions,
+                                      size_t actions_len,
+                                      bool *recirc_act, bool more_actions,
+                                      struct tc_action **need_jump_update);
 
 static bool
 is_internal_port(const char *type)
@@ -863,6 +869,45 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             nl_msg_put_u32(buf, OVS_ACTION_ATTR_METER, meter_id);
         }
         break;
+        case TC_ACT_POLICE_MTU: {
+            size_t offset, act_offset;
+            uint32_t jump;
+
+            offset = nl_msg_start_nested(buf,
+                                         OVS_ACTION_ATTR_CHECK_PKT_LEN);
+
+            nl_msg_put_u16(buf, OVS_CHECK_PKT_LEN_ATTR_PKT_LEN,
+                           action->police.mtu);
+
+            act_offset = nl_msg_start_nested(
+                buf, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
+            i = parse_tc_flower_to_actions__(flower, buf, i + 1,
+                                             action->police.result_jump);
+            nl_msg_end_nested(buf, act_offset);
+
+            act_offset = nl_msg_start_nested(
+                buf, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL);
+
+            jump = flower->actions[i - 1].jump_action;
+            if (jump == JUMP_ACTION_STOP) {
+                jump = max_index;
+            }
+            if (jump != 0) {
+                i = parse_tc_flower_to_actions__(flower, buf, i, jump);
+            }
+            nl_msg_end_nested(buf, act_offset);
+
+            i--;
+            nl_msg_end_nested(buf, offset);
+        }
+        break;
+        }
+
+        if (action->jump_action && action->type != TC_ACT_POLICE_MTU) {
+            /* If there is a jump, it means this was the end of an action
+             * set and we need to end this branch. */
+            i++;
+            break;
         }
     }
     return i;
@@ -1622,11 +1667,121 @@ parse_match_ct_state_to_flower(struct tc_flower *flower, struct match *match)
     }
 }
 
+
+static int
+parse_check_pkt_len_action(struct netdev *netdev, struct tc_flower *flower,
+                           struct offload_info *info, struct tc_action *action,
+                           const struct nlattr *nla, bool last_action,
+                           struct tc_action **need_jump_update,
+                           bool *recirc_act)
+{
+    struct tc_action *ge_jump_update = NULL, *le_jump_update = NULL;
+    const struct nlattr *nl_actions;
+    int err, le_offset, gt_offset;
+    uint16_t pkt_len;
+
+    static const struct nl_policy ovs_cpl_policy[] = {
+        [OVS_CHECK_PKT_LEN_ATTR_PKT_LEN] = { .type = NL_A_U16 },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] = { .type = NL_A_NESTED },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]
+            = { .type = NL_A_NESTED },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_cpl_policy)];
+
+    if (!nl_parse_nested(nla, ovs_cpl_policy, a, ARRAY_SIZE(a))) {
+        VLOG_INFO("Received invalid formatted OVS_ACTION_ATTR_CHECK_PKT_LEN!");
+        return EOPNOTSUPP;
+    }
+
+    if (!a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] ||
+        !a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]) {
+        VLOG_INFO("Received invalid OVS_CHECK_PKT_LEN_ATTR_ACTION_IF_*!");
+        return EOPNOTSUPP;
+    }
+
+    pkt_len = nl_attr_get_u16(a[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN]);
+
+    /* Add the police mtu action first in the allocated slot. */
+    action->police.mtu = pkt_len;
+    action->type = TC_ACT_POLICE_MTU;
+    le_offset = flower->action_count++;
+
+    /* Parse and add the greater than action(s).
+     * NOTE: The last_action parameter means that there are no more actions
+     *       after the if () then ... else () case. */
+    nl_actions = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
+    err = netdev_tc_parse_nl_actions(netdev, flower, info,
+                                     nl_attr_get(nl_actions),
+                                     nl_attr_get_size(nl_actions),
+                                     recirc_act, !last_action,
+                                     &ge_jump_update);
+    if (err) {
+        return err;
+    }
+
+    /* Update goto offset for le actions. */
+    flower->actions[le_offset].police.result_jump = flower->action_count;
+
+    gt_offset = flower->action_count;
+
+    /* Parse and add the less than action(s). */
+    nl_actions = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL];
+    err = netdev_tc_parse_nl_actions(netdev, flower, info,
+                                     nl_attr_get(nl_actions),
+                                     nl_attr_get_size(nl_actions),
+                                     recirc_act, !last_action,
+                                     &le_jump_update);
+
+    if (gt_offset == flower->action_count && last_action) {
+        /* No le actions where added, fix gt offset. */
+        flower->actions[le_offset].police.result_jump = JUMP_ACTION_STOP;
+    }
+
+    /* Update goto offset for gt actions to skip the le ones. */
+    if (last_action) {
+        flower->actions[gt_offset - 1].jump_action = JUMP_ACTION_STOP;
+
+        if (need_jump_update) {
+            *need_jump_update = NULL;
+        }
+    } else {
+        if (gt_offset == flower->action_count) {
+            flower->actions[gt_offset - 1].jump_action = 0;
+        } else {
+            flower->actions[gt_offset - 1].jump_action = flower->action_count;
+        }
+        /* If we have nested if() else () the if actions jump over the else
+         * and will end-up in the outer else () case, which it should have
+         * skipped. To void this we return the "potential" inner if() goto to
+         * need_jump_update, so it can be updated on return!
+         */
+        if (need_jump_update) {
+            *need_jump_update = &flower->actions[gt_offset - 1];
+        }
+    }
+
+    if (le_jump_update != NULL) {
+        le_jump_update->jump_action =
+            flower->actions[gt_offset - 1].jump_action;
+    }
+    if (ge_jump_update != NULL) {
+        ge_jump_update->jump_action =
+            flower->actions[gt_offset - 1].jump_action;
+    }
+
+    if (err) {
+        return err;
+    }
+
+    return 0;
+}
+
 static int
 netdev_tc_parse_nl_actions(struct netdev *netdev, struct tc_flower *flower,
                            struct offload_info *info,
                            const struct nlattr *actions, size_t actions_len,
-                           bool *recirc_act)
+                           bool *recirc_act, bool more_actions,
+                           struct tc_action **need_jump_update)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     const struct nlattr *nla;
@@ -1756,6 +1911,16 @@ netdev_tc_parse_nl_actions(struct netdev *netdev, struct tc_flower *flower,
             action->type = TC_ACT_POLICE;
             action->police.index = police_index;
             flower->action_count++;
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_CHECK_PKT_LEN) {
+            err = parse_check_pkt_len_action(netdev, flower, info, action, nla,
+                                             nl_attr_len_pad(nla,
+                                                             left) >= left
+                                             && !more_actions,
+                                             need_jump_update,
+                                             recirc_act);
+            if (err) {
+                return err;
+            }
         } else {
             VLOG_DBG_RL(&rl, "unsupported put action type: %d",
                         nl_attr_type(nla));
@@ -2028,7 +2193,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     /* Parse all (nested) actions. */
     err = netdev_tc_parse_nl_actions(netdev, &flower, info,
-                                     actions, actions_len, &recirc_act);
+                                     actions, actions_len, &recirc_act,
+                                     false, NULL);
     if (err) {
         return err;
     }

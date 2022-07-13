@@ -58,6 +58,17 @@ enum tc_qdisc_hook {
     TC_EGRESS,
 };
 
+#define METER_POLICE_IDS_BASE 0x10000000
+#define METER_POLICE_IDS_MAX  0x1FFFFFFF
+
+static inline bool
+tc_is_meter_index(uint32_t index) {
+    if (index >= METER_POLICE_IDS_BASE && index <= METER_POLICE_IDS_MAX) {
+        return true;
+    }
+    return false;
+}
+
 /* Returns tc handle 'major':'minor'. */
 static inline unsigned int
 tc_make_handle(unsigned int major, unsigned int minor)
@@ -178,6 +189,7 @@ enum tc_action_type {
     TC_ACT_GOTO,
     TC_ACT_CT,
     TC_ACT_POLICE,
+    TC_ACT_POLICE_MTU,
 };
 
 enum nat_type {
@@ -260,18 +272,20 @@ struct tc_action {
             bool force;
             bool commit;
         } ct;
-
         struct {
             struct tc_flower_key key;
             struct tc_flower_key mask;
         } rewrite;
-
         struct {
             uint32_t index;
+            uint32_t result_jump;
+            uint16_t mtu;
         } police;
-     };
+    };
 
-     enum tc_action_type type;
+    enum tc_action_type type;
+    uint32_t jump_action;
+#define JUMP_ACTION_STOP 0xffffffff
 };
 
 /* assert that if we overflow with a masked write of uint32_t to the last byte
