@@ -1,4 +1,0 @@
-# This is a POSIX shell fragment                -*- sh -*-
-
-# ENABLE_OVS_VTEP: Whether to start ovs-vtep.
-ENABLE_OVS_VTEP="false"

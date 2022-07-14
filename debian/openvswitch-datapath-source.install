@@ -1,5 +1,0 @@
-debian/*.modules.in usr/src/modules/openvswitch-datapath/debian
-debian/changelog usr/src/modules/openvswitch-datapath/debian
-debian/compat usr/src/modules/openvswitch-datapath/debian
-debian/control usr/src/modules/openvswitch-datapath/debian
-openvswitch.tar.gz usr/src/modules/openvswitch-datapath

@@ -111,9 +111,6 @@ jobs:
             m32:          m32
             opts:         --disable-ssl
 
-          - compiler:     gcc
-            deb_package:  deb
-
     steps:
     - name: checkout
       uses: actions/checkout@v2

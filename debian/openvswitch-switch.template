@@ -1,8 +1,0 @@
-# This is a POSIX shell fragment                -*- sh -*-
-
-# FORCE_COREFILES: If 'yes' then core files will be enabled.
-# FORCE_COREFILES=yes
-
-# OVS_CTL_OPTS: Extra options to pass to ovs-ctl.  This is, for example,
-# a suitable place to specify --ovs-vswitchd-wrapper=valgrind.
-# OVS_CTL_OPTS=

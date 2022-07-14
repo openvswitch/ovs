@@ -1,5 +1,0 @@
-usr/lib/*/libopenvswitch*.so.*
-usr/lib/*/libofproto*.so.*
-usr/lib/*/libovsdb*.so.*
-usr/lib/*/libsflow*.so.*
-usr/lib/*/libvtep*.so.*
