@@ -33,24 +33,20 @@ architectures.
   The packaged version available with distributions may not be latest
   Open vSwitch release.
 
-Debian
--------
+Debian / Ubuntu
+---------------
 
 You can use ``apt-get`` or ``aptitude`` to install the .deb packages and must
 be superuser.
 
-1. Debian has ``openvswitch-switch`` and ``openvswitch-common`` .deb packages
-that includes the core userspace components of the switch.
+1. Debian and Ubuntu has ``openvswitch-switch`` and ``openvswitch-common``
+packages that includes the core userspace components of the switch.  Extra
+packages for documentation, ipsec, pki, VTEP and Python support are also
+available.  The Open vSwitch kernel datapath is maintained as part of the
+upstream kernel available in the distribution.
 
-2. For kernel datapath, ``openvswitch-datapath-dkms`` can be installed to
-automatically build and install Open vSwitch kernel module for your running
-kernel.  This package is only available when the .deb packages are built from
-the Open vSwitch repository; it is not downstream in Debian or Ubuntu releases.
-
-3. For fast userspace switching, Open vSwitch with DPDK support is
-bundled in the package ``openvswitch-switch-dpdk``.  This package is only
-available in the Ubuntu distribution; it is not upstream in the Open vSwitch
-repository or downstream in Debian.
+2. For fast userspace switching, Open vSwitch with DPDK support is
+bundled in the package ``openvswitch-switch-dpdk``.
 
 Fedora
 ------

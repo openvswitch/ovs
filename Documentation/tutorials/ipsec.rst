@@ -42,28 +42,15 @@ Installing OVS and IPsec Packages
 ---------------------------------
 
 OVS IPsec has .deb and .rpm packages. You should use the right package
-based on your Linux distribution. This tutorial uses Ubuntu 16.04 and Fedora 32
+based on your Linux distribution. This tutorial uses Ubuntu 22.04 and Fedora 32
 as examples.
 
 Ubuntu
 ~~~~~~
 
-1. Follow :doc:`/intro/install/debian` to build debian packages.
+1. Install the related packages::
 
-   .. note::
-
-     If you have already installed OVS, then you only need to install
-     openvswitch-pki_*.deb and openvswitch-ipsec_*.deb in the following step.
-     If your kernel version is below v4.13.0, update your kernel to v4.13.0 or
-     above.
-
-2. Install the related packages::
-
-       # apt-get install dkms strongswan
-       # dpkg -i libopenvswitch_*.deb openvswitch-common_*.deb \
-             openvswitch-switch_*.deb openvswitch-datapath-dkms_*.deb \
-             python-openvswitch_*.deb openvswitch-pki_*.deb \
-             openvswitch-ipsec_*.deb
+       # apt-get install openvswitch-ipsec
 
    If the installation is successful, you should be able to see the
    ovs-monitor-ipsec daemon is running in your system.
