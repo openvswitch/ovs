@@ -53,15 +53,11 @@
         chdir: /git/ovs/rhel
     with_items:
       - openvswitch-fedora.spec
-      - openvswitch-kmod-fedora.spec
-      - openvswitch-dkms.spec
 
   - name: Install build dependencies specified from spec files
     shell: echo "y" | yum-builddep /tmp/{{item}}
     with_items:
       - openvswitch-fedora.spec
-      - openvswitch-kmod-fedora.spec
-      - openvswitch-dkms.spec
 
   - name: Create rpm dev tree
     command: rpmdev-setuptree
@@ -95,21 +91,9 @@
       line: "Release: {{ ansible_local.builder.release }}"
     with_items:
       - openvswitch-fedora.spec
-      - openvswitch-kmod-fedora.spec
-      - openvswitch-dkms.spec
 
   - name: Build Open vSwitch user space rpms
     command: rpmbuild -bb --without check rhel/openvswitch-fedora.spec
-    args:
-        chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
-
-  - name: Build Open vSwitch kmod rpm
-    command: rpmbuild -bb --without check rhel/openvswitch-fedora.spec
-    args:
-        chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
-
-  - name: Build Open vSwitch dkms rpm
-    command: rpmbuild -bb --without check rhel/openvswitch-dkms.spec
     args:
         chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
 

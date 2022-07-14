@@ -17,9 +17,7 @@
 # These tests can be executed, for example, via:
 #    rpmbuild -rb --with check_datapath_kernel openvswitch.src.rpm
 #
-# These tests will use the currently installed OVS kernel modules, when
-# testing out of tree kernel modules the appropriate openvswitch-kmod
-# package should be installed first.
+# These tests will use the currently installed OVS kernel modules.
 
 %{!?release_number:%define release_number 1}
 

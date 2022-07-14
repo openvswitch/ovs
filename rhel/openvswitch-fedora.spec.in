@@ -17,9 +17,7 @@
 # These tests can be executed, for example, via:
 #    rpmbuild -rb --with check_datapath_kernel openvswitch-fedora.src.rpm
 #
-# These tests will use the currently installed OVS kernel modules, when
-# testing out of tree kernel modules the appropriate openvswitch-kmod
-# package should be installed first.
+# These tests will use the currently installed OVS kernel modules.
 
 #%define kernel 2.6.40.4-5.fc15.x86_64
 
@@ -54,7 +52,6 @@ Version: @VERSION@
 
 # Nearly all of openvswitch is ASL 2.0.  The bugtool is LGPLv2+, and the
 # lib/sflow*.[ch] files are SISSL
-# datapath/ is GPLv2 (although not built into any of the binary packages)
 License: ASL 2.0 and LGPLv2+ and SISSL
 Release: %{release_number}%{?dist}
 Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz

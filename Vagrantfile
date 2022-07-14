@@ -54,17 +54,12 @@ cd /vagrant
 [ -f Makefile ] && ./configure && make distclean
 mkdir -p ~/build
 cd ~/build
-/vagrant/configure --with-linux=/lib/modules/`uname -r`/build --enable-silent-rules
+/vagrant/configure --enable-silent-rules
 SCRIPT
 
 $build_ovs = <<SCRIPT
 cd ~/build
 make
-SCRIPT
-
-$test_kmod = <<SCRIPT
-cd ~/build
-make check-kmod RECHECK=yes
 SCRIPT
 
 $install_rpm = <<SCRIPT
@@ -73,7 +68,6 @@ PACKAGE_VERSION=`autom4te -l Autoconf -t 'AC_INIT:$2' /vagrant/configure.ac`
 make && make dist
 rpmdev-setuptree
 cp openvswitch-$PACKAGE_VERSION.tar.gz $HOME/rpmbuild/SOURCES
-rpmbuild --bb -D "kversion `uname -r`" /vagrant/rhel/openvswitch-kmod-fedora.spec
 rpmbuild --bb --without check /vagrant/rhel/openvswitch-fedora.spec
 rpm -e openvswitch
 rpm -ivh $HOME/rpmbuild/RPMS/x86_64/openvswitch-$PACKAGE_VERSION-1.fc23.x86_64.rpm
@@ -88,7 +82,6 @@ PACKAGE_VERSION=`autom4te -l Autoconf -t 'AC_INIT:$2' /vagrant/configure.ac`
 make && make dist
 rpmdev-setuptree
 cp openvswitch-$PACKAGE_VERSION.tar.gz $HOME/rpmbuild/SOURCES
-rpmbuild --bb -D "kversion `uname -r`" /vagrant/rhel/openvswitch-kmod-fedora.spec
 rpmbuild --bb --without check /vagrant/rhel/openvswitch-fedora.spec
 rpm -e openvswitch
 rpm -ivh $HOME/rpmbuild/RPMS/x86_64/openvswitch-$PACKAGE_VERSION-1.x86_64.rpm
@@ -125,7 +118,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        debian.vm.provision "bootstrap", type: "shell", inline: $bootstrap_debian
        debian.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
        debian.vm.provision "build_ovs", type: "shell", inline: $build_ovs
-       debian.vm.provision "test_ovs_kmod", type: "shell", inline: $test_kmod
        debian.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
        debian.vm.provision "install_deb", type: "shell", inline: $install_deb
   end
@@ -135,7 +127,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        fedora.vm.provision "bootstrap", type: "shell", inline: $bootstrap_fedora
        fedora.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
        fedora.vm.provision "build_ovs", type: "shell", inline: $build_ovs
-       fedora.vm.provision "test_ovs_kmod", type: "shell", inline: $test_kmod
        fedora.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
        fedora.vm.provision "install_rpm", type: "shell", inline: $install_rpm
   end
@@ -145,7 +136,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        centos.vm.provision "bootstrap", type: "shell", inline: $bootstrap_centos
        centos.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
        centos.vm.provision "build_ovs", type: "shell", inline: $build_ovs
-       centos.vm.provision "test_ovs_kmod", type: "shell", inline: $test_kmod
        centos.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
        centos.vm.provision "install_rpm", type: "shell", inline: $install_centos_rpm
   end

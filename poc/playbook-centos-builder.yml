@@ -41,13 +41,11 @@
         chdir: /git/ovs/rhel
     with_items:
       - openvswitch.spec
-      - kmod-openvswitch-rhel6.spec
 
   - name: Install build dependencies specified from spec files
     shell: echo "y" | yum-builddep /tmp/{{item}}
     with_items:
       - openvswitch.spec
-      - kmod-openvswitch-rhel6.spec
 
   - name: Create rpm dev tree
     command: rpmdev-setuptree
@@ -81,15 +79,9 @@
       line: "Release: {{ ansible_local.builder.release }}"
     with_items:
       - openvswitch.spec
-      - kmod-openvswitch-rhel6.spec
 
   - name: Build Open vSwitch user space rpms
     command: rpmbuild -bb --without check rhel/openvswitch.spec
-    args:
-        chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
-
-  - name: Build Open vSwitch kmod rpms (only for currently loaded kernel)
-    command: rpmbuild -bb  --without check rhel/kmod-openvswitch-rhel6.spec
     args:
         chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
 

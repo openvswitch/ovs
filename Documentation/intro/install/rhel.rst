@@ -194,24 +194,6 @@ the unit tests, run::
    /lib/modules/2.6.32-279.el6.x86_64/build doesn't exist`` or similar, then
    the kernel-devel package is missing or buggy.
 
-Kernel Module
-~~~~~~~~~~~~~
-
-On RHEL 6, to build the Open vSwitch kernel module run::
-
-    $ rpmbuild -bb rhel/kmod-openvswitch-rhel6.spec
-
-You might have to specify a kernel version and/or variants, e.g.::
-
-    $ rpmbuild -bb \
-        -D "kversion 2.6.32-131.6.1.el6.x86_64" \
-        -D "kflavors default debug kdump" \
-        rhel/kmod-openvswitch-rhel6.spec
-
-This produces an "kmod-openvswitch" RPM for each kernel variant, in this
-example: "kmod-openvswitch", "kmod-openvswitch-debug", and
-"kmod-openvswitch-kdump".
-
 .. _rhel-script-integrations:
 
 Red Hat Network Scripts Integration
