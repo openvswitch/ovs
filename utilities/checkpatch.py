@@ -194,12 +194,12 @@ skip_signoff_check = False
 #
 # Python isn't checked as flake8 performs these checks during build.
 line_length_ignore_list = re.compile(
-    r'\.(am|at|etc|in|m4|mk|patch|py)$|debian/rules')
+    r'\.(am|at|etc|in|m4|mk|patch|py)$|^debian/.*$')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
 # of files need lines with leading tabs.
-leading_whitespace_ignore_list = re.compile(r'\.(mk|am|at)$|debian/rules')
+leading_whitespace_ignore_list = re.compile(r'\.(mk|am|at)$|^debian/.*$')
 
 
 def is_subtracted_line(line):
