@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 
 from distutils.command.build_ext import build_ext
@@ -63,6 +64,15 @@ class try_build_ext(build_ext):
             raise BuildFailed()
 
 
+# Allow caller of setup.py to pass in libopenvswitch.a as an object for linking
+# through the use of LDFLAGS environment variable when not building a shared
+# openvswitch library.
+if os.environ.get('enable_shared', '') == 'no':
+    json_libraries = []
+else:
+    json_libraries = ['openvswitch']
+
+
 setup_args = dict(
     name='ovs',
     description='Open vSwitch library',
@@ -85,7 +95,7 @@ setup_args = dict(
         'Programming Language :: Python :: 3.5',
     ],
     ext_modules=[setuptools.Extension("ovs._json", sources=["ovs/_json.c"],
-                                      libraries=['openvswitch'])],
+                                      libraries=json_libraries)],
     cmdclass={'build_ext': try_build_ext},
     install_requires=['sortedcontainers'],
     extras_require={':sys_platform == "win32"': ['pywin32 >= 1.0']},
