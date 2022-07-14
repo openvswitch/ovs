@@ -16,7 +16,6 @@ jobs:
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
       KERNEL:      ${{ matrix.kernel }}
-      KERNEL_LIST: ${{ matrix.kernel_list }}
       LIBS:        ${{ matrix.libs }}
       M32:         ${{ matrix.m32 }}
       OPTS:        ${{ matrix.opts }}
@@ -37,14 +36,11 @@ jobs:
 
           - compiler:     gcc
             testsuite:    test
-            kernel:       3.16
           - compiler:     clang
             testsuite:    test
-            kernel:       3.16
             asan:         asan
           - compiler:     clang
             testsuite:    test
-            kernel:       3.16
             ubsan:        ubsan
 
           - compiler:     gcc
@@ -67,16 +63,6 @@ jobs:
           - compiler:     clang
             testsuite:    test
             libs:         -ljemalloc
-
-          - compiler:     gcc
-            kernel_list:  5.8 5.5 5.4 4.19
-          - compiler:     clang
-            kernel_list:  5.8 5.5 5.4 4.19
-
-          - compiler:     gcc
-            kernel_list:  4.14 4.9 4.4 3.16
-          - compiler:     clang
-            kernel_list:  4.14 4.9 4.4 3.16
 
           - compiler:     gcc
             afxdp:        afxdp

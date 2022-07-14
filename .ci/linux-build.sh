@@ -91,9 +91,6 @@ function install_kernel()
         sudo sed -i '/^# define __always_inline .*/i # undef __always_inline' \
                     /usr/include/x86_64-linux-gnu/sys/cdefs.h || true
         EXTRA_OPTS="${EXTRA_OPTS} --enable-afxdp"
-    else
-        EXTRA_OPTS="${EXTRA_OPTS} --with-linux=$(pwd)"
-        echo "Installed kernel source in $(pwd)"
     fi
     popd
 }
@@ -187,20 +184,10 @@ function configure_ovs()
 
 function build_ovs()
 {
-    local KERNEL=$1
-
     configure_ovs $OPTS
     make selinux-policy
 
-    # Only build datapath if we are testing kernel w/o running testsuite and
-    # AF_XDP support.
-    if [ "${KERNEL}" ] && ! [ "$AFXDP" ]; then
-        pushd datapath
-        make -j4
-        popd
-    else
-        make -j4
-    fi
+    make -j4
 }
 
 if [ "$DEB_PACKAGE" ]; then
@@ -270,8 +257,7 @@ if [ "$UBSAN" ]; then
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CFLAGS_UBSAN}"
 fi
 
-save_OPTS="${OPTS} $*"
-OPTS="${EXTRA_OPTS} ${save_OPTS}"
+OPTS="${EXTRA_OPTS} ${OPTS} $*"
 
 if [ "$TESTSUITE" ]; then
     # 'distcheck' will reconfigure with required options.
@@ -282,20 +268,7 @@ if [ "$TESTSUITE" ]; then
     make distcheck -j4 CFLAGS="${CFLAGS_FOR_OVS}" \
         TESTSUITEFLAGS=-j4 RECHECK=yes
 else
-    if [ -z "${KERNEL_LIST}" ]; then build_ovs ${KERNEL};
-    else
-        save_EXTRA_OPTS="${EXTRA_OPTS}"
-        for KERNEL in ${KERNEL_LIST}; do
-            echo "=============================="
-            echo "Building with kernel ${KERNEL}"
-            echo "=============================="
-            EXTRA_OPTS="${save_EXTRA_OPTS}"
-            install_kernel ${KERNEL}
-            OPTS="${EXTRA_OPTS} ${save_OPTS}"
-            build_ovs ${KERNEL}
-            make distclean
-        done
-    fi
+    build_ovs
 fi
 
 exit 0
