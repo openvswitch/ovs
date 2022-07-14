@@ -85,10 +85,15 @@ override_dh_auto_install:
 
 execute_after_dh_install:
 	set -e && for pyvers in $(PYTHON3S); do \
-		cd python && python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python3-openvswitch; cd ..; \
+		cd python && \
+		enable_shared=no \
+		CFLAGS=-I$(CURDIR)/debian/tmp/usr/include \
+		LDFLAGS=$(CURDIR)/debian/tmp/usr/lib/libopenvswitch.a \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-openvswitch; \
+		cd ..; \
 		mkdir -p $(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
-		install -v -D -m 644 python/ovstest/*.py \
+		install -v -D python/ovstest/*.py \
 			$(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
 	done
 
@@ -108,7 +113,7 @@ override_dh_strip:
 	dh_strip --dbgsym-migration='openvswitch-dbg (<< 2.17~)'
 
 override_dh_python3:
-	dh_python3 --shebang=/usr/bin/python3
+	DEB_HOST_ARCH=$(DEB_HOST_ARCH) dh_python3 --shebang=/usr/bin/python3
 
 # Helper target for creating snapshots from upstream git
 DATE=$(shell date +%Y%m%d)

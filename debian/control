@@ -278,11 +278,12 @@ Description: Open vSwitch VTEP utilities
  VTEP-configured database and a VTEP emulator.
 
 Package: python3-openvswitch
-Architecture: all
+Architecture: linux-any
 Section: python
 Depends:
  ${misc:Depends},
  ${python3:Depends},
+ ${shlibs:Depends},
 Description: Python 3 bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
