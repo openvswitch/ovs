@@ -1,0 +1,2 @@
+usr/share/openvswitch/scripts/ifupdown.sh etc/network/if-post-down.d/openvswitch
+usr/share/openvswitch/scripts/ifupdown.sh etc/network/if-pre-up.d/openvswitch

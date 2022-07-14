@@ -1,0 +1,18 @@
+[Unit]
+Description=Open vSwitch
+Before=network.target
+After=network-pre.target ovsdb-server.service ovs-vswitchd.service
+PartOf=network.target
+Requires=ovsdb-server.service
+Requires=ovs-vswitchd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true
+ExecReload=/usr/share/openvswitch/scripts/ovs-systemd-reload
+ExecStop=/bin/true
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+Also=ovs-record-hostname.service

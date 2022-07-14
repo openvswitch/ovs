@@ -1,0 +1,8 @@
+# We provide the openvswitch-source binary package for reproducible integrated
+# builds with sibling projects instead of a -dev package.
+usr/include/*
+usr/lib/*
+
+# The OVS Python bits are put in place in debian/rules and the bits left in
+# debian/tmp are to be ignored.
+usr/share/openvswitch/python/*

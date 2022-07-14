@@ -1,0 +1,126 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+#export DH_VERBOSE=1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+execute_after_dh_autoreconf:
+	patch -f --no-backup-if-mismatch -i $(CURDIR)/debian/ltmain-whole-archive.diff build-aux/ltmain.sh
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+PARALLEL = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+PARALLEL =
+endif
+
+PYTHON3S:=$(shell py3versions -vr)
+DEB_HOST_ARCH?=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+override_dh_auto_configure:
+	test -d _debian || mkdir _debian
+	cd _debian && ( \
+		test -e Makefile || \
+		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
+					 --sysconfdir=/etc \
+					 $(DATAPATH_CONFIGURE_OPTS) \
+					 $(EXTRA_CONFIGURE_OPTS) \
+					 )
+ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
+	test -d _dpdk || mkdir _dpdk
+	cd _dpdk && ( \
+		test -e Makefile || \
+        ../configure --prefix=/usr --localstatedir=/var --enable-ssl \
+                     --with-dpdk=shared --sysconfdir=/etc \
+					 $(DATAPATH_CONFIGURE_OPTS) \
+					 $(EXTRA_CONFIGURE_OPTS) \
+					 )
+endif
+
+
+# NOTE(jamespage): by default, just run all tests
+TEST_LIST =
+TEST_LIST_DPDK =
+
+# armhf:
+#  30: bfd - check that BFD works together with RSTP   FAILED (bfd.at:829)
+ifneq (,$(filter armhf, $(DEB_HOST_ARCH)))
+TEST_LIST = 1-29 31-
+TEST_LIST_DPDK = $(TEST_LIST)
+endif # armhf
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	if $(MAKE) -C _debian check TESTSUITEFLAGS='$(PARALLEL) $(TEST_LIST)' || \
+                $(MAKE) -C _debian check TESTSUITEFLAGS='--recheck'; then :; \
+	else \
+		cat _debian/tests/testsuite.log; \
+		exit 1; \
+	fi
+# Skip DPDK testing on arm64 as builders don't have crc32 support
+# which is used in aarch64 based crc optimization in ovs >= 2.12.0~
+ifneq (,$(filter i386 amd64 ppc64el, $(DEB_HOST_ARCH)))
+	if $(MAKE) -C _dpdk check TESTSUITEFLAGS='$(PARALLEL) $(TEST_LIST_DPDK)' || \
+				$(MAKE) -C _dpdk check TESTSUITEFLAGS='--recheck'; then :; \
+	else \
+		cat _dpdk/tests/testsuite.log; \
+		exit 1; \
+	fi
+endif # i386/amd64/ppc64el
+endif # nocheck
+
+override_dh_auto_build:
+	dh_auto_build --sourcedirectory=_debian -- dist distdir=openvswitch
+	dh_auto_build --sourcedirectory=_debian
+ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
+	dh_auto_build --sourcedirectory=_dpdk
+endif
+
+execute_before_dh_auto_clean:
+	find . -name "*.pyc" -delete
+
+override_dh_auto_install:
+	dh_auto_install --sourcedirectory=_debian
+
+execute_after_dh_install:
+	set -e && for pyvers in $(PYTHON3S); do \
+		cd python && python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-openvswitch; cd ..; \
+		mkdir -p $(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
+		install -v -D -m 644 python/ovstest/*.py \
+			$(CURDIR)/debian/openvswitch-test/usr/lib/python$$pyvers/dist-packages/ovstest; \
+	done
+
+override_dh_installinit:
+	dh_installinit --restart-after-upgrade
+	dh_installinit -popenvswitch-switch --name=ovsdb-server --no-start
+	dh_installinit -popenvswitch-switch --name=ovs-vswitchd --no-start
+	dh_installinit -popenvswitch-switch --name=ovs-record-hostname --no-start
+
+override_dh_installsystemd:
+	dh_installsystemd -popenvswitch-switch --name=ovsdb-server --no-start
+	dh_installsystemd -popenvswitch-switch --name=ovs-vswitchd --no-start
+	dh_installsystemd -popenvswitch-switch --name=ovs-record-hostname --no-start
+	dh_installsystemd --restart-after-upgrade -Xovs-vswitchd.service -Xovsdb-server.service -Xovs-record-hostname.service
+
+override_dh_strip:
+	dh_strip --dbgsym-migration='openvswitch-dbg (<< 2.17~)'
+
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
+# Helper target for creating snapshots from upstream git
+DATE=$(shell date +%Y%m%d)
+# Upstream branch to track
+BRANCH=branch-2.17
+VERSION=2.17.0
+
+get-orig-snapshot:
+	rm -Rf openvswitch-upstream
+	git clone --branch $(BRANCH) --depth 1 https://github.com/openvswitch/ovs openvswitch-upstream
+	cd openvswitch-upstream && \
+		export COMMIT=`git rev-parse --short HEAD` && \
+		git archive --format tgz --prefix=openvswitch-$(VERSION)~git$(DATE).$$COMMIT/ \
+			-o ../../openvswitch_$(VERSION)~git$(DATE).$$COMMIT.orig.tar.gz $(BRANCH)
+	rm -Rf openvswitch-upstream

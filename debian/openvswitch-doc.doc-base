@@ -1,0 +1,10 @@
+Document: openvswitch-doc
+Title: Open vSwitch Documentation
+Author: N/A
+Abstract: Sphinx documentation for Open vSwitch
+Section: Network/Communication
+
+Format: HTML
+Index: /usr/share/doc/openvswitch-doc/html/index.html
+Files: /usr/share/doc/openvswitch-doc/html/*
+

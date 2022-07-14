@@ -1,0 +1,4 @@
+# Lintian is bad at figuring out manpages
+openvswitch-switch: spare-manual-page
+# There are init scripts, they have different names
+openvswitch-switch: package-supports-alternative-init-but-no-init.d-script

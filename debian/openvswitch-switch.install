@@ -1,0 +1,30 @@
+#!/usr/bin/dh-exec
+debian/ifupdown.sh usr/share/openvswitch/scripts
+debian/openvswitch-switch.default => /usr/share/openvswitch/switch/default.template
+debian/ovs-systemd-reload /usr/share/openvswitch/scripts
+etc/bash_completion.d/ovs-vsctl-bashcomp.bash usr/share/bash-completion/completions
+usr/bin/ovs-dpctl
+usr/bin/ovs-dpctl-top
+usr/bin/ovs-pcap
+usr/bin/ovs-tcpdump
+usr/bin/ovs-tcpundump
+usr/bin/ovs-vlan-test
+usr/bin/ovs-vsctl
+usr/sbin/ovs-vswitchd usr/lib/openvswitch-switch/
+usr/share/man/man1/ovs-pcap.1
+usr/share/man/man1/ovs-tcpundump.1
+usr/share/man/man5/ovs-vswitchd.conf.db.5
+usr/share/man/man8/ovs-ctl.8
+usr/share/man/man8/ovs-dpctl-top.8
+usr/share/man/man8/ovs-dpctl.8
+usr/share/man/man8/ovs-kmod-ctl.8
+usr/share/man/man8/ovs-tcpdump.8
+usr/share/man/man8/ovs-vlan-test.8
+usr/share/man/man8/ovs-vsctl.8
+usr/share/man/man8/ovs-vswitchd.8
+usr/share/openvswitch/scripts/ovs-check-dead-ifs
+usr/share/openvswitch/scripts/ovs-ctl
+usr/share/openvswitch/scripts/ovs-kmod-ctl
+usr/share/openvswitch/scripts/ovs-save
+usr/share/openvswitch/vswitch.ovsschema
+usr/share/openvswitch/local-config.ovsschema

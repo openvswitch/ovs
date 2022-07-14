@@ -1,0 +1,30 @@
+--- a/build-aux/ltmain.sh
++++ b/build-aux/ltmain.sh
+@@ -7296,6 +7296,11 @@
+ 	continue
+ 	;;
+
++      -Wl,--whole-archive|-Wl,--no-whole-archive)
++	deplibs="$deplibs $arg"
++	continue
++	;;
++
+       -Wc,*)
+ 	func_stripname '-Wc,' '' "$arg"
+ 	args=$func_stripname_result
+@@ -7735,6 +7740,15 @@
+ 	  fi
+ 	  continue
+ 	  ;;
++	-Wl,--whole-archive|-Wl,--no-whole-archive)
++	  if test "$linkmode,$pass" = "prog,link"; then
++	    compile_deplibs="$deplib $compile_deplibs"
++	    finalize_deplibs="$deplib $finalize_deplibs"
++	  else
++	    deplibs="$deplib $deplibs"
++	  fi
++	  continue
++	  ;;
+ 	-l*)
+ 	  if test lib != "$linkmode" && test prog != "$linkmode"; then
+ 	    func_warning "'-l' is ignored for archives/objects"

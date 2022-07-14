@@ -13,5 +13,8 @@
 ^third-party/
 ^windows/
 ^xenserver/
-^debian/rules.modules$
+^debian/README.Debian$
+^debian/copyright.in$
+^debian/openvswitch-switch.init$
+^debian/openvswitch-switch.postinst$
 ^debian/rules$

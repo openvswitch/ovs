@@ -1,0 +1,36 @@
+Here's an example configuration for your /etc/network/interfaces
+using a simple ovsbr0 bridge for eth0, with dhcp for ipv4 and ipv6.
+This was taken from https://bugs.debian.org/860786.
+
+auto  ovsbr0
+iface ovsbr0 inet dhcp
+	ovs_type OVSBridge
+        ovs_ports eth0
+
+auto ovsbr0
+iface ovsbr0 inet6 dhcp
+        ovs_type OVSBridge
+        ovs_ports eth0
+
+autobr0 eth0
+iface eth0 inet manual
+        ovs_bridge ovsbr0
+        ovs_type OVSPort
+
+However, this didn't work for me. Instead, this worked:
+
+auto br0
+iface br0 inet dhcp
+	ovs_type OVSBridge
+	ovs_port enp0s3
+
+auto enp0s3
+iface enp0s3 inet manual
+	ovs_bridge br0
+	ovs_type OVSPort
+	up ip address add 0/0 dev enp0s3
+	up ip link set enp0s3 up
+	up dhclient br0
+	down ip link set enp0s3 down
+
+ -- Antoine Beaupré <anarcat@debian.org>, Wed, 22 Jun 2022 12:02:39 -0400

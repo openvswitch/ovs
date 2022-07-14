@@ -1,0 +1,18 @@
+[Unit]
+Description=Open vSwitch Record Hostname
+After=ovsdb-server.service ovs-vswitchd.service network-online.target
+Requires=ovsdb-server.service
+Requires=ovs-vswitchd.service
+Requires=network-online.target
+AssertPathIsReadWrite=/var/run/openvswitch/db.sock
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/openvswitch/scripts/ovs-ctl record-hostname-if-not-set
+ExecStop=/bin/true
+ExecReload=/usr/share/openvswitch/scripts/ovs-ctl record-hostname-if-not-set
+TimeoutSec=300
+RemainAfterExit=yes
+
+[Install]
+RequiredBy=openvswitch-switch.service

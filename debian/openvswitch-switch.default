@@ -1,0 +1,17 @@
+# This is a POSIX shell fragment                -*- sh -*-
+
+# FORCE_COREFILES: If 'yes' then core files will be enabled.
+# FORCE_COREFILES=yes
+
+# OVS_CTL_OPTS: Extra options to pass to ovs-ctl.  This is, for example,
+# a suitable place to specify --ovs-vswitchd-wrapper=valgrind.
+# OVS_CTL_OPTS=
+
+# DPDK options are now configured via ovs-vsctl/ovsdb.
+# dpdk-extra is the fallback for users who formerly set e.g.
+#  '--vhost-owner libvirt-qemu:kvm --vhost-perm 0664'
+# here or any other DPDK EAL arguments via DPDK_OPTS which are not covered by
+# the default switches provided by ovs-vsctl.
+# This is an arbitrary string that will get appended to the EAL commandline.
+# For more on the new ovsdb based configuration of DPDK features, see:
+# `man ovs-vswitchd.conf.db`

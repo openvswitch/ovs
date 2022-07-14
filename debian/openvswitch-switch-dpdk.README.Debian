@@ -1,0 +1,62 @@
+openvswitch-switch-dpdk
+-----------------------
+
+This package provides a DPDK enabled version of the OpenvSwitch vswitchd
+binary; by default, the ovs-vswitchd binary from openvswitch-switch will
+be used:
+
+  $ update-alternatives --query ovs-vswitchd
+  Name: ovs-vswitchd
+  Link: /usr/sbin/ovs-vswitchd
+  Status: auto
+  Best: /usr/lib/openvswitch-switch/ovs-vswitchd
+  Value: /usr/lib/openvswitch-switch/ovs-vswitchd
+
+  Alternative: /usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk
+  Priority: 50
+
+  Alternative: /usr/lib/openvswitch-switch/ovs-vswitchd
+  Priority: 100
+
+DPDK provides fast packet processing in userspace, and has some specific
+requirements in terms of system configuration.
+
+DPDK has a minimum CPU feature set of SSE3, so is not appropriate for all
+amd64 CPU types hence is not enabled by default.
+
+To switch to the DPDK version:
+
+   sudo update-alternatives --set ovs-vswitchd \
+        /usr/lib/openvswitch-switch-dpdk/ovs-vswitchd-dpdk
+   sudo service openvswitch-switch restart
+
+and to switch back:
+
+   sudo update-alternatives --set ovs-vswitchd \
+        /usr/lib/openvswitch-switch/ovs-vswitchd
+   sudo service openvswitch-switch restart
+
+ -- James Page <james.page@ubuntu.com>  Tue, 21 Jul 2015 12:06:49 +0100
+
+Since Open vSwitch >= 2.6 the configuration of DPDK features has changed.
+Instead of providing DPDK_OPTS in /etc/default/openvswitch-switch one now has
+to use ovs-vsctl to enter the config into the database.
+
+An example basic configuration workflow might look like:
+ # Enable DPDK
+ $ ovs-vsctl set Open_vSwitch . "other_config:dpdk-init=true"
+ # run on cores 3,4 8,9
+ $ ovs-vsctl set Open_vSwitch . "other_config:dpdk-lcore-mask=0x318"
+ # Allocate 2G huge pages (not Numa node aware)
+ $ ovs-vsctl set Open_vSwitch . "other_config:dpdk-alloc-mem=2048"
+ # group/permissions for vhost-user sockets (required to work with libvirt/qemu)
+ $ ovs-vsctl set Open_vSwitch . \
+    "other_config:dpdk-extra=--vhost-owner libvirt-qemu:kvm --vhost-perm 0666"
+
+There are also tunables like:
+ $ ovs-vsctl set Open_vSwitch . "other_config:pmd-cpu-mask=0x318"
+ $ ovs-vsctl set Open_vSwitch . "other_config:n-dpdk-rxqs=4"
+
+Any of those changes require openvswitch to be restarted to take effect.
+
+ -- Christian Ehrhardt <christian.ehrhardt@canonical.com>  Tue, 04 Oct 2016 11:17:12 +0200
