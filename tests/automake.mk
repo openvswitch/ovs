@@ -343,12 +343,6 @@ check-kernel: all
 	set $(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
 	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
-# Testing the out of tree Kernel module
-check-kmod: all
-	$(MAKE) modules_install
-	modprobe -r -a vport-geneve vport-gre vport-lisp vport-stt vport-vxlan openvswitch
-	$(MAKE) check-kernel
-
 check-system-userspace: all
 	set $(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)'; \
 	"$$@" $(TESTSUITEFLAGS) -j1 || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)

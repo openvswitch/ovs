@@ -436,13 +436,6 @@ your system, run::
 
     $ make check-kernel
 
-To install the kernel module from the current build directory and run the
-testsuite against that kernel module::
-
-    $ make check-kmod
-
-The results of the testsuite are in ``tests/system-kmod-testsuite.dir``.
-
 All the features documented under `Unit Tests`_ are available for the kernel
 datapath testsuite.
 
