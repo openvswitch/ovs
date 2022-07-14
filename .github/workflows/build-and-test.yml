@@ -216,10 +216,18 @@ jobs:
       deb_dependencies: |
         linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
       DEB_PACKAGE: yes
+      DPDK:        ${{ matrix.dpdk }}
 
-    name: linux deb
+    name: linux deb ${{ matrix.dpdk }} dpdk
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dpdk: no
+          - dpdk: shared
 
     steps:
     - name: checkout
@@ -234,6 +242,9 @@ jobs:
       run:  sudo apt update || true
     - name: install dependencies for debian packages
       run:  sudo apt install -y ${{ env.deb_dependencies }}
+    - name: install dpdk-dev
+      if:   matrix.dpdk != 'no'
+      run:  sudo apt install -y libdpdk-dev
 
     - name: prepare
       run:  ./.ci/linux-prepare.sh
@@ -244,5 +255,5 @@ jobs:
     - name: upload deb packages
       uses: actions/upload-artifact@v2
       with:
-        name: deb-packages
+        name: deb-packages-${{ matrix.dpdk }}-dpdk
         path: '/home/runner/work/ovs/*.deb'

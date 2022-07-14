@@ -2,8 +2,7 @@ EXTRA_DIST += \
 	debian/README.Debian \
 	debian/changelog \
 	debian/clean \
-	debian/control \
-	debian/copyright \
+	debian/control.in \
 	debian/copyright.in \
 	debian/dirs \
 	debian/gbp.conf \
@@ -80,12 +79,54 @@ check-debian-changelog-version:
 ALL_LOCAL += check-debian-changelog-version
 DIST_HOOKS += check-debian-changelog-version
 
-$(srcdir)/debian/copyright: AUTHORS.rst debian/copyright.in
+
+update_deb_copyright = \
 	$(AM_V_GEN) \
 	{ sed -n -e '/%AUTHORS%/q' -e p < $(srcdir)/debian/copyright.in;   \
 	  tail -n +28 $(srcdir)/AUTHORS.rst | sed '1,/^$$/d' |		   \
 		sed -n -e '/^$$/q' -e 's/^/  /p';			   \
 	  sed -e '1,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
-	} > $@
+	} > debian/copyright
 
-DISTCLEANFILES += debian/copyright
+debian/copyright: AUTHORS.rst debian/copyright.in
+	$(update_deb_copyright)
+
+CLEANFILES += debian/copyright
+
+
+if DPDK_NETDEV
+update_deb_control = \
+	$(AM_V_GEN) sed -e 's/^\# DPDK_NETDEV //' \
+		< $(srcdir)/debian/control.in > debian/control
+else
+update_deb_control = \
+	$(AM_V_GEN) grep -v '^\# DPDK_NETDEV' \
+		< $(srcdir)/debian/control.in > debian/control
+endif
+
+debian/control: $(srcdir)/debian/control.in Makefile
+	$(update_deb_control)
+
+CLEANFILES += debian/control
+
+
+debian: debian/copyright debian/control
+.PHONY: debian
+
+
+debian-deb: debian
+	@if test X"$(srcdir)" != X"$(top_builddir)"; then			\
+		echo "Debian packages should be built from $(abs_srcdir)/";	\
+		exit 1;								\
+	fi
+	$(MAKE) distclean
+	$(update_deb_copyright)
+	$(update_deb_control)
+	$(AM_V_GEN) fakeroot debian/rules clean
+if DPDK_NETDEV
+	$(AM_V_GEN) DEB_BUILD_OPTIONS="nocheck parallel=`nproc`" \
+		fakeroot debian/rules binary
+else
+	$(AM_V_GEN) DEB_BUILD_OPTIONS="nocheck parallel=`nproc` nodpdk" \
+		fakeroot debian/rules binary
+endif

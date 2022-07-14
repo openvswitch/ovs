@@ -28,6 +28,7 @@ override_dh_auto_configure:
 					 $(EXTRA_CONFIGURE_OPTS) \
 					 )
 ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
+ifeq (,$(filter nodpdk, $(DEB_BUILD_OPTIONS)))
 	test -d _dpdk || mkdir _dpdk
 	cd _dpdk && ( \
 		test -e Makefile || \
@@ -36,6 +37,7 @@ ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
 					 $(DATAPATH_CONFIGURE_OPTS) \
 					 $(EXTRA_CONFIGURE_OPTS) \
 					 )
+endif
 endif
 
 
@@ -61,12 +63,14 @@ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 # Skip DPDK testing on arm64 as builders don't have crc32 support
 # which is used in aarch64 based crc optimization in ovs >= 2.12.0~
 ifneq (,$(filter i386 amd64 ppc64el, $(DEB_HOST_ARCH)))
+ifeq (,$(filter nodpdk, $(DEB_BUILD_OPTIONS)))
 	if $(MAKE) -C _dpdk check TESTSUITEFLAGS='$(PARALLEL) $(TEST_LIST_DPDK)' || \
 				$(MAKE) -C _dpdk check TESTSUITEFLAGS='--recheck'; then :; \
 	else \
 		cat _dpdk/tests/testsuite.log; \
 		exit 1; \
 	fi
+endif # nodpdk
 endif # i386/amd64/ppc64el
 endif # nocheck
 
@@ -74,7 +78,9 @@ override_dh_auto_build:
 	dh_auto_build --sourcedirectory=_debian -- dist distdir=openvswitch
 	dh_auto_build --sourcedirectory=_debian
 ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
+ifeq (,$(filter nodpdk, $(DEB_BUILD_OPTIONS)))
 	dh_auto_build --sourcedirectory=_dpdk
+endif
 endif
 
 execute_before_dh_auto_clean:

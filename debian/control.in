@@ -12,7 +12,7 @@ Build-Depends:
  autoconf (>= 2.64),
  automake (>= 1.10),
  bzip2,
- debhelper-compat (= 13),
+ debhelper-compat (= 10),
  dh-exec,
  dh-python,
  dh-sequence-python3,
@@ -21,7 +21,7 @@ Build-Depends:
  iproute2,
  libcap-ng-dev,
  libdbus-1-dev [amd64 i386 ppc64el arm64],
- libdpdk-dev (>= 21.11) [amd64 i386 ppc64el arm64],
+# DPDK_NETDEV  libdpdk-dev (>= 21.11) [amd64 i386 ppc64el arm64],
  libnuma-dev [amd64 i386 ppc64el arm64],
  libpcap-dev [amd64 i386 ppc64el arm64],
  libssl-dev,
@@ -176,34 +176,34 @@ Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.
 
-Package: openvswitch-switch-dpdk
-Architecture: amd64 arm64 i386 ppc64el
-Pre-Depends: ${misc:Pre-Depends},
-Depends:
- dpdk,
- openvswitch-switch (= ${binary:Version}),
- ${misc:Depends},
- ${python3:Depends},
- ${shlibs:Depends},
-Enhances:
- openvswitch-switch,
-Description: DPDK enabled Open vSwitch switch implementation
- Open vSwitch is a production quality, multilayer, software-based,
- Ethernet virtual switch. It is designed to enable massive network
- automation through programmatic extension, while still supporting
- standard management interfaces and protocols (e.g. NetFlow, IPFIX,
- sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In addition, it is designed
- to support distribution across multiple physical servers similar to
- VMware's vNetwork distributed vswitch or Cisco's Nexus 1000V.
- .
- openvswitch-switch provides the userspace components and utilities for
- the Open vSwitch kernel-based switch.
- .
- DPDK is a set of libraries for fast packet processing. Applications run
- in user-space and communicate directly with dedicated network interfaces.
- .
- This package provides a DPDK enabled implementation of the ovs-vswitchd
- binary.
+# DPDK_NETDEV Package: openvswitch-switch-dpdk
+# DPDK_NETDEV Architecture: amd64 arm64 i386 ppc64el
+# DPDK_NETDEV Pre-Depends: ${misc:Pre-Depends},
+# DPDK_NETDEV Depends:
+# DPDK_NETDEV  dpdk,
+# DPDK_NETDEV  openvswitch-switch (= ${binary:Version}),
+# DPDK_NETDEV  ${misc:Depends},
+# DPDK_NETDEV  ${python3:Depends},
+# DPDK_NETDEV  ${shlibs:Depends},
+# DPDK_NETDEV Enhances:
+# DPDK_NETDEV  openvswitch-switch,
+# DPDK_NETDEV Description: DPDK enabled Open vSwitch switch implementation
+# DPDK_NETDEV  Open vSwitch is a production quality, multilayer, software-based,
+# DPDK_NETDEV  Ethernet virtual switch. It is designed to enable massive network
+# DPDK_NETDEV  automation through programmatic extension, while still supporting
+# DPDK_NETDEV  standard management interfaces and protocols (e.g. NetFlow, IPFIX,
+# DPDK_NETDEV  sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In addition, it is designed
+# DPDK_NETDEV  to support distribution across multiple physical servers similar to
+# DPDK_NETDEV  VMware's vNetwork distributed vswitch or Cisco's Nexus 1000V.
+# DPDK_NETDEV  .
+# DPDK_NETDEV  openvswitch-switch provides the userspace components and utilities for
+# DPDK_NETDEV  the Open vSwitch kernel-based switch.
+# DPDK_NETDEV  .
+# DPDK_NETDEV  DPDK is a set of libraries for fast packet processing. Applications run
+# DPDK_NETDEV  in user-space and communicate directly with dedicated network interfaces.
+# DPDK_NETDEV  .
+# DPDK_NETDEV  This package provides a DPDK enabled implementation of the ovs-vswitchd
+# DPDK_NETDEV  binary.
 
 Package: openvswitch-test
 Architecture: all

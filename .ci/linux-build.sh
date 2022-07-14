@@ -204,9 +204,10 @@ function build_ovs()
 }
 
 if [ "$DEB_PACKAGE" ]; then
+    ./boot.sh && ./configure --with-dpdk=$DPDK && make debian
     mk-build-deps --install --root-cmd sudo --remove debian/control
     dpkg-checkbuilddeps
-    DEB_BUILD_OPTIONS='parallel=4 nocheck' fakeroot debian/rules binary
+    make debian-deb
     packages=$(ls $(pwd)/../*.deb)
     deps=""
     for pkg in $packages; do
