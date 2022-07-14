@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KERNEL_VERSION=$1
+KERNEL_VERSION=host
 OVS_BRANCH=$2
 GITHUB_SRC=$3
 
@@ -39,14 +39,9 @@ cd ovs
 config="./configure --localstatedir="/var" --sysconfdir="/etc" --prefix="/usr"
 --enable-ssl"
 
-if [ $KERNEL_VERSION = "host" ]; then
-   eval $config
-else
-    withlinux=" --with-linux=/lib/modules/$KERNEL_VERSION/build"
-    eval $config$withlinux
-fi
+eval $config
 
-make -j8; make install; make modules_install
+make -j8; make install
 
 # remove deps to make the container light weight.
 apt-get remove --purge -y ${build_deps}

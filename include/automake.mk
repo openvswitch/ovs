@@ -1,6 +1,6 @@
 BUILT_SOURCES += include/odp-netlink.h include/odp-netlink-macros.h
 
-include/odp-netlink.h: datapath/linux/compat/include/linux/openvswitch.h \
+include/odp-netlink.h: include/linux/openvswitch.h \
                        build-aux/extract-odp-netlink-h
 	$(AM_V_GEN)sed -f $(srcdir)/build-aux/extract-odp-netlink-h < $< > $@
 

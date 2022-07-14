@@ -1,8 +1,0 @@
-/Kbuild
-/Makefile
-/Makefile.main
-/Module.markers
-/kcompat.h
-/modules.order
-/tmp
-/*.c

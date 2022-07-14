@@ -74,6 +74,9 @@ Post-v2.17.0
    - Linux datapath:
      * Add offloading meter tc police.
      * Add support for offloading the check_pkt_len action.
+   - Previously deprecated Linux kernel module is now fully removed from
+     the OVS source tree.  The version provided with the Linux kernel
+     should be used instead.
 
 
 v2.17.0 - 17 Feb 2022

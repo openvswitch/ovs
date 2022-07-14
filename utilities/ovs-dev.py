@@ -106,7 +106,7 @@ def conf():
         pass  # Directory exists.
 
     os.chdir(BUILD_GCC)
-    _sh(*(configure + ["--with-linux=/lib/modules/%s/build" % uname()]))
+    _sh(*(configure))
 
     try:
         _sh("clang --version", check=True)
@@ -184,12 +184,9 @@ def tag():
     ctags = ['ctags', '-R', '-f', '.tags']
 
     try:
-        _sh(*(ctags + ['--exclude="datapath/"']))
+        _sh(*ctags)
     except:
-        try:
-            _sh(*ctags)  # Some versions of ctags don't have --exclude
-        except:
-            pass
+        pass
 
     try:
         _sh('cscope', '-R', '-b')
@@ -351,7 +348,7 @@ Basic Configuration:
 
     # First install the basic requirements needed to build Open vSwitch.
     sudo apt-get install git build-essential libtool autoconf pkg-config \\
-            libssl-dev gdb libcap-ng-dev linux-headers-`uname -r`
+            libssl-dev gdb libcap-ng-dev
 
     # Next clone the Open vSwitch source.
     git clone https://github.com/openvswitch/ovs.git %(ovs)s
@@ -361,14 +358,6 @@ Basic Configuration:
 
     # Build the switch.
     %(v)s conf make
-
-    # Install the kernel module
-    sudo insmod %(ovs)s/datapath/linux/openvswitch.ko
-
-    # If needed, manually load all required vport modules:
-    sudo insmod %(ovs)s/datapath/linux/vport-vxlan.ko
-    sudo insmod %(ovs)s/datapath/linux/vport-geneve.ko
-    [...]
 
     # Run the switch.
     %(v)s run

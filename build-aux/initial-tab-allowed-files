@@ -3,7 +3,6 @@
 \.mk$
 \.png$
 \.sln$
-^datapath/
 ^include/linux/
 ^include/sparse/rte_
 ^include/windows/

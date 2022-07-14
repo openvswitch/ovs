@@ -81,7 +81,7 @@ Copyright: (c) 1990,1993, The Regents of the University of California
 License: BSD-3-clause
 
 Files:
- datapath/linux/compat/include/linux/openvswitch.h
+ include/linux/openvswitch.h
 Copyright: (c) 2007-2017 Nicira, Inc.
 License: Apache-2.0-or-GPL-2.0
 
