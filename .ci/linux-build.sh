@@ -207,10 +207,23 @@ if [ "$DEB_PACKAGE" ]; then
     mk-build-deps --install --root-cmd sudo --remove debian/control
     dpkg-checkbuilddeps
     DEB_BUILD_OPTIONS='parallel=4 nocheck' fakeroot debian/rules binary
-    # Not trying to install ipsec package as there are issues with system-wide
-    # installed python3-openvswitch package and the pyenv used by Travis.
-    packages=$(ls $(pwd)/../*.deb | grep -v ipsec)
-    sudo apt install ${packages}
+    packages=$(ls $(pwd)/../*.deb)
+    deps=""
+    for pkg in $packages; do
+        _ifs=$IFS
+        IFS=","
+        for dep in $(dpkg-deb -f $pkg Depends); do
+            dep_name=$(echo "$dep"|awk '{print$1}')
+            # Don't install internal package inter-dependencies from apt
+            echo $dep_name | grep -q openvswitch && continue
+            deps+=" $dep_name"
+        done
+        IFS=$_ifs
+    done
+    # install package dependencies from apt
+    echo $deps | xargs sudo apt -y install
+    # install the locally built openvswitch packages
+    sudo dpkg -i $packages
     exit 0
 fi
 
