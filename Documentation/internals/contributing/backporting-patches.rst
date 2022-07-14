@@ -119,6 +119,13 @@ userspace changes.
 How to backport kernel patches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+These instructions only apply to Open vSwitch releases 2.17 and older.
+As of Open vSwitch branch 2.18 the Open vSwitch kernel module is no
+longer supported and only the Linux openvswitch kernel module is used.
+In the case of Open vSwitch releases 2.17 and older, kernel backports
+may be required for bux fixes and feature implementation so these
+instructions are preserved for that reason.
+
 First, the patch should be submitted upstream to `netdev`. When the patch has
 been applied to `net-next`, it is ready to be backported. Starting from the
 Linux tree, use ``git format-patch`` to format each patch that should be

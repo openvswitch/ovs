@@ -132,35 +132,11 @@ tests.  This can take several minutes.
     $ make rpm-fedora RPMBUILD_OPT="--with check"
 
 
-Kernel OVS Tree Datapath RPM
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To build the Open vSwitch kernel module for the currently running kernel
-version, run:
-
-::
-
-    $ make rpm-fedora-kmod
-
-To build the Open vSwitch kernel module for another kernel version, the desired
-kernel version can be specified via the `kversion` macro.  For example:
-
-::
-
-    $ make rpm-fedora-kmod \
-         RPMBUILD_OPT='-D "kversion 4.3.4-300.fc23.x86_64"'
-
 Installing
 ----------
 
 RPM packages can be installed by using the command ``rpm -i``. Package
 installation requires superuser privileges.
-
-The `openvswitch-kmod` RPM should be installed first if the Linux OVS tree
-datapath module is to be used. The `openvswitch-kmod` RPM should not be
-installed if only the in-tree Linux datapath or user-space datapath is needed.
-Refer to the :doc:`/faq/index` for more information about the various Open
-vSwitch datapath options.
 
 In most cases only the `openvswitch` RPM will need to be installed. The
 `python3-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and

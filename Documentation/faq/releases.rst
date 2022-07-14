@@ -75,6 +75,7 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.15.x       3.16 to 5.8
     2.16.x       3.16 to 5.8
     2.17.x       3.16 to 5.8
+    2.18.x       N/A
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built
@@ -110,7 +111,8 @@ Q: Are all features available with all datapaths?
     Linux OVS tree
       The datapath implemented by the Linux kernel module distributed with
       the OVS source tree. This datapath is deprecated starting with OVS
-      2.15.x and support capped at Linux kernel version 5.8.
+      2.15.x and support capped at Linux kernel version 5.8. As of OVS 2.18.x
+      the Linux OVS tree is no longer supported.
 
     Userspace
       This datapath supports conventional system devices as well as

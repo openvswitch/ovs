@@ -302,24 +302,6 @@ example::
 
     $ ./configure CFLAGS="-g -O2 -fsanitize=address -fno-omit-frame-pointer -fno-common"
 
-To build the Linux kernel module, so that you can run the kernel-based switch,
-pass the location of the kernel build directory on ``--with-linux``. For
-example, to build for a running instance of Linux::
-
-    $ ./configure --with-linux=/lib/modules/$(uname -r)/build
-
-.. note::
-  If ``--with-linux`` requests building for an unsupported version of Linux,
-  then ``configure`` will fail with an error message. Refer to the
-  :doc:`/faq/index` for advice in that case.
-
-If you wish to build the kernel module for an architecture other than the
-architecture of the machine used for the build, you may specify the kernel
-architecture string using the KARCH variable when invoking the configure
-script. For example, to build for MIPS with Linux::
-
-    $ ./configure --with-linux=/path/to/linux KARCH=mips
-
 If you plan to do much Open vSwitch development, you might want to add
 ``--enable-Werror``, which adds the ``-Werror`` option to the compiler command
 line, turning warnings into errors. That makes it impossible to miss warnings
@@ -389,51 +371,6 @@ Building
    running system, by default under ``/usr/local``::
 
        $ make install
-
-5. If you built kernel modules, you may install them, e.g.::
-
-       $ make modules_install
-
-   It is possible that you already had a Open vSwitch kernel module installed
-   on your machine that came from upstream Linux (in a different directory). To
-   make sure that you load the Open vSwitch kernel module you built from this
-   repository, you should create a ``depmod.d`` file that prefers your newly
-   installed kernel modules over the kernel modules from upstream Linux. The
-   following snippet of code achieves the same::
-
-       $ config_file="/etc/depmod.d/openvswitch.conf"
-       $ for module in datapath/linux/*.ko; do
-         modname="$(basename ${module})"
-         echo "override ${modname%.ko} * extra" >> "$config_file"
-         echo "override ${modname%.ko} * weak-updates" >> "$config_file"
-         done
-       $ depmod -a
-
-   Finally, load the kernel modules that you need. e.g.::
-
-       $ /sbin/modprobe openvswitch
-
-   To verify that the modules have been loaded, run ``/sbin/lsmod`` and check
-   that openvswitch is listed::
-
-       $ /sbin/lsmod | grep openvswitch
-
-   .. note::
-     If the ``modprobe`` operation fails, look at the last few kernel log
-     messages (e.g. with ``dmesg | tail``). Generally, issues like this occur
-     when Open vSwitch is built for a kernel different from the one into which
-     you are trying to load it.  Run ``modinfo`` on ``openvswitch.ko`` and on a
-     module built for the running kernel, e.g.::
-
-         $ /sbin/modinfo openvswitch.ko
-         $ /sbin/modinfo /lib/modules/$(uname -r)/kernel/net/bridge/bridge.ko
-
-     Compare the "vermagic" lines output by the two commands.  If they differ,
-     then Open vSwitch was built for the wrong kernel.
-
-     If you decide to report a bug or ask a question related to module loading,
-     include the output from the ``dmesg`` and ``modinfo`` commands mentioned
-     above.
 
 .. _general-starting:
 
