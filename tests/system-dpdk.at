@@ -544,6 +544,382 @@ dnl --------------------------------------------------------------------------
 
 
 dnl --------------------------------------------------------------------------
+dnl MTU increase phy port
+AT_SETUP([OVS-DPDK - MTU increase phy port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_PHY_SKIP()
+OVS_DPDK_START()
+
+dnl First set MTU to its default value and confirm that value, then increase the MTU value and confirm the new value
+
+dnl Add userspace bridge and attach it to OVS with default MTU value
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Check default MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=1500' stdout], [], [stdout])
+
+dnl Increase MTU value and check in the datapath
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
+
+dnl Fail if MTU is not supported
+AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
+
+dnl Fail if error is encountered during MTU setup
+AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
+
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU decrease phy port
+AT_SETUP([OVS-DPDK - MTU decrease phy port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_PHY_SKIP()
+OVS_DPDK_START()
+
+dnl First set an increased MTU value and confirm that value, then decrease the MTU value and confirm the new value
+
+dnl Add userspace bridge and attach it to OVS and modify MTU value
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if MTU is not supported
+AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
+
+dnl Fail if error is encountered during MTU setup
+AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+
+dnl Decrease MTU value and check in the datapath
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=2000])
+
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=2000' stdout], [], [stdout])
+
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU increase vport port
+AT_SETUP([OVS-DPDK - MTU increase vport port])
+AT_KEYWORDS([dpdk])
+
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS with default MTU value
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+
+dnl Check default MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=1500' stdout], [], [stdout])
+
+dnl Increase MTU value and check in the datapath
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
+
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU decrease vport port
+AT_SETUP([OVS-DPDK - MTU decrease vport port])
+AT_KEYWORDS([dpdk])
+
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS and modify MTU value
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+
+dnl Decrease MTU value and check in the datapath
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=2000])
+
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=2000' stdout], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU upper bound phy port
+AT_SETUP([OVS-DPDK - MTU upper bound phy port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_PHY_SKIP()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9702])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if MTU is not supported
+AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
+
+dnl Fail if error is encountered during MTU setup
+AT_FAIL_IF([grep "Interface phy0 MTU (9702) setup error" ovs-vswitchd.log], [], [stdout])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9702' stdout], [], [stdout])
+
+dnl Set MTU value above upper bound and check for error
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9711])
+AT_CHECK([grep "phy0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
+
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@phy0: unsupported MTU 9711@d
+\@failed to set MTU for network device phy0: Invalid argument@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU lower bound phy port
+AT_SETUP([OVS-DPDK - MTU lower bound phy port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_PHY_SKIP()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=68])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Fail if MTU is not supported
+AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
+
+dnl Fail if error is encountered during MTU setup
+AT_FAIL_IF([grep "Interface phy0 MTU (68) setup error" ovs-vswitchd.log], [], [stdout])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=68' stdout], [], [stdout])
+
+dnl Set MTU value below lower bound and check for error
+AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=67])
+AT_CHECK([grep "phy0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
+
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@phy0: unsupported MTU 67@d
+\@failed to set MTU for network device phy0: Invalid argument@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU upper bound vport port
+AT_SETUP([OVS-DPDK - MTU upper bound vport port])
+AT_KEYWORDS([dpdk])
+
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9702])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=9702' stdout], [], [stdout])
+
+dnl Set MTU value above upper bound and check for error
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
+AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@dpdkvhostuserclient0: unsupported MTU 9711@d
+\@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl MTU lower bound vport port
+AT_SETUP([OVS-DPDK - MTU lower bound vport port])
+AT_KEYWORDS([dpdk])
+
+AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=68])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+
+OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+
+dnl Check MTU value in the datapath
+AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
+AT_CHECK([egrep 'mtu=68' stdout], [], [stdout])
+
+dnl Set MTU value below lower bound and check for error
+AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
+AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
+
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@dpdkvhostuserclient0: unsupported MTU 67@d
+\@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
+])")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
 dnl Add standard DPDK PHY port
 AT_SETUP([OVS-DPDK - MFEX Autovalidator])
 AT_KEYWORDS([dpdk])
