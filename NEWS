@@ -57,6 +57,8 @@ Post-v2.17.0
        The old variant is kept for backward compatibility.
      * Add actions auto-validator function to compare different actions
        implementations against default implementation.
+     * Add command line option to switch between different actions
+       implementations available at run time.
    - Linux datapath:
      * Add offloading meter tc police.
      * Add support for offloading the check_pkt_len action.

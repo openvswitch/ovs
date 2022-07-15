@@ -39,6 +39,7 @@
 #include "csum.h"
 #include "conntrack.h"
 #include "openvswitch/vlog.h"
+#include "unixctl.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_execute);
 COVERAGE_DEFINE(datapath_drop_sample_error);
@@ -876,6 +877,48 @@ odp_actions_impl_set(const char *name)
     return 0;
 }
 
+static void
+action_impl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+
+    int err = odp_actions_impl_set(argv[1]);
+    if (err) {
+        ds_put_format(&reply,
+                      "Error: unknown action implementation, %s, specified!",
+                      argv[1]);
+        unixctl_command_reply_error(conn, ds_cstr(&reply));
+    } else {
+        ds_put_format(&reply, "Action implementation set to %s.", argv[1]);
+        unixctl_command_reply(conn, ds_cstr(&reply));
+    }
+
+    ds_destroy(&reply);
+}
+
+static void
+action_impl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+
+    odp_execute_action_get_info(&reply);
+    unixctl_command_reply(conn, ds_cstr(&reply));
+    ds_destroy(&reply);
+}
+
+static void
+odp_execute_unixctl_init(void)
+{
+    unixctl_command_register("odp-execute/action-impl-set", "name",
+                             1, 1, action_impl_set,
+                             NULL);
+    unixctl_command_register("odp-execute/action-impl-show", "",
+                             0, 0, action_impl_show,
+                             NULL);
+}
+
 void
 odp_execute_init(void)
 {
@@ -883,6 +926,7 @@ odp_execute_init(void)
     if (ovsthread_once_start(&once)) {
         odp_execute_action_init();
         odp_actions_impl_set("scalar");
+        odp_execute_unixctl_init();
         ovsthread_once_done(&once);
     }
 }

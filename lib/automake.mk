@@ -584,6 +584,7 @@ MAN_FRAGMENTS += \
 	lib/netdev-dpdk-unixctl.man \
 	lib/dpif-netdev-unixctl.man \
 	lib/dpif-netlink-unixctl.man \
+	lib/odp-execute-unixctl.man \
 	lib/ofp-version.man \
 	lib/ovs.tmac \
 	lib/ovs-replay.man \

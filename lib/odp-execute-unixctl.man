@@ -1,0 +1,10 @@
+.SS "ODP-EXECUTE COMMANDS"
+These commands manage the "odp-execute" component.
+
+.IP "\fBodp-execute/action-impl-show\fR
+Lists the actions implementations that are available and highlights the
+currently enabled one.
+.
+.IP "\fBodp-execute/action-impl-set\fR \fIaction_impl\fR"
+Sets the action implementation to any available implementation. By default
+"scalar" is used.

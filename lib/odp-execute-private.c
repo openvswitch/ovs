@@ -68,6 +68,18 @@ odp_execute_action_set(const char *name)
 }
 
 void
+odp_execute_action_get_info(struct ds *string)
+{
+    ds_put_cstr(string, "Available Actions implementations:\n");
+    for (int i = 0; i < ACTION_IMPL_MAX; i++) {
+        ds_put_format(string, "  %s (available: %s, active: %s)\n",
+                      action_impls[i].name,
+                      action_impls[i].available ? "Yes" : "No",
+                      i == active_action_impl_index ? "Yes" : "No");
+    }
+}
+
+void
 odp_execute_action_init(void)
 {
     /* Each impl's function array is initialized to reflect the scalar
