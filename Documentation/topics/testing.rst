@@ -361,12 +361,12 @@ testsuite.
 Userspace datapath: Testing and Validation of CPU-specific Optimizations
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-As multiple versions of the datapath classifier and packet parsing functions
-can co-exist, each with different CPU ISA optimizations, it is important to
-validate that they all give the exact same results.  To easily test all the
-implementations, an ``autovalidator`` implementation of them exists.  This
-implementation runs all other available implementations, and verifies that the
-results are identical.
+As multiple versions of the datapath classifier, packet parsing functions and
+actions can co-exist, each with different CPU ISA optimizations, it is
+important to validate that they all give the exact same results.  To easily
+test all the implementations, an ``autovalidator`` implementation of them
+exists. This implementation runs all other available implementations, and
+verifies that the results are identical.
 
 Running the OVS unit tests with the autovalidator enabled ensures all
 implementations provide the same results.  Note that the performance of the
@@ -382,18 +382,26 @@ To set the autovalidator for the packet parser, use this command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set autovalidator
 
+To set the autovalidator for actions, use this command::
+
+    $ ovs-appctl odp-execute/action-impl-set autovalidator
+
 To run the OVS unit test suite with the autovalidator as the default
 implementation, it is required to recompile OVS.  During the recompilation,
 the default priority of the `autovalidator` implementation is set to the
-maximum priority, ensuring every test will be run with every implementation::
+maximum priority, ensuring every test will be run with every implementation.
+Priority is only related to mfex autovalidator and not the actions
+autovalidator.::
 
-    $ ./configure --enable-autovalidator --enable-mfex-default-autovalidator
+    $ ./configure --enable-autovalidator --enable-mfex-default-autovalidator \
+        --enable-actions-default-autovalidator
 
 The following line should be seen in the configuration log when the above
 options are used::
 
     checking whether DPCLS Autovalidator is default implementation... yes
     checking whether MFEX Autovalidator is default implementation... yes
+    checking whether actions Autovalidator is default implementation... yes
 
 Compile OVS in debug mode to have `ovs_assert` statements error out if
 there is a mis-match in the datapath classifier lookup or packet parser

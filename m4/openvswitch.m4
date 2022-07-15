@@ -421,6 +421,35 @@ AC_DEFUN([OVS_CHECK_SPHINX],
    AC_ARG_VAR([SPHINXBUILD])
    AM_CONDITIONAL([HAVE_SPHINX], [test "$SPHINXBUILD" != none])])
 
+
+dnl Checks for compiler correctly emitting AVX512-VL vpermd instruction.
+dnl GCC5 says it exports AVX512-VL, but it doesn't implement "vpermd" instruction
+dnl resulting in compilation failures. To workaround this "reported vs actual"
+dnl mismatch, we compile a small snippet, and conditionally enable AVX512-VL.
+AC_DEFUN([OVS_CHECK_GCC_AVX512VL], [
+  AC_MSG_CHECKING([whether compiler correctly emits AVX512-VL])
+  AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([#include <immintrin.h>
+                     static void __attribute__((__target__("avx512vl")))
+                     check_permutexvar(void)
+                     {
+                         __m256i v_swap32a = _mm256_setr_epi32(0x0, 0x4, 0xF,
+                                                               0xF, 0xF, 0xF,
+                                                               0xF, 0xF);
+                         v_swap32a = _mm256_permutexvar_epi32(v_swap32a,
+                                                              v_swap32a);
+                     }],[])],
+    [AC_MSG_RESULT([yes])
+    ovs_cv_gcc_avx512vl_good=yes],
+    [AC_MSG_RESULT([no])
+    ovs_cv_gcc_avx512vl_good=no])
+   if test "$ovs_cv_gcc_avx512vl_good" = yes; then
+     AC_DEFINE([HAVE_GCC_AVX512VL_GOOD], [1],
+               [Define to 1 if gcc implements the vpermd instruction.])
+   fi
+   AM_CONDITIONAL([HAVE_GCC_AVX512VL_GOOD],
+                  [test "$ovs_cv_gcc_avx512vl_good" = yes])])
+
 dnl Checks for binutils/assembler known issue with AVX512.
 dnl Due to backports, we probe assembling a reproducer instead of checking
 dnl binutils version string. More details, including ASM dumps and debug here:

@@ -321,3 +321,33 @@ following command::
 ``scalar`` can be selected on core ``3`` by the following command::
 
     $ ovs-appctl dpif-netdev/miniflow-parser-set -pmd 3 scalar
+
+
+Actions Implementations (Experimental)
+--------------------------------------
+
+Actions describe what processing or modification should be performed on a
+packet when it matches a given flow. Similar to the datapath interface,
+DPCLS and MFEX (see above), the implementation of these actions can be
+accelerated using SIMD instructions, resulting in improved performance.
+
+OVS provides multiple implementations of the actions, however some
+implementations requiring a CPU capable of executing the required SIMD
+instructions.
+
+Available implementations can be listed with the following command::
+
+    $ ovs-appctl odp-execute/action-impl-show
+        Available Actions implementations:
+            scalar (available: Yes, active: Yes)
+            autovalidator (available: Yes, active: No)
+            avx512 (available: Yes, active: No)
+
+By default, ``scalar`` is used.  Implementations can be selected by
+name::
+
+    $ ovs-appctl odp-execute/action-impl-set avx512
+    Action implementation set to avx512.
+
+    $ ovs-appctl odp-execute/action-impl-set scalar
+    Action implementation set to scalar.

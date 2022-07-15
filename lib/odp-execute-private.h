@@ -22,6 +22,14 @@
 #include "odp-netlink.h"
 #include "ovs-atomic.h"
 
+/* Combine all required ISA and Linker checks into a single #define
+ * for readability and simplicity where the checks are needed. Note
+ * that it is always #defined, so code must use the #if preprocesor
+ * directive (not #ifdef). */
+#define ACTION_IMPL_AVX512_CHECK (__x86_64__ && HAVE_AVX512F \
+    && HAVE_LD_AVX512_GOOD && __SSE4_2__ && HAVE_AVX512BW && HAVE_AVX512VL \
+    && HAVE_GCC_AVX512VL_GOOD)
+
 /* Forward declaration for typedef. */
 struct odp_execute_action_impl;
 
@@ -55,6 +63,10 @@ enum odp_execute_action_impl_idx {
     /* See ACTION_IMPL_BEGIN below, for "first to-be-validated" impl.
      * Do not change the autovalidator position in this list without updating
      * the define below. */
+
+#if ACTION_IMPL_AVX512_CHECK
+    ACTION_IMPL_AVX512,
+#endif
 
     ACTION_IMPL_MAX,
 };

@@ -61,6 +61,7 @@ Post-v2.17.0
        implementations available at run time.
      * Add build time configure command to enable auto-validator as default
        actions implementation at build time.
+     * Add AVX512 implementation of actions.
    - Linux datapath:
      * Add offloading meter tc police.
      * Add support for offloading the check_pkt_len action.
