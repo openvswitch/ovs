@@ -75,7 +75,7 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.15.x       3.16 to 5.8
     2.16.x       3.16 to 5.8
     2.17.x       3.16 to 5.8
-    2.18.x       N/A
+    3.0+         N/A
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built
@@ -91,7 +91,7 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     Starting with Open vSwitch 2.15, building the Linux kernel module from
     the Open vSwitch source tree is deprecated.  It will not be updated to
     support Linux versions later than 5.8.  We will remove the kernel module
-    source code from the Open vSwitch source tree for the Open vSwitch 2.18
+    source code from the Open vSwitch source tree for the Open vSwitch 3.0
     release.
 
 Q: Are all features available with all datapaths?
@@ -111,7 +111,7 @@ Q: Are all features available with all datapaths?
     Linux OVS tree
       The datapath implemented by the Linux kernel module distributed with
       the OVS source tree. This datapath is deprecated starting with OVS
-      2.15.x and support capped at Linux kernel version 5.8. As of OVS 2.18.x
+      2.15.x and support capped at Linux kernel version 5.8. As of OVS 3.0.x
       the Linux OVS tree is no longer supported.
 
     Userspace
@@ -134,12 +134,12 @@ Q: Are all features available with all datapaths?
     Feature                    Linux upstream Linux OVS tree Userspace Hyper-V
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            2.5          2.6      YES
-    Connection tracking-IPv6        YES            YES          YES      2.18
+    Connection tracking-IPv6        YES            YES          YES      3.0
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
     Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
-    Conntrack NAT6                  4.6            2.6          2.8      2.18
+    Conntrack NAT6                  4.6            2.6          2.8      3.0
     Tunnel - LISP                   NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
@@ -147,7 +147,7 @@ Q: Are all features available with all datapaths?
     Tunnel - Geneve                 3.18           2.4          2.4      YES
     Tunnel - GRE-IPv6               4.18           2.6          2.6      NO
     Tunnel - VXLAN-IPv6             4.3            2.6          2.6      NO
-    Tunnel - Geneve-IPv6            4.4            2.6          2.6      2.18
+    Tunnel - Geneve-IPv6            4.4            2.6          2.6      3.0
     Tunnel - ERSPAN                 4.18           2.10         2.10     NO
     Tunnel - ERSPAN-IPv6            4.18           2.10         2.10     NO
     Tunnel - GTP-U                  NO             NO           2.14     NO
@@ -215,6 +215,7 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.15.x       20.11.4
     2.16.x       20.11.4
     2.17.x       21.11.1
+    3.0.x        21.11.1
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?

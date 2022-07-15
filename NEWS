@@ -1,5 +1,5 @@
-Post-v2.17.0
----------------------
+v3.0.0 - xx xxx xxxx
+--------------------
    - libopenvswitch API change:
      * To fix the Undefined Behavior issue causing the compiler to incorrectly
        optimize important parts of code, container iteration macros (e.g.,
@@ -74,8 +74,8 @@ Post-v2.17.0
        for example OVN.
      * Shared library and subsequently libopenvswitch and libopenvswitch-dev
        binary packages are no longer built.
-   - Linux datapath:
-     * Add offloading meter tc police.
+   - Linux TC offload:
+     * Add support for offloading meters via tc police.
      * Add support for offloading the check_pkt_len action.
    - New configuration knob 'other_config:all-members-active' for
      balance-slb bonds.

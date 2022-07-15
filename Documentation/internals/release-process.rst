@@ -104,9 +104,9 @@ LTS designation schedule example (depends on current state of development):
 +---------+--------------+--------------------------------------------------+
 | 2.17    | Feb 2022     | 2.17 - new latest stable                         |
 +---------+--------------+--------------------------------------------------+
-| 2.18    | Aug 2022     | 2.18 - new latest stable, 2.17 stable ⟶ new LTS  |
+| 3.0     | Aug 2022     | 3.0  - new latest stable, 2.17 stable ⟶ new LTS  |
 +---------+--------------+--------------------------------------------------+
-| 2.19    | Feb 2023     | 2.19 - new latest stable, 2.13 LTS ⟶ EOL         |
+| 3.1     | Feb 2023     | 3.1  - new latest stable, 2.13 LTS ⟶ EOL         |
 +---------+--------------+--------------------------------------------------+
 
 While branches other than LTS and the latest release are not formally
