@@ -162,7 +162,7 @@ EXTRA_DIST += ovsdb/local-config.xml
 CLEANFILES += ovsdb/ovsdb.local-config.5
 man_MANS += ovsdb/ovsdb.local-config.5
 ovsdb/ovsdb.local-config.5: \
-	ovsdb/ovsdb-doc ovsdb/ ovsdb/local-config.xml ovsdb/local-config.ovsschema
+	ovsdb/ovsdb-doc ovsdb/local-config.xml ovsdb/local-config.ovsschema
 	$(AM_V_GEN)$(OVSDB_DOC) \
 		--version=$(VERSION) \
 		$(srcdir)/ovsdb/local-config.ovsschema \
