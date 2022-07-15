@@ -154,6 +154,58 @@ action_avx512_pop_vlan(struct dp_packet_batch *batch,
     }
 }
 
+/* This function performs the same operation on each packet in the batch as
+ * the scalar eth_push_vlan() function. */
+static void
+action_avx512_push_vlan(struct dp_packet_batch *batch, const struct nlattr *a)
+{
+    struct dp_packet *packet;
+    const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
+    ovs_be16 tpid, tci;
+
+    /* This shuffle mask is used below, and each position tells where to
+     * move the bytes to. So here, the fourth byte in v_ether is moved to
+     * byte location 0 in v_shift. The fifth is moved to 1, etc., etc.
+     * The 0xFF is special it tells to fill that position with 0. */
+    static const uint8_t vlan_push_shuffle_mask[16] = {
+        4, 5, 6, 7, 8, 9, 10, 11,
+        12, 13, 14, 15, 0xFF, 0xFF, 0xFF, 0xFF
+    };
+
+    /* Load the shuffle mask in v_index. */
+    __m128i v_index = _mm_loadu_si128((void *) vlan_push_shuffle_mask);
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        tpid = vlan->vlan_tpid;
+        tci = vlan->vlan_tci;
+
+        /* As we are about to insert the VLAN_HEADER we now need to adjust all
+         * the offsets. */
+        avx512_dp_packet_resize_l2(packet, VLAN_HEADER_LEN);
+
+        char *pkt_data = (char *) dp_packet_data(packet);
+
+        /* Build up the VLAN TCI/TPID in a single uint32_t. */
+        const uint32_t tci_proc = tci & htons(~VLAN_CFI);
+        const uint32_t tpid_tci = (tci_proc << 16) | tpid;
+
+        /* Load the first 128-bits of the packet into the v_ether register.
+         * Note that this includes the 4 unused bytes (VLAN_HEADER_LEN). */
+        __m128i v_ether = _mm_loadu_si128((void *) pkt_data);
+
+        /* Move(shuffle) the veth_dst and veth_src data to create room for
+         * the vlan header. */
+        __m128i v_shift = _mm_shuffle_epi8(v_ether, v_index);
+
+        /* Copy(insert) the 32-bit VLAN header, tpid_tci, at the 3rd 32-bit
+         * word offset, i.e. ofssetof(vlan_eth_header, veth_type) */
+        __m128i v_vlan_hdr = _mm_insert_epi32(v_shift, tpid_tci, 3);
+
+        /* Write back the modified ethernet header. */
+        _mm_storeu_si128((void *) pkt_data, v_vlan_hdr);
+    }
+}
+
 int
 action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
 {
@@ -164,6 +216,8 @@ action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
     /* Set function pointers for actions that can be applied directly, these
      * are identified by OVS_ACTION_ATTR_*. */
     self->funcs[OVS_ACTION_ATTR_POP_VLAN] = action_avx512_pop_vlan;
+    self->funcs[OVS_ACTION_ATTR_PUSH_VLAN] = action_avx512_push_vlan;
+
     return 0;
 }
 
