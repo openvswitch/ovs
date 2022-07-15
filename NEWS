@@ -55,6 +55,8 @@ Post-v2.17.0
      * 'dpif-netdev/subtable-lookup-prio-get' appctl command renamed to
        'dpif-netdev/subtable-lookup-info-get' to better reflect its purpose.
        The old variant is kept for backward compatibility.
+     * Add actions auto-validator function to compare different actions
+       implementations against default implementation.
    - Linux datapath:
      * Add offloading meter tc police.
      * Add support for offloading the check_pkt_len action.

@@ -236,6 +236,10 @@ void *dp_packet_steal_data(struct dp_packet *);
 static inline bool dp_packet_equal(const struct dp_packet *,
                                    const struct dp_packet *);
 
+bool dp_packet_compare_offsets(struct dp_packet *good,
+                               struct dp_packet *test,
+                               struct ds *err_str);
+
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
 static inline void

@@ -506,3 +506,27 @@ dp_packet_resize_l2(struct dp_packet *b, int increment)
     dp_packet_adjust_layer_offset(&b->l2_5_ofs, increment);
     return dp_packet_data(b);
 }
+
+bool
+dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
+                          struct ds *err_str)
+{
+    if ((b1->l2_pad_size != b2->l2_pad_size) ||
+        (b1->l2_5_ofs != b2->l2_5_ofs) ||
+        (b1->l3_ofs != b2->l3_ofs) ||
+        (b1->l4_ofs != b2->l4_ofs)) {
+        if (err_str) {
+            ds_put_format(err_str, "Packet offset comparison failed\n");
+            ds_put_format(err_str, "Buffer 1 offsets: l2_pad_size %u,"
+                          " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                          b1->l2_pad_size, b1->l2_5_ofs,
+                          b1->l3_ofs, b1->l4_ofs);
+            ds_put_format(err_str, "Buffer 2 offsets: l2_pad_size %u,"
+                          " l2_5_ofs : %u l3_ofs %u, l4_ofs %u\n",
+                          b2->l2_pad_size, b2->l2_5_ofs,
+                          b2->l3_ofs, b2->l4_ofs);
+        }
+        return false;
+    }
+    return true;
+}

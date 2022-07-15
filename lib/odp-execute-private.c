@@ -30,6 +30,12 @@ VLOG_DEFINE_THIS_MODULE(odp_execute_impl);
 static int active_action_impl_index;
 
 static struct odp_execute_action_impl action_impls[] = {
+    [ACTION_IMPL_AUTOVALIDATOR] = {
+        .available = false,
+        .name = "autovalidator",
+        .init_func = action_autoval_init,
+    },
+
     [ACTION_IMPL_SCALAR] = {
         .available = false,
         .name = "scalar",
@@ -102,4 +108,96 @@ odp_execute_action_init(void)
             }
         }
     }
+}
+
+/* Init sequence required to be scalar first to pick up the default scalar
+ * implementations, allowing over-riding of the optimized functions later. */
+BUILD_ASSERT_DECL(ACTION_IMPL_SCALAR == 0);
+BUILD_ASSERT_DECL(ACTION_IMPL_AUTOVALIDATOR == 1);
+
+/* Loop over packets, and validate each one for the given action. */
+static void
+action_autoval_generic(struct dp_packet_batch *batch, const struct nlattr *a)
+{
+    struct odp_execute_action_impl *scalar = &action_impls[ACTION_IMPL_SCALAR];
+    enum ovs_action_attr attr_type = nl_attr_type(a);
+    struct dp_packet_batch original_batch;
+    bool failed = false;
+
+    dp_packet_batch_clone(&original_batch, batch);
+
+    scalar->funcs[attr_type](batch, a);
+
+    for (int impl = ACTION_IMPL_BEGIN; impl < ACTION_IMPL_MAX; impl++) {
+        /* Clone original batch and execute implementation under test. */
+        struct dp_packet_batch test_batch;
+
+        dp_packet_batch_clone(&test_batch, &original_batch);
+        action_impls[impl].funcs[attr_type](&test_batch, a);
+
+        /* Loop over implementations, checking each one. */
+        for (int pidx = 0; pidx < original_batch.count; pidx++) {
+            struct dp_packet *good_pkt = batch->packets[pidx];
+            struct dp_packet *test_pkt = test_batch.packets[pidx];
+
+            struct ds log_msg = DS_EMPTY_INITIALIZER;
+
+            /* Compare packet length and payload contents. */
+            bool eq = dp_packet_equal(good_pkt, test_pkt);
+
+            if (!eq) {
+                ds_put_format(&log_msg, "Packet: %d\nAction : ", pidx);
+                format_odp_actions(&log_msg, a, a->nla_len, NULL);
+                ds_put_format(&log_msg, "\nGood hex:\n");
+                ds_put_hex_dump(&log_msg, dp_packet_data(good_pkt),
+                                dp_packet_size(good_pkt), 0, false);
+                ds_put_format(&log_msg, "Test hex:\n");
+                ds_put_hex_dump(&log_msg, dp_packet_data(test_pkt),
+                                dp_packet_size(test_pkt), 0, false);
+
+                failed = true;
+            }
+
+            /* Compare offsets and RSS */
+            if (!dp_packet_compare_offsets(good_pkt, test_pkt, &log_msg)) {
+                failed = true;
+            }
+
+            if (dp_packet_rss_valid(good_pkt)) {
+                uint32_t good_hash = dp_packet_get_rss_hash(good_pkt);
+                uint32_t test_hash = dp_packet_get_rss_hash(test_pkt);
+
+                if (good_hash != test_hash) {
+                    ds_put_format(&log_msg,
+                                  "Autovalidation rss hash failed\n");
+                    ds_put_format(&log_msg, "Good RSS hash : %u\n", good_hash);
+                    ds_put_format(&log_msg, "Test RSS hash : %u\n", test_hash);
+
+                    failed = true;
+                }
+            }
+
+            if (failed) {
+                VLOG_ERR("Autovalidation of %s failed. Details:\n%s",
+                         action_impls[impl].name, ds_cstr(&log_msg));
+                ds_destroy(&log_msg);
+                failed = false;
+            }
+        }
+        dp_packet_delete_batch(&test_batch, true);
+    }
+    dp_packet_delete_batch(&original_batch, true);
+}
+
+int
+action_autoval_init(struct odp_execute_action_impl *self)
+{
+    /* Set function pointers for actions that can be applied directly, these
+     * are identified by OVS_ACTION_ATTR_*. */
+    for (int i = 0; i < __OVS_ACTION_ATTR_MAX; i++) {
+        if (action_impls[ACTION_IMPL_SCALAR].funcs[i]) {
+            self->funcs[i] = action_autoval_generic;
+        }
+    }
+    return 0;
 }
