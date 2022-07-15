@@ -77,6 +77,8 @@ BUILD_ASSERT_DECL(ACTION_IMPL_AUTOVALIDATOR == 1);
 
 #define ACTION_IMPL_BEGIN (ACTION_IMPL_AUTOVALIDATOR + 1)
 
+bool action_avx512_isa_probe(void);
+
 /* Odp execute init handles setting up the state of the actions functions at
  * initialization time. It cannot return errors, as it must always succeed in
  * initializing the scalar/generic codepath. */
@@ -89,6 +91,8 @@ int odp_action_scalar_init(struct odp_execute_action_impl *self);
 struct odp_execute_action_impl * odp_execute_action_set(const char *name);
 
 int action_autoval_init(struct odp_execute_action_impl *self);
+
+int action_avx512_init(struct odp_execute_action_impl *self);
 
 void odp_execute_action_get_info(struct ds *name);
 

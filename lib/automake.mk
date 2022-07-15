@@ -45,6 +45,10 @@ lib_libopenvswitchavx512_la_CFLAGS += \
 lib_libopenvswitchavx512_la_SOURCES += \
 	lib/dpif-netdev-extract-avx512.c \
 	lib/dpif-netdev-lookup-avx512-gather.c
+if HAVE_GCC_AVX512VL_GOOD
+lib_libopenvswitchavx512_la_SOURCES += \
+	lib/odp-execute-avx512.c
+endif # HAVE_GCC_AVX512VL_GOOD
 endif # HAVE_AVX512VL
 endif # HAVE_AVX512BW
 lib_libopenvswitchavx512_la_LDFLAGS = \
