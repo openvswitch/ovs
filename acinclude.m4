@@ -14,6 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl Set OVS Actions Autovalidator as the default action implementation
+dnl at compile time. This enables automatically running all unit tests
+dnl with all actions implementations.
+AC_DEFUN([OVS_CHECK_ACTIONS_AUTOVALIDATOR], [
+  AC_ARG_ENABLE([actions-default-autovalidator],
+                [AC_HELP_STRING([--enable-actions-default-autovalidator],
+                                [Enable actions autovalidator as default
+                                 ovs actions implementation.])],
+                [autovalidator=yes],[autovalidator=no])
+  AC_MSG_CHECKING([whether actions Autovalidator is default implementation])
+  if test "$autovalidator" != yes; then
+    AC_MSG_RESULT([no])
+  else
+    AC_DEFINE([ACTIONS_AUTOVALIDATOR_DEFAULT], [1],
+              [Autovalidator for actions is a default implementation.])
+    AC_MSG_RESULT([yes])
+  fi
+])
+
+
 dnl Set OVS MFEX Autovalidator as default miniflow extract at compile time?
 dnl This enables automatically running all unit tests with all MFEX
 dnl implementations.
