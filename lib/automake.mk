@@ -216,6 +216,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/object-collection.h \
 	lib/odp-execute.c \
 	lib/odp-execute.h \
+	lib/odp-execute-private.c \
+	lib/odp-execute-private.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
 	lib/ofp-actions.c \

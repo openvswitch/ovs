@@ -40,6 +40,7 @@
 #include "netdev.h"
 #include "netdev-offload.h"
 #include "nx-match.h"
+#include "odp-execute.h"
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"
 #include "openvswitch/dynamic-string.h"
@@ -530,6 +531,8 @@ bridge_init(const char *remote)
     stp_init();
     lldp_init();
     rstp_init();
+    odp_execute_init();
+
     ifaces_changed = seq_create();
     last_ifaces_changed = seq_read(ifaces_changed);
     ifnotifier = if_notifier_create(if_change_cb, NULL);
