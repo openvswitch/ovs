@@ -21,6 +21,7 @@
 #include <config.h>
 #include <errno.h>
 
+#include "csum.h"
 #include "dp-packet.h"
 #include "immintrin.h"
 #include "odp-execute.h"
@@ -57,6 +58,22 @@ BUILD_ASSERT_DECL(sizeof(struct dp_packet) -
 BUILD_ASSERT_DECL(offsetof(struct ovs_key_ethernet, eth_src) +
                   MEMBER_SIZEOF(struct ovs_key_ethernet, eth_src) ==
                   offsetof(struct ovs_key_ethernet, eth_dst));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_src) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_src) ==
+                  offsetof(struct ovs_key_ipv4, ipv4_dst));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_dst) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_dst) ==
+                  offsetof(struct ovs_key_ipv4, ipv4_proto));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_proto) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_proto) ==
+                  offsetof(struct ovs_key_ipv4, ipv4_tos));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_tos) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_tos) ==
+                  offsetof(struct ovs_key_ipv4, ipv4_ttl));
 
 /* Array of callback functions, one for each masked operation. */
 odp_execute_action_cb impl_set_masked_funcs[__OVS_KEY_ATTR_MAX];
@@ -278,6 +295,194 @@ action_avx512_eth_set_addrs(struct dp_packet_batch *batch,
     }
 }
 
+static inline uint16_t ALWAYS_INLINE
+avx512_get_delta(__m256i old_header, __m256i new_header)
+{
+    __m256i v_zeros = _mm256_setzero_si256();
+
+    /* These two shuffle masks, v_swap16a and v_swap16b, are to shuffle the
+     * old and new header to add padding after each 16-bit value for the
+     * following carry over addition. */
+    __m256i v_swap16a = _mm256_setr_epi16(0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0x0504, 0xFFFF, 0x0706, 0xFFFF,
+                                          0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF);
+    __m256i v_swap16b = _mm256_setr_epi16(0x0908, 0xFFFF, 0x0B0A, 0xFFFF,
+                                          0x0D0C, 0xFFFF, 0x0F0E, 0xFFFF,
+                                          0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+                                          0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF);
+    __m256i v_shuf_old1 = _mm256_shuffle_epi8(old_header, v_swap16a);
+    __m256i v_shuf_old2 = _mm256_shuffle_epi8(old_header, v_swap16b);
+    __m256i v_shuf_new1 = _mm256_shuffle_epi8(new_header, v_swap16a);
+    __m256i v_shuf_new2 = _mm256_shuffle_epi8(new_header, v_swap16b);
+
+    /* Add each part of the old and new headers together. */
+    __m256i v_delta1 = _mm256_add_epi32(v_shuf_old1, v_shuf_new1);
+    __m256i v_delta2 = _mm256_add_epi32(v_shuf_old2, v_shuf_new2);
+
+    /* Add old and new header. */
+    __m256i v_delta = _mm256_add_epi32(v_delta1, v_delta2);
+
+    /* Perform horizontal add to go from 8x32-bits to 2x32-bits. */
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+
+    /* Shuffle 32-bit value from 3rd lane into first lane for final
+     * horizontal add. */
+    __m256i v_swap32a = _mm256_setr_epi32(0x0, 0x4, 0xF, 0xF,
+                                          0xF, 0xF, 0xF, 0xF);
+    v_delta = _mm256_permutexvar_epi32(v_swap32a, v_delta);
+
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi16(v_delta, v_zeros);
+
+    /* Extract delta value. */
+    return _mm256_extract_epi16(v_delta, 0);
+}
+
+/* This function will calculate the csum delta for the IPv4 addresses in the
+ * new_header and old_header, assuming the csum field on the new_header was
+ * updated. */
+static inline uint16_t ALWAYS_INLINE
+avx512_ipv4_addr_csum_delta(__m256i old_header, __m256i new_header)
+{
+    __m256i v_zeros = _mm256_setzero_si256();
+
+    /* Set the v_ones register to all one's. */
+    __m256i v_ones = _mm256_cmpeq_epi16(v_zeros, v_zeros);
+
+    /* Combine the old and new header, i.e. adding in the new IP addresses
+     * in the old header (oh). This is done by using the 0x03C 16-bit mask,
+     * picking 16-bit word 7 till 10.  */
+    __m256i v_blend_new = _mm256_mask_blend_epi16(0x03C0, old_header,
+                                                  new_header);
+
+    /* Invert the old_header register. */
+    old_header =_mm256_andnot_si256(old_header, v_ones);
+
+    /* Calculate the delta between the old and new header. */
+    return avx512_get_delta(old_header, v_blend_new);
+}
+
+/* This function will calculate the csum delta between the new_header and
+ * old_header, assuming the csum field on the new_header was not yet updated
+ * or reset. It also assumes headers contain the first 20-bytes of the IPv4
+ * header data, and the rest is zeroed out. */
+static inline uint16_t ALWAYS_INLINE
+avx512_ipv4_hdr_csum_delta(__m256i old_header, __m256i new_header)
+{
+    __m256i v_zeros = _mm256_setzero_si256();
+
+    /* Set the v_ones register to all one's. */
+    __m256i v_ones = _mm256_cmpeq_epi16(v_zeros, v_zeros);
+
+    /* Invert the old_header register. */
+    old_header =_mm256_andnot_si256(old_header, v_ones);
+
+    /* Calculate the delta between the old and new header. */
+    return avx512_get_delta(old_header, new_header);
+}
+
+/* This function performs the same operation on each packet in the batch as
+ * the scalar odp_set_ipv4() function. */
+static void
+action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
+                             const struct nlattr *a)
+{
+    const struct ovs_key_ipv4 *key, *mask;
+    struct dp_packet *packet;
+    a = nl_attr_get(a);
+    key = nl_attr_get(a);
+    mask = odp_get_key_mask(a, struct ovs_key_ipv4);
+
+    /* Read the content of the key(src) and mask in the respective registers.
+     * We only load the size of the actual structure, which is only 96-bits. */
+    __m256i v_key = _mm256_maskz_loadu_epi32(0x7, (void *) key);
+    __m256i v_mask = _mm256_maskz_loadu_epi32(0x7, (void *) mask);
+
+    /* This two shuffle masks, v_shuf32, v_shuffle, are to shuffle key and
+     * mask to match the ip_header structure layout. */
+    static const uint8_t ip_shuffle_mask[32] = {
+            0xFF, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0x06, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02, 0x03,
+            0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+    __m256i v_shuf32 = _mm256_setr_epi32(0x0, 0x2, 0xF, 0xF,
+                                         0x1, 0xF, 0xF, 0xF);
+
+    __m256i v_shuffle = _mm256_loadu_si256((void *) ip_shuffle_mask);
+
+    /* Two shuffles are required for key and mask to match the layout of
+     * the ip_header struct. The _shuffle_epi8 only works within 128-bit
+     * lanes, so a permute is required to move src and dst into the correct
+     * lanes. And then a shuffle is used to move the fields into the right
+     * order. */
+    __m256i v_key_shuf = _mm256_permutexvar_epi32(v_shuf32, v_key);
+    v_key_shuf = _mm256_shuffle_epi8(v_key_shuf, v_shuffle);
+
+    __m256i v_mask_shuf = _mm256_permutexvar_epi32(v_shuf32, v_mask);
+    v_mask_shuf = _mm256_shuffle_epi8(v_mask_shuf, v_shuffle);
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        struct ip_header *nh = dp_packet_l3(packet);
+        ovs_be16 old_csum = ~nh->ip_csum;
+
+        /* Load the 20 bytes of the IPv4 header. Without options, which is the
+         * most common case it's 20 bytes, but can be up to 60 bytes. */
+        __m256i v_packet = _mm256_maskz_loadu_epi32(0x1F, (void *) nh);
+
+        /* AND the v_pkt_mask to the packet data (v_packet). */
+        __m256i v_pkt_masked = _mm256_andnot_si256(v_mask_shuf, v_packet);
+
+        /* OR the new addresses (v_key_shuf) with the masked packet addresses
+         * (v_pkt_masked). */
+        __m256i v_new_hdr = _mm256_or_si256(v_key_shuf, v_pkt_masked);
+
+        /* Update the IP checksum based on updated IP values. */
+        uint16_t delta = avx512_ipv4_hdr_csum_delta(v_packet, v_new_hdr);
+        uint32_t new_csum = old_csum + delta;
+        delta = csum_finish(new_csum);
+
+        /* Insert new checksum. */
+        v_new_hdr = _mm256_insert_epi16(v_new_hdr, delta, 5);
+
+        /* If ip_src or ip_dst has been modified, L4 checksum needs to
+         * be updated too. */
+        if (mask->ipv4_src || mask->ipv4_dst) {
+
+            uint16_t delta_checksum = avx512_ipv4_addr_csum_delta(v_packet,
+                                                                  v_new_hdr);
+
+            if (nh->ip_proto == IPPROTO_UDP) {
+                /* New UDP checksum. */
+                struct udp_header *uh = dp_packet_l4(packet);
+                if (uh->udp_csum) {
+                    uint16_t old_udp_checksum = ~uh->udp_csum;
+                    uint32_t udp_checksum = old_udp_checksum + delta_checksum;
+                    udp_checksum = csum_finish(udp_checksum);
+
+                    if (!udp_checksum) {
+                        udp_checksum = htons(0xffff);
+                    }
+                    /* Insert new udp checksum. */
+                    uh->udp_csum = udp_checksum;
+                }
+            } else if (nh->ip_proto == IPPROTO_TCP) {
+                /* New TCP checksum. */
+                struct tcp_header *th = dp_packet_l4(packet);
+                uint16_t old_tcp_checksum = ~th->tcp_csum;
+                uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+                tcp_checksum = csum_finish(tcp_checksum);
+
+                th->tcp_csum = tcp_checksum;
+            }
+        }
+        /* Write back the modified IPv4 addresses. */
+        _mm256_mask_storeu_epi32((void *) nh, 0x1F, v_new_hdr);
+    }
+}
+
 static void
 action_avx512_set_masked(struct dp_packet_batch *batch, const struct nlattr *a)
 {
@@ -307,6 +512,7 @@ action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
     /* Set function pointers for the individual operations supported by the
      * SET_MASKED action. */
     impl_set_masked_funcs[OVS_KEY_ATTR_ETHERNET] = action_avx512_eth_set_addrs;
+    impl_set_masked_funcs[OVS_KEY_ATTR_IPV4] = action_avx512_ipv4_set_addrs;
 
     return 0;
 }
