@@ -562,8 +562,6 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
     }
 }
 
-#define get_mask(a, type) ((const type *)(const void *)(a + 1) + 1)
-
 static void
 odp_execute_masked_set_action(struct dp_packet *packet,
                               const struct nlattr *a)
@@ -575,17 +573,17 @@ odp_execute_masked_set_action(struct dp_packet *packet,
     switch (type) {
     case OVS_KEY_ATTR_PRIORITY:
         md->skb_priority = nl_attr_get_u32(a)
-            | (md->skb_priority & ~*get_mask(a, uint32_t));
+            | (md->skb_priority & ~*odp_get_key_mask(a, uint32_t));
         break;
 
     case OVS_KEY_ATTR_SKB_MARK:
         md->pkt_mark = nl_attr_get_u32(a)
-            | (md->pkt_mark & ~*get_mask(a, uint32_t));
+            | (md->pkt_mark & ~*odp_get_key_mask(a, uint32_t));
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(packet, nl_attr_get(a),
-                          get_mask(a, struct ovs_key_ethernet));
+                          odp_get_key_mask(a, struct ovs_key_ethernet));
         break;
 
     case OVS_KEY_ATTR_NSH: {
@@ -595,27 +593,27 @@ odp_execute_masked_set_action(struct dp_packet *packet,
 
     case OVS_KEY_ATTR_IPV4:
         odp_set_ipv4(packet, nl_attr_get(a),
-                     get_mask(a, struct ovs_key_ipv4));
+                     odp_get_key_mask(a, struct ovs_key_ipv4));
         break;
 
     case OVS_KEY_ATTR_IPV6:
         odp_set_ipv6(packet, nl_attr_get(a),
-                     get_mask(a, struct ovs_key_ipv6));
+                     odp_get_key_mask(a, struct ovs_key_ipv6));
         break;
 
     case OVS_KEY_ATTR_TCP:
         odp_set_tcp(packet, nl_attr_get(a),
-                    get_mask(a, struct ovs_key_tcp));
+                    odp_get_key_mask(a, struct ovs_key_tcp));
         break;
 
     case OVS_KEY_ATTR_UDP:
         odp_set_udp(packet, nl_attr_get(a),
-                    get_mask(a, struct ovs_key_udp));
+                    odp_get_key_mask(a, struct ovs_key_udp));
         break;
 
     case OVS_KEY_ATTR_SCTP:
         odp_set_sctp(packet, nl_attr_get(a),
-                     get_mask(a, struct ovs_key_sctp));
+                     odp_get_key_mask(a, struct ovs_key_sctp));
         break;
 
     case OVS_KEY_ATTR_MPLS:
@@ -623,33 +621,33 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         if (mh) {
             put_16aligned_be32(&mh->mpls_lse, nl_attr_get_be32(a)
                                | (get_16aligned_be32(&mh->mpls_lse)
-                                  & ~*get_mask(a, ovs_be32)));
+                                  & ~*odp_get_key_mask(a, ovs_be32)));
         }
         break;
 
     case OVS_KEY_ATTR_ARP:
         set_arp(packet, nl_attr_get(a),
-                get_mask(a, struct ovs_key_arp));
+                odp_get_key_mask(a, struct ovs_key_arp));
         break;
 
     case OVS_KEY_ATTR_ND:
         odp_set_nd(packet, nl_attr_get(a),
-                   get_mask(a, struct ovs_key_nd));
+                   odp_get_key_mask(a, struct ovs_key_nd));
         break;
 
     case OVS_KEY_ATTR_ND_EXTENSIONS:
         odp_set_nd_ext(packet, nl_attr_get(a),
-                       get_mask(a, struct ovs_key_nd_extensions));
+                       odp_get_key_mask(a, struct ovs_key_nd_extensions));
         break;
 
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a)
-            | (md->dp_hash & ~*get_mask(a, uint32_t));
+            | (md->dp_hash & ~*odp_get_key_mask(a, uint32_t));
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
         md->recirc_id = nl_attr_get_u32(a)
-            | (md->recirc_id & ~*get_mask(a, uint32_t));
+            | (md->recirc_id & ~*odp_get_key_mask(a, uint32_t));
         break;
 
     case OVS_KEY_ATTR_TUNNEL:    /* Masked data not supported for tunnel. */
@@ -857,6 +855,17 @@ action_push_vlan(struct dp_packet_batch *batch, const struct nlattr *a)
     }
 }
 
+static void
+action_set_masked(struct dp_packet_batch *batch, const struct nlattr *a)
+{
+    const struct nlattr *key = nl_attr_get(a);
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        odp_execute_masked_set_action(packet, key);
+    }
+}
+
 /* Implementation of the scalar actions impl init function. Build up the
  * array of func ptrs here. */
 int
@@ -866,6 +875,7 @@ odp_action_scalar_init(struct odp_execute_action_impl *self)
      * are identified by OVS_ACTION_ATTR_*. */
     self->funcs[OVS_ACTION_ATTR_POP_VLAN] = action_pop_vlan;
     self->funcs[OVS_ACTION_ATTR_PUSH_VLAN] = action_push_vlan;
+    self->funcs[OVS_ACTION_ATTR_SET_MASKED] = action_set_masked;
 
     return 0;
 }
@@ -1080,12 +1090,6 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             }
             break;
 
-        case OVS_ACTION_ATTR_SET_MASKED:
-            DP_PACKET_BATCH_FOR_EACH(i, packet, batch) {
-                odp_execute_masked_set_action(packet, nl_attr_get(a));
-            }
-            break;
-
         case OVS_ACTION_ATTR_SAMPLE:
             DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
                 odp_execute_sample(dp, packet, steal && last_action, a,
@@ -1212,6 +1216,7 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
         /* The following actions are handled by the scalar implementation. */
         case OVS_ACTION_ATTR_POP_VLAN:
         case OVS_ACTION_ATTR_PUSH_VLAN:
+        case OVS_ACTION_ATTR_SET_MASKED:
             OVS_NOT_REACHED();
         }
 

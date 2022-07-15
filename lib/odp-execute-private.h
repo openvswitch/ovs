@@ -96,4 +96,7 @@ int action_avx512_init(struct odp_execute_action_impl *self);
 
 void odp_execute_action_get_info(struct ds *name);
 
+void odp_execute_scalar_action(struct dp_packet_batch *batch,
+                               const struct nlattr *action);
+
 #endif /* ODP_EXTRACT_PRIVATE */

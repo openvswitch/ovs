@@ -23,6 +23,7 @@
 
 #include "dp-packet.h"
 #include "immintrin.h"
+#include "odp-execute.h"
 #include "odp-execute-private.h"
 #include "odp-netlink.h"
 #include "openvswitch/vlog.h"
@@ -49,6 +50,16 @@ BUILD_ASSERT_DECL(offsetof(struct dp_packet, l3_ofs) +
  * at the l2_pad_size location. */
 BUILD_ASSERT_DECL(sizeof(struct dp_packet) -
                   offsetof(struct dp_packet, l2_pad_size) >= sizeof(__m128i));
+
+/* The below build assert makes sure the order of the fields needed by
+ * the set masked functions shuffle operations do not change. This should not
+ * happen as these are defined under the Linux uapi. */
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ethernet, eth_src) +
+                  MEMBER_SIZEOF(struct ovs_key_ethernet, eth_src) ==
+                  offsetof(struct ovs_key_ethernet, eth_dst));
+
+/* Array of callback functions, one for each masked operation. */
+odp_execute_action_cb impl_set_masked_funcs[__OVS_KEY_ATTR_MAX];
 
 static inline void ALWAYS_INLINE
 avx512_dp_packet_resize_l2(struct dp_packet *b, int resize_by_bytes)
@@ -206,6 +217,80 @@ action_avx512_push_vlan(struct dp_packet_batch *batch, const struct nlattr *a)
     }
 }
 
+/* This function performs the same operation on each packet in the batch as
+ * the scalar odp_eth_set_addrs() function. */
+static void
+action_avx512_eth_set_addrs(struct dp_packet_batch *batch,
+                            const struct nlattr *a)
+{
+    const struct ovs_key_ethernet *key, *mask;
+    struct dp_packet *packet;
+
+    a = nl_attr_get(a);
+    key = nl_attr_get(a);
+    mask = odp_get_key_mask(a, struct ovs_key_ethernet);
+
+    /* Read the content of the key(src) and mask in the respective registers.
+     * We only load the src and dest addresses, which is only 96-bits and not
+     * 128-bits. */
+    __m128i v_src = _mm_maskz_loadu_epi32(0x7,(void *) key);
+    __m128i v_mask = _mm_maskz_loadu_epi32(0x7, (void *) mask);
+
+
+    /* These shuffle masks are used below, and each position tells where to
+     * move the bytes to. So here, the fourth sixth byte in
+     * ovs_key_ethernet is moved to byte location 0 in v_src/v_mask.
+     * The seventh is moved to 1, etc., etc.
+     * This swap is needed to move the src and dest MAC addresses in the
+     * same order as in the ethernet packet. */
+    static const uint8_t eth_shuffle[16] = {
+        6, 7, 8, 9, 10, 11, 0, 1,
+        2, 3, 4, 5, 0xFF, 0xFF, 0xFF, 0xFF
+    };
+
+    /* Load the shuffle mask in v_shuf. */
+    __m128i v_shuf = _mm_loadu_si128((void *) eth_shuffle);
+
+    /* Swap the key/mask src and dest addresses to the ethernet order. */
+    v_src = _mm_shuffle_epi8(v_src, v_shuf);
+    v_mask = _mm_shuffle_epi8(v_mask, v_shuf);
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+
+        struct eth_header *eh = dp_packet_eth(packet);
+
+        if (!eh) {
+            continue;
+        }
+
+        /* Load the first 128-bits of the packet into the v_ether register. */
+        __m128i v_dst = _mm_loadu_si128((void *) eh);
+
+        /* AND the v_mask to the packet data (v_dst). */
+        __m128i dst_masked = _mm_andnot_si128(v_mask, v_dst);
+
+        /* OR the new addresses (v_src) with the masked packet addresses
+         * (dst_masked). */
+        __m128i res = _mm_or_si128(v_src, dst_masked);
+
+        /* Write back the modified ethernet addresses. */
+        _mm_storeu_si128((void *) eh, res);
+    }
+}
+
+static void
+action_avx512_set_masked(struct dp_packet_batch *batch, const struct nlattr *a)
+{
+    const struct nlattr *mask = nl_attr_get(a);
+    enum ovs_key_attr attr_type = nl_attr_type(mask);
+
+    if (attr_type <= OVS_KEY_ATTR_MAX && impl_set_masked_funcs[attr_type]) {
+        impl_set_masked_funcs[attr_type](batch, a);
+    } else {
+        odp_execute_scalar_action(batch, a);
+    }
+}
+
 int
 action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
 {
@@ -217,6 +302,11 @@ action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
      * are identified by OVS_ACTION_ATTR_*. */
     self->funcs[OVS_ACTION_ATTR_POP_VLAN] = action_avx512_pop_vlan;
     self->funcs[OVS_ACTION_ATTR_PUSH_VLAN] = action_avx512_push_vlan;
+    self->funcs[OVS_ACTION_ATTR_SET_MASKED] = action_avx512_set_masked;
+
+    /* Set function pointers for the individual operations supported by the
+     * SET_MASKED action. */
+    impl_set_masked_funcs[OVS_KEY_ATTR_ETHERNET] = action_avx512_eth_set_addrs;
 
     return 0;
 }
