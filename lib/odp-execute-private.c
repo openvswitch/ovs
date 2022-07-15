@@ -33,7 +33,7 @@ static struct odp_execute_action_impl action_impls[] = {
     [ACTION_IMPL_SCALAR] = {
         .available = false,
         .name = "scalar",
-        .init_func = NULL,
+        .init_func = odp_action_scalar_init,
     },
 };
 
@@ -87,5 +87,19 @@ odp_execute_action_init(void)
 
         VLOG_INFO("Action implementation %s (available: %s)",
                   action_impls[i].name, avail ? "Yes" : "No");
+
+        /* The following is a run-time check to make sure a scalar
+         * implementation exists for the given ISA implementation. This is to
+         * make sure the autovalidator works as expected. */
+        if (avail && i != ACTION_IMPL_SCALAR) {
+            for (int j = 0; j < __OVS_ACTION_ATTR_MAX; j++) {
+                /* No ovs_assert(), as it can be compiled out. */
+                if (action_impls[ACTION_IMPL_SCALAR].funcs[j] == NULL
+                    && action_impls[i].funcs[j] != NULL) {
+                    ovs_assert_failure(OVS_SOURCE_LOCATOR, __func__,
+                                       "Missing scalar action function!");
+                }
+            }
+        }
     }
 }

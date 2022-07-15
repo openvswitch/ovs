@@ -834,6 +834,29 @@ requires_datapath_assistance(const struct nlattr *a)
     return false;
 }
 
+static void
+action_pop_vlan(struct dp_packet_batch *batch,
+                const struct nlattr *a OVS_UNUSED)
+{
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        eth_pop_vlan(packet);
+    }
+}
+
+/* Implementation of the scalar actions impl init function. Build up the
+ * array of func ptrs here. */
+int
+odp_action_scalar_init(struct odp_execute_action_impl *self)
+{
+    /* Set function pointers for actions that can be applied directly, these
+     * are identified by OVS_ACTION_ATTR_*. */
+    self->funcs[OVS_ACTION_ATTR_POP_VLAN] = action_pop_vlan;
+
+    return 0;
+}
+
 /* The active function pointers on the datapath. ISA optimized implementations
  * are enabled by plugging them into this static arary, which is consulted when
  * applying actions on the datapath. */
@@ -985,12 +1008,6 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             break;
         }
 
-        case OVS_ACTION_ATTR_POP_VLAN:
-            DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-                eth_pop_vlan(packet);
-            }
-            break;
-
         case OVS_ACTION_ATTR_PUSH_MPLS: {
             const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
 
@@ -1141,6 +1158,8 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
         case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_UNSPEC:
         case __OVS_ACTION_ATTR_MAX:
+        /* The following actions are handled by the scalar implementation. */
+        case OVS_ACTION_ATTR_POP_VLAN:
             OVS_NOT_REACHED();
         }
 

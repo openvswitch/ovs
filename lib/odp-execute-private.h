@@ -66,6 +66,10 @@ BUILD_ASSERT_DECL(ACTION_IMPL_SCALAR == 0);
  * initializing the scalar/generic codepath. */
 void odp_execute_action_init(void);
 
+/* Init functions for the action implementations. Initializes the function
+ * pointers for optimized action types. */
+int odp_action_scalar_init(struct odp_execute_action_impl *self);
+
 struct odp_execute_action_impl * odp_execute_action_set(const char *name);
 
 #endif /* ODP_EXTRACT_PRIVATE */
