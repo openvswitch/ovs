@@ -2561,6 +2561,15 @@ NXST_FLOW reply:
  table=1, priority=100,ct_state=+est+trk,in_port=1 actions=output:2
 ])
 
+dnl Send a 3rd UDP packet on port 1
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+
+dnl There still should not be any packet that matches the established ct_state.
+AT_CHECK([ovs-ofctl dump-flows br0 "table=1 in_port=1,ct_state=+trk+est" | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ table=1, priority=100,ct_state=+est+trk,in_port=1 actions=output:2
+])
+
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
