@@ -48,18 +48,19 @@ other_conn_update(struct conntrack *ct, struct conn *conn_,
                   struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_other *conn = conn_other_cast(conn_);
-    enum ct_update_res ret = CT_UPDATE_VALID;
 
     if (reply && conn->state != OTHERS_BIDIR) {
         conn->state = OTHERS_BIDIR;
     } else if (conn->state == OTHERS_FIRST) {
         conn->state = OTHERS_MULTIPLE;
-        ret = CT_UPDATE_VALID_NEW;
     }
 
     conn_update_expiration(ct, &conn->up, other_timeouts[conn->state], now);
 
-    return ret;
+    if (conn->state == OTHERS_BIDIR) {
+        return CT_UPDATE_VALID;
+    }
+    return CT_UPDATE_VALID_NEW;
 }
 
 static bool
