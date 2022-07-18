@@ -43,7 +43,7 @@ if [ "$M32" ]; then
 fi
 
 # Install python test dependencies
-pip install -r python/test_requirements.txt
+pip3 install -r python/test_requirements.txt
 
 # IPv6 is supported by kernel but disabled in TravisCI images:
 #   https://github.com/travis-ci/travis-ci/issues/8891
