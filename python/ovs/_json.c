@@ -50,7 +50,7 @@ Parser_feed(json_ParserObject * self, PyObject * args)
     Py_ssize_t input_sz;
     PyObject *input;
     size_t rd;
-    char *input_str;
+    const char *input_str;
 
     if (self->_parser == NULL) {
         return NULL;
@@ -111,7 +111,7 @@ json_to_python(struct json *json)
             return dict;
         }
     case JSON_ARRAY:{
-            int i;
+            size_t i;
             PyObject *arr = PyList_New(json->array.n);
 
             if (arr == NULL) {
