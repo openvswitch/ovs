@@ -2,10 +2,6 @@
 #include <openvswitch/json.h>
 #include "structmember.h"
 
-#if PY_MAJOR_VERSION >= 3
-#define IS_PY3K
-#endif
-
 typedef struct {
     PyObject_HEAD
     struct json_parser *_parser;
@@ -63,21 +59,13 @@ Parser_feed(json_ParserObject * self, PyObject * args)
     if (!PyArg_UnpackTuple(args, "input", 1, 1, &input)) {
         return NULL;
     }
-#ifdef IS_PY3K
     if ((input_str = PyUnicode_AsUTF8AndSize(input, &input_sz)) == NULL) {
-#else
-    if (PyString_AsStringAndSize(input, &input_str, &input_sz) < 0) {
-#endif
         return NULL;
     }
 
     rd = json_parser_feed(self->_parser, input_str, (size_t) input_sz);
 
-#ifdef IS_PY3K
     return PyLong_FromSize_t(rd);
-#else
-    return PyInt_FromSize_t(rd);
-#endif
 }
 
 static PyObject *
@@ -144,11 +132,7 @@ json_to_python(struct json *json)
             return PyFloat_FromDouble(json->real);
         } /* fall through to treat 0 as int */
     case JSON_INTEGER:
-#ifdef IS_PY3K
         return PyLong_FromLong((long) json->integer);
-#else
-        return PyInt_FromLong((long) json->integer);
-#endif
 
     case JSON_STRING:
         return PyUnicode_FromString(json->string);
@@ -225,7 +209,6 @@ static PyTypeObject json_ParserType = {
     Parser_new,                 /* tp_new */
 };
 
-#ifdef IS_PY3K
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
     "ovs._json",                /* m_name */
@@ -238,32 +221,17 @@ static struct PyModuleDef moduledef = {
     0,                          /* m_free */
 };
 
-#define INITERROR return NULL
-#else /* !IS_PY3K */
-#define INITERROR return
-#endif
-
 PyMODINIT_FUNC
-#ifdef IS_PY3K
 PyInit__json(void)
-#else
-init_json(void)
-#endif
 {
     PyObject *m;
 
     if (PyType_Ready(&json_ParserType) < 0) {
-        INITERROR;
+        return NULL;
     }
-#ifdef IS_PY3K
     m = PyModule_Create(&moduledef);
-#else
-    m = Py_InitModule3("ovs._json", NULL, "OVS JSON Parser module");
-#endif
 
     Py_INCREF(&json_ParserType);
     PyModule_AddObject(m, "Parser", (PyObject *) & json_ParserType);
-#ifdef IS_PY3K
     return m;
-#endif
 }
