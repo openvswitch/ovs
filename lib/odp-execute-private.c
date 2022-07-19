@@ -60,6 +60,23 @@ action_avx512_isa_probe(void)
 
 #endif
 
+#if ACTION_IMPL_AVX512_CHECK && HAVE_AVX512VBMI
+bool
+action_avx512vbmi_isa_probe(void)
+{
+    if (!cpu_has_isa(OVS_CPU_ISA_X86_AVX512VBMI)) {
+        return false;
+    }
+    return true;
+}
+#else
+bool
+action_avx512vbmi_isa_probe(void)
+{
+    return false;
+}
+#endif
+
 static struct odp_execute_action_impl action_impls[] = {
     [ACTION_IMPL_AUTOVALIDATOR] = {
         .available = false,
