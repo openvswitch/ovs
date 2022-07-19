@@ -184,6 +184,7 @@ Han Ding                           handing@chinatelecom.cn
 Han Zhou                           zhouhan@gmail.com
 Hao Zheng
 Hariprasad Govindharajan           hariprasad.govindharajan@intel.com
+Harold Huang                       baymaxhuang@gmail.com
 Harry Van Haaren                   harry.van.haaren@intel.com
 Helmut Schaa                       helmut.schaa@googlemail.com
 Henry Mai
