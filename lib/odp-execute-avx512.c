@@ -20,6 +20,8 @@
 
 #include <config.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <netinet/ip6.h>
 
 #include "csum.h"
 #include "dp-packet.h"
@@ -483,6 +485,172 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
     }
 }
 
+#if HAVE_AVX512VBMI
+static inline uint16_t ALWAYS_INLINE
+__attribute__((__target__("avx512vbmi")))
+avx512_ipv6_get_delta(__m512i ip6_header)
+{
+    __m256i v_zeros = _mm256_setzero_si256();
+    __m512i v_shuf_src_dst = _mm512_setr_epi64(0x01, 0x02, 0x03, 0x04,
+                                               0xFF, 0xFF, 0xFF, 0xFF);
+
+    __m512i v_header = _mm512_permutexvar_epi64(v_shuf_src_dst, ip6_header);
+    __m256i v_ip6_src_dst =  _mm512_extracti64x4_epi64(v_header, 0);
+    /* These two shuffle masks, v_swap16a and v_swap16b, are to shuffle the
+     * src and dst fields and add padding after each 16-bit value for the
+     * following carry over addition. */
+    __m256i v_swap16a = _mm256_setr_epi16(0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0x0504, 0xFFFF, 0x0706, 0xFFFF,
+                                          0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0x0504, 0xFFFF, 0x0706, 0xFFFF);
+    __m256i v_swap16b = _mm256_setr_epi16(0x0908, 0xFFFF, 0x0B0A, 0xFFFF,
+                                          0x0D0C, 0xFFFF, 0x0F0E, 0xFFFF,
+                                          0x0908, 0xFFFF, 0x0B0A, 0xFFFF,
+                                          0x0D0C, 0xFFFF, 0x0F0E, 0xFFFF);
+    __m256i v_shuf_old1 = _mm256_shuffle_epi8(v_ip6_src_dst, v_swap16a);
+    __m256i v_shuf_old2 = _mm256_shuffle_epi8(v_ip6_src_dst, v_swap16b);
+
+    /* Add each part of the old and new headers together. */
+    __m256i v_delta = _mm256_add_epi32(v_shuf_old1, v_shuf_old2);
+
+    /* Perform horizontal add to go from 8x32-bits to 2x32-bits. */
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+
+    /* Shuffle 32-bit value from 3rd lane into first lane for final
+     * horizontal add. */
+    __m256i v_swap32a = _mm256_setr_epi32(0x0, 0x4, 0xF, 0xF,
+                                          0xF, 0xF, 0xF, 0xF);
+    v_delta = _mm256_permutexvar_epi32(v_swap32a, v_delta);
+
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi16(v_delta, v_zeros);
+
+    /* Extract delta value. */
+    return _mm256_extract_epi16(v_delta, 0);
+}
+
+static inline uint16_t ALWAYS_INLINE
+__attribute__((__target__("avx512vbmi")))
+avx512_ipv6_addr_csum_delta(__m512i old_header, __m512i new_header)
+{
+    uint16_t delta;
+    uint16_t old_delta = avx512_ipv6_get_delta(old_header);
+    uint16_t new_delta = avx512_ipv6_get_delta(new_header);
+    old_delta = ~old_delta;
+    uint32_t csum_delta = old_delta + new_delta;
+    delta = csum_finish(csum_delta);
+
+    return ~delta;
+}
+
+/* This function performs the same operation on each packet in the batch as
+ * the scalar odp_set_ipv6() function. */
+static void
+__attribute__((__target__("avx512vbmi")))
+action_avx512_ipv6_set_addrs(struct dp_packet_batch *batch,
+                             const struct nlattr *a)
+{
+    const struct ovs_key_ipv6 *key, *mask;
+    struct dp_packet *packet;
+    a = nl_attr_get(a);
+    key = nl_attr_get(a);
+    mask = odp_get_key_mask(a, struct ovs_key_ipv6);
+
+    /* Read the content of the key and mask in the respective registers. We
+     * only load the size of the actual structure, which is only 40 bytes. */
+    __m512i v_key = _mm512_maskz_loadu_epi64(0x1F, (void *) key);
+    __m512i v_mask = _mm512_maskz_loadu_epi64(0x1F, (void *) mask);
+
+    /* This shuffle mask v_shuffle, is to shuffle key and mask to match the
+     * ip6_hdr structure layout. */
+    static const uint8_t ip_shuffle_mask[64] = {
+            0x20, 0x21, 0x22, 0x23, 0xFF, 0xFF, 0x24, 0x26,
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+            0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0XFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0XFF, 0xFF
+    };
+
+    __m512i v_shuffle = _mm512_loadu_si512((void *) ip_shuffle_mask);
+
+    /* This shuffle is required for key and mask to match the layout of the
+     * ip6_hdr struct. */
+    __m512i v_key_shuf = _mm512_permutexvar_epi8(v_shuffle, v_key);
+    __m512i v_mask_shuf = _mm512_permutexvar_epi8(v_shuffle, v_mask);
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+
+        /* Load the 40 bytes of the IPv6 header. */
+        __m512i v_packet = _mm512_maskz_loadu_epi64(0x1F, (void *) nh);
+
+        /* AND the v_pkt_mask to the packet data (v_packet). */
+        __m512i v_pkt_masked = _mm512_andnot_si512(v_mask_shuf, v_packet);
+
+        /* OR the new addresses (v_key_shuf) with the masked packet addresses
+         * (v_pkt_masked). */
+        __m512i v_new_hdr = _mm512_or_si512(v_key_shuf, v_pkt_masked);
+
+        /* If ip6_src or ip6_dst has been modified, L4 checksum needs to
+         * be updated. */
+        bool do_checksum = false;
+#ifdef s6_addr32
+        for (int j = 0; j < 4; j++) {
+            if (mask->ipv6_dst.s6_addr32[j] || mask->ipv6_src.s6_addr32[j]) {
+                do_checksum = true;
+            }
+        }
+#else
+        for (int j = 0; j < 16; j++) {
+             if (mask->ipv6_dst.s6_addr[j] || mask->ipv6_src.s6_addr[j]) {
+                do_checksum = true;
+            }
+        }
+#endif
+        if (do_checksum) {
+            uint8_t proto = nh->ip6_nxt;
+            uint16_t delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                                  v_new_hdr);
+
+            if (proto == IPPROTO_UDP) {
+                struct udp_header *uh = dp_packet_l4(packet);
+                if (uh->udp_csum) {
+                    uint16_t old_udp_checksum = ~uh->udp_csum;
+                    uint32_t udp_checksum = old_udp_checksum + delta_checksum;
+                    udp_checksum = csum_finish(udp_checksum);
+
+                    if (!udp_checksum) {
+                        udp_checksum = htons(0xffff);
+                    }
+
+                    uh->udp_csum = udp_checksum;
+                }
+            } else if (proto == IPPROTO_TCP) {
+                struct tcp_header *th = dp_packet_l4(packet);
+                uint16_t old_tcp_checksum = ~th->tcp_csum;
+                uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+                tcp_checksum = csum_finish(tcp_checksum);
+
+                th->tcp_csum = tcp_checksum;
+            } else if (proto == IPPROTO_ICMPV6) {
+                struct icmp6_header *icmp = dp_packet_l4(packet);
+                uint16_t old_icmp_checksum = ~icmp->icmp6_cksum;
+                uint32_t icmp6_checksum = old_icmp_checksum + delta_checksum;
+                icmp6_checksum = csum_finish(icmp6_checksum);
+
+                icmp->icmp6_cksum = icmp6_checksum;
+            }
+        }
+        /* Write back the modified IPv6 addresses. */
+         _mm512_mask_storeu_epi64((void *) nh, 0x1F, v_new_hdr);
+    }
+}
+#endif
+
 static void
 action_avx512_set_masked(struct dp_packet_batch *batch, const struct nlattr *a)
 {
@@ -513,6 +681,9 @@ action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
      * SET_MASKED action. */
     impl_set_masked_funcs[OVS_KEY_ATTR_ETHERNET] = action_avx512_eth_set_addrs;
     impl_set_masked_funcs[OVS_KEY_ATTR_IPV4] = action_avx512_ipv4_set_addrs;
+#if HAVE_AVX512VBMI
+    impl_set_masked_funcs[OVS_KEY_ATTR_IPV6] = action_avx512_ipv6_set_addrs;
+#endif
 
     return 0;
 }
