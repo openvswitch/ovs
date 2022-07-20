@@ -97,9 +97,10 @@ odp_execute_action_set(const char *name)
     for (int i = 0; i < ACTION_IMPL_MAX; i++) {
         /* String compare, and set ptrs atomically. */
         if (!strcmp(action_impls[i].name, name)) {
-            active_action_impl_index = i;
-
-            VLOG_INFO("Action implementation set to %s", name);
+            if (i != active_action_impl_index) {
+                active_action_impl_index = i;
+                VLOG_INFO("Action implementation set to %s", name);
+            }
             return &action_impls[i];
         }
     }
@@ -142,8 +143,8 @@ odp_execute_action_init(void)
 
         action_impls[i].available = avail;
 
-        VLOG_INFO("Action implementation %s (available: %s)",
-                  action_impls[i].name, avail ? "Yes" : "No");
+        VLOG_DBG("Actions implementation '%s' %s available.",
+                 action_impls[i].name, avail ? "is" : "is not");
 
         /* The following is a run-time check to make sure a scalar
          * implementation exists for the given ISA implementation. This is to
