@@ -669,6 +669,9 @@ AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
 AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
 
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
@@ -722,6 +725,9 @@ AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=2000])
 
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
 AT_CHECK([egrep 'mtu=2000' stdout], [], [stdout])
+
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -852,6 +858,9 @@ dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
 
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
@@ -906,6 +915,8 @@ dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
 
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
