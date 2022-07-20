@@ -1099,12 +1099,18 @@ vport_to_rte_tunnel(struct netdev *vport,
     const struct netdev_tunnel_config *tnl_cfg;
 
     memset(tunnel, 0, sizeof *tunnel);
+
+    tnl_cfg = netdev_get_tunnel_config(vport);
+    if (!tnl_cfg) {
+        return -1;
+    }
+
+    if (!IN6_IS_ADDR_V4MAPPED(&tnl_cfg->ipv6_dst)) {
+        tunnel->is_ipv6 = true;
+    }
+
     if (!strcmp(netdev_get_type(vport), "vxlan")) {
         tunnel->type = RTE_FLOW_ITEM_TYPE_VXLAN;
-        tnl_cfg = netdev_get_tunnel_config(vport);
-        if (!tnl_cfg) {
-            return -1;
-        }
         tunnel->tp_dst = tnl_cfg->dst_port;
         if (!VLOG_DROP_DBG(&rl)) {
             ds_put_format(s_tnl, "flow tunnel create %d type vxlan; ",
