@@ -229,9 +229,17 @@ PyInit__json(void)
     if (PyType_Ready(&json_ParserType) < 0) {
         return NULL;
     }
+
     m = PyModule_Create(&moduledef);
+    if (!m) {
+        return NULL;
+    }
 
     Py_INCREF(&json_ParserType);
-    PyModule_AddObject(m, "Parser", (PyObject *) & json_ParserType);
+    if (PyModule_AddObject(m, "Parser", (PyObject *) &json_ParserType) < 0) {
+        Py_DECREF(&json_ParserType);
+        Py_DECREF(m);
+        return NULL;
+    }
     return m;
 }
