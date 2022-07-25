@@ -2,6 +2,7 @@
 # -*- makefile -*-
 #export DH_VERBOSE=1
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND = -fPIC
 
 %:
 	dh $@
@@ -91,10 +92,14 @@ override_dh_auto_install:
 
 execute_after_dh_install:
 	set -e && for pyvers in $(PYTHON3S); do \
-		cd python && \
+		cd python; \
+		export PKG_CONFIG_PATH=$(CURDIR)/debian/tmp/usr/lib/pkgconfig; \
+		export PKG_CONFIG_SYSROOT_DIR=$(CURDIR)/debian/tmp; \
+		export PKG_CONFIG_SYSTEM_INCLUDE_PATH=/; \
+		export PKG_CONFIG_SYSTEM_LIBRARY_PATH=/; \
 		enable_shared=no \
-		CFLAGS=-I$(CURDIR)/debian/tmp/usr/include \
-		LDFLAGS=$(CURDIR)/debian/tmp/usr/lib/libopenvswitch.a \
+		extra_cflags="`pkg-config --cflags libopenvswitch`" \
+		extra_libs="-Wl,-Bstatic -lopenvswitch -Wl,-Bdynamic `pkg-config --libs --static libopenvswitch`" \
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python3-openvswitch; \
 		cd ..; \

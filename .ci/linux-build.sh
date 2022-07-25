@@ -212,6 +212,13 @@ if [ "$DEB_PACKAGE" ]; then
     echo $deps | xargs sudo apt -y install
     # install the locally built openvswitch packages
     sudo dpkg -i $packages
+
+    # Check that python C extension is built correctly.
+    python3 -c "
+from ovs import _json
+import ovs.json
+assert ovs.json.from_string('{\"a\": 42}') == {'a': 42}"
+
     exit 0
 fi
 
