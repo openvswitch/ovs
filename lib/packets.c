@@ -1709,7 +1709,7 @@ compose_ipv6(struct dp_packet *packet, uint8_t proto,
              const struct in6_addr *src, const struct in6_addr *dst,
              uint8_t key_tc, ovs_be32 key_fl, uint8_t key_hl, int size)
 {
-    struct ip6_hdr *nh;
+    struct ovs_16aligned_ip6_hdr *nh;
     void *data;
 
     nh = dp_packet_l3(packet);
@@ -1847,7 +1847,7 @@ packet_put_ra_prefix_opt(struct dp_packet *b,
                          const ovs_be128 prefix)
 {
     size_t prev_l4_size = dp_packet_l4_size(b);
-    struct ip6_hdr *nh = dp_packet_l3(b);
+    struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(b);
     nh->ip6_plen = htons(prev_l4_size + ND_PREFIX_OPT_LEN);
 
     struct ovs_nd_prefix_opt *prefix_opt =
