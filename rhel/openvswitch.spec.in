@@ -110,24 +110,6 @@ install -d -m 0755 $RPM_BUILD_ROOT%{_rundir}/openvswitch
 install -d -m 0755 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
 install -d -m 0755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
-copy_headers() {
-    src=$1
-    dst=$RPM_BUILD_ROOT/$2
-    install -d -m 0755 $dst
-    install -m 0644 $src/*.h $dst
-}
-copy_headers include %{_includedir}/openvswitch
-copy_headers include/openflow %{_includedir}/openvswitch/openflow
-copy_headers include/openvswitch %{_includedir}/openvswitch/openvswitch
-copy_headers include/sparse %{_includedir}/openvswitch/sparse
-copy_headers include/sparse/arpa %{_includedir}/openvswitch/sparse/arpa
-copy_headers include/sparse/netinet %{_includedir}/openvswitch/sparse/netinet
-copy_headers include/sparse/sys %{_includedir}/openvswitch/sparse/sys
-copy_headers lib %{_includedir}/openvswitch/lib
-
-install -D -m 0644 lib/.libs/libopenvswitch.a \
-    $RPM_BUILD_ROOT/%{_libdir}/libopenvswitch.a
-
 %check
 %if %{with check}
     if make check TESTSUITEFLAGS='%{_smp_mflags}' RECHECK=yes; then :;
