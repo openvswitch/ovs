@@ -8,4 +8,4 @@ Description: OpenFlow library of Open vSwitch
 Version: @VERSION@
 Libs: -L${libdir} -lofproto
 Libs.private: @LIBS@
-Cflags: -I${includedir}/openvswitch
+Cflags: -I${includedir}
