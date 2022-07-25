@@ -65,12 +65,16 @@ class try_build_ext(build_ext):
 
 
 # Allow caller of setup.py to pass in libopenvswitch.a as an object for linking
-# through the use of LDFLAGS environment variable when not building a shared
-# openvswitch library.
+# plus all the dependencies through the use of 'extra_cflags' and 'extra_libs'
+# environment variables when not building a shared openvswitch library.
+
 if os.environ.get('enable_shared', '') == 'no':
-    json_libraries = []
+    libraries = []
 else:
-    json_libraries = ['openvswitch']
+    libraries = ['openvswitch']
+
+extra_cflags = os.environ.get('extra_cflags', '').split()
+extra_libs = os.environ.get('extra_libs', '').split()
 
 
 setup_args = dict(
@@ -94,8 +98,11 @@ setup_args = dict(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
     ],
-    ext_modules=[setuptools.Extension("ovs._json", sources=["ovs/_json.c"],
-                                      libraries=json_libraries)],
+    ext_modules=[setuptools.Extension("ovs._json",
+                                      sources=["ovs/_json.c"],
+                                      libraries=libraries,
+                                      extra_compile_args=extra_cflags,
+                                      extra_link_args=extra_libs)],
     cmdclass={'build_ext': try_build_ext},
     install_requires=['sortedcontainers'],
     extras_require={':sys_platform == "win32"': ['pywin32 >= 1.0'],
