@@ -464,3 +464,72 @@ ERROR: Inappropriate non-ascii characters detected.
 "
 
 AT_CLEANUP
+
+
+m4_define([FIXES_TAG_ERROR], [dnl
+ERROR: \"Fixes\" tag is malformed.
+Use the following format:
+  git log -1 --pretty=format:\"Fixes: %h (\\\"%s\\\")\" --abbrev=12 COMMIT_REF
+])
+
+AT_SETUP([checkpatch - Fixes tag])
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    Fixes: 123456789abc (\"commit name\")
+    Signed-off-by: A"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    fixes: 123456789abc (\"commit name\")
+    Signed-off-by: A" \
+    "FIXES_TAG_ERROR
+1: fixes: 123456789abc (\"commit name\")
+"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    Fixes: 12345678 (\"commit name\")
+    Signed-off-by: A" \
+    "FIXES_TAG_ERROR
+1: Fixes: 12345678 (\"commit name\")
+"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    Fixes: 1234567890abcdef1234567890abcdef12345678 (\"commit name\")
+    Signed-off-by: A" \
+    "FIXES_TAG_ERROR
+1: Fixes: 1234567890abcdef1234567890abcdef12345678 (\"commit name\")
+"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    Fixes: 123456789abc \"commit name\"
+    Signed-off-by: A" \
+    "FIXES_TAG_ERROR
+1: Fixes: 123456789abc \"commit name\"
+"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+
+    Fixes: 123456789abc (\"some very long commit name that doesn\'t fit into
+                           a single line, but should not be wrapped.\")
+    Signed-off-by: A" \
+    "FIXES_TAG_ERROR
+1: Fixes: 123456789abc (\"some very long commit name that doesn\'t fit into
+"
+
+AT_CLEANUP

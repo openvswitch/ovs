@@ -793,6 +793,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                               re.I | re.M | re.S)
     is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
                                      re.I | re.M | re.S)
+    is_fixes = re.compile(r'(\s*(Fixes:)(.*))$', re.I | re.M | re.S)
+    is_fixes_exact = re.compile(r'^Fixes: [0-9a-f]{12} \(".*"\)$')
 
     tags_typos = {
         r'^Acked by:': 'Acked-by:',
@@ -894,6 +896,13 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                   not skip_gerrit_change_id_check):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
+                print("%d: %s\n" % (lineno, line))
+            elif is_fixes.match(line) and not is_fixes_exact.match(line):
+                print_error('"Fixes" tag is malformed.\n'
+                            'Use the following format:\n'
+                            '  git log -1 '
+                            '--pretty=format:"Fixes: %h (\\\"%s\\\")" '
+                            '--abbrev=12 COMMIT_REF\n')
                 print("%d: %s\n" % (lineno, line))
             elif spellcheck:
                 check_spelling(line, False)
