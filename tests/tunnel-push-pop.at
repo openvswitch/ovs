@@ -906,11 +906,11 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-tun0 in_port=p7], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0], [dnl
 Megaflow: recirc_id=0,eth,in_port=7,dl_src=00:00:00:00:00:00,dnl
 dl_dst=00:00:00:00:00:00,dl_type=0x0000
-Datapath actions: push_vlan(vid=200,pcp=0),1,clone(tnl_push(tnl_port(4789),dnl
+Datapath actions: push_vlan(vid=200,pcp=0),1,tnl_push(tnl_port(4789),dnl
 header(size=50,type=4,eth(dst=aa:55:aa:66:00:00,src=aa:55:aa:55:00:00,dnl
 dl_type=0x0800),ipv4(src=10.0.0.2,dst=10.0.0.11,proto=17,tos=0,ttl=64,dnl
 frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x0)),dnl
-out_port(100)),8)
+out_port(100)),8
 ])
 
 OVS_VSWITCHD_STOP
