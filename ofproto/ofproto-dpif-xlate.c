@@ -7671,6 +7671,39 @@ xlate_wc_finish(struct xlate_ctx *ctx)
     }
 }
 
+/* This will optimize the odp actions generated. For now, it will remove
+ * trailing clone actions that are unnecessary. */
+static void
+xlate_optimize_odp_actions(struct xlate_in *xin)
+{
+    struct ofpbuf *actions = xin->odp_actions;
+    struct nlattr *last_action = NULL;
+    struct nlattr *a;
+    int left;
+
+    if (!actions) {
+        return;
+    }
+
+    /* Find the last action in the set. */
+    NL_ATTR_FOR_EACH (a, left, actions->data, actions->size) {
+        last_action = a;
+    }
+
+    /* Remove the trailing clone() action, by directly embedding the nested
+     * actions. */
+    if (last_action && nl_attr_type(last_action) == OVS_ACTION_ATTR_CLONE) {
+        void *dest;
+
+        nl_msg_reset_size(actions,
+                          (unsigned char *) last_action -
+                          (unsigned char *) actions->data);
+
+        dest = nl_msg_put_uninit(actions, nl_attr_get_size(last_action));
+        memmove(dest, nl_attr_get(last_action), nl_attr_get_size(last_action));
+    }
+}
+
 /* Translates the flow, actions, or rule in 'xin' into datapath actions in
  * 'xout'.
  * The caller must take responsibility for eventually freeing 'xout', with
@@ -8096,6 +8129,10 @@ exit:
         if (xin->odp_actions) {
             ofpbuf_clear(xin->odp_actions);
         }
+    } else {
+        /* In the non-error case, see if we can further optimize the datapath
+         * rules by removing redundant (clone) actions. */
+        xlate_optimize_odp_actions(xin);
     }
 
     /* Install drop action if datapath supports explicit drop action. */
