@@ -19,7 +19,7 @@ dnl This enables automatically running all unit tests with all MFEX
 dnl implementations.
 AC_DEFUN([OVS_CHECK_MFEX_AUTOVALIDATOR], [
   AC_ARG_ENABLE([mfex-default-autovalidator],
-                [AC_HELP_STRING([--enable-mfex-default-autovalidator],
+                [AS_HELP_STRING([--enable-mfex-default-autovalidator],
                                 [Enable MFEX autovalidator as default
                                  miniflow_extract implementation.])],
                 [autovalidator=yes],[autovalidator=no])
@@ -38,7 +38,7 @@ dnl This enables automatically running all unit tests with all DPCLS
 dnl implementations.
 AC_DEFUN([OVS_CHECK_DPCLS_AUTOVALIDATOR], [
   AC_ARG_ENABLE([autovalidator],
-                [AC_HELP_STRING([--enable-autovalidator],
+                [AS_HELP_STRING([--enable-autovalidator],
                                 [Enable DPCLS autovalidator as default subtable
                                  search implementation.])],
                 [autovalidator=yes],[autovalidator=no])
@@ -57,7 +57,7 @@ dnl Set OVS DPIF default implementation at configure time for running the unit
 dnl tests on the whole codebase without modifying tests per DPIF impl
 AC_DEFUN([OVS_CHECK_DPIF_AVX512_DEFAULT], [
   AC_ARG_ENABLE([dpif-default-avx512],
-                [AC_HELP_STRING([--enable-dpif-default-avx512],
+                [AS_HELP_STRING([--enable-dpif-default-avx512],
                                 [Enable DPIF AVX512 implementation as default.])],
                 [dpifavx512=yes],[dpifavx512=no])
   AC_MSG_CHECKING([whether DPIF AVX512 is default implementation])
@@ -89,7 +89,7 @@ dnl OVS_ENABLE_WERROR
 AC_DEFUN([OVS_ENABLE_WERROR],
   [AC_ARG_ENABLE(
      [Werror],
-     [AC_HELP_STRING([--enable-Werror], [Add -Werror to CFLAGS])],
+     [AS_HELP_STRING([--enable-Werror], [Add -Werror to CFLAGS])],
      [], [enable_Werror=no])
    AC_CONFIG_COMMANDS_PRE(
      [if test "X$enable_Werror" = Xyes; then
@@ -118,10 +118,10 @@ dnl
 dnl Configure linux kernel source tree
 AC_DEFUN([OVS_CHECK_LINUX], [
   AC_ARG_WITH([linux],
-              [AC_HELP_STRING([--with-linux=/path/to/linux],
+              [AS_HELP_STRING([--with-linux=/path/to/linux],
                               [Specify the Linux kernel build directory])])
   AC_ARG_WITH([linux-source],
-              [AC_HELP_STRING([--with-linux-source=/path/to/linux-source],
+              [AS_HELP_STRING([--with-linux-source=/path/to/linux-source],
                               [Specify the Linux kernel source directory
                                (usually figured out automatically from build
                                directory)])])
@@ -355,7 +355,7 @@ dnl
 dnl Check both Linux kernel AF_XDP and libbpf support
 AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
   AC_ARG_ENABLE([afxdp],
-                [AC_HELP_STRING([--enable-afxdp], [Enable AF-XDP support])],
+                [AS_HELP_STRING([--enable-afxdp], [Enable AF-XDP support])],
                 [], [enable_afxdp=no])
   AC_MSG_CHECKING([whether AF_XDP is enabled])
   if test "$enable_afxdp" != yes; then
@@ -397,7 +397,7 @@ dnl
 dnl Configure DPDK source tree
 AC_DEFUN([OVS_CHECK_DPDK], [
   AC_ARG_WITH([dpdk],
-              [AC_HELP_STRING([--with-dpdk=static|shared|yes],
+              [AS_HELP_STRING([--with-dpdk=static|shared|yes],
                               [Specify "static" or "shared" depending on the
                               DPDK libraries to use])],
               [have_dpdk=true])
@@ -1435,7 +1435,7 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
 
    AC_ARG_ENABLE(
      [sparse],
-     [AC_HELP_STRING([--enable-sparse], [Run "sparse" by default])],
+     [AS_HELP_STRING([--enable-sparse], [Run "sparse" by default])],
      [], [enable_sparse=no])
    AM_CONDITIONAL([ENABLE_SPARSE_BY_DEFAULT], [test $enable_sparse = yes])])
 
