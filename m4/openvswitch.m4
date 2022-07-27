@@ -21,7 +21,7 @@ AC_DEFUN([OVS_CHECK_COVERAGE],
   [AC_REQUIRE([AC_PROG_CC])
    AC_ARG_ENABLE(
      [coverage],
-     [AC_HELP_STRING([--enable-coverage],
+     [AS_HELP_STRING([--enable-coverage],
                      [Enable gcov coverage tool.])],
      [case "${enableval}" in
         (yes) coverage=true ;;
@@ -50,7 +50,7 @@ dnl Checks for --enable-ndebug and defines NDEBUG if it is specified.
 AC_DEFUN([OVS_CHECK_NDEBUG],
   [AC_ARG_ENABLE(
      [ndebug],
-     [AC_HELP_STRING([--enable-ndebug],
+     [AS_HELP_STRING([--enable-ndebug],
                      [Disable debugging features for max performance])],
      [case "${enableval}" in
         (yes) ndebug=true ;;
@@ -64,7 +64,7 @@ dnl Checks for --enable-usdt-probes and defines HAVE_USDT if it is specified.
 AC_DEFUN([OVS_CHECK_USDT], [
   AC_ARG_ENABLE(
     [usdt-probes],
-    [AC_HELP_STRING([--enable-usdt-probes],
+    [AS_HELP_STRING([--enable-usdt-probes],
                     [Enable User Statically Defined Tracing (USDT) probes])],
     [case "${enableval}" in
        (yes) usdt=true ;;
@@ -227,7 +227,7 @@ dnl Checks for libcap-ng.
 AC_DEFUN([OVS_CHECK_LIBCAPNG],
   [AC_ARG_ENABLE(
      [libcapng],
-     [AC_HELP_STRING([--disable-libcapng], [Disable Linux capability support])],
+     [AS_HELP_STRING([--disable-libcapng], [Disable Linux capability support])],
      [case "${enableval}" in
         (yes) libcapng=true ;;
         (no)  libcapng=false ;;
@@ -263,7 +263,7 @@ dnl Checks for OpenSSL.
 AC_DEFUN([OVS_CHECK_OPENSSL],
   [AC_ARG_ENABLE(
      [ssl],
-     [AC_HELP_STRING([--disable-ssl], [Disable OpenSSL support])],
+     [AS_HELP_STRING([--disable-ssl], [Disable OpenSSL support])],
      [case "${enableval}" in
         (yes) ssl=true ;;
         (no)  ssl=false ;;
@@ -320,7 +320,7 @@ dnl Checks for the directory in which to store the PKI.
 AC_DEFUN([OVS_CHECK_PKIDIR],
   [AC_ARG_WITH(
      [pkidir],
-     AC_HELP_STRING([--with-pkidir=DIR],
+     AS_HELP_STRING([--with-pkidir=DIR],
                     [PKI hierarchy directory [[LOCALSTATEDIR/lib/openvswitch/pki]]]),
      [PKIDIR=$withval],
      [PKIDIR='${localstatedir}/lib/openvswitch/pki'])
@@ -330,7 +330,7 @@ dnl Checks for the directory in which to store pidfiles.
 AC_DEFUN([OVS_CHECK_RUNDIR],
   [AC_ARG_WITH(
      [rundir],
-     AC_HELP_STRING([--with-rundir=DIR],
+     AS_HELP_STRING([--with-rundir=DIR],
                     [directory used for pidfiles
                     [[LOCALSTATEDIR/run/openvswitch]]]),
      [RUNDIR=$withval],
@@ -341,7 +341,7 @@ dnl Checks for the directory in which to store logs.
 AC_DEFUN([OVS_CHECK_LOGDIR],
   [AC_ARG_WITH(
      [logdir],
-     AC_HELP_STRING([--with-logdir=DIR],
+     AS_HELP_STRING([--with-logdir=DIR],
                     [directory used for logs [[LOCALSTATEDIR/log/PACKAGE]]]),
      [LOGDIR=$withval],
      [LOGDIR='${localstatedir}/log/${PACKAGE}'])
@@ -351,7 +351,7 @@ dnl Checks for the directory in which to store the Open vSwitch database.
 AC_DEFUN([OVS_CHECK_DBDIR],
   [AC_ARG_WITH(
      [dbdir],
-     AC_HELP_STRING([--with-dbdir=DIR],
+     AS_HELP_STRING([--with-dbdir=DIR],
                     [directory used for conf.db [[SYSCONFDIR/PACKAGE]]]),
      [DBDIR=$withval],
      [DBDIR='${sysconfdir}/${PACKAGE}'])
