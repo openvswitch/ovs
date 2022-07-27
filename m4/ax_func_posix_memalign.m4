@@ -1,5 +1,5 @@
 # ===========================================================================
-#  http://www.gnu.org/software/autoconf-archive/ax_func_posix_memalign.html
+#  https://www.gnu.org/software/autoconf-archive/ax_func_posix_memalign.html
 # ===========================================================================
 #
 # SYNOPSIS
@@ -22,12 +22,12 @@
 #   and this notice are preserved. This file is offered as-is, without any
 #   warranty.
 
-#serial 7
+#serial 9
 
 AC_DEFUN([AX_FUNC_POSIX_MEMALIGN],
 [AC_CACHE_CHECK([for working posix_memalign],
   [ax_cv_func_posix_memalign_works],
-  [AC_TRY_RUN([
+  [AC_RUN_IFELSE([AC_LANG_SOURCE([[
 #include <stdlib.h>
 
 int
@@ -39,7 +39,7 @@ main ()
    * the size word. */
   exit (posix_memalign (&buffer, sizeof(void *), 123) != 0);
 }
-    ],
+    ]])],
     [ax_cv_func_posix_memalign_works=yes],
     [ax_cv_func_posix_memalign_works=no],
     [ax_cv_func_posix_memalign_works=no])])
