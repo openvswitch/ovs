@@ -203,7 +203,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 del-flows br0])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=10,in_port=ovs-p0,udp actions=meter:1,normal"])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=1 actions=normal"])
 
-NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc $NC_EOF_OPT -u 10.1.1.2 5678 -p 6789])
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
 in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0, used:0.001s, actions:meter(0),3
 ])
@@ -211,7 +211,7 @@ in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0
 sleep 1
 
 for i in `seq 10`; do
-NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc $NC_EOF_OPT -u 10.1.1.2 5678 -p 6789])
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
@@ -252,7 +252,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 del-flows br0])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=10,in_port=ovs-p0,udp actions=meter:1,normal"])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "priority=1 actions=normal"])
 
-NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc $NC_EOF_OPT -u 10.1.1.2 5678 -p 6789])
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
 in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0, used:0.001s, actions:meter(0),3
 ])
@@ -260,7 +260,7 @@ in_port(2),eth(macs),eth_type(0x0800),ipv4(proto=17,frag=no), packets:0, bytes:0
 sleep 1
 
 for i in `seq 10`; do
-NS_CHECK_EXEC([at_ns0], [echo "mark" | nc -u 10.1.1.2 5678 -p 6789])
+NS_CHECK_EXEC([at_ns0], [echo "mark" | nc $NC_EOF_OPT -u 10.1.1.2 5678 -p 6789])
 done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep "meter" | DUMP_CLEAN_SORTED], [0], [dnl
