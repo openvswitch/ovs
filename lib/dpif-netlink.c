@@ -1074,7 +1074,7 @@ dpif_netlink_port_add_compat(struct dpif_netlink *dpif, struct netdev *netdev,
 
             ext_ofs = nl_msg_start_nested(&options, OVS_TUNNEL_ATTR_EXTENSION);
             for (i = 0; i < 32; i++) {
-                if (tnl_cfg->exts & (1 << i)) {
+                if (tnl_cfg->exts & (UINT32_C(1) << i)) {
                     nl_msg_put_flag(&options, i);
                 }
             }
