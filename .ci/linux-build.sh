@@ -244,9 +244,7 @@ fi
 if [ "$ASAN" ]; then
     # This will override default option configured in tests/atlocal.in.
     export ASAN_OPTIONS='detect_leaks=1'
-    # -O2 generates few false-positive memory leak reports in test-ovsdb
-    # application, so lowering optimizations to -O1 here.
-    CFLAGS_ASAN="-O1 -fno-omit-frame-pointer -fno-common -fsanitize=address"
+    CFLAGS_ASAN="-fno-omit-frame-pointer -fno-common -fsanitize=address"
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${CFLAGS_ASAN}"
 fi
 
