@@ -300,11 +300,24 @@ print_and_free_ovsdb_error(struct ovsdb_error *error)
     free(string);
 }
 
+static struct json **json_to_destroy;
+
+static void
+destroy_on_ovsdb_error(struct json **json)
+{
+    json_to_destroy = json;
+}
+
 static void
 check_ovsdb_error(struct ovsdb_error *error)
 {
     if (error) {
         char *s = ovsdb_error_to_string_free(error);
+
+        if (json_to_destroy) {
+            json_destroy(*json_to_destroy);
+            json_to_destroy = NULL;
+        }
         ovs_fatal(0, "%s", s);
     }
 }
@@ -487,6 +500,8 @@ do_diff_data(struct ovs_cmdl_context *ctx)
     struct json *json;
     struct ovsdb_datum new, old, diff, reincarnation;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_type_from_json(&type, json));
     json_destroy(json);
@@ -562,6 +577,8 @@ do_parse_atomic_type(struct ovs_cmdl_context *ctx)
     enum ovsdb_atomic_type type;
     struct json *json;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_atomic_type_from_json(&type, json));
     json_destroy(json);
@@ -573,6 +590,8 @@ do_parse_base_type(struct ovs_cmdl_context *ctx)
 {
     struct ovsdb_base_type base;
     struct json *json;
+
+    destroy_on_ovsdb_error(&json);
 
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
@@ -587,6 +606,8 @@ do_parse_type(struct ovs_cmdl_context *ctx)
     struct ovsdb_type type;
     struct json *json;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_type_from_json(&type, json));
     json_destroy(json);
@@ -600,6 +621,8 @@ do_parse_atoms(struct ovs_cmdl_context *ctx)
     struct ovsdb_base_type base;
     struct json *json;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
@@ -629,6 +652,8 @@ do_parse_atom_strings(struct ovs_cmdl_context *ctx)
     struct ovsdb_base_type base;
     struct json *json;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
@@ -675,6 +700,8 @@ do_parse_data__(int argc, char *argv[],
     struct json *json;
     int i;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(argv[1]));
     check_ovsdb_error(ovsdb_type_from_json(&type, json));
     json_destroy(json);
@@ -705,6 +732,8 @@ do_parse_data_strings(struct ovs_cmdl_context *ctx)
     struct ovsdb_type type;
     struct json *json;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_type_from_json(&type, json));
@@ -746,6 +775,8 @@ do_sort_atoms(struct ovs_cmdl_context *ctx)
     size_t n_atoms;
     int i;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
     json_destroy(json);
@@ -785,6 +816,8 @@ do_parse_column(struct ovs_cmdl_context *ctx)
     struct ovsdb_column *column;
     struct json *json;
 
+    destroy_on_ovsdb_error(&json);
+
     json = parse_json(ctx->argv[2]);
     check_ovsdb_error(ovsdb_column_from_json(json, ctx->argv[1], &column));
     json_destroy(json);
@@ -801,6 +834,8 @@ do_parse_table(struct ovs_cmdl_context *ctx)
 
     default_is_root = ctx->argc > 3 && !strcmp(ctx->argv[3], "true");
 
+    destroy_on_ovsdb_error(&json);
+
     json = parse_json(ctx->argv[2]);
     check_ovsdb_error(ovsdb_table_schema_from_json(json, ctx->argv[1], &ts));
     json_destroy(json);
@@ -816,6 +851,8 @@ do_parse_rows(struct ovs_cmdl_context *ctx)
     struct ovsdb_table *table;
     struct json *json;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
@@ -876,6 +913,8 @@ do_compare_rows(struct ovs_cmdl_context *ctx)
     int n_rows;
     int i, j;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
     json_destroy(json);
@@ -935,6 +974,8 @@ do_parse_conditions(struct ovs_cmdl_context *ctx)
     int exit_code = 0;
     int i;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
     json_destroy(json);
@@ -976,6 +1017,8 @@ do_evaluate_condition__(struct ovs_cmdl_context *ctx, int mode)
     size_t n_rows;
     struct json *json;
     size_t i, j;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(ctx->argv[1]));
@@ -1064,6 +1107,8 @@ do_compare_conditions(struct ovs_cmdl_context *ctx)
     struct json *json;
     size_t i;
 
+    destroy_on_ovsdb_error(&json);
+
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
@@ -1105,6 +1150,8 @@ do_parse_mutations(struct ovs_cmdl_context *ctx)
     int exit_code = 0;
     int i;
 
+    destroy_on_ovsdb_error(&json);
+
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
     json_destroy(json);
@@ -1143,6 +1190,8 @@ do_execute_mutations(struct ovs_cmdl_context *ctx)
     size_t n_rows;
     struct json *json;
     size_t i, j;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(ctx->argv[1]));
@@ -1268,6 +1317,8 @@ do_query(struct ovs_cmdl_context *ctx)
     int exit_code = 0;
     size_t i;
 
+    destroy_on_ovsdb_error(&json);
+
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(ctx->argv[1]));
     check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
@@ -1361,6 +1412,8 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
     struct json *json;
     int exit_code = 0;
     size_t i;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Parse table schema, create table. */
     json = unbox_json(parse_json(ctx->argv[1]));
@@ -1489,6 +1542,8 @@ do_parse_schema(struct ovs_cmdl_context *ctx)
     struct ovsdb_schema *schema;
     struct json *json;
 
+    destroy_on_ovsdb_error(&json);
+
     json = parse_json(ctx->argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
@@ -1503,6 +1558,8 @@ do_execute__(struct ovs_cmdl_context *ctx, bool ro)
     struct json *json;
     struct ovsdb *db;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Create database. */
     json = parse_json(ctx->argv[1]);
@@ -1569,6 +1626,8 @@ do_trigger(struct ovs_cmdl_context *ctx)
     long long int now;
     int number;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Create database. */
     json = parse_json(ctx->argv[1]);
@@ -1795,6 +1854,8 @@ do_transact(struct ovs_cmdl_context *ctx)
     struct ovsdb_schema *schema;
     struct json *json;
     int i;
+
+    destroy_on_ovsdb_error(&json);
 
     /* Create table. */
     json = parse_json("{\"name\": \"testdb\", "
