@@ -389,13 +389,9 @@ ds_put_hex(struct ds *ds, const void *buf_, size_t size)
     }
 }
 
-/* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per
- * line.  Numeric offsets are also included, starting at 'ofs' for the first
- * byte in 'buf'.  If 'ascii' is true then the corresponding ASCII characters
- * are also rendered alongside. */
-void
-ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
-                uintptr_t ofs, bool ascii)
+static void
+ds_put_hex_dump__(struct ds *ds, const void *buf_, size_t size,
+                  uintptr_t ofs, bool ascii, bool skip_zero_lines)
 {
     const uint8_t *buf = buf_;
     const size_t per_line = 16; /* Maximum bytes per line. */
@@ -410,6 +406,10 @@ ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
         if (end - start > size)
             end = start + size;
         n = end - start;
+
+        if (skip_zero_lines && is_all_zeros(&buf[start], n)) {
+            goto next;
+        }
 
         /* Print line. */
         ds_put_format(ds, "%08"PRIxMAX"  ",
@@ -438,11 +438,31 @@ ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
             ds_chomp(ds, ' ');
         }
         ds_put_format(ds, "\n");
-
+next:
         ofs += n;
         buf += n;
         size -= n;
     }
+}
+
+/* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per
+ * line.  Numeric offsets are also included, starting at 'ofs' for the first
+ * byte in 'buf'.  If 'ascii' is true then the corresponding ASCII characters
+ * are also rendered alongside. */
+void
+ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
+                uintptr_t ofs, bool ascii)
+{
+    ds_put_hex_dump__(ds, buf_, size, ofs, ascii, false);
+}
+
+/* Same as 'ds_put_hex_dump', but doesn't print lines that only contains
+ * zero bytes. */
+void
+ds_put_sparse_hex_dump(struct ds *ds, const void *buf_, size_t size,
+                       uintptr_t ofs, bool ascii)
+{
+    ds_put_hex_dump__(ds, buf_, size, ofs, ascii, true);
 }
 
 int
