@@ -1542,7 +1542,17 @@ test_key_and_mask(struct match *match)
     }
 
     if (!is_all_zeros(mask, sizeof *mask)) {
-        VLOG_DBG_RL(&rl, "offloading isn't supported, unknown attribute");
+        if (!VLOG_DROP_DBG(&rl)) {
+            struct ds ds = DS_EMPTY_INITIALIZER;
+
+            ds_put_cstr(&ds,
+                        "offloading isn't supported, unknown attribute\n"
+                        "Unused mask bits:\n");
+            ds_put_sparse_hex_dump(&ds, mask, sizeof *mask, 0, false);
+
+            VLOG_DBG("%s", ds_cstr(&ds));
+            ds_destroy(&ds);
+        }
         return EOPNOTSUPP;
     }
 
