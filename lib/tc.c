@@ -3067,17 +3067,17 @@ log_tc_flower_match(const char *msg,
         key_b[i] = ((uint8_t *) &b->key)[i] & mask_b;
     }
     ds_put_cstr(&s, "\nExpected Mask:\n");
-    ds_put_hex(&s, &a->mask, sizeof a->mask);
+    ds_put_sparse_hex_dump(&s, &a->mask, sizeof a->mask, 0, false);
     ds_put_cstr(&s, "\nReceived Mask:\n");
-    ds_put_hex(&s, &b->mask, sizeof b->mask);
+    ds_put_sparse_hex_dump(&s, &b->mask, sizeof b->mask, 0, false);
     ds_put_cstr(&s, "\nExpected Key:\n");
-    ds_put_hex(&s, &a->key, sizeof a->key);
+    ds_put_sparse_hex_dump(&s, &a->key, sizeof a->key, 0, false);
     ds_put_cstr(&s, "\nReceived Key:\n");
-    ds_put_hex(&s, &b->key, sizeof b->key);
+    ds_put_sparse_hex_dump(&s, &b->key, sizeof b->key, 0, false);
     ds_put_cstr(&s, "\nExpected Masked Key:\n");
-    ds_put_hex(&s, key_a, sizeof key_a);
+    ds_put_sparse_hex_dump(&s, key_a, sizeof key_a, 0, false);
     ds_put_cstr(&s, "\nReceived Masked Key:\n");
-    ds_put_hex(&s, key_b, sizeof key_b);
+    ds_put_sparse_hex_dump(&s, key_b, sizeof key_b, 0, false);
 
     if (a->action_count != b->action_count) {
         /* If action count is not equal, we print all actions to see which
