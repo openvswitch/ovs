@@ -1356,6 +1356,21 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
     return 0;
 }
 
+static bool
+is_ipv6_fragment_and_masked(const struct flow *key, const struct flow *mask)
+{
+    if (key->dl_type != htons(ETH_P_IPV6)) {
+        return false;
+    }
+    if (mask->nw_proto && key->nw_proto == IPPROTO_FRAGMENT) {
+        return true;
+    }
+    if (key->nw_frag & (mask->nw_frag & FLOW_NW_FRAG_ANY)) {
+        return true;
+    }
+    return false;
+}
+
 static int
 test_key_and_mask(struct match *match)
 {
@@ -1435,6 +1450,11 @@ test_key_and_mask(struct match *match)
     } else if (key->dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)) {
         VLOG_DBG_RL(&rl,
                     "offloading of non-ethernet packets isn't supported");
+        return EOPNOTSUPP;
+    }
+
+    if (is_ipv6_fragment_and_masked(key, mask)) {
+        VLOG_DBG_RL(&rl, "offloading of IPv6 fragments isn't supported");
         return EOPNOTSUPP;
     }
 
@@ -1736,7 +1756,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             memset(&mask->arp_tha, 0, sizeof mask->arp_tha);
     }
 
-    if (is_ip_any(key)) {
+    if (is_ip_any(key) && !is_ipv6_fragment_and_masked(key, mask)) {
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
         mask->nw_proto = 0;
