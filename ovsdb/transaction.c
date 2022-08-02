@@ -1098,7 +1098,7 @@ ovsdb_txn_precommit(struct ovsdb_txn *txn)
 }
 
 static struct ovsdb_txn*
-ovsdb_txn_clone(const struct ovsdb_txn *txn)
+ovsdb_txn_clone_for_history(const struct ovsdb_txn *txn)
 {
     struct ovsdb_txn *txn_cloned = xzalloc(sizeof *txn_cloned);
     ovs_list_init(&txn_cloned->txn_tables);
@@ -1121,8 +1121,8 @@ ovsdb_txn_clone(const struct ovsdb_txn *txn)
 
             r_cloned->uuid = r->uuid;
             r_cloned->table = r->table;
-            r_cloned->old = r->old ? ovsdb_row_clone(r->old) : NULL;
-            r_cloned->new = r->new ? ovsdb_row_clone(r->new) : NULL;
+            r_cloned->old = r->old ? ovsdb_row_datum_clone(r->old) : NULL;
+            r_cloned->new = r->new ? ovsdb_row_datum_clone(r->new) : NULL;
             memcpy(&r_cloned->changed, &r->changed, bitmap_n_bytes(n_columns));
             hmap_insert(&t_cloned->txn_rows, &r_cloned->hmap_node,
                         uuid_hash(&r_cloned->uuid));
@@ -1160,7 +1160,7 @@ ovsdb_txn_add_to_history(struct ovsdb_txn *txn)
 {
     if (txn->db->need_txn_history) {
         struct ovsdb_txn_history_node *node = xzalloc(sizeof *node);
-        node->txn = ovsdb_txn_clone(txn);
+        node->txn = ovsdb_txn_clone_for_history(txn);
         ovs_list_push_back(&txn->db->txn_history, &node->node);
         txn->db->n_txn_history++;
         txn->db->n_txn_history_atoms += txn->n_atoms;
