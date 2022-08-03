@@ -28,13 +28,15 @@
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev_impl);
+#define DPIF_NETDEV_IMPL_AVX512_CHECK (__x86_64__ && HAVE_AVX512F \
+    && HAVE_LD_AVX512_GOOD && __SSE4_2__)
 
 enum dpif_netdev_impl_info_idx {
     DPIF_NETDEV_IMPL_SCALAR,
     DPIF_NETDEV_IMPL_AVX512
 };
 
-#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+#if DPIF_NETDEV_IMPL_AVX512_CHECK
 static int32_t
 dp_netdev_input_outer_avx512_probe(void)
 {
@@ -54,7 +56,7 @@ static struct dpif_netdev_impl_info_t dpif_impls[] = {
       .probe = NULL,
       .name = "dpif_scalar", },
 
-#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+#if DPIF_NETDEV_IMPL_AVX512_CHECK
     /* Only available on x86_64 bit builds with SSE 4.2 used for OVS core. */
     [DPIF_NETDEV_IMPL_AVX512] = { .input_func = dp_netdev_input_outer_avx512,
       .probe = dp_netdev_input_outer_avx512_probe,
@@ -73,7 +75,7 @@ dp_netdev_impl_get_default(void)
         int dpif_idx = DPIF_NETDEV_IMPL_SCALAR;
 
 /* Configure-time overriding to run test suite on all implementations. */
-#if (__x86_64__ && HAVE_AVX512F && HAVE_LD_AVX512_GOOD && __SSE4_2__)
+#if DPIF_NETDEV_IMPL_AVX512_CHECK
 #ifdef DPIF_AVX512_DEFAULT
         dp_netdev_input_func_probe probe;
 
