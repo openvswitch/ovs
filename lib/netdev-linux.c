@@ -2626,7 +2626,7 @@ static void
 nl_msg_act_police_end_nest(struct ofpbuf *request, size_t offset,
                            size_t act_offset)
 {
-    nl_msg_put_u32(request, TCA_POLICE_RESULT, TC_ACT_PIPE);
+    nl_msg_put_u32(request, TCA_POLICE_RESULT, TC_ACT_UNSPEC);
     nl_msg_end_nested(request, offset);
     nl_msg_end_nested(request, act_offset);
 }
