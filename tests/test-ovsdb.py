@@ -620,7 +620,7 @@ def update_condition(idl, commands):
     commands = commands[len("condition "):].split(";")
     for command in commands:
         command = command.split(" ")
-        if(len(command) != 2):
+        if len(command) != 2:
             sys.stderr.write("Error parsing condition %s\n" % command)
             sys.exit(1)
 

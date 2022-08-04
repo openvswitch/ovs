@@ -124,6 +124,6 @@ except BuildFailed:
     print("Retrying the build without the C extension.")
     print("*" * 75)
 
-    del(setup_args['cmdclass'])
-    del(setup_args['ext_modules'])
+    del setup_args['cmdclass']
+    del setup_args['ext_modules']
     setuptools.setup(**setup_args)

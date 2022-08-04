@@ -956,7 +956,7 @@ def load_plugins(just_capabilities=False, filter=None):
                     filters = []
                 else:
                     filters = filters_tmp.split(',')
-                if not(filter is None or filter in filters):
+                if not (filter is None or filter in filters):
                     continue
                 if el.tagName == "files":
                     newest_first = getBoolAttr(el, 'newest_first')
