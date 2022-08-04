@@ -373,6 +373,7 @@ RYAN D. MOATS                      rmoats@us.ibm.com
 Ryan Wilson
 Sairam Venugopal                   vsairam@vmware.com
 Sajjad Lateef
+Salem Sol                          salems@nvidia.com
 Saloni Jain                        saloni.jain@tcs.com
 Salvatore Daniele                  sdaniele@redhat.com
 Samuel Ghinet                      sghinet@cloudbasesolutions.com
