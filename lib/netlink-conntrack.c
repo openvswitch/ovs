@@ -672,13 +672,13 @@ nl_ct_parse_protoinfo_tcp(struct nlattr *nla,
     static const struct nl_policy policy[] = {
         [CTA_PROTOINFO_TCP_STATE] = { .type = NL_A_U8, .optional = false },
         [CTA_PROTOINFO_TCP_WSCALE_ORIGINAL] = { .type = NL_A_U8,
-                                                .optional = false },
+                                                .optional = true },
         [CTA_PROTOINFO_TCP_WSCALE_REPLY] = { .type = NL_A_U8,
-                                             .optional = false },
+                                             .optional = true },
         [CTA_PROTOINFO_TCP_FLAGS_ORIGINAL] = { .type = NL_A_U16,
-                                               .optional = false },
+                                               .optional = true },
         [CTA_PROTOINFO_TCP_FLAGS_REPLY] = { .type = NL_A_U16,
-                                            .optional = false },
+                                            .optional = true },
     };
     struct nlattr *attrs[ARRAY_SIZE(policy)];
     bool parsed;
@@ -695,20 +695,29 @@ nl_ct_parse_protoinfo_tcp(struct nlattr *nla,
          * connection, but our structures store a separate state for
          * each endpoint.  Here we duplicate the state. */
         protoinfo->tcp.state_orig = protoinfo->tcp.state_reply = state;
-        protoinfo->tcp.wscale_orig = nl_attr_get_u8(
-            attrs[CTA_PROTOINFO_TCP_WSCALE_ORIGINAL]);
-        protoinfo->tcp.wscale_reply = nl_attr_get_u8(
-            attrs[CTA_PROTOINFO_TCP_WSCALE_REPLY]);
-        flags_orig =
-            nl_attr_get_unspec(attrs[CTA_PROTOINFO_TCP_FLAGS_ORIGINAL],
-                               sizeof *flags_orig);
-        protoinfo->tcp.flags_orig =
-            ip_ct_tcp_flags_to_dpif(flags_orig->flags);
-        flags_reply =
-            nl_attr_get_unspec(attrs[CTA_PROTOINFO_TCP_FLAGS_REPLY],
-                               sizeof *flags_reply);
-        protoinfo->tcp.flags_reply =
-            ip_ct_tcp_flags_to_dpif(flags_reply->flags);
+
+        if (attrs[CTA_PROTOINFO_TCP_WSCALE_ORIGINAL]) {
+            protoinfo->tcp.wscale_orig =
+                nl_attr_get_u8(attrs[CTA_PROTOINFO_TCP_WSCALE_ORIGINAL]);
+        }
+        if (attrs[CTA_PROTOINFO_TCP_WSCALE_REPLY]) {
+            protoinfo->tcp.wscale_reply =
+                nl_attr_get_u8(attrs[CTA_PROTOINFO_TCP_WSCALE_REPLY]);
+        }
+        if (attrs[CTA_PROTOINFO_TCP_FLAGS_ORIGINAL]) {
+            flags_orig =
+                nl_attr_get_unspec(attrs[CTA_PROTOINFO_TCP_FLAGS_ORIGINAL],
+                                   sizeof *flags_orig);
+            protoinfo->tcp.flags_orig =
+                ip_ct_tcp_flags_to_dpif(flags_orig->flags);
+        }
+        if (attrs[CTA_PROTOINFO_TCP_FLAGS_REPLY]) {
+            flags_reply =
+                nl_attr_get_unspec(attrs[CTA_PROTOINFO_TCP_FLAGS_REPLY],
+                                   sizeof *flags_reply);
+            protoinfo->tcp.flags_reply =
+                ip_ct_tcp_flags_to_dpif(flags_reply->flags);
+        }
     } else {
         VLOG_ERR_RL(&rl, "Could not parse nested TCP protoinfo options. "
                     "Possibly incompatible Linux kernel version.");
