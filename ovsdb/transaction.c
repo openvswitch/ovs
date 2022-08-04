@@ -42,7 +42,7 @@ struct ovsdb_txn {
     struct ovs_list txn_tables; /* Contains "struct ovsdb_txn_table"s. */
     struct ds comment;
     struct uuid txnid; /* For clustered and relay modes.  It is the eid. */
-    size_t n_atoms;    /* Number of atoms in all transaction rows. */
+    size_t n_atoms;    /* Number of atoms in all changed transaction rows. */
     ssize_t n_atoms_diff;  /* Difference between number of added and
                             * removed atoms. */
 };
@@ -987,8 +987,16 @@ static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 count_atoms(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_table *table = txn_row->table;
+    size_t n_columns = shash_count(&table->schema->columns);
     ssize_t n_atoms_old = 0, n_atoms_new = 0;
     struct shash_node *node;
+
+    if (txn_row->old && txn_row->new
+        && bitmap_is_all_zeros(txn_row->changed, n_columns)) {
+        /* This row didn't change, it has nothing to contribute
+         * to atom counters. */
+        return NULL;
+    }
 
     SHASH_FOR_EACH (node, &table->schema->columns) {
         const struct ovsdb_column *column = node->data;
@@ -1115,6 +1123,14 @@ ovsdb_txn_clone_for_history(const struct ovsdb_txn *txn)
         struct ovsdb_txn_row *r;
         HMAP_FOR_EACH (r, hmap_node, &t->txn_rows) {
             size_t n_columns = shash_count(&t->table->schema->columns);
+
+            if (r->old && r->new
+                && bitmap_is_all_zeros(r->changed, n_columns)) {
+                /* The row is neither old or new and no columns changed.
+                 * No need to store in the history. */
+                continue;
+            }
+
             struct ovsdb_txn_row *r_cloned =
                 xzalloc(offsetof(struct ovsdb_txn_row, changed)
                         + bitmap_n_bytes(n_columns));
