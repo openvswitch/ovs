@@ -142,7 +142,7 @@ class ConditionState(object):
 
 class IdlTable(object):
     def __init__(self, idl, table):
-        assert(isinstance(table, ovs.db.schema.TableSchema))
+        assert isinstance(table, ovs.db.schema.TableSchema)
         self._table = table
         self.need_table = False
         self.rows = custom_index.IndexedRows(self)
@@ -164,7 +164,7 @@ class IdlTable(object):
 
     @condition.setter
     def condition(self, condition):
-        assert(isinstance(condition, list))
+        assert isinstance(condition, list)
         self.idl.cond_change(self.name, condition)
 
     @classmethod
