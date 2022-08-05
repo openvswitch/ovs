@@ -3492,6 +3492,11 @@ AT_CHECK([ovs-ofctl bundle br0 bundle.txt])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 ])
 
+dnl Send the second fragment in order to avoid keeping the first fragment
+dnl in the queue until the expiration occurs. Fragments already queued, if resent,
+dnl may lead to failures on the kernel datapath.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1, packet=50540000000a505400000009080045000030000100320011a4860a0101010a01010200010002000800000010203040506070809000010203040506070809, actions=ct(commit)"])
+
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
