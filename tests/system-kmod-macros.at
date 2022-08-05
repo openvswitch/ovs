@@ -200,6 +200,13 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
 ])
 
+# CHECK_LATER_IPV6_FRAGMENTS()
+#
+# Upstream kernels beetween 4.20 and 5.19 are not parsing IPv6 fragments
+# correctly.  The issue was also backported in some older distribution
+# kernels, so kernels below 4.20 are not reliable.
+m4_define([CHECK_LATER_IPV6_FRAGMENTS], [OVS_CHECK_MIN_KERNEL(5, 19)])
+
 # VSCTL_ADD_DATAPATH_TABLE()
 #
 # Create system datapath table "system" for kernel tests in ovsdb
