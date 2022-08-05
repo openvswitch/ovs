@@ -301,6 +301,11 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([:])
 ])
 
+# CHECK_LATER_IPV6_FRAGMENTS()
+#
+# Userspace is parsing later IPv6 fragments correctly.
+m4_define([CHECK_LATER_IPV6_FRAGMENTS], [])
+
 # VSCTL_ADD_DATAPATH_TABLE()
 #
 # Create datapath table "netdev" for userspace tests in ovsdb
