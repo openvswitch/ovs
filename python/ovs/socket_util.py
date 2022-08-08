@@ -23,6 +23,11 @@ import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
 
+try:
+    import ssl
+except ImportError:
+    ssl = None
+
 if sys.platform == 'win32':
     import ovs.winutils as winutils
     import win32file
@@ -178,7 +183,12 @@ def check_connection_completion(sock):
         if revents & ovs.poller.POLLERR or revents & ovs.poller.POLLHUP:
             try:
                 # The following should raise an exception.
-                sock.send("\0".encode(), socket.MSG_DONTWAIT)
+                if ssl and isinstance(sock, ssl.SSLSocket):
+                    # SSL wrapped socket does not allow
+                    # non-zero optional flag.
+                    sock.send("\0".encode())
+                else:
+                    sock.send("\0".encode(), socket.MSG_DONTWAIT)
 
                 # (Here's where we end up if it didn't.)
                 # XXX rate-limit
