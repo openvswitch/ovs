@@ -6,7 +6,7 @@ jobs:
   build-linux:
     env:
       dependencies: |
-        automake libtool gcc bc libjemalloc1 libjemalloc-dev    \
+        automake libtool gcc bc libjemalloc2 libjemalloc-dev    \
         libssl-dev llvm-dev libelf-dev libnuma-dev libpcap-dev  \
         ninja-build selinux-policy-dev
       AFXDP:       ${{ matrix.afxdp }}
@@ -22,7 +22,7 @@ jobs:
       TESTSUITE:   ${{ matrix.testsuite }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     timeout-minutes: 30
 
     strategy:
