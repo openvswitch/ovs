@@ -29,9 +29,7 @@ This document describes how to integrate Open vSwitch onto a new platform to
 expose the state of the switch and attached devices for centralized control.
 (If you are looking to port the switching components of Open vSwitch to a new
 platform, refer to :doc:`porting`)  The focus of this guide is on hypervisors,
-but many of the interfaces are useful for hardware switches, as well.  The
-XenServer integration is the most mature implementation, so most of the
-examples are drawn from it.
+but many of the interfaces are useful for hardware switches, as well.
 
 The externally visible interface to this integration is platform-agnostic.  We
 encourage anyone who integrates Open vSwitch to use the same interface, because
@@ -48,18 +46,15 @@ ensure that these values are correctly populated and maintained.
 
 An integrator sets the columns in the database by talking to the ovsdb-server
 daemon.  A few of the columns can be set during startup by calling the ovs-ctl
-tool from inside the startup scripts.  The ``xenserver/etc_init.d_openvswitch``
+tool from inside the startup scripts.  The ``rhel/etc_init.d_openvswitch``
 script provides examples of its use, and the ovs-ctl(8) manpage contains
 complete documentation.  At runtime, ovs-vsctl can be used to set columns in
-the database.  The script ``xenserver/etc_xensource_scripts_vif`` contains
-examples of its use, and ovs-vsctl(8) manpage contains complete documentation.
+the database.
 
 Python and C bindings to the database are provided if deeper integration with a
-program are needed.  The XenServer ovs-xapi-sync daemon
-(``xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync``) provides an example
-of using the Python bindings.  More information on the python bindings is
-available at ``python/ovs/db/idl.py``.  Information on the C bindings is
-available at ``lib/ovsdb-idl.h``.
+program are needed.  More information on the python bindings is available at
+``python/ovs/db/idl.py``.  Information on the C bindings is available at
+``lib/ovsdb-idl.h``.
 
 The following diagram shows how integration scripts fit into the Open vSwitch
 architecture:
@@ -83,7 +78,6 @@ architecture:
     |             |                              |             |
     |  +---------------------+                   |             |
     |  | Integration scripts |                   |             |
-    |  | (ex: ovs-xapi-sync) |                   |             |
     |  +---------------------+                   |             |
     |                                            |   Userspace |
     |----------------------------------------------------------|
@@ -105,8 +99,7 @@ individual column, please refer to the ovs-vswitchd.conf.db(5) manpage.
 The ``Open_vSwitch`` table describes the switch as a whole.  The
 ``system_type`` and ``system_version`` columns identify the platform to the
 controller.  The ``external_ids:system-id`` key uniquely identifies the
-physical host.  In XenServer, the system-id will likely be the same as the UUID
-returned by ``xe host-list``. This key allows controllers to distinguish
+physical host.  This key allows controllers to distinguish
 between multiple hypervisors.
 
 Most of this configuration can be done with the ovs-ctl command at startup.
@@ -114,7 +107,7 @@ For example:
 
 ::
 
-    $ ovs-ctl --system-type="XenServer" --system-version="6.0.0-50762p" \
+    $ ovs-ctl --system-type="KVM" --system-version="4.18.el8_6" \
         --system-id="${UUID}" "${other_options}" start
 
 Alternatively, the ovs-vsctl command may be used to set a particular value at
@@ -132,9 +125,7 @@ Bridge table
 ------------
 
 The Bridge table describes individual bridges within an Open vSwitch instance.
-The ``external-ids:bridge-id`` key uniquely identifies a particular bridge.  In
-XenServer, this will likely be the same as the UUID returned by ``xe
-network-list`` for that particular bridge.
+The ``external-ids:bridge-id`` key uniquely identifies a particular bridge.
 
 For example, to set the identifier for bridge "br0", the following command can
 be used:
@@ -161,18 +152,14 @@ attached-mac
 
   This field contains the MAC address of the device attached to the interface.
   On a hypervisor, this is the MAC address of the interface as seen inside a
-  VM.  It does not necessarily correlate to the host-side MAC address.  For
-  example, on XenServer, the MAC address on a VIF in the hypervisor is always
-  FE:FF:FF:FF:FF:FF, but inside the VM a normal MAC address is seen.
+  VM.  It does not necessarily correlate to the host-side MAC address.
 
 iface-id
 
   This field uniquely identifies the interface.  In hypervisors, this allows
   the controller to follow VM network interfaces as VMs migrate.  A well-chosen
   identifier should also allow an administrator or a controller to associate
-  the interface with the corresponding object in the VM management system.  For
-  example, the Open vSwitch integration with XenServer by default uses the
-  XenServer assigned UUID for a VIF record as the iface-id.
+  the interface with the corresponding object in the VM management system.
 
 iface-status
 

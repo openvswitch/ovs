@@ -70,7 +70,6 @@
 #include "util.h"
 #include "unixctl.h"
 #include "lib/vswitch-idl.h"
-#include "xenserver.h"
 #include "vlan-bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(bridge);
@@ -299,9 +298,7 @@ static void bridge_configure_remotes(struct bridge *,
 static void bridge_pick_local_hw_addr(struct bridge *, struct eth_addr *ea,
                                       struct iface **hw_addr_iface);
 static uint64_t bridge_pick_datapath_id(struct bridge *,
-                                        const struct eth_addr bridge_ea,
-                                        struct iface *hw_addr_iface);
-static uint64_t dpid_from_hash(const void *, size_t nbytes);
+                                        const struct eth_addr bridge_ea);
 static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
 static bool port_is_bond_fake_iface(const struct port *);
@@ -1329,7 +1326,7 @@ bridge_configure_datapath_id(struct bridge *br)
     }
     br->ea = ea;
 
-    dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
+    dpid = bridge_pick_datapath_id(br, ea);
     if (dpid != ofproto_get_datapath_id(br->ofproto)) {
         VLOG_INFO("bridge %s: using datapath ID %016"PRIx64, br->name, dpid);
         ofproto_set_datapath_id(br->ofproto, dpid);
@@ -2362,14 +2359,10 @@ bridge_pick_local_hw_addr(struct bridge *br, struct eth_addr *ea,
 }
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
- * Ethernet address is 'bridge_ea'.  If 'bridge_ea' is the Ethernet address of
- * an interface on 'br', then that interface must be passed in as
- * 'hw_addr_iface'; if 'bridge_ea' was derived some other way, then
- * 'hw_addr_iface' must be passed in as a null pointer. */
+ * Ethernet address is 'bridge_ea'.  */
 static uint64_t
 bridge_pick_datapath_id(struct bridge *br,
-                        const struct eth_addr bridge_ea,
-                        struct iface *hw_addr_iface)
+                        const struct eth_addr bridge_ea)
 {
     /*
      * The procedure for choosing a bridge MAC address will, in the most
@@ -2391,44 +2384,7 @@ bridge_pick_datapath_id(struct bridge *br,
         return dpid;
     }
 
-    if (!hw_addr_iface) {
-        /*
-         * A purely internal bridge, that is, one that has no non-virtual
-         * network devices on it at all, is difficult because it has no
-         * natural unique identifier at all.
-         *
-         * When the host is a XenServer, we handle this case by hashing the
-         * host's UUID with the name of the bridge.  Names of bridges are
-         * persistent across XenServer reboots, although they can be reused if
-         * an internal network is destroyed and then a new one is later
-         * created, so this is fairly effective.
-         *
-         * When the host is not a XenServer, we punt by using a random MAC
-         * address on each run.
-         */
-        const char *host_uuid = xenserver_get_host_uuid();
-        if (host_uuid) {
-            char *combined = xasprintf("%s,%s", host_uuid, br->name);
-            dpid = dpid_from_hash(combined, strlen(combined));
-            free(combined);
-            return dpid;
-        }
-    }
-
     return eth_addr_to_uint64(bridge_ea);
-}
-
-static uint64_t
-dpid_from_hash(const void *data, size_t n)
-{
-    union {
-        uint8_t bytes[SHA1_DIGEST_SIZE];
-        struct eth_addr ea;
-    } hash;
-
-    sha1_bytes(data, n, hash.bytes);
-    eth_addr_mark_random(&hash.ea);
-    return eth_addr_to_uint64(hash.ea);
 }
 
 static void

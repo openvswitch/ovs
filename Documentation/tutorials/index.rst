@@ -29,12 +29,6 @@ Tutorials
 
 Getting started with Open vSwitch (OVS).
 
-.. TODO(stephenfin): We could really do with a few basic tutorials, along with
-   some more specialized ones (DPDK, XenServer, Windows). The latter could
-   probably be formed from the install guides, but the former will need to be
-   produced from scratch or reproduced from blogs (with permission of the
-   author)
-
 .. toctree::
    :maxdepth: 2
 

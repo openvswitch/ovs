@@ -99,11 +99,9 @@ TESTSUITE_AT = \
 	tests/ovsdb-lock.at \
 	tests/ovsdb-rbac.at \
 	tests/ovs-vsctl.at \
-	tests/ovs-xapi-sync.at \
 	tests/pytest.at \
 	tests/stp.at \
 	tests/rstp.at \
-	tests/interface-reconfigure.at \
 	tests/vlog.at \
 	tests/vtep-ctl.at \
 	tests/auto-attach.at \
@@ -526,7 +524,6 @@ CHECK_PYFILES = \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/test-stream.py \
-	tests/MockXenAPI.py \
 	tests/test-unix-socket.py \
 	tests/test-unixctl.py \
 	tests/test-vlog.py \
