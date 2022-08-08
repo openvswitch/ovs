@@ -72,8 +72,7 @@ Both VMs (`vm1` and `vm2`) run on `host1`.
 Each VM has a single interface that appears as a Linux device (e.g., ``tap0``) on the physical host.
 
 .. note::
-  For Xen/XenServer, VM interfaces appears as Linux devices with names like
-  ``vif1.0``. Other Linux systems may present these interfaces as ``vnet0``,
+  VM interfaces may appear as Linux devices with names like ``vnet0``,
   ``vnet1``, etc.
 
 Configuration Steps

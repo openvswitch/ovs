@@ -11,7 +11,6 @@
 ^lib/strsep\.c$
 ^third-party/
 ^windows/
-^xenserver/
 ^debian/README.Debian$
 ^debian/copyright.in$
 ^debian/openvswitch-switch.init$

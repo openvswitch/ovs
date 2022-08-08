@@ -86,6 +86,8 @@ v3.0.0 - xx xxx xxxx
    - Previously deprecated Linux kernel module is now fully removed from
      the OVS source tree.  The version provided with the Linux kernel
      should be used instead.
+   - XenServer: Support for integration with XenServer has been removed due to
+     lack of maintenance and bitrot.
 
 
 v2.17.0 - 17 Feb 2022

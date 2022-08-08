@@ -588,32 +588,6 @@ AC_DEFUN([OVS_CONDITIONAL_CC_OPTION_DEFINE],
                [Define to 1 if compiler supports the '$1' option.])
    fi])
 
-dnl Check for too-old XenServer.
-AC_DEFUN([OVS_CHECK_XENSERVER_VERSION],
-  [AC_CACHE_CHECK([XenServer release], [ovs_cv_xsversion],
-    [if test -e /etc/redhat-release; then
-       ovs_cv_xsversion=`sed -n 's/^XenServer DDK release \([[^-]]*\)-.*/\1/p' /etc/redhat-release`
-     fi
-     if test -z "$ovs_cv_xsversion"; then
-       ovs_cv_xsversion=none
-     fi])
-  case $ovs_cv_xsversion in
-    none)
-      ;;
-
-    [[1-9]][[0-9]]* |                    dnl XenServer 10 or later
-    [[6-9]]* |                           dnl XenServer 6 or later
-    5.[[7-9]]* |                         dnl XenServer 5.7 or later
-    5.6.[[1-9]][[0-9]][[0-9]][[0-9]]* |  dnl XenServer 5.6.1000 or later
-    5.6.[[2-9]][[0-9]][[0-9]]* |         dnl XenServer 5.6.200 or later
-    5.6.1[[0-9]][[0-9]])                 dnl Xenserver 5.6.100 or later
-      ;;
-
-    *)
-      AC_MSG_ERROR([This appears to be XenServer $ovs_cv_xsversion, but only XenServer 5.6.100 or later is supported.  (If you are really using a supported version of XenServer, you may override this error message by specifying 'ovs_cv_xsversion=5.6.100' on the "configure" command line.)])
-      ;;
-  esac])
-
 dnl OVS_CHECK_SPARSE_TARGET
 dnl
 dnl The "cgcc" script from "sparse" isn't very good at detecting the

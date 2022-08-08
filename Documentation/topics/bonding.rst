@@ -152,11 +152,11 @@ special handling of received packets.
 
 Several of the physical switches that support LACP block all traffic for ports
 that are configured to use LACP, until LACP is negotiated with the host. When
-configuring a LACP bond on a OVS host (eg: XenServer), this means that there
-will be an interruption of the network connectivity between the time the ports
-on the physical switch and the bond on the OVS host are configured. The
-interruption may be relatively long, if different people are responsible for
-managing the switches and the OVS host.
+configuring a LACP bond on a OVS host, this means that there will be an
+interruption of the network connectivity between the time the ports on the
+physical switch and the bond on the OVS host are configured. The interruption
+may be relatively long, if different people are responsible for managing the
+switches and the OVS host.
 
 Such network connectivity failure can be avoided if LACP can be configured on
 the OVS host before configuring the physical switch, and having the OVS host

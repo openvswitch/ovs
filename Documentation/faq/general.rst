@@ -44,11 +44,11 @@ Q: What is Open vSwitch?
 Q: What virtualization platforms can use Open vSwitch?
 
     A: Open vSwitch can currently run on any Linux-based virtualization
-    platform (kernel 3.10 and newer), including: KVM, VirtualBox, Xen, Xen
-    Cloud Platform, XenServer. As of Linux 3.3 it is part of the mainline
-    kernel.  The bulk of the code is written in platform- independent C and is
-    easily ported to other environments.  We welcome inquires about integrating
-    Open vSwitch with other virtualization platforms.
+    platform (kernel 3.10 and newer), including: KVM and VirtualBox.
+    As of Linux 3.3 it is part of the mainline kernel.  The bulk of the
+    code is written in platform- independent C and is easily ported to
+    other environments.  We welcome inquires about integrating Open
+    vSwitch with other virtualization platforms.
 
 Q: How can I try Open vSwitch?
 
@@ -58,8 +58,7 @@ Q: How can I try Open vSwitch?
     Debian, Ubuntu, Fedora.
 
     You may also download and run a virtualization platform that already has
-    Open vSwitch integrated.  For example, download a recent ISO for XenServer
-    or Xen Cloud Platform.  Be aware that the version integrated with a
+    Open vSwitch integrated.  Be aware that the version integrated with a
     particular platform may not be the most recent Open vSwitch release.
 
 Q: Does Open vSwitch only work on Linux?

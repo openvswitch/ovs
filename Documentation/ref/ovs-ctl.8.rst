@@ -481,9 +481,8 @@ Files
 Example
 =======
 
-The files ``debian/openvswitch-switch.init`` and
-``xenserver/etc_init.d_openvswitch`` in the Open vSwitch source
-distribution are good examples of how to use ``ovs-ctl``.
+The file ``debian/openvswitch-switch.init`` in the Open vSwitch source
+distribution is a good example of how to use ``ovs-ctl``.
 
 See Also
 ========

@@ -598,8 +598,8 @@ userspace flows using the ovs-ofctl utility and also uses the
 ``other_config:flow-restore-wait`` column to keep the traffic downtime to the
 minimum. The ovs-ctl utility's ``force-reload-kmod`` function does all of the
 above, but also replaces the old kernel module with the new one. Open vSwitch
-startup scripts for Debian, XenServer and RHEL use ovs-ctl's functions and it
-is recommended that these functions be used for other software platforms too.
+startup scripts for Debian and RHEL use ovs-ctl's functions and it is
+recommended that these functions be used for other software platforms too.
 
 Reporting Bugs
 --------------
