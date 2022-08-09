@@ -663,6 +663,23 @@ count_cpu_cores(void)
     return n_cores > 0 ? n_cores : 0;
 }
 
+/* Returns the total number of cores on the system, or 0 if the
+ * number cannot be determined. */
+int
+count_total_cores(void)
+{
+    long int n_cores;
+
+#ifndef _WIN32
+    n_cores = sysconf(_SC_NPROCESSORS_CONF);
+#else
+    n_cores = 0;
+    errno = ENOTSUP;
+#endif
+
+    return n_cores > 0 ? n_cores : 0;
+}
+
 /* Returns 'true' if current thread is PMD thread. */
 bool
 thread_is_pmd(void)
