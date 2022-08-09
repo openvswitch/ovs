@@ -2481,6 +2481,77 @@ dpif_netlink_handler_uninit(struct dpif_handler *handler)
 }
 #endif
 
+/* Returns true if num is a prime number,
+ * otherwise, return false.
+ */
+static bool
+is_prime(uint32_t num)
+{
+    if (num == 2) {
+        return true;
+    }
+
+    if (num < 2) {
+        return false;
+    }
+
+    if (num % 2 == 0) {
+        return false;
+    }
+
+    for (uint64_t i = 3; i * i <= num; i += 2) {
+        if (num % i == 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* Returns start if start is a prime number.  Otherwise returns the next
+ * prime greater than start.  Search is limited by UINT32_MAX.
+ *
+ * Returns 0 if no prime has been found between start and UINT32_MAX.
+ */
+static uint32_t
+next_prime(uint32_t start)
+{
+    if (start <= 2) {
+        return 2;
+    }
+
+    for (uint32_t i = start; i < UINT32_MAX; i++) {
+        if (is_prime(i)) {
+            return i;
+        }
+    }
+
+    return 0;
+}
+
+/* Calculates and returns the number of handler threads needed based
+ * the following formula:
+ *
+ * handlers_n = min(next_prime(active_cores + 1), total_cores)
+ */
+static uint32_t
+dpif_netlink_calculate_n_handlers(void)
+{
+    uint32_t total_cores = count_total_cores();
+    uint32_t n_handlers = count_cpu_cores();
+    uint32_t next_prime_num;
+
+    /* If not all cores are available to OVS, create additional handler
+     * threads to ensure more fair distribution of load between them.
+     */
+    if (n_handlers < total_cores && total_cores > 2) {
+        next_prime_num = next_prime(n_handlers + 1);
+        n_handlers = MIN(next_prime_num, total_cores);
+    }
+
+    return n_handlers;
+}
+
 static int
 dpif_netlink_refresh_handlers_cpu_dispatch(struct dpif_netlink *dpif)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
@@ -2490,7 +2561,7 @@ dpif_netlink_refresh_handlers_cpu_dispatch(struct dpif_netlink *dpif)
     uint32_t n_handlers;
     uint32_t *upcall_pids;
 
-    n_handlers = count_cpu_cores();
+    n_handlers = dpif_netlink_calculate_n_handlers();
     if (dpif->n_handlers != n_handlers) {
         VLOG_DBG("Dispatch mode(per-cpu): initializing %d handlers",
                    n_handlers);
@@ -2730,7 +2801,7 @@ dpif_netlink_number_handlers_required(struct dpif *dpif_, uint32_t *n_handlers)
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
 
     if (dpif_netlink_upcall_per_cpu(dpif)) {
-        *n_handlers = count_cpu_cores();
+        *n_handlers = dpif_netlink_calculate_n_handlers();
         return true;
     }
 
