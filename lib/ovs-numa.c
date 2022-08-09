@@ -387,6 +387,35 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
     return OVS_CORE_UNSPEC;
 }
 
+/* Returns the largest core_id.
+ *
+ * Return OVS_CORE_UNSPEC, if core_id information is not found.
+ *
+ * Returning OVS_CORE_UNSPEC comes at a caveat.  The caller function
+ * must remember to check the return value of this callee function
+ * against OVS_CORE_UNSPEC.  OVS_CORE_UNSPEC is a positive integer
+ * INT_MAX, which the caller may interpret it as the largest
+ * core_id if it's not checking for it.
+ */
+unsigned
+ovs_numa_get_largest_core_id(void)
+{
+    struct cpu_core *core;
+    unsigned max_id = 0;
+
+    if (!found_numa_and_core) {
+        return OVS_CORE_UNSPEC;
+    }
+
+    HMAP_FOR_EACH (core, hmap_node, &all_cpu_cores) {
+        if (core->core_id > max_id) {
+            max_id = core->core_id;
+        }
+    }
+
+    return max_id;
+}
+
 static struct ovs_numa_dump *
 ovs_numa_dump_create(void)
 {

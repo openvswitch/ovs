@@ -56,6 +56,7 @@ int ovs_numa_get_n_numas(void);
 int ovs_numa_get_n_cores(void);
 int ovs_numa_get_numa_id(unsigned core_id);
 int ovs_numa_get_n_cores_on_numa(int numa_id);
+unsigned ovs_numa_get_largest_core_id(void);
 struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
 struct ovs_numa_dump *ovs_numa_dump_cores_with_cmask(const char *cmask);
 struct ovs_numa_dump *ovs_numa_dump_n_cores_per_numa(int n);
