@@ -791,14 +791,28 @@ dpif_netlink_set_handler_pids(struct dpif *dpif_, const uint32_t *upcall_pids,
                               uint32_t n_upcall_pids)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    int largest_cpu_id = ovs_numa_get_largest_core_id();
     struct dpif_netlink_dp request, reply;
     struct ofpbuf *bufp;
-    int error;
-    int n_cores;
 
-    n_cores = count_cpu_cores();
-    ovs_assert(n_cores == n_upcall_pids);
-    VLOG_DBG("Dispatch mode(per-cpu): Number of CPUs is %d", n_cores);
+    uint32_t *corrected;
+    int error, i, n_cores;
+
+    if (largest_cpu_id == OVS_NUMA_UNSPEC) {
+        largest_cpu_id = -1;
+    }
+
+    /* Some systems have non-continuous cpu core ids.  count_total_cores()
+     * would return an accurate number, however, this number cannot be used.
+     * e.g. If the largest core_id of a system is cpu9, but the system only
+     * has 4 cpus then the OVS kernel module would throw a "CPU mismatch"
+     * warning.  With the MAX() in place in this example we send an array of
+     * size 10 and prevent the warning.  This has no bearing on the number of
+     * threads created.
+     */
+    n_cores = MAX(count_total_cores(), largest_cpu_id + 1);
+    VLOG_DBG("Dispatch mode(per-cpu): Setting up handler PIDs for %d cores",
+             n_cores);
 
     dpif_netlink_dp_init(&request);
     request.cmd = OVS_DP_CMD_SET;
@@ -807,7 +821,12 @@ dpif_netlink_set_handler_pids(struct dpif *dpif_, const uint32_t *upcall_pids,
     request.user_features = dpif->user_features |
                             OVS_DP_F_DISPATCH_UPCALL_PER_CPU;
 
-    request.upcall_pids = upcall_pids;
+    corrected = xcalloc(n_cores, sizeof *corrected);
+
+    for (i = 0; i < n_cores; i++) {
+        corrected[i] = upcall_pids[i % n_upcall_pids];
+    }
+    request.upcall_pids = corrected;
     request.n_upcall_pids = n_cores;
 
     error = dpif_netlink_dp_transact(&request, &reply, &bufp);
@@ -815,9 +834,10 @@ dpif_netlink_set_handler_pids(struct dpif *dpif_, const uint32_t *upcall_pids,
         dpif->user_features = reply.user_features;
         ofpbuf_delete(bufp);
         if (!dpif_netlink_upcall_per_cpu(dpif)) {
-            return -EOPNOTSUPP;
+            error = -EOPNOTSUPP;
         }
     }
+    free(corrected);
     return error;
 }
 
