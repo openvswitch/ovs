@@ -66,14 +66,9 @@ jobs:
             libs:         -ljemalloc
 
           - compiler:     gcc
-            kernel_list:  5.5 4.20 4.19 4.18 4.17 4.16
+            kernel_list:  4.19 4.14 4.9 4.4 3.16
           - compiler:     clang
-            kernel_list:  5.5 4.20 4.19 4.18 4.17 4.16
-
-          - compiler:     gcc
-            kernel_list:  4.15 4.14 4.9 4.4 3.16
-          - compiler:     clang
-            kernel_list:  4.15 4.14 4.9 4.4 3.16
+            kernel_list:  4.19 4.14 4.9 4.4 3.16
 
           - compiler:     gcc
             afxdp:        afxdp
