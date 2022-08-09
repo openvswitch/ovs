@@ -187,10 +187,8 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     install_dpdk $DPDK_VER
     # Enable pdump support in OVS.
     EXTRA_OPTS="${EXTRA_OPTS} --enable-dpdk-pdump"
-    if [ "$CC" = "clang" ]; then
-        # Disregard cast alignment errors until DPDK is fixed
-        CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-cast-align"
-    fi
+    # Disregard cast alignment errors until DPDK is fixed
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-cast-align"
 fi
 
 if [ "$CC" = "clang" ]; then
