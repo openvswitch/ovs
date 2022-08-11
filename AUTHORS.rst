@@ -308,6 +308,7 @@ Mijo Safradin                      mijo@linux.vnet.ibm.com
 Mika Vaisanen                      mika.vaisanen@gmail.com
 Mike Pattrick                      mkp@redhat.com
 Minoru TAKAHASHI                   takahashi.minoru7@gmail.com
+Miro Tomaska                       mtomaska@redhat.com
 Mohammad Heib                      mheib@redhat.com
 Moshe Levi                         moshele@mellanox.com
 Murphy McCauley                    murphy.mccauley@gmail.com
