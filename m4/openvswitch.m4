@@ -450,6 +450,35 @@ AC_DEFUN([OVS_CHECK_GCC_AVX512VL], [
    AM_CONDITIONAL([HAVE_GCC_AVX512VL_GOOD],
                   [test "$ovs_cv_gcc_avx512vl_good" = yes])])
 
+dnl Checks whether the build system implements the vpopcntdq instruction. The
+dnl compiler and assembler each separately need to support vpopcntdq. In order
+dnl to test the assembler with the below code snippet, set the optimization
+dnl level of the function to "O0" so it won't be optimized away by the
+dnl compiler.
+AC_DEFUN([OVS_CHECK_AVX512VPOPCNTDQ], [
+  AC_MSG_CHECKING([whether compiler correctly emits AVX512-VPOPCNTDQ])
+  AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([#include <immintrin.h>
+                     void
+                     __attribute__((__target__("avx512vpopcntdq")))
+                     __attribute__((optimize("O0")))
+                     check_vpopcntdq(void)
+                     {
+                         __m512i v_test;
+                         v_test = _mm512_popcnt_epi64(v_test);
+                     }],[])],
+    [AC_MSG_RESULT([yes])
+    ovs_cv_avx512vpopcntdq_good=yes],
+    [AC_MSG_RESULT([no])
+    ovs_cv_avx512vpopcntdq_good=no])
+   if test "$ovs_cv_avx512vpopcntdq_good" = yes; then
+     AC_DEFINE([HAVE_AVX512VPOPCNTDQ], [1],
+               [Define to 1 if the build system implements the vpopcntdq
+                instruction.])
+   fi
+   AM_CONDITIONAL([HAVE_AVX512VPOPCNTDQ],
+                  [test "$ovs_cv_avx512vpopcntdq_good" = yes])])
+
 dnl Checks for binutils/assembler known issue with AVX512.
 dnl Due to backports, we probe assembling a reproducer instead of checking
 dnl binutils version string. More details, including ASM dumps and debug here:
