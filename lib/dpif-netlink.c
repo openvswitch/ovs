@@ -2257,8 +2257,6 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     size_t left;
     struct netdev *dev;
     struct offload_info info;
-    ovs_be16 dst_port = 0;
-    uint8_t csum_on = false;
     int err;
 
     info.tc_modify_flow_deleted = false;
@@ -2278,10 +2276,9 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
         return EOPNOTSUPP;
     }
 
-    /* Get tunnel dst port */
+    /* Check the output port for a tunnel. */
     NL_ATTR_FOR_EACH(nla, left, put->actions, put->actions_len) {
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
-            const struct netdev_tunnel_config *tnl_cfg;
             struct netdev *outdev;
             odp_port_t out_port;
 
@@ -2291,19 +2288,10 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
                 err = EOPNOTSUPP;
                 goto out;
             }
-            tnl_cfg = netdev_get_tunnel_config(outdev);
-            if (tnl_cfg && tnl_cfg->dst_port != 0) {
-                dst_port = tnl_cfg->dst_port;
-            }
-            if (tnl_cfg) {
-                csum_on = tnl_cfg->csum;
-            }
             netdev_close(outdev);
         }
     }
 
-    info.tp_dst_port = dst_port;
-    info.tunnel_csum_on = csum_on;
     info.recirc_id_shared_with_tc = (dpif->user_features
                                      & OVS_DP_F_TC_RECIRC_SHARING);
     err = netdev_flow_put(dev, &match,
