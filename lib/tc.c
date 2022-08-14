@@ -409,6 +409,10 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_ENC_IPV6_DST_MASK] = { .type = NL_A_UNSPEC,
                                            .min_len = sizeof(struct in6_addr),
                                            .optional = true, },
+    [TCA_FLOWER_KEY_ENC_UDP_SRC_PORT] = { .type = NL_A_U16,
+                                          .optional = true, },
+    [TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK] = { .type = NL_A_U16,
+                                               .optional = true, },
     [TCA_FLOWER_KEY_ENC_UDP_DST_PORT] = { .type = NL_A_U16,
                                           .optional = true, },
     [TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK] = { .type = NL_A_U16,
@@ -782,6 +786,12 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
             nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_DST_MASK]);
         flower->key.tunnel.ipv6.ipv6_dst =
             nl_attr_get_in6_addr(attrs[TCA_FLOWER_KEY_ENC_IPV6_DST]);
+    }
+    if (attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK]) {
+        flower->mask.tunnel.tp_src =
+            nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK]);
+        flower->key.tunnel.tp_src =
+            nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_SRC_PORT]);
     }
     if (attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK]) {
         flower->mask.tunnel.tp_dst =
@@ -3393,12 +3403,14 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     struct in6_addr *ipv6_src = &flower->key.tunnel.ipv6.ipv6_src;
     struct in6_addr *ipv6_dst = &flower->key.tunnel.ipv6.ipv6_dst;
     ovs_be32 id = be64_to_be32(flower->key.tunnel.id);
+    ovs_be16 tp_src = flower->key.tunnel.tp_src;
     ovs_be16 tp_dst = flower->key.tunnel.tp_dst;
     uint8_t tos = flower->key.tunnel.tos;
     uint8_t ttl = flower->key.tunnel.ttl;
     uint8_t tos_mask = flower->mask.tunnel.tos;
     uint8_t ttl_mask = flower->mask.tunnel.ttl;
     ovs_be64 id_mask = flower->mask.tunnel.id;
+    ovs_be16 tp_src_mask = flower->mask.tunnel.tp_src;
     ovs_be16 tp_dst_mask = flower->mask.tunnel.tp_dst;
 
     if (ipv4_dst_mask || ipv4_src_mask) {
@@ -3424,6 +3436,11 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     if (ttl_mask) {
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL, ttl);
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL_MASK, ttl_mask);
+    }
+    if (tp_src_mask) {
+        nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_SRC_PORT, tp_src);
+        nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK,
+                        tp_src_mask);
     }
     if (tp_dst_mask) {
         nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT, tp_dst);
