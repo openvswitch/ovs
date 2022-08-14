@@ -817,15 +817,15 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                           &flower->key.tunnel.ipv6.ipv6_src,
                                           &flower->mask.tunnel.ipv6.ipv6_src);
         }
-        if (flower->key.tunnel.tos) {
+        if (flower->mask.tunnel.tos) {
             match_set_tun_tos_masked(match, flower->key.tunnel.tos,
                                      flower->mask.tunnel.tos);
         }
-        if (flower->key.tunnel.ttl) {
+        if (flower->mask.tunnel.ttl) {
             match_set_tun_ttl_masked(match, flower->key.tunnel.ttl,
                                      flower->mask.tunnel.ttl);
         }
-        if (flower->key.tunnel.tp_dst) {
+        if (flower->mask.tunnel.tp_dst) {
             match_set_tun_tp_dst_masked(match, flower->key.tunnel.tp_dst,
                                         flower->mask.tunnel.tp_dst);
         }
