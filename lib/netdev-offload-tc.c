@@ -585,30 +585,42 @@ flower_tun_opt_to_match(struct match *match, struct tc_flower *flower)
     struct geneve_opt *opt, *opt_mask;
     int len, cnt = 0;
 
+    /* Options are always in UDPIF format in the 'flower'. */
+    match->flow.tunnel.flags |= FLOW_TNL_F_UDPIF;
+    match->wc.masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
+
+    match->flow.tunnel.metadata.present.len =
+           flower->key.tunnel.metadata.present.len;
+    /* In the 'flower' mask len is an actual length, not a mask.  But in the
+     * 'match' it is an actual mask, so should be an exact match, because TC
+     * will always match on the exact value. */
+    match->wc.masks.tunnel.metadata.present.len = 0xff;
+
+    if (!flower->key.tunnel.metadata.present.len) {
+        /* No options present. */
+        return;
+    }
+
     memcpy(match->flow.tunnel.metadata.opts.gnv,
            flower->key.tunnel.metadata.opts.gnv,
            flower->key.tunnel.metadata.present.len);
-    match->flow.tunnel.metadata.present.len =
-           flower->key.tunnel.metadata.present.len;
-    match->flow.tunnel.flags |= FLOW_TNL_F_UDPIF;
     memcpy(match->wc.masks.tunnel.metadata.opts.gnv,
            flower->mask.tunnel.metadata.opts.gnv,
            flower->mask.tunnel.metadata.present.len);
 
+    /* Fixing up 'length' fields of particular options, since these are
+     * also not masks, but actual lengths in the 'flower' structure. */
     len = flower->key.tunnel.metadata.present.len;
     while (len) {
         opt = &match->flow.tunnel.metadata.opts.gnv[cnt];
         opt_mask = &match->wc.masks.tunnel.metadata.opts.gnv[cnt];
 
+        /* "Exact" match as set in tun_metadata_to_geneve_mask__(). */
         opt_mask->length = 0x1f;
 
         cnt += sizeof(struct geneve_opt) / 4 + opt->length;
         len -= sizeof(struct geneve_opt) + opt->length * 4;
     }
-
-    match->wc.masks.tunnel.metadata.present.len =
-           flower->mask.tunnel.metadata.present.len;
-    match->wc.masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
 }
 
 static void
@@ -1116,9 +1128,8 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         if (flower->key.tunnel.tp_dst) {
             match_set_tun_tp_dst(match, flower->key.tunnel.tp_dst);
         }
-        if (flower->key.tunnel.metadata.present.len) {
-            flower_tun_opt_to_match(match, flower);
-        }
+
+        flower_tun_opt_to_match(match, flower);
     }
 
     act_off = nl_msg_start_nested(buf, OVS_FLOW_ATTR_ACTIONS);
@@ -1604,6 +1615,8 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
         len -= sizeof(struct geneve_opt) + opt->length * 4;
     }
 
+    /* Copying from the key and not from the mask, since in the 'flower'
+     * the length for a mask is not a mask, but the actual length. */
     flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
 }
 
