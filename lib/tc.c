@@ -721,15 +721,17 @@ flower_tun_geneve_opt_check_len(struct tun_metadata *key,
     const struct geneve_opt *opt, *opt_mask;
     int len, cnt = 0;
 
+    if (key->present.len != mask->present.len) {
+        goto bad_length;
+    }
+
     len = key->present.len;
     while (len) {
         opt = &key->opts.gnv[cnt];
         opt_mask = &mask->opts.gnv[cnt];
 
         if (opt->length != opt_mask->length) {
-            VLOG_ERR_RL(&error_rl,
-                        "failed to parse tun options; key/mask length differ");
-            return EINVAL;
+            goto bad_length;
         }
 
         cnt += sizeof(struct geneve_opt) / 4 + opt->length;
@@ -737,6 +739,11 @@ flower_tun_geneve_opt_check_len(struct tun_metadata *key,
     }
 
     return 0;
+
+bad_length:
+    VLOG_ERR_RL(&error_rl,
+                "failed to parse tun options; key/mask length differ");
+    return EINVAL;
 }
 
 static int
