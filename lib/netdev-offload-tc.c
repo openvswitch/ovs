@@ -44,6 +44,7 @@
 VLOG_DEFINE_THIS_MODULE(netdev_offload_tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
+static struct vlog_rate_limit warn_rl = VLOG_RATE_LIMIT_INIT(10, 2);
 
 static struct hmap ufid_to_tc = HMAP_INITIALIZER(&ufid_to_tc);
 static struct hmap tc_to_ufid = HMAP_INITIALIZER(&tc_to_ufid);
@@ -1296,6 +1297,7 @@ static int
 parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
                           const struct nlattr *set, size_t set_len)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     const struct nlattr *tunnel;
     const struct nlattr *tun_attr;
     size_t tun_left, tunnel_len;
@@ -1314,6 +1316,7 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
 
     action->type = TC_ACT_ENCAP;
     action->encap.id_present = false;
+    action->encap.no_csum = 1;
     flower->action_count++;
     NL_ATTR_FOR_EACH_UNSAFE(tun_attr, tun_left, tunnel, tunnel_len) {
         switch (nl_attr_type(tun_attr)) {
@@ -1336,6 +1339,18 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         break;
         case OVS_TUNNEL_KEY_ATTR_TTL: {
             action->encap.ttl = nl_attr_get_u8(tun_attr);
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: {
+            /* XXX: This is wrong!  We're ignoring the DF flag configuration
+             * requested by the user.  However, TC for now has no way to pass
+             * that flag and it is set by default, meaning tunnel offloading
+             * will not work if 'options:df_default=false' is not set.
+             * Keeping incorrect behavior for now. */
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_CSUM: {
+            action->encap.no_csum = 0;
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV6_SRC: {
@@ -1362,6 +1377,10 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
             action->encap.data.present.len = nl_attr_get_size(tun_attr);
         }
         break;
+        default:
+            VLOG_DBG_RL(&rl, "unsupported tunnel key attribute %d",
+                        nl_attr_type(tun_attr));
+            return EOPNOTSUPP;
         }
     }
 
@@ -1490,18 +1509,51 @@ test_key_and_mask(struct match *match)
 
 static void
 flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
-                        const struct flow_tnl *tnl_mask)
+                        struct flow_tnl *tnl_mask)
 {
     struct geneve_opt *opt, *opt_mask;
     int len, cnt = 0;
 
+    /* 'flower' always has an exact match on tunnel metadata length, so having
+     * it in a wrong format is not acceptable unless it is empty. */
+    if (!(tnl->flags & FLOW_TNL_F_UDPIF)) {
+        if (tnl->metadata.present.map) {
+            /* XXX: Add non-UDPIF format parsing here? */
+            VLOG_WARN_RL(&warn_rl, "Tunnel options are in the wrong format.");
+        } else {
+            /* There are no options, that equals for them to be in UDPIF format
+             * with a zero 'len'.  Clearing the 'map' mask as consumed.
+             * No need to explicitly set 'len' to zero in the 'flower'. */
+            tnl_mask->flags &= ~FLOW_TNL_F_UDPIF;
+            memset(&tnl_mask->metadata.present.map, 0,
+                   sizeof tnl_mask->metadata.present.map);
+        }
+        return;
+    }
+
+    tnl_mask->flags &= ~FLOW_TNL_F_UDPIF;
+
+    flower->key.tunnel.metadata.present.len = tnl->metadata.present.len;
+    /* Copying from the key and not from the mask, since in the 'flower'
+     * the length for a mask is not a mask, but the actual length.  TC
+     * will use an exact match for the length. */
+    flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
+    memset(&tnl_mask->metadata.present.len, 0,
+           sizeof tnl_mask->metadata.present.len);
+
+    if (!tnl->metadata.present.len) {
+        return;
+    }
+
     memcpy(flower->key.tunnel.metadata.opts.gnv, tnl->metadata.opts.gnv,
            tnl->metadata.present.len);
-    flower->key.tunnel.metadata.present.len = tnl->metadata.present.len;
-
     memcpy(flower->mask.tunnel.metadata.opts.gnv, tnl_mask->metadata.opts.gnv,
            tnl->metadata.present.len);
 
+    memset(tnl_mask->metadata.opts.gnv, 0, tnl->metadata.present.len);
+
+    /* Fixing up 'length' fields of particular options, since these are
+     * also not masks, but actual lengths in the 'flower' structure. */
     len = flower->key.tunnel.metadata.present.len;
     while (len) {
         opt = &flower->key.tunnel.metadata.opts.gnv[cnt];
@@ -1512,10 +1564,6 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
         cnt += sizeof(struct geneve_opt) / 4 + opt->length;
         len -= sizeof(struct geneve_opt) + opt->length * 4;
     }
-
-    /* Copying from the key and not from the mask, since in the 'flower'
-     * the length for a mask is not a mask, but the actual length. */
-    flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
 }
 
 static void
@@ -1620,7 +1668,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     const struct flow *key = &match->flow;
     struct flow *mask = &match->wc.masks;
     const struct flow_tnl *tnl = &match->flow.tunnel;
-    const struct flow_tnl *tnl_mask = &mask->tunnel;
+    struct flow_tnl *tnl_mask = &mask->tunnel;
     struct tc_action *action;
     bool recirc_act = false;
     uint32_t block_id = 0;
@@ -1661,6 +1709,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.ttl = tnl->ip_ttl;
         flower.key.tunnel.tp_src = tnl->tp_src;
         flower.key.tunnel.tp_dst = tnl->tp_dst;
+
         flower.mask.tunnel.ipv4.ipv4_src = tnl_mask->ip_src;
         flower.mask.tunnel.ipv4.ipv4_dst = tnl_mask->ip_dst;
         flower.mask.tunnel.ipv6.ipv6_src = tnl_mask->ipv6_src;
@@ -1673,10 +1722,32 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
          * Degrading the flow down to exact match for now as a workaround. */
         flower.mask.tunnel.tp_dst = OVS_BE16_MAX;
         flower.mask.tunnel.id = (tnl->flags & FLOW_TNL_F_KEY) ? tnl_mask->tun_id : 0;
+
+        memset(&tnl_mask->ip_src, 0, sizeof tnl_mask->ip_src);
+        memset(&tnl_mask->ip_dst, 0, sizeof tnl_mask->ip_dst);
+        memset(&tnl_mask->ipv6_src, 0, sizeof tnl_mask->ipv6_src);
+        memset(&tnl_mask->ipv6_dst, 0, sizeof tnl_mask->ipv6_dst);
+        memset(&tnl_mask->ip_tos, 0, sizeof tnl_mask->ip_tos);
+        memset(&tnl_mask->ip_ttl, 0, sizeof tnl_mask->ip_ttl);
+        memset(&tnl_mask->tp_dst, 0, sizeof tnl_mask->tp_dst);
+
+        memset(&tnl_mask->tun_id, 0, sizeof tnl_mask->tun_id);
+        tnl_mask->flags &= ~FLOW_TNL_F_KEY;
+
+        /* XXX: This is wrong!  We're ignoring DF and CSUM flags configuration
+         * requested by the user.  However, TC for now has no way to pass
+         * these flags in a flower key and their masks are set by default,
+         * meaning tunnel offloading will not work at all if not cleared.
+         * Keeping incorrect behavior for now. */
+        tnl_mask->flags &= ~(FLOW_TNL_F_DONT_FRAGMENT | FLOW_TNL_F_CSUM);
+
         flower_match_to_tun_opt(&flower, tnl, tnl_mask);
         flower.tunnel = true;
+    } else {
+        /* There is no tunnel metadata to match on, but there could be some
+         * mask bits set due to flow translation artifacts.  Clear them. */
+        memset(&mask->tunnel, 0, sizeof mask->tunnel);
     }
-    memset(&mask->tunnel, 0, sizeof mask->tunnel);
 
     flower.key.eth_type = key->dl_type;
     flower.mask.eth_type = mask->dl_type;
@@ -1947,10 +2018,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             err = parse_put_flow_set_action(&flower, action, set, set_len);
             if (err) {
                 return err;
-            }
-            if (action->type == TC_ACT_ENCAP) {
-                action->encap.tp_dst = info->tp_dst_port;
-                action->encap.no_csum = !info->tunnel_csum_on;
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
             const struct nlattr *set = nl_attr_get(nla);
