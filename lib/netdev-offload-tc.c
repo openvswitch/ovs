@@ -1126,7 +1126,8 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                      flower->mask.tunnel.ttl);
         }
         if (flower->key.tunnel.tp_dst) {
-            match_set_tun_tp_dst(match, flower->key.tunnel.tp_dst);
+            match_set_tun_tp_dst_masked(match, flower->key.tunnel.tp_dst,
+                                        flower->mask.tunnel.tp_dst);
         }
 
         flower_tun_opt_to_match(match, flower);
@@ -2029,6 +2030,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.mask.tunnel.ipv6.ipv6_dst = tnl_mask->ipv6_dst;
         flower.mask.tunnel.tos = tnl_mask->ip_tos;
         flower.mask.tunnel.ttl = tnl_mask->ip_ttl;
+        /* XXX: We should be setting the mask from 'tnl_mask->tp_dst' here, but
+         * some hardware drivers (mlx5) doesn't support masked matches and will
+         * refuse to offload such flows keeping them in software path.
+         * Degrading the flow down to exact match for now as a workaround. */
+        flower.mask.tunnel.tp_dst = OVS_BE16_MAX;
         flower.mask.tunnel.id = (tnl->flags & FLOW_TNL_F_KEY) ? tnl_mask->tun_id : 0;
         flower_match_to_tun_opt(&flower, tnl, tnl_mask);
         flower.tunnel = true;
