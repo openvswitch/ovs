@@ -1,4 +1,4 @@
-v3.0.0 - xx xxx xxxx
+v3.0.0 - 15 Aug 2022
 --------------------
    - libopenvswitch API change:
      * To fix the Undefined Behavior issue causing the compiler to incorrectly

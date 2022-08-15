@@ -11,7 +11,7 @@ openvswitch (3.0.0-1) unstable; urgency=low
      - Stop building shared library and subsequently remove libopenvswitch and
        libopenvswitch-dev binary packages.
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 15 Jul 2022 14:00:00 +0100
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 15 Aug 2022 17:43:58 +0200
 
 openvswitch (2.17.0-1) unstable; urgency=low
 
