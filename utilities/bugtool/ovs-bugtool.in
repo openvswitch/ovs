@@ -658,8 +658,7 @@ exclude those logs from the archive.
         prefix_output(CAP_SYSTEM_LOGS, log, last_mod_time=log_last_mod_time)
 
     ovs_logs = ([OPENVSWITCH_LOG_DIR + x for x in
-        ['ovs-vswitchd.log', 'ovsdb-server.log',
-        'ovs-xapi-sync.log', 'ovs-ctl.log']])
+        ['ovs-vswitchd.log', 'ovsdb-server.log', 'ovs-ctl.log']])
     for log in ovs_logs:
         prefix_output(CAP_OPENVSWITCH_LOGS, log,
                       last_mod_time=log_last_mod_time)

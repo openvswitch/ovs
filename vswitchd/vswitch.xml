@@ -70,13 +70,6 @@
       <column name="external_ids" key="system-id">
         A unique identifier for the Open vSwitch's physical host.
         The form of the identifier depends on the type of the host.
-        On a Citrix XenServer, this will likely be the same as
-        <ref column="external_ids" key="xs-system-uuid"/>.
-      </column>
-
-      <column name="external_ids" key="xs-system-uuid">
-        The Citrix XenServer universally unique identifier for the physical
-        host as displayed by <code>xe host-list</code>.
       </column>
 
       <column name="external_ids" key="hostname">
@@ -999,7 +992,7 @@
       <column name="system_type">
         <p>
           An identifier for the type of system on top of which Open vSwitch
-          runs, e.g. <code>XenServer</code> or <code>KVM</code>.
+          runs, e.g. <code>KVM</code>.
         </p>
         <p>
           System integrators are responsible for choosing and setting an
@@ -1010,7 +1003,8 @@
       <column name="system_version">
         <p>
           The version of the system identified by <ref column="system_type"/>,
-          e.g. <code>5.6.100-39265p</code> on XenServer 5.6.100 build 39265.
+          e.g. <code>4.18.0-372.19.1.el8_6</code> on RHEL 8.6 with kernel
+          4.18.0-372.19.1.
         </p>
         <p>
           System integrators are responsible for choosing and setting an
@@ -1667,16 +1661,7 @@
       </column>
 
       <column name="external_ids" key="bridge-id">
-        A unique identifier of the bridge.  On Citrix XenServer this will
-        commonly be the same as
-        <ref column="external_ids" key="xs-network-uuids"/>.
-      </column>
-
-      <column name="external_ids" key="xs-network-uuids">
-        Semicolon-delimited set of universally unique identifier(s) for the
-        network with which this bridge is associated on a Citrix XenServer
-        host.  The network identifiers are RFC 4122 UUIDs as displayed by,
-        e.g., <code>xe network-list</code>.
+        A unique identifier of the bridge.
       </column>
 
       <column name="other_config" key="hwaddr">
@@ -2494,12 +2479,12 @@
         Default is false.
       </column>
 
-      <column name="external_ids" key="fake-bridge-id-*">
+      <column name="external_ids" key="fake-bridge-*">
         External IDs for a fake bridge (see the <ref column="fake_bridge"/>
         column) are defined by prefixing a <ref table="Bridge"/> <ref
         table="Bridge" column="external_ids"/> key with
         <code>fake-bridge-</code>,
-        e.g. <code>fake-bridge-xs-network-uuids</code>.
+        e.g. <code>fake-bridge-bridge-id</code>.
       </column>
 
       <column name="other_config" key="transient"
@@ -4347,22 +4332,17 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         represents a virtual Ethernet interface connected to a virtual
         machine.  These key-value pairs should not be present for other types
         of interfaces.  Keys whose names end in <code>-uuid</code> have
-        values that uniquely identify the entity in question.  For a Citrix
-        XenServer hypervisor, these values are UUIDs in RFC 4122 format.
-        Other hypervisors may use other formats.
+        values that uniquely identify the entity in question.
       </p>
 
       <column name="external_ids" key="attached-mac">
         The MAC address programmed into the ``virtual hardware'' for this
         interface, in the form
         <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-        For Citrix XenServer, this is the value of the <code>MAC</code> field
-        in the VIF record for this interface.
       </column>
 
       <column name="external_ids" key="iface-id">
-        A system-unique identifier for the interface.  On XenServer, this will
-        commonly be the same as <ref column="external_ids" key="xs-vif-uuid"/>.
+        A system-unique identifier for the interface.
       </column>
 
       <column name="external_ids" key="iface-status"
@@ -4372,14 +4352,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           Hypervisors may sometimes have more than one interface associated
           with a given <ref column="external_ids" key="iface-id"/>, only one of
           which is actually in use at a given time.  For example, in some
-          circumstances XenServer has both a ``tap'' and a ``vif'' interface
-          for a single <ref column="external_ids" key="iface-id"/>, but only
-          uses one of them at a time.  A hypervisor that behaves this way must
-          mark the currently in use interface <code>active</code> and the
-          others <code>inactive</code>.  A hypervisor that never has more than
-          one interface for a given <ref column="external_ids" key="iface-id"/>
-          may mark that interface <code>active</code> or omit <ref
-          column="external_ids" key="iface-status"/> entirely.
+          circumstances hypervisor may have both a ``tap'' and a ``vif''
+          interface for a single <ref column="external_ids" key="iface-id"/>,
+          but only uses one of them at a time.  A hypervisor that behaves this
+          way must mark the currently in use interface <code>active</code> and
+          the others <code>inactive</code>.  A hypervisor that never has more
+          than one interface for a given <ref column="external_ids"
+          key="iface-id"/> may mark that interface <code>active</code> or omit
+          <ref column="external_ids" key="iface-status"/> entirely.
         </p>
 
         <p>
@@ -4396,20 +4376,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         </p>
       </column>
 
-      <column name="external_ids" key="xs-vif-uuid">
-        The virtual interface associated with this interface.
-      </column>
-
-      <column name="external_ids" key="xs-network-uuid">
-        The virtual network to which this interface is attached.
-      </column>
-
       <column name="external_ids" key="vm-id">
-        The VM to which this interface belongs. On XenServer, this will be the
-        same as <ref column="external_ids" key="xs-vm-uuid"/>.
-      </column>
-
-      <column name="external_ids" key="xs-vm-uuid">
         The VM to which this interface belongs.
       </column>
     </group>
