@@ -148,21 +148,6 @@ To bind locally to port 6653 (the default) and wait for incoming
 connections from OpenFlow switches:
 .IP
 \fB% ovs\-testcontroller ptcp:\fR
-.SH "BUGS"
-.PP
-Configuring a Citrix XenServer to connect to a particular controller
-only points the remote OVSDB management connection to that controller.
-It does not also configure OpenFlow connections, because the manager
-is expected to do that over the management protocol.
-\fBovs\-testcontroller\fR is not an Open vSwitch manager and does not know
-how to do that.
-.PP
-As a stopgap workaround, \fBovs\-vsctl\fR can wait for an OVSDB
-connection and set the controller, e.g.:
-.IP
-\fB% ovs\-vsctl \-t0 \-\-db=pssl: \-\-certificate=cert.pem
-\-\-ca\-cert=none \-\-private\-key=privkey.pem
-\-\-peer\-ca\-cert=cacert.pem set\-controller ssl:\fIip\fR
 .SH "SEE ALSO"
 .
 .BR ovs\-appctl (8),

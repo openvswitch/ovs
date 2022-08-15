@@ -289,7 +289,7 @@ and adjusting log levels:
   The default pattern for console and file output is ``%D{%Y-%m-%dT
   %H:%M:%SZ}|%05N|%c|%p|%m``; for syslog output, ``%05N|%c|%p|%m``.
 
-  Daemons written in Python (e.g. ``ovs-xapi-sync``) do not allow
+  Daemons written in Python (e.g. ``ovs-monitor-ipsec``) do not allow
   control over the log pattern.
 
 * ``vlog/set FACILITY:<facility>``
