@@ -136,6 +136,7 @@ Q: Are all features available with all datapaths?
     Connection tracking             4.3            2.5          2.6      YES
     Connection tracking-IPv6        YES            YES          YES      3.0
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
+    Conntrack IPv6 Fragment         4.3            2.6          2.12     3.1
     Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES

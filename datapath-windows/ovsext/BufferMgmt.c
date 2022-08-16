@@ -77,6 +77,7 @@
  */
 
 #include "precomp.h"
+#include "jhash.h"
 #include "Debug.h"
 #include "Flow.h"
 #include "Offload.h"
@@ -90,8 +91,6 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_BUFMGMT
-
-
 /*
  * --------------------------------------------------------------------------
  * OvsInitBufferPool --
@@ -1109,19 +1108,26 @@ GetIpHeaderInfo(PNET_BUFFER_LIST curNbl,
 {
     EthHdr *eth;
     IPHdr *ipHdr;
+    IPv6Hdr *ipv6Hdr;
     PNET_BUFFER curNb;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
-
     eth = (EthHdr *)NdisGetDataBuffer(curNb,
                                       hdrInfo->l4Offset,
                                       NULL, 1, 0);
     if (eth == NULL) {
         return NDIS_STATUS_INVALID_PACKET;
     }
-    ipHdr = (IPHdr *)((PCHAR)eth + hdrInfo->l3Offset);
-    *hdrSize = (UINT32)(hdrInfo->l3Offset + (ipHdr->ihl * 4));
+
+    if (hdrInfo->isIPv6) {
+        ipv6Hdr = (IPv6Hdr *)((PCHAR)eth + hdrInfo->l3Offset);
+        *hdrSize = (UINT32)(hdrInfo->l4Offset);
+    } else {
+        ipHdr = (IPHdr *)((PCHAR)eth + hdrInfo->l3Offset);
+        *hdrSize = (UINT32)(hdrInfo->l3Offset + (ipHdr->ihl * 4));
+    }
+
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -1151,17 +1157,72 @@ GetSegmentHeaderInfo(PNET_BUFFER_LIST nbl,
     return NDIS_STATUS_SUCCESS;
 }
 
+static VOID
+FixFragmentHeader4(UINT16 fragmentSize, UINT16 offset, const EthHdr *dstEth,
+                   BOOLEAN lastPacket)
+{
+    IPHdr *dstIP = NULL;
+
+    dstIP = (IPHdr *)((PCHAR)dstEth + sizeof(*dstEth));
+    dstIP->tot_len = htons(fragmentSize + dstIP->ihl * 4);
+    if (lastPacket) {
+        dstIP->frag_off = htons(offset & IP_OFFSET);
+    } else {
+        dstIP->frag_off = htons((offset & IP_OFFSET) | IP_MF);
+    }
+
+    dstIP->check = 0;
+    dstIP->check = IPChecksum((UINT8 *)dstIP, dstIP->ihl * 4, 0);
+}
+
+static VOID
+FixFragmentHeader6(UINT16 offset, const EthHdr *dstEth,
+                   UINT32 fragmentIdent,
+                   BOOLEAN lastPacket)
+{
+    IPv6Hdr *dstIP = NULL;
+    UINT8 nextHdr;
+    IPv6ExtHdr *extHdr;
+
+    dstIP = (IPv6Hdr *)((PCHAR)dstEth + sizeof(*dstEth));
+    extHdr = (IPv6ExtHdr *)((PCHAR)dstIP + sizeof(IPv6Hdr));
+    nextHdr = dstIP->nexthdr;
+    while (nextHdr != SOCKET_IPPROTO_FRAGMENT) {
+        nextHdr = extHdr->nextHeader;
+        extHdr = (IPv6ExtHdr *)((PCHAR)extHdr + OVS_IPV6_OPT_LEN(extHdr));
+        if (!extHdr) {
+            break;
+        }
+    }
+
+    if (nextHdr == SOCKET_IPPROTO_FRAGMENT) {
+        IPv6FragHdr *fragHdr = (IPv6FragHdr  *)extHdr;
+        fragHdr->reserved = 0x00;
+        fragHdr->offlg &= htons(0x00);
+        fragHdr->ident = fragmentIdent;
+        if (lastPacket) {
+            fragHdr->offlg |= htons(offset << 3);
+        } else {
+            fragHdr->offlg |= htons(0x01);
+            fragHdr->offlg |= htons(offset << 3) ;
+        }
+    } else {
+        if (!extHdr) {
+            ASSERT(! "Invalid fragment packet.");
+        }
+    }
+}
+
 /*
  * --------------------------------------------------------------------------
  * FixFragmentHeader
  *
  *    Fix IP length, Offset, IP checksum.
- *    XXX - Support IpV6 Fragments
  * --------------------------------------------------------------------------
  */
 static NDIS_STATUS
-FixFragmentHeader(PNET_BUFFER nb, UINT16 fragmentSize,
-                  BOOLEAN lastPacket, UINT16 offset)
+FixFragmentHeader(PNET_BUFFER nb, UINT16 fragmentSize, BOOLEAN lastPacket,
+                  UINT16 offset, UINT32 fragmentIdent)
 {
     EthHdr *dstEth = NULL;
     PMDL mdl = NULL;
@@ -1180,25 +1241,20 @@ FixFragmentHeader(PNET_BUFFER nb, UINT16 fragmentSize,
     {
         IPHdr *dstIP = NULL;
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
-            >= sizeof(EthHdr) + sizeof(IPHdr));
-
+               >= sizeof(EthHdr) + sizeof(IPHdr));
         dstIP = (IPHdr *)((PCHAR)dstEth + sizeof(*dstEth));
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
-            >= sizeof(EthHdr) + dstIP->ihl * 4);
-        dstIP->tot_len = htons(fragmentSize + dstIP->ihl * 4);
-        if (lastPacket) {
-            dstIP->frag_off = htons(offset & IP_OFFSET);
-        } else {
-            dstIP->frag_off = htons((offset & IP_OFFSET) | IP_MF);
-        }
-
-        dstIP->check = 0;
-        dstIP->check = IPChecksum((UINT8 *)dstIP, dstIP->ihl * 4, 0);
+               >= sizeof(EthHdr) + dstIP->ihl * 4);
+        FixFragmentHeader4(fragmentSize, offset, dstEth, lastPacket);
         break;
     }
     case ETH_TYPE_IPV6_NBO:
     {
-        return NDIS_STATUS_NOT_SUPPORTED;
+        ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+               >= sizeof(EthHdr) + sizeof(IPv6Hdr));
+        FixFragmentHeader6(offset, dstEth, fragmentIdent,
+                           lastPacket);
+        break;
     }
     default:
         OVS_LOG_ERROR("Invalid eth type: %d\n", dstEth->Type);
@@ -1314,6 +1370,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
     return STATUS_SUCCESS;
 }
+
  /*
   * --------------------------------------------------------------------------
  * OvsTcpSegmentNBL --
@@ -1331,6 +1388,187 @@ OvsTcpSegmentNBL(PVOID ovsContext,
     return OvsFragmentNBL(ovsContext, nbl, hdrInfo, mss, headRoom, isIpFragment);
 }
 
+NDIS_STATUS
+OvsFigureIPV6ExtHdrLayout(PNET_BUFFER_LIST nbl,
+                          POVS_PACKET_HDR_INFO hdrInfo,
+                          UINT16 *beforeFragmentExtFieldLen)
+{
+    EthHdr *eth;
+    IPv6Hdr *ipv6Hdr;
+    IPv6ExtHdr *extHdr;
+    PNET_BUFFER curNb;
+    UINT8 nextHdr = 0;
+    UINT16 offset = 0;
+    BOOLEAN foundRouterHeader = FALSE;
+    UINT16 extFieldLen = 0;
+
+    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
+    eth = (EthHdr *)NdisGetDataBuffer(curNb,
+                                      hdrInfo->l4Offset,
+                                      NULL, 1, 0);
+    if (!eth) {
+        OVS_LOG_ERROR("Invalid packet.");
+        return NDIS_STATUS_INVALID_PACKET;
+    }
+
+    ipv6Hdr = (IPv6Hdr *)((PCHAR)eth + hdrInfo->l3Offset);
+    nextHdr = ipv6Hdr->nexthdr;
+    extHdr = (IPv6ExtHdr *)((PCHAR)ipv6Hdr + sizeof(*ipv6Hdr));
+    extFieldLen = hdrInfo->l4Offset - hdrInfo->l3Offset - sizeof(IPv6Hdr);
+
+    while (offset <= extFieldLen) {
+        switch (nextHdr) {
+            case SOCKET_IPPROTO_HOPOPTS:
+                *beforeFragmentExtFieldLen += OVS_IPV6_OPT_LEN(extHdr);
+                break;
+            case SOCKET_IPPROTO_ROUTING:
+                *beforeFragmentExtFieldLen += OVS_IPV6_OPT_LEN(extHdr);
+                foundRouterHeader = TRUE;
+                break;
+            case SOCKET_IPPROTO_DSTOPTS:
+                if (foundRouterHeader) {
+                    /* In the ipv6 extension field, dst option field must
+                     * appear with routeing option filed. */
+                    *beforeFragmentExtFieldLen += OVS_IPV6_OPT_LEN(extHdr);
+                    return NDIS_STATUS_SUCCESS;
+                } else {
+                    /* dst opts field not appear with routing field,
+                     * this represent this dst option field is
+                     * bebind fragment. */
+                    return NDIS_STATUS_SUCCESS;
+                }
+                break;
+            default:
+                return NDIS_STATUS_SUCCESS;
+        }
+
+        offset += OVS_IPV6_OPT_LEN(extHdr);
+        nextHdr = extHdr->nextHeader;
+        extHdr = (IPv6ExtHdr *)((PCHAR)extHdr + OVS_IPV6_OPT_LEN(extHdr));
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  function name -- FixIPV6ExtHdrField
+ *     This function mainly used to fix IPv6 extension field, because we only
+ *     add fragment field in the header, not fix the next header filed,
+ *     this function is used to fix that issue.
+ * --------------------------------------------------------------------------
+ */
+NDIS_STATUS
+FixIPV6ExtHdrField(PNET_BUFFER nb, UINT16 l3Offset, UINT16 l4Offset,
+                   UINT16 fragmentSize)
+{
+    EthHdr *eth;
+    IPv6Hdr *ipv6Hdr = NULL;
+    IPv6ExtHdr *extHdr = NULL;
+    IPv6ExtHdr *lastExtHdr = NULL;
+    IPv6FragHdr *frgHdr = NULL;
+    UINT8 nextHdr = 0;
+    UINT16 offset = 0;
+    BOOLEAN exitLookup = FALSE;
+    BOOLEAN foundRouterHeader = FALSE;
+    PMDL mdl = NULL;
+    PUINT8 bufferStart = NULL;
+    UINT16 extFieldLen = 0;
+
+    mdl = NET_BUFFER_FIRST_MDL(nb);
+    bufferStart = (PUINT8)OvsGetMdlWithLowPriority(mdl);
+    if (!bufferStart) {
+        OVS_LOG_ERROR("Return, buffer start null.");
+        return STATUS_NDIS_INVALID_PACKET;
+    }
+    eth = (EthHdr *)(bufferStart + NET_BUFFER_CURRENT_MDL_OFFSET(nb));
+    ipv6Hdr = (IPv6Hdr *)((PCHAR)eth+ l3Offset);
+    nextHdr = ipv6Hdr->nexthdr;
+    lastExtHdr = NULL;
+    extHdr = (IPv6ExtHdr *)((PCHAR)ipv6Hdr + sizeof(*ipv6Hdr));
+    extFieldLen = l4Offset - l3Offset - sizeof(IPv6Hdr);
+    ipv6Hdr->payload_len = htons(extFieldLen + fragmentSize);
+
+    while (offset <= extFieldLen) {
+        switch (nextHdr) {
+            case SOCKET_IPPROTO_HOPOPTS:
+                break;
+            case SOCKET_IPPROTO_ROUTING:
+                foundRouterHeader = TRUE;
+                break;
+            case SOCKET_IPPROTO_DSTOPTS:
+                if (foundRouterHeader) {
+                    frgHdr = (IPv6FragHdr *)((PCHAR)extHdr + offset);
+                    frgHdr->nextHeader = ipv6Hdr->nexthdr;
+                    ipv6Hdr->nexthdr = SOCKET_IPPROTO_FRAGMENT;
+
+                } else {
+                    /* This dest option field was appear behind
+                     * fragment field. */
+                    if (lastExtHdr) {
+                        frgHdr = (IPv6FragHdr *)extHdr;
+                        frgHdr->nextHeader = lastExtHdr->nextHeader;
+                        lastExtHdr->nextHeader = SOCKET_IPPROTO_FRAGMENT;
+                    } else {
+                        frgHdr = (IPv6FragHdr *)((PCHAR)extHdr + offset);
+                        frgHdr->nextHeader = ipv6Hdr->nexthdr;
+                        ipv6Hdr->nexthdr = SOCKET_IPPROTO_FRAGMENT;
+                    }
+                }
+                exitLookup = TRUE;
+                break;
+            default:
+                if (!offset) {
+                    frgHdr = (IPv6FragHdr *)((PCHAR)extHdr + offset);
+                    frgHdr->nextHeader = ipv6Hdr->nexthdr;
+                    ipv6Hdr->nexthdr = SOCKET_IPPROTO_FRAGMENT;
+                } else {
+                    frgHdr = (IPv6FragHdr *)extHdr;
+                    frgHdr->nextHeader = lastExtHdr->nextHeader;
+                    lastExtHdr->nextHeader = SOCKET_IPPROTO_FRAGMENT;
+                }
+                exitLookup = TRUE;
+                break;
+        }
+
+        if (exitLookup) {
+            break;
+        }
+
+        offset += OVS_IPV6_OPT_LEN(extHdr);
+        nextHdr = extHdr->nextHeader;
+        lastExtHdr = extHdr;
+        extHdr = (IPv6ExtHdr *)((PCHAR)extHdr + OVS_IPV6_OPT_LEN(extHdr));
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+UINT32
+GenFragIdent6(PNET_BUFFER_LIST nbl, POVS_PACKET_HDR_INFO hdrInfo)
+{
+    EthHdr *eth;
+    IPv6Hdr *ipv6Hdr;
+    PNET_BUFFER curNb;
+    UINT32 srcHash;
+    UINT32 dstHash;
+    UINT32 randNumber;
+    LARGE_INTEGER randomSeed;
+
+    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
+    eth = (EthHdr *)NdisGetDataBuffer(curNb,
+                                      hdrInfo->l4Offset,
+                                      NULL, 1, 0);
+    ipv6Hdr = (IPv6Hdr *)((PCHAR)eth + hdrInfo->l3Offset);
+    KeQuerySystemTime(&randomSeed);
+    randNumber = randomSeed.LowPart * OVS_FRAG_MAGIC_NUMBER + 1;
+
+    srcHash = OvsJhashBytes((UINT32 *)(&(ipv6Hdr->saddr)), 4, randNumber);
+    dstHash = OvsJhashBytes((UINT32 *)(&(ipv6Hdr->daddr)), 4, srcHash);
+    return dstHash;
+}
 
 /*
  * --------------------------------------------------------------------------
@@ -1366,8 +1604,11 @@ OvsFragmentNBL(PVOID ovsContext,
     PNET_BUFFER nb, newNb;
     NDIS_STATUS status;
     UINT16 segmentSize;
-    ULONG copiedSize;
+    ULONG copiedSize = 0;
     UINT16 offset = 0, packetCounter = 0;
+    UINT16 beforeFragHdrLen = 0;
+    UINT32 fragmentIdent = 0;
+    UINT16 ip6StdHeaderLen = 0;
 
     srcCtx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(nbl);
     if (srcCtx == NULL || srcCtx->magic != OVS_CTX_MAGIC) {
@@ -1378,6 +1619,19 @@ OvsFragmentNBL(PVOID ovsContext,
 
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
     ASSERT(NET_BUFFER_NEXT_NB(nb) == NULL);
+
+    if (hdrInfo->isIPv6 && isIpFragment) {
+        /* 1. We need to calculate the header length before
+         * fragment and after fragment.
+         * */
+        status = OvsFigureIPV6ExtHdrLayout(nbl, hdrInfo,
+                                           &beforeFragHdrLen);
+        if (status != NDIS_STATUS_SUCCESS) {
+            OVS_LOG_ERROR("Figure out ipv6 header layout error.");
+            return NULL;
+        }
+        ip6StdHeaderLen = hdrInfo->l3Offset + sizeof(IPv6Hdr);
+    }
 
     /* Figure out the header size */
     if (isIpFragment) {
@@ -1391,21 +1645,40 @@ OvsFragmentNBL(PVOID ovsContext,
     }
     /* Get the NBL size. */
     if (isIpFragment) {
-        nblSize = fragmentSize - hdrSize;
+        if (hdrInfo->isIPv6) {
+            nblSize = fragmentSize - hdrSize - sizeof(IPv6FragHdr);
+        } else {
+            nblSize = fragmentSize - hdrSize;
+        }
     } else {
         nblSize = fragmentSize;
     }
-    size = NET_BUFFER_DATA_LENGTH(nb) - hdrSize;
 
-    /* XXX add to ovsPool counters? */
-    newNbl = NdisAllocateFragmentNetBufferList(nbl, NULL, NULL, hdrSize,
-                                               nblSize, hdrSize + headRoom ,
-                                               0, 0);
+    size = NET_BUFFER_DATA_LENGTH(nb) - hdrSize;
+    if (hdrInfo->isIPv6) {
+        /* Because if we want to divide ipv6 info fragments,
+         * we need add a fragment header in packet, thus we will
+         * allocate more memory(contain fragment header) for the packet. */
+        UINT32 dataOffset = hdrSize + sizeof(IPv6FragHdr) + headRoom;
+        newNbl = NdisAllocateFragmentNetBufferList(nbl, NULL, NULL, hdrSize,
+                                                   nblSize,
+                                                   dataOffset,
+                                                   0, 0);
+    } else {
+        newNbl = NdisAllocateFragmentNetBufferList(nbl, NULL, NULL, hdrSize,
+                                                   nblSize, hdrSize + headRoom,
+                                                   0, 0);
+    }
+
     if (newNbl == NULL) {
         return NULL;
     }
 
-    /* Now deal with TCP payload */
+    /* Generate fragment identification */
+    if (isIpFragment && hdrInfo->isIPv6) {
+        fragmentIdent = GenFragIdent6(nbl, hdrInfo);
+    }
+
     for (newNb = NET_BUFFER_LIST_FIRST_NB(newNbl); newNb != NULL;
             newNb = NET_BUFFER_NEXT_NB(newNb)) {
         segmentSize = (size > nblSize ? nblSize : size) & 0xffff;
@@ -1413,17 +1686,128 @@ OvsFragmentNBL(PVOID ovsContext,
             NdisAdvanceNetBufferDataStart(newNb, headRoom, FALSE, NULL);
         }
 
-        /* Now copy the eth/IP/TCP header and fix up */
-        status = NdisCopyFromNetBufferToNetBuffer(newNb, 0, hdrSize, nb, 0,
-                                                  &copiedSize);
-        if (status != NDIS_STATUS_SUCCESS || hdrSize != copiedSize) {
-            goto nblcopy_error;
+        if (NET_BUFFER_LIST_FIRST_NB(newNbl) == newNb) {
+            if (hdrInfo->isIPv6) {
+                /* When it is first ipv6 packet, we need copy all of ip
+                 * ext header Copy headers before fragment.
+                 * */
+                status = NdisCopyFromNetBufferToNetBuffer(newNb, 0,
+                                                          ip6StdHeaderLen,
+                                                          nb, 0 , &copiedSize);
+                if (status != NDIS_STATUS_SUCCESS ||
+                    (hdrInfo->l3Offset + sizeof(IPv6Hdr)) != copiedSize) {
+                    goto nblcopy_error;
+                }
+
+                if (beforeFragHdrLen) {
+                    status = NdisCopyFromNetBufferToNetBuffer(newNb,
+                                                              ip6StdHeaderLen,
+                                                              beforeFragHdrLen,
+                                                              nb,
+                                                              ip6StdHeaderLen,
+                                                              &copiedSize);
+                    if (status != NDIS_STATUS_SUCCESS ||
+                        beforeFragHdrLen != copiedSize) {
+                        goto nblcopy_error;
+                    }
+                }
+                /* Copy fragment headers. */
+                /* Copy headers after fragments. */
+
+                UINT32 behindFragHdrLen = hdrSize - hdrInfo->l3Offset
+                                          - sizeof(IPv6Hdr)
+                                          - beforeFragHdrLen;
+                if (behindFragHdrLen > 0) {
+                    status = NdisCopyFromNetBufferToNetBuffer(newNb,
+                                                              (ip6StdHeaderLen
+                                                               + beforeFragHdrLen
+                                                               + sizeof(IPv6FragHdr)),
+                                                              behindFragHdrLen,
+                                                              nb,
+                                                              ip6StdHeaderLen
+                                                              + beforeFragHdrLen,
+                                                              &copiedSize);
+                    if (status != NDIS_STATUS_SUCCESS ||
+                        behindFragHdrLen != copiedSize) {
+                        goto nblcopy_error;
+                    }
+                }
+
+                /* Fix IPv6 opt fields. */
+                status = FixIPV6ExtHdrField(newNb,
+                                            hdrInfo->l3Offset,
+                                            hdrInfo->l4Offset + sizeof(IPv6FragHdr),
+                                            segmentSize);
+                if (status !=  NDIS_STATUS_SUCCESS) {
+                    OVS_LOG_ERROR("Invalid reassemble packet.");
+                    goto  nblcopy_error;
+                }
+            } else {
+                /* Now copy the eth/IP/TCP header and fix up */
+                status = NdisCopyFromNetBufferToNetBuffer(newNb, 0, hdrSize,
+                                                          nb, 0, &copiedSize);
+                if (status != NDIS_STATUS_SUCCESS || hdrSize != copiedSize) {
+                    goto nblcopy_error;
+                }
+            }
+        } else {
+            if (hdrInfo->isIPv6) {
+                /* Because ipv6 fragment not first packet, doesn't exist
+                 * header after fragment, thus release some data space*/
+                UINT32 behindFragHdrLen = (hdrSize - hdrInfo->l3Offset
+                                           - sizeof(IPv6Hdr) - beforeFragHdrLen);
+                if (behindFragHdrLen > 0) {
+                    NdisAdvanceNetBufferDataStart(newNb,
+                                                  behindFragHdrLen,
+                                                  FALSE, NULL);
+                }
+
+                /* When it is not first ipv6 packet, we only need copy before
+                 * ipv6 segment. */
+                status = NdisCopyFromNetBufferToNetBuffer(newNb, 0,
+                                                          ip6StdHeaderLen,
+                                                          nb, 0 , &copiedSize);
+                if (status != NDIS_STATUS_SUCCESS ||
+                    (hdrInfo->l3Offset + sizeof(IPv6Hdr)) != copiedSize) {
+                    goto nblcopy_error;
+                }
+
+                if (beforeFragHdrLen) {
+                    status = NdisCopyFromNetBufferToNetBuffer(newNb,
+                                                              ip6StdHeaderLen,
+                                                              beforeFragHdrLen,
+                                                              nb,
+                                                              ip6StdHeaderLen,
+                                                              &copiedSize);
+                    if (status != NDIS_STATUS_SUCCESS ||
+                        beforeFragHdrLen != copiedSize) {
+                        goto nblcopy_error;
+                    }
+                }
+
+                status = FixIPV6ExtHdrField(newNb, hdrInfo->l3Offset,
+                                            (ip6StdHeaderLen +
+                                             beforeFragHdrLen +
+                                             sizeof(IPv6FragHdr)),
+                                            segmentSize);
+                if (status !=  NDIS_STATUS_SUCCESS) {
+                    OVS_LOG_ERROR("Invalid reassemble packet.");
+                    goto  nblcopy_error;
+                }
+            } else {
+                status = NdisCopyFromNetBufferToNetBuffer(newNb, 0, hdrSize,
+                                                          nb, 0, &copiedSize);
+                if (status != NDIS_STATUS_SUCCESS ||
+                    hdrSize != copiedSize) {
+                    goto nblcopy_error;
+                }
+            }
         }
 
         if (isIpFragment) {
             status = FixFragmentHeader(newNb, segmentSize,
                                        NET_BUFFER_NEXT_NB(newNb) == NULL,
-                                       offset);
+                                       offset, fragmentIdent);
         } else {
             status = FixSegmentHeader(newNb, segmentSize, seqNumber,
                                       NET_BUFFER_NEXT_NB(newNb) == NULL,
@@ -1431,12 +1815,20 @@ OvsFragmentNBL(PVOID ovsContext,
         }
 
         if (status != NDIS_STATUS_SUCCESS) {
+            OVS_LOG_INFO("nbl copy error.");
             goto nblcopy_error;
         }
 
         /* Move on to the next segment */
         if (isIpFragment) {
-            offset += (segmentSize) / 8;
+            if (NET_BUFFER_LIST_FIRST_NB(newNbl) == newNb &&
+                hdrInfo->isIPv6) {
+                offset += (segmentSize) / 8;
+                offset += (UINT16)((hdrSize - ip6StdHeaderLen -
+                                    beforeFragHdrLen) / 8);
+            } else {
+                offset += (segmentSize) / 8;
+            }
         } else {
             seqNumber += segmentSize;
         }
@@ -1755,7 +2147,7 @@ OvsCompleteNBL(PVOID switch_ctx,
         if (value == 1 && pendingSend == exchange) {
             InterlockedExchange16((SHORT volatile *)&ctx->pendingSend, 0);
             OvsSendNBLIngress(context, parent, ctx->sendFlags);
-        } else if (value == 0){
+        } else if (value == 0) {
             return OvsCompleteNBL(context, parent, FALSE);
         }
     }

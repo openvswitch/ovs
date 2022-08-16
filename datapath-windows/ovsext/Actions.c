@@ -917,7 +917,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
                                           ovsFwdCtx->completionList,
                                           &ovsFwdCtx->layers, FALSE);
             if (status != NDIS_STATUS_SUCCESS) {
-                dropReason = L"Dropped due to resouces.";
+                dropReason = L"Dropped due to resources.";
                 goto dropit;
             }
         }
@@ -2410,8 +2410,9 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                 goto dropit;
             } else if (oldNbl != ovsFwdCtx.curNbl) {
                 /*
-                 * OvsIpv4Reassemble consumes the original NBL and creates a
-                 * new one and assigns it to the curNbl of ovsFwdCtx.
+                 * OvsIpv4Reassemble/OvsIpv6Reassemble consumes the
+                 * original NBL and creates a new one and assigns
+                 * it to the curNbl of ovsFwdCtx.
                  */
                 OvsInitForwardingCtx(&ovsFwdCtx,
                                      ovsFwdCtx.switchContext,
@@ -2422,6 +2423,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                                      ovsFwdCtx.completionList,
                                      &ovsFwdCtx.layers, FALSE);
                 key->ipKey.nwFrag = OVS_FRAG_TYPE_NONE;
+                key->ipv6Key.nwFrag = OVS_FRAG_TYPE_NONE;
             }
             break;
         }

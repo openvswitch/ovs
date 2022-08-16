@@ -141,7 +141,7 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
             nextHdr = extHdr->nextHeader;
             if (OvsPacketLenNBL(packet) < ofs) {
                 return NDIS_STATUS_FAILURE;
-             }
+            }
         } else if (nextHdr == SOCKET_IPPROTO_FRAGMENT) {
             IPv6FragHdr fragHdrStorage;
             const IPv6FragHdr *fragHdr;
@@ -157,13 +157,15 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
 
             /* We only process the first fragment. */
             if (fragHdr->offlg != htons(0)) {
-                if ((fragHdr->offlg & IP6F_OFF_HOST_ORDER_MASK) == htons(0)) {
+                if ((ntohs(fragHdr->offlg) & IP6F_OFF_HOST_ORDER_MASK) == htons(0)) {
                     ipv6Key->nwFrag = OVS_FRAG_TYPE_FIRST;
                 } else {
                     ipv6Key->nwFrag = OVS_FRAG_TYPE_LATER;
                     nextHdr = SOCKET_IPPROTO_FRAGMENT;
                     break;
                 }
+            } else {
+                ipv6Key->nwFrag = OVS_FRAG_TYPE_NONE;
             }
         }
     }

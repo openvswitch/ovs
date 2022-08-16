@@ -40,6 +40,7 @@
 #define OVS_CT_POOL_TAG                 'CTVO'
 #define OVS_GENEVE_POOL_TAG             'GNVO'
 #define OVS_IPFRAG_POOL_TAG             'FGVO'
+#define OVS_IP6FRAG_POOL_TAG            'F6VO'
 
 _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID *OvsAllocateMemory(size_t size);

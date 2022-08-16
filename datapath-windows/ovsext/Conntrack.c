@@ -16,6 +16,7 @@
 
 #include "Conntrack.h"
 #include "IpFragment.h"
+#include "Ip6Fragment.h"
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Event.h"
@@ -547,14 +548,14 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
             if (status == NDIS_STATUS_SUCCESS) {
                  /* After the Ipv4 Fragment is reassembled, update flow key as
                    L3 and L4 headers are not correct */
-                 status =
-                      OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
-                                     &newFlowKey, &fwdCtx->layers,
-                                     !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ? &(fwdCtx->tunKey) : NULL);
+                 status = OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                         &newFlowKey, &fwdCtx->layers,
+                                         !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ?
+                                         &(fwdCtx->tunKey) : NULL);
                 if (status != NDIS_STATUS_SUCCESS) {
                      OVS_LOG_ERROR("Extract flow failed Nbl %p", fwdCtx->curNbl);
                      return status;
-                 }
+                }
                 *key = newFlowKey;
             }
             return status;
@@ -566,21 +567,31 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
         }
         return NDIS_STATUS_NOT_SUPPORTED;
     case ETH_TYPE_IPV6:
+        if (key->ipv6Key.nwFrag != OVS_FRAG_TYPE_NONE) {
+            status = OvsProcessIpv6Fragment(fwdCtx->switchContext,
+                                            &fwdCtx->curNbl,
+                                            fwdCtx->completionList,
+                                            fwdCtx->fwdDetail->SourcePortId,
+                                            &fwdCtx->layers,
+                                            key->tunKey.tunnelId, key);
+            if (status == NDIS_STATUS_SUCCESS) {
+                status =  OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                         &newFlowKey, &fwdCtx->layers,
+                                         !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ?
+                                         &(fwdCtx->tunKey) : NULL);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    OVS_LOG_ERROR("Extract flow for ipv6 failed Nbl %p",
+                                  fwdCtx->curNbl);
+                    return status;
+                }
+                *key = newFlowKey;
+            }
+            return status;
+        }
+
         if (key->ipv6Key.nwProto == IPPROTO_ICMPV6
             || key->ipv6Key.nwProto == IPPROTO_TCP
             || key->ipv6Key.nwProto == IPPROTO_UDP) {
-            /** TODO fragment **/
-
-            /** Extract flow key from packet and assign it to
-             * returned parameter. **/
-            status =  OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
-                                     &newFlowKey, &fwdCtx->layers,
-                                     !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ? &(fwdCtx->tunKey) : NULL);
-            if (status != NDIS_STATUS_SUCCESS) {
-                OVS_LOG_ERROR("Extract flow for ipv6 failed Nbl %p", fwdCtx->curNbl);
-                return status;
-            }
-            *key = newFlowKey;
             return NDIS_STATUS_SUCCESS;
         }
         return NDIS_STATUS_NOT_SUPPORTED;

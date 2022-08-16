@@ -3,6 +3,8 @@ Post-v3.0.0
    - ovs-appctl:
      * "ovs-appctl ofproto/trace" command can now display port names with the
        "--names" option.
+   - Windows:
+     * Conntrack IPv6 fragment support.
 
 
 v3.0.0 - 15 Aug 2022

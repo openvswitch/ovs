@@ -28,6 +28,7 @@
 #include "IpHelper.h"
 #include "Oid.h"
 #include "IpFragment.h"
+#include "Ip6Fragment.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -239,6 +240,13 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
+    status = OvsInitIp6Fragment(switchContext);
+    if (status != STATUS_SUCCESS) {
+        OvsUninitSwitchContext(switchContext);
+        OVS_LOG_ERROR("Exit: Failed to initialize Ip6 Fragment");
+        goto create_switch_done;
+    }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -272,6 +280,7 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     OvsCleanupConntrack();
     OvsCleanupCtRelated();
     OvsCleanupIpFragment();
+    OvsCleanupIp6Fragment();
 
     /* This completes the cleanup, and a new attach can be handled now. */
 
