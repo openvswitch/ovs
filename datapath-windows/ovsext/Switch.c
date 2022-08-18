@@ -24,6 +24,7 @@
 #include "Switch.h"
 #include "Vport.h"
 #include "Event.h"
+#include "Meter.h"
 #include "Flow.h"
 #include "IpHelper.h"
 #include "Oid.h"
@@ -244,6 +245,13 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
     if (status != STATUS_SUCCESS) {
         OvsUninitSwitchContext(switchContext);
         OVS_LOG_ERROR("Exit: Failed to initialize Ip6 Fragment");
+        goto create_switch_done;
+    }
+    
+    status = OvsInitMeter(switchContext);
+    if (status != STATUS_SUCCESS) {
+        OvsUninitSwitchContext(switchContext);
+        OVS_LOG_ERROR("Exit: Failed to initialize Ovs meter.");
         goto create_switch_done;
     }
 

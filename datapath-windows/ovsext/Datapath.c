@@ -100,7 +100,11 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsReadPacketCmdHandler,
                          OvsCtDeleteCmdHandler,
                          OvsCtDumpCmdHandler,
-                         OvsCtLimitHandler;
+                         OvsCtLimitHandler,
+                         OvsMeterFeatureProbe,
+                         OvsNewMeterCmdHandler,
+                         OvsMeterDestroy,
+                         OvsMeterGet;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -305,6 +309,43 @@ NETLINK_FAMILY nlCtFamilyOps = {
     .maxAttr  = OVS_NL_CT_ATTR_MAX,
     .cmds     = nlCtFamilyCmdOps,
     .opsCount = ARRAY_SIZE(nlCtFamilyCmdOps)
+};
+
+/* Netlink Meter family */
+NETLINK_CMD nlMeterFamilyCmdOps[] = {
+    {  .cmd             = OVS_METER_CMD_FEATURES,
+       .handler         = OvsMeterFeatureProbe,
+       .supportedDevOp  = OVS_TRANSACTION_DEV_OP |
+                             OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+       .validateDpIndex = FALSE
+    },
+    { .cmd              = OVS_METER_CMD_SET,
+      .handler          = OvsNewMeterCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP |
+                          OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = FALSE
+    },
+    { .cmd              = OVS_METER_CMD_GET,
+      .handler          = OvsMeterGet,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP |
+                          OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = FALSE
+    },
+    { .cmd              = OVS_METER_CMD_DEL,
+      .handler          = OvsMeterDestroy,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP |
+                          OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = FALSE
+    },
+};
+
+NETLINK_FAMILY nlMeterFamilyOps = {
+    .name     = OVS_METER_FAMILY,
+    .id       = OVS_WIN_NL_METER_FAMILY_ID,
+    .version  = OVS_METER_VERSION,
+    .maxAttr  = __OVS_METER_ATTR_MAX,
+    .cmds     = nlMeterFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlMeterFamilyCmdOps)
 };
 
 /* Netlink netdev family. */
@@ -951,6 +992,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     case NFNL_TYPE_CT_GET:
     case NFNL_TYPE_CT_DEL:
         nlFamilyOps = &nlCtFamilyOps;
+        break;
+    case OVS_WIN_NL_METER_FAMILY_ID:
+        nlFamilyOps = &nlMeterFamilyOps;
         break;
     case OVS_WIN_NL_CTRL_FAMILY_ID:
         nlFamilyOps = &nlControlFamilyOps;

@@ -23,6 +23,7 @@
 #include "Flow.h"
 #include "Gre.h"
 #include "Jhash.h"
+#include "Meter.h"
 #include "Mpls.h"
 #include "NetProto.h"
 #include "Offload.h"
@@ -2501,6 +2502,15 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                      goto dropit;
                  }
             }
+            break;
+        }
+        case OVS_ACTION_ATTR_METER: {
+            if (OvsMeterExecute(&ovsFwdCtx, NlAttrGetU32(a))) {
+                OVS_LOG_INFO("Drop packet");
+                dropReason = L"Ovs-meter exceed max rate";
+                goto dropit;
+            }
+
             break;
         }
         case OVS_ACTION_ATTR_SAMPLE:
