@@ -933,7 +933,8 @@ parse_tc_flower_to_actions(struct tc_flower *flower,
 }
 
 static int
-parse_tc_flower_to_match(struct tc_flower *flower,
+parse_tc_flower_to_match(const struct netdev *netdev,
+                         struct tc_flower *flower,
                          struct match *match,
                          struct nlattr **actions,
                          struct dpif_flow_stats *stats,
@@ -1134,7 +1135,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                         flower->mask.tunnel.tp_dst);
         }
 
-        flower_tun_opt_to_match(match, flower);
+        if (!strcmp(netdev_get_type(netdev), "geneve")) {
+            flower_tun_opt_to_match(match, flower);
+        }
     }
 
     act_off = nl_msg_start_nested(buf, OVS_FLOW_ATTR_ACTIONS);
@@ -1175,8 +1178,8 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
             continue;
         }
 
-        if (parse_tc_flower_to_match(&flower, match, actions, stats, attrs,
-                                     wbuffer, dump->terse)) {
+        if (parse_tc_flower_to_match(netdev, &flower, match, actions,
+                                     stats, attrs, wbuffer, dump->terse)) {
             continue;
         }
 
@@ -2105,7 +2108,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
          * Keeping incorrect behavior for now. */
         tnl_mask->flags &= ~(FLOW_TNL_F_DONT_FRAGMENT | FLOW_TNL_F_CSUM);
 
-        flower_match_to_tun_opt(&flower, tnl, tnl_mask);
+        if (!strcmp(netdev_get_type(netdev), "geneve")) {
+            flower_match_to_tun_opt(&flower, tnl, tnl_mask);
+        }
         flower.tunnel = true;
     } else {
         /* There is no tunnel metadata to match on, but there could be some
@@ -2385,7 +2390,8 @@ netdev_tc_flow_get(struct netdev *netdev,
     }
 
     in_port = netdev_ifindex_to_odp_port(id.ifindex);
-    parse_tc_flower_to_match(&flower, match, actions, stats, attrs, buf, false);
+    parse_tc_flower_to_match(netdev, &flower, match, actions,
+                             stats, attrs, buf, false);
 
     match->wc.masks.in_port.odp_port = u32_to_odp(UINT32_MAX);
     match->flow.in_port.odp_port = in_port;
