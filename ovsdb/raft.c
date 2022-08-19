@@ -3952,7 +3952,7 @@ raft_write_snapshot(struct raft *raft, struct ovsdb_log *log,
     if (error) {
         return error;
     }
-    ovsdb_log_mark_base(raft->log);
+    ovsdb_log_mark_base(log);
 
     /* Write log records. */
     for (uint64_t index = new_log_start; index < raft->log_end; index++) {
