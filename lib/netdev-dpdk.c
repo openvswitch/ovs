@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <linux/virtio_net.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <linux/if.h>
 
 #include <rte_bus_pci.h>
@@ -77,6 +78,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 COVERAGE_DEFINE(vhost_tx_contention);
 COVERAGE_DEFINE(vhost_notification);
+
+static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
+static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
+static bool vhost_postcopy_enabled = false; /* Status of vHost POSTCOPY
+                                             * support. */
+static bool per_port_memory = false; /* Status of per port memory support */
 
 #define DPDK_PORT_WATCHDOG_INTERVAL 5
 
@@ -915,7 +922,7 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
     uint32_t buf_size = dpdk_buf_size(dev->requested_mtu);
     struct dpdk_mp *dmp;
     int ret = 0;
-    bool per_port_mp = dpdk_per_port_memory();
+    bool per_port_mp = per_port_memory;
 
     /* With shared memory we do not need to configure a mempool if the MTU
      * and socket ID have not changed, the previous configuration is still
@@ -1379,7 +1386,7 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
      */
-    dev->vhost_id = xasprintf("%s/%s", dpdk_get_vhost_sock_dir(), name);
+    dev->vhost_id = xasprintf("%s/%s", vhost_sock_dir, name);
 
     dev->vhost_driver_flags &= ~RTE_VHOST_USER_CLIENT;
 
@@ -5102,12 +5109,12 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         vhost_flags |= RTE_VHOST_USER_LINEARBUF_SUPPORT;
 
         /* Enable IOMMU support, if explicitly requested. */
-        if (dpdk_vhost_iommu_enabled()) {
+        if (vhost_iommu_enabled) {
             vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
         }
 
         /* Enable POSTCOPY support, if explicitly requested. */
-        if (dpdk_vhost_postcopy_enabled()) {
+        if (vhost_postcopy_enabled) {
             vhost_flags |= RTE_VHOST_USER_POSTCOPY_SUPPORT;
         }
 
@@ -5389,8 +5396,18 @@ netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *netdev,
 #endif /* ALLOW_EXPERIMENTAL_API */
 
 static void
-parse_user_mempools_list(const char *mtus)
+parse_mempool_config(const struct smap *ovs_other_config)
 {
+    per_port_memory = smap_get_bool(ovs_other_config,
+                                    "per-port-memory", false);
+    VLOG_INFO("Per port memory for DPDK devices %s.",
+              per_port_memory ? "enabled" : "disabled");
+}
+
+static void
+parse_user_mempools_list(const struct smap *ovs_other_config)
+{
+    const char *mtus = smap_get(ovs_other_config, "shared-mempool-config");
     char *list, *copy, *key, *value;
     int error = 0;
 
@@ -5436,6 +5453,75 @@ parse_user_mempools_list(const char *mtus)
         user_mempools = NULL;
     }
     free(copy);
+}
+
+static int
+process_vhost_flags(char *flag, const char *default_val, int size,
+                    const struct smap *ovs_other_config,
+                    char **new_val)
+{
+    const char *val;
+    int changed = 0;
+
+    val = smap_get(ovs_other_config, flag);
+
+    /* Process the vhost-sock-dir flag if it is provided, otherwise resort to
+     * default value.
+     */
+    if (val && (strlen(val) <= size)) {
+        changed = 1;
+        *new_val = xstrdup(val);
+        VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
+    } else {
+        VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
+        *new_val = xstrdup(default_val);
+    }
+
+    return changed;
+}
+
+static void
+parse_vhost_config(const struct smap *ovs_other_config)
+{
+    char *sock_dir_subcomponent;
+
+    if (process_vhost_flags("vhost-sock-dir", ovs_rundir(),
+                            NAME_MAX, ovs_other_config,
+                            &sock_dir_subcomponent)) {
+        struct stat s;
+
+        if (!strstr(sock_dir_subcomponent, "..")) {
+            vhost_sock_dir = xasprintf("%s/%s", ovs_rundir(),
+                                       sock_dir_subcomponent);
+
+            if (stat(vhost_sock_dir, &s)) {
+                VLOG_ERR("vhost-user sock directory '%s' does not exist.",
+                         vhost_sock_dir);
+            }
+        } else {
+            vhost_sock_dir = xstrdup(ovs_rundir());
+            VLOG_ERR("vhost-user sock directory request '%s/%s' has invalid"
+                     "characters '..' - using %s instead.",
+                     ovs_rundir(), sock_dir_subcomponent, ovs_rundir());
+        }
+        free(sock_dir_subcomponent);
+    } else {
+        vhost_sock_dir = sock_dir_subcomponent;
+    }
+
+    vhost_iommu_enabled = smap_get_bool(ovs_other_config,
+                                        "vhost-iommu-support", false);
+    VLOG_INFO("IOMMU support for vhost-user-client %s.",
+               vhost_iommu_enabled ? "enabled" : "disabled");
+
+    vhost_postcopy_enabled = smap_get_bool(ovs_other_config,
+                                           "vhost-postcopy-support", false);
+    if (vhost_postcopy_enabled && memory_locked()) {
+        VLOG_WARN("vhost-postcopy-support and mlockall are not compatible.");
+        vhost_postcopy_enabled = false;
+    }
+    VLOG_INFO("POSTCOPY support for vhost-user-client %s.",
+              vhost_postcopy_enabled ? "enabled" : "disabled");
 }
 
 #define NETDEV_DPDK_CLASS_COMMON                            \
@@ -5523,10 +5609,10 @@ static const struct netdev_class dpdk_vhost_client_class = {
 void
 netdev_dpdk_register(const struct smap *ovs_other_config)
 {
-    const char *mempoolcfg = smap_get(ovs_other_config,
-                                      "shared-mempool-config");
+    parse_mempool_config(ovs_other_config);
+    parse_user_mempools_list(ovs_other_config);
+    parse_vhost_config(ovs_other_config);
 
-    parse_user_mempools_list(mempoolcfg);
     netdev_register_provider(&dpdk_class);
     netdev_register_provider(&dpdk_vhost_class);
     netdev_register_provider(&dpdk_vhost_client_class);

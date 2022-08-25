@@ -19,7 +19,6 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <getopt.h>
 
 #include <rte_cpuflags.h>
@@ -47,39 +46,8 @@ VLOG_DEFINE_THIS_MODULE(dpdk);
 
 static FILE *log_stream = NULL;       /* Stream for DPDK log redirection */
 
-static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
-static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
-static bool vhost_postcopy_enabled = false; /* Status of vHost POSTCOPY
-                                             * support. */
-static bool per_port_memory = false; /* Status of per port memory support */
-
 /* Indicates successful initialization of DPDK. */
 static atomic_bool dpdk_initialized = ATOMIC_VAR_INIT(false);
-
-static int
-process_vhost_flags(char *flag, const char *default_val, int size,
-                    const struct smap *ovs_other_config,
-                    char **new_val)
-{
-    const char *val;
-    int changed = 0;
-
-    val = smap_get(ovs_other_config, flag);
-
-    /* Process the vhost-sock-dir flag if it is provided, otherwise resort to
-     * default value.
-     */
-    if (val && (strlen(val) <= size)) {
-        changed = 1;
-        *new_val = xstrdup(val);
-        VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
-    } else {
-        VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
-        *new_val = xstrdup(default_val);
-    }
-
-    return changed;
-}
 
 static bool
 args_contains(const struct svec *args, const char *value)
@@ -345,11 +313,9 @@ malloc_dump_stats_wrapper(FILE *stream)
 static bool
 dpdk_init__(const struct smap *ovs_other_config)
 {
-    char *sock_dir_subcomponent;
     char **argv = NULL;
     int result;
     bool auto_determine = true;
-    int err = 0;
     struct ovs_numa_dump *affinity = NULL;
     struct svec args = SVEC_EMPTY_INITIALIZER;
 
@@ -360,49 +326,6 @@ dpdk_init__(const struct smap *ovs_other_config)
         setbuf(log_stream, NULL);
         rte_openlog_stream(log_stream);
     }
-
-    if (process_vhost_flags("vhost-sock-dir", ovs_rundir(),
-                            NAME_MAX, ovs_other_config,
-                            &sock_dir_subcomponent)) {
-        struct stat s;
-        if (!strstr(sock_dir_subcomponent, "..")) {
-            vhost_sock_dir = xasprintf("%s/%s", ovs_rundir(),
-                                       sock_dir_subcomponent);
-
-            err = stat(vhost_sock_dir, &s);
-            if (err) {
-                VLOG_ERR("vhost-user sock directory '%s' does not exist.",
-                         vhost_sock_dir);
-            }
-        } else {
-            vhost_sock_dir = xstrdup(ovs_rundir());
-            VLOG_ERR("vhost-user sock directory request '%s/%s' has invalid"
-                     "characters '..' - using %s instead.",
-                     ovs_rundir(), sock_dir_subcomponent, ovs_rundir());
-        }
-        free(sock_dir_subcomponent);
-    } else {
-        vhost_sock_dir = sock_dir_subcomponent;
-    }
-
-    vhost_iommu_enabled = smap_get_bool(ovs_other_config,
-                                        "vhost-iommu-support", false);
-    VLOG_INFO("IOMMU support for vhost-user-client %s.",
-               vhost_iommu_enabled ? "enabled" : "disabled");
-
-    vhost_postcopy_enabled = smap_get_bool(ovs_other_config,
-                                           "vhost-postcopy-support", false);
-    if (vhost_postcopy_enabled && memory_locked()) {
-        VLOG_WARN("vhost-postcopy-support and mlockall are not compatible.");
-        vhost_postcopy_enabled = false;
-    }
-    VLOG_INFO("POSTCOPY support for vhost-user-client %s.",
-              vhost_postcopy_enabled ? "enabled" : "disabled");
-
-    per_port_memory = smap_get_bool(ovs_other_config,
-                                    "per-port-memory", false);
-    VLOG_INFO("Per port memory for DPDK devices %s.",
-              per_port_memory ? "enabled" : "disabled");
 
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
@@ -556,30 +479,6 @@ dpdk_init(const struct smap *ovs_other_config)
         VLOG_INFO_ONCE("DPDK Disabled - Use other_config:dpdk-init to enable");
     }
     atomic_store_relaxed(&dpdk_initialized, enabled);
-}
-
-const char *
-dpdk_get_vhost_sock_dir(void)
-{
-    return vhost_sock_dir;
-}
-
-bool
-dpdk_vhost_iommu_enabled(void)
-{
-    return vhost_iommu_enabled;
-}
-
-bool
-dpdk_vhost_postcopy_enabled(void)
-{
-    return vhost_postcopy_enabled;
-}
-
-bool
-dpdk_per_port_memory(void)
-{
-    return per_port_memory;
 }
 
 bool

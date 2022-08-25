@@ -49,30 +49,6 @@ dpdk_detach_thread(void)
 {
 }
 
-const char *
-dpdk_get_vhost_sock_dir(void)
-{
-    return NULL;
-}
-
-bool
-dpdk_vhost_iommu_enabled(void)
-{
-    return false;
-}
-
-bool
-dpdk_vhost_postcopy_enabled(void)
-{
-    return false;
-}
-
-bool
-dpdk_per_port_memory(void)
-{
-    return false;
-}
-
 bool
 dpdk_available(void)
 {
