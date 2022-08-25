@@ -247,9 +247,7 @@ dp_packet_delete(struct dp_packet *b)
 {
     if (b) {
         if (b->source == DPBUF_DPDK) {
-            /* If this dp_packet was allocated by DPDK it must have been
-             * created as a dp_packet */
-            free_dpdk_buf((struct dp_packet*) b);
+            free_dpdk_buf(b);
             return;
         }
 

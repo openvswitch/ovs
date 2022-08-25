@@ -151,11 +151,6 @@ netdev_dpdk_rte_flow_tunnel_item_release(
 #else
 
 static inline void
-netdev_dpdk_register(const struct smap *ovs_other_config OVS_UNUSED)
-{
-    /* Nothing */
-}
-static inline void
 free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
 {
     /* Nothing */

@@ -134,11 +134,7 @@ dp_packet_uninit(struct dp_packet *b)
         if (b->source == DPBUF_MALLOC) {
             free(dp_packet_base(b));
         } else if (b->source == DPBUF_DPDK) {
-#ifdef DPDK_NETDEV
-            /* If this dp_packet was allocated by DPDK it must have been
-             * created as a dp_packet */
-            free_dpdk_buf((struct dp_packet*) b);
-#endif
+            free_dpdk_buf(b);
         } else if (b->source == DPBUF_AFXDP) {
             free_afxdp_buf(b);
         }
