@@ -694,11 +694,11 @@ dpdk_mp_sweep(void) OVS_REQUIRES(dpdk_mp_mutex)
  * calculating.
  */
 static uint32_t
-dpdk_calculate_mbufs(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
+dpdk_calculate_mbufs(struct netdev_dpdk *dev, int mtu)
 {
     uint32_t n_mbufs;
 
-    if (!per_port_mp) {
+    if (!per_port_memory) {
         /* Shared memory are being used.
          * XXX: this is a really rough method of provisioning memory.
          * It's impossible to determine what the exact memory requirements are
@@ -729,7 +729,7 @@ dpdk_calculate_mbufs(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
 }
 
 static struct dpdk_mp *
-dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
+dpdk_mp_create(struct netdev_dpdk *dev, int mtu)
 {
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     const char *netdev_name = netdev_get_name(&dev->up);
@@ -754,7 +754,7 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     /* Get the size of each mbuf, based on the MTU */
     mbuf_size = MTU_TO_FRAME_LEN(mtu);
 
-    n_mbufs = dpdk_calculate_mbufs(dev, mtu, per_port_mp);
+    n_mbufs = dpdk_calculate_mbufs(dev, mtu);
 
     do {
         /* Full DPDK memory pool name must be unique and cannot be
@@ -840,7 +840,7 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
 }
 
 static struct dpdk_mp *
-dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
+dpdk_mp_get(struct netdev_dpdk *dev, int mtu)
 {
     struct dpdk_mp *dmp, *next;
     bool reuse = false;
@@ -848,7 +848,7 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     ovs_mutex_lock(&dpdk_mp_mutex);
     /* Check if shared memory is being used, if so check existing mempools
      * to see if reuse is possible. */
-    if (!per_port_mp) {
+    if (!per_port_memory) {
         /* If user has provided defined mempools, check if one is suitable
          * and get new buffer size.*/
         mtu = dpdk_get_user_adjusted_mtu(mtu, dev->requested_mtu,
@@ -867,7 +867,7 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     dpdk_mp_sweep();
 
     if (!reuse) {
-        dmp = dpdk_mp_create(dev, mtu, per_port_mp);
+        dmp = dpdk_mp_create(dev, mtu);
         if (dmp) {
             /* Shared memory will hit the reuse case above so will not
              * request a mempool that already exists but we need to check
@@ -877,7 +877,7 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
              * dmp to point to the existing entry and increment the refcount
              * to avoid being freed at a later stage.
              */
-            if (per_port_mp && rte_errno == EEXIST) {
+            if (per_port_memory && rte_errno == EEXIST) {
                 LIST_FOR_EACH (next, list_node, &dpdk_mp_list) {
                     if (dmp->mp == next->mp) {
                         rte_free(dmp);
@@ -922,17 +922,16 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
     uint32_t buf_size = dpdk_buf_size(dev->requested_mtu);
     struct dpdk_mp *dmp;
     int ret = 0;
-    bool per_port_mp = per_port_memory;
 
     /* With shared memory we do not need to configure a mempool if the MTU
      * and socket ID have not changed, the previous configuration is still
      * valid so return 0 */
-    if (!per_port_mp && dev->mtu == dev->requested_mtu
+    if (!per_port_memory && dev->mtu == dev->requested_mtu
         && dev->socket_id == dev->requested_socket_id) {
         return ret;
     }
 
-    dmp = dpdk_mp_get(dev, FRAME_LEN_TO_MTU(buf_size), per_port_mp);
+    dmp = dpdk_mp_get(dev, FRAME_LEN_TO_MTU(buf_size));
     if (!dmp) {
         VLOG_ERR("Failed to create memory pool for netdev "
                  "%s, with MTU %d on socket %d: %s\n",
