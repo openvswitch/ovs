@@ -813,9 +813,20 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
         ds_put_cstr(&s, "Packets are IP fragments and "
                     "the fragment handling mode is \"drop\".");
     } else {
+        struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+
+        if (ctx->xin->names) {
+            struct ofproto_dpif *ofprotop;
+            ofprotop = ofproto_dpif_lookup_by_name(ctx->xbridge->name);
+            ofproto_append_ports_to_map(&map, ofprotop->up.ports);
+        }
+
         minimatch_format(&rule->up.cr.match,
                          ofproto_get_tun_tab(&ctx->xin->ofproto->up),
-                         NULL, &s, OFP_DEFAULT_PRIORITY);
+                         &map, &s, OFP_DEFAULT_PRIORITY);
+
+        ofputil_port_map_destroy(&map);
+
         if (ds_last(&s) != ' ') {
             ds_put_cstr(&s, ", ");
         }
@@ -6985,11 +6996,20 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         }
 
         if (OVS_UNLIKELY(ctx->xin->trace)) {
+            struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+
+            if (ctx->xin->names) {
+                struct ofproto_dpif *ofprotop;
+                ofprotop = ofproto_dpif_lookup_by_name(ctx->xbridge->name);
+                ofproto_append_ports_to_map(&map, ofprotop->up.ports);
+            }
+
             struct ds s = DS_EMPTY_INITIALIZER;
-            struct ofpact_format_params fp = { .s = &s };
+            struct ofpact_format_params fp = { .s = &s, .port_map = &map };
             ofpacts_format(a, OFPACT_ALIGN(a->len), &fp);
             xlate_report(ctx, OFT_ACTION, "%s", ds_cstr(&s));
             ds_destroy(&s);
+            ofputil_port_map_destroy(&map);
         }
 
         switch (a->type) {

@@ -1246,7 +1246,8 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         if (!VLOG_DROP_WARN(&rll)) {
             ds_init(&output);
             ofproto_trace(upcall->ofproto, upcall->flow,
-                          upcall->packet, NULL, 0, NULL, &output);
+                          upcall->packet, NULL, 0, NULL, &output,
+                          false);
             VLOG_WARN("%s", ds_cstr(&output));
             ds_destroy(&output);
         }

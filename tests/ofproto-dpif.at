@@ -6284,6 +6284,18 @@ Flow: pkt_mark=0x1,skb_priority=0x2,arp,in_port=2,vlan_tci=0x0000,dl_src=50:54:0
 bridge("br0")
 ])
 
+# Test command: ofproto/trace br_name br_flow packet --names
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  "in_port=2,skb_priority=2,pkt_mark=1" "$pkt2to1" --names], [0], [stdout],[stderr])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: p1
+])
+AT_CHECK([head -n 3 stdout], [0], [dnl
+Flow: pkt_mark=0x1,skb_priority=0x2,arp,in_port=p2,vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:01,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_op=0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+
+bridge("br0")
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

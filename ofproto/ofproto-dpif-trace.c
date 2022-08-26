@@ -213,7 +213,7 @@ parse_flow_and_packet(int argc, const char *argv[],
                       struct ofproto_dpif **ofprotop, struct flow *flow,
                       struct dp_packet **packetp,
                       struct ovs_list *next_ct_states,
-                      bool *consistent)
+                      bool *consistent, bool *names)
 {
     const struct dpif_backer *backer = NULL;
     char *error = NULL;
@@ -232,6 +232,9 @@ parse_flow_and_packet(int argc, const char *argv[],
     bool generate_packet = false;
     if (consistent) {
         *consistent = false;
+    }
+    if (names) {
+        *names = false;
     }
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -270,6 +273,10 @@ parse_flow_and_packet(int argc, const char *argv[],
                    && (!strcmp(arg, "-consistent") ||
                        !strcmp(arg, "--consistent"))) {
             *consistent = true;
+        } else if (names
+                   && (!strcmp(arg, "-names") ||
+                       !strcmp(arg, "--names"))) {
+            *names = true;
         } else if (!strcmp(arg, "--ct-next")) {
             if (i + 1 >= argc) {
                 error = xasprintf("Missing argument for option %s", arg);
@@ -418,11 +425,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
 
         struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
-        const struct ofport *ofport;
-        HMAP_FOR_EACH (ofport, hmap_node, &(*ofprotop)->up.ports) {
-            ofputil_port_map_put(&map, ofport->ofp_port,
-                                 netdev_get_name(ofport->netdev));
-        }
+        ofproto_append_ports_to_map(&map, (*ofprotop)->up.ports);
         char *err = parse_ofp_exact_flow(flow, NULL,
                                          ofproto_get_tun_tab(&(*ofprotop)->up),
                                          args[n_args - 1], &map);
@@ -474,16 +477,17 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     struct dp_packet *packet;
     char *error;
     struct flow flow;
+    bool names;
     struct ovs_list next_ct_states = OVS_LIST_INITIALIZER(&next_ct_states);
 
     error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet,
-                                  &next_ct_states, NULL);
+                                  &next_ct_states, NULL, &names);
     if (!error) {
         struct ds result;
 
         ds_init(&result);
         ofproto_trace(ofproto, &flow, packet, NULL, 0, &next_ct_states,
-                      &result);
+                      &result, names);
         unixctl_command_reply(conn, ds_cstr(&result));
         ds_destroy(&result);
         dp_packet_delete(packet);
@@ -501,6 +505,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     enum ofputil_protocol usable_protocols;
     struct ofproto_dpif *ofproto;
     bool enforce_consistency;
+    bool names;
     struct ofpbuf ofpacts;
     struct dp_packet *packet;
     struct ds result;
@@ -530,7 +535,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     }
 
     error = parse_flow_and_packet(argc, argv, &ofproto, &match.flow, &packet,
-                                  &next_ct_states, &enforce_consistency);
+                                  &next_ct_states, &enforce_consistency,
+                                  &names);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);
@@ -578,7 +584,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     }
 
     ofproto_trace(ofproto, &match.flow, packet,
-                  ofpacts.data, ofpacts.size, &next_ct_states, &result);
+                  ofpacts.data, ofpacts.size, &next_ct_states, &result,
+                  names);
     unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
@@ -729,7 +736,7 @@ static void
 ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
                 const struct dp_packet *packet, struct ovs_list *recirc_queue,
                 const struct ofpact ofpacts[], size_t ofpacts_len,
-                struct ds *output)
+                struct ds *output, bool names)
 {
     struct ofpbuf odp_actions;
     ofpbuf_init(&odp_actions, 0);
@@ -737,6 +744,8 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
     struct xlate_in xin;
     struct flow_wildcards wc;
     struct ovs_list trace = OVS_LIST_INITIALIZER(&trace);
+    struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+    struct hmap *portno_names = NULL;
     xlate_in_init(&xin, ofproto,
                   ofproto_dpif_get_tables_version(ofproto), flow,
                   flow->in_port.ofp_port, NULL, ntohs(flow->tcp_flags),
@@ -745,12 +754,27 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
     xin.ofpacts_len = ofpacts_len;
     xin.trace = &trace;
     xin.recirc_queue = recirc_queue;
+    xin.names = names;
+
+    if (names) {
+        ofproto_append_ports_to_map(&map, ofproto->up.ports);
+
+        portno_names = xmalloc(sizeof *portno_names);
+        hmap_init(portno_names);
+
+        struct dpif_port dpif_port;
+        struct dpif_port_dump port_dump;
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
+            odp_portno_names_set(portno_names, dpif_port.port_no,
+                                 dpif_port.name);
+        }
+    }
 
     /* Copy initial flow out of xin.flow.  It differs from '*flow' because
      * xlate_in_init() initializes actset_output to OFPP_UNSET. */
     struct flow initial_flow = xin.flow;
     ds_put_cstr(output, "Flow: ");
-    flow_format(output, &initial_flow, NULL);
+    flow_format(output, &initial_flow, &map);
     ds_put_char(output, '\n');
 
     struct xlate_out xout;
@@ -762,18 +786,19 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
     if (flow_equal(&initial_flow, &xin.flow)) {
         ds_put_cstr(output, "unchanged");
     } else {
-        flow_format(output, &xin.flow, NULL);
+        flow_format(output, &xin.flow, &map);
     }
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Megaflow: ");
     struct match match;
     match_init(&match, flow, &wc);
-    match_format(&match, NULL, output, OFP_DEFAULT_PRIORITY);
+    match_format(&match, &map, output, OFP_DEFAULT_PRIORITY);
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Datapath actions: ");
-    format_odp_actions(output, odp_actions.data, odp_actions.size, NULL);
+    format_odp_actions(output, odp_actions.data, odp_actions.size,
+                       portno_names);
 
     if (error != XLATE_OK) {
         ds_put_format(output,
@@ -790,6 +815,13 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
         }
     }
 
+    if (names) {
+        ofputil_port_map_destroy(&map);
+
+        odp_portno_names_destroy(portno_names);
+        hmap_destroy(portno_names);
+        free(portno_names);
+    }
 
     xlate_out_uninit(&xout);
     ofpbuf_uninit(&odp_actions);
@@ -809,17 +841,19 @@ void
 ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               const struct dp_packet *packet,
               const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct ovs_list *next_ct_states, struct ds *output)
+              struct ovs_list *next_ct_states, struct ds *output,
+              bool names)
 {
     struct ovs_list recirc_queue = OVS_LIST_INITIALIZER(&recirc_queue);
     ofproto_trace__(ofproto, flow, packet, &recirc_queue,
-                    ofpacts, ofpacts_len, output);
+                    ofpacts, ofpacts_len, output, names);
 
     struct oftrace_recirc_node *recirc_node;
     LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
         ofproto_trace_recirc_node(recirc_node, next_ct_states, output);
         ofproto_trace__(ofproto, &recirc_node->flow, recirc_node->packet,
-                        &recirc_queue, ofpacts, ofpacts_len, output);
+                        &recirc_queue, ofpacts, ofpacts_len, output,
+                        names);
         oftrace_recirc_node_destroy(recirc_node);
     }
 }
@@ -842,4 +876,14 @@ ofproto_dpif_trace_init(void)
         "[-consistent] {[dp_name] odp_flow | bridge br_flow} [OPTIONS...] "
         "[-generate|packet] actions",
         2, INT_MAX, ofproto_unixctl_trace_actions, NULL);
+}
+
+void
+ofproto_append_ports_to_map(struct ofputil_port_map *map, struct hmap ports) {
+    struct ofport *ofport;
+
+    HMAP_FOR_EACH (ofport, hmap_node, &ports) {
+        ofputil_port_map_put(map, ofport->ofp_port,
+                             netdev_get_name(ofport->netdev));
+    }
 }

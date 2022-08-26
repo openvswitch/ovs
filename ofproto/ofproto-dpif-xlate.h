@@ -166,6 +166,10 @@ struct xlate_in {
 
     /* UUID of first non-patch port packet was received on.*/
     struct uuid xport_uuid;
+
+    /* If true, port names are displayed instead of port numbers in
+     * tracing translation. */
+    bool names;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
