@@ -310,6 +310,8 @@ smap_clone(struct smap *dst, const struct smap *src)
     const struct smap_node *node;
 
     smap_init(dst);
+    hmap_reserve(&dst->map, smap_count(src));
+
     SMAP_FOR_EACH (node, src) {
         smap_add__(dst, xstrdup(node->key), xstrdup(node->value),
                    node->node.hash);

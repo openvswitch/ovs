@@ -66,6 +66,8 @@ hmapx_clone(struct hmapx *map, const struct hmapx *orig)
     struct hmapx_node *node;
 
     hmapx_init(map);
+    hmap_reserve(&map->map, hmapx_count(orig));
+
     HMAP_FOR_EACH (node, hmap_node, &orig->map) {
         hmapx_add__(map, node->data, node->hmap_node.hash);
     }
