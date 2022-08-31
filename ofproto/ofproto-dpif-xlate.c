@@ -1515,7 +1515,7 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
         if (OVS_UNLIKELY(!recirc_id_node)) {
             if (errorp) {
                 *errorp = xasprintf("no recirculation data for recirc_id "
-                                    "%"PRIu32, flow->recirc_id);
+                                    "%#"PRIx32, flow->recirc_id);
             }
             return NULL;
         }
@@ -1556,8 +1556,8 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
         if (errorp) {
             *errorp = (tnl_port_should_receive(flow)
                        ? xstrdup("no OpenFlow tunnel port for this packet")
-                       : xasprintf("no OpenFlow tunnel port for datapath "
-                                   "port %"PRIu32, flow->in_port.odp_port));
+                       : xasprintf("no OpenFlow port for datapath port "
+                                   "%"PRIu32, flow->in_port.odp_port));
         }
         return NULL;
     }
