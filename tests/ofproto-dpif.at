@@ -6393,6 +6393,20 @@ AT_CHECK([tail -2 stderr], [0], [dnl
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
+# Test incorrect command: ofproto/trace with nonexistent port number
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(42)" ], [2], [stdout], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+no OpenFlow port for datapath port 42
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+# Test incorrect command: ofproto/trace with nonexistent recirc_id
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "recirc_id(0x42)" ], [2], [stdout], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+no recirculation data for recirc_id 0x42
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
