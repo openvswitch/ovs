@@ -431,7 +431,6 @@ struct dp_netdev_rxq {
     unsigned intrvl_idx;               /* Write index for 'cycles_intrvl'. */
     struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
     bool is_vhost;                     /* Is rxq of a vhost port. */
-    bool hw_miss_api_supported;        /* hw_miss_packet_recover() supported.*/
 
     /* Counters of cycles spent successfully polling and processing pkts. */
     atomic_ullong cycles[RXQ_N_CYCLES];
@@ -5416,7 +5415,6 @@ port_reconfigure(struct dp_netdev_port *port)
 
         port->rxqs[i].port = port;
         port->rxqs[i].is_vhost = !strncmp(port->type, "dpdkvhost", 9);
-        port->rxqs[i].hw_miss_api_supported = true;
 
         err = netdev_rxq_open(netdev, &port->rxqs[i].rx, i);
         if (err) {
@@ -8034,17 +8032,15 @@ dp_netdev_hw_flow(const struct dp_netdev_pmd_thread *pmd,
 #ifdef ALLOW_EXPERIMENTAL_API /* Packet restoration API required. */
     /* Restore the packet if HW processing was terminated before completion. */
     struct dp_netdev_rxq *rxq = pmd->ctx.last_rxq;
+    bool miss_api_supported;
 
-    if (rxq->hw_miss_api_supported) {
+    atomic_read_relaxed(&rxq->port->netdev->hw_info.miss_api_supported,
+                        &miss_api_supported);
+    if (miss_api_supported) {
         int err = netdev_hw_miss_packet_recover(rxq->port->netdev, packet);
-        if (err) {
-            if (err != EOPNOTSUPP) {
-                COVERAGE_INC(datapath_drop_hw_miss_recover);
-                return -1;
-            } else {
-                /* API unsupported by the port; avoid subsequent calls. */
-                rxq->hw_miss_api_supported = false;
-            }
+        if (err && err != EOPNOTSUPP) {
+            COVERAGE_INC(datapath_drop_hw_miss_recover);
+            return -1;
         }
     }
 #endif
