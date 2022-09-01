@@ -308,6 +308,15 @@ m4_define([OVS_APP_EXIT_AND_WAIT_BY_TARGET],
    AT_CHECK([ovs-appctl --target=$1 exit])
    OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
+dnl OVS_DAEMONIZE([command], [pidfile])
+dnl
+dnl Run 'command' as a background process and record its pid to 'pidfile' to
+dnl allow cleanup on exit.
+m4_define([OVS_DAEMONIZE],
+   [$1 & echo $! > $2
+    on_exit "kill `cat $2`"
+   ])
+
 dnl on_exit "COMMAND"
 dnl
 dnl Add the shell COMMAND to a collection executed when the current test

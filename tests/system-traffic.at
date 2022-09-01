@@ -969,7 +969,7 @@ ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
 
 IPTABLES_ACCEPT([br-underlay])
 
-ip netns exec at_ns0 tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap &
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
 
 dnl First, check the underlay.
@@ -1017,7 +1017,7 @@ ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [op
 
 IPTABLES_ACCEPT([br-underlay])
 
-ip netns exec at_ns0 tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap &
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
 
 dnl First, check the underlay
@@ -1070,7 +1070,7 @@ dnl around it.
 iptables -I INPUT 1 -i br-underlay -j ACCEPT
 on_exit 'iptables -D INPUT 1'
 
-ip netns exec at_ns0 tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap &
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
 
 dnl First, check the underlay.
@@ -1127,7 +1127,7 @@ dnl around it.
 ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
 on_exit 'ip6tables -D INPUT 1'
 
-ip netns exec at_ns0 tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap &
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
 
 dnl First, check the underlay.
@@ -1183,7 +1183,7 @@ dnl around it.
 ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
 on_exit 'ip6tables -D INPUT 1'
 
-ip netns exec at_ns0 tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap &
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap 2>/dev/null], [tcpdump.pid])
 sleep 1
 
 dnl First, check the underlay.
@@ -2048,7 +2048,7 @@ dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
@@ -2080,7 +2080,7 @@ dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
@@ -2113,7 +2113,7 @@ dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
@@ -2145,7 +2145,7 @@ dnl eth/ip/icmp --> OVS --> eth/mpls/eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x0800 actions=encap(mpls_mc),set_mpls_label:2,encap(ethernet),set_field:00:00:00:00:00:02->dl_dst,set_field:00:00:00:00:00:01->dl_src,ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is a icmp packet. pkt=eth/ip/icmp
@@ -2179,7 +2179,7 @@ dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
@@ -2216,7 +2216,7 @@ dnl eth/mpls/eth/ip/icmp --> OVS --> eth/ip/icmp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x8847,mpls_label=2 actions=decap(),decap(packet_type(ns=0,type=0)),ovs-p1"])
 
 rm -rf p1.pcap
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is an mpls packet encapsulating ethernet packet. pkt=eth/mpls/eth/ip/icmp
@@ -4261,8 +4261,8 @@ NS_CHECK_EXEC([at_ns0], [ip route add 10.1.1.0/24 via 10.2.1.2])
 NS_CHECK_EXEC([at_ns1], [ip route add 10.1.1.0/24 via 10.2.1.1])
 
 dnl Solely for debugging when things go wrong
-NS_EXEC([at_ns0], [tcpdump -l -n -xx -U -i p0 -w p0.pcap >tcpdump.out 2>/dev/null &])
-NS_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 -w p1.pcap >tcpdump.out 2>/dev/null &])
+NETNS_DAEMONIZE([at_ns0], [tcpdump -l -n -xx -U -i p0 -w p0.pcap >tcpdump.out 2>/dev/null], [tcpdump_0.pid])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 -w p1.pcap >tcpdump.out 2>/dev/null], [tcpdump_1.pid])
 
 AT_DATA([flows.txt], [dnl
 table=0,arp,actions=normal
@@ -5702,7 +5702,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 rm p0.pcap
-tcpdump -n -U -i ovs-p0 -w p0.pcap &
+OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
@@ -6470,7 +6470,7 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 rm p0.pcap
-tcpdump -n -U -i ovs-p0 -w p0.pcap &
+OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
@@ -7573,7 +7573,7 @@ dnl The flow will encap a nsh header to the TCP syn packet
 dnl eth/ip/tcp --> OVS --> eth/nsh/eth/ip/tcp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,ip,actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
 
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is a TCP syn packet. pkt=eth/ip/tcp
@@ -7605,7 +7605,7 @@ dnl The flow will decap a nsh header which in turn carries a TCP syn packet
 dnl eth/nsh/eth/ip/tcp --> OVS --> eth/ip/tcp
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f, actions=decap(),decap(), ovs-p1"])
 
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
@@ -7637,7 +7637,7 @@ dnl The flow will add another NSH header with nsh_spi=0x101, nsh_si=4,
 dnl nsh_ttl=7 and change the md1 context
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x03,actions=decap(),decap(),encap(nsh(md_type=1)),set_field:0x07->nsh_ttl,set_field:0x0101->nsh_spi,set_field:0x04->nsh_si,set_field:0x100f0e0d->nsh_c1,set_field:0x0c0b0a09->nsh_c2,set_field:0x08070605->nsh_c3,set_field:0x04030201->nsh_c4,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
 
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
 sleep 1
 
 dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
@@ -7673,8 +7673,8 @@ dnl packet to to at_ns2.
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x02,actions=ovs-p1"])
 AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x01,actions=ovs-p2"])
 
-NS_CHECK_EXEC([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap &])
-NS_CHECK_EXEC([at_ns2], [tcpdump -l -n -xx -U -i p2 > p2.pcap &])
+NETNS_DAEMONIZE([at_ns1], [tcpdump -l -n -xx -U -i p1 > p1.pcap], [tcpdump.pid])
+NETNS_DAEMONIZE([at_ns2], [tcpdump -l -n -xx -U -i p2 > p2.pcap], [tcpdump2.pid])
 sleep 1
 
 dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
