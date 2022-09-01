@@ -1603,17 +1603,19 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
  * be taken.
  *
  * Returns 0 if successful, ENODEV if the parsed flow has no associated ofproto.
+ * Sets an extended error string to 'errorp'.  Callers are responsible for
+ * freeing that string.
  */
 int
 xlate_lookup(const struct dpif_backer *backer, const struct flow *flow,
              struct ofproto_dpif **ofprotop, struct dpif_ipfix **ipfix,
              struct dpif_sflow **sflow, struct netflow **netflow,
-             ofp_port_t *ofp_in_port)
+             ofp_port_t *ofp_in_port, char **errorp)
 {
     struct ofproto_dpif *ofproto;
     const struct xport *xport;
 
-    ofproto = xlate_lookup_ofproto_(backer, flow, ofp_in_port, &xport, NULL);
+    ofproto = xlate_lookup_ofproto_(backer, flow, ofp_in_port, &xport, errorp);
 
     if (!ofproto) {
         return ENODEV;
