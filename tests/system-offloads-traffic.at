@@ -297,8 +297,8 @@ table=4,in_port=1,reg0=0x0 actions=output:4
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pcap 2>/dev/null &])
-NS_CHECK_EXEC([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null &])
+NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pcap 2>/dev/null], [tcpdump3.pid])
+NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null], [tcpdump4.pid])
 sleep 1
 
 NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -325,10 +325,10 @@ AT_CHECK([test $(ovs-appctl upcall/show | grep -c "offloaded flows") -eq 0], [0]
 
 OVS_TRAFFIC_VSWITCHD_STOP
 
-AT_CHECK([cat p3.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+AT_CHECK([cat p3.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 1032
 ])
-AT_CHECK([cat p4.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+AT_CHECK([cat p4.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 72
 ])
 
@@ -355,8 +355,8 @@ table=4,in_port=1,reg0=0x0 actions=output:4
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pcap 2>/dev/null &])
-NS_CHECK_EXEC([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null &])
+NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pcap 2>/dev/null], [tcpdump3.pid])
+NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null], [tcpdump4.pid])
 sleep 1
 
 NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -382,10 +382,12 @@ in_port(3),eth(),eth_type(0x0800),ipv4(frag=no), packets:19, bytes:11614, used:0
 AT_CHECK([ovs-appctl upcall/show | grep -E "offloaded flows : [[1-9]]"], [0], [ignore])
 
 sleep 1
-AT_CHECK([cat p3.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+kill $(cat tcpdump3.pid)
+kill $(cat tcpdump4.pid)
+AT_CHECK([cat p3.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 1032
 ])
-AT_CHECK([cat p4.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+AT_CHECK([cat p4.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 72
 ])
 
@@ -501,8 +503,8 @@ table=4,in_port=1,reg0=0x0 actions=mod_nw_tos:8,output:4
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3_2.pcap 2>/dev/null &])
-NS_CHECK_EXEC([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4_2.pcap 2>/dev/null &])
+NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3_2.pcap 2>/dev/null], [tcpdump3_2.pid])
+NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4_2.pcap 2>/dev/null], [tcpdump4_2.pid])
 sleep 1
 
 NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -519,10 +521,12 @@ in_port(3),eth(),eth_type(0x0800),ipv4(frag=no), packets:20, bytes:11720, used:0
 ])
 
 sleep 1
-AT_CHECK([cat p3_2.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+kill $(cat tcpdump3_2.pid)
+kill $(cat tcpdump4_2.pid)
+AT_CHECK([cat p3_2.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 1032
 ])
-AT_CHECK([cat p4_2.pcap | awk '{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
+AT_CHECK([cat p4_2.pcap | awk 'NF{print $NF}' | uniq -c | awk '{$1=$1;print}'], [0], [dnl
 10 72
 ])
 
