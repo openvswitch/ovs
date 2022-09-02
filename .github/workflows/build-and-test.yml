@@ -141,6 +141,7 @@ jobs:
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
+      DPDK_EXPERIMENTAL: ${{ matrix.dpdk_experimental }}
       LIBS:        ${{ matrix.libs }}
       M32:         ${{ matrix.m32 }}
       OPTS:        ${{ matrix.opts }}
@@ -219,6 +220,9 @@ jobs:
             opts:         --enable-shared
 
           - compiler:     gcc
+            dpdk_experimental: dpdk-experimental
+
+          - compiler:     gcc
             m32:          m32
             opts:         --disable-ssl
 
@@ -294,7 +298,7 @@ jobs:
         diff -u ./hosts.bak /etc/hosts || true
 
     - name: DPDK cache
-      if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
+      if:   matrix.dpdk != '' || matrix.dpdk_shared != '' || matrix.dpdk_experimental != ''
       uses: actions/cache@v4
       with:
         path: dpdk-dir
