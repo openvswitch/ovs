@@ -8,6 +8,9 @@ SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
 JOBS=${JOBS:-"-j4"}
 
+[ -z "$DPDK_EXPERIMENTAL" ] || DPDK=1
+[ -z "$DPDK_SHARED" ] || DPDK=1
+
 function install_dpdk()
 {
     local DPDK_INSTALL_DIR="$(pwd)/dpdk-dir"
@@ -108,8 +111,11 @@ assert ovs.json.from_string('{\"a\": 42}') == {'a': 42}"
     exit 0
 fi
 
-if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
+if [ "$DPDK" ]; then
     install_dpdk
+    if [ -n "$DPDK_EXPERIMENTAL" ]; then
+        CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -DALLOW_EXPERIMENTAL_API"
+    fi
 fi
 
 if [ "$STD" ]; then
