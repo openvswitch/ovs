@@ -13,8 +13,8 @@ jobs:
     env:
       dependencies: gcc libnuma-dev libxdp-dev ninja-build pkgconf
       CC: gcc
-      DPDK_GIT: https://dpdk.org/git/dpdk-stable
-      DPDK_VER: 25.11
+      DPDK_GIT: https://dpdk.org/git/dpdk
+      DPDK_VER: refs/heads/main
     name: dpdk gcc
     outputs:
       dpdk_key: ${{ steps.gen_dpdk_key.outputs.key }}
@@ -622,6 +622,7 @@ jobs:
       run:  cd ovs && make -j4
 
   build-linux-deb:
+    if: false
     env:
       deb_dependencies: |
         linux-headers-$(uname -r) build-essential fakeroot devscripts equivs
