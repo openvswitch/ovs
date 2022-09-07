@@ -5531,3 +5531,77 @@ netdev_dpdk_register(const struct smap *ovs_other_config)
     netdev_register_provider(&dpdk_vhost_class);
     netdev_register_provider(&dpdk_vhost_client_class);
 }
+
+#define MAX_PATTERN_NUM 64
+#define MAX_ACTION_NUM 64
+
+int
+generate_eth_flow(struct netdev *netdev, short rx_q, unsigned char *dst_addr)
+{
+    /* Declaring structs being used. 8< */
+    struct rte_flow_attr attr;
+    struct rte_flow_item pattern[MAX_PATTERN_NUM];
+    struct rte_flow_action action[MAX_ACTION_NUM];
+    struct rte_flow *flow = NULL;
+    struct rte_flow_error error;
+    struct rte_flow_action_queue queue = { .index = rx_q };
+    int res;
+    uint16_t port_id;
+
+    struct rte_flow_item_eth eth = {
+        .type = RTE_BE16(0x0000),
+    };
+
+    static const struct rte_flow_item_eth rte_flow_item_eth_mask_test = {
+        .dst.addr_bytes = {0xff,0xff,0xff,0xff,0xff,0xff},
+        .src.addr_bytes = {0x00,0x00,0x00,0x00,0x00,0x00},
+        .type = RTE_BE16(0xffff),
+    };
+
+    memcpy(eth.dst.addr_bytes, dst_addr, sizeof(eth.dst.addr_bytes));
+    memset(pattern, 0, sizeof(pattern));
+    memset(action, 0, sizeof(action));
+
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    port_id = dev->port_id;
+
+
+    /* Set the rule attribute, only ingress packets will be checked. 8< */
+    memset(&attr, 0, sizeof(struct rte_flow_attr));
+    attr.ingress = 1;
+    /* >8 End of setting the rule attribute. */
+
+    /* setting the eth to pass all packets */
+    pattern[0].type = RTE_FLOW_ITEM_TYPE_ETH;
+    pattern[0].spec = &eth;
+    pattern[0].mask = &rte_flow_item_eth_mask_test;
+
+    /* end the pattern array */
+    pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
+
+    /*
+     *      * create the action sequence.
+     *           * one action only,  move packet to queue
+     *                */
+    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+    action[0].conf = &queue;
+    action[1].type = RTE_FLOW_ACTION_TYPE_END;
+
+    /* Validate the rule and create it. 8< */
+    res = rte_flow_validate(port_id, &attr, pattern, action, &error);
+    if (res) {
+        return -1;
+    }
+    if (!res)
+        flow = rte_flow_create(port_id, &attr, pattern, action, &error);
+    //TODO:May be we can store this flow to use for later?
+    if (!flow) {
+        VLOG_ERR("Flow creation failed %s\n", error.message);
+        return -1;
+    }
+    return 0;
+
+
+}
+
+

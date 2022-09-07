@@ -163,4 +163,6 @@ free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
 
 #endif
 
+int
+generate_eth_flow(struct netdev *netdev, short rx_q, unsigned char *dst_addr);
 #endif /* netdev-dpdk.h */

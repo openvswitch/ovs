@@ -190,6 +190,7 @@ static uint32_t dpcls_subtable_lookup_reprobe(struct dpcls *cls);
 static void dpcls_insert(struct dpcls *, struct dpcls_rule *,
                          const struct netdev_flow_key *mask);
 static void dpcls_remove(struct dpcls *, struct dpcls_rule *);
+static int parse_flow_steer_params(char *copy_params, struct dp_netdev *dp);
 
 /* Set of supported meter flags */
 #define DP_SUPPORTED_METER_FLAGS_MASK \
@@ -313,6 +314,7 @@ struct dp_netdev {
 
     /* Cpu mask for pin of pmd threads. */
     char *pmd_cmask;
+    char *rxq_steer_params;
 
     uint64_t last_tnl_conf_seq;
 
@@ -4759,6 +4761,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     const char *cmask = smap_get(other_config, "pmd-cpu-mask");
     const char *pmd_rxq_assign = smap_get_def(other_config, "pmd-rxq-assign",
                                              "cycles");
+    const char *rxq_steer_params = smap_get(other_config, "rxq-steer-params");
     unsigned long long insert_prob =
         smap_get_ullong(other_config, "emc-insert-inv-prob",
                         DEFAULT_EM_FLOW_INSERT_INV_PROB);
@@ -4782,6 +4785,12 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     if (!nullable_string_is_equal(dp->pmd_cmask, cmask)) {
         free(dp->pmd_cmask);
         dp->pmd_cmask = nullable_xstrdup(cmask);
+        dp_netdev_request_reconfigure(dp);
+    }
+
+    if (!nullable_string_is_equal(dp->rxq_steer_params, rxq_steer_params)) {
+        free(dp->rxq_steer_params);
+        dp->rxq_steer_params = nullable_xstrdup(rxq_steer_params);
         dp_netdev_request_reconfigure(dp);
     }
 
@@ -6472,6 +6481,22 @@ reconfigure_datapath(struct dp_netdev *dp)
             }
         }
     }
+
+
+    /* Look for change in rules and re-configure them,
+     * For now preserve the order of mac steering entries
+     * parse the string , lookup port and add steering entries
+     * eg. "rx_steer_params:eth4|0|aa:bb:cc:dd:ee:ff,eth4|1|aa:bb:cc:dd:eb:ed"
+     */
+
+    char *copy_params =nullable_xstrdup(dp->rxq_steer_params);
+
+    if (copy_params) {
+         parse_flow_steer_params(copy_params, dp);
+    }
+    free(copy_params);
+
+
 
     /* Step 4: Compute new rxq scheduling.  We don't touch the pmd threads
      * for now, we just update the 'pmd' pointer in each rxq to point to the
@@ -10080,4 +10105,79 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key *keys[],
         *num_lookups_p = lookups_match;
     }
     return false;
+}
+
+static int parse_flow_steer_params(char *copy_params, struct dp_netdev *dp) {
+    char *save_ptr  = NULL;
+    char *rule = strtok_r(copy_params, ",", &save_ptr);
+    uint32_t rule_count = 0;
+
+    while(rule) {
+        char *saved_ptr = NULL;
+        char *rule_attribute = strtok_r(rule, "|", &saved_ptr );
+        uint32_t rule_attribute_count = 0;
+        char *port_name = NULL;
+        struct dp_netdev_port *portp = NULL;
+        uint16_t q_no;
+        uint8_t mac_addr[6] = {};
+        int err;
+        while (rule_attribute) {
+            switch (rule_attribute_count) {
+                case 0:
+                    //Find the port id given the name
+                    port_name = nullable_xstrdup(rule_attribute);
+                    if (ENODEV == get_port_by_name(dp, port_name, &portp) ) {
+                        printf("device not present...skipping rule\n");
+                        break;
+                    }
+                    
+                    break;
+                case 1:
+                    q_no = strtol(rule_attribute, NULL, 10);
+                    //TODO: check if queue is valid
+                    //and skip the loop
+                    break;
+                case 2: ;
+                    char *new_saved_ptr = NULL;
+                    char *pch = strtok_r(rule_attribute, ":", &new_saved_ptr);
+                    uint32_t i = 0;
+                    while (pch!=NULL)
+                    {
+                        //*pch = ':';
+                        mac_addr[i] = strtol(pch, NULL, 16);
+                        i++;
+                        pch=strtok_r(NULL, ":", &new_saved_ptr);
+                    }
+                    break;
+                default:
+                        printf("DO nothing!\n");
+                        exit(0);
+                        //only 3 argument allowed
+            }
+            if (!port_name) {
+                break; 
+            }
+            rule_attribute = strtok_r(NULL , "|", &saved_ptr);
+            rule_attribute_count++;
+
+        }
+#define MAC_ADDR_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
+#define MAC_ADDR_PRINT(mac_addr)    mac_addr[0],mac_addr[1],mac_addr[2],mac_addr[3],mac_addr[4],mac_addr[5]
+        //Call rule proagramming
+        if (portp) {
+            err = generate_eth_flow(portp->netdev, q_no, mac_addr);
+        }
+        if (err) {
+            VLOG_INFO("Error adding flow %s:%d:"MAC_ADDR_FMT, port_name, q_no, MAC_ADDR_PRINT(mac_addr));// ether_ntoa(mac_addr));
+        } else {
+            VLOG_INFO("Flow successfully added %s:%d:"MAC_ADDR_FMT, port_name, q_no, MAC_ADDR_PRINT(mac_addr));// ether_ntoa(mac_addr));
+        }
+
+        free(port_name);
+
+        rule = strtok_r(NULL , ",", &save_ptr);
+        rule_count++;
+
+    }
+
 }
