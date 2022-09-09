@@ -226,6 +226,7 @@ Jinjun Gao                         gjinjun@gmail.com
 Jiri Benc                          jbenc@redhat.com
 Joe Perches                        joe@perches.com
 Joe Stringer                       joe@ovn.org
+Jon Kohler                         jon@nutanix.com
 Jonathan Vestin                    jonavest@kau.se
 Jorge Arturo Sauma Vargas          jorge.sauma@hpe.com
 Jun Nakajima                       jun.nakajima@intel.com
