@@ -79,3 +79,14 @@ testsuite.tmp.orig
 /Documentation/_build
 /.venv
 /cxx-check
+snapshot.env
+PTHREADS-BUILT/bin/pthreadVC3.dll
+PTHREADS-BUILT/bin/pthreadVC3d.dll
+PTHREADS-BUILT/bin/pthreadVCE3.dll
+PTHREADS-BUILT/bin/pthreadVCE3d.dll
+PTHREADS-BUILT/bin/pthreadVSE3.dll
+PTHREADS-BUILT/bin/pthreadVSE3d.dll
+PTHREADS-BUILT/include/_ptw32.h
+PTHREADS-BUILT/include/pthread.h
+PTHREADS-BUILT/include/sched.h
+PTHREADS-BUILT/include/semaphore.h

@@ -77,10 +77,13 @@ EXTRA_DIST = \
 	NOTICE \
 	.ci/linux-build.sh \
 	.ci/linux-prepare.sh \
+	.ci/windows-build.sh \
+	.ci/windows-prepare.sh \
 	.ci/osx-build.sh \
 	.ci/osx-prepare.sh \
 	.cirrus.yml \
 	.github/workflows/build-and-test.yml \
+	.github/workflows/build-windows.yml \
 	.travis.yml \
 	appveyor.yml \
 	boot.sh \

@@ -59,9 +59,12 @@ OvsAllocateAlignedMemory(size_t size, UINT16 align)
          * XXX: NdisAllocateMemory*() functions don't talk anything about
          * alignment. Hence using ExAllocatePool*();
          */
-        return (VOID *)ExAllocatePoolWithTagPriority(NonPagedPoolNx, size,
-                                                     OVS_MEMORY_TAG,
-                                                     NormalPoolPriority);
+
+        POOL_EXTENDED_PARAMETER params = { 0 };
+        params.Type = PoolExtendedParameterPriority;
+        params.Priority = HighPoolPriority;
+        return (VOID*) ExAllocatePool3(POOL_FLAG_PAGED,
+            size, OVS_MEMORY_TAG, &params, 1);
     }
 
     /* Invalid user input. */

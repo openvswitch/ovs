@@ -10,7 +10,8 @@ EXTRA_DIST += \
 	build-aux/sodepends.py \
 	build-aux/soexpand.py \
 	build-aux/text2c \
-	build-aux/xml2nroff
+	build-aux/xml2nroff \
+	build-aux/envdiff.ps1
 
 FLAKE8_PYFILES += \
     build-aux/dpdkstrip.py \

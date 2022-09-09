@@ -68,8 +68,7 @@
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="Configuration">
-    <TargetVersion>
-    </TargetVersion>
+    <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>True</UseDebugLibraries>
     <PlatformToolsetVer Condition="'$(PlatformToolsetVer)' == ''">10.0</PlatformToolsetVer>
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
