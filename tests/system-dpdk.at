@@ -262,10 +262,10 @@ AT_CHECK([ovs-vsctl set interface phy0 ingress_policing_rate=0 ingress_policing_
 
 dnl Check policer was removed correctly
 AT_CHECK([ovs-vsctl list interface phy0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_burst: 0' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface phy0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
@@ -298,10 +298,10 @@ AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=0 i
 
 dnl Check ingress policer was removed correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_burst: 0' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 dnl Parse log file
 AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
@@ -338,10 +338,10 @@ AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.l
 
 dnl Check ingress policer was created correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_burst: 1000' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_burst: 1000' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_rate: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 
 dnl Parse log file
@@ -379,10 +379,10 @@ AT_FAIL_IF([grep "Could not create rte meter for ingress policer" ovs-vswitchd.l
 
 dnl Check ingress policer was created correctly
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_burst: 0' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_burst: 0' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'ingress_policing_rate: 10000' stdout], [], [stdout])
+AT_CHECK([grep -E 'ingress_policing_rate: 10000' stdout], [], [stdout])
 
 dnl Parse log file
 AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
@@ -421,7 +421,7 @@ AT_CHECK([ovs-vsctl destroy QoS phy0 -- clear Port phy0 qos])
 
 dnl Check egress policer was removed correctly
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show phy0], [], [stdout])
-AT_CHECK([egrep 'QoS not configured on phy0' stdout], [], [stdout])
+AT_CHECK([grep -E 'QoS not configured on phy0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
@@ -460,7 +460,7 @@ AT_CHECK([ovs-vsctl destroy QoS dpdkvhostuserclient0 -- clear Port dpdkvhostuser
 
 dnl Check egress policer was removed correctly
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
+AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -493,7 +493,7 @@ AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
+AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -528,7 +528,7 @@ AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
-AT_CHECK([egrep 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
+AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -561,7 +561,7 @@ sleep 2
 
 dnl Check default MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=1500' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=1500' stdout], [], [stdout])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
@@ -573,7 +573,7 @@ dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
 
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
 
 
 dnl Clean up
@@ -609,13 +609,13 @@ AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], 
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
 
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=2000])
 
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=2000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=2000' stdout], [], [stdout])
 
 
 dnl Clean up
@@ -661,13 +661,13 @@ OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Check default MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=1500' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=1500' stdout], [], [stdout])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
 
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
@@ -718,13 +718,13 @@ OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
 
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=2000])
 
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=2000' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=2000' stdout], [], [stdout])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
@@ -762,7 +762,7 @@ AT_FAIL_IF([grep "Interface phy0 MTU (9702) setup error" ovs-vswitchd.log], [], 
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9702' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9702' stdout], [], [stdout])
 
 dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9711])
@@ -803,7 +803,7 @@ AT_FAIL_IF([grep "Interface phy0 MTU (68) setup error" ovs-vswitchd.log], [], [s
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=68' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=68' stdout], [], [stdout])
 
 dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=67])
@@ -852,7 +852,7 @@ OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=9702' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=9702' stdout], [], [stdout])
 
 dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
@@ -909,7 +909,7 @@ OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 
 dnl Check MTU value in the datapath
 AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([egrep 'mtu=68' stdout], [], [stdout])
+AT_CHECK([grep -E 'mtu=68' stdout], [], [stdout])
 
 dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
