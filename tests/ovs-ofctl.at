@@ -3243,9 +3243,9 @@ AT_CHECK([ovs-testcontroller -vsyslog:off --detach --no-chdir --pidfile punix:te
 OVS_WAIT_UNTIL([test -e testcontroller])
 
 dnl check for some of the initial handshake messages
-OVS_WAIT_UNTIL([egrep "OFPT_FEATURES_REQUEST" snoopbr0.txt >/dev/null 2>&1])
-OVS_WAIT_UNTIL([egrep "OFPT_FEATURES_REPLY" snoopbr0.txt >/dev/null 2>&1])
-OVS_WAIT_UNTIL([egrep "OFPT_SET_CONFIG" snoopbr0.txt >/dev/null 2>&1])
+OVS_WAIT_UNTIL([grep -E "OFPT_FEATURES_REQUEST" snoopbr0.txt >/dev/null 2>&1])
+OVS_WAIT_UNTIL([grep -E "OFPT_FEATURES_REPLY" snoopbr0.txt >/dev/null 2>&1])
+OVS_WAIT_UNTIL([grep -E "OFPT_SET_CONFIG" snoopbr0.txt >/dev/null 2>&1])
 
 dnl need to suppress the 'connection failed' WARN message in ovs-vswitchd
 dnl because we need ovs-vswitchd to have the controller config before starting

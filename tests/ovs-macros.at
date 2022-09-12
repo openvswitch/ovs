@@ -134,7 +134,7 @@ parent_pid () {
     # e.g. Alpine Linux) is noncompliant, so we use a Linux-specific approach
     # when it's available.  We check the format of the status file to avoid
     # the NetBSD file with the same name but different contents.
-    if egrep '^PPid:[[:space:]]*[0-9]*$' /proc/$1/status > /dev/null 2>&1; then
+    if grep -E '^PPid:[[:space:]]*[0-9]*$' /proc/$1/status > /dev/null 2>&1; then
         sed -n 's/^PPid:	\([0-9]*\)/\1/p' /proc/$1/status
     else
         ps -o ppid= -p $1
