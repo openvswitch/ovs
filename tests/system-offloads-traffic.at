@@ -90,7 +90,7 @@ AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
 rate 100Kbit burst 1280b
 ])
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
-  egrep "basic|matchall" > /dev/null], [0])
+  grep -E "basic|matchall" > /dev/null], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -139,7 +139,7 @@ AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
 pkts_rate 100000 pkts_burst 10000
 ])
 AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
-  egrep "basic|matchall" > /dev/null], [0])
+  grep -E "basic|matchall" > /dev/null], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 

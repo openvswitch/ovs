@@ -6,7 +6,7 @@
 m4_define([OVS_DPDK_PRE_CHECK],
   [dnl Check Hugepages
    AT_CHECK([cat /proc/meminfo], [], [stdout])
-   AT_SKIP_IF([egrep 'HugePages_Free: *0' stdout], [], [stdout])
+   AT_SKIP_IF([grep -E 'HugePages_Free: *0' stdout], [], [stdout])
    AT_CHECK([mount], [], [stdout])
    AT_CHECK([grep 'hugetlbfs' stdout], [], [stdout], [])
 

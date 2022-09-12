@@ -859,11 +859,11 @@ dnl ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/2
 dnl Now, check the overlay by sending out raw arp and icmp packets.
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff00000003080045000042ec2c4000402ff3bcac1f0101ac1f016400006558fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=NORMAL"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0, length 46: ARP, Reply 10.1.1.100 is-at f2:ff:00:00:00:01.* length 28" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0, length 46: ARP, Reply 10.1.1.100 is-at f2:ff:00:00:00:01.* length 28" 2>&1 1>/dev/null])
 
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500007aec8e4000402ff322ac1f0101ac1f016400006558f2ff00000001f2ff00000004080045000054548f40004001cfb30a0101010a0101640800e6e829270003e1a3435b00000000ff1a050000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=NORMAL"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0, length 102: IP 10.1.1.100 > 10.1.1.1: ICMP echo reply,.* length 64$" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0, length 102: IP 10.1.1.100 > 10.1.1.1: ICMP echo reply,.* length 64$" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -904,15 +904,15 @@ dnl Okay, now send out an arp request from 10.1.1.1 for 10.1.1.100 in erspan.
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500004e151d4000402fcac0ac1f0101ac1f0164100088be000000061000000100000007fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
 
 dnl 0002 is arp reply, followed by mac address of 10.1.1.100.
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0030:  0806 0001 0800 0604 0002 f2ff 0000 0001" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0a01 0164 f2ff 0000 0004 0a01 0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0030:  0806 0001 0800 0604 0002 f2ff 0000 0001" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0040:  0a01 0164 f2ff 0000 0004 0a01 0101" 2>&1 1>/dev/null])
 
 dnl Okay, now check the overlay with raw icmp packets.
-AT_FAIL_IF([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
+AT_FAIL_IF([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
 
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500008e70cb4000402f6ed2ac1f0101ac1f0164100088be000000051000000100000007f2ff00000001f2ff0000000408004500005c4a3340004001da070a0101010a010164080084f238fb0001f36a6b5b0000000021870e0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -956,17 +956,17 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [
 dnl Okay, send raw arp request and icmp echo request.
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff00000003080045000052373d4000402fa89cac1f0101ac1f0164100088be00000006200000016f54b41700008078fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0030:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0030:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0040:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0050:  0101" 2>&1 1>/dev/null])
 
 dnl Because tcpdump might not be able to parse erspan headers, we check icmp echo reply
 dnl by packet length.
-AT_FAIL_IF([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
+AT_FAIL_IF([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
 
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500009287e14000402f57b8ac1f0101ac1f0164100088be0000000520000001144cd5a400008078f2ff00000001f2ff0000000408004500005c38d640004001eb640a0101010a01016408005e57585f0001df6c6b5b0000000045bc050000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1014,15 +1014,15 @@ dnl Okay, now send raw arp request and icmp echo request.
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531003a2f40fc000100000000000000000000000001fc000100000000000000000000000100100088be000000051000007b00000007fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
 
 dnl Check arp reply.
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0060:  0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0040:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0050:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0060:  0101" 2>&1 1>/dev/null])
 
-AT_FAIL_IF([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
+AT_FAIL_IF([cat p0.pcap | grep -E "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
 
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531007a3c40fc000100000000000000000000000001fc0001000000000000000000000001002f00040104010100100088be000000061000407b00000007f2ff00000001f2ff0000000408004500005429b640004001fa8c0a0101010a01016408005c2c7526000118d3685b00000000e4aa020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1069,15 +1069,15 @@ NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING],
 dnl Okay, now send raw arp request and icmp echo request.
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531003e2f40fc000100000000000000000000000001fc000100000000000000000000000100100088be0000000620000079af514f9900008070fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0004 f2ff 0000 0001 0806 0001 0800 0604" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0002 f2ff 0000 0001 0a01 0164 f2ff 0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0060:  0004 0a01 0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0040:  0004 f2ff 0000 0001 0806 0001 0800 0604" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0050:  0002 f2ff 0000 0001 0a01 0164 f2ff 0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0060:  0004 0a01 0101" 2>&1 1>/dev/null])
 
-AT_FAIL_IF([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
+AT_FAIL_IF([cat p0.pcap | grep -E "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
 
 ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531007e3c40fc000100000000000000000000000001fc0001000000000000000000000001002f00040104010100100088be0000000720004079af514f9b00008070f2ff00000001f2ff00000004080045000054ffcb4000400124770a0101010a0101640800419e23ac000112d7685b000000004caf0c0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=normal"
 
-OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1869,10 +1869,10 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1901,10 +1901,10 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8847 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1934,10 +1934,10 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -1966,10 +1966,10 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected mpls encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *0000 *0000 *0002 *0000 *0000 *0001 *8848 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *2140 *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *4500 *0054 *0344 *4000 *4001 *2161 *0a01 *0101" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0a01 *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2000,13 +2000,13 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected decapsulated on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0060:  *3637" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0060:  *3637" 2>&1 1>/dev/null])
 
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2037,13 +2037,13 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 00 00 00 00 00 02 00 00 00 00 00 01 88 47 00 00 21 40 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 08 00 45 00 00 54 03 44 40 00 40 01 21 61 0a 01 01 01 0a 01 01 02 08 00 ef ac 7c e4 00 03 5b 2c 1f 61 00 00 00 00 50 0b 02 00 00 00 00 00 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37  > /dev/null])
 
 dnl Check the expected decapsulated on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0060:  *3637" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000:  *36b1 *ee7c *0102 *36b1 *ee7c *0103 *0800 *4500" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010:  *0054 *0344 *4000 *4001 *2161 *0a01 *0101 *0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020:  *0102 *0800 *efac *7ce4 *0003 *5b2c *1f61 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030:  *0000 *500b *0200 *0000 *0000 *1011 *1213 *1415" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040:  *1617 *1819 *1a1b *1c1d *1e1f *2021 *2223 *2425" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050:  *2627 *2829 *2a2b *2c2d *2e2f *3031 *3233 *3435" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0060:  *3637" 2>&1 1>/dev/null])
 
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -5502,7 +5502,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=
 udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),mark=1
 ])
 
-AT_CHECK([tcpdump -v "icmp" -r p0.pcap 2>/dev/null | egrep 'wrong|bad'], [1], [ignore-nolog])
+AT_CHECK([tcpdump -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -6252,7 +6252,7 @@ sleep 1
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
 NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -6 $NC_EOF_OPT -u fc00::2 1"])
 
-AT_CHECK([tcpdump -v "icmp6" -r p0.pcap 2>/dev/null | egrep 'wrong|bad'], [1], [ignore-nolog])
+AT_CHECK([tcpdump -v "icmp6" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 udp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>)
@@ -7251,12 +7251,12 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected nsh encapsulated packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010: *0103 *0012 *34ff *1122 *3344 *0000 *0000 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020: *0000 *0000 *0000 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0012 *34ff *1122 *3344 *0000 *0000 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0000 *0000 *0000 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7283,10 +7283,10 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected de-capsulated TCP packet on the egress interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010: *0028 *0001 *0000 *4006 *b013 *c0a8 *000a *0a00" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020: *000a *0400 *0800 *0000 *00c8 *0000 *0000 *5002" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030: *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0028 *0001 *0000 *4006 *b013 *c0a8 *000a *0a00" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *000a *0400 *0800 *0000 *00c8 *0000 *0000 *5002" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7316,12 +7316,12 @@ dnl p1(at_ns1) interface
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check the expected NSH packet with new fields in the header
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010: *0103 *0001 *0104 *100f *0e0d *0c0b *0a09 *0807" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020: *0605 *0403 *0201 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0001 *0104 *100f *0e0d *0c0b *0a09 *0807" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0605 *0403 *0201 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7350,23 +7350,23 @@ dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
 NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p1 interface
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0010: *0103 *0001 *0002 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p1.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0010: *0103 *0001 *0002 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p1.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1
 NS_CHECK_EXEC([at_ns1], [$PYTHON3 $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
 
 dnl Check for the above packet on p2 interface
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0010: *0103 *0001 *0001 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
-OVS_WAIT_UNTIL([cat p2.pcap | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0010: *0103 *0001 *0001 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
