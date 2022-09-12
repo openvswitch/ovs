@@ -740,14 +740,14 @@ dnl Output to tunnel from a int-br internal port.
 dnl Checking that the packet arrived and it was correctly encapsulated.
 AT_CHECK([ovs-ofctl add-flow int-br "in_port=LOCAL,actions=debug_slow,output:2"])
 AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
-OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}4" | wc -l` -ge 1])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}4" | wc -l` -ge 1])
 dnl Sending again to exercise the non-miss upcall path.
 AT_CHECK([ovs-appctl netdev-dummy/receive int-br "${packet}4"])
-OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}4" | wc -l` -ge 2])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}4" | wc -l` -ge 2])
 
 dnl Output to tunnel from the controller.
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out int-br CONTROLLER "debug_slow,output:2" "${packet}5"])
-OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | egrep "${encap}${packet}5" | wc -l` -ge 1])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep -E "${encap}${packet}5" | wc -l` -ge 1])
 
 dnl Datapath actions should not have tunnel push action.
 AT_CHECK([ovs-appctl dpctl/dump-flows | grep -q tnl_push], [1])
