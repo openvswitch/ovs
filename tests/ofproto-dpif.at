@@ -498,6 +498,72 @@ AT_CHECK([sed -n '/member p2/,/^$/p' bond3.txt | grep 'hash'], [0], [ignore])
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 
+dnl Regression test for a deadlock / double lock on post-recirculation rule
+dnl updates while processing PACKET_OUT.
+AT_SETUP([ofproto-dpif - balance-tcp bonding rule updates on packet-out])
+dnl Create br0 with interfaces bond0(p1, p2) and p5,
+dnl    and br1 with interfaces bond1(p3, p4) and p6.
+dnl    bond0 <-> bond1
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active dnl
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 -- dnl
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p1.sock ofport_request=1 mtu_request=65535 -- dnl
+   set interface p2 type=dummy options:pstream=punix:$OVS_RUNDIR/p2.sock ofport_request=2 mtu_request=65535 -- dnl
+   add-port br0 p5 -- set interface p5 ofport_request=5 type=dummy mtu_request=65535 -- dnl
+   add-br br1 -- dnl
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- dnl
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 dnl
+                  fail-mode=secure -- dnl
+   add-bond br1 bond1 p3 p4 bond_mode=balance-tcp lacp=active dnl
+        other-config:lacp-time=fast other-config:bond-rebalance-interval=1000 -- dnl
+   set interface p3 type=dummy options:stream=unix:$OVS_RUNDIR/p1.sock ofport_request=3 mtu_request=65535 -- dnl
+   set interface p4 type=dummy options:stream=unix:$OVS_RUNDIR/p2.sock ofport_request=4 mtu_request=65535 -- dnl
+   add-port br1 p6 -- set interface p6 ofport_request=6 type=dummy mtu_request=65535 --])
+AT_CHECK([ovs-appctl vlog/set bond:dbg])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+OVS_WAIT_WHILE([ovs-appctl bond/show | grep "may_enable: false"])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 2000 200
+
+dnl Send some traffic to distribute all the hashes between ports.
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+
+dnl Wait for rebalancing for per-hash stats accounting.
+ovs-appctl time/warp 1000 100
+
+dnl Check that p2 handles some hashes.
+ovs-appctl bond/show > bond1.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond1.txt | grep 'hash'], [0], [ignore])
+
+dnl Pause revalidators to be sure that they do not update flows while
+dnl the bonding configuration chnages.
+ovs-appctl revalidator/pause
+
+dnl Move p2 down to trigger update of bonding post-recirculation rules by
+dnl forcing move of all the hashes to p1.
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 down], 0, [OK
+])
+
+dnl Send PACKET_OUT that may lead to flow updates since the bonding
+dnl configuration changed.
+packet=ffffffffffff00102030405008004500001c00000000401100000a000002ffffffff0035111100080000
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=p5 packet=$packet actions=resubmit(,0)"])
+
+dnl Resume revalidators.
+ovs-appctl revalidator/resume
+ovs-appctl revalidator/wait
+
+ovs-appctl time/warp 200 100
+dnl Check that all hashes moved form p2 and OVS is still working.
+ovs-appctl bond/show > bond2.txt
+AT_CHECK([sed -n '/member p2/,/^$/p' bond2.txt | grep 'hash'], [1], [ignore])
+
+OVS_VSWITCHD_STOP()
+AT_CLEANUP
 
 # Makes sure recirculation does not change the way packet is handled.
 AT_SETUP([ofproto-dpif - balance-tcp bonding, different recirc flow ])
