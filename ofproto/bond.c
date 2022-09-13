@@ -185,9 +185,13 @@ static struct bond_member *choose_output_member(const struct bond *,
                                                 uint16_t vlan)
     OVS_REQ_RDLOCK(rwlock);
 static void update_recirc_rules__(struct bond *);
+static bool bond_may_recirc(const struct bond *);
+static void bond_update_post_recirc_rules__(struct bond *, bool force)
+    OVS_REQ_WRLOCK(rwlock);
 static bool bond_is_falling_back_to_ab(const struct bond *);
 static void bond_add_lb_output_buckets(const struct bond *);
 static void bond_del_lb_output_buckets(const struct bond *);
+
 
 /* Attempts to parse 's' as the name of a bond balancing mode.  If successful,
  * stores the mode in '*balance' and returns true.  Otherwise returns false
@@ -510,6 +514,12 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
         bond_entry_reset(bond);
     }
 
+    if (bond->ofproto->backer->rt_support.odp.recirc
+        && bond_may_recirc(bond)) {
+        /* Update rules to reflect possible recirc_id changes. */
+        update_recirc_rules(bond);
+    }
+
     ovs_rwlock_unlock(&rwlock);
     return revalidate;
 }
@@ -721,6 +731,12 @@ bond_run(struct bond *bond, enum lacp_status lacp_status)
     if (!bond->active_member || !bond->active_member->enabled ||
         (primary && bond->active_member != primary)) {
         bond_choose_active_member(bond);
+    }
+
+    if (bond->ofproto->backer->rt_support.odp.recirc
+        && bond_may_recirc(bond)) {
+        /* Update rules to reflect possible link state changes. */
+        bond_update_post_recirc_rules__(bond, false);
     }
 
     revalidate = bond->bond_revalidate;
@@ -1038,7 +1054,7 @@ bond_may_recirc(const struct bond *bond)
 }
 
 static void
-bond_update_post_recirc_rules__(struct bond* bond, const bool force)
+bond_update_post_recirc_rules__(struct bond* bond, bool force)
     OVS_REQ_WRLOCK(rwlock)
 {
    struct bond_entry *e;
@@ -1086,6 +1102,19 @@ bond_update_post_recirc_rules(struct bond *bond, uint32_t *recirc_id,
     }
 }
 
+void
+bond_get_recirc_id_and_hash_basis(struct bond *bond, uint32_t *recirc_id,
+                                  uint32_t *hash_basis)
+{
+    ovs_rwlock_rdlock(&rwlock);
+    if (bond_may_recirc(bond)) {
+        *recirc_id = bond->recirc_id;
+        *hash_basis = bond->basis;
+    } else {
+        *recirc_id = *hash_basis = 0;
+    }
+    ovs_rwlock_unlock(&rwlock);
+}
 
 /* Rebalancing. */
 
