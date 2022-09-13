@@ -2477,9 +2477,18 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
             /* In case recirculation is not actually in use, 'xr.recirc_id'
              * will be set to '0', since a valid 'recirc_id' can
              * not be zero.  */
-            bond_update_post_recirc_rules(out_xbundle->bond,
-                                          &xr.recirc_id,
-                                          &xr.hash_basis);
+            if (ctx->xin->allow_side_effects) {
+                bond_update_post_recirc_rules(out_xbundle->bond,
+                                              &xr.recirc_id,
+                                              &xr.hash_basis);
+            } else {
+                /* If side effects are not allowed, only getting the bond
+                 * configuration.  Rule updates will be handled by the
+                 * main thread later. */
+                bond_get_recirc_id_and_hash_basis(out_xbundle->bond,
+                                                  &xr.recirc_id,
+                                                  &xr.hash_basis);
+            }
             if (xr.recirc_id) {
                 /* Use recirculation instead of output. */
                 use_recirc = true;
