@@ -361,6 +361,10 @@ static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
                                      const char *argv[], void *aux);
 static void upcall_unixctl_purge(struct unixctl_conn *conn, int argc,
                                  const char *argv[], void *aux);
+static void upcall_unixctl_pause(struct unixctl_conn *conn, int argc,
+                                 const char *argv[], void *aux);
+static void upcall_unixctl_resume(struct unixctl_conn *conn, int argc,
+                                  const char *argv[], void *aux);
 
 static struct udpif_key *ukey_create_from_upcall(struct upcall *,
                                                  struct flow_wildcards *);
@@ -433,6 +437,10 @@ udpif_init(void)
                                  upcall_unixctl_dump_wait, NULL);
         unixctl_command_register("revalidator/purge", "", 0, 0,
                                  upcall_unixctl_purge, NULL);
+        unixctl_command_register("revalidator/pause", NULL, 0, 0,
+                                 upcall_unixctl_pause, NULL);
+        unixctl_command_register("revalidator/resume", NULL, 0, 0,
+                                 upcall_unixctl_resume, NULL);
         ovsthread_once_done(&once);
     }
 }
@@ -3035,6 +3043,31 @@ upcall_unixctl_purge(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
     unixctl_command_reply(conn, "");
 }
+
+static void
+upcall_unixctl_pause(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        udpif_pause_revalidators(udpif);
+    }
+    unixctl_command_reply(conn, "");
+}
+
+static void
+upcall_unixctl_resume(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        udpif_resume_revalidators(udpif);
+    }
+    unixctl_command_reply(conn, "");
+}
+
 
 /* Flows are sorted in the following order:
  * netdev, flow state (offloaded/kernel path), flow_pps_rate.
