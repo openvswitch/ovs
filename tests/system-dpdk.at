@@ -1127,13 +1127,46 @@ OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
 OVS_DPDK_START_VSWITCHD()
 
-AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:shared-mempool-config=9000,6000,1500])
+AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:shared-mempool-config=8000,6000,1500])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
 
-CHECK_MEMPOOL_PARAM([9000], [ALL], [])
+CHECK_MEMPOOL_PARAM([8000], [ALL], [])
 CHECK_MEMPOOL_PARAM([6000], [ALL], [])
 CHECK_MEMPOOL_PARAM([1500], [ALL], [])
 
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+AT_CHECK(ovs-appctl vlog/set netdev_dpdk:dbg)
+
+dnl Add userspace bridge and a dpdk port
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_null0,no-rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Check if the right user configured mempool is found for default MTU (1500)
+AT_CHECK([grep "Found user configured shared mempool .* suitable for port with MTU 1500" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "Port p1: Requesting a mempool" ovs-vswitchd.log], [], [stdout])
+
+dnl Change the MTU value to 7000 to trigger mempool change
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK(ovs-vsctl set Interface p1 mtu_request=7000)
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Found user configured shared mempool .* suitable for port with MTU 7000"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Port p1: Requesting a mempool"])
+
+dnl Change back the MTU value to 1500 to trigger mempool change (re-use)
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK(ovs-vsctl set Interface p1 mtu_request=1500)
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Found user configured shared mempool .* suitable for port with MTU 1500"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Reusing mempool"])
+
+dnl Change the MTU value beyond the max value in shared-mempool-config list
+TMP=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+AT_CHECK(ovs-vsctl set Interface p1 mtu_request=9000)
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "No user configured shared mempool mbuf sizes found suitable for port with MTU 9000"])
+OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Port p1: Requesting a mempool"])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 p1], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
+])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
