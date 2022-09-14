@@ -182,6 +182,7 @@ __regex_empty_return = re.compile(r'\s*return;')
 __regex_if_macros = re.compile(r'^ +(%s) \([\S]([\s\S]+[\S])*\) { +\\' %
                                __parenthesized_constructs)
 __regex_nonascii_characters = re.compile("[^\u0000-\u007f]")
+__regex_efgrep = re.compile(r'.*[ef]grep.*$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -339,6 +340,11 @@ def trailing_operator(line):
 def has_xxx_mark(line):
     """Returns TRUE if the current line contains 'xxx'."""
     return __regex_has_xxx_mark.match(line) is not None
+
+
+def has_efgrep(line):
+    """Returns TRUE if the current line contains 'egrep' or 'fgrep'."""
+    return __regex_efgrep.match(line) is not None
 
 
 def filter_comments(current_line, keep=False):
@@ -608,6 +614,11 @@ checks = [
      'print':
      lambda: print_warning("Empty return followed by brace, consider omitting")
      },
+
+    {'regex': r'(\.at|\.sh)$', 'match_name': None,
+     'check': lambda x: has_efgrep(x),
+     'print':
+     lambda: print_error("grep -E/-F should be used instead of egrep/fgrep")},
 ]
 
 

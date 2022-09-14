@@ -366,6 +366,33 @@ try_checkpatch \
 
 AT_CLEANUP
 
+
+AT_SETUP([checkpatch - check egrep / fgrep])
+try_checkpatch \
+   "COMMON_PATCH_HEADER([tests/something.at])
+    +C_H_E_C_K([[ovs-vsctl show | grep -E 'my-port.*[[0-9]]$' | grep -F 'port']])
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER([tests/something.at])
+    +C_H_E_C_K([[ovs-vsctl show | egrep 'my-port.*[[0-9]]$']])
+    " \
+    "ERROR: grep -E/-F should be used instead of egrep/fgrep
+    #8 FILE: tests/something.at:1:
+    C_H_E_C_K([[ovs-vsctl show | egrep 'my-port.*[[0-9]]$']])
+"
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER([tests/something.at])
+    +C_H_E_C_K([[ovs-vsctl show | fgrep 'my-port.*[[0-9]]$']])
+    " \
+    "ERROR: grep -E/-F should be used instead of egrep/fgrep
+    #8 FILE: tests/something.at:1:
+    C_H_E_C_K([[ovs-vsctl show | fgrep 'my-port.*[[0-9]]$']])
+"
+AT_CLEANUP
+
+
 AT_SETUP([checkpatch - whitespace around cast])
 try_checkpatch \
    "COMMON_PATCH_HEADER
