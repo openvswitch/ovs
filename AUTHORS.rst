@@ -56,6 +56,7 @@ Amitabha Biswas                    azbiswas@gmail.com
 Anand Kumar                        kumaranand@vmware.com
 Andrea Kao                         eirinikos@gmail.com
 Andreas Karis                      akaris@redhat.com
+Andreas Stieger                    andreas.stieger@gmx.de
 Andrew Evans
 Andrew Beekhof                     abeekhof@redhat.com
 Andrew Kampjes                     a.kampjes@gmail.com
