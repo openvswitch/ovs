@@ -436,8 +436,8 @@ AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
      mkdir -p build-aux
      OBJFILE=build-aux/binutils_avx512_check.o
      GATHER_PARAMS='0x8(,%ymm1,1),%ymm0{%k2}'
-     echo "vpgatherqq $GATHER_PARAMS" | as --64 -o $OBJFILE -
      if ($CC -dumpmachine | grep x86_64) >/dev/null 2>&1; then
+       echo "vpgatherqq $GATHER_PARAMS" | as --64 -o $OBJFILE -
        if (objdump -d  --no-show-raw-insn $OBJFILE | grep -q $GATHER_PARAMS) >/dev/null 2>&1; then
          ovs_cv_binutils_avx512_good=yes
        else
@@ -446,11 +446,11 @@ AC_DEFUN([OVS_CHECK_BINUTILS_AVX512],
          dnl and causing zmm usage with buggy binutils versions.
          CFLAGS="$CFLAGS -mno-avx512f"
        fi
+       rm $OBJFILE
      else
        dnl non x86_64 architectures don't have avx512, so not affected
        ovs_cv_binutils_avx512_good=no
      fi])
-     rm $OBJFILE
    if test "$ovs_cv_binutils_avx512_good" = yes; then
      AC_DEFINE([HAVE_LD_AVX512_GOOD], [1],
                [Define to 1 if binutils correctly supports AVX512.])
