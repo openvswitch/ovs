@@ -184,6 +184,16 @@ static struct dpif_miniflow_extract_impl mfex_impls[] = {
         .extract_func = mfex_avx512_dot1q_ipv6_udp,
         .name = "avx512_dot1q_ipv6_udp",
     },
+#if HAVE_AVX512VBMI
+    [MFEX_IMPL_VBMI_IPv4_NVGRE] = {
+        .probe = mfex_avx512_vbmi_probe,
+        .extract_func = mfex_avx512_vbmi_ip_nvgre,
+        .name = "avx512_vbmi_ipv4_nvgre", },
+#endif
+    [MFEX_IMPL_IPv4_NVGRE] = {
+        .probe = mfex_avx512_probe,
+        .extract_func = mfex_avx512_ip_nvgre,
+        .name = "avx512_ipv4_nvgre", },
 #endif
 };
 
