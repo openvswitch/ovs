@@ -483,6 +483,7 @@ tests_ovstest_SOURCES = \
 	tests/test-unixctl.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
+	tests/test-uuidset.c \
 	tests/test-bitmap.c \
 	tests/test-vconn.c \
 	tests/test-aa.c \

@@ -274,3 +274,7 @@ AT_CLEANUP
 AT_SETUP([id-fpool module])
 AT_CHECK([ovstest test-id-fpool check], [0], [])
 AT_CLEANUP
+
+AT_SETUP([uuidset module])
+AT_CHECK([ovstest test-uuidset], [0], [], [ignore])
+AT_CLEANUP
