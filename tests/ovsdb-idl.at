@@ -2437,3 +2437,92 @@ unix:socket2 remote has col id in table simple7
 
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
+
+dnl This test checks that inserting and deleting the source of a reference
+dnl doesn't remove the reference in the (deleted) source tracked record.
+OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link1],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "link2",
+       "uuid-name": "l2row0",
+       "row": {"i": 1, "l1": ["set", [["named-uuid", "l1row0"]]]}
+      },
+      {"op": "insert",
+       "table": "link1",
+       "uuid-name": "l1row0",
+       "row": {"i": 1, "k": ["named-uuid", "l1row0"]}
+      },
+      {"op": "insert",
+       "table": "link2",
+       "uuid-name": "l2row1",
+       "row": {"i": 2, "l1": ["set", [["named-uuid", "l1row0"]]]}
+      }
+    ]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "link2",
+       "where": [["i", "==", 2]]}
+       ]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "link2",
+       "where": [["i", "==", 1]]}
+       ]'
+  ]],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
+002: {"error":null,"result":[{"count":1}]}
+003: table link1: inserted row: i=1 k=1 ka=[] l2= uuid=<1>
+003: table link1: updated columns: i k
+003: table link2: inserted row: i=1 l1=1 uuid=<0>
+003: table link2: inserted/deleted row: i=2 l1=1 uuid=<2>
+003: table link2: updated columns: i l1
+003: table link2: updated columns: i l1
+004: {"error":null,"result":[{"count":1}]}
+005: table link1: i=1 k=1 ka=[] l2= uuid=<1>
+006: done
+]])
+OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "link1",
+       "uuid-name": "l1row0",
+       "row": {"i": 1, "k": ["named-uuid", "l1row0"], "l2": ["set", [["named-uuid", "l2row0"]]]}
+      },
+      {"op": "insert",
+       "table": "link2",
+       "uuid-name": "l2row0",
+       "row": {"i": 1}
+      },
+      {"op": "insert",
+       "table": "link1",
+       "uuid-name": "l1row1",
+       "row": {"i": 2, "k": ["named-uuid", "l1row0"], "l2": ["set", [["named-uuid", "l2row0"]]]}
+      }
+    ]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "link1",
+       "where": [["i", "==", 2]]}
+       ]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "link1",
+       "where": [["i", "==", 1]]}
+       ]'
+  ]],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
+002: {"error":null,"result":[{"count":1}]}
+003: table link1: inserted row: i=1 k=1 ka=[] l2=1 uuid=<0>
+003: table link1: inserted/deleted row: i=2 k=1 ka=[] l2=1 uuid=<2>
+003: table link1: updated columns: i k l2
+003: table link1: updated columns: i k l2
+003: table link2: inserted row: i=1 l1= uuid=<1>
+003: table link2: updated columns: i
+004: {"error":null,"result":[{"count":1}]}
+005: table link2: i=1 l1= uuid=<1>
+006: done
+]])

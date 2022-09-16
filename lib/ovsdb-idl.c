@@ -2367,6 +2367,10 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct shash *data)
 static void
 ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 {
+    /* If row has to be reparsed, reparse it before it's deleted. */
+    if (!ovs_list_is_empty(&row->reparse_node)) {
+        ovsdb_idl_row_parse(row);
+    }
     ovsdb_idl_remove_from_indexes(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_destroy(row);
