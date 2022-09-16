@@ -2378,7 +2378,6 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             }
 
             OvsExecuteHash(key, (const PNL_ATTR)a);
-
             break;
         }
 

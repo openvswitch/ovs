@@ -19,5 +19,6 @@
 
 #define IPPROTO_GRE 47
 #define IPPORT_FTP 21
+#define IPPORT_TFTP 69
 
 #endif /* netinet/in.h */

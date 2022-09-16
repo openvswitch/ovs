@@ -80,6 +80,12 @@ typedef enum _NAT_ACTION {
     NAT_ACTION_DST_PORT = 1 << 4,
 } NAT_ACTION;
 
+typedef enum _CT_HELPER_METHOD {
+    CT_HELPER_NONE = 0,
+    CT_HELPER_FTP = 1,
+    CT_HELPER_TFTP = 2,
+} CT_HELPER_METHOD;
+
 typedef struct _OVS_CT_KEY {
     struct ct_endpoint src;
     struct ct_endpoint dst;
@@ -218,11 +224,10 @@ NDIS_STATUS OvsCtRelatedEntryCreate(UINT8 ipProto,
                                     UINT64 currentTime,
                                     POVS_CT_ENTRY parent);
 POVS_CT_ENTRY OvsCtRelatedLookup(OVS_CT_KEY key, UINT64 currentTime);
-
-NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
-                           OvsFlowKey *key,
-                           OVS_PACKET_HDR_INFO *layers,
-                           UINT64 currentTime,
-                           POVS_CT_ENTRY entry,
-                           BOOLEAN request);
+NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl, OvsFlowKey *key,
+                           OVS_PACKET_HDR_INFO *layers, UINT64 currentTime,
+                           POVS_CT_ENTRY entry);
+NDIS_STATUS OvsCtHandleTftp(PNET_BUFFER_LIST curNbl, OvsFlowKey *key,
+                            OVS_PACKET_HDR_INFO *layers, UINT64 currentTime,
+                            POVS_CT_ENTRY entry);
 #endif /* __OVS_CONNTRACK_H_ */

@@ -40,6 +40,7 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
     /* FTP PASV - Client initiates the connection from unknown port */
     if ((incomingKey.dl_type == entryKey.dl_type) &&
         (incomingKey.dl_type == htons(ETH_TYPE_IPV4)) &&
+        (incomingKey.nw_proto == IPPROTO_TCP) &&
         (incomingKey.dst.addr.ipv4 == entryKey.src.addr.ipv4) &&
         (incomingKey.dst.port == entryKey.src.port) &&
         (incomingKey.src.addr.ipv4 == entryKey.dst.addr.ipv4) &&
@@ -49,6 +50,7 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
 
     if ((incomingKey.dl_type == entryKey.dl_type) &&
         (incomingKey.dl_type == htons(ETH_TYPE_IPV6)) &&
+        (incomingKey.nw_proto == IPPROTO_TCP) &&
         !memcmp(&(incomingKey.dst.addr.ipv6), &(entryKey.src.addr.ipv6),
                sizeof(incomingKey.dst.addr.ipv6)) &&
         (incomingKey.dst.port == entryKey.src.port) &&
@@ -65,6 +67,7 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
      */
     if ((incomingKey.dl_type == entryKey.dl_type) &&
         (incomingKey.dl_type == htons(ETH_TYPE_IPV4)) &&
+        (incomingKey.nw_proto == IPPROTO_TCP) &&
         (incomingKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
         (incomingKey.dst.addr.ipv4 == entryKey.dst.addr.ipv4) &&
         (incomingKey.dst.port == entryKey.dst.port) &&
@@ -74,10 +77,36 @@ OvsCtRelatedKeyAreSame(OVS_CT_KEY incomingKey, OVS_CT_KEY entryKey)
 
     if ((incomingKey.dl_type == entryKey.dl_type) &&
         (incomingKey.dl_type == htons(ETH_TYPE_IPV6)) &&
+        (incomingKey.nw_proto == IPPROTO_TCP) &&
         !memcmp(&(incomingKey.src.addr.ipv6), &(entryKey.src.addr.ipv6),
                sizeof(incomingKey.src.addr.ipv6)) &&
         !memcmp(&(incomingKey.dst.addr.ipv6), &(entryKey.dst.addr.ipv6),
                sizeof(incomingKey.src.addr.ipv6)) &&
+        (incomingKey.dst.port == entryKey.dst.port) &&
+        (incomingKey.nw_proto == entryKey.nw_proto)) {
+        return TRUE;
+    }
+
+    /* Tftp protocol */
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV4)) &&
+        (incomingKey.nw_proto == IPPROTO_UDP) &&
+        !memcmp(&(incomingKey.src.addr.ipv4), &(entryKey.src.addr.ipv4),
+                sizeof(incomingKey.src.addr.ipv4)) &&
+        !memcmp(&(incomingKey.dst.addr.ipv4), &(entryKey.dst.addr.ipv4),
+                sizeof(incomingKey.dst.addr.ipv4)) &&
+        (incomingKey.dst.port == entryKey.dst.port) &&
+        (incomingKey.nw_proto == entryKey.nw_proto)) {
+        return TRUE;
+    }
+
+    if ((incomingKey.dl_type == entryKey.dl_type) &&
+        (incomingKey.dl_type == htons(ETH_TYPE_IPV6)) &&
+        (incomingKey.nw_proto == IPPROTO_UDP) &&
+        !memcmp(&(incomingKey.src.addr.ipv6), &(entryKey.src.addr.ipv6),
+                sizeof(incomingKey.src.addr.ipv6)) &&
+        !memcmp(&(incomingKey.dst.addr.ipv6), &(entryKey.dst.addr.ipv6),
+                sizeof(incomingKey.dst.addr.ipv6)) &&
         (incomingKey.dst.port == entryKey.dst.port) &&
         (incomingKey.nw_proto == entryKey.nw_proto)) {
         return TRUE;
@@ -165,7 +194,6 @@ OvsCtRelatedEntryCreate(UINT8 ipProto,
     }
 
     UINT32 hash = OvsExtractCtRelatedKeyHash(&entry->key);
-
     NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
     InsertHeadList(&ovsCtRelatedTable[hash & CT_HASH_TABLE_MASK],
                    &entry->link);
