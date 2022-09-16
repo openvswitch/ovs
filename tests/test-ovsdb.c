@@ -1953,11 +1953,14 @@ format_idl_row(const struct ovsdb_idl_row *row, int step, const char *contents,
     const char *change_str =
         !ovsdb_idl_track_is_set(row->table)
         ? ""
-        : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_INSERT) > 0
-          ? "inserted row: "
-          : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0
-            ? "deleted row: "
-            : "";
+        : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_INSERT) > 0 &&
+            ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0
+          ? "inserted/deleted row: "
+          : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_INSERT) > 0
+            ? "inserted row: "
+            : ovsdb_idl_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0
+              ? "deleted row: "
+              : "";
 
     if (terse) {
         return xasprintf("%03d: table %s", step, row->table->class_->name);
