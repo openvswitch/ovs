@@ -99,9 +99,10 @@ Bryan Phillippe                    bp@toroki.com
 Carlo Andreotti                    c.andreotti@m3s.it
 Casey Barker                       crbarker@google.com
 Chandra Sekhar Vejendla            csvejend@us.ibm.com
-Christophe Fontaine                cfontain@redhat.com
-Christoph Jaeger                   cj@linux.com
 Chris Wright                       chrisw@sous-sol.org
+Christoph Jaeger                   cj@linux.com
+Christophe Fontaine                cfontain@redhat.com
+Christopher Aubut                  christopher@aubut.me
 Chuck Short                        zulcss@ubuntu.com
 Cian Ferriter                      cian.ferriter@intel.com
 Ciara Loftus                       ciara.loftus@intel.com
