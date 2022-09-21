@@ -239,9 +239,15 @@ struct ctl_context {
     /* A command may set this member to true if some prerequisite is not met
      * and the caller should wait for something to change and then retry. */
     bool try_again;
+
+    /* If set during the context initialization, command implementation
+     * may use optimizations that will leave database changes invisible
+     * to IDL, e.g. use partial set updates. */
+    bool last_command;
 };
 
-void ctl_context_init_command(struct ctl_context *, struct ctl_command *);
+void ctl_context_init_command(struct ctl_context *, struct ctl_command *,
+                              bool last);
 void ctl_context_init(struct ctl_context *, struct ctl_command *,
                       struct ovsdb_idl *, struct ovsdb_idl_txn *,
                       struct ovsdb_symbol_table *,

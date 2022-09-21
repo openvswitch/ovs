@@ -2711,9 +2711,9 @@ post_db_reload_do_checks(const struct vsctl_context *vsctl_ctx)
 
 static void
 vsctl_context_init_command(struct vsctl_context *vsctl_ctx,
-                           struct ctl_command *command)
+                           struct ctl_command *command, bool last_command)
 {
-    ctl_context_init_command(&vsctl_ctx->base, command);
+    ctl_context_init_command(&vsctl_ctx->base, command, last_command);
     vsctl_ctx->verified_ports = false;
 }
 
@@ -2859,7 +2859,8 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
     vsctl_context_init(&vsctl_ctx, NULL, idl, txn, ovs, symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
-        vsctl_context_init_command(&vsctl_ctx, c);
+        vsctl_context_init_command(&vsctl_ctx, c,
+                                   c == &commands[n_commands - 1]);
         if (c->syntax->run) {
             (c->syntax->run)(&vsctl_ctx.base);
         }

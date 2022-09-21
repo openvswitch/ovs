@@ -1071,8 +1071,12 @@ AT_CHECK([RUN_OVS_VSCTL([set controller br1 'connection-mode=xyz'])],
 AT_CHECK([RUN_OVS_VSCTL([set controller br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ])
-AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])],
+AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y -- show])],
   [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
+])
+AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])], [1], [], [stderr])
+AT_CHECK([sed "/^.*|WARN|.*/d" < stderr], [0], [dnl
+ovs-vsctl: transaction error: {"details":"set must have 0 to 1 members but 2 are present","error":"syntax error","syntax":"[[\"set\",[\"x\",\"y\"]]]"}
 ])
 AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])],
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimum number is 1

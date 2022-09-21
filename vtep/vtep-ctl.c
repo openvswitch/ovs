@@ -2207,9 +2207,9 @@ static const struct ctl_table_class tables[VTEPREC_N_TABLES] = {
 
 static void
 vtep_ctl_context_init_command(struct vtep_ctl_context *vtepctl_ctx,
-                              struct ctl_command *command)
+                              struct ctl_command *command, bool last_command)
 {
-    ctl_context_init_command(&vtepctl_ctx->base, command);
+    ctl_context_init_command(&vtepctl_ctx->base, command, last_command);
     vtepctl_ctx->verified_ports = false;
 
 }
@@ -2304,7 +2304,8 @@ do_vtep_ctl(const char *args, struct ctl_command *commands,
     }
     vtep_ctl_context_init(&vtepctl_ctx, NULL, idl, txn, vtep_global, symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
-        vtep_ctl_context_init_command(&vtepctl_ctx, c);
+        vtep_ctl_context_init_command(&vtepctl_ctx, c,
+                                      c == &commands[n_commands - 1]);
         if (c->syntax->run) {
             (c->syntax->run)(&vtepctl_ctx.base);
         }
