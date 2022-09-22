@@ -5,6 +5,24 @@ v2.17.3 - xx xxx xxxx
        configuration in a clustered databse independently for each server.
        E.g. for listening on unique addresses.  See the ovsdb.local-config.5
        manpage for schema details.
+   - DPDK:
+     * OVS validated with DPDK 21.11.2.
+       DPDK 21.11.2 contains fixes for the following CVEs:
+       CVE-2022-28199 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-28199
+       CVE-2022-2132 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-2132
+       A bug was introduced in DPDK 21.11.1 by the commit
+       01e3dee29c02 ("vhost: fix unsafe vring addresses modifications").
+       This bug can cause a deadlock when vIOMMU is enabled and NUMA
+       reallocation of the virtqueues happen.
+       A fix has been posted and pushed to the DPDK 21.11 branch.
+       It can be found here:
+       https://patches.dpdk.org/project/dpdk/patch/20220725203206.427083-2-david.marchand@redhat.com/.
+       If a user wishes to avoid the issue then it is recommended to use
+       DPDK 21.11.0 until the release of DPDK 21.11.3.
+       It should be noted that DPDK 21.11.0 does not benefit from the numerous
+       bug and CVE fixes addressed since its release.
+       If a user wishes to benefit from these fixes it is recommended to use
+       DPDK 21.11.2.
 
 v2.17.2 - 15 Jun 2022
 ---------------------
