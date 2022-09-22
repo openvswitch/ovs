@@ -1,5 +1,23 @@
 v2.13.9 - xx xxx xxxx
 ---------------------
+   - DPDK:
+     * OVS validated with DPDK 19.11.13.
+       DPDK 19.11.13 contains fixes for the following CVEs:
+       CVE-2022-28199 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-28199
+       CVE-2022-2132 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-2132
+       A bug was introduced in DPDK 19.11.12 by the commit
+       1e68fe334ff0 ("vhost: fix unsafe vring addresses modifications").
+       This bug can cause a deadlock when vIOMMU is enabled and NUMA
+       reallocation of the virtqueues happen.
+       A fix has been posted and is due to be included in the DPDK 19.11.14 release.
+       It can be found here:
+       https://patches.dpdk.org/project/dpdk/patch/20220725203206.427083-2-david.marchand@redhat.com/.
+       If a user wishes to avoid the issue then it is recommended to use
+       DPDK 19.11.11 until the release of DPDK 19.11.14.
+       It should be noted that DPDK 19.11.11 does not benefit from the numerous
+       bug and CVE fixes addressed since its release.
+       If a user wishes to benefit from these fixes it is recommended to use
+       DPDK 19.11.13.
 
 v2.13.8 - 15 Jun 2022
 ---------------------
