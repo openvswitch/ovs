@@ -210,12 +210,12 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.10.x       17.11.10
     2.11.x       18.11.9
     2.12.x       18.11.9
-    2.13.x       19.11.10
-    2.14.x       19.11.10
-    2.15.x       20.11.4
-    2.16.x       20.11.4
-    2.17.x       21.11.1
-    3.0.x        21.11.1
+    2.13.x       19.11.13
+    2.14.x       19.11.13
+    2.15.x       20.11.6
+    2.16.x       20.11.6
+    2.17.x       21.11.2
+    3.0.x        21.11.2
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
