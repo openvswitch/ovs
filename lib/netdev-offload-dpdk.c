@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <sys/types.h>
+#include <netinet/in.h>
 #include <netinet/ip6.h>
 #include <rte_ethdev.h>
 #include <rte_flow.h>

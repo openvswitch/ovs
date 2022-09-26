@@ -18,6 +18,10 @@
 #error "Use this header only with sparse.  It is not a correct implementation."
 #endif
 
+#ifndef NETINET_IN_H_INCLUDED
+#error "Must include <netinet/in.h> before <netinet/ip6.h> for FreeBSD support"
+#endif
+
 #ifndef __NETINET_IP6_SPARSE
 #define __NETINET_IP6_SPARSE 1
 
