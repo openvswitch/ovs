@@ -5699,7 +5699,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
     struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
     bool emit_set_tunnel = false;
 
-    if (!ipfix || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
+    if (!ipfix) {
         return;
     }
 
