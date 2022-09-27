@@ -157,6 +157,7 @@ test_refuse_connection(struct ovs_cmdl_context *ctx)
     error = vconn_connect_block(vconn, (TIMEOUT - 2) * 1000);
     if (!strcmp(type, "tcp")) {
         if (error != ECONNRESET && error != EPIPE && error != ETIMEDOUT
+            && error != ECONNREFUSED
 #ifdef _WIN32
             && error != WSAECONNRESET
 #endif
