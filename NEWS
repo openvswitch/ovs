@@ -1,5 +1,21 @@
 v2.15.6 - xx xxx xxxx
 ---------------------
+   - DPDK:
+     * OVS validated with DPDK 20.11.6.
+       DPDK 20.11.6 requires a meson version of 0.48.1 or higher.
+       A bug was introduced in DPDK 20.11.5 by the commit
+       33f2e3756186 ("vhost: fix unsafe vring addresses modifications").
+       This bug can cause a deadlock when vIOMMU is enabled and NUMA
+       reallocation of the virtqueues happen.
+       A fix has been posted and pushed to the DPDK 20.11 branch.
+       It can be found here:
+       https://patches.dpdk.org/project/dpdk/patch/20220725203206.427083-2-david.marchand@redhat.com/.
+       If a user wishes to avoid the issue then it is recommended to use
+       DPDK 20.11.4 until the release of DPDK 20.11.7.
+       It should be noted that DPDK 20.11.4 does not benefit from the numerous
+       bug fixes addressed since its release.
+       If a user wishes to benefit from these fixes it is recommended to use
+       DPDK 20.11.6.
 
 v2.15.5 - 15 Jun 2022
 ---------------------
