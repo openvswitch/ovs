@@ -2623,10 +2623,17 @@ tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
 
 static void
 nl_msg_act_police_start_nest(struct ofpbuf *request, uint32_t prio,
-                             size_t *offset, size_t *act_offset)
+                             size_t *offset, size_t *act_offset,
+                             bool single_action)
 {
     *act_offset = nl_msg_start_nested(request, prio);
     nl_msg_put_string(request, TCA_ACT_KIND, "police");
+
+    /* If police action is added independently from filter, we need to
+     * add action flag according to tc-policy. */
+    if (single_action) {
+        nl_msg_put_act_tc_policy_flag(request);
+    }
     *offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
 }
 
@@ -2642,7 +2649,7 @@ nl_msg_act_police_end_nest(struct ofpbuf *request, size_t offset,
 static void
 nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
                       uint64_t pkts_rate, uint64_t pkts_burst,
-                      uint32_t notexceed_act)
+                      uint32_t notexceed_act, bool single_action)
 {
     size_t offset, act_offset;
     uint32_t prio = 0;
@@ -2651,7 +2658,8 @@ nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
         return;
     }
 
-    nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset);
+    nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset,
+                                 single_action);
     if (police->rate.rate) {
         tc_put_rtab(request, TCA_POLICE_RATE, &police->rate);
     }
@@ -2698,7 +2706,7 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
     nl_msg_put_act_police(&request, &pol_act, kpkts_rate * 1000,
-                          kpkts_burst * 1000, TC_ACT_UNSPEC);
+                          kpkts_burst * 1000, TC_ACT_UNSPEC, false);
     nl_msg_end_nested(&request, action_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -5667,7 +5675,7 @@ tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
     police_offset = nl_msg_start_nested(&request, TCA_BASIC_ACT);
     tc_policer_init(&tc_police, kbits_rate, kbits_burst);
     nl_msg_put_act_police(&request, &tc_police, kpkts_rate * 1000ULL,
-                          kpkts_burst * 1000ULL, TC_ACT_UNSPEC);
+                          kpkts_burst * 1000ULL, TC_ACT_UNSPEC, false);
     nl_msg_end_nested(&request, police_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -5702,7 +5710,7 @@ tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
 
     offset = nl_msg_start_nested(&request, TCA_ACT_TAB);
     nl_msg_put_act_police(&request, &tc_police, pkts_rate, pkts_burst,
-                          TC_ACT_PIPE);
+                          TC_ACT_PIPE, true);
     nl_msg_end_nested(&request, offset);
 
     error = tc_transact(&request, NULL);

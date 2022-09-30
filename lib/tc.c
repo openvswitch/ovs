@@ -3797,3 +3797,24 @@ tc_set_policy(const char *policy)
 
     VLOG_INFO("tc: Using policy '%s'", policy);
 }
+
+void
+nl_msg_put_act_tc_policy_flag(struct ofpbuf *request)
+{
+    int flag = 0;
+
+    if (!request) {
+        return;
+    }
+
+    if (tc_policy == TC_POLICY_SKIP_HW) {
+        flag = TCA_ACT_FLAGS_SKIP_HW;
+    } else if (tc_policy == TC_POLICY_SKIP_SW) {
+        flag = TCA_ACT_FLAGS_SKIP_SW;
+    }
+
+    if (flag) {
+        struct nla_bitfield32 flags = { flag, flag };
+        nl_msg_put_unspec(request, TCA_ACT_FLAGS, &flags, sizeof flags);
+    }
+}
