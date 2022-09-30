@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_POLICE_PKTRATE64)
+#if defined(__KERNEL__) || defined(HAVE_TCA_ACT_FLAGS_SKIP_HW)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -21,9 +21,12 @@ enum {
 	__TCA_ACT_MAX
 };
 
-#define TCA_ACT_FLAGS_NO_PERCPU_STATS 1 /* Don't use percpu allocator for
-                                         * actions stats.
-                                         */
+/* See other TCA_ACT_FLAGS_ * flags in include/net/act_api.h. */
+#define TCA_ACT_FLAGS_NO_PERCPU_STATS (1 << 0) /* Don't use percpu allocator for
+						* actions stats.
+						*/
+#define TCA_ACT_FLAGS_SKIP_HW	(1 << 1) /* don't offload action to HW */
+#define TCA_ACT_FLAGS_SKIP_SW	(1 << 2) /* don't use action in SW */
 
 #define TCA_ACT_MAX __TCA_ACT_MAX
 #define TCA_OLD_COMPAT (TCA_ACT_MAX+1)
