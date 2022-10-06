@@ -368,7 +368,7 @@ AT_CLEANUP
 # Strips out uninteresting parts of flow output, as well as parts
 # that vary from one run to another (e.g., timing and bond actions).
 m4_define([STRIP_USED], [[sed '
-    s/used:[0-9]*\.[0-9]*/used:0.0/
+    s/used:[0-9\.][0-9\.]*/used:0.0/
     s/duration=[0-9.]*s*/duration=Xs/
     s/idle_age=[0-9]*,/idle_age=X,/
 ']])
