@@ -225,6 +225,13 @@ class OVSDB(object):
     def interface_mtu(self, intf_name):
         try:
             intf = self._find_row_by_name('Interface', intf_name)
+            if intf is None:
+                mtu = 1500
+                port = self._find_row_by_name('Port', intf_name)
+                for intf in port.interfaces:
+                    if mtu < intf.mtu[0]:
+                        mtu = intf.mtu[0]
+                return mtu
             return intf.mtu[0]
         except Exception:
             return None
