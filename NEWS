@@ -1,5 +1,6 @@
-v2.17.3 - xx xxx xxxx
+v2.17.3 - 07 Oct 2022
 ---------------------
+   - Bug fixes
    - OVSDB:
      * New Local_Config schema added to support Connections (--remote)
        configuration in a clustered databse independently for each server.
