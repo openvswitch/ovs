@@ -25,7 +25,8 @@ struct ovsdb_txn;
 
 void ovsdb_file_column_diff_disable(void);
 
-struct json *ovsdb_to_txn_json(const struct ovsdb *, const char *comment);
+struct json *ovsdb_to_txn_json(const struct ovsdb *, const char *comment,
+                               bool allow_shallow_copies);
 struct json *ovsdb_file_txn_to_json(const struct ovsdb_txn *);
 struct json *ovsdb_file_txn_annotate(struct json *, const char *comment);
 struct ovsdb_error *ovsdb_file_txn_from_json(struct ovsdb *,

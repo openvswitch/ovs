@@ -52,7 +52,8 @@ static void ovsdb_file_txn_init(struct ovsdb_file_txn *);
 static void ovsdb_file_txn_add_row(struct ovsdb_file_txn *,
                                    const struct ovsdb_row *old,
                                    const struct ovsdb_row *new,
-                                   const unsigned long int *changed);
+                                   const unsigned long int *changed,
+                                   bool allow_shallow_copies);
 
 /* If set to 'true', file transactions will contain difference between
  * datums of old and new rows and not the whole new datum for the column. */
@@ -361,12 +362,19 @@ ovsdb_file_change_cb(const struct ovsdb_row *old,
                      void *ftxn_)
 {
     struct ovsdb_file_txn *ftxn = ftxn_;
-    ovsdb_file_txn_add_row(ftxn, old, new, changed);
+    ovsdb_file_txn_add_row(ftxn, old, new, changed, true);
     return true;
 }
 
+/* Converts the database into transaction JSON representation.
+ * If 'allow_shallow_copies' is false, makes sure that all the JSON
+ * objects in the resulted transaction JSON are separately allocated
+ * objects and not shallow clones of JSON objects already existing
+ * in the database.  Useful when multiple threads are working on the
+ * same database object. */
 struct json *
-ovsdb_to_txn_json(const struct ovsdb *db, const char *comment)
+ovsdb_to_txn_json(const struct ovsdb *db, const char *comment,
+                  bool allow_shallow_copies)
 {
     struct ovsdb_file_txn ftxn;
 
@@ -378,7 +386,8 @@ ovsdb_to_txn_json(const struct ovsdb *db, const char *comment)
         const struct ovsdb_row *row;
 
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
-            ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL);
+            ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL,
+                                   allow_shallow_copies);
         }
     }
 
@@ -426,7 +435,8 @@ static void
 ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
                        const struct ovsdb_row *old,
                        const struct ovsdb_row *new,
-                       const unsigned long int *changed)
+                       const unsigned long int *changed,
+                       bool allow_shallow_copies)
 {
     struct json *row;
 
@@ -451,10 +461,20 @@ ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
                 if (old && use_column_diff) {
                     ovsdb_datum_diff(&datum, &old->fields[idx],
                                      &new->fields[idx], type);
-                    column_json = ovsdb_datum_to_json(&datum, type);
+                    if (allow_shallow_copies) {
+                        column_json = ovsdb_datum_to_json(&datum, type);
+                    } else {
+                        column_json = ovsdb_datum_to_json_deep(&datum, type);
+                    }
                     ovsdb_datum_destroy(&datum, type);
                 } else {
-                    column_json = ovsdb_datum_to_json(&new->fields[idx], type);
+                    if (allow_shallow_copies) {
+                        column_json = ovsdb_datum_to_json(
+                                            &new->fields[idx], type);
+                    } else {
+                        column_json = ovsdb_datum_to_json_deep(
+                                            &new->fields[idx], type);
+                    }
                 }
                 if (!row) {
                     row = json_object_create();
