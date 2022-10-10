@@ -304,7 +304,7 @@ do_create_cluster(struct ovs_cmdl_context *ctx)
 
         struct ovsdb *ovsdb = ovsdb_file_read(src_file_name, false);
         char *comment = xasprintf("created from %s", src_file_name);
-        data = ovsdb_to_txn_json(ovsdb, comment);
+        data = ovsdb_to_txn_json(ovsdb, comment, true);
         free(comment);
         schema = ovsdb_schema_clone(ovsdb->schema);
         ovsdb_destroy(ovsdb);
@@ -359,7 +359,8 @@ write_standalone_db(const char *file_name, const char *comment,
 
     error = ovsdb_log_write_and_free(log, ovsdb_schema_to_json(db->schema));
     if (!error) {
-        error = ovsdb_log_write_and_free(log, ovsdb_to_txn_json(db, comment));
+        error = ovsdb_log_write_and_free(log,
+                                         ovsdb_to_txn_json(db, comment, true));
     }
     ovsdb_log_close(log);
 

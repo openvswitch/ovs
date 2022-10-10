@@ -455,9 +455,15 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
 /* Converts 'atom', of the specified 'type', to JSON format, and returns the
  * JSON.  The caller is responsible for freeing the returned JSON.
  *
+ * If 'allow_shallow_copies' is false, deep copy of the string JSON object
+ * will be used.  Useful when the same string object is accessed by multiple
+ * threads as deep copy will not change the reference counter of the original
+ * JSON string.
+ *
  * Refer to RFC 7047 for the format of the JSON that this function produces. */
-struct json *
-ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
+static struct json *
+ovsdb_atom_to_json__(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                     bool allow_shallow_copies)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
@@ -473,7 +479,8 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         return json_boolean_create(atom->boolean);
 
     case OVSDB_TYPE_STRING:
-        return json_clone(atom->s);
+        return allow_shallow_copies ? json_clone(atom->s)
+                                    : json_deep_clone(atom->s);
 
     case OVSDB_TYPE_UUID:
         return wrap_json("uuid", json_string_create_nocopy(
@@ -483,6 +490,19 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     default:
         OVS_NOT_REACHED();
     }
+}
+
+struct json *
+ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
+{
+    return ovsdb_atom_to_json__(atom, type, true);
+}
+
+static struct json *
+ovsdb_atom_to_json_deep(const union ovsdb_atom *atom,
+                        enum ovsdb_atomic_type type)
+{
+    return ovsdb_atom_to_json__(atom, type, false);
 }
 
 static char *
@@ -1409,12 +1429,15 @@ ovsdb_unconstrained_datum_from_json(struct ovsdb_datum *datum,
 static struct json *
 ovsdb_base_to_json(const union ovsdb_atom *atom,
                    const struct ovsdb_base_type *base,
-                   bool use_row_names)
+                   bool use_row_names,
+                   bool allow_shallow_copies)
 {
     if (!use_row_names
         || base->type != OVSDB_TYPE_UUID
         || !base->uuid.refTableName) {
-        return ovsdb_atom_to_json(atom, base->type);
+        return allow_shallow_copies
+               ? ovsdb_atom_to_json(atom, base->type)
+               : ovsdb_atom_to_json_deep(atom, base->type);
     } else {
         return json_array_create_2(
             json_string_create("named-uuid"),
@@ -1425,7 +1448,8 @@ ovsdb_base_to_json(const union ovsdb_atom *atom,
 static struct json *
 ovsdb_datum_to_json__(const struct ovsdb_datum *datum,
                       const struct ovsdb_type *type,
-                      bool use_row_names)
+                      bool use_row_names,
+                      bool allow_shallow_copies)
 {
     if (ovsdb_type_is_map(type)) {
         struct json **elems;
@@ -1435,14 +1459,15 @@ ovsdb_datum_to_json__(const struct ovsdb_datum *datum,
         for (i = 0; i < datum->n; i++) {
             elems[i] = json_array_create_2(
                 ovsdb_base_to_json(&datum->keys[i], &type->key,
-                                   use_row_names),
+                                   use_row_names, allow_shallow_copies),
                 ovsdb_base_to_json(&datum->values[i], &type->value,
-                                   use_row_names));
+                                   use_row_names, allow_shallow_copies));
         }
 
         return wrap_json("map", json_array_create(elems, datum->n));
     } else if (datum->n == 1) {
-        return ovsdb_base_to_json(&datum->keys[0], &type->key, use_row_names);
+        return ovsdb_base_to_json(&datum->keys[0], &type->key,
+                                  use_row_names, allow_shallow_copies);
     } else {
         struct json **elems;
         size_t i;
@@ -1450,7 +1475,7 @@ ovsdb_datum_to_json__(const struct ovsdb_datum *datum,
         elems = xmalloc(datum->n * sizeof *elems);
         for (i = 0; i < datum->n; i++) {
             elems[i] = ovsdb_base_to_json(&datum->keys[i], &type->key,
-                                          use_row_names);
+                                          use_row_names, allow_shallow_copies);
         }
 
         return wrap_json("set", json_array_create(elems, datum->n));
@@ -1467,14 +1492,21 @@ struct json *
 ovsdb_datum_to_json(const struct ovsdb_datum *datum,
                     const struct ovsdb_type *type)
 {
-    return ovsdb_datum_to_json__(datum, type, false);
+    return ovsdb_datum_to_json__(datum, type, false, true);
+}
+
+struct json *
+ovsdb_datum_to_json_deep(const struct ovsdb_datum *datum,
+                         const struct ovsdb_type *type)
+{
+    return ovsdb_datum_to_json__(datum, type, false, false);
 }
 
 struct json *
 ovsdb_datum_to_json_with_row_names(const struct ovsdb_datum *datum,
                                    const struct ovsdb_type *type)
 {
-    return ovsdb_datum_to_json__(datum, type, true);
+    return ovsdb_datum_to_json__(datum, type, true, true);
 }
 
 static const char *

@@ -585,7 +585,9 @@ compaction_thread(void *aux)
     struct json *data;
 
     VLOG_DBG("%s: Compaction thread started.", state->db->name);
-    data = ovsdb_to_txn_json(state->db, "compacting database online");
+    data = ovsdb_to_txn_json(state->db, "compacting database online",
+                             /* Do not allow shallow copies to avoid races. */
+                             false);
     state->data = json_serialized_object_create(data);
     json_destroy(data);
 
@@ -633,7 +635,8 @@ ovsdb_snapshot(struct ovsdb *db, bool trim_memory OVS_UNUSED)
     if (!applied_index) {
         /* Parallel compaction is not supported for standalone databases. */
         state = xzalloc(sizeof *state);
-        state->data = ovsdb_to_txn_json(db, "compacting database online");
+        state->data = ovsdb_to_txn_json(db,
+                                        "compacting database online", true);
         state->schema = ovsdb_schema_to_json(db->schema);
     } else if (ovsdb_snapshot_ready(db)) {
         xpthread_join(db->snap_state->thread, NULL);
