@@ -1913,8 +1913,6 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
     struct nlattr *act_cookie;
     const char *act_kind;
     struct nlattr *action_attrs[ARRAY_SIZE(act_policy)];
-    int act_index = flower->action_count;
-    bool is_meter = false;
     int err = 0;
 
     if (!nl_parse_nested(action, act_policy, action_attrs,
@@ -1952,7 +1950,6 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
         nl_parse_act_ct(act_options, flower);
     } else if (!strcmp(act_kind, "police")) {
         nl_parse_act_police(act_options, flower);
-        is_meter = tc_is_meter_index(flower->actions[act_index].police.index);
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         err = EINVAL;
@@ -1965,14 +1962,6 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower,
     if (act_cookie) {
         flower->act_cookie.data = nl_attr_get(act_cookie);
         flower->act_cookie.len = nl_attr_get_size(act_cookie);
-    }
-
-    /* Skip the stats update when act_police is meter since there are always
-     * some other actions following meter. For other potential kinds of
-     * act_police actions, whose stats could not be skipped (e.g. filter has
-     * only one police action), update the action stats to the flow rule. */
-    if (is_meter) {
-        return 0;
     }
 
     return nl_parse_action_stats(action_attrs[TCA_ACT_STATS],
