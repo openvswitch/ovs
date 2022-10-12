@@ -111,7 +111,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: update PATH
       run:  |
@@ -119,7 +119,7 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: set up python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -135,7 +135,7 @@ jobs:
 
     - name: cache
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       env:
         matrix_key: ${{ matrix.dpdk }}${{ matrix.dpdk_shared }}
         ci_key:     ${{ hashFiles('dpdk-ci-signature') }}
@@ -163,7 +163,7 @@ jobs:
 
     - name: upload deb packages
       if:   matrix.deb_package != ''
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: deb-packages
         path: '/home/runner/work/ovs/*.deb'
@@ -182,7 +182,7 @@ jobs:
 
     - name: upload logs on failure
       if: failure() || cancelled()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: logs-linux-${{ join(matrix.*, '-') }}
         path: logs.tgz
@@ -201,13 +201,13 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: update PATH
       run:  |
         echo "$HOME/bin"        >> $GITHUB_PATH
         echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: set up python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
     - name: install dependencies
@@ -218,7 +218,7 @@ jobs:
       run:  ./.ci/osx-build.sh
     - name: upload logs on failure
       if: failure()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: logs-osx-clang---disable-ssl
         path: config.log
