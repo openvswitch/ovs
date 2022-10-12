@@ -103,6 +103,8 @@ enum ct_dpif_tcp_flags {
 #undef CT_DPIF_TCP_FLAG
 };
 
+#define CT_DPIF_TCPF_MASK ((CT_DPIF_TCPF_MAXACK_SET << 1) - 1)
+
 extern const char *ct_dpif_sctp_state_string[];
 
 #define CT_DPIF_SCTP_STATES \
@@ -172,6 +174,8 @@ enum ct_dpif_status_flags {
     CT_DPIF_STATUS_FLAGS
 #undef CT_DPIF_STATUS_FLAG
 };
+
+#define CT_DPIF_STATUS_MASK ((CT_DPIF_STATUS_UNTRACKED << 1) - 1)
 
 struct ct_dpif_entry {
     /* Const members. */

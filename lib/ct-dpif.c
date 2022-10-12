@@ -35,20 +35,11 @@ static void ct_dpif_format_counters(struct ds *,
                                     const struct ct_dpif_counters *);
 static void ct_dpif_format_timestamp(struct ds *,
                                      const struct ct_dpif_timestamp *);
-static void ct_dpif_format_flags(struct ds *, const char *title,
-                                 uint32_t flags, const struct flags *);
 static void ct_dpif_format_protoinfo(struct ds *, const char *title,
                                      const struct ct_dpif_protoinfo *,
                                      bool verbose);
 static void ct_dpif_format_helper(struct ds *, const char *title,
                                   const struct ct_dpif_helper *);
-
-static const struct flags ct_dpif_status_flags[] = {
-#define CT_DPIF_STATUS_FLAG(FLAG) { CT_DPIF_STATUS_##FLAG, #FLAG },
-    CT_DPIF_STATUS_FLAGS
-#undef CT_DPIF_STATUS_FLAG
-    { 0, NULL } /* End marker. */
-};
 
 /* Dumping */
 
@@ -275,6 +266,20 @@ ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
     }
 }
 
+static const char *
+ct_dpif_status_flags(uint32_t flags)
+{
+    switch (flags) {
+#define CT_DPIF_STATUS_FLAG(FLAG) \
+    case CT_DPIF_STATUS_##FLAG: \
+        return #FLAG;
+    CT_DPIF_STATUS_FLAGS
+#undef CT_DPIF_TCP_FLAG
+    default:
+        return NULL;
+    }
+}
+
 void
 ct_dpif_format_entry(const struct ct_dpif_entry *entry, struct ds *ds,
                      bool verbose, bool print_stats)
@@ -305,8 +310,9 @@ ct_dpif_format_entry(const struct ct_dpif_entry *entry, struct ds *ds,
         ds_put_format(ds, ",zone=%"PRIu16, entry->zone);
     }
     if (verbose) {
-        ct_dpif_format_flags(ds, ",status=", entry->status,
-                             ct_dpif_status_flags);
+        format_flags_masked(ds, ",status", ct_dpif_status_flags,
+                            entry->status, CT_DPIF_STATUS_MASK,
+                            CT_DPIF_STATUS_MASK);
     }
     if (print_stats) {
         ds_put_format(ds, ",timeout=%"PRIu32, entry->timeout);
@@ -415,28 +421,6 @@ ct_dpif_format_tuple(struct ds *ds, const struct ct_dpif_tuple *tuple)
     }
 }
 
-static void
-ct_dpif_format_flags(struct ds *ds, const char *title, uint32_t flags,
-                     const struct flags *table)
-{
-    if (title) {
-        ds_put_cstr(ds, title);
-    }
-    for (; table->name; table++) {
-        if (flags & table->flag) {
-            ds_put_format(ds, "%s|", table->name);
-        }
-    }
-    ds_chomp(ds, '|');
-}
-
-static const struct flags tcp_flags[] = {
-#define CT_DPIF_TCP_FLAG(FLAG)  { CT_DPIF_TCPF_##FLAG, #FLAG },
-    CT_DPIF_TCP_FLAGS
-#undef CT_DPIF_TCP_FLAG
-    { 0, NULL } /* End marker. */
-};
-
 const char *ct_dpif_tcp_state_string[] = {
 #define CT_DPIF_TCP_STATE(STATE) [CT_DPIF_TCPS_##STATE] = #STATE,
     CT_DPIF_TCP_STATES
@@ -498,6 +482,20 @@ ct_dpif_format_protoinfo_tcp(struct ds *ds,
     ct_dpif_format_enum(ds, "state=", tcp_state, ct_dpif_tcp_state_string);
 }
 
+static const char *
+ct_dpif_tcp_flags(uint32_t flags)
+{
+    switch (flags) {
+#define CT_DPIF_TCP_FLAG(FLAG) \
+    case CT_DPIF_TCPF_##FLAG: \
+        return #FLAG;
+    CT_DPIF_TCP_FLAGS
+#undef CT_DPIF_TCP_FLAG
+    default:
+        return NULL;
+    }
+}
+
 static void
 ct_dpif_format_protoinfo_tcp_verbose(struct ds *ds,
                                      const struct ct_dpif_protoinfo *protoinfo)
@@ -512,10 +510,14 @@ ct_dpif_format_protoinfo_tcp_verbose(struct ds *ds,
                       protoinfo->tcp.wscale_orig,
                       protoinfo->tcp.wscale_reply);
     }
-    ct_dpif_format_flags(ds, ",flags_orig=", protoinfo->tcp.flags_orig,
-                         tcp_flags);
-    ct_dpif_format_flags(ds, ",flags_reply=", protoinfo->tcp.flags_reply,
-                         tcp_flags);
+
+    format_flags_masked(ds, ",flags_orig", ct_dpif_tcp_flags,
+                        protoinfo->tcp.flags_orig, CT_DPIF_TCPF_MASK,
+                        CT_DPIF_TCPF_MASK);
+
+    format_flags_masked(ds, ",flags_reply", ct_dpif_tcp_flags,
+                        protoinfo->tcp.flags_reply, CT_DPIF_TCPF_MASK,
+                        CT_DPIF_TCPF_MASK);
 }
 
 static void
