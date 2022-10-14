@@ -887,7 +887,7 @@ bond_check_admissibility(struct bond *bond, const void *member_,
         if (!member->enabled && member->may_enable) {
             VLOG_DBG_RL(&rl, "bond %s: member %s: "
                         "main thread has not yet enabled member",
-                         bond->name, bond->active_member->name);
+                        bond->name, member->name);
         }
         goto out;
     case LACP_CONFIGURED:
