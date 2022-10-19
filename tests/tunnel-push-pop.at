@@ -369,6 +369,26 @@ AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
 1.1.2.92                                      f8:bc:12:44:34:b6   br0
 ])
 
+dnl Receiving Gratuitous ARP request with correct VLAN id should alter tunnel neighbor cache
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:c8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=10,pcp=7),encap(eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.92,op=1,sha=f8:bc:12:44:34:c8,tha=00:00:00:00:00:00))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving Gratuitous ARP reply with correct VLAN id should alter tunnel neighbor cache
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b2,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=10,pcp=7),encap(eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.92,op=2,sha=f8:bc:12:44:34:b2,tha=f8:bc:12:44:34:b2))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b2   br0
+])
+
 dnl Receive ARP reply without VLAN header
 AT_CHECK([ovs-vsctl set port br0 tag=0])
 AT_CHECK([ovs-appctl tnl/neigh/flush], [0], [OK
