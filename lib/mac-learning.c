@@ -176,12 +176,18 @@ get_lru(struct mac_learning *ml, struct mac_entry **e)
     OVS_REQ_RDLOCK(ml->rwlock)
 {
     if (!ovs_list_is_empty(&ml->lrus)) {
-        *e = mac_entry_from_lru_node(ml->lrus.next);
-        return true;
-    } else {
-        *e = NULL;
-        return false;
+        struct mac_entry *entry;
+
+        LIST_FOR_EACH (entry, lru_node, &ml->lrus) {
+            if (entry->expires != MAC_ENTRY_AGE_STATIC_ENTRY) {
+                *e = entry;
+                return true;
+            }
+        }
     }
+
+    *e = NULL;
+    return false;
 }
 
 static unsigned int
@@ -618,25 +624,10 @@ mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
 void
 mac_learning_flush(struct mac_learning *ml)
 {
-    struct mac_entry *e, *first_static_mac = NULL;
+    struct mac_entry *e;
 
-    while (get_lru(ml, &e) && (e != first_static_mac)) {
-
-        /* Static mac should not be evicted. */
-        if (MAC_ENTRY_AGE_STATIC_ENTRY == e->expires) {
-
-            /* Make note of first static-mac encountered, so that this while
-             * loop will break on visting this mac again via get_lru(). */
-            if (!first_static_mac) {
-                first_static_mac = e;
-            }
-
-            /* Remove from lru head and append it to tail. */
-            ovs_list_remove(&e->lru_node);
-            ovs_list_push_back(&ml->lrus, &e->lru_node);
-        } else {
-            mac_learning_expire(ml, e);
-        }
+    while (get_lru(ml, &e)) {
+        mac_learning_expire(ml, e);
     }
     hmap_shrink(&ml->table);
 }
