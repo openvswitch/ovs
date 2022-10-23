@@ -7275,6 +7275,29 @@ AT_CHECK([ovs-appctl coverage/read-counter mac_learning_static_none_move], [0], 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - static-mac learned mac age out])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone -- set bridge br0 other_config:mac-aging-time=5])
+add_of_ports br0 1 2
+
+dnl Add some static mac entries.
+AT_CHECK([ovs-appctl fdb/add br0 p1 0 50:54:00:00:01:01])
+AT_CHECK([ovs-appctl fdb/add br0 p2 0 50:54:00:00:02:02])
+
+dnl Generate some dynamic fdb entries on some ports.
+OFPROTO_TRACE([ovs-dummy], [in_port(1),eth(src=60:54:00:00:00:01)], [-generate], [100,2])
+OFPROTO_TRACE([ovs-dummy], [in_port(2),eth(src=60:54:00:00:00:02)], [-generate], [100,1])
+
+dnl Waiting for aging out.
+ovs-appctl time/warp 20000
+
+dnl Count number of static entries remaining.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/stats-show br0 | grep expired], [0], [dnl
+  Total number of expired MAC entries     : 2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - basic truncate action])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 4 5
