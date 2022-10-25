@@ -2243,7 +2243,7 @@
           lowest port-id is elected as the root.
         </column>
 
-        <column name="other_config" key="rstp-port-path-cost"
+        <column name="other_config" key="rstp-path-cost"
                 type='{"type": "integer"}'>
           The port path cost.  The Port's contribution, when it is
           the Root Port, to the Root Path Cost for the Bridge.  By default the
