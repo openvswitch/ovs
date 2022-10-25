@@ -95,7 +95,7 @@ GCC_UNALIGNED_ACCESSORS(ovs_be64, be64);
 static inline uint16_t get_unaligned_u16(const uint16_t *p_)
 {
     const uint8_t *p = (const uint8_t *) p_;
-    return ntohs((p[0] << 8) | p[1]);
+    return ntohs(((uint16_t) p[0] << 8) | (uint16_t) p[1]);
 }
 
 static inline void put_unaligned_u16(uint16_t *p_, uint16_t x_)
@@ -110,7 +110,8 @@ static inline void put_unaligned_u16(uint16_t *p_, uint16_t x_)
 static inline uint32_t get_unaligned_u32(const uint32_t *p_)
 {
     const uint8_t *p = (const uint8_t *) p_;
-    return ntohl((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]);
+    return ntohl(((uint32_t) p[0] << 24) | ((uint32_t) p[1] << 16) |
+                 ((uint32_t) p[2] <<  8) | (uint32_t) p[3]);
 }
 
 static inline void put_unaligned_u32(uint32_t *p_, uint32_t x_)
@@ -131,10 +132,10 @@ static inline uint64_t get_unaligned_u64__(const uint64_t *p_)
                   | ((uint64_t) p[1] << 48)
                   | ((uint64_t) p[2] << 40)
                   | ((uint64_t) p[3] << 32)
-                  | (p[4] << 24)
-                  | (p[5] << 16)
-                  | (p[6] << 8)
-                  | p[7]);
+                  | ((uint64_t) p[4] << 24)
+                  | ((uint64_t) p[5] << 16)
+                  | ((uint64_t) p[6] << 8)
+                  | (uint64_t)  p[7]);
 }
 
 static inline void put_unaligned_u64__(uint64_t *p_, uint64_t x_)
