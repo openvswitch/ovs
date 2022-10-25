@@ -4776,7 +4776,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         Maximum rate shared by all queued traffic, in bit/s.  Optional.  If not
         specified, for physical interfaces, the default is the link rate.  For
         other interfaces or if the link rate cannot be determined, the default
-        is currently 100 Mbps.
+        is currently 10 Gbps.
       </column>
     </group>
 

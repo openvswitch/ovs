@@ -1678,7 +1678,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         unsigned int mbps;
 
         netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, 100 * 1000 * 1000) / 1000000;
+        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
         port_s->path_cost = stp_convert_speed_to_cost(mbps);
     }
 
@@ -1761,7 +1761,7 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
         unsigned int mbps;
 
         netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, 100 * 1000 * 1000) / 1000000;
+        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
         port_s->path_cost = rstp_convert_speed_to_cost(mbps);
     }
 

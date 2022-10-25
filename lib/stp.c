@@ -313,7 +313,7 @@ stp_create(const char *name, stp_identifier bridge_id,
     for (p = stp->ports; p < &stp->ports[ARRAY_SIZE(stp->ports)]; p++) {
         p->stp = stp;
         p->port_id = (stp_port_no(p) + 1) | (STP_DEFAULT_PORT_PRIORITY << 8);
-        p->path_cost = 19;      /* Recommended default for 100 Mb/s link. */
+        p->path_cost = 2;      /* Recommended default for 10 Gb/s link. */
         stp_initialize_port(p, STP_DISABLED);
     }
     ovs_refcount_init(&stp->ref_cnt);
@@ -989,7 +989,7 @@ stp_convert_speed_to_cost(unsigned int speed)
         : speed >= 16 ? 62  /* 16 Mb/s. */
         : speed >= 10 ? 100 /* 10 Mb/s. */
         : speed >= 4 ? 250  /* 4 Mb/s. */
-        : 19;             /* 100 Mb/s (guess). */
+        : 2;             /* 10 Gb/s (guess). */
     ovs_mutex_unlock(&mutex);
     return ret;
 }

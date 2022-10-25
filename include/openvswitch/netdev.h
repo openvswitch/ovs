@@ -121,6 +121,8 @@ enum netdev_features {
     NETDEV_F_PAUSE_ASYM = 1 << 15, /* Asymmetric pause. */
 };
 
+#define NETDEV_DEFAULT_BPS UINT64_C(10 * 1000 * 1000 * 1000)
+
 int netdev_get_features(const struct netdev *,
                         enum netdev_features *current,
                         enum netdev_features *advertised,

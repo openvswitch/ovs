@@ -84,7 +84,7 @@ struct dp_packet;
 /* Port path cost [Table 17-3] */
 #define RSTP_MIN_PORT_PATH_COST 1
 #define RSTP_MAX_PORT_PATH_COST 200000000
-#define RSTP_DEFAULT_PORT_PATH_COST 200000
+#define RSTP_DEFAULT_PORT_PATH_COST 2000
 
 /* RSTP Bridge identifier [9.2.5].  Top four most significant bits are a
  * priority value. The next most significant twelve bits are a locally

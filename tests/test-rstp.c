@@ -107,6 +107,8 @@ send_bpdu(struct dp_packet *pkt, void *port_, void *b_)
     dp_packet_delete(pkt);
 }
 
+#define RSTP_PORT_PATH_COST_100M 200000
+
 static struct bridge *
 new_bridge(struct test_case *tc, int id)
 {
@@ -122,6 +124,7 @@ new_bridge(struct test_case *tc, int id)
     for (i = 1; i < MAX_PORTS; i++) {
         p = rstp_add_port(b->rstp);
         rstp_port_set_aux(p, p);
+        rstp_port_set_path_cost(p, RSTP_PORT_PATH_COST_100M);
         rstp_port_set_state(p, RSTP_DISABLED);
         rstp_port_set_mac_operational(p, true);
     }
@@ -544,8 +547,8 @@ test_rstp_main(int argc, char *argv[])
                         }
                         get_token();
 
-                        path_cost = match(":") ? must_get_int() :
-                                                 RSTP_DEFAULT_PORT_PATH_COST;
+                        path_cost = match(":") ? must_get_int()
+                                               : RSTP_PORT_PATH_COST_100M;
                         if (port_no < bridge->n_ports) {
                             /* Enable port. */
                             reinitialize_port(p);

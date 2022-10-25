@@ -4710,7 +4710,7 @@ htb_parse_qdisc_details__(struct netdev *netdev_,
 
         netdev_linux_read_features(netdev);
         current = !netdev->get_features_error ? netdev->current : 0;
-        hc->max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
+        hc->max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
     }
     hc->min_rate = hc->max_rate;
     hc->burst = 0;
@@ -5182,7 +5182,7 @@ hfsc_parse_qdisc_details__(struct netdev *netdev_, const struct smap *details,
 
         netdev_linux_read_features(netdev);
         current = !netdev->get_features_error ? netdev->current : 0;
-        max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
+        max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
     }
 
     class->min_rate = max_rate;

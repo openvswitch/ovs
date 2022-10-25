@@ -23,6 +23,10 @@ Post-v3.0.0
        bug and CVE fixes addressed since its release.
        If a user wishes to benefit from these fixes it is recommended to use
        DPDK 21.11.2.
+   - For the QoS max-rate and STP/RSTP path-cost configuration OVS now assumes
+     10 Gbps link speed by default in case the actual link speed cannot be
+     determined.  Previously it was 10 Mbps.  Values can still be overridden
+     by specifying 'max-rate' or '[r]stp-path-cost' accordingly.
 
 
 v3.0.0 - 15 Aug 2022
