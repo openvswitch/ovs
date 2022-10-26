@@ -1004,7 +1004,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
             ds_put_format(ds, "helper=%s,", helper);
         }
         if (timeout) {
-            ds_put_format(ds, "timeout=%s", timeout);
+            ds_put_format(ds, "timeout=%s,", timeout);
         }
         if (nat) {
             format_odp_ct_nat(ds, nat);
