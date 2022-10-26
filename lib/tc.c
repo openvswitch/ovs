@@ -1088,7 +1088,7 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
                 int diff = flower_off + (keys->off - mf);
                 ovs_be32 *dst = (void *) (rewrite_key + diff);
                 ovs_be32 *dst_m = (void *) (rewrite_mask + diff);
-                ovs_be32 mask, mask_word, data_word;
+                ovs_be32 mask, mask_word, data_word, val;
                 uint32_t zero_bits;
 
                 mask_word = htonl(ntohl(keys->mask) << m->boundary_shift);
@@ -1103,8 +1103,13 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
                     mask &= htonl(UINT32_MAX << zero_bits);
                 }
 
-                *dst_m |= mask;
-                *dst |= data_word & mask;
+                val = get_unaligned_be32(dst_m);
+                val |= mask;
+                put_unaligned_be32(dst_m, val);
+
+                val = get_unaligned_be32(dst);
+                val |= data_word & mask;
+                put_unaligned_be32(dst, val);
             }
         }
 
