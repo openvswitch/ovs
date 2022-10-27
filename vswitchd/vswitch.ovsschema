@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "8.3.0",
- "cksum": "3781850481 26690",
+ "version": "8.3.1",
+ "cksum": "3012963480 26720",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -280,7 +280,8 @@
                "min": 0, "max": "unlimited"}},
        "bfd_status": {
            "type": {"key": "string", "value": "string",
-               "min": 0, "max": "unlimited"}},
+               "min": 0, "max": "unlimited"},
+           "ephemeral": true},
        "cfm_mpid": {
          "type": {
            "key": {"type": "integer"},
