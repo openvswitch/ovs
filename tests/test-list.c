@@ -106,6 +106,8 @@ test_list_construction(void)
         int values[MAX_ELEMS];
         struct ovs_list list;
 
+        memset(elements, 0, sizeof elements);
+        memset(values, 0, sizeof values);
         make_list(&list, elements, values, n);
         check_list(&list, values, n);
     }

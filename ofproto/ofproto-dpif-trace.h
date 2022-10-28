@@ -86,7 +86,8 @@ void ofproto_dpif_trace_init(void);
 void ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               const struct dp_packet *packet,
               const struct ofpact *, size_t ofpacts_len,
-              struct ovs_list *next_ct_states, struct ds *output);
+              struct ovs_list *next_ct_states, struct ds *output,
+              bool names);
 
 struct oftrace_node *oftrace_report(struct ovs_list *, enum oftrace_node_type,
                                     const char *text);
@@ -95,5 +96,7 @@ bool oftrace_add_recirc_node(struct ovs_list *recirc_queue,
                              const struct ofpact_nat *,
                              const struct dp_packet *, uint32_t recirc_id,
                              const uint16_t zone);
+
+void ofproto_append_ports_to_map(struct ofputil_port_map *, struct hmap ports);
 
 #endif /* ofproto-dpif-trace.h */

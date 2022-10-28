@@ -6,6 +6,7 @@
 #include "lib/dhparams.h"
 #include "openvswitch/util.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
 static int
 my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
 {
@@ -142,3 +143,4 @@ DH *get_dh4096(void)
     }
     return dh;
 }
+#endif

@@ -78,7 +78,11 @@ OvsConntrackValidateIcmp6Packet(const ICMPHdr *icmp)
         return FALSE;
     }
 
-    return icmp->type == ICMP6_ECHO_REQUEST;
+    return icmp->type == ICMP6_ECHO_REQUEST ||
+           icmp->type == ICMP6_PACKET_TOO_BIG ||
+           icmp->type == ICMP6_DST_UNREACH ||
+           icmp->type == ICMP6_TIME_EXCEEDED ||
+           icmp->type == ICMP6_PARAM_PROB;
 }
 
 OVS_CT_ENTRY *

@@ -23,6 +23,7 @@
 #include "Flow.h"
 #include "Gre.h"
 #include "Jhash.h"
+#include "Meter.h"
 #include "Mpls.h"
 #include "NetProto.h"
 #include "Offload.h"
@@ -917,7 +918,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
                                           ovsFwdCtx->completionList,
                                           &ovsFwdCtx->layers, FALSE);
             if (status != NDIS_STATUS_SUCCESS) {
-                dropReason = L"Dropped due to resouces.";
+                dropReason = L"Dropped due to resources.";
                 goto dropit;
             }
         }
@@ -2378,7 +2379,6 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             }
 
             OvsExecuteHash(key, (const PNL_ATTR)a);
-
             break;
         }
 
@@ -2411,8 +2411,9 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                 goto dropit;
             } else if (oldNbl != ovsFwdCtx.curNbl) {
                 /*
-                 * OvsIpv4Reassemble consumes the original NBL and creates a
-                 * new one and assigns it to the curNbl of ovsFwdCtx.
+                 * OvsIpv4Reassemble/OvsIpv6Reassemble consumes the
+                 * original NBL and creates a new one and assigns
+                 * it to the curNbl of ovsFwdCtx.
                  */
                 OvsInitForwardingCtx(&ovsFwdCtx,
                                      ovsFwdCtx.switchContext,
@@ -2423,6 +2424,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                                      ovsFwdCtx.completionList,
                                      &ovsFwdCtx.layers, FALSE);
                 key->ipKey.nwFrag = OVS_FRAG_TYPE_NONE;
+                key->ipv6Key.nwFrag = OVS_FRAG_TYPE_NONE;
             }
             break;
         }
@@ -2500,6 +2502,15 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                      goto dropit;
                  }
             }
+            break;
+        }
+        case OVS_ACTION_ATTR_METER: {
+            if (OvsMeterExecute(&ovsFwdCtx, NlAttrGetU32(a))) {
+                OVS_LOG_INFO("Drop packet");
+                dropReason = L"Ovs-meter exceed max rate";
+                goto dropit;
+            }
+
             break;
         }
         case OVS_ACTION_ATTR_SAMPLE:

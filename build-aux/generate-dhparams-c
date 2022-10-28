@@ -1,5 +1,74 @@
 #! /bin/sh -e
 
+dhparam_to_c() {
+    local bits
+    local get_p=0
+    local line
+    local nl="
+"
+    local p
+    local i=0
+    while read -r line; do
+        case "$line" in
+            *"DH Parameters: "*)
+                bits=${line#*DH Parameters: (}
+                bits=${bits% bit)}
+                continue
+                ;;
+            "P:"|"prime:")
+                get_p=1
+                continue
+                ;;
+            "G: "*|"generator: "*)
+                g=${line#*(}
+                g=${g%)}
+                g=$(printf "0x%.2X" "$g")
+                continue
+                ;;
+        esac
+        if [ "$get_p" = 1 ]; then
+            IFS=":"
+            for x in $line; do
+                [ -z "$p" ] && [ "$x" = "00" ] && continue
+                [ $i -ge 10 ] && i=0
+                [ $i -eq 0 ] && p="$p$nl       "
+                x=0x$x
+                p=$(printf "%s 0x%.2X," "$p" "$x")
+                i=$((i + 1))
+            done
+            unset IFS
+        fi
+    done <<EOF
+$(openssl dhparam -in "$1" -text -noout)
+EOF
+    p=${p%,}
+    cat <<EOF
+DH *get_dh${bits}(void)
+{
+    static unsigned char dhp_${bits}[] = {$p
+    };
+    static unsigned char dhg_${bits}[] = {
+        $g
+    };
+    DH *dh = DH_new();
+    BIGNUM *p, *g;
+
+    if (dh == NULL)
+        return NULL;
+    p = BN_bin2bn(dhp_${bits}, sizeof(dhp_${bits}), NULL);
+    g = BN_bin2bn(dhg_${bits}, sizeof(dhg_${bits}), NULL);
+    if (p == NULL || g == NULL
+            || !my_DH_set0_pqg(dh, p, NULL, g)) {
+        DH_free(dh);
+        BN_free(p);
+        BN_free(g);
+        return NULL;
+    }
+    return dh;
+}
+EOF
+}
+
 cat <<'EOF'
 /* Generated automatically; do not modify!     -*- buffer-read-only: t -*-
  *
@@ -9,6 +78,7 @@ cat <<'EOF'
 #include "lib/dhparams.h"
 #include "openvswitch/util.h"
 
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
 static int
 my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
 {
@@ -22,11 +92,6 @@ my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
 #endif
 }
 EOF
-(openssl dhparam -C -in lib/dh2048.pem -noout &&
-openssl dhparam -C -in lib/dh4096.pem -noout) | sed '
-    s/^static DH/DH/
-    s/\(get_dh[0-9]*\)()/\1(void)/
-    s/\(DH_set0_pqg\)/my_\1/
-    s/[ 	]*$//
-    s/	/        /g
-'
+dhparam_to_c lib/dh2048.pem
+dhparam_to_c lib/dh4096.pem
+echo "#endif"

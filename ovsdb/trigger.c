@@ -282,7 +282,7 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 
             /* Make the new copy into a transaction log record. */
             struct json *txn_json = ovsdb_to_txn_json(
-                newdb, "converted by ovsdb-server");
+                newdb, "converted by ovsdb-server", true);
 
             /* Propose the change. */
             t->progress = ovsdb_txn_propose_schema_change(

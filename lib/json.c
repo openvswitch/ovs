@@ -420,8 +420,8 @@ json_destroy_array(struct json_array *array)
     free(array->elems);
 }
 
-static struct json *json_clone_object(const struct shash *object);
-static struct json *json_clone_array(const struct json_array *array);
+static struct json *json_deep_clone_object(const struct shash *object);
+static struct json *json_deep_clone_array(const struct json_array *array);
 
 /* Returns 'json', with the reference count incremented. */
 struct json * 
@@ -439,10 +439,10 @@ json_deep_clone(const struct json *json)
 {
     switch (json->type) {
     case JSON_OBJECT:
-        return json_clone_object(json->object);
+        return json_deep_clone_object(json->object);
 
     case JSON_ARRAY:
-        return json_clone_array(&json->array);
+        return json_deep_clone_array(&json->array);
 
     case JSON_STRING:
         return json_string_create(json->string);
@@ -474,7 +474,7 @@ json_nullable_clone(const struct json *json)
 }
 
 static struct json *
-json_clone_object(const struct shash *object)
+json_deep_clone_object(const struct shash *object)
 {
     struct shash_node *node;
     struct json *json;
@@ -482,20 +482,20 @@ json_clone_object(const struct shash *object)
     json = json_object_create();
     SHASH_FOR_EACH (node, object) {
         struct json *value = node->data;
-        json_object_put(json, node->name, json_clone(value));
+        json_object_put(json, node->name, json_deep_clone(value));
     }
     return json;
 }
 
 static struct json *
-json_clone_array(const struct json_array *array)
+json_deep_clone_array(const struct json_array *array)
 {
     struct json **elems;
     size_t i;
 
     elems = xmalloc(array->n * sizeof *elems);
     for (i = 0; i < array->n; i++) {
-        elems[i] = json_clone(array->elems[i]);
+        elems[i] = json_deep_clone(array->elems[i]);
     }
     return json_array_create(elems, array->n);
 }

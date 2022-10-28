@@ -136,6 +136,7 @@ Q: Are all features available with all datapaths?
     Connection tracking             4.3            2.5          2.6      YES
     Connection tracking-IPv6        YES            YES          YES      3.0
     Conntrack Fragment Reass.       4.3            2.6          2.12     YES
+    Conntrack IPv6 Fragment         4.3            2.6          2.12     3.1
     Conntrack Timeout Policies      5.2            2.12         2.14     NO
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
@@ -210,12 +211,12 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.10.x       17.11.10
     2.11.x       18.11.9
     2.12.x       18.11.9
-    2.13.x       19.11.10
-    2.14.x       19.11.10
-    2.15.x       20.11.4
-    2.16.x       20.11.4
-    2.17.x       21.11.1
-    3.0.x        21.11.1
+    2.13.x       19.11.13
+    2.14.x       19.11.13
+    2.15.x       20.11.6
+    2.16.x       20.11.6
+    2.17.x       21.11.2
+    3.0.x        21.11.2
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?

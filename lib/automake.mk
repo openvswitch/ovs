@@ -386,6 +386,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/util.h \
 	lib/uuid.c \
 	lib/uuid.h \
+	lib/uuidset.c \
+	lib/uuidset.h \
 	lib/valgrind.h \
 	lib/vconn-provider.h \
 	lib/vconn-stream.c \

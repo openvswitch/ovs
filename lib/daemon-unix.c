@@ -396,6 +396,8 @@ monitor_daemon(pid_t daemon_pid)
                 }
 
                 log_received_backtrace(daemonize_fd);
+                close(daemonize_fd);
+                daemonize_fd = -1;
 
                 /* Throttle restarts to no more than once every 10 seconds. */
                 if (time(NULL) < last_restart + 10) {

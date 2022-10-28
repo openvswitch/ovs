@@ -122,12 +122,9 @@ OvsCtExtractNumbers(char *buf,
  *----------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
-               OvsFlowKey *key,
-               OVS_PACKET_HDR_INFO *layers,
-               UINT64 currentTime,
-               POVS_CT_ENTRY entry,
-               BOOLEAN request)
+OvsCtHandleFtp(PNET_BUFFER_LIST curNbl, OvsFlowKey *key,
+               OVS_PACKET_HDR_INFO *layers, UINT64 currentTime,
+               POVS_CT_ENTRY entry)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     FTP_TYPE ftpType = 0;
@@ -157,52 +154,51 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
     OvsStrlcpy((char *)ftpMsg, (char *)buf, min(len, sizeof(ftpMsg)));
     char *req = NULL;
 
-    if (request) {
-        if ((len >= 5) && (OvsStrncmp("PORT", ftpMsg, 4) == 0)) {
-            ftpType = FTP_TYPE_ACTIVE;
-            req = ftpMsg + 4;
-        } else if ((len >= 5) && (OvsStrncmp("EPRT", ftpMsg, 4) == 0)) {
-            ftpType = FTP_EXTEND_TYPE_ACTIVE;
-            req = ftpMsg + 4;
-        }
-    } else {
-        if ((len >= 4) && (OvsStrncmp(FTP_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
-            ftpType = FTP_TYPE_PASV;
-            /* There are various formats for PASV command. We try to support
-             * some of them. This has been addressed by RFC 2428 - EPSV.
-             * Eg:
-             *    227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).
-             *    227 Entering Passive Mode (h1,h2,h3,h4,p1,p2
-             *    227 Entering Passive Mode. h1,h2,h3,h4,p1,p2
-             *    227 =h1,h2,h3,h4,p1,p2
-             */
-            char *paren;
-            paren = strchr(ftpMsg, '(');
-            if (paren) {
-                req = paren + 1;
-            } else {
-                /* PASV command without ( */
-                req = ftpMsg + 3;
-            }
-        } else if ((len >= 4) && (OvsStrncmp(FTP_EXTEND_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
-            ftpType = FTP_EXTEND_TYPE_PASV;
-            /* The ftp extended passive mode only contain port info, ip address
-             * is same with the network protocol used by control connection.
-             * 229 Entering Extended Passive Mode (|||port|)
-             * */
-            char *paren;
-            paren = strchr(ftpMsg, '|');
-            if (paren) {
-                req = paren + 3;
-            } else {
-                /* Not a valid EPSV packet. */
-                return NDIS_STATUS_INVALID_PACKET;
-            }
+    if ((len >= 5) && (OvsStrncmp("PORT", ftpMsg, 4) == 0)) {
+        ftpType = FTP_TYPE_ACTIVE;
+        req = ftpMsg + 4;
+    } else if ((len >= 5) && (OvsStrncmp("EPRT", ftpMsg, 4) == 0)) {
+        ftpType = FTP_EXTEND_TYPE_ACTIVE;
+        req = ftpMsg + 4;
+    }
 
-            if (!(*req > '0' && * req < '9')) {
-                /* Not a valid port number. */
-                return NDIS_STATUS_INVALID_PACKET;
-            }
+    if ((len >= 4) && (OvsStrncmp(FTP_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
+        ftpType = FTP_TYPE_PASV;
+        /* There are various formats for PASV command. We try to support
+         * some of them. This has been addressed by RFC 2428 - EPSV.
+         * Eg:
+         *    227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).
+         *    227 Entering Passive Mode (h1,h2,h3,h4,p1,p2
+         *    227 Entering Passive Mode. h1,h2,h3,h4,p1,p2
+         *    227 =h1,h2,h3,h4,p1,p2
+         */
+        char *paren;
+        paren = strchr(ftpMsg, '(');
+        if (paren) {
+            req = paren + 1;
+        } else {
+            /* PASV command without ( */
+            req = ftpMsg + 3;
+        }
+    } else if ((len >= 4) && (
+               OvsStrncmp(FTP_EXTEND_PASV_RSP_PREFIX, ftpMsg, 3) == 0)) {
+        ftpType = FTP_EXTEND_TYPE_PASV;
+        /* The ftp extended passive mode only contain port info, ip address
+         * is same with the network protocol used by control connection.
+         * 229 Entering Extended Passive Mode (|||port|)
+         * */
+        char *paren;
+        paren = strchr(ftpMsg, '|');
+        if (paren) {
+            req = paren + 3;
+        } else {
+            /* Not a valid EPSV packet. */
+            return NDIS_STATUS_INVALID_PACKET;
+        }
+
+        if (!(*req > '0' && * req < '9')) {
+            /* Not a valid port number. */
+            return NDIS_STATUS_INVALID_PACKET;
         }
     }
 
@@ -226,8 +222,15 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
                           (arr[2] << 8) | arr[3]);
         port = ntohs(((arr[4] << 8) | arr[5]));
 
-        serverIp.ipv4 = ip;
-        clientIp.ipv4 = key->ipKey.nwDst;
+        if (ftpType == FTP_TYPE_ACTIVE) {
+            serverIp.ipv4 = key->ipKey.nwDst;
+            clientIp.ipv4 = ip;
+        }
+
+        if (ftpType == FTP_TYPE_PASV) {
+            serverIp.ipv4 = ip;
+            clientIp.ipv4 = key->ipKey.nwDst;
+        }
     } else {
         if (ftpType == FTP_EXTEND_TYPE_ACTIVE) {
             /** In ftp active mode, we need to parse string like below:
@@ -239,7 +242,7 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
             char *nextHdr = NULL;
             int index = 0;
             int isIpv6AddressFamily = 0;
-            char ftpStr[1024] = {0x00};
+            char ftpStr[512] = {0x00};
 
             RtlCopyMemory(ftpStr, req, strlen(req));
             for (curHdr = ftpStr; *curHdr != '|'; curHdr++);

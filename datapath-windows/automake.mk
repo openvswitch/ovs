@@ -37,11 +37,15 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Gre.c \
 	datapath-windows/ovsext/IpFragment.c \
 	datapath-windows/ovsext/IpFragment.h \
+	datapath-windows/ovsext/Ip6Fragment.c \
+	datapath-windows/ovsext/Ip6Fragment.h \
 	datapath-windows/ovsext/IpHelper.c \
 	datapath-windows/ovsext/IpHelper.h \
 	datapath-windows/ovsext/Jhash.c \
 	datapath-windows/ovsext/Jhash.h \
 	datapath-windows/ovsext/Mpls.h \
+	datapath-windows/ovsext/Meter.c \
+	datapath-windows/ovsext/Meter.h \
 	datapath-windows/ovsext/NetProto.h \
 	datapath-windows/ovsext/Netlink/Netlink.c \
 	datapath-windows/ovsext/Netlink/Netlink.h \

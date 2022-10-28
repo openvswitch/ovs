@@ -362,6 +362,10 @@ static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
                                      const char *argv[], void *aux);
 static void upcall_unixctl_purge(struct unixctl_conn *conn, int argc,
                                  const char *argv[], void *aux);
+static void upcall_unixctl_pause(struct unixctl_conn *conn, int argc,
+                                 const char *argv[], void *aux);
+static void upcall_unixctl_resume(struct unixctl_conn *conn, int argc,
+                                  const char *argv[], void *aux);
 
 static struct udpif_key *ukey_create_from_upcall(struct upcall *,
                                                  struct flow_wildcards *);
@@ -398,7 +402,8 @@ static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct dp_packet *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *,
                           const unsigned int mru,
-                          const ovs_u128 *ufid, const unsigned pmd_id);
+                          const ovs_u128 *ufid, const unsigned pmd_id,
+                          char **errorp);
 static void upcall_uninit(struct upcall *);
 
 static void udpif_flow_rebalance(struct udpif *udpif);
@@ -434,6 +439,10 @@ udpif_init(void)
                                  upcall_unixctl_dump_wait, NULL);
         unixctl_command_register("revalidator/purge", "", 0, 0,
                                  upcall_unixctl_purge, NULL);
+        unixctl_command_register("revalidator/pause", NULL, 0, 0,
+                                 upcall_unixctl_pause, NULL);
+        unixctl_command_register("revalidator/resume", NULL, 0, 0,
+                                 upcall_unixctl_resume, NULL);
         ovsthread_once_done(&once);
     }
 }
@@ -819,6 +828,7 @@ recv_upcalls(struct handler *handler)
         struct upcall *upcall = &upcalls[n_upcalls];
         struct flow *flow = &flows[n_upcalls];
         unsigned int mru = 0;
+        char *errorp = NULL;
         uint64_t hash = 0;
         int error;
 
@@ -845,7 +855,7 @@ recv_upcalls(struct handler *handler)
 
         error = upcall_receive(upcall, udpif->backer, &dupcall->packet,
                                dupcall->type, dupcall->userdata, flow, mru,
-                               &dupcall->ufid, PMD_ID_NULL);
+                               &dupcall->ufid, PMD_ID_NULL, &errorp);
         if (error) {
             if (error == ENODEV) {
                 /* Received packet on datapath port for which we couldn't
@@ -856,8 +866,11 @@ recv_upcalls(struct handler *handler)
                               dupcall->key_len, NULL, 0, NULL, 0,
                               &dupcall->ufid, PMD_ID_NULL, NULL);
                 VLOG_INFO_RL(&rl, "received packet on unassociated datapath "
-                             "port %"PRIu32, flow->in_port.odp_port);
+                             "port %"PRIu32"%s%s%s", flow->in_port.odp_port,
+                             errorp ? " (" : "", errorp ? errorp : "",
+                             errorp ? ")" : "");
             }
+            free(errorp);
             goto free_dupcall;
         }
 
@@ -1143,7 +1156,8 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct dp_packet *packet, enum dpif_upcall_type type,
                const struct nlattr *userdata, const struct flow *flow,
                const unsigned int mru,
-               const ovs_u128 *ufid, const unsigned pmd_id)
+               const ovs_u128 *ufid, const unsigned pmd_id,
+               char **errorp)
 {
     int error;
 
@@ -1152,7 +1166,8 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
         return EAGAIN;
     } else if (upcall->type == MISS_UPCALL) {
         error = xlate_lookup(backer, flow, &upcall->ofproto, &upcall->ipfix,
-                             &upcall->sflow, NULL, &upcall->ofp_in_port);
+                             &upcall->sflow, NULL, &upcall->ofp_in_port,
+                             errorp);
         if (error) {
             return error;
         }
@@ -1160,7 +1175,11 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
         struct ofproto_dpif *ofproto
             = ofproto_dpif_lookup_by_uuid(&upcall->cookie.ofproto_uuid);
         if (!ofproto) {
-            VLOG_INFO_RL(&rl, "upcall could not find ofproto");
+            if (errorp) {
+                *errorp = xstrdup("upcall could not find ofproto");
+            } else {
+                VLOG_INFO_RL(&rl, "upcall could not find ofproto");
+            }
             return ENODEV;
         }
         upcall->ofproto = ofproto;
@@ -1246,7 +1265,8 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         if (!VLOG_DROP_WARN(&rll)) {
             ds_init(&output);
             ofproto_trace(upcall->ofproto, upcall->flow,
-                          upcall->packet, NULL, 0, NULL, &output);
+                          upcall->packet, NULL, 0, NULL, &output,
+                          false);
             VLOG_WARN("%s", ds_cstr(&output));
             ds_destroy(&output);
         }
@@ -1349,7 +1369,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     atomic_read_relaxed(&enable_megaflows, &megaflow);
 
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
-                           flow, 0, ufid, pmd_id);
+                           flow, 0, ufid, pmd_id, NULL);
     if (error) {
         return error;
     }
@@ -2145,7 +2165,7 @@ xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
     }
 
     error = xlate_lookup(udpif->backer, &ctx->flow, &ofproto, NULL, NULL,
-                         ctx->netflow, &ofp_in_port);
+                         ctx->netflow, &ofp_in_port, NULL);
     if (error) {
         return error;
     }
@@ -3098,6 +3118,31 @@ upcall_unixctl_purge(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
     unixctl_command_reply(conn, "");
 }
+
+static void
+upcall_unixctl_pause(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        udpif_pause_revalidators(udpif);
+    }
+    unixctl_command_reply(conn, "");
+}
+
+static void
+upcall_unixctl_resume(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    struct udpif *udpif;
+
+    LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        udpif_resume_revalidators(udpif);
+    }
+    unixctl_command_reply(conn, "");
+}
+
 
 /* Flows are sorted in the following order:
  * netdev, flow state (offloaded/kernel path), flow_pps_rate.

@@ -193,7 +193,9 @@ static void ssl_clear_txbuf(struct ssl_stream *);
 static void interpret_queued_ssl_error(const char *function);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
 static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
+#endif
 static void log_ca_cert(const char *file_name, X509 *cert);
 static void stream_ssl_set_ca_cert_file__(const char *file_name,
                                           bool bootstrap, bool force);
@@ -471,7 +473,11 @@ static char *
 get_peer_common_name(const struct ssl_stream *sslv)
 {
     char *peer_name = NULL;
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
     X509 *peer_cert = SSL_get_peer_certificate(sslv->ssl);
+#else
+    X509 *peer_cert = SSL_get1_peer_certificate(sslv->ssl);
+#endif
     if (!peer_cert) {
         return NULL;
     }
@@ -1070,7 +1076,11 @@ do_ssl_init(void)
         return ENOPROTOOPT;
     }
     SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
     SSL_CTX_set_tmp_dh_callback(ctx, tmp_dh_callback);
+#else
+    SSL_CTX_set_dh_auto(ctx, 1);
+#endif
     SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
     SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
@@ -1081,6 +1091,7 @@ do_ssl_init(void)
     return 0;
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x3000000fL
 static DH *
 tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 {
@@ -1112,6 +1123,7 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
                 keylength);
     return NULL;
 }
+#endif
 
 /* Returns true if SSL is at least partially configured. */
 bool

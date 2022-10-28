@@ -286,6 +286,7 @@ NDIS_STATUS OvsEncapGeneve(POVS_VPORT_ENTRY vport,
         } else if (tunKey->dst.si_family == AF_INET6) {
             csumInfo.Transmit.IsIPv4 = 0;
             csumInfo.Transmit.IsIPv6 = 1;
+            csumInfo.Transmit.IpHeaderChecksum = 0;
         }
 
         if (tunKey->flags & OVS_TNL_F_CSUM) {

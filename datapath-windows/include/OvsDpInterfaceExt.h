@@ -74,6 +74,9 @@
 #define OVS_WIN_NL_CT_FAMILY_ID              (NLMSG_MIN_TYPE + 7)
 #define OVS_WIN_NL_CTLIMIT_FAMILY_ID         (NLMSG_MIN_TYPE + 8)
 
+/* Meter Family */
+#define OVS_WIN_NL_METER_FAMILY_ID            (NLMSG_MIN_TYPE + 9)
+
 #define OVS_WIN_NL_INVALID_MCGRP_ID          0
 #define OVS_WIN_NL_MCGRP_START_ID            100
 #define OVS_WIN_NL_VPORT_MCGRP_ID            (OVS_WIN_NL_MCGRP_START_ID + 1)

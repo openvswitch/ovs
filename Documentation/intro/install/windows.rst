@@ -852,32 +852,33 @@ related state.
 
    normal scenario
    Vif38(20::1, ofport:2)->Vif40(20:2, ofport:3)
-   Vif38Name="podvif38"
-   Vif40Name="podvif40"
+   Vif38Name="podvif70"
+   Vif40Name="Ethernet1"
    Vif38Port=2
-   Vif38Address="20::1"
-   Vif38MacAddressCli="00-15-5D-F0-01-0b"
+   Vif38Address="20::88"
    Vif40Port=3
-   Vif40Address="20::2"
-   Vif40MacAddressCli="00-15-5D-F0-01-0C"
+   Vif40Address="20::45"
+   Vif40MacAddressCli="00-50-56-98-9d-97"
+   Vif38MacAddressCli="00-15-5D-F0-01-0B"
    Protocol="tcp6"
-   > netsh int ipv6 set neighbors $Vif38Name $Vif40Address \
-     $Vif40MacAddressCli
-   > netsh int ipv6 set neighbors $Vif40Name $Vif38Address \
-     $Vif38MacAddressCli
+   > netsh int ipv6 set neighbors $Vif38Name $Vif40Address $Vif40MacAddressCli
+   > netsh int ipv6 set neighbors $Vif42Name $Vif38Ip $Vif38MacAddressCli
    > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
-   > ovs-ofctl add-flow br-int "table=0,priority=1,$Protocol \
+   > ovs-ofctl add-flow br-int "table=0,priority=1,$Protocol
      actions=ct(table=1)"
-   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=+new+trk-est, \
+   > ovs-ofctl add-flow br-int "table=1,priority=1,tp_dst=21, $Protocol,\
+     actions=ct(commit,table=2,alg=ftp)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,tp_src=21, $Protocol,\
+     actions=ct(commit,table=2,alg=ftp)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1, ct_state=+new+trk+rel,\
      $Protocol,actions=ct(commit,table=2)"
    > ovs-ofctl add-flow br-int "table=1,priority=1, \
-     ct_state=-new+trk+est-rel, $Protocol,actions=ct(commit,table=2)"
-   > ovs-ofctl add-flow br-int "table=1,priority=1, \
-     ct_state=-new+trk+est+rel, $Protocol,actions=ct(commit,table=2)"
-   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+     ct_state=-new+trk+est+rel,$Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6,\
      ipv6_dst=$Vif38Address,$Protocol,actions=output:$Vif38Port"
-   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6, \
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6,\
      ipv6_dst=$Vif40Address,$Protocol,actions=output:$Vif40Port"
+
 
 ::
 
@@ -885,45 +886,130 @@ related state.
    Vif38(20::1, ofport:2) -> nat address(20::9) -> Vif42(21::3, ofport:4)
    Due to not construct flow to return neighbor mac address, we set the
    neighbor mac address manually
+   Vif38Name="podvif70"
+   Vif42Name="Ethernet1"
+   Vif38Ip="20::88"
    Vif38Port=2
-   Vif42Port=4
-   Vif38Name="podvif38"
-   Vif42Name="podvif42"
+   Vif42Port=3
    NatAddress="20::9"
    NatMacAddress="aa:bb:cc:dd:ee:ff"
    NatMacAddressForCli="aa-bb-cc-dd-ee-ff"
    Vif42Ip="21::3"
-   Vif38MacAddress="00:15:5D:F0:01:0B"
-   Vif42MacAddress="00:15:5D:F0:01:0D"
+   Vif38MacAddress="00:15:5D:F0:01:14"
+   Vif38MacAddressCli="00-15-5D-F0-01-14"
+   Vif42MacAddress="00:50:56:98:9d:97"
    Protocol="tcp6"
-   > netsh int ipv6 set neighbors $Vif38Name $NatAddress \
-     $NatMacAddressForCli
-   > netsh int ipv6 set neighbors $Vif42Name $NatAddress \
-     $NatMacAddressForCli
+   netsh int ipv6 set neighbors $Vif38Name $NatAddress $NatMacAddressForCli
+   netsh int ipv6 set neighbors $Vif42Name $Vif38Ip $Vif38MacAddressCli
    > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
-   > ovs-ofctl add-flow br-int "table=0,priority=2,ipv6, \
-     dl_dst=$NatMacAddress,ct_state=-trk,$Protocol \
-     actions=ct(table=1,zone=456,nat)"
-   > ovs-ofctl add-flow br-int "table=0,priority=1,ipv6, \
-     ct_state=-trk,ip6,$Protocol actions=ct(nat, zone=456,table=1)"
-   > ovs-ofctl add-flow br-int "table=1,ipv6,in_port=$Vif38Port, \
-     ipv6_dst=$NatAddress,ct_state=+trk+new,$Protocol \
-     actions=ct(commit,nat(dst=$Vif42Ip),zone=456, \
-     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress, \
+   > ovs-ofctl add-flow br-int "table=0,priority=2,ipv6,ipv6_dst=$NatAddress,\
+     ct_state=-trk,$Protocol actions=ct(table=1,zone=456)"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,ipv6,ipv6_dst=$Vif38Ip,\
+     ct_state=-trk,ip6,$Protocol actions=ct(zone=456,table=1)"
+   > ovs-ofctl add-flow br-int "table=1,priority=2,ipv6,in_port=$Vif38Port,\
+     ipv6_dst=$NatAddress,ct_state=+trk-rel,tp_dst=21,$Protocol \
+     actions=ct(commit,alg=ftp,nat(dst=$Vif42Ip),zone=456, \
+     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress,\
      mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
-   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+dnat,$Protocol, \
-     action=resubmit(,2)"
-   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+snat, \
-     $Protocol,action=resubmit(,2)"
-   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+rel,$Protocol, \
-     action=resubmit(,2)"
-   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif38Port, \
-     ipv6_dst=$Vif42Ip,$Protocol, actions=mod_dl_src=$NatMacAddress, \
-     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
-   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif42Port, \
-     ct_state=-new+est,ct_mark=1,ct_zone=456,$Protocol, \
-     actions=mod_dl_src=$NatMacAddress,mod_dl_dst=$Vif38MacAddress, \
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ipv6,ct_state=+trk-rel,\
+     ipv6_dst=$Vif38Ip,$Protocol,action=ct(nat,alg=ftp,zone=456,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+rel,\
+     ipv6_dst=$NatAddress,$Protocol,\
+     action=ct(table=2,commit,nat(dst=$Vif42Ip),\
+     zone=456, exec(set_field:1->ct_mark))"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+rel,$Protocol,\
+     ipv6_dst=$Vif38Ip, action=ct(nat,zone=456,table=2)"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,ipv6_dst=$Vif42Ip,$Protocol,\
+     actions=mod_dl_src=$NatMacAddress, mod_dl_dst=$Vif42MacAddress,\
+     output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,ipv6_dst=$Vif38Ip,\
+     ct_state=-new+est,ct_mark=1,ct_zone=456,$Protocol,\
+     actions=mod_dl_src=$NatMacAddress,mod_dl_dst=$Vif38MacAddress,\
      output:$Vif38Port"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,ipv6_dst=$Vif38Ip,\
+     ct_state=+new,ct_mark=1,ct_zone=456,$Protocol,\
+     actions=mod_dl_src=$NatMacAddress,\
+     mod_dl_dst=$Vif38MacAddress, output:$Vif38Port"
+
+Tftp same with ftp, it also contains a related connection, we could use
+following follow test the tftp connection.
+
+::
+
+   normal scenario
+   Vif38Name="podvif70"
+   Vif40Name="Ethernet1"
+   Vif38Port=2
+   Vif38Address="20::88"
+   Vif40Port=3
+   Vif40Address="20::45"
+   Vif40MacAddressCli="00-50-56-98-9d-97"
+   Vif38MacAddressCli="00-15-5D-F0-01-14"
+   Protocol="udp6"
+   netsh int ipv6 set neighbors $Vif38Name $Vif40Address $Vif40MacAddressCli
+   netsh int ipv6 set neighbors $Vif40Name $Vif38Address $Vif38MacAddressCli
+   > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,$Protocol,
+     ipv6_src=$Vif38Address actions=ct(table=1)"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,$Protocol,
+     ipv6_src=$Vif40Address actions=ct(table=1)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=+new+trk-est,
+     tp_dst=69,$Protocol,udp6 actions=ct(commit,alg=tftp,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=-new+trk+est-rel,\
+     udp6 $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=-new+trk+est+rel,\
+     $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=1,priority=1,ct_state=+new+trk+rel,\
+     $Protocol,actions=ct(commit,table=2)"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6,\
+     ipv6_dst=$Vif38Address,$Protocol,actions=output:$Vif38Port"
+   > ovs-ofctl add-flow br-int "table=2,priority=1,ip6,\
+     ipv6_dst=$Vif40Address,$Protocol,actions=output:$Vif40Port"
+
+::
+
+   nat scenario
+   Vif38Name="podvif70"
+   Vif42Name="Ethernet1"
+   Vif38Ip="20::88"
+   Vif38Port=2
+   Vif42Port=3
+   NatAddress="20::9"
+   NatMacAddress="aa:bb:cc:dd:ee:ff"
+   NatMacAddressForCli="aa-bb-cc-dd-ee-ff"
+   Vif42Ip="21::3"
+   Vif38MacAddress="00:15:5D:F0:01:14"
+   Vif38MacAddressCli="00-15-5D-F0-01-14"
+   Vif42MacAddress="00:50:56:98:9d:97"
+   Protocol="ip6"
+   netsh int ipv6 set neighbors $Vif38Name $NatAddress $NatMacAddressForCli
+   netsh int ipv6 set neighbors $Vif42Name $Vif38Ip $Vif38MacAddressCli
+   > ovs-ofctl del-flows br-int --strict "table=0,priority=0"
+   > ovs-ofctl add-flow br-int "table=0,priority=2,ipv6,\
+     dl_dst=$NatMacAddress,ct_state=-trk,$Protocol \
+     actions=ct(table=1,zone=456)"
+   > ovs-ofctl add-flow br-int "table=0,priority=1,ipv6,ct_state=-trk,ip6,\
+     $Protocol actions=ct(table=1,zone=456)"
+   > ovs-ofctl add-flow br-int "table=1,in_port=$Vif38Port,\
+     ipv6_dst=$NatAddress,ct_state=+trk+new-rel,$Protocol,udp6\
+     actions=ct(commit,alg=tftp,nat(dst=$Vif42Ip),zone=456,\
+     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress,\
+     mod_dl_dst=$Vif42MacAddress,output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,in_port=$Vif42Port,\
+     ipv6_dst=$Vif38Ip,ct_state=+trk+rel-rpl,$Protocol\
+     actions=ct(commit,nat(src=$NatAddress),zone=456,\
+     exec(set_field:1->ct_mark)),mod_dl_src=$NatMacAddress,\
+     mod_dl_dst=$Vif38MacAddress,output:$Vif38Port"
+   > ovs-ofctl add-flow br-int "table=1,ipv6,ct_state=+trk+rel+est+rpl,\
+     $Protocol,action=ct(nat,table=2,zone=456)"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif38Port,\
+     ct_state=+rel+dnat,ipv6_dst=$Vif42Ip,$Protocol,\
+     actions=mod_dl_src=$NatMacAddress,mod_dl_dst=$Vif42MacAddress,\
+     output:$Vif42Port"
+   > ovs-ofctl add-flow br-int "table=2,ipv6,in_port=$Vif42Port,\
+     ct_state=-new+est,$Protocol,actions=mod_dl_src=$NatMacAddress,\
+     mod_dl_dst=$Vif38MacAddress,output:$Vif38Port"
+
 
 .. note::
 

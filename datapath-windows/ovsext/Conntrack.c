@@ -16,6 +16,7 @@
 
 #include "Conntrack.h"
 #include "IpFragment.h"
+#include "Ip6Fragment.h"
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Event.h"
@@ -356,8 +357,8 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         const ICMPHdr *icmp;
         icmp = OvsGetIcmp(curNbl, layers->l4Offset, &storage);
         if (!OvsConntrackValidateIcmp6Packet(icmp)) {
-            if(icmp) {
-                OVS_LOG_TRACE("Invalid ICMP packet detected, icmp->type %u",
+            if (icmp) {
+                OVS_LOG_TRACE("Invalid ICMP6 packet detected, icmp->type %u",
                               icmp->type);
             }
             state = OVS_CS_F_INVALID;
@@ -547,14 +548,14 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
             if (status == NDIS_STATUS_SUCCESS) {
                  /* After the Ipv4 Fragment is reassembled, update flow key as
                    L3 and L4 headers are not correct */
-                 status =
-                      OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
-                                     &newFlowKey, &fwdCtx->layers,
-                                     !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ? &(fwdCtx->tunKey) : NULL);
+                 status = OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                         &newFlowKey, &fwdCtx->layers,
+                                         !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ?
+                                         &(fwdCtx->tunKey) : NULL);
                 if (status != NDIS_STATUS_SUCCESS) {
                      OVS_LOG_ERROR("Extract flow failed Nbl %p", fwdCtx->curNbl);
                      return status;
-                 }
+                }
                 *key = newFlowKey;
             }
             return status;
@@ -566,21 +567,31 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
         }
         return NDIS_STATUS_NOT_SUPPORTED;
     case ETH_TYPE_IPV6:
+        if (key->ipv6Key.nwFrag != OVS_FRAG_TYPE_NONE) {
+            status = OvsProcessIpv6Fragment(fwdCtx->switchContext,
+                                            &fwdCtx->curNbl,
+                                            fwdCtx->completionList,
+                                            fwdCtx->fwdDetail->SourcePortId,
+                                            &fwdCtx->layers,
+                                            key->tunKey.tunnelId, key);
+            if (status == NDIS_STATUS_SUCCESS) {
+                status =  OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
+                                         &newFlowKey, &fwdCtx->layers,
+                                         !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ?
+                                         &(fwdCtx->tunKey) : NULL);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    OVS_LOG_ERROR("Extract flow for ipv6 failed Nbl %p",
+                                  fwdCtx->curNbl);
+                    return status;
+                }
+                *key = newFlowKey;
+            }
+            return status;
+        }
+
         if (key->ipv6Key.nwProto == IPPROTO_ICMPV6
             || key->ipv6Key.nwProto == IPPROTO_TCP
             || key->ipv6Key.nwProto == IPPROTO_UDP) {
-            /** TODO fragment **/
-
-            /** Extract flow key from packet and assign it to
-             * returned parameter. **/
-            status =  OvsExtractFlow(fwdCtx->curNbl, fwdCtx->srcVportNo,
-                                     &newFlowKey, &fwdCtx->layers,
-                                     !OvsIphIsZero(&(fwdCtx->tunKey.dst)) ? &(fwdCtx->tunKey) : NULL);
-            if (status != NDIS_STATUS_SUCCESS) {
-                OVS_LOG_ERROR("Extract flow for ipv6 failed Nbl %p", fwdCtx->curNbl);
-                return status;
-            }
-            *key = newFlowKey;
             return NDIS_STATUS_SUCCESS;
         }
         return NDIS_STATUS_NOT_SUPPORTED;
@@ -874,13 +885,25 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
         return NDIS_STATUS_INVALID_PACKET;
     }
 
+    /* It's only designed for unNat traffic, when reverse traffic comes,
+     * find the unNat table, if found the nat entry, based on the nat entry
+     * restore the conntrack, it will be stored in the ctx->key and then use the
+     * ctx->key lookup the conntrack table to find the corresponded
+     * entry with the traffic.*/
     natEntry = OvsNatLookup(&ctx->key, TRUE);
     if (natEntry) {
-        /* Translate address first for reverse NAT */
+        /* initial direction 20::1 -> 20::9,  reverse direction 21::3 -> 20::1
+         * 20::9 could be regarded as nat ip, before convert, ctx->key value
+         * is "21::3 -> 20::1", after convert, ctx->key value is
+         * "20::9->20::1" */
         ctx->key = natEntry->ctEntry->key;
         OvsCtKeyReverse(&ctx->key);
     } else {
-        if (flowKey->l2.dlType == htons(ETH_TYPE_IPV4)) {
+        if (OvsNatLookup(&ctx->key, FALSE)) {
+            /* Do nothing here, this branch here used to exclude traffic
+             * described in https://github.com/openvswitch/ovs-issues/issues/237
+             * */
+        } else if (flowKey->l2.dlType == htons(ETH_TYPE_IPV4)) {
             OvsPickupCtTupleAsLookupKey(&(ctx->key), zone, flowKey);
         }
     }
@@ -901,6 +924,18 @@ OvsDetectFtp6Packet(OvsFlowKey *key) {
     return (key->ipv6Key.nwProto == IPPROTO_TCP &&
             (ntohs(key->ipv6Key.l4.tpDst) == IPPORT_FTP ||
              ntohs(key->ipv6Key.l4.tpSrc) == IPPORT_FTP));
+}
+
+static __inline BOOLEAN
+OvsDetectTftpPacket(OvsFlowKey *key) {
+    return (key->ipKey.nwProto == IPPROTO_UDP &&
+            (ntohs(key->ipKey.l4.tpDst) == IPPORT_TFTP));
+}
+
+static __inline BOOLEAN
+OvsDetectTftp6Packet(OvsFlowKey *key) {
+    return (key->ipv6Key.nwProto == IPPROTO_UDP &&
+            (ntohs(key->ipv6Key.l4.tpDst) == IPPORT_TFTP));
 }
 
 /*
@@ -989,7 +1024,9 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
     if (entry) {
         NdisAcquireSpinLock(&(entry->lock));
         if ((layers->isIPv6 && key->ipv6Key.nwProto == IPPROTO_TCP) ||
-            (!(layers->isIPv6) && key->ipKey.nwProto == IPPROTO_TCP)) {
+            (!(layers->isIPv6) && key->ipKey.nwProto == IPPROTO_TCP) ||
+            (layers->isIPv6 && key->ipv6Key.nwProto == IPPROTO_UDP) ||
+            (!(layers->isIPv6) && key->ipKey.nwProto == IPPROTO_UDP)) {
             /* Update the related bit if there is a parent */
             if (entry->parent) {
                 state |= OVS_CS_F_RELATED;
@@ -1156,12 +1193,11 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     BOOLEAN triggerUpdateEvent = FALSE;
     BOOLEAN entryCreated = FALSE;
-    BOOLEAN isFtpPacket = FALSE;
-    BOOLEAN isFtpRequestDirection = FALSE;
     POVS_CT_ENTRY entry = NULL;
     POVS_CT_ENTRY parent = NULL;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OvsConntrackKeyLookupCtx ctx = { 0 };
+    CT_HELPER_METHOD helpMethod = CT_HELPER_NONE;
     LOCK_STATE_EX lockStateTable;
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
@@ -1241,24 +1277,45 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
 
     OvsCtSetMarkLabel(key, entry, mark, labels, &triggerUpdateEvent);
 
+    if (helper && RtlEqualMemory(helper, "ftp", sizeof("ftp"))) {
+        helpMethod = CT_HELPER_FTP;
+    } else if (helper && RtlEqualMemory(helper, "tftp", sizeof("tftp"))) {
+        helpMethod = CT_HELPER_TFTP;
+    }
+
+    /* This code section was added to compatible with the old version,
+     * because old version regard all traffic to port 21 as ftp traffic,
+     * no need to add alg field in ct. Thus, the code was added to keep the
+     * same behavior for ftp and tftp.*/
     if (layers->isIPv6) {
-        isFtpPacket = OvsDetectFtp6Packet(key);
-        if (ntohs(key->ipv6Key.l4.tpDst) == IPPORT_FTP) {
-            isFtpRequestDirection = TRUE;
+        if (OvsDetectFtp6Packet(key)) {
+            helpMethod = CT_HELPER_FTP;
+        }
+
+        if (OvsDetectTftp6Packet(key)) {
+            helpMethod = CT_HELPER_TFTP;
         }
     } else {
-        isFtpPacket = OvsDetectFtpPacket(key);
-        if (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP) {
-            isFtpRequestDirection = TRUE;
+        if (OvsDetectFtpPacket(key)) {
+            helpMethod = CT_HELPER_FTP;
+        }
+
+        if (OvsDetectTftpPacket(key)) {
+            helpMethod = CT_HELPER_TFTP;
         }
     }
 
-    if (isFtpPacket) {
-        /* FTP parser will always be loaded */
-        status = OvsCtHandleFtp(curNbl, key, layers, currentTime, entry,
-                                isFtpRequestDirection);
+    if (helpMethod == CT_HELPER_FTP) {
+        status = OvsCtHandleFtp(curNbl, key, layers, currentTime, entry);
         if (status != NDIS_STATUS_SUCCESS) {
             OVS_LOG_ERROR("Error while parsing the FTP packet");
+        }
+    }
+
+    if (helpMethod == CT_HELPER_TFTP) {
+        status = OvsCtHandleTftp(curNbl, key, layers, currentTime, entry);
+        if (status != NDIS_STATUS_SUCCESS) {
+            OVS_LOG_ERROR("Error while parsing the TFTP packet");
         }
     }
 
@@ -1266,7 +1323,6 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     /* The entry should have the same helper name with parent's */
     if (!entry->helper_name &&
         (helper || (parent && parent->helper_name))) {
-
         helper = helper ? helper : parent->helper_name;
         entry->helper_name = OvsAllocateMemoryWithTag(strlen(helper) + 1,
                                                       OVS_CT_POOL_TAG);

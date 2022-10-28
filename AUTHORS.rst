@@ -56,6 +56,7 @@ Amitabha Biswas                    azbiswas@gmail.com
 Anand Kumar                        kumaranand@vmware.com
 Andrea Kao                         eirinikos@gmail.com
 Andreas Karis                      akaris@redhat.com
+Andreas Stieger                    andreas.stieger@gmx.de
 Andrew Evans
 Andrew Beekhof                     abeekhof@redhat.com
 Andrew Kampjes                     a.kampjes@gmail.com
@@ -98,9 +99,10 @@ Bryan Phillippe                    bp@toroki.com
 Carlo Andreotti                    c.andreotti@m3s.it
 Casey Barker                       crbarker@google.com
 Chandra Sekhar Vejendla            csvejend@us.ibm.com
-Christophe Fontaine                cfontain@redhat.com
-Christoph Jaeger                   cj@linux.com
 Chris Wright                       chrisw@sous-sol.org
+Christoph Jaeger                   cj@linux.com
+Christophe Fontaine                cfontain@redhat.com
+Christopher Aubut                  christopher@aubut.me
 Chuck Short                        zulcss@ubuntu.com
 Cian Ferriter                      cian.ferriter@intel.com
 Ciara Loftus                       ciara.loftus@intel.com
@@ -160,6 +162,7 @@ Ethan J. Jackson                   ejj@eecs.berkeley.edu
 Ethan Rahn                         erahn@arista.com
 Eziz Durdyyev                      ezizdurdy@gmail.com
 Fabrizio D'Angelo                  fdangelo@redhat.com
+Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
 Francesco Fusco                    ffusco@redhat.com
@@ -226,6 +229,7 @@ Jinjun Gao                         gjinjun@gmail.com
 Jiri Benc                          jbenc@redhat.com
 Joe Perches                        joe@perches.com
 Joe Stringer                       joe@ovn.org
+Jon Kohler                         jon@nutanix.com
 Jonathan Vestin                    jonavest@kau.se
 Jorge Arturo Sauma Vargas          jorge.sauma@hpe.com
 Jun Nakajima                       jun.nakajima@intel.com
@@ -456,6 +460,8 @@ Wei Yongjun                        yjwei@cn.fujitsu.com
 Wenyu Zhang                        wenyuz@vmware.com
 William Fulton
 William Tu                         u9012063@gmail.com
+Wilson Peng                        pweisong@vmware.com
+Xavier Simonart                    xsimonar@redhat.com
 Xiao Liang                         shaw.leon@gmail.com
 xu rong                            xu.rong@zte.com.cn
 YAMAMOTO Takashi                   yamamoto@midokura.com

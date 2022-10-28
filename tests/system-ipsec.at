@@ -133,10 +133,8 @@ m4_define([CHECK_ESP_TRAFFIC],
       NS_EXEC([right], [ip link set dev br-ipsec up])
 
       dnl Capture any underlay esp packets
-      tcpdump -l -nn -i ovs-p0 esp > $ovs_base/left/tcpdump.log &
-      on_exit "kill $!"
-      tcpdump -l -nn -i ovs-p1 esp > $ovs_base/right/tcpdump.log &
-      on_exit "kill $!"
+      OVS_DAEMONIZE([tcpdump -l -nn -i ovs-p0 esp > $ovs_base/left/tcpdump.log], [tcpdump0.pid])
+      OVS_DAEMONIZE([tcpdump -l -nn -i ovs-p1 esp > $ovs_base/right/tcpdump.log], [tcpdump1.pid])
 
       dnl Wait for all loaded connections to be active
       OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(left)` -eq `IPSEC_STATUS_ACTIVE(left)`])
