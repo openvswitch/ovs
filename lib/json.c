@@ -365,7 +365,7 @@ static void json_destroy_array(struct json_array *array);
 
 /* Frees 'json' and everything it points to, recursively. */
 void
-json_destroy(struct json *json)
+json_destroy__(struct json *json)
 {
     switch (json->type) {
     case JSON_OBJECT:
@@ -422,16 +422,6 @@ json_destroy_array(struct json_array *array)
 
 static struct json *json_deep_clone_object(const struct shash *object);
 static struct json *json_deep_clone_array(const struct json_array *array);
-
-/* Returns 'json', with the reference count incremented. */
-struct json * 
-json_clone(const struct json *json_)
-{
-    struct json *json = CONST_CAST(struct json *, json_);
-    json->count++;
-    return json;
-}
-
 
 /* Returns a deep copy of 'json'. */
 struct json *
