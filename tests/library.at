@@ -69,6 +69,11 @@ skiplist random
 ])
 AT_CLEANUP
 
+AT_SETUP([test byteq])
+AT_CHECK([ovstest test-byteq], [0], [....
+])
+AT_CLEANUP
+
 AT_SETUP([type properties])
 AT_CHECK([test-type-props])
 AT_CLEANUP
