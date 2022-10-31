@@ -2647,6 +2647,10 @@ conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
     conn_key_to_tuple(&conn->key, &entry->tuple_orig);
     conn_key_to_tuple(&conn->rev_key, &entry->tuple_reply);
 
+    if (conn->alg_related) {
+        conn_key_to_tuple(&conn->parent_key, &entry->tuple_parent);
+    }
+
     entry->zone = conn->key.zone;
 
     ovs_mutex_lock(&conn->lock);
