@@ -2981,12 +2981,18 @@ netdev_linux_set_qos(struct netdev *netdev_,
         /* Delete existing qdisc. */
         error = tc_del_qdisc(netdev_);
         if (error) {
+            VLOG_WARN_RL(&rl, "%s: Failed to delete existing qdisc: %s",
+                         netdev_get_name(netdev_), ovs_strerror(error));
             goto exit;
         }
         ovs_assert(netdev->tc == NULL);
 
         /* Install new qdisc. */
         error = new_ops->tc_install(netdev_, details);
+        if (error) {
+            VLOG_WARN_RL(&rl, "%s: Failed to install new qdisc: %s",
+                         netdev_get_name(netdev_), ovs_strerror(error));
+        }
         ovs_assert((error == 0) == (netdev->tc != NULL));
     }
 
@@ -5977,13 +5983,12 @@ tc_del_qdisc(struct netdev *netdev_)
     if (!tcmsg) {
         return ENODEV;
     }
-    tcmsg->tcm_handle = tc_make_handle(1, 0);
     tcmsg->tcm_parent = TC_H_ROOT;
 
     error = tc_transact(&request, NULL);
-    if (error == EINVAL) {
-        /* EINVAL probably means that the default qdisc was in use, in which
-         * case we've accomplished our purpose. */
+    if (error == EINVAL || error == ENOENT) {
+        /* EINVAL or ENOENT probably means that the default qdisc was in use,
+         * in which case we've accomplished our purpose. */
         error = 0;
     }
     if (!error && netdev->tc) {
