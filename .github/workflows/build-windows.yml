@@ -6,7 +6,7 @@ jobs:
   build-windows:
     name: windows ${{ join(matrix.*, ' ') }}
     env:
-      OPTS: --prefix=C:/openvswitch/usr --localstatedir=C:/openvswitch/var --sysconfdir=C:/openvswitch/etc ${{ matrix.opts }}
+      OPTS: --prefix=C:/openvswitch/usr --localstatedir=C:/ProgramData/openvswitch/var --sysconfdir=C:/ProgramData/openvswitch/etc ${{ matrix.opts }}
       TESTSUITE: ${{ matrix.testsuite }}
     
     runs-on: windows-latest
@@ -87,3 +87,15 @@ jobs:
         with:
           name: logs-windows-${{ join(matrix.*, '-') }}
           path: config.log
+      - name: install
+        run: |
+          source ~/.visualstudio.sh 
+          source ~/.pythonenv.sh
+          make install
+          cp ./PTHREADS-BUILT/bin/pthreadVC3.dll /C/openvswitch/usr/sbin
+          cp ./PTHREADS-BUILT/bin/pthreadVC3.dll /C/openvswitch/usr/bin
+      - name: upload build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: openswitch-windows-${{ join(matrix.*, '-') }}
+          path: c:\openvswitch
