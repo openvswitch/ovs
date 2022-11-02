@@ -365,9 +365,10 @@ Rich Lane                          rlane@bigswitch.com
 Richard Oliver                     richard@richard-oliver.co.uk
 Rishi Bamba                        rishi.bamba@tcs.com
 Rob Adams                          readams@readams.net
-Robert Åkerblom-Andersson          Robert.nr1@gmail.com
-Robert Wojciechowicz               robertx.wojciechowicz@intel.com
 Rob Hoes                           rob.hoes@citrix.com
+Robert Wojciechowicz               robertx.wojciechowicz@intel.com
+Robert Åkerblom-Andersson          Robert.nr1@gmail.com
+Robin Jarry                        rjarry@redhat.com
 Rohith Basavaraja                  rohith.basavaraja@gmail.com
 Roi Dayan                          roid@nvidia.com
 Róbert Mulik                       robert.mulik@ericsson.com
