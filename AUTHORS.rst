@@ -117,6 +117,7 @@ Dan Wendlandt
 Dan Williams                       dcbw@redhat.com
 Daniel Alvarez                     dalvarez@redhat.com
 Daniel Borkmann                    dborkman@redhat.com
+Daniel Ding                        zhihui.ding@easystack.cn
 Daniel Hiltgen                     daniel@netkine.com
 Daniel Roman
 Daniele Di Proietto                daniele.di.proietto@gmail.com
