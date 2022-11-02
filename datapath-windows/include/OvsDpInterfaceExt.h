@@ -23,9 +23,9 @@
 #define OVS_DATAPATH_EXT_VERSION 1
 
 /* Name of the device. */
-#define OVS_DEVICE_NAME_NT     L"\\Device\\OpenvSwitchDevice"
-#define OVS_DEVICE_NAME_DOS    L"\\DosDevices\\OpenvSwitchDevice"
-#define OVS_DEVICE_NAME_USER   TEXT("\\\\.\\OpenvSwitchDevice")
+#define OVS_DEVICE_NAME_NT     L"\\Device\\DbosoftOVSD"
+#define OVS_DEVICE_NAME_DOS    L"\\DosDevices\\DbosoftOVSD"
+#define OVS_DEVICE_NAME_USER   TEXT("\\\\.\\DbosoftOVSD")
 
 #define OVS_IOCTL_DEVICE_TYPE 45000
 
