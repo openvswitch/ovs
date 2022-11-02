@@ -325,6 +325,28 @@ struct prio_map_data {
     uint16_t prio;
 };
 
+static uint16_t
+get_next_available_prio(ovs_be16 protocol)
+{
+    static uint16_t last_prio = TC_RESERVED_PRIORITY_MAX;
+
+    if (multi_mask_per_prio) {
+        if (protocol == htons(ETH_P_IP)) {
+            return TC_RESERVED_PRIORITY_IPV4;
+        } else if (protocol == htons(ETH_P_IPV6)) {
+            return TC_RESERVED_PRIORITY_IPV6;
+        }
+    }
+
+    /* last_prio can overflow if there will be many different kinds of
+     * flows which shouldn't happen organically. */
+    if (last_prio == UINT16_MAX) {
+        return TC_RESERVED_PRIORITY_NONE;
+    }
+
+    return ++last_prio;
+}
+
 /* Get free prio for tc flower
  * If prio is already allocated for mask/eth_type combination then return it.
  * If not assign new prio.
@@ -336,11 +358,11 @@ get_prio_for_tc_flower(struct tc_flower *flower)
 {
     static struct hmap prios = HMAP_INITIALIZER(&prios);
     static struct ovs_mutex prios_lock = OVS_MUTEX_INITIALIZER;
-    static uint16_t last_prio = TC_RESERVED_PRIORITY_MAX;
     size_t key_len = sizeof(struct tc_flower_key);
     size_t hash = hash_int((OVS_FORCE uint32_t) flower->key.eth_type, 0);
     struct prio_map_data *data;
     struct prio_map_data *new_data;
+    uint16_t prio;
 
     if (!multi_mask_per_prio) {
         hash = hash_bytes(&flower->mask, key_len, hash);
@@ -359,21 +381,20 @@ get_prio_for_tc_flower(struct tc_flower *flower)
         }
     }
 
-    if (last_prio == UINT16_MAX) {
-        /* last_prio can overflow if there will be many different kinds of
-         * flows which shouldn't happen organically. */
+    prio = get_next_available_prio(flower->key.eth_type);
+    if (prio == TC_RESERVED_PRIORITY_NONE) {
         ovs_mutex_unlock(&prios_lock);
-        return 0;
+        return prio;
     }
 
     new_data = xzalloc(sizeof *new_data);
     memcpy(&new_data->mask, &flower->mask, key_len);
-    new_data->prio = ++last_prio;
+    new_data->prio = prio;
     new_data->protocol = flower->key.eth_type;
     hmap_insert(&prios, &new_data->node, hash);
     ovs_mutex_unlock(&prios_lock);
 
-    return new_data->prio;
+    return prio;
 }
 
 static uint32_t
