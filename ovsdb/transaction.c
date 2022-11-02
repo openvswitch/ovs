@@ -623,7 +623,7 @@ static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_weak_ref *weak;
-    struct ovsdb_table *table;
+    struct ovsdb_table *table = txn_row->table;
     struct shash_node *node;
 
     if (txn_row->old && !txn_row->new) {
@@ -645,6 +645,15 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
             ovs_assert(ovs_list_is_empty(&weak->src_node));
             ovs_list_insert(&src_txn_row->deleted_refs, &weak->src_node);
         }
+
+        /* Creating refs that needs to be removed on commit. */
+        SHASH_FOR_EACH (node, &table->schema->columns) {
+            const struct ovsdb_column *column = node->data;
+            struct ovsdb_datum *datum = &txn_row->old->fields[column->index];
+
+            find_and_add_weak_refs(txn_row->old, datum, column,
+                                   &txn_row->deleted_refs, NULL, NULL);
+        }
     }
 
     if (!txn_row->new) {
@@ -655,7 +664,6 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         return NULL;
     }
 
-    table = txn_row->table;
     SHASH_FOR_EACH (node, &table->schema->columns) {
         const struct ovsdb_column *column = node->data;
         struct ovsdb_datum *datum = &txn_row->new->fields[column->index];
