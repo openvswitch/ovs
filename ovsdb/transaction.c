@@ -587,7 +587,7 @@ ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
 }
 
 static void
-add_weak_ref(struct ovsdb_txn_row *txn_row, const struct ovsdb_row *dst_,
+add_weak_ref(const struct ovsdb_row *src, const struct ovsdb_row *dst_,
              struct ovs_list *ref_list,
              const union ovsdb_atom *key, const union ovsdb_atom *value,
              bool by_key, const struct ovsdb_column *column)
@@ -595,13 +595,13 @@ add_weak_ref(struct ovsdb_txn_row *txn_row, const struct ovsdb_row *dst_,
     struct ovsdb_row *dst = CONST_CAST(struct ovsdb_row *, dst_);
     struct ovsdb_weak_ref *weak;
 
-    if (txn_row->new == dst) {
+    if (src == dst) {
         return;
     }
 
     weak = xzalloc(sizeof *weak);
-    weak->src_table = txn_row->new->table;
-    weak->src = *ovsdb_row_get_uuid(txn_row->new);
+    weak->src_table = src->table;
+    weak->src = *ovsdb_row_get_uuid(src);
     weak->dst_table = dst->table;
     weak->dst = *ovsdb_row_get_uuid(dst);
     ovsdb_type_clone(&weak->type, &column->type);
@@ -616,7 +616,7 @@ add_weak_ref(struct ovsdb_txn_row *txn_row, const struct ovsdb_row *dst_,
 }
 
 static void
-find_and_add_weak_ref(struct ovsdb_txn_row *txn_row,
+find_and_add_weak_ref(const struct ovsdb_row *src,
                       const union ovsdb_atom *key,
                       const union ovsdb_atom *value,
                       const struct ovsdb_column *column,
@@ -628,12 +628,37 @@ find_and_add_weak_ref(struct ovsdb_txn_row *txn_row,
         : ovsdb_table_get_row(column->type.value.uuid.refTable, &value->uuid);
 
     if (row) {
-        add_weak_ref(txn_row, row, ref_list, key, value, by_key, column);
+        add_weak_ref(src, row, ref_list, key, value, by_key, column);
     } else if (not_found) {
         if (uuid_is_zero(by_key ? &key->uuid : &value->uuid)) {
             *zero = true;
         }
         ovsdb_datum_add_unsafe(not_found, key, value, &column->type, NULL);
+    }
+}
+
+static void
+find_and_add_weak_refs(const struct ovsdb_row *src,
+                       const struct ovsdb_datum *datum,
+                       const struct ovsdb_column *column,
+                       struct ovs_list *ref_list,
+                       struct ovsdb_datum *not_found, bool *zero)
+{
+    unsigned int i;
+
+    if (ovsdb_base_type_is_weak_ref(&column->type.key)) {
+        for (i = 0; i < datum->n; i++) {
+            find_and_add_weak_ref(src, &datum->keys[i],
+                                  datum->values ? &datum->values[i] : NULL,
+                                  column, true, ref_list, not_found, zero);
+        }
+    }
+
+    if (ovsdb_base_type_is_weak_ref(&column->type.value)) {
+        for (i = 0; i < datum->n; i++) {
+            find_and_add_weak_ref(src, &datum->keys[i], &datum->values[i],
+                                  column, false, ref_list, not_found, zero);
+        }
     }
 }
 
@@ -678,7 +703,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         const struct ovsdb_column *column = node->data;
         struct ovsdb_datum *datum = &txn_row->new->fields[column->index];
         struct ovsdb_datum added, removed, deleted_refs;
-        unsigned int orig_n, i;
+        unsigned int orig_n;
         bool zero = false;
 
         orig_n = datum->n;
@@ -712,23 +737,8 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 
         /* Checking added data and creating new references. */
         ovsdb_datum_init_empty(&deleted_refs);
-        if (ovsdb_base_type_is_weak_ref(&column->type.key)) {
-            for (i = 0; i < added.n; i++) {
-                find_and_add_weak_ref(txn_row, &added.keys[i],
-                                      added.values ? &added.values[i] : NULL,
-                                      column, true, &txn_row->added_refs,
-                                      &deleted_refs, &zero);
-            }
-        }
-
-        if (ovsdb_base_type_is_weak_ref(&column->type.value)) {
-            for (i = 0; i < added.n; i++) {
-                find_and_add_weak_ref(txn_row, &added.keys[i],
-                                      &added.values[i],
-                                      column, false, &txn_row->added_refs,
-                                      &deleted_refs, &zero);
-            }
-        }
+        find_and_add_weak_refs(txn_row->new, &added, column,
+                               &txn_row->added_refs, &deleted_refs, &zero);
         if (deleted_refs.n) {
             /* Removing all the references that doesn't point to valid rows. */
             ovsdb_datum_sort_unique(&deleted_refs, &column->type);
@@ -741,24 +751,8 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         /* Creating refs that needs to be removed on commit.  This includes
          * both: the references that got directly removed from the datum and
          * references removed due to deletion of a referenced row. */
-        if (ovsdb_base_type_is_weak_ref(&column->type.key)) {
-            for (i = 0; i < removed.n; i++) {
-                find_and_add_weak_ref(txn_row, &removed.keys[i],
-                                      removed.values
-                                      ? &removed.values[i] : NULL,
-                                      column, true, &txn_row->deleted_refs,
-                                      NULL, NULL);
-            }
-        }
-
-        if (ovsdb_base_type_is_weak_ref(&column->type.value)) {
-            for (i = 0; i < removed.n; i++) {
-                find_and_add_weak_ref(txn_row, &removed.keys[i],
-                                      &removed.values[i],
-                                      column, false, &txn_row->deleted_refs,
-                                      NULL, NULL);
-            }
-        }
+        find_and_add_weak_refs(txn_row->new, &removed, column,
+                               &txn_row->deleted_refs, NULL, NULL);
         ovsdb_datum_destroy(&removed, &column->type);
 
         if (datum->n != orig_n) {
