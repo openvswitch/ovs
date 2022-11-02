@@ -75,7 +75,7 @@
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10Analyze|x64'" Label="Configuration">
-    <TargetVersion />
+    <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolsetVer Condition="'$(PlatformToolsetVer)' == ''">10.0</PlatformToolsetVer>
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
@@ -94,8 +94,7 @@
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'" Label="Configuration">
-    <TargetVersion>
-    </TargetVersion>
+    <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolsetVer Condition="'$(PlatformToolsetVer)' == ''">10.0</PlatformToolsetVer>
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>

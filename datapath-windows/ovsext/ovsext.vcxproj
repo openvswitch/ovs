@@ -75,7 +75,7 @@
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10Analyze|x64'" Label="Configuration">
-    <TargetVersion />
+    <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>True</UseDebugLibraries>
     <PlatformToolsetVer Condition="'$(PlatformToolsetVer)' == ''">10.0</PlatformToolsetVer>
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
@@ -100,8 +100,7 @@
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'" Label="Configuration">
-    <TargetVersion>
-    </TargetVersion>
+    <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>False</UseDebugLibraries>
     <PlatformToolsetVer Condition="'$(PlatformToolsetVer)' == ''">10.0</PlatformToolsetVer>
     <PlatformToolset>WindowsKernelModeDriver$(PlatformToolsetVer)</PlatformToolset>
@@ -376,7 +375,7 @@
       <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">$(Version)</TimeStamp>
     </Inf>
     <Inf>
-      <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(Version)</TimeStamp>
+      <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(Version</TimeStamp>
     </Inf>
     <DriverSign>
       <FileDigestAlgorithm Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">SHA256</FileDigestAlgorithm>
