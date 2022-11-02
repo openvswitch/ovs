@@ -1,5 +1,5 @@
 ;
-; Copyright (c) dbosoft GmbH. All Rights Reserved.
+; Copyright (c) VMware. All Rights Reserved.
 ;
 
 [version]
@@ -7,20 +7,20 @@ Signature   = "$Windows NT$"
 Class       = NetService
 ClassGUID   = {4D36E974-E325-11CE-BFC1-08002BE10318}
 Provider    = %OVS%
-CatalogFile = DBO_OVSE.cat
+CatalogFile = ovsext.cat
 DriverVer   = 10/10/2013,1.0
 
 [Manufacturer]
 %OVS%=OVS,NTx86,NTia64,NTamd64
 
 [OVS.NTx86]
-%DBO_OVSE_Desc%=Install, DBO_OVSE
+%OVSExt_Desc%=Install, OVSExt
 
 [OVS.NTia64]
-%DBO_OVSE_Desc%=Install, DBO_OVSE
+%OVSExt_Desc%=Install, OVSExt
 
 [OVS.NTamd64]
-%DBO_OVSE_Desc%=Install, DBO_OVSE
+%OVSExt_Desc%=Install, OVSExt
 
 ;-------------------------------------------------------------------------
 ; Installation Section
@@ -28,30 +28,30 @@ DriverVer   = 10/10/2013,1.0
 [Install]
 AddReg=Inst_Ndi
 Characteristics=0x40000
-NetCfgInstanceId="{63E968D9-754E-4704-A5CE-6E3BF7DDF59B}"
-Copyfiles = DBO_OVSE.copyfiles.sys
+NetCfgInstanceId="{583CC151-73EC-4A6A-8B47-578297AD7623}"
+Copyfiles = OVSExt.copyfiles.sys
 
 [SourceDisksNames]
-1=%DBO_OVSE_Desc%,"",,
+1=%OVSExt_Desc%,"",,
 
 [SourceDisksFiles]
-DBO_OVSE.sys=1
+OVSExt.sys=1
 
 [DestinationDirs]
 DefaultDestDir=12
-DBO_OVSE.copyfiles.sys=12
+OVSExt.copyfiles.sys=12
 
-[DBO_OVSE.copyfiles.sys]
-DBO_OVSE.sys,,,2
+[OVSExt.copyfiles.sys]
+OVSExt.sys,,,2
 
 
 ;-------------------------------------------------------------------------
 ; Ndi installation support
 ;-------------------------------------------------------------------------
 [Inst_Ndi]
-HKR, Ndi,Service,,"DBO_OVSE"
-HKR, Ndi,CoServices,0x00010000,"DBO_OVSE"
-HKR, Ndi,HelpText,,%DBO_OVSE_HelpText%
+HKR, Ndi,Service,,"OVSExt"
+HKR, Ndi,CoServices,0x00010000,"OVSExt"
+HKR, Ndi,HelpText,,%OVSExt_HelpText%
 HKR, Ndi,FilterClass,,"ms_switch_forward"
 HKR, Ndi,FilterType,0x00010001,0x00000002
 HKR, Ndi\Interfaces,UpperRange,,"noupper"
@@ -64,21 +64,21 @@ HKR, Ndi,FilterRunType, 0x00010001, 2 ; optional
 ; write an enent log
 ;-------------------------------------------------------------------------
 [Install.Services]
-AddService=DBO_OVSE,,DBO_OVSE_Service_Inst;, common.EventLog
+AddService=OVSExt,,OVSExt_Service_Inst;, common.EventLog
 
-[DBO_OVSE_Service_Inst]
-DisplayName     = %DBO_OVSE_Desc%
+[OVSExt_Service_Inst]
+DisplayName     = %OVSExt_Desc%
 ServiceType     = 1 ;SERVICE_KERNEL_DRIVER
 StartType       = 1 ;SERVICE_SYSTEM_START
 ErrorControl    = 1 ;SERVICE_ERROR_NORMAL
-ServiceBinary   = %12%\DBO_OVSE.sys
+ServiceBinary   = %12%\OVSExt.sys
 LoadOrderGroup  = NDIS
-Description     = %DBO_OVSE_Desc%
+Description     = %OVSExt_Desc%
 
 [Install.Remove.Services]
-DelService=DBO_OVSE,0x200
+DelService=OVSExt,0x200
 
 [Strings]
-OVS = "dbosoft GmbH"
-DBO_OVSE_Desc = "dbosoft Open vSwitch Extension"
-DBO_OVSE_HelpText = "Open vSwitch forwarding switch extension"
+OVS = "The Linux Foundation (R)"
+OVSExt_Desc = "Open vSwitch Extension"
+OVSExt_HelpText = "Open vSwitch forwarding switch extension"

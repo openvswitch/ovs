@@ -188,7 +188,7 @@
     <ClInclude Include="Vxlan.h" />
   </ItemGroup>
   <PropertyGroup>
-    <TargetName>DBO_OVSE</TargetName>
+    <TargetName>OVSExt</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
     <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>

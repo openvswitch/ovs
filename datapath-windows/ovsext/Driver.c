@@ -47,17 +47,17 @@ NDIS_HANDLE gOvsExtDriverHandle;
  */
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 
-static PWCHAR ovsExtFriendlyName = L"dbosoft Open vSwitch Extension";
-static PWCHAR ovsExtServiceName = L"DBO_OVSE";
+static PWCHAR ovsExtFriendlyName = L"Open vSwitch Extension";
+static PWCHAR ovsExtServiceName = L"OVSExt";
 NDIS_STRING ovsExtGuidUC;
 NDIS_STRING ovsExtFriendlyNameUC;
 
-static PWCHAR ovsExtGuidStr = L"{63E968D9-754E-4704-A5CE-6E3BF7DDF59B}";
+static PWCHAR ovsExtGuidStr = L"{583CC151-73EC-4A6A-8B47-578297AD7623}";
 static const GUID ovsExtGuid = {
-      0x63e968d9,
-      0x754e,
-      0x4704,
-      {0xa5, 0xce, 0x6e, 0x3b, 0xf7, 0xdd, 0xf5, 0x9b}
+      0x583cc151,
+      0x73ec,
+      0x4a6a,
+      {0x8b, 0x47, 0x57, 0x82, 0x97, 0xad, 0x76, 0x23}
 };
 
 DRIVER_INITIALIZE DriverEntry;
