@@ -3,17 +3,11 @@
    are kept up-to-date.
 
 ============
-Open vSwitch
+Open vSwitch (dbosoft fork)
 ============
 
-.. image:: https://github.com/openvswitch/ovs/workflows/Build%20and%20Test/badge.svg
-    :target: https://github.com/openvswitch/ovs/actions
-.. image:: https://travis-ci.org/openvswitch/ovs.png
-    :target: https://travis-ci.org/openvswitch/ovs
-.. image:: https://ci.appveyor.com/api/projects/status/github/openvswitch/ovs?branch=master&svg=true&retina=true
-    :target: https://ci.appveyor.com/project/blp/ovs/history
-.. image:: https://api.cirrus-ci.com/github/openvswitch/ovs.svg
-    :target: https://cirrus-ci.com/github/openvswitch/ovs
+.. image:: https://github.com/dbosoft/ovs/workflows/Build%20and%20Test/badge.svg
+    :target: https://github.com/dbosoft/ovs/actions
 
 What is Open vSwitch?
 ---------------------
@@ -48,6 +42,10 @@ a kernel module.  This userspace implementation should be easier to port than
 the kernel-based switch. OVS in userspace can access Linux or DPDK devices.
 Note Open vSwitch with userspace datapath and non DPDK devices is considered
 experimental and comes with a cost in performance.
+
+What is the dbosoft fork?
+-------------------------
+We have forked openvswitch to build it for windows and to work on upstream patches. 
 
 What's here?
 ------------
