@@ -380,18 +380,18 @@ rculist_is_singleton_protected(const struct rculist *list)
 #define RCULIST_FOR_EACH_REVERSE_PROTECTED(ITER, MEMBER, RCULIST)             \
     for (INIT_MULTIVAR(ITER, MEMBER, (RCULIST)->prev, struct rculist);        \
          CONDITION_MULTIVAR(ITER, MEMBER, ITER_VAR(ITER) != (RCULIST));       \
-         UPDATE_MULTIVAR(ITER, ITER_VAR(VAR).prev))
+         UPDATE_MULTIVAR(ITER, ITER_VAR(ITER)->prev))
 
 #define RCULIST_FOR_EACH_REVERSE_PROTECTED_CONTINUE(ITER, MEMBER, RCULIST)    \
     for (INIT_MULTIVAR(ITER, MEMBER, (ITER)->MEMBER.prev, struct rculist);    \
          CONDITION_MULTIVAR(ITER, MEMBER, ITER_VAR(ITER) != (RCULIST));       \
-         UPDATE_MULTIVAR(ITER, ITER_VAR(VAR).prev))
+         UPDATE_MULTIVAR(ITER, ITER_VAR(ITER)->prev))
 
 #define RCULIST_FOR_EACH_PROTECTED(ITER, MEMBER, RCULIST)                     \
     for (INIT_MULTIVAR(ITER, MEMBER, rculist_next_protected(RCULIST),         \
                        struct rculist);                                       \
          CONDITION_MULTIVAR(ITER, MEMBER, ITER_VAR(ITER) != (RCULIST));       \
-         UPDATE_MULTIVAR(ITER, rculist_next_protected(ITER_VAR(ITER)))        \
+         UPDATE_MULTIVAR(ITER, rculist_next_protected(ITER_VAR(ITER))))       \
 
 #define RCULIST_FOR_EACH_SAFE_SHORT_PROTECTED(ITER, MEMBER, RCULIST)          \
     for (INIT_MULTIVAR_SAFE_SHORT(ITER, MEMBER,                               \
@@ -399,18 +399,18 @@ rculist_is_singleton_protected(const struct rculist *list)
                                   struct rculist);                            \
          CONDITION_MULTIVAR_SAFE_SHORT(ITER, MEMBER,                          \
                                        ITER_VAR(ITER) != (RCULIST),           \
-             ITER_NEXT_VAR(ITER) = rculist_next_protected(ITER_VAR(VAR)));    \
-        UPDATE_MULTIVAR_SHORT(ITER))
+             ITER_NEXT_VAR(ITER) = rculist_next_protected(ITER_VAR(ITER)));   \
+        UPDATE_MULTIVAR_SAFE_SHORT(ITER))
 
 #define RCULIST_FOR_EACH_SAFE_LONG_PROTECTED(ITER, NEXT, MEMBER, RCULIST)     \
     for (INIT_MULTIVAR_SAFE_LONG(ITER, NEXT, MEMBER,                          \
-                                 rculist_next_protected(RCULIST)              \
+                                 rculist_next_protected(RCULIST),             \
                                  struct rculist);                             \
-         CONDITION_MULTIVAR_SAFE_LONG(VAR, NEXT, MEMBER                       \
+         CONDITION_MULTIVAR_SAFE_LONG(ITER, NEXT, MEMBER,                     \
                                       ITER_VAR(ITER) != (RCULIST),            \
-             ITER_VAR(NEXT) = rculist_next_protected(ITER_VAR(VAR)),          \
+             ITER_VAR(NEXT) = rculist_next_protected(ITER_VAR(ITER)),         \
                                       ITER_VAR(NEXT) != (RCULIST));           \
-        UPDATE_MULTIVAR_LONG(ITER))
+        UPDATE_MULTIVAR_SAFE_LONG(ITER, NEXT))
 
 #define RCULIST_FOR_EACH_SAFE_PROTECTED(...)                                  \
     OVERLOAD_SAFE_MACRO(RCULIST_FOR_EACH_SAFE_LONG_PROTECTED,                 \
