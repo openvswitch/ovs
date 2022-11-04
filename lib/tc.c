@@ -1087,6 +1087,10 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
         }
 
         ex_type = nl_attr_find_nested(nla, TCA_PEDIT_KEY_EX_HTYPE);
+        if (!ex_type) {
+            return EOPNOTSUPP;
+        }
+
         type = nl_attr_get_u16(ex_type);
 
         err = csum_update_flag(flower, type);
