@@ -2501,13 +2501,13 @@ nl_msg_put_act_tunnel_key_release(struct ofpbuf *request)
 
 static void
 nl_msg_put_act_tunnel_geneve_option(struct ofpbuf *request,
-                                    struct tun_metadata tun_metadata)
+                                    struct tun_metadata *tun_metadata)
 {
     const struct geneve_opt *opt;
     size_t outer, inner;
     int len, cnt = 0;
 
-    len = tun_metadata.present.len;
+    len = tun_metadata->present.len;
     if (!len) {
         return;
     }
@@ -2515,7 +2515,7 @@ nl_msg_put_act_tunnel_geneve_option(struct ofpbuf *request,
     outer = nl_msg_start_nested(request, TCA_TUNNEL_KEY_ENC_OPTS);
 
     while (len) {
-        opt = &tun_metadata.opts.gnv[cnt];
+        opt = &tun_metadata->opts.gnv[cnt];
         inner = nl_msg_start_nested(request, TCA_TUNNEL_KEY_ENC_OPTS_GENEVE);
 
         nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS,
@@ -2539,7 +2539,7 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, bool id_present,
                               ovs_be32 ipv4_dst, struct in6_addr *ipv6_src,
                               struct in6_addr *ipv6_dst,
                               ovs_be16 tp_dst, uint8_t tos, uint8_t ttl,
-                              struct tun_metadata tun_metadata,
+                              struct tun_metadata *tun_metadata,
                               uint8_t no_csum, uint32_t action_pc)
 {
     size_t offset;
@@ -3207,7 +3207,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                               action->encap.tp_dst,
                                               action->encap.tos,
                                               action->encap.ttl,
-                                              action->encap.data,
+                                              &action->encap.data,
                                               action->encap.no_csum,
                                               action_pc);
                 nl_msg_put_act_flags(request);
@@ -3379,20 +3379,20 @@ nl_msg_put_masked_value(struct ofpbuf *request, uint16_t type,
 
 static void
 nl_msg_put_flower_tunnel_opts(struct ofpbuf *request, uint16_t type,
-                              struct tun_metadata metadata)
+                              struct tun_metadata *metadata)
 {
     struct geneve_opt *opt;
     size_t outer, inner;
     int len, cnt = 0;
 
-    len = metadata.present.len;
+    len = metadata->present.len;
     if (!len) {
         return;
     }
 
     outer = nl_msg_start_nested(request, type);
     while (len) {
-        opt = &metadata.opts.gnv[cnt];
+        opt = &metadata->opts.gnv[cnt];
         inner = nl_msg_start_nested(request, TCA_FLOWER_KEY_ENC_OPTS_GENEVE);
 
         nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_OPT_GENEVE_CLASS,
@@ -3469,9 +3469,9 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_KEY_ID, id);
     }
     nl_msg_put_flower_tunnel_opts(request, TCA_FLOWER_KEY_ENC_OPTS,
-                                  flower->key.tunnel.metadata);
+                                  &flower->key.tunnel.metadata);
     nl_msg_put_flower_tunnel_opts(request, TCA_FLOWER_KEY_ENC_OPTS_MASK,
-                                  flower->mask.tunnel.metadata);
+                                  &flower->mask.tunnel.metadata);
 }
 
 #define FLOWER_PUT_MASKED_VALUE(member, type) \
