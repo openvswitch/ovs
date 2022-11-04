@@ -4105,7 +4105,6 @@ dpif_netlink_meter_get_features(const struct dpif *dpif_,
                                 struct ofputil_meter_features *features)
 {
     if (probe_broken_meters(CONST_CAST(struct dpif *, dpif_))) {
-        features = NULL;
         return;
     }
 
