@@ -3101,6 +3101,7 @@ dp_netdev_offload_flush(struct dp_netdev *dp,
     ovs_barrier_init(&barrier, 1 + netdev_offload_thread_nb());
 
     netdev = netdev_ref(port->netdev);
+    netdev->hw_info.is_deleting = true;
     dp_netdev_offload_flush_enqueue(dp, netdev, &barrier);
     ovs_barrier_block(&barrier);
     netdev_close(netdev);

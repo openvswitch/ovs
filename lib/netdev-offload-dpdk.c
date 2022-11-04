@@ -2546,7 +2546,9 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
         if (data->netdev != netdev && data->physdev != netdev) {
             continue;
         }
-        if (data->creation_tid == tid) {
+        if (data->creation_tid == tid && data->netdev->hw_info.is_deleting) {
+            VLOG_INFO("Remove offloaded dpdk flows for netdev %s",
+                      netdev_get_name(netdev));
             netdev_offload_dpdk_flow_destroy(data);
         }
     }

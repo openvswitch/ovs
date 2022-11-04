@@ -51,6 +51,7 @@ struct netdev_hw_info {
     int offload_count;  /* Pending (non-offloaded) flow count */
     int pending_count;  /* Offloaded flow count */
     OVSRCU_TYPE(void *) offload_data; /* Offload metadata. */
+    bool is_deleting;
 };
 
 enum hw_info_type {

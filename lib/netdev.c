@@ -431,6 +431,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     seq_read(netdev->reconfigure_seq);
                 ovsrcu_set(&netdev->flow_api, NULL);
                 netdev->hw_info.oor = false;
+                netdev->hw_info.is_deleting = false;
                 atomic_init(&netdev->hw_info.miss_api_supported, false);
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
