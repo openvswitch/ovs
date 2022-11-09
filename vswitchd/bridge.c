@@ -2660,6 +2660,7 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(tx_512_to_1023_packets,  "tx_512_to_1023_packets")   \
     IFACE_STAT(tx_1024_to_1522_packets, "tx_1024_to_1522_packets")  \
     IFACE_STAT(tx_1523_to_max_packets,  "tx_1523_to_max_packets")   \
+    IFACE_STAT(multicast,               "rx_multicast_packets")     \
     IFACE_STAT(tx_multicast_packets,    "tx_multicast_packets")     \
     IFACE_STAT(rx_broadcast_packets,    "rx_broadcast_packets")     \
     IFACE_STAT(tx_broadcast_packets,    "tx_broadcast_packets")     \
