@@ -1502,6 +1502,8 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
     UINT16 *checkField = NULL;
     BOOLEAN l4Offload = FALSE;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    UINT16  preNatPseudoChecksum = 0;
+    BOOLEAN preservePseudoChecksum = FALSE;
 
     ASSERT(layers->value != 0);
 
@@ -1537,6 +1539,11 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
      * case, we only update the TTL.
      */
      /*Only tx direction the checksum value will be reset to be PseudoChecksum*/
+    if (!isTx) {
+        preNatPseudoChecksum = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
+            tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
+            ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
+    }
 
     if (isSource) {
         addrField = &ipHdr->saddr;
@@ -1553,7 +1560,12 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                         ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
                          (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
         }
-        if (isTx && l4Offload) {
+        if (!isTx && l4Offload) {
+            if (*checkField == preNatPseudoChecksum) {
+                preservePseudoChecksum = TRUE;
+            }
+        }
+        if (isTx && l4Offload || preservePseudoChecksum) {
             *checkField = IPPseudoChecksum(&newAddr, &ipHdr->daddr,
                 tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
                 ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
@@ -1573,8 +1585,13 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
                         ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
                          (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
         }
+        if (!isTx && l4Offload) {
+            if (*checkField == preNatPseudoChecksum) {
+                preservePseudoChecksum = TRUE;
+            }
+        }
 
-       if (isTx && l4Offload) {
+        if (isTx && l4Offload || preservePseudoChecksum) {
             *checkField = IPPseudoChecksum(&ipHdr->saddr, &newAddr,
                 tcpHdr ? IPPROTO_TCP : IPPROTO_UDP,
                 ntohs(ipHdr->tot_len) - ipHdr->ihl * 4);
@@ -1583,7 +1600,8 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
 
     if (*addrField != newAddr) {
         UINT32 oldAddr = *addrField;
-        if ((checkField && *checkField != 0) && (!l4Offload || !isTx)) {
+        if ((checkField && *checkField != 0) &&
+            (!l4Offload || (!isTx && !preservePseudoChecksum))) {
             /* Recompute total checksum. */
             *checkField = ChecksumUpdate32(*checkField, oldAddr,
                                             newAddr);
@@ -1597,7 +1615,8 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
     }
 
     if (portField && *portField != newPort) {
-        if ((checkField) && (!l4Offload || !isTx)) {
+        if ((checkField) &&
+            (!l4Offload || (!isTx && !preservePseudoChecksum))) {
             /* Recompute total checksum. */
             *checkField = ChecksumUpdate16(*checkField, *portField,
                                            newPort);
