@@ -238,8 +238,6 @@ rm -rf $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
-touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
-touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/.conf.db.~lock~
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 install -p -m 644 -D selinux/openvswitch-custom.pp \
@@ -328,6 +326,27 @@ if [ $1 -eq 1 ]; then
 fi
 %endif
 
+# Ensure that /etc/openvswitch/conf.db links to /var/lib/openvswitch,
+# moving an existing file if there is one.
+#
+# Ditto for .conf.db.~lock~.
+for base in conf.db .conf.db.~lock~; do
+    new=/var/lib/openvswitch/$base
+    old=/etc/openvswitch/$base
+    if test -f $old && test ! -e $new; then
+        mv $old $new
+    fi
+    if test ! -e $old && test ! -h $old; then
+        ln -s $new $old
+    fi
+    touch $new
+%if %{with dpdk}
+    chown openvswitch:hugetlbfs $new
+%else
+    chown openvswitch:openvswitch $new
+%endif
+done
+
 %if 0%{?systemd_post:1}
     # This may not enable openvswitch service or do daemon-reload.
     %systemd_post %{name}.service
@@ -413,8 +432,8 @@ fi
 %endif
 %dir %{_sysconfdir}/openvswitch
 %{_sysconfdir}/openvswitch/default.conf
-%config %ghost %{_sysconfdir}/openvswitch/conf.db
-%ghost %{_sysconfdir}/openvswitch/.conf.db.~lock~
+%config %ghost %{_sharedstatedir}/openvswitch/conf.db
+%ghost %{_sharedstatedir}/openvswitch/.conf.db.~lock~
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
 %defattr(-,root,root)
