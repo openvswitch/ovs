@@ -241,7 +241,7 @@ static char * OVS_WARN_UNUSED_RESULT
 learn_parse_spec(const char *orig, char *name, char *value,
                  const struct ofputil_port_map *port_map,
                  struct ofpact_learn_spec *spec,
-                 struct ofpbuf *ofpacts, struct match *match)
+                 struct ofpbuf *ofpacts)
 {
     /* Parse destination and check prerequisites. */
     struct mf_subfield dst;
@@ -275,14 +275,14 @@ learn_parse_spec(const char *orig, char *name, char *value,
                 } else {
                     char *tail;
                     /* Partial field value. */
-                    if (parse_int_string(value, (uint8_t *)&imm,
+                    if (parse_int_string(value, imm.b,
                                           dst.field->n_bytes, &tail)
                         || *tail != 0) {
                         imm_error = xasprintf("%s: cannot parse integer value", orig);
                     }
 
                     if (!imm_error &&
-                        !bitwise_is_all_zeros(&imm, dst.field->n_bytes,
+                        !bitwise_is_all_zeros(imm.b, dst.field->n_bytes,
                                               dst.n_bits,
                                               dst.field->n_bytes * 8 - dst.n_bits)) {
                         struct ds ds;
@@ -304,15 +304,13 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
                 spec->src_type = NX_LEARN_SRC_IMMEDIATE;
 
-                /* Update 'match' to allow for satisfying destination
-                 * prerequisites. */
-                mf_write_subfield_value(&dst, &imm, match);
-
                 /* Push value last, as this may reallocate 'spec'! */
                 unsigned int imm_bytes = DIV_ROUND_UP(dst.n_bits, 8);
                 uint8_t *src_imm = ofpbuf_put_zeros(ofpacts,
                                                     OFPACT_ALIGN(imm_bytes));
-                memcpy(src_imm, &imm, imm_bytes);
+
+                memcpy(src_imm, &imm.b[dst.field->n_bytes - imm_bytes],
+                       imm_bytes);
 
                 free(error);
                 return NULL;
@@ -391,7 +389,6 @@ learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
               struct ofpbuf *ofpacts)
 {
     struct ofpact_learn *learn;
-    struct match match;
     char *name, *value;
 
     learn = ofpact_put_LEARN(ofpacts);
@@ -400,7 +397,6 @@ learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
     learn->priority = OFP_DEFAULT_PRIORITY;
     learn->table_id = 1;
 
-    match_init_catchall(&match);
     while (ofputil_parse_key_value(&arg, &name, &value)) {
         if (!strcmp(name, "table")) {
             if (!ofputil_table_from_string(value, table_map,
@@ -448,7 +444,7 @@ learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
             error = learn_parse_spec(orig, name, value, port_map,
-                                     spec, ofpacts, &match);
+                                     spec, ofpacts);
             if (error) {
                 return error;
             }
