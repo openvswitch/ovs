@@ -3594,9 +3594,16 @@ static bool
 check_attr_len(struct ds *ds, const struct nlattr *a, const struct nlattr *ma,
                const struct attr_len_tbl tbl[], int max_type, bool need_key)
 {
+    uint16_t type = nl_attr_type(a);
     int expected_len;
 
-    expected_len = odp_key_attr_len(tbl, max_type, nl_attr_type(a));
+    if (type > max_type) {
+        /* Unknown attribute, can't check the length. */
+        return true;
+    }
+
+    expected_len = odp_key_attr_len(tbl, max_type, type);
+
     if (expected_len != ATTR_LEN_VARIABLE &&
         expected_len != ATTR_LEN_NESTED) {
 
@@ -3605,7 +3612,7 @@ check_attr_len(struct ds *ds, const struct nlattr *a, const struct nlattr *ma,
 
         if (bad_key_len || bad_mask_len) {
             if (need_key) {
-                ds_put_format(ds, "key%u", nl_attr_type(a));
+                ds_put_format(ds, "key%u", type);
             }
             if (bad_key_len) {
                 ds_put_format(ds, "(bad key length %"PRIuSIZE", expected %d)(",
