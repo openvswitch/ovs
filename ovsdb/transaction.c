@@ -613,6 +613,8 @@ add_weak_ref(const struct ovsdb_row *src, const struct ovsdb_row *dst_,
     weak->column_idx = column->index;
     hmap_node_nullify(&weak->dst_node);
     ovs_list_push_back(ref_list, &weak->src_node);
+
+    n_weak_refs++;
 }
 
 static void

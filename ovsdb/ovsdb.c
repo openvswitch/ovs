@@ -43,6 +43,8 @@
 #include "openvswitch/vlog.h"
 VLOG_DEFINE_THIS_MODULE(ovsdb);
 
+size_t n_weak_refs = 0;
+
 struct ovsdb_schema *
 ovsdb_schema_create(const char *name, const char *version, const char *cksum)
 {
@@ -546,6 +548,8 @@ ovsdb_get_memory_usage(const struct ovsdb *db, struct simap *usage)
     if (db->storage) {
         ovsdb_storage_get_memory_usage(db->storage, usage);
     }
+
+    simap_put(usage, "n-weak-refs", n_weak_refs);
 }
 
 struct ovsdb_table *

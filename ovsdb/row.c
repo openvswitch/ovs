@@ -21,8 +21,9 @@
 
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
-#include "ovsdb-error.h"
 #include "openvswitch/shash.h"
+#include "ovsdb-error.h"
+#include "ovsdb.h"
 #include "sort.h"
 #include "table.h"
 #include "util.h"
@@ -78,6 +79,7 @@ ovsdb_weak_ref_clone(struct ovsdb_weak_ref *src)
     ovsdb_type_clone(&weak->type, &src->type);
     weak->column_idx = src->column_idx;
     weak->by_key = src->by_key;
+    n_weak_refs++;
     return weak;
 }
 
@@ -130,6 +132,7 @@ ovsdb_weak_ref_destroy(struct ovsdb_weak_ref *weak)
     }
     ovsdb_type_destroy(&weak->type);
     free(weak);
+    n_weak_refs--;
 }
 
 struct ovsdb_row *
