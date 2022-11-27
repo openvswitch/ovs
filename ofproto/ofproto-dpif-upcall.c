@@ -1888,6 +1888,7 @@ try_ukey_replace(struct umap *umap, struct udpif_key *old_ukey,
             ovs_mutex_lock(&new_ukey->mutex);
             cmap_replace(&umap->cmap, &old_ukey->cmap_node,
                          &new_ukey->cmap_node, new_ukey->hash);
+            new_ukey->dump_seq = old_ukey->dump_seq;
             ovsrcu_postpone(ukey_delete__, old_ukey);
             transition_ukey(old_ukey, UKEY_DELETED);
             transition_ukey(new_ukey, UKEY_VISIBLE);
