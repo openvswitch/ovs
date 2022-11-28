@@ -636,6 +636,20 @@ OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
 /failed to put/d"])
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - check dpctl/add-flow wider ip match])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy])
+
+AT_CHECK([ovs-appctl revalidator/pause])
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth_type(0x0800),ipv4(src=0.0.0.0/192.0.0.0,dst=0.0.0.0/192.0.0.0,frag=no)" "3"])
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth_type(0x0800),ipv4(src=192.1.1.1/0.0.0.0,dst=49.1.1.1/0.0.0.0,frag=no)" "3"])
+AT_CHECK([ovs-appctl revalidator/resume])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # SEND_UDP_PKTS([p_name], [p_ofport])
 #
 # Sends 128 packets to port 'p_name' with different UDP destination ports.
