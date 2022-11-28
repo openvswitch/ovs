@@ -3335,6 +3335,28 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
+/* Initializes 'key' as a copy of 'flow'. */
+static inline void
+netdev_flow_key_init(struct netdev_flow_key *key,
+                     const struct flow *flow)
+{
+    uint64_t *dst = miniflow_values(&key->mf);
+    uint32_t hash = 0;
+    uint64_t value;
+
+    miniflow_map_init(&key->mf, flow);
+    miniflow_init(&key->mf, flow);
+
+    size_t n = dst - miniflow_get_values(&key->mf);
+
+    FLOW_FOR_EACH_IN_MAPS (value, flow, key->mf.map) {
+        hash = hash_add64(hash, value);
+    }
+
+    key->hash = hash_finish(hash, n * 8);
+    key->len = netdev_flow_key_size(n);
+}
+
 static inline void
 emc_change_entry(struct emc_entry *ce, struct dp_netdev_flow *flow,
                  const struct netdev_flow_key *key)
@@ -4209,7 +4231,7 @@ static int
 dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct netdev_flow_key key, mask;
+    struct netdev_flow_key key;
     struct dp_netdev_pmd_thread *pmd;
     struct match match;
     ovs_u128 ufid;
@@ -4258,9 +4280,12 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 
     /* Must produce a netdev_flow_key for lookup.
      * Use the same method as employed to create the key when adding
-     * the flow to the dplcs to make sure they match. */
-    netdev_flow_mask_init(&mask, &match);
-    netdev_flow_key_init_masked(&key, &match.flow, &mask);
+     * the flow to the dplcs to make sure they match.
+     * We need to put in the unmasked key as flow_put_on_pmd() will first try
+     * to see if an entry exists doing a packet type lookup. As masked-out
+     * fields are interpreted as zeros, they could falsely match a wider IP
+     * address mask. Installation of the flow will use the match variable. */
+    netdev_flow_key_init(&key, &match.flow);
 
     if (put->pmd_id == PMD_ID_NULL) {
         if (cmap_count(&dp->poll_threads) == 0) {
