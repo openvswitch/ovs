@@ -3,6 +3,9 @@ Post-v3.0.0
    - ovs-appctl:
      * "ovs-appctl ofproto/trace" command can now display port names with the
        "--names" option.
+   - OVSDB-IDL:
+     * Add the support to specify the persistent uuid for row insert in both
+       C and Python IDLs.
    - Windows:
      * Conntrack IPv6 fragment support.
    - DPDK:

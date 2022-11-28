@@ -1731,29 +1731,43 @@ cmd_create(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     const struct uuid *uuid = NULL;
+    bool persist_uuid = false;
+    struct uuid uuid_;
     int i;
 
     ctx->error = get_table(table_name, &table);
     if (ctx->error) {
         return;
     }
-    if (id) {
-        struct ovsdb_symbol *symbol = NULL;
 
-        ctx->error = create_symbol(ctx->symtab, id, &symbol, NULL);
-        if (ctx->error) {
-            return;
+    if (id) {
+        if (uuid_from_string(&uuid_, id)) {
+            uuid = &uuid_;
+            persist_uuid = true;
+        } else {
+            struct ovsdb_symbol *symbol = NULL;
+
+            ctx->error = create_symbol(ctx->symtab, id, &symbol, NULL);
+            if (ctx->error) {
+                return;
+            }
+            if (table->is_root) {
+                /* This table is in the root set, meaning that rows created in
+                 * it won't disappear even if they are unreferenced, so disable
+                 * warnings about that by pretending that there is a
+                 * reference. */
+                symbol->strong_ref = true;
+            }
+            uuid = &symbol->uuid;
         }
-        if (table->is_root) {
-            /* This table is in the root set, meaning that rows created in it
-             * won't disappear even if they are unreferenced, so disable
-             * warnings about that by pretending that there is a reference. */
-            symbol->strong_ref = true;
-        }
-        uuid = &symbol->uuid;
     }
 
-    row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
+    if (persist_uuid) {
+        row = ovsdb_idl_txn_insert_persist_uuid(ctx->txn, table, uuid);
+    } else {
+        row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
+    }
+
     for (i = 2; i < ctx->argc; i++) {
         ctx->error = set_column(table, row, ctx->argv[i], ctx->symtab);
         if (ctx->error) {

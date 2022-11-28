@@ -203,7 +203,7 @@ Without \fB\-\-if-exists\fR, it is an error if \fIrecord\fR does not
 exist.  With \fB\-\-if-exists\fR, this command does nothing if
 \fIrecord\fR does not exist.
 .
-.IP "[\fB\-\-id=@\fIname\fR] \fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "[\fB\-\-id=(@\fIname\fR | \fIuuid\fR] \fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of
 each \fIcolumn\fR.  Columns not explicitly set will receive their
 default values.  Outputs the UUID of the new row.
@@ -212,6 +212,9 @@ If \fB@\fIname\fR is specified, then the UUID for the new row may be
 referred to by that name elsewhere in the same \fB\*(PN\fR
 invocation in contexts where a UUID is expected.  Such references may
 precede or follow the \fBcreate\fR command.
+.IP
+If a valid \fIuuid\fR is specified, then it is used as the UUID
+of the new row.
 .
 .RS
 .IP "Caution (ovs-vsctl as example)"

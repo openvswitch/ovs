@@ -1710,3 +1710,28 @@ ingress_policing_kpkts_rate: 100
 ])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+AT_SETUP([ovs-vsctl create bridge with uuid])
+AT_KEYWORDS([create bridge with uuid])
+OVS_VSCTL_SETUP
+
+AT_CHECK([ovs-vsctl --no-wait --id=c5cc12f8-eaa1-43a7-8a73-bccd18df1111 create bridge \
+name=tst0 -- add open . bridges c5cc12f8-eaa1-43a7-8a73-bccd18df1111], [0],[dnl
+c5cc12f8-eaa1-43a7-8a73-bccd18df1111
+])
+
+AT_CHECK([ovs-vsctl --no-wait --id=c5cc12f8-eaa1-43a7-8a73-bccd18df1111 create bridge \
+name=tst1 -- add open . bridges c5cc12f8-eaa1-43a7-8a73-bccd18df1111], [1], [ignore], [ignore])
+
+AT_CHECK([ovs-vsctl --no-wait --bare --columns _uuid,name list bridge], [0], [dnl
+c5cc12f8-eaa1-43a7-8a73-bccd18df1111
+tst0
+])
+
+ovs-vsctl --no-wait --id=@a create bridge \
+name=tst1 -- add open . bridges @a
+
+AT_CHECK([ovs-vsctl --no-wait --bare --columns _uuid,name list bridge tst1], [0], [ignore])
+
+OVS_VSCTL_CLEANUP
+AT_CLEANUP

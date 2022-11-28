@@ -2400,7 +2400,7 @@ idltest_find_simple(struct ovsdb_idl *idl, int i)
     return NULL;
 }
 
-static void
+static bool
 idl_set(struct ovsdb_idl *idl, char *commands, int step)
 {
     char *cmd, *save_ptr1 = NULL;
@@ -2458,6 +2458,19 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
 
             s = idltest_simple_insert(txn);
             idltest_simple_set_i(s, atoi(arg1));
+        } else if (!strcmp(name, "insert_uuid")) {
+            struct idltest_simple *s;
+
+            if (!arg1 || !arg2) {
+                ovs_fatal(0, "\"insert\" command requires 2 arguments");
+            }
+
+            struct uuid s_uuid;
+            if (!uuid_from_string(&s_uuid, arg1)) {
+                 ovs_fatal(0, "\"insert_uuid\" command requires valid uuid");
+            }
+            s = idltest_simple_insert_persist_uuid(txn, &s_uuid);
+            idltest_simple_set_i(s, atoi(arg2));
         } else if (!strcmp(name, "delete")) {
             const struct idltest_simple *s;
 
@@ -2522,7 +2535,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             print_and_log("%03d: destroy", step);
             ovsdb_idl_txn_destroy(txn);
             ovsdb_idl_check_consistency(idl);
-            return;
+            return true;
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }
@@ -2543,6 +2556,8 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
 
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_check_consistency(idl);
+
+    return (status != TXN_ERROR);
 }
 
 static const struct ovsdb_idl_table_class *
@@ -2777,7 +2792,14 @@ do_idl(struct ovs_cmdl_context *ctx)
             update_conditions(idl, arg + strlen(cond_s));
             print_and_log("%03d: change conditions", step++);
         } else if (arg[0] != '[') {
-            idl_set(idl, arg, step++);
+            if (!idl_set(idl, arg, step++)) {
+                /* If idl_set() returns false, then no transaction
+                 * was sent to the server and most likely 'seqno'
+                 * would remain the same.  And the above 'Wait for update'
+                 * for loop poll_block() would never return.
+                 * So set seqno to 0. */
+                seqno = 0;
+            }
         } else {
             struct json *json = parse_json(arg);
             substitute_uuids(json, symtab);

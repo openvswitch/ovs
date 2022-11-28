@@ -362,6 +362,8 @@ struct %(s)s *%(s)s_cursor_data(struct ovsdb_idl_cursor *);
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
+struct %(s)s *%(s)s_insert_persist_uuid(
+    struct ovsdb_idl_txn *txn, const struct uuid *uuid);
 
 /* Returns true if the tracked column referenced by 'enum %(s)s_column_id' of
  * the row referenced by 'struct %(s)s *' was updated since the last change
@@ -807,6 +809,19 @@ struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
     return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_%(tl)s, NULL));
+}
+
+/* Inserts and returns a new row in the table "%(t)s" in the database
+ * with open transaction 'txn'.
+ *
+ * The new row is assigned the UUID specified in the 'uuid' parameter
+ * (which cannot be null).  ovsdb-server will try to assign the same
+ * UUID when 'txn' is committed. */
+struct %(s)s *
+%(s)s_insert_persist_uuid(struct ovsdb_idl_txn *txn, const struct uuid *uuid)
+{
+    return %(s)s_cast(ovsdb_idl_txn_insert_persist_uuid(
+        txn, &%(p)stable_%(tl)s, uuid));
 }
 
 bool

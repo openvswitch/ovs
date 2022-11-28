@@ -2555,3 +2555,61 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
 005: table link2: i=1 l1= uuid=<1>
 006: done
 ]])
+
+m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([idl persistent uuid insert])
+   AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest.ovsschema"])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $2],
+            [0], [stdout], [stderr])
+   AT_CHECK([sort stdout],
+            [0], [$3])
+   AT_CHECK([grep $4 stderr], [0], [ignore])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY],
+  [AT_SETUP([$1 - Python3])
+   AT_KEYWORDS([idl persistent uuid insert])
+   AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest.ovsschema"])
+   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
+            [0], [stdout], [stderr])
+   AT_CHECK([sort stdout],
+            [0], [$3])
+   AT_CHECK([grep $4 stderr], [0], [ignore])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+
+m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT],
+  [OVSDB_CHECK_IDL_PERS_UUID_INSERT_C($@)
+   OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY($@)])
+
+OVSDB_CHECK_IDL_PERS_UUID_INSERT([simple idl, persistent uuid insert],
+  [['insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df2222 2, insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df3333 3' \
+    'insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df4444 4, insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df2222 5' \
+    'insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df4444 4' \
+    'delete 2' \
+    'insert_uuid c5cc12f8-eaa1-43a7-8a73-bccd18df2222 5'
+    ]],
+  [[000: empty
+001: commit, status=success
+002: table simple: i=2 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df2222
+002: table simple: i=3 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df3333
+003: commit, status=error
+004: table simple: i=2 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df2222
+004: table simple: i=3 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df3333
+005: commit, status=success
+006: table simple: i=2 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df2222
+006: table simple: i=3 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df3333
+006: table simple: i=4 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df4444
+007: commit, status=success
+008: table simple: i=3 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df3333
+008: table simple: i=4 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df4444
+009: commit, status=success
+010: table simple: i=3 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df3333
+010: table simple: i=4 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df4444
+010: table simple: i=5 r=0 b=false s= u=00000000-0000-0000-0000-000000000000 ia=[] ra=[] ba=[] sa=[] ua=[] uuid=c5cc12f8-eaa1-43a7-8a73-bccd18df2222
+011: done
+]],
+  [['This UUID would duplicate a UUID already present within the table or deleted within the same transaction']])

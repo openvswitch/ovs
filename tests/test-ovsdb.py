@@ -429,6 +429,14 @@ def idl_set(idl, commands, step):
 
             s = txn.insert(idl.tables["simple"])
             s.i = int(args[0])
+        elif name == "insert_uuid":
+            if len(args) != 2:
+                sys.stderr.write('"set" command requires 2 argument\n')
+                sys.exit(1)
+
+            s = txn.insert(idl.tables["simple"], new_uuid=args[0],
+                           persist_uuid=True)
+            s.i = int(args[1])
         elif name == "delete":
             if len(args) != 1:
                 sys.stderr.write('"delete" command requires 1 argument\n')
@@ -491,7 +499,7 @@ def idl_set(idl, commands, step):
             print("%03d: destroy" % step)
             sys.stdout.flush()
             txn.abort()
-            return
+            return True
         elif name == "linktest":
             l1_0 = txn.insert(idl.tables["link1"])
             l1_0.i = 1
@@ -614,6 +622,8 @@ def idl_set(idl, commands, step):
         sys.stdout.write(", events=" + ", ".join(sorted(events)))
     sys.stdout.write("\n")
     sys.stdout.flush()
+
+    return status != ovs.db.idl.Transaction.ERROR
 
 
 def update_condition(idl, commands):
@@ -748,7 +758,13 @@ def do_idl(schema_file, remote, *commands):
             sys.stdout.flush()
             step += 1
         elif not command.startswith("["):
-            idl_set(idl, command, step)
+            if not idl_set(idl, command, step):
+                # If idl_set() returns false, then no transaction
+                # was sent to the server and most likely seqno
+                # would remain the same.  And the above 'Wait for update'
+                # for loop poller.block() would never return.
+                # So set seqno to 0.
+                seqno = 0
             step += 1
         else:
             json = ovs.json.from_string(command)
