@@ -880,8 +880,8 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
     if (pmd->core_id != NON_PMD_CORE_ID) {
         struct rxq_poll *list;
         size_t n_rxq;
-        uint64_t total_cycles = 0;
-        uint64_t busy_cycles = 0;
+        uint64_t total_pmd_cycles = 0;
+        uint64_t busy_pmd_cycles = 0;
         uint64_t total_rxq_proc_cycles = 0;
         unsigned int intervals;
 
@@ -894,17 +894,17 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
         sorted_poll_list(pmd, &list, &n_rxq);
 
         /* Get the total pmd cycles for an interval. */
-        atomic_read_relaxed(&pmd->intrvl_cycles, &total_cycles);
+        atomic_read_relaxed(&pmd->intrvl_cycles, &total_pmd_cycles);
         /* Calculate how many intervals are to be used. */
         intervals = DIV_ROUND_UP(secs,
                                  PMD_INTERVAL_LEN / INTERVAL_USEC_TO_SEC);
         /* Estimate the cycles to cover all intervals. */
-        total_cycles *= intervals;
-        busy_cycles = get_interval_values(pmd->busy_cycles_intrvl,
-                                          &pmd->intrvl_idx,
-                                          intervals);
-        if (busy_cycles > total_cycles) {
-            busy_cycles = total_cycles;
+        total_pmd_cycles *= intervals;
+        busy_pmd_cycles = get_interval_values(pmd->busy_cycles_intrvl,
+                                              &pmd->intrvl_idx,
+                                              intervals);
+        if (busy_pmd_cycles > total_pmd_cycles) {
+            busy_pmd_cycles = total_pmd_cycles;
         }
 
         for (int i = 0; i < n_rxq; i++) {
@@ -921,9 +921,9 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
             ds_put_format(reply, " %s", netdev_rxq_enabled(list[i].rxq->rx)
                                         ? "(enabled) " : "(disabled)");
             ds_put_format(reply, "  pmd usage: ");
-            if (total_cycles) {
+            if (total_pmd_cycles) {
                 ds_put_format(reply, "%2"PRIu64"",
-                              rxq_proc_cycles * 100 / total_cycles);
+                              rxq_proc_cycles * 100 / total_pmd_cycles);
                 ds_put_cstr(reply, " %");
             } else {
                 ds_put_format(reply, "%s", "NOT AVAIL");
@@ -933,14 +933,14 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
 
         if (n_rxq > 0) {
             ds_put_cstr(reply, "  overhead: ");
-            if (total_cycles) {
+            if (total_pmd_cycles) {
                 uint64_t overhead_cycles = 0;
 
-                if (total_rxq_proc_cycles < busy_cycles) {
-                    overhead_cycles = busy_cycles - total_rxq_proc_cycles;
+                if (total_rxq_proc_cycles < busy_pmd_cycles) {
+                    overhead_cycles = busy_pmd_cycles - total_rxq_proc_cycles;
                 }
                 ds_put_format(reply, "%2"PRIu64" %%",
-                              overhead_cycles * 100 / total_cycles);
+                              overhead_cycles * 100 / total_pmd_cycles);
             } else {
                 ds_put_cstr(reply, "NOT AVAIL");
             }
