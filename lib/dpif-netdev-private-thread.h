@@ -114,7 +114,7 @@ struct dp_netdev_pmd_thread {
     atomic_ullong intrvl_cycles;
 
     /* Write index for 'busy_cycles_intrvl'. */
-    unsigned int intrvl_idx;
+    atomic_count intrvl_idx;
     /* Busy cycles in last PMD_INTERVAL_MAX intervals. */
     atomic_ullong *busy_cycles_intrvl;
 

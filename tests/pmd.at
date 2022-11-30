@@ -70,6 +70,7 @@ CHECK_CPU_DISCOVERED()
 CHECK_PMD_THREADS_CREATED()
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -102,6 +103,7 @@ dummy@ovs-dummy: hit:0 missed:0
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -134,6 +136,7 @@ dummy@ovs-dummy: hit:0 missed:0
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -183,6 +186,7 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 CHECK_PMD_THREADS_CREATED([1], [], [+$TMP])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -215,6 +219,7 @@ dummy@ovs-dummy: hit:0 missed:0
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id <cleared> core_id <cleared>:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -280,6 +285,7 @@ CHECK_PMD_THREADS_CREATED([1], [1], [+$TMP])
 OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using group algorithm"])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id 1 core_id 1:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -302,6 +308,7 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=roundrobin])
 OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using roundrobin algorithm"])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id 1 core_id 1:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -322,6 +329,7 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-rxq-assign=cycles])
 OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Performing pmd to rx queue assignment using cycles algorithm"])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id 1 core_id 1:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -343,6 +351,7 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 CHECK_PMD_THREADS_CREATED([1], [1], [+$TMP])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show], [0], [dnl
+Displaying last 60 seconds pmd usage %
 pmd thread numa_id 1 core_id 0:
   isolated : false
   port: p0                queue-id:  0 (enabled)   pmd usage: NOT AVAIL
@@ -466,6 +475,59 @@ pmd thread numa_id <cleared> core_id <cleared>:
   avg. subtable lookups per megaflow hit: 0.00
   miss with success upcall: 1
   miss with failed upcall: 0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - pmd-rxq-show pmd usage time])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd], [], [], [DUMMY_NUMA])
+
+#CHECK_CPU_DISCOVERED()
+#CHECK_PMD_THREADS_CREATED()
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs -1 | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 0 | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 1 | grep Displaying], [0], [dnl
+Displaying last 5 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 5 | grep Displaying], [0], [dnl
+Displaying last 5 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 6 | grep Displaying], [0], [dnl
+Displaying last 10 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 51 | grep Displaying], [0], [dnl
+Displaying last 55 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 55 | grep Displaying], [0], [dnl
+Displaying last 55 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 56 | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 60 | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show -secs 61 | grep Displaying], [0], [dnl
+Displaying last 60 seconds pmd usage %
 ])
 
 OVS_VSWITCHD_STOP
