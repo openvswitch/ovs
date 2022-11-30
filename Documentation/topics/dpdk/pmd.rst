@@ -101,12 +101,20 @@ core cycles for each Rx queue::
 
 .. note::
 
-   A history of one minute is recorded and shown for each Rx queue to allow for
-   traffic pattern spikes. Any changes in the Rx queue's PMD core cycles usage,
-   due to traffic pattern or reconfig changes, will take one minute to be fully
-   reflected in the stats.
+   By default a history of one minute is recorded and shown for each Rx queue
+   to allow for traffic pattern spikes. Any changes in the Rx queue's PMD core
+   cycles usage, due to traffic pattern or reconfig changes, will take one
+   minute to be fully reflected in the stats by default.
 
-   .. versionchanged:: 2.6.0
+PMD thread usage of an Rx queue can be displayed for a shorter period of time,
+from the last 5 seconds up to the default 60 seconds in 5 second steps.
+
+To see the port/Rx queue assignment and the last 5 secs of measured usage
+history of PMD core cycles for each Rx queue::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-show -secs 5
+
+.. versionchanged:: 2.6.0
 
       The ``pmd-rxq-show`` command was added in OVS 2.6.0.
 
@@ -114,6 +122,11 @@ core cycles for each Rx queue::
 
    A ``overhead`` statistics is shown per PMD: it represents the number of
    cycles inherently consumed by the OVS PMD processing loop.
+
+.. versionchanged:: 3.1.0
+
+      The ``-secs`` parameter was added to the dpif-netdev/pmd-rxq-show
+      command.
 
 Rx queue to PMD assignment takes place whenever there are configuration changes
 or can be triggered by using::
