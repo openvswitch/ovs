@@ -1,5 +1,8 @@
-v3.0.2 - xx xxx xxxx
+v3.0.2 - 01 Dec 2022
 --------------------
+   - Bug fixes
+   - QoS:
+     * Fixed inability to apply QoS on ports with custom qdiscs.
 
 v3.0.1 - 07 Oct 2022
 --------------------
