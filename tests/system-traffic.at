@@ -7440,3 +7440,34 @@ OVS_WAIT_UNTIL([cat p2.pcap | grep -E "0x0050: *0000 *0000 *5002 *2000 *b85e *00
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([autoattach - malformed lldp])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up simple bridge port to receive lldp packets
+ADD_VETH(p0, at_ns0, br-auto, "172.31.1.1/24", "f6:b4:26:aa:5f:00")
+
+NETNS_DAEMONIZE([at_ns0], [tcpdump -l -n -xx -U -i p0 > p0.pcap], [tcpdump.pid])
+sleep 1
+
+dnl Enable lldp
+AT_CHECK([ovs-vsctl set interface ovs-p0 lldp:enable=true])
+
+dnl Send a malformed lldp packet
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 01 80 c2 00 00 0e f6 b4 26 aa 5f 00 88 cc 02 07 04 f6 b4 26 aa 5f 00 04 03 05 76 32 06 02 00 78 0c 50 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 44 45 41 44 42 45 45 46 fe 05 00 04 0d 0c 01 00 00 >/dev/null])
+
+dnl Check the logs and autoattach rx statistics here
+dnl Check the expected lldp packet
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0000: *0180 *c200 *000e *f6b4 *26aa *5f00 *88cc *0207" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0010: *04f6 *b426 *aa5f *0004 *0305 *7632 *0602 *0078" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0020: *0c50 *4445 *4144 *4245 *4546 *4445 *4144 *4245" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0030: *4546 *4445 *4144 *4245 *4546 *4445 *4144 *4245" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0040: *4546 *4445 *4144 *4245 *4546 *4445 *4144 *4245" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0050: *4546 *4445 *4144 *4245 *4546 *4445 *4144 *4245" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0060: *4546 *4445 *4144 *4245 *4546 *4445 *4144 *4245" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | grep -E "0x0070: *4546 *fe05 *0004 *0d0c *0100 *00" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
