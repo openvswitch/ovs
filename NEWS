@@ -9,23 +9,7 @@ Post-v3.0.0
    - Windows:
      * Conntrack IPv6 fragment support.
    - DPDK:
-     * OVS validated with DPDK 21.11.2.
-       DPDK 21.11.2 contains fixes for the following CVEs:
-       CVE-2022-28199 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-28199
-       CVE-2022-2132 cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-2132
-       A bug was introduced in DPDK 21.11.1 by the commit
-       01e3dee29c02 ("vhost: fix unsafe vring addresses modifications").
-       This bug can cause a deadlock when vIOMMU is enabled and NUMA
-       reallocation of the virtqueues happen.
-       A fix has been posted and pushed to the DPDK 21.11 branch.
-       It can be found here:
-       https://patches.dpdk.org/project/dpdk/patch/20220725203206.427083-2-david.marchand@redhat.com/.
-       If a user wishes to avoid the issue then it is recommended to use
-       DPDK 21.11.0 until the release of DPDK 21.11.3.
-       It should be noted that DPDK 21.11.0 does not benefit from the numerous
-       bug and CVE fixes addressed since its release.
-       If a user wishes to benefit from these fixes it is recommended to use
-       DPDK 21.11.2.
+     * Add support for DPDK 22.11.1.
    - For the QoS max-rate and STP/RSTP path-cost configuration OVS now assumes
      10 Gbps link speed by default in case the actual link speed cannot be
      determined.  Previously it was 10 Mbps.  Values can still be overridden

@@ -27,9 +27,10 @@
 #include <sys/stat.h>
 #include <linux/if.h>
 
-#include <rte_bus_pci.h>
+#include <rte_bus.h>
 #include <rte_config.h>
 #include <rte_cycles.h>
+#include <rte_dev.h>
 #include <rte_errno.h>
 #include <rte_ethdev.h>
 #include <rte_flow.h>
@@ -166,7 +167,6 @@ typedef uint16_t dpdk_port_t;
 
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
-        .split_hdr_size = 0,
         .offloads = 0,
     },
     .rx_adv_conf = {
@@ -3645,6 +3645,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
+    const char *bus_info;
     uint32_t link_speed;
     uint32_t dev_flags;
 
@@ -3657,19 +3658,8 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     link_speed = dev->link.link_speed;
     dev_flags = *dev_info.dev_flags;
+    bus_info = rte_dev_bus_info(dev_info.device);
     ovs_mutex_unlock(&dev->mutex);
-    const struct rte_bus *bus;
-    const struct rte_pci_device *pci_dev;
-    uint16_t vendor_id = RTE_PCI_ANY_ID;
-    uint16_t device_id = RTE_PCI_ANY_ID;
-    bus = rte_bus_find_by_device(dev_info.device);
-    if (bus && !strcmp(bus->name, "pci")) {
-        pci_dev = RTE_DEV_TO_PCI(dev_info.device);
-        if (pci_dev) {
-            vendor_id = pci_dev->id.vendor_id;
-            device_id = pci_dev->id.device_id;
-        }
-    }
     ovs_mutex_unlock(&dpdk_mutex);
 
     smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
@@ -3693,8 +3683,10 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "if_type", "%"PRIu32, IF_TYPE_ETHERNETCSMACD);
     smap_add_format(args, "if_descr", "%s %s", rte_version(),
                                                dev_info.driver_name);
-    smap_add_format(args, "pci-vendor_id", "0x%x", vendor_id);
-    smap_add_format(args, "pci-device_id", "0x%x", device_id);
+    smap_add_format(args, "bus_info", "bus_name=%s%s%s",
+                    rte_bus_name(rte_dev_bus(dev_info.device)),
+                    bus_info != NULL ? ", " : "",
+                    bus_info != NULL ? bus_info : "");
 
     /* Not all link speeds are defined in the OpenFlow specs e.g. 25 Gbps.
      * In that case the speed will not be reported as part of the usual

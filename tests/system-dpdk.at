@@ -78,14 +78,14 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -112,11 +112,11 @@ AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuser0 -- set Interface dpdkvhostuser0
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user server: socket created" \
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) vhost-user server: socket created" \
           ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "Socket $OVS_RUNDIR/dpdkvhostuser0 created for vhost-user port dpdkvhostuser0" \
           ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: bind to $OVS_RUNDIR/dpdkvhostuser0" ovs-vswitchd.log], [],
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) binding succeeded" ovs-vswitchd.log], [],
          [stdout])
 
 dnl Set up namespaces
@@ -157,8 +157,8 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: recvmsg failed@d
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostuser0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) recvmsg failed@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) failed to connect: No such file or directory@d
 \@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
 \@failed to enumerate system datapaths: No such file or directory@d
 ])")
@@ -187,9 +187,9 @@ AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface \
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Set up namespaces
 ADD_NAMESPACES(ns1, ns2)
@@ -229,8 +229,8 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: recvmsg failed@d
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) recvmsg failed@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 \@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
 \@failed to enumerate system datapaths: No such file or directory@d
 ])")
@@ -304,14 +304,14 @@ AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -345,14 +345,14 @@ AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -385,14 +385,14 @@ AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([grep -E 'ingress_policing_rate: 10000' stdout], [], [stdout])
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -448,9 +448,9 @@ AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if egress policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for egress policer" ovs-vswitchd.log], [], [stdout])
@@ -465,7 +465,7 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -487,9 +487,9 @@ OVS_WAIT_UNTIL([ovs-vsctl set port dpdkvhostuserclient0 qos=@newqos -- --id=@new
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
@@ -498,7 +498,7 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 \@Could not create rte meter for egress policer@d
 \@Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument@d
 ])")
@@ -522,9 +522,9 @@ OVS_WAIT_UNTIL([ovs-vsctl set port dpdkvhostuserclient0 qos=@newqos -- --id=@new
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
@@ -533,7 +533,7 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 \@Could not create rte meter for egress policer@d
 \@Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument@d
 ])")
@@ -646,9 +646,9 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
@@ -675,7 +675,7 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -703,9 +703,9 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
@@ -732,7 +732,7 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 ])")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
@@ -864,7 +864,7 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 \@dpdkvhostuserclient0: unsupported MTU 9711@d
 \@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
 ])")
@@ -894,9 +894,9 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
@@ -921,7 +921,7 @@ pkill -f -x -9 'tail -f /dev/null'
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
 \@dpdkvhostuserclient0: unsupported MTU 67@d
 \@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
 ])")

@@ -539,4 +539,4 @@ shown with::
 
 Further information can be found in the
 `DPDK documentation
-<https://doc.dpdk.org/guides-21.11/prog_guide/vhost_lib.html>`__
+<https://doc.dpdk.org/guides-22.11/prog_guide/vhost_lib.html>`__

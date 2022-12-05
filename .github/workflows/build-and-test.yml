@@ -213,7 +213,6 @@ jobs:
       matrix:
         include:
           - dpdk: no
-          - dpdk: shared
 
     steps:
     - name: checkout
