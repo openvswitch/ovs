@@ -378,12 +378,14 @@ rculist_is_singleton_protected(const struct rculist *list)
          UPDATE_MULTIVAR(ITER, rculist_next(ITER_VAR(ITER))))
 
 #define RCULIST_FOR_EACH_REVERSE_PROTECTED(ITER, MEMBER, RCULIST)             \
-    for (INIT_MULTIVAR(ITER, MEMBER, (RCULIST)->prev, struct rculist);        \
+    for (INIT_MULTIVAR(ITER, MEMBER, rculist_back_protected(RCULIST),         \
+                       struct rculist);                                       \
          CONDITION_MULTIVAR(ITER, MEMBER, ITER_VAR(ITER) != (RCULIST));       \
-         UPDATE_MULTIVAR(ITER, ITER_VAR(ITER)->prev))
+         UPDATE_MULTIVAR(ITER, rculist_back_protected(ITER_VAR(ITER))))
 
 #define RCULIST_FOR_EACH_REVERSE_PROTECTED_CONTINUE(ITER, MEMBER, RCULIST)    \
-    for (INIT_MULTIVAR(ITER, MEMBER, (ITER)->MEMBER.prev, struct rculist);    \
+    for (INIT_MULTIVAR(ITER, MEMBER, rculist_back_protected(ITER->MEMBER),    \
+                       struct rculist);                                       \
          CONDITION_MULTIVAR(ITER, MEMBER, ITER_VAR(ITER) != (RCULIST));       \
          UPDATE_MULTIVAR(ITER, ITER_VAR(ITER)->prev))
 
