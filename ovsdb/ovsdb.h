@@ -152,4 +152,7 @@ bool ovsdb_snapshot_ready(struct ovsdb *);
 
 void ovsdb_replace(struct ovsdb *dst, struct ovsdb *src);
 
+#define OVSDB_SSL_OWNER "ovsdb"
+#define OVSDB_SSL_OWNER_COLUMN "owner"
+
 #endif /* ovsdb/ovsdb.h */

@@ -28,4 +28,6 @@ void bridge_wait(void);
 
 void bridge_get_memory_usage(struct simap *usage);
 
+#define OPENFLOW_SSL_OWNER "openflow"
+
 #endif /* bridge.h */

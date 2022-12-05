@@ -53,6 +53,8 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
+#include "ovsdb/ovsdb.h"
+#include "vswitchd/bridge.h"
 
 VLOG_DEFINE_THIS_MODULE(vsctl);
 
@@ -1073,7 +1075,7 @@ static void
 pre_cmd_emer_reset(struct ctl_context *ctx)
 {
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssls);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
@@ -1111,7 +1113,7 @@ cmd_emer_reset(struct ctl_context *ctx)
 
     /* Reset the Open_vSwitch table. */
     ovsrec_open_vswitch_set_manager_options(vsctl_ctx->ovs, NULL, 0);
-    ovsrec_open_vswitch_set_ssl(vsctl_ctx->ovs, NULL);
+    ovsrec_open_vswitch_set_ssls(vsctl_ctx->ovs, NULL, 0);
 
     OVSREC_BRIDGE_FOR_EACH (br, idl) {
         const char *hwaddr;
@@ -2362,11 +2364,19 @@ cmd_set_manager(struct ctl_context *ctx)
     insert_managers(vsctl_ctx, &ctx->argv[1], n, &ctx->options);
 }
 
+static void check_ssl_owner(char *owner)
+{
+    if ((strcmp(owner, OVSDB_SSL_OWNER) != 0) &&
+        (strcmp(owner, OPENFLOW_SSL_OWNER) != 0)) {
+        ctl_fatal("owner must be one of \"%s\", \"%s\"", OVSDB_SSL_OWNER, OPENFLOW_SSL_OWNER);
+    }
+}
+
 static void
 pre_cmd_get_ssl(struct ctl_context *ctx)
 {
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
-
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssls);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_owner);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_private_key);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_certificate);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_ca_cert);
@@ -2376,69 +2386,119 @@ pre_cmd_get_ssl(struct ctl_context *ctx)
 static void
 cmd_get_ssl(struct ctl_context *ctx)
 {
-    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
-    struct ovsrec_ssl *ssl = vsctl_ctx->ovs->ssl;
-
-    ovsrec_open_vswitch_verify_ssl(vsctl_ctx->ovs);
+    const struct ovsrec_open_vswitch *ovs = vsctl_context_cast(ctx)->ovs;
+    struct ovsrec_ssl *ssl = NULL;
+    char *owner = ctx->argv[1];
+    check_ssl_owner(owner);
+ 
+    ovsrec_open_vswitch_verify_ssls(ovs);
+    for (size_t i = 0; i < ovs->n_ssls; i++) {
+        if (strcmp(ovs->ssls[i]->owner, owner) == 0) {
+            ssl = ovs->ssls[i];
+            break;
+        }
+    }
+ 
+ 
     if (ssl) {
+        ovsrec_ssl_verify_owner(ssl);
         ovsrec_ssl_verify_private_key(ssl);
         ovsrec_ssl_verify_certificate(ssl);
         ovsrec_ssl_verify_ca_cert(ssl);
         ovsrec_ssl_verify_bootstrap_ca_cert(ssl);
-
+ 
+        ds_put_format(&ctx->output, "Owner: %s\n", ssl->owner);
         ds_put_format(&ctx->output, "Private key: %s\n", ssl->private_key);
         ds_put_format(&ctx->output, "Certificate: %s\n", ssl->certificate);
         ds_put_format(&ctx->output, "CA Certificate: %s\n", ssl->ca_cert);
         ds_put_format(&ctx->output, "Bootstrap: %s\n",
                 ssl->bootstrap_ca_cert ? "true" : "false");
+    } else {
+        ds_put_format(&ctx->output, "ssl for %s not found\n", owner);
     }
 }
 
 static void
 pre_cmd_del_ssl(struct ctl_context *ctx)
 {
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssls);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_owner);
 }
 
 static void
 cmd_del_ssl(struct ctl_context *ctx)
 {
-    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
-    struct ovsrec_ssl *ssl = vsctl_ctx->ovs->ssl;
-
-    if (ssl) {
-        ovsrec_open_vswitch_verify_ssl(vsctl_ctx->ovs);
-        ovsrec_ssl_delete(ssl);
-        ovsrec_open_vswitch_set_ssl(vsctl_ctx->ovs, NULL);
+    const struct ovsrec_open_vswitch *ovs = vsctl_context_cast(ctx)->ovs;
+    struct ovsrec_ssl **ssls;
+    struct ovsrec_ssl *ssl = NULL;
+    size_t n = 0;
+    char *owner = ctx->argv[1];
+    check_ssl_owner(owner);
+ 
+    ssls = xmalloc(sizeof(*ovs->ssls) * (ovs->n_ssls));
+    for (size_t i = 0; i < ovs->n_ssls; i++) {
+        if (strcmp(ovs->ssls[i]->owner, owner) == 0) {
+            ssl = ovs->ssls[i];
+        } else {
+            ssls[n] = ovs->ssls[i];
+            n++;
+        } 
     }
+ 
+    if (ssl) {
+        ovsrec_open_vswitch_verify_ssls(ovs);
+        ovsrec_ssl_delete(ssl);
+        ovsrec_open_vswitch_set_ssls(ovs, ssls, n);
+    }
+    free(ssls);
+    ssls = NULL;
 }
 
 static void
 pre_cmd_set_ssl(struct ctl_context *ctx)
 {
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssls);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ssl_col_owner);
 }
 
 static void
 cmd_set_ssl(struct ctl_context *ctx)
 {
-    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    const struct ovsrec_open_vswitch *ovs = vsctl_context_cast(ctx)->ovs;
+    struct ovsrec_ssl **ssls;
+    struct ovsrec_ssl *ssl = NULL;
     bool bootstrap = shash_find(&ctx->options, "--bootstrap");
-    struct ovsrec_ssl *ssl = vsctl_ctx->ovs->ssl;
-
-    ovsrec_open_vswitch_verify_ssl(vsctl_ctx->ovs);
+    size_t n = 0;
+    char *owner = ctx->argv[1];
+    check_ssl_owner(owner);
+ 
+    ssls = xmalloc(sizeof(*ovs->ssls) * (ovs->n_ssls + 1));
+    for (size_t i = 0; i < ovs->n_ssls; i++) {
+        if (strcmp(ovs->ssls[i]->owner, owner) == 0) {
+            ssl = ovs->ssls[i];
+        } else {
+            ssls[n] = ovs->ssls[i];
+            n++;
+        }
+    }
+ 
+    ovsrec_open_vswitch_verify_ssls(ovs);
     if (ssl) {
         ovsrec_ssl_delete(ssl);
     }
     ssl = ovsrec_ssl_insert(ctx->txn);
-
-    ovsrec_ssl_set_private_key(ssl, ctx->argv[1]);
-    ovsrec_ssl_set_certificate(ssl, ctx->argv[2]);
-    ovsrec_ssl_set_ca_cert(ssl, ctx->argv[3]);
-
+    ovsrec_ssl_set_owner(ssl, owner);
+    ovsrec_ssl_set_private_key(ssl, ctx->argv[2]);
+    ovsrec_ssl_set_certificate(ssl, ctx->argv[3]);
+    ovsrec_ssl_set_ca_cert(ssl, ctx->argv[4]);
+ 
     ovsrec_ssl_set_bootstrap_ca_cert(ssl, bootstrap);
-
-    ovsrec_open_vswitch_set_ssl(vsctl_ctx->ovs, ssl);
+ 
+    ssls[n] = ssl;
+    n++;
+    ovsrec_open_vswitch_set_ssls(ovs, ssls, n);
+    free(ssls);
+    ssls = NULL;
 }
 
 static void
@@ -3118,9 +3178,9 @@ static const struct ctl_command_syntax vsctl_commands[] = {
      NULL, "--inactivity-probe=", RW},
 
     /* SSL commands. */
-    {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
-    {"del-ssl", 0, 0, "", pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
-    {"set-ssl", 3, 3, "PRIVATE-KEY CERTIFICATE CA-CERT", pre_cmd_set_ssl,
+    {"get-ssl", 1, 1, "{ovsdb | openflow}", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
+    {"del-ssl", 1, 1, "{ovsdb | openflow}", pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
+    {"set-ssl", 4, 4, "{ovsdb | openflow} PRIVATE-KEY CERTIFICATE CA-CERT", pre_cmd_set_ssl,
      cmd_set_ssl, NULL, "--bootstrap", RW},
 
     /* Auto Attach commands. */
