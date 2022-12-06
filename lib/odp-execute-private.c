@@ -229,6 +229,18 @@ action_autoval_generic(struct dp_packet_batch *batch, const struct nlattr *a)
                 }
             }
 
+            /* Compare packet metadata. */
+            if (memcmp(&good_pkt->md, &test_pkt->md, sizeof good_pkt->md)) {
+                ds_put_format(&log_msg, "Autovalidation metadata failed\n");
+                ds_put_format(&log_msg, "Good packet metadata:\n");
+                ds_put_sparse_hex_dump(&log_msg, &good_pkt->md,
+                                       sizeof good_pkt->md, 0, false);
+                ds_put_format(&log_msg, "Test packet metadata:\n");
+                ds_put_sparse_hex_dump(&log_msg, &test_pkt->md,
+                                       sizeof test_pkt->md, 0, false);
+                failed = true;
+            }
+
             if (failed) {
                 VLOG_ERR("Autovalidation of %s failed. Details:\n%s",
                          action_impls[impl].name, ds_cstr(&log_msg));

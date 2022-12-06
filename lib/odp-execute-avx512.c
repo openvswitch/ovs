@@ -477,6 +477,8 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
 
                 th->tcp_csum = tcp_checksum;
             }
+
+            pkt_metadata_init_conn(&packet->md);
         }
         /* Write back the modified IPv4 addresses. */
         _mm256_mask_storeu_epi32((void *) nh, 0x1F, v_new_hdr);
