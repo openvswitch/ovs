@@ -88,11 +88,10 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     RHEL and CentOS 7 3.10 based kernels since they have diverged from the
     Linux kernel.org 3.10 kernels.
 
-    Starting with Open vSwitch 2.15, building the Linux kernel module from
-    the Open vSwitch source tree is deprecated.  It will not be updated to
-    support Linux versions later than 5.8.  We will remove the kernel module
-    source code from the Open vSwitch source tree for the Open vSwitch 3.0
-    release.
+    Building the Linux kernel module from the Open vSwitch source tree was
+    deprecated starting with Open vSwitch 2.15.  And the kernel module
+    source code was completely removed from the Open vSwitch source tree in
+    3.0 release.
 
 Q: Are all features available with all datapaths?
 
