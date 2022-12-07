@@ -4347,6 +4347,7 @@ struct netem {
     uint32_t latency;
     uint32_t limit;
     uint32_t loss;
+    uint32_t jitter;
 };
 
 static struct netem *
@@ -4358,7 +4359,7 @@ netem_get__(const struct netdev *netdev_)
 
 static void
 netem_install__(struct netdev *netdev_, uint32_t latency,
-                uint32_t limit, uint32_t loss)
+                uint32_t limit, uint32_t loss, uint32_t jitter)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netem *netem;
@@ -4368,13 +4369,14 @@ netem_install__(struct netdev *netdev_, uint32_t latency,
     netem->latency = latency;
     netem->limit = limit;
     netem->loss = loss;
+    netem->jitter = jitter;
 
     netdev->tc = &netem->tc;
 }
 
 static int
 netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
-                    uint32_t limit, uint32_t loss)
+                    uint32_t limit, uint32_t loss, uint32_t jitter)
 {
     struct tc_netem_qopt opt;
     struct ofpbuf request;
@@ -4410,6 +4412,7 @@ netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
     }
 
     opt.latency = tc_time_to_ticks(latency);
+    opt.jitter = tc_time_to_ticks(jitter);
 
     nl_msg_put_string(&request, TCA_KIND, "netem");
     nl_msg_put_unspec(&request, TCA_OPTIONS, &opt, sizeof opt);
@@ -4417,9 +4420,10 @@ netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
     error = tc_transact(&request, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to replace %s qdisc, "
-                          "latency %u, limit %u, loss %u error %d(%s)",
+                          "latency %u, limit %u, loss %u, jitter %u "
+                          "error %d(%s)",
                      netdev_get_name(netdev),
-                     opt.latency, opt.limit, opt.loss,
+                     opt.latency, opt.limit, opt.loss, opt.jitter,
                      error, ovs_strerror(error));
     }
     return error;
@@ -4432,6 +4436,7 @@ netem_parse_qdisc_details__(struct netdev *netdev OVS_UNUSED,
     netem->latency = smap_get_ullong(details, "latency", 0);
     netem->limit = smap_get_ullong(details, "limit", 0);
     netem->loss = smap_get_ullong(details, "loss", 0);
+    netem->jitter = smap_get_ullong(details, "jitter", 0);
 
     if (!netem->limit) {
         netem->limit = 1000;
@@ -4446,9 +4451,10 @@ netem_tc_install(struct netdev *netdev, const struct smap *details)
 
     netem_parse_qdisc_details__(netdev, details, &netem);
     error = netem_setup_qdisc__(netdev, netem.latency,
-                                netem.limit, netem.loss);
+                                netem.limit, netem.loss, netem.jitter);
     if (!error) {
-        netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+        netem_install__(netdev, netem.latency,
+                        netem.limit, netem.loss, netem.jitter);
     }
     return error;
 }
@@ -4464,7 +4470,8 @@ netem_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg)
     error = tc_parse_qdisc(nlmsg, &kind, &nlattr);
     if (error == 0) {
         netem = nl_attr_get(nlattr);
-        netem_install__(netdev, netem->latency, netem->limit, netem->loss);
+        netem_install__(netdev, netem->latency,
+                        netem->limit, netem->loss, netem->jitter);
         return 0;
     }
 
@@ -4486,6 +4493,7 @@ netem_qdisc_get(const struct netdev *netdev, struct smap *details)
     smap_add_format(details, "latency", "%u", netem->latency);
     smap_add_format(details, "limit", "%u", netem->limit);
     smap_add_format(details, "loss", "%u", netem->loss);
+    smap_add_format(details, "jitter", "%u", netem->jitter);
     return 0;
 }
 
@@ -4495,10 +4503,12 @@ netem_qdisc_set(struct netdev *netdev, const struct smap *details)
     struct netem netem;
 
     netem_parse_qdisc_details__(netdev, details, &netem);
-    netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+    netem_install__(netdev, netem.latency,
+                    netem.limit, netem.loss, netem.jitter);
     netem_get__(netdev)->latency = netem.latency;
     netem_get__(netdev)->limit = netem.limit;
     netem_get__(netdev)->loss = netem.loss;
+    netem_get__(netdev)->jitter = netem.jitter;
     return 0;
 }
 

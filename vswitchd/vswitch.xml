@@ -4895,6 +4895,10 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         Adds an independent loss probability to the packets outgoing from the
         chosen network interface.
       </column>
+      <column name="other_config" key="jitter" type='{"type": "integer"}'>
+        Adds the provided jitter to the latency outgoing to the
+        chosen network interface. The jitter value expressed in us.
+      </column>
     </group>
 
     <group title="Common Columns">
