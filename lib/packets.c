@@ -1152,7 +1152,7 @@ packet_set_ipv4_addr(struct dp_packet *packet,
  * segements_left > 0.
  *
  * This function assumes that L3 and L4 offsets are set in the packet. */
-static bool
+bool
 packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr, bool *first_frag)
 {
     const struct ovs_16aligned_ip6_hdr *nh;
