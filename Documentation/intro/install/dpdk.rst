@@ -74,7 +74,7 @@ Install DPDK
 
        $ cd /usr/src/
        $ wget https://fast.dpdk.org/rel/dpdk-22.11.1.tar.xz
-       $ tar xf dpdk-22.11.tar.xz
+       $ tar xf dpdk-22.11.1.tar.xz
        $ export DPDK_DIR=/usr/src/dpdk-stable-22.11.1
        $ cd $DPDK_DIR
 
