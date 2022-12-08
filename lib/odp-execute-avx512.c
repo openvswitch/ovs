@@ -453,8 +453,9 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
 
             uint16_t delta_checksum = avx512_ipv4_addr_csum_delta(v_packet,
                                                                   v_new_hdr);
+            size_t l4_size = dp_packet_l4_size(packet);
 
-            if (nh->ip_proto == IPPROTO_UDP) {
+            if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
                 /* New UDP checksum. */
                 struct udp_header *uh = dp_packet_l4(packet);
                 if (uh->udp_csum) {
@@ -468,7 +469,8 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
                     /* Insert new udp checksum. */
                     uh->udp_csum = udp_checksum;
                 }
-            } else if (nh->ip_proto == IPPROTO_TCP) {
+            } else if (nh->ip_proto == IPPROTO_TCP &&
+                       l4_size >= TCP_HEADER_LEN) {
                 /* New TCP checksum. */
                 struct tcp_header *th = dp_packet_l4(packet);
                 uint16_t old_tcp_checksum = ~th->tcp_csum;
