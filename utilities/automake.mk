@@ -20,6 +20,10 @@ scripts_SCRIPTS += \
 	utilities/ovs-kmod-ctl \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
+usdt_SCRIPTS += \
+	utilities/usdt-scripts/bridge_loop.bt \
+	utilities/usdt-scripts/upcall_cost.py \
+	utilities/usdt-scripts/upcall_monitor.py
 
 completion_SCRIPTS += \
 	utilities/ovs-appctl-bashcomp.bash \

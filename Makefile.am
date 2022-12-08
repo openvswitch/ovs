@@ -120,6 +120,7 @@ OVSIDL_BUILT =
 pkgdata_DATA =
 sbin_SCRIPTS =
 scripts_SCRIPTS =
+usdt_SCRIPTS =
 completion_SCRIPTS =
 scripts_DATA =
 SUFFIXES =
@@ -133,6 +134,7 @@ C ?= 1
 endif
 
 scriptsdir = $(pkgdatadir)/scripts
+usdtdir = $(pkgdatadir)/scripts/usdt
 completiondir = $(sysconfdir)/bash_completion.d
 pkgconfigdir = $(libdir)/pkgconfig
 

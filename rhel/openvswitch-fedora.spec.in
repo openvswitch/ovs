@@ -396,6 +396,7 @@ fi
 %{_bindir}/ovs-pcap
 %{_bindir}/ovs-tcpdump
 %{_bindir}/ovs-tcpundump
+%{_datadir}/openvswitch/scripts/usdt/*
 %{_mandir}/man8/ovs-test.8*
 %{_mandir}/man8/ovs-vlan-test.8*
 %{_mandir}/man8/ovs-l3ping.8*
