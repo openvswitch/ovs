@@ -85,9 +85,9 @@ class Monitor(enum.IntEnum):
 
 class ConditionState(object):
     def __init__(self):
-        self._ack_cond = None
+        self._ack_cond = [True]
         self._req_cond = None
-        self._new_cond = [True]
+        self._new_cond = None
 
     def __iter__(self):
         return iter([self._new_cond, self._req_cond, self._ack_cond])

@@ -561,9 +561,9 @@ OVSDB_CHECK_IDL([simple idl, conditional, false condition],
                "b": true}}]']],
   [['condition simple []' \
     'condition simple [true]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: done
 ]])
@@ -577,11 +577,38 @@ OVSDB_CHECK_IDL([simple idl, conditional, true condition],
                "b": true}}]']],
   [['condition simple []' \
     'condition simple [true]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: done
+]])
+
+dnl This test ensures that the first explicitly set monitor condition
+dnl is sent to the server.
+OVSDB_CHECK_IDL([simple idl, conditional, wait for condition],
+  [],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]' \
+     'condition simple [true]' \
+     '^["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 4.0,
+               "b": true}}]']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: table simple: i=1 r=2 b=true s= u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
+003: simple: conditions unchanged
+004: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
+005: table simple: i=1 r=2 b=true s= u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
+005: table simple: i=2 r=4 b=true s= u=<1> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+006: done
 ]])
 
 OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
@@ -598,9 +625,9 @@ OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
                "b": true}}]']],
   [['condition simple []' \
     'condition simple [["i","==",1],["i","==",2]]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 003: table simple: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 004: done
@@ -615,9 +642,9 @@ OVSDB_CHECK_IDL([simple idl, conditional, modify as insert due to condition],
                "b": true}}]']],
   [['condition simple []' \
     'condition simple [["i","==",1]]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: done
 ]])
@@ -638,11 +665,11 @@ OVSDB_CHECK_IDL([simple idl, conditional, modify as delete due to condition],
        "row": {"i": 2,
                "r": 3.0,
                "b": true}}]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-004: change conditions
+004: simple: change conditions
 005: empty
 006: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
 007: table simple: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
@@ -673,14 +700,16 @@ OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
        "table": "link2",
        "row": {"i": 3},
         "uuid-name": "row0"}]']],
-  [[000: change conditions
+  [[000: link1: change conditions
+000: link2: change conditions
+000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-004: change conditions
+004: link1: change conditions
 005: table link1: i=0 k=0 ka=[] l2= uuid=<2>
 005: table simple: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-006: change conditions
+006: link2: change conditions
 007: {"error":null,"result":[{"uuid":["uuid","<3>"]}]}
 008: table link1: i=0 k=0 ka=[] l2= uuid=<2>
 008: table link2: i=3 l1= uuid=<3>
@@ -1237,10 +1266,10 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan weak refer
       {"op": "delete",
       "table": "simple6",
       "where": []}]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: table simple6: inserted row: name=first_row weak_ref=[] uuid=<0>
 001: table simple6: updated columns: name weak_ref
-002: change conditions
+002: simple: change conditions
 003: table simple6: name=first_row weak_ref=[<1>] uuid=<0>
 003: table simple: inserted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 003: table simple: updated columns: s
@@ -1279,19 +1308,19 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, orphan rows, cond
       {"op": "delete",
       "table": "simple6",
       "where": []}]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: table simple6: inserted row: name=first_row weak_ref=[] uuid=<0>
 001: table simple6: updated columns: name weak_ref
-002: change conditions
+002: simple: change conditions
 003: table simple6: name=first_row weak_ref=[<1>] uuid=<0>
 003: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 003: table simple: updated columns: s
-004: change conditions
+004: simple: change conditions
 005: table simple6: name=first_row weak_ref=[] uuid=<0>
 005: table simple: deleted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 005: table simple: inserted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
 005: table simple: updated columns: s
-006: change conditions
+006: simple: change conditions
 007: table simple6: name=first_row weak_ref=[<1>] uuid=<0>
 007: table simple: deleted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
 007: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
@@ -1333,14 +1362,14 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, references, condi
       {"op": "delete",
       "table": "simple6",
       "where": []}]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: table simple6: inserted row: name=first_row weak_ref=[] uuid=<0>
 001: table simple6: updated columns: name weak_ref
-002: change conditions
+002: simple: change conditions
 003: table simple6: name=first_row weak_ref=[<1>] uuid=<0>
 003: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 003: table simple: updated columns: s
-004: change conditions
+004: simple: change conditions
 005: table simple6: name=first_row weak_ref=[<3>] uuid=<0>
 005: table simple: deleted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 005: table simple: inserted row: i=1 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
@@ -1376,7 +1405,8 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, references, singl
       {"op": "insert",
        "table": "simple",
        "row": {"s": "row0_s"}}]']],
-  [[000: change conditions
+  [[000: simple6: conditions unchanged
+000: simple: conditions unchanged
 001: table simple6: inserted row: name=row0_s6 weak_ref=[<0>] uuid=<1>
 001: table simple6: updated columns: name weak_ref
 001: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
@@ -1418,7 +1448,8 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, weak references, 
       {"op": "insert",
        "table": "simple",
        "row": {"s": "row0_s"}}]']],
-  [[000: change conditions
+  [[000: simple6: conditions unchanged
+000: simple: conditions unchanged
 001: table simple6: inserted row: name=row0_s6 weak_ref=[<0>] uuid=<1>
 001: table simple6: updated columns: name weak_ref
 001: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
@@ -1458,7 +1489,9 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, strong references
       {"op": "insert",
        "table": "simple",
        "row": {"s": "row0_s"}}]']],
-  [[000: change conditions
+  [[000: simple3: conditions unchanged
+000: simple4: conditions unchanged
+000: simple: conditions unchanged
 001: table simple3: inserted row: name=row0_s3 uset=[] uref=[<0>] uuid=<1>
 001: table simple3: updated columns: name uref
 001: table simple4: inserted row: name=row0_s4 uuid=<0>
@@ -1493,12 +1526,14 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, strong references
       {"op": "insert",
        "table": "simple",
        "row": {"s": "row0_s"}}]']],
-  [[000: change conditions
+  [[000: simple3: conditions unchanged
+000: simple4: conditions unchanged
+000: simple: conditions unchanged
 001: table simple3: inserted row: name=row0_s3 uset=[] uref=[<0>] uuid=<1>
 001: table simple3: updated columns: name uref
 001: table simple4: inserted row: name=row0_s4 uuid=<0>
 001: table simple4: updated columns: name
-002: change conditions
+002: simple4: change conditions
 003: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
 003: table simple4: deleted row: name=row0_s4 uuid=<0>
 004: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
@@ -1529,10 +1564,12 @@ OVSDB_CHECK_IDL([simple idl, initially populated, strong references, conditional
       {"op": "insert",
        "table": "simple",
        "row": {"s": "row0_s"}}]']],
-  [[000: change conditions
+  [[000: simple3: conditions unchanged
+000: simple4: conditions unchanged
+000: simple: conditions unchanged
 001: table simple3: name=row0_s3 uset=[] uref=[<0>] uuid=<1>
 001: table simple4: name=row0_s4 uuid=<0>
-002: change conditions
+002: simple4: change conditions
 003: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
 004: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
 005: table simple3: name=row0_s3 uset=[] uref=[] uuid=<1>
@@ -2341,11 +2378,11 @@ OVSDB_CHECK_CLUSTER_IDL([simple idl, monitor_cond_since, cluster disconnect],
        "table": "simple",
        "where": [["i", "==", 1]],
        "row": {"r": 2.0 }}]']],
-  [[000: change conditions
+  [[000: simple: change conditions
 001: empty
-002: change conditions
+002: simple: change conditions
 003: table simple: i=2 r=1 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
-004: change conditions
+004: simple: change conditions
 005: reconnect
 006: table simple
 007: {"error":null,"result":[{"count":1}]}
