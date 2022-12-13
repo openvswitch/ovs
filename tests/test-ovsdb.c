@@ -2627,11 +2627,12 @@ parse_link2_json_clause(struct ovsdb_idl_condition *cond,
     }
 }
 
-static void
-update_conditions(struct ovsdb_idl *idl, char *commands)
+static unsigned int
+update_conditions(struct ovsdb_idl *idl, char *commands, int step)
 {
-    char *cmd, *save_ptr1 = NULL;
     const struct ovsdb_idl_table_class *tc;
+    unsigned int next_cond_seqno = 0;
+    char *cmd, *save_ptr1 = NULL;
 
     for (cmd = strtok_r(commands, ";", &save_ptr1); cmd;
          cmd = strtok_r(NULL, ";", &save_ptr1)) {
@@ -2682,15 +2683,20 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
         unsigned int seqno = ovsdb_idl_get_condition_seqno(idl);
         unsigned int next_seqno = ovsdb_idl_set_condition(idl, tc, &cond);
         if (seqno == next_seqno ) {
-            ovs_fatal(0, "condition unchanged");
+            print_and_log("%03d: %s: conditions unchanged",
+                          step, table_name);
+        } else {
+            print_and_log("%03d: %s: change conditions", step, table_name);
         }
         unsigned int new_next_seqno = ovsdb_idl_set_condition(idl, tc, &cond);
         if (next_seqno != new_next_seqno) {
             ovs_fatal(0, "condition expected seqno changed");
         }
+        next_cond_seqno = MAX(next_cond_seqno, next_seqno);
         ovsdb_idl_condition_destroy(&cond);
         json_destroy(json);
     }
+    return next_cond_seqno;
 }
 
 static void
@@ -2699,6 +2705,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     struct test_ovsdb_pvt_context *pvt = ctx->pvt;
     struct jsonrpc *rpc;
     struct ovsdb_idl *idl;
+    unsigned int next_cond_seqno = 0;
     unsigned int seqno = 0;
     struct ovsdb_symbol_table *symtab;
     size_t n_uuids = 0;
@@ -2735,8 +2742,8 @@ do_idl(struct ovs_cmdl_context *ctx)
     const char remote_s[] = "set-remote ";
     const char cond_s[] = "condition ";
     if (ctx->argc > 2 && strstr(ctx->argv[2], cond_s)) {
-        update_conditions(idl, ctx->argv[2] + strlen(cond_s));
-        print_and_log("%03d: change conditions", step++);
+        next_cond_seqno =
+            update_conditions(idl, ctx->argv[2] + strlen(cond_s), step++);
         i = 3;
     } else {
         i = 2;
@@ -2755,6 +2762,21 @@ do_idl(struct ovs_cmdl_context *ctx)
         if (*arg == '+') {
             /* The previous transaction didn't change anything. */
             arg++;
+        } else if (*arg == '^') {
+            /* Wait for condition change to be acked by the server. */
+            arg++;
+            for (;;) {
+                ovsdb_idl_run(idl);
+                ovsdb_idl_check_consistency(idl);
+                if (ovsdb_idl_get_condition_seqno(idl) == next_cond_seqno) {
+                    break;
+                }
+                jsonrpc_run(rpc);
+
+                ovsdb_idl_wait(idl);
+                jsonrpc_wait(rpc);
+                poll_block();
+            }
         } else {
             /* Wait for update. */
             for (;;) {
@@ -2789,8 +2811,8 @@ do_idl(struct ovs_cmdl_context *ctx)
                           arg + strlen(remote_s),
                           ovsdb_idl_is_connected(idl) ? "true" : "false");
         }  else if (!strncmp(arg, cond_s, strlen(cond_s))) {
-            update_conditions(idl, arg + strlen(cond_s));
-            print_and_log("%03d: change conditions", step++);
+            next_cond_seqno = update_conditions(idl, arg + strlen(cond_s),
+                                                step++);
         } else if (arg[0] != '[') {
             if (!idl_set(idl, arg, step++)) {
                 /* If idl_set() returns false, then no transaction
