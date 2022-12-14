@@ -1600,6 +1600,8 @@ ovsdb_server_memory_trim_on_compaction(struct unixctl_conn *conn,
                                        const char *argv[],
                                        void *arg OVS_UNUSED)
 {
+    bool old_trim_memory = trim_memory;
+    static bool have_logged = false;
     const char *command = argv[1];
 
 #if !HAVE_DECL_MALLOC_TRIM
@@ -1615,8 +1617,11 @@ ovsdb_server_memory_trim_on_compaction(struct unixctl_conn *conn,
         unixctl_command_reply_error(conn, "invalid argument");
         return;
     }
-    VLOG_INFO("memory trimming after compaction %s.",
-              trim_memory ? "enabled" : "disabled");
+    if (!have_logged || (trim_memory != old_trim_memory)) {
+        have_logged = true;
+        VLOG_INFO("memory trimming after compaction %s.",
+                  trim_memory ? "enabled" : "disabled");
+    }
     unixctl_command_reply(conn, NULL);
 }
 
