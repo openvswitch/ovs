@@ -339,12 +339,6 @@ for base in conf.db .conf.db.~lock~; do
     if test ! -e $old && test ! -h $old; then
         ln -s $new $old
     fi
-    touch $new
-%if %{with dpdk}
-    chown openvswitch:hugetlbfs $new
-%else
-    chown openvswitch:openvswitch $new
-%endif
 done
 
 %if 0%{?systemd_post:1}
@@ -505,7 +499,11 @@ fi
 %{_prefix}/lib/udev/rules.d/91-vfio.rules
 %endif
 %doc NOTICE README.rst NEWS rhel/README.RHEL.rst
-/var/lib/openvswitch
+%if %{with dpdk}
+%attr(750,openvswitch,hugetlbfs) /var/lib/openvswitch
+%else
+%attr(750,openvswitch,openvswitch) /var/lib/openvswitch
+%endif
 %attr(750,root,root) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 %ghost %attr(644,root,root) %{_rundir}/openvswitch.useropts
