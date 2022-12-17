@@ -6131,39 +6131,33 @@ rxq_scheduling(struct dp_netdev *dp)
 static uint64_t variance(uint64_t a[], int n);
 
 static uint64_t
-sched_numa_list_variance(struct sched_numa_list *numa_list)
+sched_numa_variance(struct sched_numa *numa)
 {
-    struct sched_numa *numa;
     uint64_t *percent_busy = NULL;
-    unsigned total_pmds = 0;
     int n_proc = 0;
     uint64_t var;
 
-    HMAP_FOR_EACH (numa, node, &numa_list->numas) {
-        total_pmds += numa->n_pmds;
-        percent_busy = xrealloc(percent_busy,
-                                total_pmds * sizeof *percent_busy);
+    percent_busy = xmalloc(numa->n_pmds * sizeof *percent_busy);
 
-        for (unsigned i = 0; i < numa->n_pmds; i++) {
-            struct sched_pmd *sched_pmd;
-            uint64_t total_cycles = 0;
+    for (unsigned i = 0; i < numa->n_pmds; i++) {
+        struct sched_pmd *sched_pmd;
+        uint64_t total_cycles = 0;
 
-            sched_pmd = &numa->pmds[i];
-            /* Exclude isolated PMDs from variance calculations. */
-            if (sched_pmd->isolated == true) {
-                continue;
-            }
-            /* Get the total pmd cycles for an interval. */
-            atomic_read_relaxed(&sched_pmd->pmd->intrvl_cycles, &total_cycles);
+        sched_pmd = &numa->pmds[i];
+        /* Exclude isolated PMDs from variance calculations. */
+        if (sched_pmd->isolated == true) {
+            continue;
+        }
+        /* Get the total pmd cycles for an interval. */
+        atomic_read_relaxed(&sched_pmd->pmd->intrvl_cycles, &total_cycles);
 
-            if (total_cycles) {
-                /* Estimate the cycles to cover all intervals. */
-                total_cycles *= PMD_INTERVAL_MAX;
-                percent_busy[n_proc++] = (sched_pmd->pmd_proc_cycles * 100)
-                                             / total_cycles;
-            } else {
-                percent_busy[n_proc++] = 0;
-            }
+        if (total_cycles) {
+            /* Estimate the cycles to cover all intervals. */
+            total_cycles *= PMD_INTERVAL_MAX;
+            percent_busy[n_proc++] = (sched_pmd->pmd_proc_cycles * 100)
+                                            / total_cycles;
+        } else {
+            percent_busy[n_proc++] = 0;
         }
     }
     var = variance(percent_busy, n_proc);
@@ -6237,6 +6231,7 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
     struct sched_numa_list numa_list_est;
     bool thresh_met = false;
     uint64_t current_var, estimate_var;
+    struct sched_numa *numa_cur, *numa_est;
     uint64_t improvement = 0;
 
     VLOG_DBG("PMD auto load balance performing dry run.");
@@ -6255,25 +6250,29 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
             sched_numa_list_count(&numa_list_est) == 1) {
 
         /* Calculate variances. */
-        current_var = sched_numa_list_variance(&numa_list_cur);
-        estimate_var = sched_numa_list_variance(&numa_list_est);
-
-        if (estimate_var < current_var) {
-             improvement = ((current_var - estimate_var) * 100) / current_var;
+        HMAP_FOR_EACH (numa_cur, node, &numa_list_cur.numas) {
+            numa_est = sched_numa_list_lookup(&numa_list_est,
+                                              numa_cur->numa_id);
+            if (!numa_est) {
+                continue;
+            }
+            current_var = sched_numa_variance(numa_cur);
+            estimate_var = sched_numa_variance(numa_est);
+            if (estimate_var < current_var) {
+                improvement = ((current_var - estimate_var) * 100)
+                              / current_var;
+            }
+            VLOG_DBG("Numa node %d. Current variance %"PRIu64" Estimated "
+                     "variance %"PRIu64". Variance improvement %"PRIu64"%%.",
+                     numa_cur->numa_id, current_var,
+                     estimate_var, improvement);
+            if (improvement >= dp->pmd_alb.rebalance_improve_thresh) {
+                thresh_met = true;
+            }
         }
-        VLOG_DBG("Current variance %"PRIu64" Estimated variance %"PRIu64".",
-                 current_var, estimate_var);
-        VLOG_DBG("Variance improvement %"PRIu64"%%.", improvement);
-
-        if (improvement >= dp->pmd_alb.rebalance_improve_thresh) {
-            thresh_met = true;
-            VLOG_DBG("PMD load variance improvement threshold %u%% "
-                     "is met.", dp->pmd_alb.rebalance_improve_thresh);
-        } else {
-            VLOG_DBG("PMD load variance improvement threshold "
-                     "%u%% is not met.",
-                      dp->pmd_alb.rebalance_improve_thresh);
-        }
+        VLOG_DBG("PMD load variance improvement threshold %u%% is %s.",
+                 dp->pmd_alb.rebalance_improve_thresh,
+                 thresh_met ? "met" : "not met");
     } else {
         VLOG_DBG("PMD auto load balance detected cross-numa polling with "
                  "multiple numa nodes. Unable to accurately estimate.");

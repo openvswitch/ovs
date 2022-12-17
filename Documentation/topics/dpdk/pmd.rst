@@ -291,10 +291,10 @@ If a PMD core is detected to be above the load threshold and the minimum
 pre-requisites are met, a dry-run using the current PMD assignment algorithm is
 performed.
 
-The current variance of load between the PMD cores and estimated variance from
-the dry-run are both calculated. If the estimated dry-run variance is improved
-from the current one by the variance threshold, a new Rx queue to PMD
-assignment will be performed.
+For each numa node, the current variance of load between the PMD cores and
+estimated variance from the dry-run are both calculated. If any numa's
+estimated dry-run variance is improved from the current one by the variance
+threshold, a new Rx queue to PMD assignment will be performed.
 
 For example, to set the variance improvement threshold to 40%::
 
