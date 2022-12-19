@@ -1,8 +1,5 @@
 """Defines decoders for OpenFlow actions.
 """
-
-import functools
-
 from ovs.flow.decoders import (
     decode_default,
     decode_time,
@@ -258,19 +255,6 @@ def decode_zone(value):
     return decode_field(value)
 
 
-def decode_exec(action_decoders, value):
-    """Decodes the value of the 'exec' keyword (part of the ct action).
-
-    Args:
-        decode_actions (KVDecoders): The decoders to be used to decode the
-            nested exec.
-        value (string): The string to be decoded.
-    """
-    exec_parser = KVParser(value, action_decoders)
-    exec_parser.parse()
-    return [{kv.key: kv.value} for kv in exec_parser.kv()]
-
-
 def decode_learn(action_decoders):
     """Create the decoder to be used to decode the 'learn' action.
 
@@ -338,4 +322,4 @@ def decode_learn(action_decoders):
         default_free=learn_field_decoding_free,
     )
 
-    return functools.partial(decode_exec, learn_decoder)
+    return nested_kv_decoder(learn_decoder, is_list=True)

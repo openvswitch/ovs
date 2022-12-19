@@ -320,7 +320,26 @@ def decode_nested_kv(decoders, value):
     return {kv.key: kv.value for kv in parser.kv()}
 
 
-def nested_kv_decoder(decoders=None):
+def decode_nested_kv_list(decoders, value):
+    """A key-value decoder that extracts nested key-value pairs and returns
+    them in a list of dictionary.
+
+    Args:
+        decoders (KVDecoders): The KVDecoders to use.
+        value (str): The value string to decode.
+    """
+    if not value:
+        # Mark as flag
+        return True
+
+    parser = KVParser(value, decoders)
+    parser.parse()
+    return [{kv.key: kv.value} for kv in parser.kv()]
+
+
+def nested_kv_decoder(decoders=None, is_list=False):
     """Helper function that creates a nested kv decoder with given
     KVDecoders."""
+    if is_list:
+        return functools.partial(decode_nested_kv_list, decoders)
     return functools.partial(decode_nested_kv, decoders)

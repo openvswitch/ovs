@@ -337,7 +337,8 @@ class ODPFlow(Flow):
         }
 
         _decoders["clone"] = nested_kv_decoder(
-            KVDecoders(decoders=_decoders, default_free=decode_free_output)
+            KVDecoders(decoders=_decoders, default_free=decode_free_output),
+            is_list=True,
         )
 
         return {
@@ -350,7 +351,8 @@ class ODPFlow(Flow):
                             KVDecoders(
                                 decoders=_decoders,
                                 default_free=decode_free_output,
-                            )
+                            ),
+                            is_list=True,
                         ),
                     }
                 )
