@@ -22,11 +22,15 @@ def main():
     fields = extract_ofp_fields(args.metaflow)
 
     field_decoders = {}
+    aliases = {}
     for field in fields:
         decoder = get_decoder(field)
         field_decoders[field.get("name")] = decoder
         if field.get("extra_name"):
             field_decoders[field.get("extra_name")] = decoder
+
+        for nxm in field.get("OXM", []):
+            aliases[nxm[1]] = field.get("name")
 
     code = """
 # This file is auto-generated. Do not edit!
@@ -35,14 +39,25 @@ from ovs.flow import decoders
 
 field_decoders = {{
 {decoders}
+}}
+
+field_aliases = {{
+{aliases}
 }}""".format(
         decoders="\n".join(
             [
                 "    '{name}': {decoder},".format(name=name, decoder=decoder)
                 for name, decoder in field_decoders.items()
             ]
+        ),
+        aliases="\n".join(
+            [
+                "    '{alias}': '{name}',".format(name=name, alias=alias)
+                for alias, name in aliases.items()
+            ]
         )
     )
+
     print(code)
 
 
