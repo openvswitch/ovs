@@ -331,12 +331,12 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
                         {"table": 69},
                         {"delete_learned": True},
                         {"cookie": 3664728752},
-                        {"OXM_OF_METADATA[]": True},
+                        {"OXM_OF_METADATA[]": {"field": "OXM_OF_METADATA"}},
                         {"eth_type": 2048},
-                        {"NXM_OF_IP_SRC[]": True},
+                        {"NXM_OF_IP_SRC[]": {"field": "NXM_OF_IP_SRC"}},
                         {"ip_dst": IPMask("172.30.204.105/32")},
                         {"nw_proto": 6},
-                        {"NXM_OF_TCP_SRC[]": "NXM_OF_TCP_DST[]"},
+                        {"NXM_OF_TCP_SRC[]": {"field": "NXM_OF_TCP_DST"}},
                         {
                             "load": {
                                 "value": 1,
