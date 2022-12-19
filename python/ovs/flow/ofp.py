@@ -104,9 +104,6 @@ class OFPFlow(Flow):
             ValueError if the string is malformed.
             ParseError if an error in parsing occurs.
         """
-        if " reply " in ofp_string:
-            return None
-
         sections = list()
         parts = ofp_string.split("actions=")
         if len(parts) != 2:
