@@ -402,10 +402,12 @@ class OFPFlow(Flow):
         return {
             "learn": decode_learn(action_decoders),
             "clone": nested_kv_decoder(
-                KVDecoders(action_decoders, ignore_case=True), is_list=True
+                KVDecoders(action_decoders, default_free=decode_free_output,
+                           ignore_case=True), is_list=True
             ),
             "write_actions": nested_kv_decoder(
-                KVDecoders(action_decoders, ignore_case=True), is_list=True
+                KVDecoders(action_decoders, default_free=decode_free_output,
+                           ignore_case=True), is_list=True
             ),
         }
 

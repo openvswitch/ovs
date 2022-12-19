@@ -533,6 +533,19 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
             ],
         ),
         (
+            "actions=LOCAL,clone(myport,CONTROLLER)",
+            [
+                KeyValue("output", {"port": "LOCAL"}),
+                KeyValue(
+                    "clone",
+                    [
+                        {"output": {"port": "myport"}},
+                        {"output": {"port": "CONTROLLER"}},
+                    ]
+                ),
+            ],
+        ),
+        (
             "actions=doesnotexist(1234)",
             ParseError,
         ),
