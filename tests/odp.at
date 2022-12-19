@@ -104,9 +104,9 @@ dnl specified. We can skip these.
 sed -i'back' 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
 sed -i'back' 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),\2/' odp-out.txt
 sed -i'back' 's/\(in_port(1)\),\(eth\)/\1,packet_type(ns=0,id=0),\2/' odp-out.txt
-
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-in.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CLEANUP
 
 AT_SETUP([OVS datapath wildcarded key parsing and formatting - valid forms])
@@ -194,6 +194,7 @@ sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt
 AT_CAPTURE_FILE([odp.txt])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CLEANUP
 
 AT_SETUP([OVS datapath wildcarded key filtering.])
@@ -241,24 +242,31 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_type=0x1235' < odp-base.txt], [0], [`cat odp-eth-type.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-eth-type.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_vlan=99' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-vlan.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_vlan=99,ip' < odp-vlan-base.txt], [0], [`cat odp-vlan.txt`
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='ip,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='ip,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-ipv4.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='dl_type=0x0800,nw_src=35.8.2.199,nw_dst=172.16.0.199' < odp-base.txt], [0], [`cat odp-ipv4.txt`
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='icmp,nw_src=35.8.2.199' < odp-base.txt], [0], [`cat odp-icmp.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-icmp.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='arp,arp_spa=1.2.3.5' < odp-base.txt], [0], [`cat odp-arp.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-arp.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='tcp,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-tcp.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-filter filter='tcp6,tp_src=90' < odp-base.txt], [0], [`cat odp-tcp6.txt`
 ])
+AT_CHECK_UNQUOTED([cat odp-tcp6.txt | sed 's/^#.*//' | sed 's/$/ actions:drop/' | test-dpparse.py])
 AT_CLEANUP
 
 AT_SETUP([OVS datapath actions parsing and formatting - valid forms])
@@ -391,6 +399,7 @@ add_mpls(label=200,tc=7,ttl=64,bos=1,eth_type=0x8847)
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`
 ])
+AT_CHECK_UNQUOTED([cat actions.txt | sed 's/^/actions:/' | test-dpparse.py])
 AT_CLEANUP
 
 AT_SETUP([OVS datapath actions parsing and formatting - invalid forms])
@@ -436,6 +445,7 @@ odp_actions_from_string: error
 `cat actions.txt | head -3 | tail -1`
 odp_actions_from_string: error
 ])
+AT_CHECK_UNQUOTED([cat actions.txt | sed 's/^/actions:/' | test-dpparse.py])
 AT_CLEANUP
 
 AT_SETUP([OVS datapath actions parsing and formatting - actions too long])
