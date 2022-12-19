@@ -453,21 +453,37 @@ def test_odp_fields(input_string, expected):
             ],
         ),
         (
-            "actions:clone(1)" ",clone(clone(push_vlan(vid=12,pcp=0),2),1)",
+            "actions:clone(1),clone(clone(push_vlan(vid=12,pcp=0),2),1)",
             [
-                KeyValue("clone", {"output": {"port": 1}}),
+                KeyValue("clone", [{"output": {"port": 1}}]),
                 KeyValue(
                     "clone",
-                    {
-                        "output": {"port": 1},
-                        "clone": {
-                            "push_vlan": {
-                                "vid": 12,
-                                "pcp": 0,
-                            },
-                            "output": {"port": 2},
+                    [
+                        {
+                            "clone": [
+                                {
+                                    "push_vlan": {
+                                        "vid": 12,
+                                        "pcp": 0,
+                                    },
+                                },
+                                {"output": {"port": 2}},
+                            ]
                         },
-                    },
+                        {"output": {"port": 1}},
+                    ],
+                ),
+            ],
+        ),
+        (
+            "actions:clone(recirc(0x1),recirc(0x2))",
+            [
+                KeyValue(
+                    "clone",
+                    [
+                        {"recirc": 1},
+                        {"recirc": 2},
+                    ],
                 ),
             ],
         ),
