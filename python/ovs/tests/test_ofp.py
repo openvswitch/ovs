@@ -510,6 +510,21 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
             ],
         ),
         (
+            "actions=POP_VLAN,push_vlan:0x8100,NORMAL,clone(MOD_NW_SRC:192.168.1.1,resubmit(,10))",  # noqa: E501
+            [
+                KeyValue("POP_VLAN", True),
+                KeyValue("push_vlan", 0x8100),
+                KeyValue("output", {"port": "NORMAL"}),
+                KeyValue(
+                    "clone",
+                    [
+                        {"MOD_NW_SRC": netaddr.IPAddress("192.168.1.1")},
+                        {"resubmit": {"port": "", "table": 10}},
+                    ]
+                ),
+            ],
+        ),
+        (
             "actions=doesnotexist(1234)",
             ParseError,
         ),
