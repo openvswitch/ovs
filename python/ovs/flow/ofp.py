@@ -246,7 +246,8 @@ class OFPFlow(Flow):
         }
         clone_actions = OFPFlow._clone_actions_decoders_args(actions)
         actions.update(clone_actions)
-        return KVDecoders(actions, default_free=decode_free_output)
+        return KVDecoders(actions, default_free=decode_free_output,
+                          ignore_case=True)
 
     @staticmethod
     def _output_actions_decoders_args():
@@ -401,10 +402,10 @@ class OFPFlow(Flow):
         return {
             "learn": decode_learn(action_decoders),
             "clone": nested_kv_decoder(
-                KVDecoders(action_decoders), is_list=True
+                KVDecoders(action_decoders, ignore_case=True), is_list=True
             ),
             "write_actions": nested_kv_decoder(
-                KVDecoders(action_decoders), is_list=True
+                KVDecoders(action_decoders, ignore_case=True), is_list=True
             ),
         }
 

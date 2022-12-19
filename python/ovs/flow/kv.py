@@ -105,10 +105,17 @@ class KVDecoders(object):
 
     strict = True
 
-    def __init__(self, decoders=None, default=None, default_free=None):
-        self._decoders = decoders or dict()
+    def __init__(self, decoders=None, default=None, default_free=None,
+                 ignore_case=False):
+        if not decoders:
+            self._decoders = dict()
+        elif ignore_case:
+            self._decoders = {k.lower(): v for k, v in decoders.items()}
+        else:
+            self._decoders = decoders
         self._default = default
         self._default_free = default_free or self._default_free_decoder
+        self._ignore_case = ignore_case
 
     def decode(self, keyword, value_str):
         """Decode a keyword and value.
@@ -121,7 +128,11 @@ class KVDecoders(object):
             The key (str) and value(any) to be stored.
         """
 
-        decoder = self._decoders.get(keyword)
+        decoder = None
+        if self._ignore_case:
+            decoder = self._decoders.get(keyword.lower())
+        else:
+            decoder = self._decoders.get(keyword)
         if decoder:
             result = decoder(value_str)
             if isinstance(result, KeyValue):
