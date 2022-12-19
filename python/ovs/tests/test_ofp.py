@@ -2,7 +2,7 @@ import netaddr
 import pytest
 
 from ovs.flow.ofp import OFPFlow
-from ovs.flow.kv import KeyValue
+from ovs.flow.kv import KeyValue, ParseError
 from ovs.flow.decoders import EthMask, IPMask, decode_mask
 
 
@@ -509,11 +509,37 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
                 ),
             ],
         ),
+        (
+            "actions=doesnotexist(1234)",
+            ParseError,
+        ),
+        (
+            "actions=learn(eth_type=nofield)",
+            ParseError,
+        ),
+        (
+            "actions=learn(nofield=eth_type)",
+            ParseError,
+        ),
+        (
+            "nofield=0x123 actions=drop",
+            ParseError,
+        ),
+        (
+            "actions=load:0x12334->NOFILED",
+            ParseError,
+        ),
     ],
 )
 def test_act(input_string, expected):
+    if isinstance(expected, type):
+        with pytest.raises(expected):
+            ofp = OFPFlow(input_string)
+        return
+
     ofp = OFPFlow(input_string)
     actions = ofp.actions_kv
+
     for i in range(len(expected)):
         assert expected[i].key == actions[i].key
         assert expected[i].value == actions[i].value

@@ -1,6 +1,9 @@
 import pytest
 
-from ovs.flow.kv import KVParser, KeyValue
+from ovs.flow.kv import KVParser, KVDecoders, KeyValue
+from ovs.flow.decoders import decode_default
+
+decoders = KVDecoders(default=lambda k, v: (k, decode_default(v)))
 
 
 @pytest.mark.parametrize(
@@ -9,7 +12,7 @@ from ovs.flow.kv import KVParser, KeyValue
         (
             (
                 "cookie=0x0, duration=147566.365s, table=0, n_packets=39, n_bytes=2574, idle_age=65534, hard_age=65534",  # noqa: E501
-                None,
+                decoders,
             ),
             [
                 KeyValue("cookie", 0),
@@ -24,7 +27,7 @@ from ovs.flow.kv import KVParser, KeyValue
         (
             (
                 "load:0x4->NXM_NX_REG13[],load:0x9->NXM_NX_REG11[],load:0x8->NXM_NX_REG12[],load:0x1->OXM_OF_METADATA[],load:0x1->NXM_NX_REG14[],mod_dl_src:0a:58:a9:fe:00:02,resubmit(,8)",  # noqa: E501
-                None,
+                decoders,
             ),
             [
                 KeyValue("load", "0x4->NXM_NX_REG13[]"),
@@ -36,20 +39,17 @@ from ovs.flow.kv import KVParser, KeyValue
                 KeyValue("resubmit", ",8"),
             ],
         ),
+        (("l1(l2(l3(l4())))", decoders), [KeyValue("l1", "l2(l3(l4()))")]),
         (
-            ("l1(l2(l3(l4())))", None),
-            [KeyValue("l1", "l2(l3(l4()))")]
-        ),
-        (
-            ("l1(l2(l3(l4()))),foo:bar", None),
+            ("l1(l2(l3(l4()))),foo:bar", decoders),
             [KeyValue("l1", "l2(l3(l4()))"), KeyValue("foo", "bar")],
         ),
         (
-            ("enqueue:1:2,output=2", None),
+            ("enqueue:1:2,output=2", decoders),
             [KeyValue("enqueue", "1:2"), KeyValue("output", 2)],
         ),
         (
-            ("value_to_reg(100)->someReg[10],foo:bar", None),
+            ("value_to_reg(100)->someReg[10],foo:bar", decoders),
             [
                 KeyValue("value_to_reg", "(100)->someReg[10]"),
                 KeyValue("foo", "bar"),
