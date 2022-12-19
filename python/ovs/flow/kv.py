@@ -87,10 +87,11 @@ class KVDecoders(object):
 
     Args:
         decoders (dict): Optional; A dictionary of decoders indexed by keyword.
-        default (callable): Optional; A decoder used if a match is not found in
-            configured decoders. If not provided, the default behavior is to
-            try to decode the value into an integer and, if that fails,
-            just return the string as-is.
+        default (callable): Optional; A function to use if a match is not
+            found in configured decoders. If not provided, the default behavior
+            is to try to decode the value into an integer and, if that fails,
+            just return the string as-is. The function must accept a the key
+            and the value and return the decoded (key, value) tuple back.
         default_free (callable): Optional; The decoder used if a match is not
             found in configured decoders and it's a free value (e.g:
             a value without a key) Defaults to returning the free value as
@@ -100,7 +101,7 @@ class KVDecoders(object):
 
     def __init__(self, decoders=None, default=None, default_free=None):
         self._decoders = decoders or dict()
-        self._default = default or decode_default
+        self._default = default or (lambda k, v: (k, decode_default(v)))
         self._default_free = default_free or self._default_free_decoder
 
     def decode(self, keyword, value_str):
@@ -126,7 +127,7 @@ class KVDecoders(object):
             return keyword, value
         else:
             if value_str:
-                return keyword, self._default(value_str)
+                return self._default(keyword, value_str)
             else:
                 return self._default_free(keyword)
 
