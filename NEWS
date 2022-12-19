@@ -14,6 +14,10 @@ Post-v3.0.0
      10 Gbps link speed by default in case the actual link speed cannot be
      determined.  Previously it was 10 Mbps.  Values can still be overridden
      by specifying 'max-rate' or '[r]stp-path-cost' accordingly.
+   - ovs-ctl:
+     * New option '--dump-hugepages' to include hugepages in core dumps. This
+       can assist with postmortem analysis involving DPDK, but may also produce
+       significantly larger core dump files.
 
 
 v3.0.0 - 15 Aug 2022

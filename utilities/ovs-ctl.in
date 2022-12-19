@@ -103,8 +103,13 @@ set_system_ids () {
     action "Configuring Open vSwitch system IDs" "$@" $extra_ids
 }
 
-check_force_cores () {
-    if test X"$FORCE_COREFILES" = Xyes; then
+check_core_config () {
+    if test X"$DUMP_HUGEPAGES" = Xyes; then
+        echo 0x7f > /proc/self/coredump_filter
+        if test X"$FORCE_COREFILES" = Xyes; then
+            ulimit -c unlimited
+        fi
+    elif test X"$FORCE_COREFILES" = Xyes; then
         ulimit -c 67108864
     fi
 }
@@ -116,7 +121,7 @@ del_transient_ports () {
 }
 
 do_start_ovsdb () {
-    check_force_cores
+    check_core_config
 
     if daemon_is_running ovsdb-server; then
         log_success_msg "ovsdb-server is already running"
@@ -193,7 +198,7 @@ add_managers () {
 }
 
 do_start_forwarding () {
-    check_force_cores
+    check_core_config
 
     insert_mod_if_required || return 1
 
@@ -330,6 +335,7 @@ set_defaults () {
 
     DAEMON_CWD=/
     FORCE_COREFILES=yes
+    DUMP_HUGEPAGES=no
     MLOCKALL=yes
     SELF_CONFINEMENT=yes
     MONITOR=yes
@@ -419,6 +425,7 @@ Other important options for "start", "restart" and "force-reload-kmod":
 Less important options for "start", "restart" and "force-reload-kmod":
   --daemon-cwd=DIR               set working dir for OVS daemons (default: $DAEMON_CWD)
   --no-force-corefiles           do not force on core dumps for OVS daemons
+  --dump-hugepages               include hugepages in core dumps
   --no-mlockall                  do not lock all of ovs-vswitchd into memory
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
   --ovsdb-server-options=OPTIONS additional options for ovsdb-server (example: '-vconsole:dbg -vfile:dbg')
