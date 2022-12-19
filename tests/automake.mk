@@ -19,6 +19,7 @@ EXTRA_DIST += \
 	$(OVSDB_CLUSTER_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
+	$(srcdir)/tests/test-ofparse.py \
 	$(srcdir)/tests/testsuite \
 	$(srcdir)/tests/testsuite.patch
 
@@ -522,6 +523,7 @@ CHECK_PYFILES = \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
 	tests/test-l7.py \
+	tests/test-ofparse.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/test-stream.py \
