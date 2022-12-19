@@ -22,7 +22,7 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
         (
             "actions=controller,controller:200",
             [
-                KeyValue("output", "controller"),
+                KeyValue("output", {"port": "CONTROLLER"}),
                 KeyValue("controller", {"max_len": 200}),
             ],
         ),
@@ -522,6 +522,14 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
                         {"resubmit": {"port": "", "table": 10}},
                     ]
                 ),
+            ],
+        ),
+        (
+            "actions=MOD_NW_SRC:192.168.1.1,CONTROLLER,CONTROLLER:123",
+            [
+                KeyValue("MOD_NW_SRC", netaddr.IPAddress("192.168.1.1")),
+                KeyValue("output", {"port": "CONTROLLER"}),
+                KeyValue("CONTROLLER", {"max_len": 123}),
             ],
         ),
         (

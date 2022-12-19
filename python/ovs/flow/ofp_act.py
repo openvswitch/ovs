@@ -35,7 +35,7 @@ def decode_output(value):
 def decode_controller(value):
     """Decodes the controller action."""
     if not value:
-        return KeyValue("output", "controller")
+        return KeyValue("output", {"port": "CONTROLLER"})
     else:
         # Try controller:max_len
         try:
