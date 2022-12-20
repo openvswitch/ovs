@@ -1,5 +1,10 @@
-v3.0.3 - xx xxx xxxx
+v3.0.3 - 20 Dec 2022
 --------------------
+   - Bug fixes
+   - Security:
+     * Fixed LLDP underflow issue while parsing malformed Auto Attach TLVs.
+       The original patch is available here:
+       https://mail.openvswitch.org/pipermail/ovs-dev/2022-December/400596.html
 
 v3.0.2 - 01 Dec 2022
 --------------------
