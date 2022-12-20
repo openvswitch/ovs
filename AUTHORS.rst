@@ -350,8 +350,9 @@ Pim van den Berg                   pim@nethuis.nl
 pritesh                            pritesh.kothari@cisco.com
 Pravin B Shelar                    pshelar@ovn.org
 Przemyslaw Szczerbik               przemyslawx.szczerbik@intel.com
-Quentin Monnet                     quentin.monnet@6wind.com
+Qian Chen                          cq674350529@163.com
 Qiuyu Xiao                         qiuyu.xiao.qyx@gmail.com
+Quentin Monnet                     quentin.monnet@6wind.com
 Raju Subramanian
 Rami Rosen                         ramirose@gmail.com
 Ramu Ramamurthy                    ramu.ramamurthy@us.ibm.com
