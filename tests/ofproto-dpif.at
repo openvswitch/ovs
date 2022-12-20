@@ -29,6 +29,25 @@ AT_CHECK([ovs-appctl revalidator/wait])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - malformed lldp autoattach tlv])
+OVS_VSWITCHD_START()
+add_of_ports br0 1
+
+dnl Enable lldp
+AT_CHECK([ovs-vsctl set interface p1 lldp:enable=true])
+
+dnl Send a malformed lldp packet
+packet="0180c200000ef6b426aa5f0088cc020704f6b426aa5f000403057632060200780c"dnl
+"5044454144424545464445414442454546444541444245454644454144424545464445414"dnl
+"4424545464445414442454546444541444245454644454144424545464445414442454546"dnl
+"4445414442454546fe0500040d0c010000"
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$packet"], [0], [stdout])
+
+OVS_WAIT_UNTIL([grep -q "ISID_VLAN_ASGNS TLV too short" ovs-vswitchd.log])
+
+OVS_VSWITCHD_STOP(["/|WARN|ISID_VLAN_ASGNS TLV too short received on/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - active-backup bonding (with primary)])
 
 dnl Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and
