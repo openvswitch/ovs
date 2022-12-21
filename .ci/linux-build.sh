@@ -7,21 +7,6 @@ CFLAGS_FOR_OVS="-g -O2"
 SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
 
-on_exit() {
-    if [ $? = 0 ]; then
-        exit
-    fi
-    FILES_TO_PRINT="config.log"
-    FILES_TO_PRINT="$FILES_TO_PRINT */_build/sub/tests/testsuite.log"
-
-    for pr_file in $FILES_TO_PRINT; do
-        cat "$pr_file" 2>/dev/null
-    done
-}
-# We capture the error logs as artifacts in Github Actions, no need to dump
-# them via a EXIT handler.
-[ -n "$GITHUB_WORKFLOW" ] || trap on_exit EXIT
-
 function install_kernel()
 {
     if [[ "$1" =~ ^5.* ]]; then
@@ -98,19 +83,9 @@ function install_kernel()
 function install_dpdk()
 {
     local DPDK_VER=$1
-    local VERSION_FILE="dpdk-dir/travis-dpdk-cache-version"
+    local VERSION_FILE="dpdk-dir/cached-version"
     local DPDK_OPTS=""
-    local DPDK_LIB=""
-
-    if [ -z "$TRAVIS_ARCH" ] ||
-       [ "$TRAVIS_ARCH" == "amd64" ]; then
-        DPDK_LIB=$(pwd)/dpdk-dir/build/lib/x86_64-linux-gnu
-    elif [ "$TRAVIS_ARCH" == "aarch64" ]; then
-        DPDK_LIB=$(pwd)/dpdk-dir/build/lib/aarch64-linux-gnu
-    else
-        echo "Target is unknown"
-        exit 1
-    fi
+    local DPDK_LIB=$(pwd)/dpdk-dir/build/lib/x86_64-linux-gnu
 
     if [ "$DPDK_SHARED" ]; then
         EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=shared"
@@ -245,7 +220,7 @@ elif [ "$M32" ]; then
     # Adding m32 flag directly to CC to avoid any posiible issues with API/ABI
     # difference on 'configure' and 'make' stages.
     export CC="$CC -m32"
-elif [ "$TRAVIS_ARCH" != "aarch64" ]; then
+else
     OPTS="--enable-sparse"
     if [ "$AFXDP" ]; then
         # netdev-afxdp uses memset for 64M for umem initialization.

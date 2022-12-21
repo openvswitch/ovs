@@ -133,8 +133,12 @@ jobs:
     - name: install common dependencies
       run:  sudo apt install -y ${{ env.dependencies }}
     - name: install libunbound libunwind
+      # GitHub Actions doesn't have 32-bit versions of these libraries.
       if:   matrix.m32 == ''
       run:  sudo apt install -y libunbound-dev libunwind-dev
+    - name: install 32-bit libraries
+      if:   matrix.m32 != ''
+      run:  sudo apt install -y gcc-multilib
 
     - name: prepare
       run:  ./.ci/linux-prepare.sh

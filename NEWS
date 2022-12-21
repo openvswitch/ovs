@@ -20,6 +20,8 @@ Post-v3.0.0
      * New option '--dump-hugepages' to include hugepages in core dumps. This
        can assist with postmortem analysis involving DPDK, but may also produce
        significantly larger core dump files.
+   - Support for travis-ci.org based continuous integration builds has been
+     dropped.
 
 
 v3.0.0 - 15 Aug 2022
