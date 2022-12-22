@@ -254,6 +254,7 @@ DPIF_OP_FLOW_EXECUTE operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
+- ``utilities/usdt-scripts/dpif_nl_exec_monitor.py``
 - ``utilities/usdt-scripts/upcall_cost.py``
 
 
