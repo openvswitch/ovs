@@ -868,8 +868,21 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
                             OVS_XDP_HEADROOM);
         dp_packet_set_size(packet, len);
 
+#if __GNUC__ >= 11 && !__clang__
+        /* GCC 11+ generates a false-positive warning about free() being
+         * called on DPBUF_AFXDP packet, but it is an imposisible code path.
+         * Disabling a warning to avoid build failures.
+         * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108187 */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+
         /* Add packet into batch, increase batch->count. */
         dp_packet_batch_add(batch, packet);
+
+#if __GNUC__ && !__clang__
+#pragma GCC diagnostic pop
+#endif
 
         idx_rx++;
     }
