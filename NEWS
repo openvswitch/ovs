@@ -4,6 +4,9 @@ Post-v3.0.0
      of handler and revalidator threads if necessary.
    - AF_XDP:
      * Added support for building with libxdp and libbpf >= 0.7.
+     * Support for AF_XDP is now enabled by default if all dependencies are
+       available at the build time.  Use --disable-afxdp to disable.
+       Use --enable-afxdp to fail the build if dependencies are not present.
    - ovs-appctl:
      * "ovs-appctl ofproto/trace" command can now display port names with the
        "--names" option.

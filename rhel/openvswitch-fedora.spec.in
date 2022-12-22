@@ -171,6 +171,8 @@ This package provides IPsec tunneling support for OVS tunnels.
 %endif
 %if %{with afxdp}
         --enable-afxdp \
+%else
+        --disable-afxdp \
 %endif
         --enable-ssl \
         --disable-static \

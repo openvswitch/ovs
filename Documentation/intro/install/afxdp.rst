@@ -30,8 +30,7 @@ This document describes how to build and install Open vSwitch using
 AF_XDP netdev.
 
 .. warning::
-  The AF_XDP support of Open vSwitch is considered 'experimental',
-  and it is not compiled in by default.
+  The AF_XDP support of Open vSwitch is considered 'experimental'.
 
 
 Introduction
@@ -136,6 +135,9 @@ Next, ensure the standard OVS requirements are installed and
 bootstrap/configure the package::
 
   ./boot.sh && ./configure --enable-afxdp
+
+``--enable-afxdp`` here is optional, but it will ensure that all dependencies
+are available at the build time.
 
 Finally, build and install OVS::
 

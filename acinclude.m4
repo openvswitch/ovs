@@ -253,46 +253,70 @@ dnl OVS_CHECK_LINUX_AF_XDP
 dnl
 dnl Check both Linux kernel AF_XDP and libbpf/libxdp support
 AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
-  AC_ARG_ENABLE([afxdp],
-                [AS_HELP_STRING([--enable-afxdp], [Enable AF-XDP support])],
-                [], [enable_afxdp=no])
+  AC_ARG_ENABLE(
+    [afxdp],
+    [AS_HELP_STRING([--disable-afxdp], [Disable AF-XDP support])],
+    [case "${enableval}" in
+       (yes | no | auto) ;;
+       (*) AC_MSG_ERROR([bad value ${enableval} for --enable-afxdp]) ;;
+     esac],
+    [enable_afxdp=auto])
+
   AC_MSG_CHECKING([whether AF_XDP is enabled])
-  if test "$enable_afxdp" != yes; then
+  if test "$enable_afxdp" == no; then
     AC_MSG_RESULT([no])
     AF_XDP_ENABLE=false
   else
-    AC_MSG_RESULT([yes])
+    AC_MSG_RESULT([$enable_afxdp])
     AF_XDP_ENABLE=true
+    failed_dep=none
+    dnl Saving libs to restore in case we will end up not building with AF_XDP.
+    save_LIBS=$LIBS
 
-    AC_CHECK_HEADER([bpf/libbpf.h], [],
-      [AC_MSG_ERROR([unable to find bpf/libbpf.h for AF_XDP support])])
+    AC_CHECK_HEADER([bpf/libbpf.h], [], [failed_dep="bpf/libbpf.h"])
 
-    AC_CHECK_HEADER([linux/if_xdp.h], [],
-      [AC_MSG_ERROR([unable to find linux/if_xdp.h for AF_XDP support])])
-
-    OVS_FIND_DEPENDENCY([libbpf_strerror], [bpf], [libbpf])
-    AC_CHECK_FUNCS([bpf_xdp_query_id bpf_xdp_detach])
-
-    if test "x$ac_cv_func_bpf_xdp_detach" = xyes; then
-        dnl We have libbpf >= 0.7.  Look for libxdp as xsk functions
-        dnl were moved into this library.
-        OVS_FIND_DEPENDENCY([libxdp_strerror], [xdp], [libxdp])
-        AC_CHECK_HEADER([xdp/xsk.h],
-          AC_DEFINE([HAVE_LIBXDP], [1], [xsk.h is supplied with libxdp]),
-          AC_MSG_ERROR([unable to find xdp/xsk.h for AF_XDP support]))
-    else
-        dnl libbpf < 0.7 contains all the necessary functionality.
-        AC_CHECK_HEADER([bpf/xsk.h], [],
-          [AC_MSG_ERROR([unable to find bpf/xsk.h for AF_XDP support])])
+    if test "$failed_dep" = none; then
+      AC_CHECK_HEADER([linux/if_xdp.h], [], [failed_dep="linux/if_xdp.h"])
     fi
 
-    AC_CHECK_FUNCS([pthread_spin_lock], [],
-      [AC_MSG_ERROR([unable to find pthread_spin_lock for AF_XDP support])])
+    if test "$failed_dep" = none; then
+      AC_SEARCH_LIBS([libbpf_strerror], [bpf], [], [failed_dep="libbpf"])
+      AC_CHECK_FUNCS([bpf_xdp_query_id bpf_xdp_detach])
+    fi
 
-    OVS_FIND_DEPENDENCY([numa_alloc_onnode], [numa], [libnuma])
+    if test "$failed_dep" = none -a "x$ac_cv_func_bpf_xdp_detach" = xyes; then
+        dnl We have libbpf >= 0.7.  Look for libxdp as xsk functions
+        dnl were moved into this library.
+        AC_SEARCH_LIBS([libxdp_strerror], [xdp],
+          AC_CHECK_HEADER([xdp/xsk.h],
+            AC_DEFINE([HAVE_LIBXDP], [1], [xsk.h is supplied with libxdp]),
+            [failed_dep="xdp/xsk.h"]),
+          [failed_dep="libxdp"])
+    elif test "$failed_dep" = none; then
+        dnl libbpf < 0.7 contains all the necessary functionality.
+        AC_CHECK_HEADER([bpf/xsk.h], [], [failed_dep="bpf/xsk.h"])
+    fi
 
-    AC_DEFINE([HAVE_AF_XDP], [1],
-              [Define to 1 if AF_XDP support is available and enabled.])
+    if test "$failed_dep" = none; then
+      AC_CHECK_FUNCS([pthread_spin_lock], [], [failed_dep="pthread_spin_lock"])
+    fi
+
+    if test "$failed_dep" = none; then
+      AC_SEARCH_LIBS([numa_alloc_onnode], [numa], [], [failed_dep="libnuma"])
+    fi
+
+    if test "$failed_dep" = none; then
+      AC_DEFINE([HAVE_AF_XDP], [1],
+                [Define to 1 if AF_XDP support is available and enabled.])
+    elif test "$enable_afxdp" = yes; then
+      AC_MSG_ERROR([Missing $failed_dep dependency for AF_XDP support])
+    else
+      AC_MSG_WARN(m4_normalize(
+          [Cannot find $failed_dep, netdev-afxdp will not be supported
+           (use --disable-afxdp to suppress this warning).]))
+      AF_XDP_ENABLE=false
+      LIBS=$save_LIBS
+    fi
   fi
   AM_CONDITIONAL([HAVE_AF_XDP], test "$AF_XDP_ENABLE" = true)
 ])
