@@ -2,6 +2,8 @@ Post-v3.0.0
 --------------------
    - ovs-vswitchd now detects changes in CPU affinity and adjusts the number
      of handler and revalidator threads if necessary.
+   - AF_XDP:
+     * Added support for building with libxdp and libbpf >= 0.7.
    - ovs-appctl:
      * "ovs-appctl ofproto/trace" command can now display port names with the
        "--names" option.

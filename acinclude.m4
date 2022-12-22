@@ -251,7 +251,7 @@ AC_DEFUN([OVS_FIND_DEPENDENCY], [
 
 dnl OVS_CHECK_LINUX_AF_XDP
 dnl
-dnl Check both Linux kernel AF_XDP and libbpf support
+dnl Check both Linux kernel AF_XDP and libbpf/libxdp support
 AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
   AC_ARG_ENABLE([afxdp],
                 [AS_HELP_STRING([--enable-afxdp], [Enable AF-XDP support])],
@@ -270,8 +270,21 @@ AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
     AC_CHECK_HEADER([linux/if_xdp.h], [],
       [AC_MSG_ERROR([unable to find linux/if_xdp.h for AF_XDP support])])
 
-    AC_CHECK_HEADER([bpf/xsk.h], [],
-      [AC_MSG_ERROR([unable to find bpf/xsk.h for AF_XDP support])])
+    OVS_FIND_DEPENDENCY([libbpf_strerror], [bpf], [libbpf])
+    AC_CHECK_FUNCS([bpf_xdp_query_id bpf_xdp_detach])
+
+    if test "x$ac_cv_func_bpf_xdp_detach" = xyes; then
+        dnl We have libbpf >= 0.7.  Look for libxdp as xsk functions
+        dnl were moved into this library.
+        OVS_FIND_DEPENDENCY([libxdp_strerror], [xdp], [libxdp])
+        AC_CHECK_HEADER([xdp/xsk.h],
+          AC_DEFINE([HAVE_LIBXDP], [1], [xsk.h is supplied with libxdp]),
+          AC_MSG_ERROR([unable to find xdp/xsk.h for AF_XDP support]))
+    else
+        dnl libbpf < 0.7 contains all the necessary functionality.
+        AC_CHECK_HEADER([bpf/xsk.h], [],
+          [AC_MSG_ERROR([unable to find bpf/xsk.h for AF_XDP support])])
+    fi
 
     AC_CHECK_FUNCS([pthread_spin_lock], [],
       [AC_MSG_ERROR([unable to find pthread_spin_lock for AF_XDP support])])
@@ -280,13 +293,6 @@ AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
 
     AC_DEFINE([HAVE_AF_XDP], [1],
               [Define to 1 if AF_XDP support is available and enabled.])
-    LIBBPF_LDADD=" -lbpf -lelf"
-    AC_SUBST([LIBBPF_LDADD])
-
-    AC_CHECK_DECL([xsk_ring_prod__needs_wakeup], [
-      AC_DEFINE([HAVE_XDP_NEED_WAKEUP], [1],
-        [XDP need wakeup support detected in xsk.h.])
-    ], [], [[#include <bpf/xsk.h>]])
   fi
   AM_CONDITIONAL([HAVE_AF_XDP], test "$AF_XDP_ENABLE" = true)
 ])
@@ -357,7 +363,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     ], [], [[#include <rte_config.h>]])
 
     AC_CHECK_DECL([RTE_NET_AF_XDP], [
-      LIBBPF_LDADD="-lbpf"
+      OVS_FIND_DEPENDENCY([libbpf_strerror], [bpf], [libbpf])
     ], [], [[#include <rte_config.h>]])
 
     AC_CHECK_DECL([RTE_LIBRTE_VHOST_NUMA], [

@@ -75,7 +75,7 @@ BuildRequires: dpdk-devel >= 22.11
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 %if %{with afxdp}
-BuildRequires: libbpf-devel numactl-devel
+BuildRequires: libxdp-devel libbpf-devel numactl-devel
 %endif
 BuildRequires: unbound unbound-devel
 

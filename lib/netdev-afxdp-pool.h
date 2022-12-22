@@ -19,12 +19,7 @@
 
 #ifdef HAVE_AF_XDP
 
-#include <bpf/xsk.h>
-#include <errno.h>
-#include <stdbool.h>
-
 #include "openvswitch/thread.h"
-#include "ovs-atomic.h"
 
 /* LIFO ptr_array. */
 struct umem_pool {
