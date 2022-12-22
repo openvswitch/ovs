@@ -8,14 +8,12 @@ jobs:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev    \
         libssl-dev llvm-dev libelf-dev libnuma-dev libpcap-dev  \
-        ninja-build selinux-policy-dev
-      AFXDP:       ${{ matrix.afxdp }}
+        ninja-build selinux-policy-dev libbpf-dev
       ASAN:        ${{ matrix.asan }}
       UBSAN:       ${{ matrix.ubsan }}
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
-      KERNEL:      ${{ matrix.kernel }}
       LIBS:        ${{ matrix.libs }}
       M32:         ${{ matrix.m32 }}
       OPTS:        ${{ matrix.opts }}
@@ -65,11 +63,9 @@ jobs:
             libs:         -ljemalloc
 
           - compiler:     gcc
-            afxdp:        afxdp
-            kernel:       5.3
+            opts:         --enable-afxdp
           - compiler:     clang
-            afxdp:        afxdp
-            kernel:       5.3
+            opts:         --enable-afxdp
 
           - compiler:     gcc
             dpdk:         dpdk

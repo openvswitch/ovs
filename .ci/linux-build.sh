@@ -7,79 +7,6 @@ CFLAGS_FOR_OVS="-g -O2"
 SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
 
-function install_kernel()
-{
-    if [[ "$1" =~ ^5.* ]]; then
-        PREFIX="v5.x"
-    elif [[ "$1" =~ ^4.* ]]; then
-        PREFIX="v4.x"
-    elif [[ "$1" =~ ^3.* ]]; then
-        PREFIX="v3.x"
-    else
-        PREFIX="v2.6/longterm/v2.6.32"
-    fi
-
-    base_url="https://cdn.kernel.org/pub/linux/kernel/${PREFIX}"
-    # Download page with list of all available kernel versions.
-    wget ${base_url}/
-    # Uncompress in case server returned gzipped page.
-    (file index* | grep ASCII) || (mv index* index.new.gz && gunzip index*)
-    # Get version of the latest stable release.
-    hi_ver=$(echo ${1} | sed 's/\./\\\./')
-    lo_ver=$(cat ./index* | grep -P -o "${hi_ver}\.[0-9]+" | \
-             sed 's/.*\..*\.\(.*\)/\1/' | sort -h | tail -1)
-    version="${1}.${lo_ver}"
-
-    rm -rf index* linux-*
-
-    url="${base_url}/linux-${version}.tar.xz"
-    # Download kernel sources. Try direct link on CDN failure.
-    wget ${url} ||
-    (rm -f linux-${version}.tar.xz && wget ${url}) ||
-    (rm -f linux-${version}.tar.xz && wget ${url/cdn/www})
-
-    tar xvf linux-${version}.tar.xz > /dev/null
-    pushd linux-${version}
-    make allmodconfig
-
-    # Cannot use CONFIG_KCOV: -fsanitize-coverage=trace-pc is not supported by compiler
-    sed -i 's/CONFIG_KCOV=y/CONFIG_KCOV=n/' .config
-
-    # stack validation depends on tools/objtool, but objtool does not compile on travis.
-    # It is giving following error.
-    #  >>> GEN      arch/x86/insn/inat-tables.c
-    #  >>> Semantic error at 40: Unknown imm opnd: AL
-    # So for now disable stack-validation for the build.
-
-    sed -i 's/CONFIG_STACK_VALIDATION=y/CONFIG_STACK_VALIDATION=n/' .config
-    make oldconfig
-
-    # Older kernels do not include openvswitch
-    if [ -d "net/openvswitch" ]; then
-        make net/openvswitch/
-    else
-        make net/bridge/
-    fi
-
-    if [ "$AFXDP" ]; then
-        sudo make headers_install INSTALL_HDR_PATH=/usr
-        pushd tools/lib/bpf/
-        # Bulding with gcc because there are some issues in make files
-        # that breaks building libbpf with clang on Travis.
-        CC=gcc sudo make install
-        CC=gcc sudo make install_headers
-        sudo ldconfig
-        popd
-        # The Linux kernel defines __always_inline in stddef.h (283d7573), and
-        # sys/cdefs.h tries to re-define it.  Older libc-dev package in xenial
-        # doesn't have a fix for this issue.  Applying it manually.
-        sudo sed -i '/^# define __always_inline .*/i # undef __always_inline' \
-                    /usr/include/x86_64-linux-gnu/sys/cdefs.h || true
-        EXTRA_OPTS="${EXTRA_OPTS} --enable-afxdp"
-    fi
-    popd
-}
-
 function install_dpdk()
 {
     local DPDK_VER=$1
@@ -200,10 +127,6 @@ import ovs.json
 assert ovs.json.from_string('{\"a\": 42}') == {'a': 42}"
 
     exit 0
-fi
-
-if [ "$KERNEL" ]; then
-    install_kernel $KERNEL
 fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
