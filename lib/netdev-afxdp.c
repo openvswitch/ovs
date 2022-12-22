@@ -434,7 +434,11 @@ xsk_configure(int ifindex, int xdp_queue_id, enum afxdp_mode mode,
 
     /* Umem memory region. */
     bufs = xmalloc_pagealign(NUM_FRAMES * FRAME_SIZE);
+#ifndef __CHECKER__
+    /* Sparse complains about a very large memset, but it is OK in this case.
+     * So, hiding it from the checker. */
     memset(bufs, 0, NUM_FRAMES * FRAME_SIZE);
+#endif
 
     /* Create AF_XDP socket. */
     umem = xsk_configure_umem(bufs, NUM_FRAMES * FRAME_SIZE);

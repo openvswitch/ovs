@@ -222,10 +222,6 @@ elif [ "$M32" ]; then
     export CC="$CC -m32"
 else
     EXTRA_OPTS="$EXTRA_OPTS --enable-sparse"
-    if [ "$AFXDP" ]; then
-        # netdev-afxdp uses memset for 64M for umem initialization.
-        SPARSE_FLAGS="${SPARSE_FLAGS} -Wno-memcpy-max-count"
-    fi
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} ${SPARSE_FLAGS}"
 fi
 
