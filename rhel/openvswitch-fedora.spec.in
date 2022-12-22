@@ -26,8 +26,8 @@
 %bcond_without libcapng
 # To enable DPDK support, specify '--with dpdk' when building
 %bcond_with dpdk
-# To enable AF_XDP support, specify '--with afxdp' when building
-%bcond_with afxdp
+# To disable AF_XDP support, specify '--without afxdp' when building
+%bcond_without afxdp
 
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
