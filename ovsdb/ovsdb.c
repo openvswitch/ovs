@@ -715,5 +715,8 @@ ovsdb_replace(struct ovsdb *dst, struct ovsdb *src)
 
     dst->rbac_role = ovsdb_get_table(dst, "RBAC_Role");
 
+    /* Get statistics from the new database. */
+    dst->n_atoms = src->n_atoms;
+
     ovsdb_destroy(src);
 }
