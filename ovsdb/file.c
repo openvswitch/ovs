@@ -270,22 +270,48 @@ ovsdb_convert_table(struct ovsdb_txn *txn,
                     const struct ovsdb_table *src_table,
                     struct ovsdb_table *dst_table)
 {
+    const struct ovsdb_column **dst_columns;
+    struct ovsdb_error *error = NULL;
     const struct ovsdb_row *src_row;
+    unsigned long *src_equal;
+    struct shash_node *node;
+    size_t n_src_columns;
+
+    n_src_columns = shash_count(&src_table->schema->columns);
+    src_equal = bitmap_allocate(n_src_columns);
+    dst_columns = xzalloc(n_src_columns * sizeof *dst_columns);
+
+    SHASH_FOR_EACH (node, &src_table->schema->columns) {
+        const struct ovsdb_column *src_column = node->data;
+
+        if (src_column->index == OVSDB_COL_UUID ||
+            src_column->index == OVSDB_COL_VERSION) {
+            continue;
+        }
+
+        const struct ovsdb_column *dst_column =
+            shash_find_data(&dst_table->schema->columns, src_column->name);
+
+        if (!dst_column) {
+            continue;
+        }
+
+        dst_columns[src_column->index] = dst_column;
+
+        if (ovsdb_type_equals(&src_column->type, &dst_column->type)) {
+            bitmap_set1(src_equal, src_column->index);
+        }
+    }
+
     HMAP_FOR_EACH (src_row, hmap_node, &src_table->rows) {
         struct ovsdb_row *dst_row = ovsdb_row_create(dst_table);
         *ovsdb_row_get_uuid_rw(dst_row) = *ovsdb_row_get_uuid(src_row);
 
-        struct shash_node *node;
         SHASH_FOR_EACH (node, &src_table->schema->columns) {
             const struct ovsdb_column *src_column = node->data;
-            if (src_column->index == OVSDB_COL_UUID ||
-                src_column->index == OVSDB_COL_VERSION) {
-                continue;
-            }
+            const struct ovsdb_column *dst_column;
 
-            const struct ovsdb_column *dst_column
-                = shash_find_data(&dst_table->schema->columns,
-                                  src_column->name);
+            dst_column = dst_columns[src_column->index];
             if (!dst_column) {
                 continue;
             }
@@ -293,19 +319,30 @@ ovsdb_convert_table(struct ovsdb_txn *txn,
             ovsdb_datum_destroy(&dst_row->fields[dst_column->index],
                                 &dst_column->type);
 
-            struct ovsdb_error *error = ovsdb_datum_convert(
+            if (bitmap_is_set(src_equal, src_column->index)) {
+                /* This column didn't change - no need to convert. */
+                ovsdb_datum_clone(&dst_row->fields[dst_column->index],
+                                  &src_row->fields[src_column->index]);
+                continue;
+            }
+
+            error = ovsdb_datum_convert(
                 &dst_row->fields[dst_column->index], &dst_column->type,
                 &src_row->fields[src_column->index], &src_column->type);
             if (error) {
                 ovsdb_datum_init_empty(&dst_row->fields[dst_column->index]);
                 ovsdb_row_destroy(dst_row);
-                return error;
+                goto exit;
             }
         }
 
         ovsdb_txn_row_insert(txn, dst_row);
     }
-    return NULL;
+
+exit:
+    free(dst_columns);
+    bitmap_free(src_equal);
+    return error;
 }
 
 /* Copies the data in 'src', converts it into the schema specified in
