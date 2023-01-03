@@ -1308,6 +1308,24 @@ dnl After removing all the bridges, the number of atoms in the database
 dnl should return to its initial value.
 AT_CHECK([test $(get_memory_value atoms) -eq $initial_db_atoms])
 
+dnl Add a few more resources.
+for i in $(seq 1 10); do
+    cmd=$(add_ports $i $(($i / 4 + 1)))
+    AT_CHECK([ovs-vsctl --no-wait add-br br$i $cmd])
+done
+check_atoms
+
+db_atoms_before_conversion=$(get_memory_value atoms)
+
+dnl Trigger online conversion.
+AT_CHECK([ovsdb-client convert $abs_top_srcdir/vswitchd/vswitch.ovsschema],
+         [0], [ignore], [ignore])
+
+dnl Check that conversion didn't change the number of atoms and the history
+dnl still has a reasonable size.
+check_atoms
+AT_CHECK([test $(get_memory_value atoms) -eq $db_atoms_before_conversion])
+
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
