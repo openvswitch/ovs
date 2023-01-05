@@ -808,6 +808,53 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - slow_action on geneve6 tunnel])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_CHECK_GENEVE_UDP6ZEROCSUM()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "fc00::1/64", [], [], "nodad")
+AT_CHECK([ip addr add dev br-underlay "fc00::100/64" nodad])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL6([geneve], [br0], [at_gnv0], [fc00::1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL6([geneve], [ns_gnv0], [at_ns0], [fc00::100], [10.1.1.1/24],
+                   [vni 0 udp6zerocsumtx udp6zerocsumrx])
+AT_CHECK([ovs-ofctl add-flow br0 "table=37,actions=at_gnv0"])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Start tcpdump to capture the encapsulated packets.
+NETNS_DAEMONIZE([at_ns0], [tcpdump -U -i p0 -w p0.pcap], [tcpdump.pid])
+sleep 1
+
+dnl Generate a single packet trough the controler that needs an ARP modification
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=controller packet=fffffffffffffa163e949d8008060001080006040001fa163e949d80c0a820300000000000000a0000fe actions=set_field:0xa0000f4->reg1,move:NXM_NX_XXREG0[[64..95]]->NXM_OF_ARP_SPA[[]],resubmit(,37)"])
+sleep 1
+
+dnl Stop OVS and tcpdump and verify the results.
+OVS_TRAFFIC_VSWITCHD_STOP
+
+ovs-pcap p0.pcap
+
+AT_CHECK([ovs-pcap p0.pcap | grep -Eq "^[[[:xdigit:]]]{24}86dd60000000003a1140fc000000000000000000000000000100fc000000000000000000000000000001[[[:xdigit:]]]{4}17c1003a[[[:xdigit:]]]{4}0000655800000000fffffffffffffa163e949d8008060001080006040001[[[:xdigit:]]]{12}0a0000f40000000000000a0000fe$"])
+AT_CLEANUP
+
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
 OVS_CHECK_MIN_KERNEL(3, 10)
 
