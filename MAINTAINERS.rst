@@ -28,11 +28,11 @@ Committers
 Open vSwitch committers are the people who have been granted access to push
 changes to the Open vSwitch git repository.
 
-The responsibilities of an Open vSwitch committer are documented
-`here <Documentation/internals/committer-responsibilities.rst>`__.
+The responsibilities of an Open vSwitch committer are documented here:
+|responsibilities|.
 
-The process for adding or removing committers is documented
-`here <Documentation/internals/committer-grant-revocation.rst>`__.
+The process for adding or removing committers is documented here:
+|grant-revocation|.
 
 This is the current list of active Open vSwitch committers:
 
@@ -77,8 +77,8 @@ This is the current list of active Open vSwitch committers:
      - yamamoto@midokura.com
 
 The project also maintains a list of Emeritus Committers (or Maintainers).
-More information about Emeritus Committers can be found
-`here <Documentation/internals/committer-emeritus-status.rst>`__.
+More information about Emeritus Committers can be found here:
+|emeritus-status|.
 
 .. list-table:: OVS Emeritus Maintainers
    :header-rows: 1
@@ -91,3 +91,12 @@ More information about Emeritus Committers can be found
      - ejj@eecs.berkeley.edu
    * - Joe Stringer
      - joe@ovn.org
+
+.. Cut here for the Documentation/internals/maintainers.rst
+
+.. |responsibilities| replace:: `Expectations for Developers with Open vSwitch
+   Repo Access <Documentation/internals/committer-responsibilities.rst>`__
+.. |grant-revocation| replace:: `OVS Committer Grant/Revocation Policy
+   <Documentation/internals/committer-grant-revocation.rst>`__
+.. |emeritus-status|  replace:: `Emeritus Status for OVS Committers
+   <Documentation/internals/committer-emeritus-status.rst>`__
