@@ -263,7 +263,7 @@ AC_DEFUN([OVS_CHECK_LINUX_AF_XDP], [
     [enable_afxdp=auto])
 
   AC_MSG_CHECKING([whether AF_XDP is enabled])
-  if test "$enable_afxdp" == no; then
+  if test "$enable_afxdp" = no; then
     AC_MSG_RESULT([no])
     AF_XDP_ENABLE=false
   else
