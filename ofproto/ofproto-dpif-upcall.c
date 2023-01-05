@@ -2874,7 +2874,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 } else {
                     struct dpif_flow_stats stats;
                     COVERAGE_INC(revalidate_missed_dp_flow);
-                    memset(&stats, 0, sizeof stats);
+                    memcpy(&stats, &ukey->stats, sizeof stats);
                     result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
                                              reval_seq, &recircs, false);
                 }
