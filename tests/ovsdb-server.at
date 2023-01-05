@@ -1254,7 +1254,7 @@ dnl a case where there is only one transaction in a history.
 get_memory_value () {
     n=$(ovs-appctl -t ovsdb-server memory/show dnl
             | tr ' ' '\n' | grep "^$1:" | cut -d ':' -f 2)
-    if test X"$n" == "X"; then
+    if test X"$n" = "X"; then
         n=0
     fi
     echo $n
