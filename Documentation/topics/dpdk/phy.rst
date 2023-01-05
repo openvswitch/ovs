@@ -76,8 +76,8 @@ persist across reboots. In addition, there are two options available for this
 kernel space driver - VFIO (Virtual Function I/O) and UIO (Userspace I/O) -
 along with a number of drivers for each option. We will demonstrate examples of
 both tools and will use the ``vfio-pci`` driver, which is the more secure,
-robust driver of those available. More information can be found in the `DPDK
-documentation <dpdk-drivers>`__.
+robust driver of those available. More information can be found in the
+`DPDK drivers documentation`_.
 
 To list devices using :command:`driverctl`, run::
 
@@ -115,9 +115,9 @@ tool::
    Open vSwitch 2.6.0 added support for DPDK 16.07, which in turn renamed the
    former ``dpdk_nic_bind`` tool to ``dpdk-devbind``.
 
-For more information, refer to the `DPDK documentation <dpdk-drivers>`__.
+For more information, refer to the `DPDK drivers documentation`_.
 
-.. _dpdk-drivers: https://doc.dpdk.org/guides-22.11/linux_gsg/linux_drivers.html
+.. _DPDK drivers documentation: https://doc.dpdk.org/guides-22.11/linux_gsg/linux_drivers.html
 
 .. _dpdk-phy-multiqueue:
 
@@ -394,14 +394,14 @@ in the ``options`` column of the ``Interface`` table.
 
 .. important::
 
-   Some DPDK port use `bifurcated drivers <bifurcated-drivers>`__,
-   which means that a kernel netdevice remains when Open vSwitch is stopped.
+   Some DPDK port use `bifurcated drivers`_, which means that a kernel
+   netdevice remains when Open vSwitch is stopped.
 
    In such case, any configuration applied to a VF would remain set on the
    kernel netdevice, and be inherited from it when Open vSwitch is restarted,
    even if the options described in this section are unset from Open vSwitch.
 
-.. _bifurcated-drivers: https://doc.dpdk.org/guides-22.11/linux_gsg/linux_drivers.html#bifurcated-driver
+.. _bifurcated drivers: https://doc.dpdk.org/guides-22.11/linux_gsg/linux_drivers.html#bifurcated-driver
 
 - Configure the VF MAC address::
 
