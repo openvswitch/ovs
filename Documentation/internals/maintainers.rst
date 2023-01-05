@@ -22,3 +22,8 @@
       Avoid deeper levels because they do not render well.
 
 .. include:: ../../MAINTAINERS.rst
+   :end-before: Cut here for the Documentation/internals/maintainers.rst
+
+.. |responsibilities| replace:: :doc:`committer-responsibilities`
+.. |grant-revocation| replace:: :doc:`committer-grant-revocation`
+.. |emeritus-status|  replace:: :doc:`committer-emeritus-status`
