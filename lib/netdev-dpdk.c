@@ -2363,72 +2363,6 @@ is_vhost_running(struct netdev_dpdk *dev)
     return (netdev_dpdk_get_vid(dev) >= 0 && dev->vhost_reconfigured);
 }
 
-static inline void
-netdev_dpdk_vhost_update_rx_size_counters(struct netdev_stats *stats,
-                                          unsigned int packet_size)
-{
-    /* Hard-coded search for the size bucket. */
-    if (packet_size < 256) {
-        if (packet_size >= 128) {
-            stats->rx_128_to_255_packets++;
-        } else if (packet_size <= 64) {
-            stats->rx_1_to_64_packets++;
-        } else {
-            stats->rx_65_to_127_packets++;
-        }
-    } else {
-        if (packet_size >= 1523) {
-            stats->rx_1523_to_max_packets++;
-        } else if (packet_size >= 1024) {
-            stats->rx_1024_to_1522_packets++;
-        } else if (packet_size < 512) {
-            stats->rx_256_to_511_packets++;
-        } else {
-            stats->rx_512_to_1023_packets++;
-        }
-    }
-}
-
-static inline void
-netdev_dpdk_vhost_update_rx_counters(struct netdev_dpdk *dev,
-                                     struct dp_packet **packets, int count,
-                                     int qos_drops)
-{
-    struct netdev_stats *stats = &dev->stats;
-    struct dp_packet *packet;
-    unsigned int packet_size;
-    int i;
-
-    stats->rx_packets += count;
-    stats->rx_dropped += qos_drops;
-    for (i = 0; i < count; i++) {
-        packet = packets[i];
-        packet_size = dp_packet_size(packet);
-
-        if (OVS_UNLIKELY(packet_size < ETH_HEADER_LEN)) {
-            /* This only protects the following multicast counting from
-             * too short packets, but it does not stop the packet from
-             * further processing. */
-            stats->rx_errors++;
-            stats->rx_length_errors++;
-            continue;
-        }
-
-        netdev_dpdk_vhost_update_rx_size_counters(stats, packet_size);
-
-        struct eth_header *eh = (struct eth_header *) dp_packet_data(packet);
-        if (OVS_UNLIKELY(eth_addr_is_multicast(eh->eth_dst))) {
-            stats->multicast++;
-        }
-
-        stats->rx_bytes += packet_size;
-    }
-
-    if (OVS_UNLIKELY(qos_drops)) {
-        dev->sw_stats->rx_qos_drops += qos_drops;
-    }
-}
-
 /*
  * The receive path for the vhost port is the TX path out from guest.
  */
@@ -2473,10 +2407,12 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
         qos_drops -= nb_rx;
     }
 
-    rte_spinlock_lock(&dev->stats_lock);
-    netdev_dpdk_vhost_update_rx_counters(dev, batch->packets,
-                                         nb_rx, qos_drops);
-    rte_spinlock_unlock(&dev->stats_lock);
+    if (OVS_UNLIKELY(qos_drops)) {
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.rx_dropped += qos_drops;
+        dev->sw_stats->rx_qos_drops += qos_drops;
+        rte_spinlock_unlock(&dev->stats_lock);
+    }
 
     batch->count = nb_rx;
     dp_packet_batch_init_packet_fields(batch);
@@ -2585,38 +2521,6 @@ netdev_dpdk_filter_packet_len(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
     }
 
     return cnt;
-}
-
-static inline void
-netdev_dpdk_vhost_update_tx_counters(struct netdev_dpdk *dev,
-                                     struct dp_packet **packets,
-                                     int attempted,
-                                     struct netdev_dpdk_sw_stats *sw_stats_add)
-{
-    int dropped = sw_stats_add->tx_mtu_exceeded_drops +
-                  sw_stats_add->tx_qos_drops +
-                  sw_stats_add->tx_failure_drops +
-                  sw_stats_add->tx_invalid_hwol_drops;
-    struct netdev_stats *stats = &dev->stats;
-    int sent = attempted - dropped;
-    int i;
-
-    stats->tx_packets += sent;
-    stats->tx_dropped += dropped;
-
-    for (i = 0; i < sent; i++) {
-        stats->tx_bytes += dp_packet_size(packets[i]);
-    }
-
-    if (OVS_UNLIKELY(dropped || sw_stats_add->tx_retries)) {
-        struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
-
-        sw_stats->tx_retries            += sw_stats_add->tx_retries;
-        sw_stats->tx_failure_drops      += sw_stats_add->tx_failure_drops;
-        sw_stats->tx_mtu_exceeded_drops += sw_stats_add->tx_mtu_exceeded_drops;
-        sw_stats->tx_qos_drops          += sw_stats_add->tx_qos_drops;
-        sw_stats->tx_invalid_hwol_drops += sw_stats_add->tx_invalid_hwol_drops;
-    }
 }
 
 static void
@@ -2799,6 +2703,7 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     int vid = netdev_dpdk_get_vid(dev);
     struct netdev_dpdk_sw_stats stats;
     struct rte_mbuf **pkts;
+    int dropped;
     int retries;
 
     batch_cnt = cnt = dp_packet_batch_size(batch);
@@ -2818,6 +2723,7 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     }
 
     cnt = netdev_dpdk_common_send(netdev, batch, &stats);
+    dropped = batch_cnt - cnt;
 
     pkts = (struct rte_mbuf **) batch->packets;
     vhost_batch_cnt = cnt;
@@ -2848,12 +2754,21 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
 
     stats.tx_failure_drops += cnt;
+    dropped += cnt;
     stats.tx_retries = MIN(retries, max_retries);
 
-    rte_spinlock_lock(&dev->stats_lock);
-    netdev_dpdk_vhost_update_tx_counters(dev, batch->packets, batch_cnt,
-                                         &stats);
-    rte_spinlock_unlock(&dev->stats_lock);
+    if (OVS_UNLIKELY(dropped || stats.tx_retries)) {
+        struct netdev_dpdk_sw_stats *sw_stats = dev->sw_stats;
+
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.tx_dropped += dropped;
+        sw_stats->tx_retries += stats.tx_retries;
+        sw_stats->tx_failure_drops += stats.tx_failure_drops;
+        sw_stats->tx_mtu_exceeded_drops += stats.tx_mtu_exceeded_drops;
+        sw_stats->tx_qos_drops += stats.tx_qos_drops;
+        sw_stats->tx_invalid_hwol_drops += stats.tx_invalid_hwol_drops;
+        rte_spinlock_unlock(&dev->stats_lock);
+    }
 
     pkts = (struct rte_mbuf **) batch->packets;
     for (int i = 0; i < vhost_batch_cnt; i++) {
@@ -3008,39 +2923,303 @@ netdev_dpdk_set_mtu(struct netdev *netdev, int mtu)
 }
 
 static int
-netdev_dpdk_get_carrier(const struct netdev *netdev, bool *carrier);
-
-static int
 netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
                             struct netdev_stats *stats)
 {
+    struct rte_vhost_stat_name *vhost_stats_names = NULL;
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct rte_vhost_stat *vhost_stats = NULL;
+    int vhost_stats_count;
+    int err;
+    int qid;
+    int vid;
 
     ovs_mutex_lock(&dev->mutex);
 
+    if (!is_vhost_running(dev)) {
+        err = EPROTO;
+        goto out;
+    }
+
+    vid = netdev_dpdk_get_vid(dev);
+
+    /* We expect all rxqs have the same number of stats, only query rxq0. */
+    qid = 0 * VIRTIO_QNUM + VIRTIO_TXQ;
+    err = rte_vhost_vring_stats_get_names(vid, qid, NULL, 0);
+    if (err < 0) {
+        err = EPROTO;
+        goto out;
+    }
+
+    vhost_stats_count = err;
+    vhost_stats_names = xcalloc(vhost_stats_count, sizeof *vhost_stats_names);
+    vhost_stats = xcalloc(vhost_stats_count, sizeof *vhost_stats);
+
+    err = rte_vhost_vring_stats_get_names(vid, qid, vhost_stats_names,
+                                          vhost_stats_count);
+    if (err != vhost_stats_count) {
+        err = EPROTO;
+        goto out;
+    }
+
+#define VHOST_RXQ_STATS                                               \
+    VHOST_RXQ_STAT(rx_packets,              "good_packets")           \
+    VHOST_RXQ_STAT(rx_bytes,                "good_bytes")             \
+    VHOST_RXQ_STAT(rx_broadcast_packets,    "broadcast_packets")      \
+    VHOST_RXQ_STAT(multicast,               "multicast_packets")      \
+    VHOST_RXQ_STAT(rx_undersized_errors,    "undersize_packets")      \
+    VHOST_RXQ_STAT(rx_1_to_64_packets,      "size_64_packets")        \
+    VHOST_RXQ_STAT(rx_65_to_127_packets,    "size_65_127_packets")    \
+    VHOST_RXQ_STAT(rx_128_to_255_packets,   "size_128_255_packets")   \
+    VHOST_RXQ_STAT(rx_256_to_511_packets,   "size_256_511_packets")   \
+    VHOST_RXQ_STAT(rx_512_to_1023_packets,  "size_512_1023_packets")  \
+    VHOST_RXQ_STAT(rx_1024_to_1522_packets, "size_1024_1518_packets") \
+    VHOST_RXQ_STAT(rx_1523_to_max_packets,  "size_1519_max_packets")
+
+#define VHOST_RXQ_STAT(MEMBER, NAME) dev->stats.MEMBER = 0;
+    VHOST_RXQ_STATS;
+#undef VHOST_RXQ_STAT
+
+    for (int q = 0; q < dev->up.n_rxq; q++) {
+        qid = q * VIRTIO_QNUM + VIRTIO_TXQ;
+
+        err = rte_vhost_vring_stats_get(vid, qid, vhost_stats,
+                                        vhost_stats_count);
+        if (err != vhost_stats_count) {
+            err = EPROTO;
+            goto out;
+        }
+
+        for (int i = 0; i < vhost_stats_count; i++) {
+#define VHOST_RXQ_STAT(MEMBER, NAME)                                 \
+            if (string_ends_with(vhost_stats_names[i].name, NAME)) { \
+                dev->stats.MEMBER += vhost_stats[i].value;           \
+                continue;                                            \
+            }
+            VHOST_RXQ_STATS;
+#undef VHOST_RXQ_STAT
+        }
+    }
+
+    /* OVS reports 64 bytes and smaller packets into "rx_1_to_64_packets".
+     * Since vhost only reports good packets and has no error counter,
+     * rx_undersized_errors is highjacked (see above) to retrieve
+     * "undersize_packets". */
+    dev->stats.rx_1_to_64_packets += dev->stats.rx_undersized_errors;
+    memset(&dev->stats.rx_undersized_errors, 0xff,
+           sizeof dev->stats.rx_undersized_errors);
+
+#define VHOST_RXQ_STAT(MEMBER, NAME) stats->MEMBER = dev->stats.MEMBER;
+    VHOST_RXQ_STATS;
+#undef VHOST_RXQ_STAT
+
+    free(vhost_stats_names);
+    vhost_stats_names = NULL;
+    free(vhost_stats);
+    vhost_stats = NULL;
+
+    /* We expect all txqs have the same number of stats, only query txq0. */
+    qid = 0 * VIRTIO_QNUM;
+    err = rte_vhost_vring_stats_get_names(vid, qid, NULL, 0);
+    if (err < 0) {
+        err = EPROTO;
+        goto out;
+    }
+
+    vhost_stats_count = err;
+    vhost_stats_names = xcalloc(vhost_stats_count, sizeof *vhost_stats_names);
+    vhost_stats = xcalloc(vhost_stats_count, sizeof *vhost_stats);
+
+    err = rte_vhost_vring_stats_get_names(vid, qid, vhost_stats_names,
+                                          vhost_stats_count);
+    if (err != vhost_stats_count) {
+        err = EPROTO;
+        goto out;
+    }
+
+#define VHOST_TXQ_STATS                                               \
+    VHOST_TXQ_STAT(tx_packets,              "good_packets")           \
+    VHOST_TXQ_STAT(tx_bytes,                "good_bytes")             \
+    VHOST_TXQ_STAT(tx_broadcast_packets,    "broadcast_packets")      \
+    VHOST_TXQ_STAT(tx_multicast_packets,    "multicast_packets")      \
+    VHOST_TXQ_STAT(rx_undersized_errors,    "undersize_packets")      \
+    VHOST_TXQ_STAT(tx_1_to_64_packets,      "size_64_packets")        \
+    VHOST_TXQ_STAT(tx_65_to_127_packets,    "size_65_127_packets")    \
+    VHOST_TXQ_STAT(tx_128_to_255_packets,   "size_128_255_packets")   \
+    VHOST_TXQ_STAT(tx_256_to_511_packets,   "size_256_511_packets")   \
+    VHOST_TXQ_STAT(tx_512_to_1023_packets,  "size_512_1023_packets")  \
+    VHOST_TXQ_STAT(tx_1024_to_1522_packets, "size_1024_1518_packets") \
+    VHOST_TXQ_STAT(tx_1523_to_max_packets,  "size_1519_max_packets")
+
+#define VHOST_TXQ_STAT(MEMBER, NAME) dev->stats.MEMBER = 0;
+    VHOST_TXQ_STATS;
+#undef VHOST_TXQ_STAT
+
+    for (int q = 0; q < dev->up.n_txq; q++) {
+        qid = q * VIRTIO_QNUM;
+
+        err = rte_vhost_vring_stats_get(vid, qid, vhost_stats,
+                                        vhost_stats_count);
+        if (err != vhost_stats_count) {
+            err = EPROTO;
+            goto out;
+        }
+
+        for (int i = 0; i < vhost_stats_count; i++) {
+#define VHOST_TXQ_STAT(MEMBER, NAME)                                 \
+            if (string_ends_with(vhost_stats_names[i].name, NAME)) { \
+                dev->stats.MEMBER += vhost_stats[i].value;           \
+                continue;                                            \
+            }
+            VHOST_TXQ_STATS;
+#undef VHOST_TXQ_STAT
+        }
+    }
+
+    /* OVS reports 64 bytes and smaller packets into "tx_1_to_64_packets".
+     * Same as for rx, rx_undersized_errors is highjacked. */
+    dev->stats.tx_1_to_64_packets += dev->stats.rx_undersized_errors;
+    memset(&dev->stats.rx_undersized_errors, 0xff,
+           sizeof dev->stats.rx_undersized_errors);
+
+#define VHOST_TXQ_STAT(MEMBER, NAME) stats->MEMBER = dev->stats.MEMBER;
+    VHOST_TXQ_STATS;
+#undef VHOST_TXQ_STAT
+
     rte_spinlock_lock(&dev->stats_lock);
-    /* Supported Stats */
-    stats->rx_packets = dev->stats.rx_packets;
-    stats->tx_packets = dev->stats.tx_packets;
     stats->rx_dropped = dev->stats.rx_dropped;
     stats->tx_dropped = dev->stats.tx_dropped;
-    stats->multicast = dev->stats.multicast;
-    stats->rx_bytes = dev->stats.rx_bytes;
-    stats->tx_bytes = dev->stats.tx_bytes;
-    stats->rx_errors = dev->stats.rx_errors;
-    stats->rx_length_errors = dev->stats.rx_length_errors;
-
-    stats->rx_1_to_64_packets = dev->stats.rx_1_to_64_packets;
-    stats->rx_65_to_127_packets = dev->stats.rx_65_to_127_packets;
-    stats->rx_128_to_255_packets = dev->stats.rx_128_to_255_packets;
-    stats->rx_256_to_511_packets = dev->stats.rx_256_to_511_packets;
-    stats->rx_512_to_1023_packets = dev->stats.rx_512_to_1023_packets;
-    stats->rx_1024_to_1522_packets = dev->stats.rx_1024_to_1522_packets;
-    stats->rx_1523_to_max_packets = dev->stats.rx_1523_to_max_packets;
-
     rte_spinlock_unlock(&dev->stats_lock);
 
+    err = 0;
+out:
+
     ovs_mutex_unlock(&dev->mutex);
+
+    free(vhost_stats);
+    free(vhost_stats_names);
+
+    return err;
+}
+
+static int
+netdev_dpdk_vhost_get_custom_stats(const struct netdev *netdev,
+                                   struct netdev_custom_stats *custom_stats)
+{
+    struct rte_vhost_stat_name *vhost_stats_names = NULL;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct rte_vhost_stat *vhost_stats = NULL;
+    int vhost_rxq_stats_count;
+    int vhost_txq_stats_count;
+    int stat_offset;
+    int err;
+    int qid;
+    int vid;
+
+    netdev_dpdk_get_sw_custom_stats(netdev, custom_stats);
+    stat_offset = custom_stats->size;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    if (!is_vhost_running(dev)) {
+        goto out;
+    }
+
+    vid = netdev_dpdk_get_vid(dev);
+
+    qid = 0 * VIRTIO_QNUM + VIRTIO_TXQ;
+    err = rte_vhost_vring_stats_get_names(vid, qid, NULL, 0);
+    if (err < 0) {
+        goto out;
+    }
+    vhost_rxq_stats_count = err;
+
+    qid = 0 * VIRTIO_QNUM;
+    err = rte_vhost_vring_stats_get_names(vid, qid, NULL, 0);
+    if (err < 0) {
+        goto out;
+    }
+    vhost_txq_stats_count = err;
+
+    stat_offset += dev->up.n_rxq * vhost_rxq_stats_count;
+    stat_offset += dev->up.n_txq * vhost_txq_stats_count;
+    custom_stats->counters = xrealloc(custom_stats->counters,
+                                      stat_offset *
+                                      sizeof *custom_stats->counters);
+    stat_offset = custom_stats->size;
+
+    vhost_stats_names = xcalloc(vhost_rxq_stats_count,
+                                sizeof *vhost_stats_names);
+    vhost_stats = xcalloc(vhost_rxq_stats_count, sizeof *vhost_stats);
+
+    for (int q = 0; q < dev->up.n_rxq; q++) {
+        qid = q * VIRTIO_QNUM + VIRTIO_TXQ;
+
+        err = rte_vhost_vring_stats_get_names(vid, qid, vhost_stats_names,
+                                              vhost_rxq_stats_count);
+        if (err != vhost_rxq_stats_count) {
+            goto out;
+        }
+
+        err = rte_vhost_vring_stats_get(vid, qid, vhost_stats,
+                                        vhost_rxq_stats_count);
+        if (err != vhost_rxq_stats_count) {
+            goto out;
+        }
+
+        for (int i = 0; i < vhost_rxq_stats_count; i++) {
+            ovs_strlcpy(custom_stats->counters[stat_offset + i].name,
+                        vhost_stats_names[i].name,
+                        NETDEV_CUSTOM_STATS_NAME_SIZE);
+            custom_stats->counters[stat_offset + i].value =
+                 vhost_stats[i].value;
+        }
+        stat_offset += vhost_rxq_stats_count;
+    }
+
+    free(vhost_stats_names);
+    vhost_stats_names = NULL;
+    free(vhost_stats);
+    vhost_stats = NULL;
+
+    vhost_stats_names = xcalloc(vhost_txq_stats_count,
+                                sizeof *vhost_stats_names);
+    vhost_stats = xcalloc(vhost_txq_stats_count, sizeof *vhost_stats);
+
+    for (int q = 0; q < dev->up.n_txq; q++) {
+        qid = q * VIRTIO_QNUM;
+
+        err = rte_vhost_vring_stats_get_names(vid, qid, vhost_stats_names,
+                                              vhost_txq_stats_count);
+        if (err != vhost_txq_stats_count) {
+            goto out;
+        }
+
+        err = rte_vhost_vring_stats_get(vid, qid, vhost_stats,
+                                        vhost_txq_stats_count);
+        if (err != vhost_txq_stats_count) {
+            goto out;
+        }
+
+        for (int i = 0; i < vhost_txq_stats_count; i++) {
+            ovs_strlcpy(custom_stats->counters[stat_offset + i].name,
+                        vhost_stats_names[i].name,
+                        NETDEV_CUSTOM_STATS_NAME_SIZE);
+            custom_stats->counters[stat_offset + i].value =
+                 vhost_stats[i].value;
+        }
+        stat_offset += vhost_txq_stats_count;
+    }
+
+    free(vhost_stats_names);
+    vhost_stats_names = NULL;
+    free(vhost_stats);
+    vhost_stats = NULL;
+
+out:
+    ovs_mutex_unlock(&dev->mutex);
+
+    custom_stats->size = stat_offset;
 
     return 0;
 }
@@ -3087,6 +3266,9 @@ netdev_dpdk_convert_xstats(struct netdev_stats *stats,
     }
 #undef DPDK_XSTATS
 }
+
+static int
+netdev_dpdk_get_carrier(const struct netdev *netdev, bool *carrier);
 
 static int
 netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
@@ -3536,6 +3718,7 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
             if (NETDEV_UP & on) {
                 rte_spinlock_lock(&dev->stats_lock);
                 memset(&dev->stats, 0, sizeof dev->stats);
+                memset(dev->sw_stats, 0, sizeof *dev->sw_stats);
                 rte_spinlock_unlock(&dev->stats_lock);
             }
         }
@@ -5036,6 +5219,11 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
         dev->tx_q[0].map = 0;
     }
 
+    rte_spinlock_lock(&dev->stats_lock);
+    memset(&dev->stats, 0, sizeof dev->stats);
+    memset(dev->sw_stats, 0, sizeof *dev->sw_stats);
+    rte_spinlock_unlock(&dev->stats_lock);
+
     if (userspace_tso_enabled()) {
         dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
         VLOG_DBG("%s: TSO enabled on vhost port", netdev_get_name(&dev->up));
@@ -5095,6 +5283,9 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT) && dev->vhost_id) {
         /* Register client-mode device. */
         vhost_flags |= RTE_VHOST_USER_CLIENT;
+
+        /* Extended per vq statistics. */
+        vhost_flags |= RTE_VHOST_USER_NET_STATS_ENABLE;
 
         /* There is no support for multi-segments buffers. */
         vhost_flags |= RTE_VHOST_USER_LINEARBUF_SUPPORT;
@@ -5574,7 +5765,7 @@ static const struct netdev_class dpdk_vhost_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
-    .get_custom_stats = netdev_dpdk_get_sw_custom_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,
@@ -5590,7 +5781,7 @@ static const struct netdev_class dpdk_vhost_client_class = {
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,
     .get_stats = netdev_dpdk_vhost_get_stats,
-    .get_custom_stats = netdev_dpdk_get_sw_custom_stats,
+    .get_custom_stats = netdev_dpdk_vhost_get_custom_stats,
     .get_status = netdev_dpdk_vhost_user_get_status,
     .reconfigure = netdev_dpdk_vhost_client_reconfigure,
     .rxq_recv = netdev_dpdk_vhost_rxq_recv,

@@ -200,9 +200,10 @@ ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
 tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+    --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,queues=2,server=1" \
+    --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+    --single-file-segments -- -a --nb-cores 2 --rxq 2 --txq 2 \
+    >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
@@ -220,8 +221,32 @@ AT_CHECK([ip netns exec ns1 ip addr add 172.31.110.11/24 dev tap0], [],
 
 AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
 AT_CHECK([ip netns exec ns2 ip link show], [], [stdout], [stderr])
-AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
+AT_CHECK([ip netns exec ns1 ping -i 0.1 -c 10 -I tap0 172.31.110.12], [], [stdout],
          [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link set tap0 down], [], [stdout], [stderr])
+
+# Wait for stats to be queried ("stats-update-interval")
+sleep 5
+AT_CHECK([ovs-vsctl get interface dpdkvhostuserclient0 statistics], [], [stdout], [stderr])
+
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_packets` -gt 0 -a dnl
+               `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_bytes` -gt 0])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_packets` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q0_good_packets` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q1_good_packets`))])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_bytes` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q0_good_bytes` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q1_good_bytes`))])
+
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_packets` -gt 0 -a dnl
+               `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes` -gt 0])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_packets` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_packets` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_packets`))])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_bytes` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_bytes`))])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
