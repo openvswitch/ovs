@@ -154,6 +154,9 @@ AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
 
+dnl Wait for vhost-user handling the socket disconnect.
+OVS_WAIT_UNTIL([grep "vHost Device '$OVS_RUNDIR/dpdkvhostuser0' has been removed" ovs-vswitchd.log])
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
