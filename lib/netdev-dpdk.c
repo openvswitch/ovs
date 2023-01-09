@@ -2287,13 +2287,8 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
     }
 
     if (OVS_UNLIKELY(nb_tx != cnt)) {
-        /* Free buffers, which we couldn't transmit, one at a time (each
-         * packet could come from a different mempool) */
-        int i;
-
-        for (i = nb_tx; i < cnt; i++) {
-            rte_pktmbuf_free(pkts[i]);
-        }
+        /* Free buffers, which we couldn't transmit. */
+        rte_pktmbuf_free_bulk(&pkts[nb_tx], cnt - nb_tx);
     }
 
     return cnt - nb_tx;
@@ -2769,9 +2764,7 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     }
 
     pkts = (struct rte_mbuf **) batch->packets;
-    for (int i = 0; i < vhost_batch_cnt; i++) {
-        rte_pktmbuf_free(pkts[i]);
-    }
+    rte_pktmbuf_free_bulk(pkts, vhost_batch_cnt);
 
     return 0;
 }
