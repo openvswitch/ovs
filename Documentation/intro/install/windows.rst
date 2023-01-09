@@ -1090,9 +1090,9 @@ To stop and delete the services, run:
 Windows CI Service
 ------------------
 
-`AppVeyor <www.appveyor.com>`__ provides a free Windows autobuild service for
-open source projects.  Open vSwitch has integration with AppVeyor for
-continuous build.  A developer can build test his changes for Windows by
+`AppVeyor <https://www.appveyor.com>`__ provides a free Windows autobuild
+service for open source projects.  Open vSwitch has integration with AppVeyor
+for continuous build.  A developer can build test his changes for Windows by
 logging into appveyor.com using a github account, creating a new project by
 linking it to his development repository in github and triggering a new build.
 
