@@ -476,6 +476,7 @@ tests_ovstest_SOURCES = \
 	tests/test-packets.c \
 	tests/test-random.c \
 	tests/test-rcu.c \
+	tests/test-rculist.c \
 	tests/test-reconnect.c \
 	tests/test-rstp.c \
 	tests/test-sflow.c \
