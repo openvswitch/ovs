@@ -2242,7 +2242,7 @@ netdev_offload_dpdk_actions(struct netdev *netdev,
                             struct nlattr *nl_actions,
                             size_t actions_len)
 {
-    const struct rte_flow_attr flow_attr = { .ingress = 1, .transfer = 1 };
+    const struct rte_flow_attr flow_attr = { .transfer = 1, };
     struct flow_actions actions = {
         .actions = NULL,
         .cnt = 0,
