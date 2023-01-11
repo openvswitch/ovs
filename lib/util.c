@@ -2371,11 +2371,9 @@ xsleep(unsigned int seconds)
     ovsrcu_quiesce_end();
 }
 
-/* High resolution sleep. */
-void
-xnanosleep(uint64_t nanoseconds)
+static void
+xnanosleep__(uint64_t nanoseconds)
 {
-    ovsrcu_quiesce_start();
 #ifndef _WIN32
     int retval;
     struct timespec ts_sleep;
@@ -2403,7 +2401,22 @@ xnanosleep(uint64_t nanoseconds)
                        ovs_lasterror_to_string());
     }
 #endif
+}
+
+/* High resolution sleep with thread quiesce. */
+void
+xnanosleep(uint64_t nanoseconds)
+{
+    ovsrcu_quiesce_start();
+    xnanosleep__(nanoseconds);
     ovsrcu_quiesce_end();
+}
+
+/* High resolution sleep without thread quiesce. */
+void
+xnanosleep_no_quiesce(uint64_t nanoseconds)
+{
+    xnanosleep__(nanoseconds);
 }
 
 /* Determine whether standard output is a tty or not. This is useful to decide
