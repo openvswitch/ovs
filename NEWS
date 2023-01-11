@@ -30,6 +30,9 @@ Post-v3.0.0
    - Userspace datapath:
      * Add '-secs' argument to appctl 'dpif-netdev/pmd-rxq-show' to show
        the pmd usage of an Rx queue over a configurable time period.
+     * Add new experimental PMD load based sleeping feature. PMD threads can
+       request to sleep up to a user configured 'pmd-maxsleep' value under
+       low load conditions.
 
 
 v3.0.0 - 15 Aug 2022

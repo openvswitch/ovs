@@ -171,6 +171,11 @@ static struct odp_support dp_netdev_support = {
 /* Time in microseconds to try RCU quiescing. */
 #define PMD_RCU_QUIESCE_INTERVAL 10000LL
 
+/* Number of pkts Rx on an interface that will stop pmd thread sleeping. */
+#define PMD_SLEEP_THRESH (NETDEV_MAX_BURST / 2)
+/* Time in uS to increment a pmd thread sleep time. */
+#define PMD_SLEEP_INC_US 10
+
 struct dpcls {
     struct cmap_node node;      /* Within dp_netdev_pmd_thread.classifiers */
     odp_port_t in_port;
@@ -279,6 +284,8 @@ struct dp_netdev {
     atomic_uint32_t emc_insert_min;
     /* Enable collection of PMD performance metrics. */
     atomic_bool pmd_perf_metrics;
+    /* Max load based sleep request. */
+    atomic_uint64_t pmd_max_sleep;
     /* Enable the SMC cache from ovsdb config */
     atomic_bool smc_enable_db;
 
@@ -4821,8 +4828,10 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint64_t rebalance_intvl;
     uint8_t cur_rebalance_load;
     uint32_t rebalance_load, rebalance_improve;
+    uint64_t  pmd_max_sleep, cur_pmd_max_sleep;
     bool log_autolb = false;
     enum sched_assignment_type pmd_rxq_assign_type;
+    static bool first_set_config = true;
 
     tx_flush_interval = smap_get_int(other_config, "tx-flush-interval",
                                      DEFAULT_TX_FLUSH_INTERVAL);
@@ -4969,6 +4978,19 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     bool autolb_state = smap_get_bool(other_config, "pmd-auto-lb", false);
 
     set_pmd_auto_lb(dp, autolb_state, log_autolb);
+
+    pmd_max_sleep = smap_get_ullong(other_config, "pmd-maxsleep", 0);
+    pmd_max_sleep = ROUND_UP(pmd_max_sleep, 10);
+    pmd_max_sleep = MIN(PMD_RCU_QUIESCE_INTERVAL, pmd_max_sleep);
+    atomic_read_relaxed(&dp->pmd_max_sleep, &cur_pmd_max_sleep);
+    if (first_set_config || pmd_max_sleep != cur_pmd_max_sleep) {
+        atomic_store_relaxed(&dp->pmd_max_sleep, pmd_max_sleep);
+        VLOG_INFO("PMD max sleep request is %"PRIu64" usecs.", pmd_max_sleep);
+        VLOG_INFO("PMD load based sleeps are %s.",
+                  pmd_max_sleep ? "enabled" : "disabled" );
+    }
+
+    first_set_config  = false;
     return 0;
 }
 
@@ -6929,6 +6951,7 @@ pmd_thread_main(void *f_)
     int poll_cnt;
     int i;
     int process_packets = 0;
+    uint64_t sleep_time = 0;
 
     poll_list = NULL;
 
@@ -6989,10 +7012,13 @@ reload:
     ovs_mutex_lock(&pmd->perf_stats.stats_mutex);
     for (;;) {
         uint64_t rx_packets = 0, tx_packets = 0;
+        uint64_t time_slept = 0;
+        uint64_t max_sleep;
 
         pmd_perf_start_iteration(s);
 
         atomic_read_relaxed(&pmd->dp->smc_enable_db, &pmd->ctx.smc_enable_db);
+        atomic_read_relaxed(&pmd->dp->pmd_max_sleep, &max_sleep);
 
         for (i = 0; i < poll_cnt; i++) {
 
@@ -7011,6 +7037,9 @@ reload:
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq,
                                            poll_list[i].port_no);
             rx_packets += process_packets;
+            if (process_packets >= PMD_SLEEP_THRESH) {
+                sleep_time = 0;
+            }
         }
 
         if (!rx_packets) {
@@ -7018,7 +7047,30 @@ reload:
              * Check if we need to send something.
              * There was no time updates on current iteration. */
             pmd_thread_ctx_time_update(pmd);
-            tx_packets = dp_netdev_pmd_flush_output_packets(pmd, false);
+            tx_packets = dp_netdev_pmd_flush_output_packets(pmd,
+                                                   max_sleep && sleep_time
+                                                   ? true : false);
+        }
+
+        if (max_sleep) {
+            /* Check if a sleep should happen on this iteration. */
+            if (sleep_time) {
+                struct cycle_timer sleep_timer;
+
+                cycle_timer_start(&pmd->perf_stats, &sleep_timer);
+                xnanosleep_no_quiesce(sleep_time * 1000);
+                time_slept = cycle_timer_stop(&pmd->perf_stats, &sleep_timer);
+                pmd_thread_ctx_time_update(pmd);
+            }
+            if (sleep_time < max_sleep) {
+                /* Increase sleep time for next iteration. */
+                sleep_time += PMD_SLEEP_INC_US;
+            } else {
+                sleep_time = max_sleep;
+            }
+        } else {
+            /* Reset sleep time as max sleep policy may have been changed. */
+            sleep_time = 0;
         }
 
         /* Do RCU synchronization at fixed interval.  This ensures that
@@ -7058,7 +7110,7 @@ reload:
             break;
         }
 
-        pmd_perf_end_iteration(s, rx_packets, tx_packets,
+        pmd_perf_end_iteration(s, rx_packets, tx_packets, time_slept,
                                pmd_perf_metrics_enabled(pmd));
     }
     ovs_mutex_unlock(&pmd->perf_stats.stats_mutex);
@@ -9909,7 +9961,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                            struct polled_queue *poll_list, int poll_cnt)
 {
     struct dpcls *cls;
-    uint64_t tot_idle = 0, tot_proc = 0;
+    uint64_t tot_idle = 0, tot_proc = 0, tot_sleep = 0;
     unsigned int pmd_load = 0;
 
     if (pmd->ctx.now > pmd->next_cycle_store) {
@@ -9926,10 +9978,13 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                        pmd->prev_stats[PMD_CYCLES_ITER_IDLE];
             tot_proc = pmd->perf_stats.counters.n[PMD_CYCLES_ITER_BUSY] -
                        pmd->prev_stats[PMD_CYCLES_ITER_BUSY];
+            tot_sleep = pmd->perf_stats.counters.n[PMD_CYCLES_SLEEP] -
+                        pmd->prev_stats[PMD_CYCLES_SLEEP];
 
             if (pmd_alb->is_enabled && !pmd->isolated) {
                 if (tot_proc) {
-                    pmd_load = ((tot_proc * 100) / (tot_idle + tot_proc));
+                    pmd_load = ((tot_proc * 100) /
+                                    (tot_idle + tot_proc + tot_sleep));
                 }
 
                 atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
@@ -9946,6 +10001,8 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                         pmd->perf_stats.counters.n[PMD_CYCLES_ITER_IDLE];
         pmd->prev_stats[PMD_CYCLES_ITER_BUSY] =
                         pmd->perf_stats.counters.n[PMD_CYCLES_ITER_BUSY];
+        pmd->prev_stats[PMD_CYCLES_SLEEP] =
+                        pmd->perf_stats.counters.n[PMD_CYCLES_SLEEP];
 
         /* Get the cycles that were used to process each queue and store. */
         for (unsigned i = 0; i < poll_cnt; i++) {

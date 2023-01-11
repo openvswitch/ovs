@@ -324,5 +324,59 @@ A user can use this option to set a minimum frequency of Rx queue to PMD
 reassignment due to PMD Auto Load Balance. For example, this could be set
 (in min) such that a reassignment is triggered at most every few hours.
 
+PMD load based sleeping (Experimental)
+--------------------------------------
+
+PMD threads constantly poll Rx queues which are assigned to them. In order to
+reduce the CPU cycles they use, they can sleep for small periods of time
+when there is no load or very-low load on all the Rx queues they poll.
+
+This can be enabled by setting the max requested sleep time (in microseconds)
+for a PMD thread::
+
+    $ ovs-vsctl set open_vswitch . other_config:pmd-maxsleep=500
+
+Non-zero values will be rounded up to the nearest 10 microseconds to avoid
+requesting very small sleep times.
+
+With a non-zero max value a PMD may request to sleep by an incrementing amount
+of time up to the maximum time. If at any point the threshold of at least half
+a batch of packets (i.e. 16) is received from an Rx queue that the PMD is
+polling is met, the requested sleep time will be reset to 0. At that point no
+sleeps will occur until the no/low load conditions return.
+
+Sleeping in a PMD thread will mean there is a period of time when the PMD
+thread will not process packets. Sleep times requested are not guaranteed
+and can differ significantly depending on system configuration. The actual
+time not processing packets will be determined by the sleep and processor
+wake-up times and should be tested with each system configuration.
+
+Sleep time statistics for 10 secs can be seen with::
+
+    $ ovs-appctl dpif-netdev/pmd-stats-clear \
+        && sleep 10 && ovs-appctl dpif-netdev/pmd-perf-show
+
+Example output, showing that during the last 10 seconds, 76.8% of iterations
+had a sleep of some length. The total amount of sleep time was 9.15 seconds and
+the average sleep time per iteration was 46 microseconds::
+
+   - sleep iterations:       153994  ( 76.8 % of iterations)
+   Sleep time (us):         9159399  ( 59 us/iteration avg.)
+
+Any potential power saving from PMD load based sleeping is dependent on the
+system configuration (e.g. enabling processor C-states) and workloads.
+
+.. note::
+
+    If there is a sudden spike of packets while the PMD thread is sleeping and
+    the processor is in a low-power state it may result in some lost packets or
+    extra latency before the PMD thread returns to processing packets at full
+    rate.
+
+.. note::
+
+    By default Linux kernel groups timer expirations and this can add an
+    overhead of up to 50 microseconds to a requested timer expiration.
+
 .. _ovs-vswitchd(8):
     http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html
