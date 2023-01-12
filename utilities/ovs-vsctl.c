@@ -180,6 +180,7 @@ main(int argc, char *argv[])
     ovsdb_idl_set_shuffle_remotes(idl, shuffle_remotes);
     ovsdb_idl_set_remote(idl, db, retry);
     ovsdb_idl_set_leader_only(idl, leader_only);
+    ovsdb_idl_set_db_change_aware(idl, false);
     run_prerequisites(commands, n_commands, idl);
 
     /* Execute the commands.
