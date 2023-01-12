@@ -321,6 +321,14 @@ ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *idl, bool shuffle)
     ovsdb_cs_set_shuffle_remotes(idl->cs, shuffle);
 }
 
+/* Passes 'set_db_change_aware' to ovsdb_cs_set_db_change_aware().  See that
+ * function for documentation. */
+void
+ovsdb_idl_set_db_change_aware(struct ovsdb_idl *idl, bool set_db_change_aware)
+{
+    ovsdb_cs_set_db_change_aware(idl->cs, set_db_change_aware);
+}
+
 /* Reset min_index to 0. This prevents a situation where the client
  * thinks all databases have stale data, when they actually have all
  * been destroyed and rebuilt from scratch.

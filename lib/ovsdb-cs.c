@@ -219,6 +219,9 @@ struct ovsdb_cs {
     struct uuid cid;
     struct hmap server_rows;
 
+    /* Whether to send 'set_db_change_aware'. */
+    bool set_db_change_aware;
+
     /* Clustered servers. */
     uint64_t min_index;      /* Minimum allowed index, to avoid regression. */
     bool leader_only;        /* If true, do not connect to Raft followers. */
@@ -331,6 +334,7 @@ ovsdb_cs_create(const char *db_name, int max_version,
     cs->request_id = NULL;
     cs->leader_only = true;
     cs->shuffle_remotes = true;
+    cs->set_db_change_aware = true;
     hmap_init(&cs->server_rows);
 
     return cs;
@@ -461,7 +465,7 @@ ovsdb_cs_process_response(struct ovsdb_cs *cs, struct jsonrpc_msg *msg)
             cs->server.monitor_version = cs->server.max_version;
             ovsdb_cs_db_parse_monitor_reply(&cs->server, msg->result,
                                             cs->server.monitor_version);
-            if (ovsdb_cs_check_server_db(cs)) {
+            if (ovsdb_cs_check_server_db(cs) && cs->set_db_change_aware) {
                 ovsdb_cs_send_db_change_aware(cs);
             }
         } else {
@@ -1148,6 +1152,22 @@ ovsdb_cs_send_cond_change(struct ovsdb_cs *cs)
         cs->request_id = json_clone(msg->id);
         jsonrpc_session_send(cs->session, msg);
     }
+}
+
+/* Database change awareness. */
+
+/* By default, or if 'set_db_change_aware' is true, 'cs' will send
+ * 'set_db_change_aware' request to the server after receiving the _SERVER data
+ * (when the server supports it), which is useful for clients that intends to
+ * keep long connections to the server.  Otherwise, 'cs' will not send the
+ * 'set_db_change_aware' request, which is more reasonable for short-lived
+ * connections to avoid unnecessary processing at the server side and possible
+ * error handling due to connections being closed by the clients before the
+ * responses are sent by the server. */
+void
+ovsdb_cs_set_db_change_aware(struct ovsdb_cs *cs, bool set_db_change_aware)
+{
+    cs->set_db_change_aware = set_db_change_aware;
 }
 
 /* Clustered servers. */
