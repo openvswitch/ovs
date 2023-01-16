@@ -134,8 +134,8 @@ override_dh_python3:
 # Helper target for creating snapshots from upstream git
 DATE=$(shell date +%Y%m%d)
 # Upstream branch to track
-BRANCH=branch-3.0
-VERSION=3.0.0
+BRANCH=branch-3.1
+VERSION=3.1.0
 
 get-orig-snapshot:
 	rm -Rf openvswitch-upstream

@@ -1,4 +1,4 @@
-Post-v3.0.0
+v3.1.0 - xx xxx xxxx
 --------------------
    - ovs-vswitchd now detects changes in CPU affinity and adjusts the number
      of handler and revalidator threads if necessary.
