@@ -25,6 +25,9 @@ Post-v3.0.0
      * New option '--dump-hugepages' to include hugepages in core dumps. This
        can assist with postmortem analysis involving DPDK, but may also produce
        significantly larger core dump files.
+   - ovs-dpctl and 'ovs-appctl dpctl/' commands:
+     * 'flush-conntrack' is now capable of handling partial 5-tuple,
+        with additional optional parameter to specify the reply direction.
    - Support for travis-ci.org based continuous integration builds has been
      dropped.
    - Userspace datapath:

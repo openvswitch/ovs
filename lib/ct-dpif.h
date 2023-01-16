@@ -20,6 +20,8 @@
 #include "openvswitch/types.h"
 #include "packets.h"
 
+struct ofp_ct_match;
+
 union ct_dpif_inet_addr {
     ovs_be32 ip;
     ovs_be32 ip6[4];
@@ -285,7 +287,7 @@ int ct_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
 int ct_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_entry *);
 int ct_dpif_dump_done(struct ct_dpif_dump_state *);
 int ct_dpif_flush(struct dpif *, const uint16_t *zone,
-                  const struct ct_dpif_tuple *);
+                  const struct ofp_ct_match *);
 int ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns);
 int ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns);
 int ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns);
@@ -311,7 +313,6 @@ void ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto);
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
-bool ct_dpif_parse_tuple(struct ct_dpif_tuple *, const char *s, struct ds *);
 void ct_dpif_push_zone_limit(struct ovs_list *, uint16_t zone, uint32_t limit,
                              uint32_t count);
 void ct_dpif_free_zone_limits(struct ovs_list *);

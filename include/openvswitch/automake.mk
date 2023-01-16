@@ -15,6 +15,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/ofp-actions.h \
 	include/openvswitch/ofp-bundle.h \
 	include/openvswitch/ofp-connection.h \
+	include/openvswitch/ofp-ct.h \
 	include/openvswitch/ofp-ed-props.h \
 	include/openvswitch/ofp-errors.h \
 	include/openvswitch/ofp-flow.h \
