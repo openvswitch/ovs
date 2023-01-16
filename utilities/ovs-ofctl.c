@@ -48,6 +48,7 @@
 #include "openvswitch/meta-flow.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-bundle.h"
+#include "openvswitch/ofp-ct.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-group.h"
 #include "openvswitch/ofp-match.h"
@@ -485,6 +486,9 @@ usage(void)
            "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
            "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
            "  ct-flush-zone SWITCH ZONE   flush conntrack entries in ZONE\n"
+           "  ct-flush SWITCH [ZONE] [CT_ORIG_TUPLE [CT_REPLY_TUPLE]]\n"
+           "                              flush conntrack entries specified\n"
+           "                              by CT_ORIG/REPLY_TUPLE and ZONE\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -3051,6 +3055,50 @@ ofctl_ct_flush_zone(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_ct_flush(struct ovs_cmdl_context *ctx)
+{
+    struct vconn *vconn;
+    struct ofp_ct_match match = {0};
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    uint16_t zone, *pzone = NULL;
+    int args = ctx->argc - 2;
+
+    /* Parse zone. */
+    if (args && !strncmp(ctx->argv[2], "zone=", 5)) {
+        if (!ovs_scan(ctx->argv[2], "zone=%"SCNu16, &zone)) {
+            ovs_fatal(0, "Failed to parse zone");
+        }
+        pzone = &zone;
+        args--;
+    }
+
+    /* Parse ct tuples. */
+    for (int i = 0; i < 2; i++) {
+        if (!args) {
+            break;
+        }
+
+        struct ofp_ct_tuple *tuple =
+            i ? &match.tuple_reply : &match.tuple_orig;
+        const char *arg = ctx->argv[ctx->argc - args];
+
+        if (arg[0] && !ofp_ct_tuple_parse(tuple, arg, &ds, &match.ip_proto,
+                                          &match.l3_type)) {
+            ovs_fatal(0, "Failed to parse ct-tuple: %s", ds_cstr(&ds));
+        }
+        args--;
+    }
+
+    open_vconn(ctx->argv[1], &vconn);
+    enum ofp_version version = vconn_get_version(vconn);
+    struct ofpbuf *msg = ofp_ct_match_encode(&match, pzone, version);
+
+    ds_destroy(&ds);
+    transact_noreply(vconn, msg);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
 {
     dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_FLOW_REQUEST);
@@ -5062,6 +5110,9 @@ static const struct ovs_cmdl_command all_commands[] = {
 
     { "ct-flush-zone", "switch zone",
       2, 2, ofctl_ct_flush_zone, OVS_RO },
+
+    { "ct-flush", "switch [zone=N] [ct-orig-tuple [ct-reply-tuple]]",
+      1, 4, ofctl_ct_flush, OVS_RO },
 
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse, OVS_RW },

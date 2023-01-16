@@ -22,6 +22,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#include "openflow/nicira-ext.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -58,6 +60,12 @@ bool ofp_ct_tuple_is_five_tuple(const struct ofp_ct_tuple *, uint8_t ip_proto);
 void ofp_ct_match_format(struct ds *, const struct ofp_ct_match *);
 bool ofp_ct_tuple_parse(struct ofp_ct_tuple *, const char *,
                         struct ds *, uint8_t *ip_proto, uint16_t *l3_type);
+
+enum ofperr ofp_ct_match_decode(struct ofp_ct_match *, bool *with_zone,
+                                uint16_t *zone_id, const struct ofp_header *);
+struct ofpbuf *ofp_ct_match_encode(const struct ofp_ct_match *,
+                                   uint16_t *zone_id,
+                                   enum ofp_version version);
 
 #ifdef __cplusplus
 }

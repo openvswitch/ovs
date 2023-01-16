@@ -4073,3 +4073,111 @@ AT_CHECK([ovs-ofctl ofp-print "\
 NXT_CT_FLUSH_ZONE (xid=0x3): zone_id=13
 ])
 AT_CLEANUP
+
+AT_SETUP([NXT_CT_FLUSH])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 18 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 20 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=13 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 68 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+00 00 00 48 00 00 00 00 \
+00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 01 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+00 02 00 08 00 50 00 00 \
+00 03 00 08 1f 90 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=13 'ct_nw_src=10.10.0.1,ct_nw_dst=10.10.0.2,ct_tp_src=80,ct_tp_dst=8080,ct_nw_proto=6' 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 68 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+00 01 00 48 00 00 00 00 \
+00 01 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+00 03 00 08 00 50 00 00 \
+00 02 00 08 1f 90 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=13 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_nw_src=10.10.0.2,ct_nw_dst=10.10.0.1,ct_tp_src=8080,ct_tp_dst=80'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 b0 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+00 00 00 48 00 00 00 00 \
+00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 01 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+00 02 00 08 00 50 00 00 \
+00 03 00 08 1f 90 00 00 \
+00 01 00 48 00 00 00 00 \
+00 01 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+00 03 00 08 00 50 00 00 \
+00 02 00 08 1f 90 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=13 'ct_nw_src=10.10.0.1,ct_nw_dst=10.10.0.2,ct_tp_src=80,ct_tp_dst=8080,ct_nw_proto=6' 'ct_nw_src=10.10.0.2,ct_nw_dst=10.10.0.1,ct_tp_src=8080,ct_tp_dst=80'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 b8 00 00 00 03 00 00 23 20 00 00 00 20 \
+01 \
+00 00 00 00 00 00 00 \
+00 00 00 50 00 00 00 00 \
+00 00 00 14 fd 18 00 00 00 00 00 00 00 00 ff ff ab cd 00 01 00 00 00 00 \
+00 01 00 14 fd 18 00 00 00 00 00 00 00 00 ff ff ab cd 00 02 00 00 00 00 \
+00 04 00 08 00 0a 00 00 \
+00 05 00 05 01 00 00 00 \
+00 06 00 05 02 00 00 00 \
+00 01 00 50 00 00 00 00 \
+00 01 00 14 fd 18 00 00 00 00 00 00 00 00 ff ff ab cd 00 02 00 00 00 00 \
+00 00 00 14 fd 18 00 00 00 00 00 00 00 00 ff ff ab cd 00 01 00 00 00 00 \
+00 04 00 08 00 0a 00 00 \
+00 05 00 05 03 00 00 00 \
+00 06 00 05 04 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 'ct_ipv6_src=fd18::ffff:abcd:1,ct_ipv6_dst=fd18::ffff:abcd:2,icmp_id=10,icmp_type=1,icmp_code=2,ct_nw_proto=1' 'ct_ipv6_src=fd18::ffff:abcd:1,ct_ipv6_dst=fd18::ffff:abcd:2,icmp_id=10,icmp_type=3,icmp_code=4'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 58 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+00 00 00 38 00 00 00 00 \
+00 00 00 14 00 0a 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 01 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+" | grep -q OFPBPC_BAD_VALUE], [0])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 60 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 02 00 08 00 0d 00 00 \
+00 00 00 20 00 00 00 00 \
+00 00 00 14 00 0a 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 01 00 00 00 00 \
+00 01 00 20 00 00 00 00 \
+00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
+" | grep -q OFPBPC_BAD_VALUE], [0])
+AT_CLEANUP

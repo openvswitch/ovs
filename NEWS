@@ -21,6 +21,9 @@ Post-v3.0.0
      10 Gbps link speed by default in case the actual link speed cannot be
      determined.  Previously it was 10 Mbps.  Values can still be overridden
      by specifying 'max-rate' or '[r]stp-path-cost' accordingly.
+   - OpenFlow:
+     * New OpenFlow extension NXT_CT_FLUSH to flush connections matching
+       the specified fields.
    - ovs-ctl:
      * New option '--dump-hugepages' to include hugepages in core dumps. This
        can assist with postmortem analysis involving DPDK, but may also produce
@@ -28,6 +31,9 @@ Post-v3.0.0
    - ovs-dpctl and 'ovs-appctl dpctl/' commands:
      * 'flush-conntrack' is now capable of handling partial 5-tuple,
         with additional optional parameter to specify the reply direction.
+   - ovs-ofctl:
+     * New command 'flush-conntrack' that accepts zone and 5-tuple (or partial
+       5-tuple) for both directions.
    - Support for travis-ci.org based continuous integration builds has been
      dropped.
    - Userspace datapath:

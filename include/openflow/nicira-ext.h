@@ -1064,4 +1064,41 @@ struct nx_zone_id {
 };
 OFP_ASSERT(sizeof(struct nx_zone_id) == 8);
 
+/* CT flush available TLVs. */
+enum nx_ct_flush_tlv_type {
+    /* Outer types. */
+    NXT_CT_ORIG_TUPLE = 0,     /* Outer type for original tuple TLV.
+                                * Nested TLVs are specified
+                                * by 'enum nx_ct_flush_tuple_tlv_type'. */
+    NXT_CT_REPLY_TUPLE = 1,    /* Outer type for reply tuple TLV. *
+                                * Nested TLVs are specified
+                                * by 'enum nx_ct_flush_tuple_tlv_type'*/
+    /* Primitive types. */
+    NXT_CT_ZONE_ID = 2,        /* be16 zone id. */
+};
+
+/* CT flush nested TLVs. */
+enum nx_ct_flush_tuple_tlv_type {
+    NXT_CT_TUPLE_SRC = 0,            /* IPv6 or mapped IPv4 address. */
+    NXT_CT_TUPLE_DST = 1,            /* IPv6 or mapped IPv4 address. */
+    NXT_CT_TUPLE_SRC_PORT = 2,       /* be16 source port. */
+    NXT_CT_TUPLE_DST_PORT = 3,       /* be16 destination port. */
+    NXT_CT_TUPLE_ICMP_ID = 4,        /* be16 ICMP id. */
+    NXT_CT_TUPLE_ICMP_TYPE = 5,      /* u8 ICMP type. */
+    NXT_CT_TUPLE_ICMP_CODE = 6,      /* u8 ICMP code. */
+};
+
+/* NXT_CT_FLUSH.
+ *
+ * Flushes the connection tracking entries specified by 5-tuple.
+ * The struct should be followed by TLVs specifying the matching parameters.
+ * Currently there is a limitation for ICMP, in order to partially match on
+ * ICMP parameters the tuple should include at least SRC/DST. */
+struct nx_ct_flush {
+    uint8_t ip_proto;          /* IP protocol. */
+    uint8_t pad[7];            /* Align to 64 bits (must be zero). */
+    /* Followed by optional TLVs of type 'enum nx_ct_flush_tlv_type'. */
+};
+OFP_ASSERT(sizeof(struct nx_ct_flush) == 8);
+
 #endif /* openflow/nicira-ext.h */

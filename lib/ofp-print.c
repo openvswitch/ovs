@@ -45,6 +45,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-bundle.h"
 #include "openvswitch/ofp-connection.h"
+#include "openvswitch/ofp-ct.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-group.h"
 #include "openvswitch/ofp-ipfix.h"
@@ -950,6 +951,23 @@ ofp_print_nxt_ct_flush_zone(struct ds *string, const struct nx_zone_id *nzi)
 }
 
 static enum ofperr
+ofp_print_nxt_ct_flush(struct ds *string, const struct ofp_header *oh)
+{
+    uint16_t zone_id = 0;
+    struct ofp_ct_match match = {0};
+
+    enum ofperr error = ofp_ct_match_decode(&match, NULL, &zone_id, oh);
+    if (error) {
+        return error;
+    }
+
+    ds_put_format(string, " zone=%"PRIu16" ", zone_id);
+    ofp_ct_match_format(string, &match);
+
+    return 0;
+}
+
+static enum ofperr
 ofp_to_string__(const struct ofp_header *oh,
                 const struct ofputil_port_map *port_map,
                 const struct ofputil_table_map *table_map, enum ofpraw raw,
@@ -1184,6 +1202,8 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPTYPE_CT_FLUSH_ZONE:
         return ofp_print_nxt_ct_flush_zone(string, ofpmsg_body(oh));
+    case OFPTYPE_CT_FLUSH:
+        return ofp_print_nxt_ct_flush(string, oh);
     }
 
     return 0;

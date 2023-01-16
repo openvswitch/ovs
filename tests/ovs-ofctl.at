@@ -3271,3 +3271,41 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sed '/OFPST_FLO
 
 OVS_VSWITCHD_STOP(["/Flow exceeded the maximum flow statistics reply size and was excluded from the response set/d"])
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl ct-flush])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl vlog/set ct_dpif:dbg])
+
+# Check flush conntrack with both zone and tuple
+AT_CHECK([ovs-ofctl ct-flush br0 zone=5 'ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1'])
+
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 1])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=5 'ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_tp_src=1,ct_tp_dst=0,ct_nw_proto=17' 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0'" ovs-vswitchd.log])
+
+# Check flush-conntrack just with tuple
+AT_CHECK([ovs-ofctl ct-flush br0 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_nw_proto=17,ct_tp_src=1'])
+
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 2])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_tp_src=1,ct_tp_dst=0,ct_nw_proto=17' 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0'" ovs-vswitchd.log])
+
+# Check flush-conntrack with reply tuple
+AT_CHECK([ovs-ofctl ct-flush br0 '' 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_nw_proto=17,ct_tp_src=1'])
+
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 3])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=17' 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_tp_src=1,ct_tp_dst=0'" ovs-vswitchd.log])
+
+# Check flush-conntrack with zone and reply tuple
+AT_CHECK([ovs-ofctl ct-flush br0 zone=5 '' 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_nw_proto=17,ct_tp_src=1'])
+
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 4])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=5 'ct_nw_src=::,ct_nw_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=17' 'ct_nw_src=10.1.1.3,ct_nw_dst=10.1.1.4,ct_tp_src=1,ct_tp_dst=0'" ovs-vswitchd.log])
+
+# Check flush-conntrack without any tuple and zone
+AT_CHECK([ovs-ofctl ct-flush br0])
+
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 5])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: <all>" ovs-vswitchd.log])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

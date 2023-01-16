@@ -5358,11 +5358,12 @@ type_set_config(const char *type, const struct smap *other_config)
 }
 
 static void
-ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
+ct_flush(const struct ofproto *ofproto_, const uint16_t *zone,
+         const struct ofp_ct_match *match)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    ct_dpif_flush(ofproto->backer->dpif, zone, NULL);
+    ct_dpif_flush(ofproto->backer->dpif, zone, match);
 }
 
 static struct ct_timeout_policy *
@@ -5674,6 +5675,10 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
     smap_add(cap, "add_mpls", s.add_mpls ? "true" : "false");
+
+    /* The ct_tuple_flush is implemented on dpif level, so it is supported
+     * for all backers. */
+    smap_add(cap, "ct_flush", "true");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and

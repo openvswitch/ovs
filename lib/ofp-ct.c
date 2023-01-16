@@ -23,8 +23,12 @@
 
 #include "ct-dpif.h"
 #include "openvswitch/ofp-ct.h"
+#include "openflow/nicira-ext.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/packets.h"
 
@@ -210,4 +214,196 @@ error_with_msg:
 error:
     free(copy);
     return false;
+}
+
+static enum ofperr
+ofpprop_pull_ipv6(struct ofpbuf *property, struct in6_addr *addr,
+                  uint16_t *l3_type)
+{
+    if (ofpbuf_msgsize(property) < sizeof *addr) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    memcpy(addr, property->msg, sizeof *addr);
+
+    uint16_t l3 = 0;
+    if (!ipv6_is_zero(addr)) {
+        l3 = IN6_IS_ADDR_V4MAPPED(addr) ? AF_INET : AF_INET6;
+    }
+
+    if (*l3_type && l3 && *l3_type != l3) {
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+
+    *l3_type = l3;
+
+    return 0;
+}
+
+static enum ofperr
+ofp_ct_tuple_decode_nested(struct ofpbuf *property, struct ofp_ct_tuple *tuple,
+                           uint16_t *l3_type)
+{
+    struct ofpbuf nested;
+    enum ofperr error = ofpprop_parse_nested(property, &nested);
+    if (error) {
+        return error;
+    }
+
+    while (nested.size) {
+        struct ofpbuf inner;
+        uint64_t type;
+
+        error = ofpprop_pull(&nested, &inner, &type);
+        if (error) {
+            return error;
+        }
+        switch (type) {
+        case NXT_CT_TUPLE_SRC:
+            error = ofpprop_pull_ipv6(&inner, &tuple->src, l3_type);
+            break;
+
+        case NXT_CT_TUPLE_DST:
+            error = ofpprop_pull_ipv6(&inner, &tuple->dst, l3_type);
+            break;
+
+        case NXT_CT_TUPLE_SRC_PORT:
+            error = ofpprop_parse_be16(&inner, &tuple->src_port);
+            break;
+
+        case NXT_CT_TUPLE_DST_PORT:
+            error = ofpprop_parse_be16(&inner, &tuple->dst_port);
+            break;
+
+        case NXT_CT_TUPLE_ICMP_ID:
+            error = ofpprop_parse_be16(&inner, &tuple->icmp_id);
+            break;
+
+        case NXT_CT_TUPLE_ICMP_TYPE:
+            error = ofpprop_parse_u8(&inner, &tuple->icmp_type);
+            break;
+
+        case NXT_CT_TUPLE_ICMP_CODE:
+            error = ofpprop_parse_u8(&inner, &tuple->icmp_code);
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+static void
+ofp_ct_tuple_encode(const struct ofp_ct_tuple *tuple, struct ofpbuf *buf,
+                    enum nx_ct_flush_tlv_type type, uint8_t ip_proto)
+{
+    /* 128 B is enough to hold the whole tuple. */
+    uint8_t stub[128];
+    struct ofpbuf nested = OFPBUF_STUB_INITIALIZER(stub);
+
+    if (!ipv6_is_zero(&tuple->src)) {
+        ofpprop_put(&nested, NXT_CT_TUPLE_SRC, &tuple->src, sizeof tuple->src);
+    }
+
+    if (!ipv6_is_zero(&tuple->dst)) {
+        ofpprop_put(&nested, NXT_CT_TUPLE_DST, &tuple->dst, sizeof tuple->dst);
+    }
+
+    if (ip_proto == IPPROTO_ICMP || ip_proto == IPPROTO_ICMPV6) {
+        ofpprop_put_be16(&nested, NXT_CT_TUPLE_ICMP_ID, tuple->icmp_id);
+        ofpprop_put_u8(&nested, NXT_CT_TUPLE_ICMP_TYPE, tuple->icmp_type);
+        ofpprop_put_u8(&nested, NXT_CT_TUPLE_ICMP_CODE, tuple->icmp_code);
+    } else {
+        if (tuple->src_port) {
+            ofpprop_put_be16(&nested, NXT_CT_TUPLE_SRC_PORT, tuple->src_port);
+        }
+
+        if (tuple->dst_port) {
+            ofpprop_put_be16(&nested, NXT_CT_TUPLE_DST_PORT, tuple->dst_port);
+        }
+    }
+
+    if (nested.size) {
+        ofpprop_put_nested(buf, type, &nested);
+    }
+
+    ofpbuf_uninit(&nested);
+}
+
+enum ofperr
+ofp_ct_match_decode(struct ofp_ct_match *match, bool *with_zone,
+                    uint16_t *zone_id, const struct ofp_header *oh)
+{
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    const struct nx_ct_flush *nx_flush = ofpbuf_pull(&msg, sizeof *nx_flush);
+
+    if (!is_all_zeros(nx_flush->pad, sizeof nx_flush->pad)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    match->ip_proto = nx_flush->ip_proto;
+
+    struct ofp_ct_tuple *orig = &match->tuple_orig;
+    struct ofp_ct_tuple *reply = &match->tuple_reply;
+
+    while (msg.size) {
+        struct ofpbuf property;
+        uint64_t type;
+
+        enum ofperr error = ofpprop_pull(&msg, &property, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case NXT_CT_ORIG_TUPLE:
+            error = ofp_ct_tuple_decode_nested(&property, orig,
+                                               &match->l3_type);
+            break;
+
+        case NXT_CT_REPLY_TUPLE:
+            error = ofp_ct_tuple_decode_nested(&property, reply,
+                                               &match->l3_type);
+            break;
+
+        case NXT_CT_ZONE_ID:
+            if (with_zone) {
+                *with_zone = true;
+            }
+            error = ofpprop_parse_u16(&property, zone_id);
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+struct ofpbuf *
+ofp_ct_match_encode(const struct ofp_ct_match *match, uint16_t *zone_id,
+                    enum ofp_version version)
+{
+    struct ofpbuf *msg = ofpraw_alloc(OFPRAW_NXT_CT_FLUSH, version, 0);
+    struct nx_ct_flush *nx_flush = ofpbuf_put_zeros(msg, sizeof *nx_flush);
+    const struct ofp_ct_tuple *orig = &match->tuple_orig;
+    const struct ofp_ct_tuple *reply = &match->tuple_reply;
+
+    nx_flush->ip_proto = match->ip_proto;
+
+    ofp_ct_tuple_encode(orig, msg, NXT_CT_ORIG_TUPLE,match->ip_proto);
+    ofp_ct_tuple_encode(reply, msg, NXT_CT_REPLY_TUPLE, match->ip_proto);
+
+    if (zone_id) {
+        ofpprop_put_u16(msg, NXT_CT_ZONE_ID, *zone_id);
+    }
+
+    return msg;
 }

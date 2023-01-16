@@ -292,6 +292,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
     case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
     case OFPTYPE_CT_FLUSH_ZONE:
+    case OFPTYPE_CT_FLUSH:
         break;
     }
 
