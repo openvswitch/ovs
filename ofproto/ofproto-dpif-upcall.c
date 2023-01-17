@@ -2099,6 +2099,10 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
 {
     long long int metric, now, duration;
 
+    if (!ofproto_min_revalidate_pps) {
+        return true;
+    }
+
     if (!used) {
         /* Always revalidate the first time a flow is dumped. */
         return true;

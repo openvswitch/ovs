@@ -724,7 +724,7 @@ ofproto_set_max_revalidator(unsigned max_revalidator)
 void
 ofproto_set_min_revalidate_pps(unsigned min_revalidate_pps)
 {
-    ofproto_min_revalidate_pps = min_revalidate_pps ? min_revalidate_pps : 1;
+    ofproto_min_revalidate_pps = min_revalidate_pps;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with
