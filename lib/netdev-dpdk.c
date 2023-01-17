@@ -49,6 +49,7 @@
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
 #include "if-notifier.h"
+#include "mpsc-queue.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
@@ -4255,30 +4256,38 @@ destroy_device(int vid)
     }
 }
 
-static int
-vring_state_changed(int vid, uint16_t queue_id, int enable)
+static struct mpsc_queue vhost_state_change_queue
+    = MPSC_QUEUE_INITIALIZER(&vhost_state_change_queue);
+static atomic_uint64_t vhost_state_change_queue_size;
+
+struct vhost_state_change {
+    struct mpsc_queue_node node;
+    char ifname[IF_NAME_SZ];
+    uint16_t queue_id;
+    int enable;
+};
+
+static void
+vring_state_changed__(struct vhost_state_change *sc)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
-    int qid = queue_id / VIRTIO_QNUM;
-    bool is_rx = (queue_id % VIRTIO_QNUM) == VIRTIO_TXQ;
-    char ifname[IF_NAME_SZ];
-
-    rte_vhost_get_ifname(vid, ifname, sizeof ifname);
+    int qid = sc->queue_id / VIRTIO_QNUM;
+    bool is_rx = (sc->queue_id % VIRTIO_QNUM) == VIRTIO_TXQ;
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
         ovs_mutex_lock(&dev->mutex);
-        if (nullable_string_is_equal(ifname, dev->vhost_id)) {
+        if (nullable_string_is_equal(sc->ifname, dev->vhost_id)) {
             if (is_rx) {
                 bool old_state = dev->vhost_rxq_enabled[qid];
 
-                dev->vhost_rxq_enabled[qid] = enable != 0;
+                dev->vhost_rxq_enabled[qid] = sc->enable != 0;
                 if (old_state != dev->vhost_rxq_enabled[qid]) {
                     netdev_change_seq_changed(&dev->up);
                 }
             } else {
-                if (enable) {
+                if (sc->enable) {
                     dev->tx_q[qid].map = qid;
                 } else {
                     dev->tx_q[qid].map = OVS_VHOST_QUEUE_DISABLED;
@@ -4295,11 +4304,69 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
 
     if (exists) {
         VLOG_INFO("State of queue %d ( %s_qid %d ) of vhost device '%s' "
-                  "changed to \'%s\'", queue_id, is_rx == true ? "rx" : "tx",
-                  qid, ifname, (enable == 1) ? "enabled" : "disabled");
+                  "changed to \'%s\'", sc->queue_id, is_rx ? "rx" : "tx",
+                  qid, sc->ifname, sc->enable == 1 ? "enabled" : "disabled");
     } else {
-        VLOG_INFO("vHost Device '%s' not found", ifname);
-        return -1;
+        VLOG_INFO("vHost Device '%s' not found", sc->ifname);
+    }
+}
+
+#define NETDEV_DPDK_VHOST_EVENTS_BACKOFF_MIN 1
+#define NETDEV_DPDK_VHOST_EVENTS_BACKOFF_MAX 64
+static void *
+netdev_dpdk_vhost_events_main(void *arg OVS_UNUSED)
+{
+    mpsc_queue_acquire(&vhost_state_change_queue);
+
+    for (;;) {
+        struct mpsc_queue_node *node;
+        uint64_t backoff;
+
+        backoff = NETDEV_DPDK_VHOST_EVENTS_BACKOFF_MIN;
+        while (mpsc_queue_tail(&vhost_state_change_queue) == NULL) {
+            xnanosleep(backoff * 1E6);
+            if (backoff < NETDEV_DPDK_VHOST_EVENTS_BACKOFF_MAX) {
+                backoff <<= 1;
+            }
+        }
+
+        MPSC_QUEUE_FOR_EACH_POP (node, &vhost_state_change_queue) {
+            struct vhost_state_change *sc;
+
+            sc = CONTAINER_OF(node, struct vhost_state_change, node);
+            vring_state_changed__(sc);
+            free(sc);
+            atomic_count_dec64(&vhost_state_change_queue_size);
+        }
+    }
+
+    OVS_NOT_REACHED();
+    mpsc_queue_release(&vhost_state_change_queue);
+
+    return NULL;
+}
+
+static int
+vring_state_changed(int vid, uint16_t queue_id, int enable)
+{
+    static struct vlog_rate_limit vhost_rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    struct vhost_state_change *sc;
+
+    sc = xmalloc(sizeof *sc);
+    if (!rte_vhost_get_ifname(vid, sc->ifname, sizeof sc->ifname)) {
+        uint64_t queue_size;
+
+        sc->queue_id = queue_id;
+        sc->enable = enable;
+        mpsc_queue_insert(&vhost_state_change_queue, &sc->node);
+        queue_size = atomic_count_inc64(&vhost_state_change_queue_size);
+        if (queue_size >= 1000) {
+            VLOG_WARN_RL(&vhost_rl, "vring state change queue has %"PRIu64" "
+                         "entries. Last update was for socket %s.", queue_size,
+                         sc->ifname);
+        }
+    } else {
+        free(sc);
     }
 
     return 0;
@@ -4366,12 +4433,6 @@ netdev_dpdk_get_vid(const struct netdev_dpdk *dev)
     return ovsrcu_index_get(&dev->vid);
 }
 
-struct ingress_policer *
-netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev)
-{
-    return ovsrcu_get(struct ingress_policer *, &dev->ingress_policer);
-}
-
 static int
 netdev_dpdk_class_init(void)
 {
@@ -4409,7 +4470,26 @@ netdev_dpdk_class_init(void)
     return 0;
 }
 
+static int
+netdev_dpdk_vhost_class_init(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        ovs_thread_create("ovs_vhost", netdev_dpdk_vhost_events_main, NULL);
+        ovsthread_once_done(&once);
+    }
+
+    return 0;
+}
+
 /* QoS Functions */
+
+struct ingress_policer *
+netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev)
+{
+    return ovsrcu_get(struct ingress_policer *, &dev->ingress_policer);
+}
 
 /*
  * Initialize QoS configuration operations.
@@ -5751,6 +5831,7 @@ static const struct netdev_class dpdk_class = {
 static const struct netdev_class dpdk_vhost_class = {
     .type = "dpdkvhostuser",
     NETDEV_DPDK_CLASS_COMMON,
+    .init = netdev_dpdk_vhost_class_init,
     .construct = netdev_dpdk_vhost_construct,
     .destruct = netdev_dpdk_vhost_destruct,
     .send = netdev_dpdk_vhost_send,
@@ -5766,6 +5847,7 @@ static const struct netdev_class dpdk_vhost_class = {
 static const struct netdev_class dpdk_vhost_client_class = {
     .type = "dpdkvhostuserclient",
     NETDEV_DPDK_CLASS_COMMON,
+    .init = netdev_dpdk_vhost_class_init,
     .construct = netdev_dpdk_vhost_client_construct,
     .destruct = netdev_dpdk_vhost_destruct,
     .set_config = netdev_dpdk_vhost_client_set_config,
