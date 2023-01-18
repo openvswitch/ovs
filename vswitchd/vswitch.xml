@@ -807,10 +807,6 @@
           Rx queues that it polls.
         </p>
         <p>
-          To avoid requesting very small sleeps (e.g. less than 10 us) the
-          value will be rounded up to the nearest 10 us.
-        </p>
-        <p>
           The maximum value is <code>10000 microseconds</code>.
         </p>
       </column>
