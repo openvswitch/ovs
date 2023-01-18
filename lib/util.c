@@ -25,6 +25,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 #include "bitmap.h"
@@ -2418,6 +2421,19 @@ xnanosleep_no_quiesce(uint64_t nanoseconds)
 {
     xnanosleep__(nanoseconds);
 }
+
+#if __linux__
+void
+set_timer_resolution(unsigned long nanoseconds)
+{
+    prctl(PR_SET_TIMERSLACK, nanoseconds);
+}
+#else
+void
+set_timer_resolution(unsigned long nanoseconds OVS_UNUSED)
+{
+}
+#endif
 
 /* Determine whether standard output is a tty or not. This is useful to decide
  * whether to use color output or not when --color option for utilities is set

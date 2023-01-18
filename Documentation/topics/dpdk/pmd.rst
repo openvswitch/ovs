@@ -373,10 +373,5 @@ system configuration (e.g. enabling processor C-states) and workloads.
     extra latency before the PMD thread returns to processing packets at full
     rate.
 
-.. note::
-
-    By default Linux kernel groups timer expirations and this can add an
-    overhead of up to 50 microseconds to a requested timer expiration.
-
 .. _ovs-vswitchd(8):
     http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html
