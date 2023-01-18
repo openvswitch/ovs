@@ -177,7 +177,7 @@ static struct odp_support dp_netdev_support = {
 /* Number of pkts Rx on an interface that will stop pmd thread sleeping. */
 #define PMD_SLEEP_THRESH (NETDEV_MAX_BURST / 2)
 /* Time in uS to increment a pmd thread sleep time. */
-#define PMD_SLEEP_INC_US 10
+#define PMD_SLEEP_INC_US 1
 
 struct dpcls {
     struct cmap_node node;      /* Within dp_netdev_pmd_thread.classifiers */
@@ -4983,7 +4983,6 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     set_pmd_auto_lb(dp, autolb_state, log_autolb);
 
     pmd_max_sleep = smap_get_ullong(other_config, "pmd-maxsleep", 0);
-    pmd_max_sleep = ROUND_UP(pmd_max_sleep, 10);
     pmd_max_sleep = MIN(PMD_RCU_QUIESCE_INTERVAL, pmd_max_sleep);
     atomic_read_relaxed(&dp->pmd_max_sleep, &cur_pmd_max_sleep);
     if (first_set_config || pmd_max_sleep != cur_pmd_max_sleep) {

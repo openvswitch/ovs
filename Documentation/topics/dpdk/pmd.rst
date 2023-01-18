@@ -334,10 +334,7 @@ when there is no load or very-low load on all the Rx queues they poll.
 This can be enabled by setting the max requested sleep time (in microseconds)
 for a PMD thread::
 
-    $ ovs-vsctl set open_vswitch . other_config:pmd-maxsleep=500
-
-Non-zero values will be rounded up to the nearest 10 microseconds to avoid
-requesting very small sleep times.
+    $ ovs-vsctl set open_vswitch . other_config:pmd-maxsleep=50
 
 With a non-zero max value a PMD may request to sleep by an incrementing amount
 of time up to the maximum time. If at any point the threshold of at least half
@@ -356,12 +353,12 @@ Sleep time statistics for 10 secs can be seen with::
     $ ovs-appctl dpif-netdev/pmd-stats-clear \
         && sleep 10 && ovs-appctl dpif-netdev/pmd-perf-show
 
-Example output, showing that during the last 10 seconds, 76.8% of iterations
-had a sleep of some length. The total amount of sleep time was 9.15 seconds and
-the average sleep time per iteration was 46 microseconds::
+Example output, showing that during the last 10 seconds, 74.5% of iterations
+had a sleep of some length. The total amount of sleep time was 9.06 seconds
+and the average sleep time where a sleep was requested was 9 microseconds::
 
-   - sleep iterations:       153994  ( 76.8 % of iterations)
-   Sleep time (us):         9159399  ( 59 us/iteration avg.)
+   - sleep iterations:       977037  ( 74.5 % of iterations)
+   Sleep time (us):         9068841  (  9 us/iteration avg.)
 
 Any potential power saving from PMD load based sleeping is dependent on the
 system configuration (e.g. enabling processor C-states) and workloads.
