@@ -171,6 +171,9 @@ static struct odp_support dp_netdev_support = {
 /* Time in microseconds to try RCU quiescing. */
 #define PMD_RCU_QUIESCE_INTERVAL 10000LL
 
+/* Timer resolution for PMD threads in nanoseconds. */
+#define PMD_TIMER_RES_NS 1000
+
 /* Number of pkts Rx on an interface that will stop pmd thread sleeping. */
 #define PMD_SLEEP_THRESH (NETDEV_MAX_BURST / 2)
 /* Time in uS to increment a pmd thread sleep time. */
@@ -6962,6 +6965,7 @@ pmd_thread_main(void *f_)
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
     dfc_cache_init(&pmd->flow_cache);
     pmd_alloc_static_tx_qid(pmd);
+    set_timer_resolution(PMD_TIMER_RES_NS);
 
 reload:
     atomic_count_init(&pmd->pmd_overloaded, 0);
