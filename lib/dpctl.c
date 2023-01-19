@@ -750,6 +750,10 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
                 print_stat(dpctl_p, "  TX bytes:", s.tx_bytes);
                 print_human_size(dpctl_p, s.tx_bytes);
                 dpctl_print(dpctl_p, "\n");
+
+                print_stat(dpctl_p, "    UPCALL packets:", s.upcall_packets);
+                print_stat(dpctl_p, " errors:", s.upcall_errors);
+                dpctl_print(dpctl_p, "\n");
             } else {
                 dpctl_print(dpctl_p, ", could not retrieve stats (%s)",
                             ovs_strerror(error));

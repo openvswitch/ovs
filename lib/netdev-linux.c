@@ -2156,16 +2156,16 @@ swap_uint64(uint64_t *a, uint64_t *b)
  * 'src' is allowed to be misaligned. */
 static void
 netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
-                                  const struct ovs_vport_stats *src)
+                                  const struct dpif_netlink_vport *vport)
 {
-    dst->rx_packets = get_32aligned_u64(&src->rx_packets);
-    dst->tx_packets = get_32aligned_u64(&src->tx_packets);
-    dst->rx_bytes = get_32aligned_u64(&src->rx_bytes);
-    dst->tx_bytes = get_32aligned_u64(&src->tx_bytes);
-    dst->rx_errors = get_32aligned_u64(&src->rx_errors);
-    dst->tx_errors = get_32aligned_u64(&src->tx_errors);
-    dst->rx_dropped = get_32aligned_u64(&src->rx_dropped);
-    dst->tx_dropped = get_32aligned_u64(&src->tx_dropped);
+    dst->rx_packets = get_32aligned_u64(&vport->stats->rx_packets);
+    dst->tx_packets = get_32aligned_u64(&vport->stats->tx_packets);
+    dst->rx_bytes = get_32aligned_u64(&vport->stats->rx_bytes);
+    dst->tx_bytes = get_32aligned_u64(&vport->stats->tx_bytes);
+    dst->rx_errors = get_32aligned_u64(&vport->stats->rx_errors);
+    dst->tx_errors = get_32aligned_u64(&vport->stats->tx_errors);
+    dst->rx_dropped = get_32aligned_u64(&vport->stats->rx_dropped);
+    dst->tx_dropped = get_32aligned_u64(&vport->stats->tx_dropped);
     dst->multicast = 0;
     dst->collisions = 0;
     dst->rx_length_errors = 0;
@@ -2179,6 +2179,8 @@ netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
     dst->tx_fifo_errors = 0;
     dst->tx_heartbeat_errors = 0;
     dst->tx_window_errors = 0;
+    dst->upcall_packets = vport->upcall_success;
+    dst->upcall_errors = vport->upcall_fail;
 }
 
 static int
@@ -2196,7 +2198,7 @@ get_stats_via_vport__(const struct netdev *netdev, struct netdev_stats *stats)
         return EOPNOTSUPP;
     }
 
-    netdev_stats_from_ovs_vport_stats(stats, reply.stats);
+    netdev_stats_from_ovs_vport_stats(stats, &reply);
 
     ofpbuf_delete(buf);
 

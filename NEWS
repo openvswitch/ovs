@@ -1,5 +1,9 @@
 Post-v3.1.0
 --------------------
+   - Linux kernel datapath:
+     * OVS now collects per-interface upcall statistics that can be obtained
+       via 'ovs-appctl dpctl/show -s' or the interface's statistics column
+       in OVSDB.  Available with upstream kernel 6.2+.
 
 
 v3.1.0 - xx xxx xxxx

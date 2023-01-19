@@ -44,6 +44,8 @@ struct dpif_netlink_vport {
     uint32_t n_upcall_pids;
     const uint32_t *upcall_pids;           /* OVS_VPORT_ATTR_UPCALL_PID. */
     const struct ovs_vport_stats *stats;   /* OVS_VPORT_ATTR_STATS. */
+    uint64_t upcall_success;               /* OVS_VPORT_UPCALL_ATTR_SUCCESS. */
+    uint64_t upcall_fail;                  /* OVS_VPORT_UPCALL_ATTR_FAIL. */
     const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
 };

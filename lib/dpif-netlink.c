@@ -4685,6 +4685,8 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
                                    .optional = true },
         [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_VPORT_ATTR_NETNSID] = { .type = NL_A_U32, .optional = true },
+        [OVS_VPORT_ATTR_UPCALL_STATS] = { .type = NL_A_NESTED,
+                                          .optional = true },
     };
 
     dpif_netlink_vport_init(vport);
@@ -4715,6 +4717,21 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
     }
     if (a[OVS_VPORT_ATTR_STATS]) {
         vport->stats = nl_attr_get(a[OVS_VPORT_ATTR_STATS]);
+    }
+    if (a[OVS_VPORT_ATTR_UPCALL_STATS]) {
+        const struct nlattr *nla;
+        size_t left;
+
+        NL_NESTED_FOR_EACH (nla, left, a[OVS_VPORT_ATTR_UPCALL_STATS]) {
+            if (nl_attr_type(nla) == OVS_VPORT_UPCALL_ATTR_SUCCESS) {
+                vport->upcall_success = nl_attr_get_u64(nla);
+            } else if (nl_attr_type(nla) == OVS_VPORT_UPCALL_ATTR_FAIL) {
+                vport->upcall_fail = nl_attr_get_u64(nla);
+            }
+        }
+    } else {
+        vport->upcall_success = UINT64_MAX;
+        vport->upcall_fail = UINT64_MAX;
     }
     if (a[OVS_VPORT_ATTR_OPTIONS]) {
         vport->options = nl_attr_get(a[OVS_VPORT_ATTR_OPTIONS]);

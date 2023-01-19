@@ -87,6 +87,10 @@ struct netdev_stats {
     uint64_t rx_oversize_errors;
     uint64_t rx_fragmented_errors;
     uint64_t rx_jabber_errors;
+
+    /* Datapath upcall statistics. */
+    uint64_t upcall_packets; /* Rx packets forwarded to userspace. */
+    uint64_t upcall_errors;  /* Rx packets failed forwarding to userspace. */
 };
 
 /* Structure representation of custom statistics counter */

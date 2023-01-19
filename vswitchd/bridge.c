@@ -2626,7 +2626,9 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_undersized_errors,    "rx_undersized_errors")     \
     IFACE_STAT(rx_oversize_errors,      "rx_oversize_errors")       \
     IFACE_STAT(rx_fragmented_errors,    "rx_fragmented_errors")     \
-    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")
+    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")         \
+    IFACE_STAT(upcall_packets,          "upcall_packets")           \
+    IFACE_STAT(upcall_errors,           "upcall_errors")
 
 #define IFACE_STAT(MEMBER, NAME) + 1
     enum { N_IFACE_STATS = IFACE_STATS };
