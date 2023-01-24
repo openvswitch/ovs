@@ -337,29 +337,32 @@ pmd_perf_format_histograms(struct ds *str, struct pmd_perf_stats *s)
                   ">", s->max_vhost_qfill.bin[i],
                   ">", s->upcalls.bin[i],
                   ">", s->cycles_per_upcall.bin[i]);
-    if (s->totals.iterations > 0) {
-        ds_put_cstr(str,
-                    "-----------------------------------------------------"
-                    "-----------------------------------------------------"
-                    "------------------------------------------------\n");
-        ds_put_format(str,
-                      "   %-21s  %-21s  %-21s  %-21s  %-21s  %-21s  %-21s\n",
-                      "cycles/it", "packets/it", "cycles/pkt", "pkts/batch",
-                      "vhost qlen", "upcalls/it", "cycles/upcall");
-        ds_put_format(str,
-                      "   %-21"PRIu64"  %-21.5f  %-21"PRIu64
-                      "  %-21.5f  %-21.5f  %-21.5f  %-21"PRIu32"\n",
-                      s->totals.cycles / s->totals.iterations,
-                      1.0 * s->totals.pkts / s->totals.iterations,
-                      s->totals.pkts
-                          ? s->totals.busy_cycles / s->totals.pkts : 0,
-                      s->totals.batches
-                          ? 1.0 * s->totals.pkts / s->totals.batches : 0,
-                      1.0 * s->totals.max_vhost_qfill / s->totals.iterations,
-                      1.0 * s->totals.upcalls / s->totals.iterations,
-                      s->totals.upcalls
-                          ? s->totals.upcall_cycles / s->totals.upcalls : 0);
-    }
+    ds_put_cstr(str,
+                "-----------------------------------------------------"
+                "-----------------------------------------------------"
+                "------------------------------------------------\n");
+    ds_put_format(str,
+                  "   %-21s  %-21s  %-21s  %-21s  %-21s  %-21s  %-21s\n",
+                  "cycles/it", "packets/it", "cycles/pkt", "pkts/batch",
+                  "vhost qlen", "upcalls/it", "cycles/upcall");
+    ds_put_format(str,
+                  "   %-21"PRIu64"  %-21.5f  %-21"PRIu64
+                  "  %-21.5f  %-21.5f  %-21.5f  %-21"PRIu32"\n",
+                  s->totals.iterations
+                      ? s->totals.cycles / s->totals.iterations : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.pkts / s->totals.iterations : 0,
+                  s->totals.pkts
+                      ? s->totals.busy_cycles / s->totals.pkts : 0,
+                  s->totals.batches
+                      ? 1.0 * s->totals.pkts / s->totals.batches : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.max_vhost_qfill / s->totals.iterations
+                      : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.upcalls / s->totals.iterations : 0,
+                  s->totals.upcalls
+                      ? s->totals.upcall_cycles / s->totals.upcalls : 0);
 }
 
 void
