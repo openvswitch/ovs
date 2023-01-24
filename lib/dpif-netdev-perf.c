@@ -241,12 +241,14 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             "  - sleep iterations: %12"PRIu64"  (%5.1f %% of iterations)\n"
             "  Sleep time (us):    %12.0f  (%3.0f us/iteration avg.)\n",
             tot_iter,
-            (tot_cycles + tot_sleep_cycles) * us_per_cycle / tot_iter,
+            tot_iter
+                ? (tot_cycles + tot_sleep_cycles) * us_per_cycle / tot_iter
+                : 0,
             tot_cycles, 100.0 * (tot_cycles / duration) / tsc_hz,
             idle_iter,
-            100.0 * stats[PMD_CYCLES_ITER_IDLE] / tot_cycles,
+            tot_cycles ? 100.0 * stats[PMD_CYCLES_ITER_IDLE] / tot_cycles : 0,
             busy_iter,
-            100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles,
+            tot_cycles ? 100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles : 0,
             sleep_iter, tot_iter ? 100.0 * sleep_iter / tot_iter : 0,
             tot_sleep_cycles * us_per_cycle,
             sleep_iter ? (tot_sleep_cycles * us_per_cycle) / sleep_iter : 0);
