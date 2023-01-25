@@ -181,6 +181,7 @@ AT_CLEANUP
 
 AT_SETUP([offloads - check interface meter offloading -  offloads disabled])
 AT_KEYWORDS([dp-meter])
+AT_SKIP_IF([test $HAVE_NC = "no"])
 OVS_TRAFFIC_VSWITCHD_START()
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
@@ -230,6 +231,7 @@ AT_CLEANUP
 AT_SETUP([offloads - check interface meter offloading -  offloads enabled])
 AT_KEYWORDS([offload-meter])
 AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
+AT_SKIP_IF([test $HAVE_NC = "no"])
 OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
