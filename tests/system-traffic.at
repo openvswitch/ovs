@@ -3384,7 +3384,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related to original direction])
-AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
