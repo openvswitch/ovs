@@ -822,13 +822,13 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
                 struct {
                     ovs_u128 key;
                     ovs_u128 mask;
-                } *ct_label;
+                } ct_label = {
+                    .key = action->ct.label,
+                    .mask = action->ct.label_mask,
+                };
 
-                ct_label = nl_msg_put_unspec_uninit(buf,
-                                                    OVS_CT_ATTR_LABELS,
-                                                    sizeof *ct_label);
-                ct_label->key = action->ct.label;
-                ct_label->mask = action->ct.label_mask;
+                nl_msg_put_unspec(buf, OVS_CT_ATTR_LABELS,
+                                  &ct_label, sizeof ct_label);
             }
 
             if (action->ct.nat_type) {
@@ -1318,13 +1318,14 @@ parse_put_flow_ct_action(struct tc_flower *flower,
                 break;
                 case OVS_CT_ATTR_LABELS: {
                     const struct {
-                        ovs_u128 key;
-                        ovs_u128 mask;
+                        ovs_32aligned_u128 key;
+                        ovs_32aligned_u128 mask;
                     } *ct_label;
 
                     ct_label = nl_attr_get_unspec(ct_attr, sizeof *ct_label);
-                    action->ct.label = ct_label->key;
-                    action->ct.label_mask = ct_label->mask;
+                    action->ct.label = get_32aligned_u128(&ct_label->key);
+                    action->ct.label_mask =
+                        get_32aligned_u128(&ct_label->mask);
                 }
                 break;
             }
