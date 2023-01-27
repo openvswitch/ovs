@@ -2054,12 +2054,19 @@ tc_dump_tc_chain_start(struct tcf_id *id, struct nl_dump *dump)
 }
 
 int
-tc_del_filter(struct tcf_id *id)
+tc_del_filter(struct tcf_id *id, const char *kind)
 {
     struct ofpbuf request;
 
     request_from_tcf_id(id, 0, RTM_DELTFILTER, NLM_F_ACK, &request);
+    nl_msg_put_string(&request, TCA_KIND, kind);
     return tc_transact(&request, NULL);
+}
+
+int
+tc_del_flower_filter(struct tcf_id *id)
+{
+    return tc_del_filter(id, "flower");
 }
 
 int
@@ -2070,6 +2077,7 @@ tc_get_flower(struct tcf_id *id, struct tc_flower *flower)
     int error;
 
     request_from_tcf_id(id, 0, RTM_GETTFILTER, NLM_F_ECHO, &request);
+    nl_msg_put_string(&request, TCA_KIND, "flower");
     error = tc_transact(&request, &reply);
     if (error) {
         return error;
