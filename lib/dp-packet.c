@@ -146,7 +146,11 @@ dp_packet_uninit(struct dp_packet *b)
 struct dp_packet *
 dp_packet_new(size_t size)
 {
+#ifdef DPDK_NETDEV
+    struct dp_packet *b = xmalloc_cacheline(sizeof *b);
+#else
     struct dp_packet *b = xmalloc(sizeof *b);
+#endif
     dp_packet_init(b, size);
     return b;
 }

@@ -257,7 +257,11 @@ dp_packet_delete(struct dp_packet *b)
         }
 
         dp_packet_uninit(b);
+#ifdef DPDK_NETDEV
+        free_cacheline(b);
+#else
         free(b);
+#endif
     }
 }
 
