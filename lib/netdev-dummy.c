@@ -204,7 +204,7 @@ dummy_packet_stream_create(struct stream *stream)
 {
     struct dummy_packet_stream *s;
 
-    s = xzalloc(sizeof *s);
+    s = xzalloc_cacheline(sizeof *s);
     dummy_packet_stream_init(s, stream);
 
     return s;
@@ -350,7 +350,7 @@ dummy_packet_conn_close(struct dummy_packet_conn *conn)
         pstream_close(pconn->pstream);
         for (i = 0; i < pconn->n_streams; i++) {
             dummy_packet_stream_close(pconn->streams[i]);
-            free(pconn->streams[i]);
+            free_cacheline(pconn->streams[i]);
         }
         free(pconn->streams);
         pconn->pstream = NULL;
@@ -359,7 +359,7 @@ dummy_packet_conn_close(struct dummy_packet_conn *conn)
 
     case ACTIVE:
         dummy_packet_stream_close(rconn->rstream);
-        free(rconn->rstream);
+        free_cacheline(rconn->rstream);
         rconn->rstream = NULL;
         reconnect_destroy(rconn->reconnect);
         rconn->reconnect = NULL;
@@ -469,7 +469,7 @@ dummy_pconn_run(struct netdev_dummy *dev)
         pconn->streams = xrealloc(pconn->streams,
                                 ((pconn->n_streams + 1)
                                  * sizeof s));
-        s = xmalloc(sizeof *s);
+        s = xmalloc_cacheline(sizeof *s);
         pconn->streams[pconn->n_streams++] = s;
         dummy_packet_stream_init(s, new_stream);
     } else if (error != EAGAIN) {
@@ -489,7 +489,7 @@ dummy_pconn_run(struct netdev_dummy *dev)
                      stream_get_name(s->stream),
                      ovs_retval_to_string(error));
             dummy_packet_stream_close(s);
-            free(s);
+            free_cacheline(s);
             pconn->streams[i] = pconn->streams[--pconn->n_streams];
         } else {
             i++;
