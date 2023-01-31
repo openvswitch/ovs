@@ -495,6 +495,7 @@ lic121                             lic121@chinatelecom.cn
 lzhecheng                          lzhecheng@vmware.com
 parameswaran krishnamurthy         parkrish@gmail.com
 solomon                            liwei.solomon@gmail.com
+wangchuanlei                       wangchuanlei@inspur.com
 wenxu                              wenxu@ucloud.cn
 wisd0me                            ak47izatool@gmail.com
 xushengping                        shengping.xu@huawei.com
