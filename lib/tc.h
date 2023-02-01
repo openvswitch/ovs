@@ -320,7 +320,6 @@ is_tcf_id_eq(struct tcf_id *id1, struct tcf_id *id2)
 {
     return id1->prio == id2->prio
            && id1->handle == id2->handle
-           && id1->handle == id2->handle
            && id1->hook == id2->hook
            && id1->block_id == id2->block_id
            && id1->ifindex == id2->ifindex
