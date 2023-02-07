@@ -126,7 +126,7 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 AT_CHECK([ovs-appctl dpctl/add-flow "tunnel(dst=1.1.1.1,src=3.3.3.200/255.255.255.0,tp_dst=123,tp_src=1,ttl=64),recirc_id(0),in_port(1),eth(),eth_type(0x0800),ipv4()" "2"])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | tail -1], [0], [dnl
-tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),recirc_id(0),in_port(1),eth(),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),in_port(1),eth(),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
 ])
 
 OVS_VSWITCHD_STOP

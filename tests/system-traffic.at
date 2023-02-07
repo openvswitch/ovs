@@ -7159,7 +7159,6 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - can match and clear ct_state from outside OVS])
 CHECK_CONNTRACK_LOCAL_STACK()
-CHECK_NO_TC_OFFLOAD()
 OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE()
 

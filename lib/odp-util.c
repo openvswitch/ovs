@@ -6204,12 +6204,23 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     const struct flow *mask = parms->mask;
     const struct flow *data = export_mask ? mask : flow;
 
+    if (parms->support.recirc) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
+    }
+
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
     if (flow_tnl_dst_is_set(&flow->tunnel) ||
         flow_tnl_src_is_set(&flow->tunnel) || export_mask) {
         tun_key_to_attr(buf, &data->tunnel, &parms->flow->tunnel,
                         parms->key_buf, NULL);
+    }
+
+    /* Add an ingress port attribute if this is a mask or 'in_port.odp_port'
+     * is not the magical value "ODPP_NONE". */
+    if (export_mask || flow->in_port.odp_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, data->in_port.odp_port);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
@@ -6254,16 +6265,6 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
             ct->dst_port = data->ct_tp_dst;
             ct->ipv6_proto = data->ct_nw_proto;
         }
-    }
-    if (parms->support.recirc) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
-    }
-
-    /* Add an ingress port attribute if this is a mask or 'in_port.odp_port'
-     * is not the magical value "ODPP_NONE". */
-    if (export_mask || flow->in_port.odp_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, data->in_port.odp_port);
     }
 
     nl_msg_put_be32(buf, OVS_KEY_ATTR_PACKET_TYPE, data->packet_type);
