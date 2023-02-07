@@ -34,3 +34,9 @@ m4_define([CHECK_NO_TC_OFFLOAD],
 [
      AT_SKIP_IF([:])
 ])
+
+# Conntrack ALGs are not supported for tc.
+m4_define([CHECK_CONNTRACK_ALG],
+[
+     AT_SKIP_IF([:])
+])
