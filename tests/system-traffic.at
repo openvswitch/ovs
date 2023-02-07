@@ -2911,6 +2911,9 @@ AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
 AT_CHECK([ovs-ofctl mod-flows br0 dnl
             'priority=100,ct_state=-trk,tcp,in_port="ovs-p0" actions=ct(table=0,zone=15)'])
 
+dnl Wait for a flow flush as some datapaths (read TC) might take time to clear.
+AT_CHECK([ovs-appctl revalidator/wait], [0])
+
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
@@ -2921,7 +2924,6 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - zones from other field, more tests])
 CHECK_CONNTRACK()
-CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2959,6 +2961,9 @@ AT_CHECK([ovs-appctl dpctl/dump-flows --names filter=in_port=ovs-p0 dnl
               | grep -q "ct_label(0x5/0xffff)" ], [0], [])
 
 AT_CHECK([ovs-ofctl mod-flows br0 'priority=100,ct_state=-trk,tcp,in_port="ovs-p0" actions=ct(table=0,zone=15,commit,exec(load:0xffff000f->NXM_NX_CT_LABEL[[0..31]]))'])
+
+dnl Wait for a flow flush as some datapaths (read TC) might take time to clear.
+AT_CHECK([ovs-appctl revalidator/wait], [0])
 
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
