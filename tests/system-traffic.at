@@ -1639,6 +1639,7 @@ dnl   ns0: connect to br-underlay, with IP: 10.1.1.1
 AT_SETUP([datapath - truncate and output to gre tunnel by simulated packets])
 OVS_CHECK_MIN_KERNEL(3, 10)
 AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"02:90:8c:a8:a1:49\"])
@@ -1770,6 +1771,7 @@ AT_SETUP([datapath - truncate and output to gre tunnel])
 AT_SKIP_IF([test $HAVE_NC = no])
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
+CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_BR([br-underlay])

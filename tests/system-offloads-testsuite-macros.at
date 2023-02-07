@@ -30,6 +30,27 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
 ])
 
 # Macro to exclude tests that will fail with TC offload enabled.
+# We currently have the below tests disabled in system-traffic.at
+# for the following reasons:
+#
+#  TC does not support moving ports to a different namespace than vswitchd's
+#  namespace, so we need to disable this test.
+#    - 'conntrack - multiple namespaces, internal ports'
+#
+#  The kernel's tcf_ct_act() function does not seem to take care of any (QinQ)
+#  VLAN headers causing commits to fail. However, if this is solved, we have to
+#  make sure conntrack does not break the VLAN boundary, i.e., putting together
+#  two packets with different CVLAN+SVLAN values.
+#    - 'conntrack - IPv4 fragmentation + cvlan'
+#
+#  Fragmentation handling in ct zone 9 does not seem to work correctly.
+#  When moving this test over to the default zone all works fine.
+#    - 'conntrack - Fragmentation over vxlan'
+#
+#  Occasionally we fail with invalid byte counts.
+#    - 'datapath - truncate and output to gre tunnel by simulated packets'
+#    - 'datapath - truncate and output to gre tunnel'
+#
 m4_define([CHECK_NO_TC_OFFLOAD],
 [
      AT_SKIP_IF([:])
