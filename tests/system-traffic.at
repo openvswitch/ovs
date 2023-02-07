@@ -1199,7 +1199,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - mpls actions])
-CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1216,8 +1215,8 @@ AT_CHECK([ovs-vsctl add-port br0 patch0])
 AT_CHECK([ovs-vsctl add-port br1 patch1])
 
 AT_DATA([flows.txt], [dnl
-table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:3,resubmit(,1)
-table=0,priority=100,dl_type=0x8847,mpls_label=3 actions=pop_mpls:0x0800,resubmit(,1)
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:4,resubmit(,1)
+table=0,priority=100,dl_type=0x8847,mpls_label=4 actions=pop_mpls:0x0800,resubmit(,1)
 table=0,priority=10 actions=resubmit(,1)
 table=1,priority=10 actions=normal
 ])
@@ -1237,7 +1236,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - multiple mpls label pop])
-CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1254,10 +1252,10 @@ AT_CHECK([ovs-vsctl add-port br0 patch0])
 AT_CHECK([ovs-vsctl add-port br1 patch1])
 
 AT_DATA([flows.txt], [dnl
-table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:3,push_mpls:0x8847,set_mpls_label:2,push_mpls:0x8847,set_mpls_label:1,resubmit(,3)
+table=0,priority=100,dl_type=0x0800 actions=push_mpls:0x8847,set_mpls_label:4,push_mpls:0x8847,set_mpls_label:2,push_mpls:0x8847,set_mpls_label:1,resubmit(,3)
 table=0,priority=100,dl_type=0x8847,mpls_label=1 actions=pop_mpls:0x8847,resubmit(,1)
 table=1,priority=100,dl_type=0x8847,mpls_label=2 actions=pop_mpls:0x8847,resubmit(,2)
-table=2,priority=100,dl_type=0x8847,mpls_label=3 actions=pop_mpls:0x0800,resubmit(,3)
+table=2,priority=100,dl_type=0x8847,mpls_label=4 actions=pop_mpls:0x0800,resubmit(,3)
 table=0,priority=10 actions=resubmit(,3)
 table=3,priority=10 actions=normal
 ])
