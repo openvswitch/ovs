@@ -1362,7 +1362,19 @@ get_user_hz(void)
 static void
 nl_parse_tcf(const struct tcf_t *tm, struct tc_flower *flower)
 {
-    uint64_t lastused = time_msec() - (tm->lastuse * 1000 / get_user_hz());
+    uint64_t lastused;
+
+    /* On creation both tm->install and tm->lastuse are set to jiffies
+     * by the kernel. So if both values are the same, the flow has not been
+     * used yet.
+     *
+     * Note that tm->firstuse can not be used due to some kernel bug, i.e.,
+     * hardware offloaded flows do not update tm->firstuse. */
+    if (tm->lastuse == tm->install) {
+        lastused = 0;
+    } else {
+        lastused = time_msec() - (tm->lastuse * 1000 / get_user_hz());
+    }
 
     if (flower->lastused < lastused) {
         flower->lastused = lastused;
