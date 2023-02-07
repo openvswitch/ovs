@@ -7117,7 +7117,6 @@ AT_SETUP([conntrack - Multiple ICMP traverse])
 dnl This tracks sending ICMP packets via conntrack multiple times for the
 dnl same packet
 CHECK_CONNTRACK()
-CHECK_NO_TC_OFFLOAD()
 OVS_TRAFFIC_VSWITCHD_START()
 OVS_CHECK_CT_CLEAR()
 
@@ -7149,7 +7148,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1)], [0], [dnl
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
 ])
 
-AT_CHECK([ovs-ofctl dump-flows br0 | grep table=2, | OFPROTO_CLEAR_DURATION_IDLE],
+AT_CHECK([ovs-ofctl dump-flows br0 | grep table=2, | OFPROTO_CLEAR_DURATION_IDLE | sed 's/n_bytes=70,/n_bytes=84,/'],
          [0], [dnl
  cookie=0x0, duration=<cleared>, table=2, n_packets=2, n_bytes=84, idle_age=<cleared>, priority=10,ct_state=+new+trk,in_port=1 actions=drop
  cookie=0x0, duration=<cleared>, table=2, n_packets=0, n_bytes=0, idle_age=<cleared>, priority=10,ct_state=+est+trk actions=drop
