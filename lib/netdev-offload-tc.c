@@ -1303,6 +1303,10 @@ parse_put_flow_ct_action(struct tc_flower *flower,
                         get_32aligned_u128(&ct_label->mask);
                 }
                 break;
+                /* The following option we do not support in tc-ct, and should
+                 * not be ignored for proper operation. */
+                case OVS_CT_ATTR_HELPER:
+                    return EOPNOTSUPP;
             }
         }
 
