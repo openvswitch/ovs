@@ -867,7 +867,11 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             ct_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_CT);
 
             if (action->ct.commit) {
-                nl_msg_put_flag(buf, OVS_CT_ATTR_COMMIT);
+                if (action->ct.force) {
+                    nl_msg_put_flag(buf, OVS_CT_ATTR_FORCE_COMMIT);
+                } else {
+                    nl_msg_put_flag(buf, OVS_CT_ATTR_COMMIT);
+                }
             }
 
             if (action->ct.zone) {
@@ -1356,7 +1360,12 @@ parse_put_flow_ct_action(struct tc_flower *flower,
         NL_ATTR_FOR_EACH_UNSAFE (ct_attr, ct_left, ct, ct_len) {
             switch (nl_attr_type(ct_attr)) {
                 case OVS_CT_ATTR_COMMIT: {
-                        action->ct.commit = true;
+                    action->ct.commit = true;
+                }
+                break;
+                case OVS_CT_ATTR_FORCE_COMMIT: {
+                    action->ct.commit = true;
+                    action->ct.force = true;
                 }
                 break;
                 case OVS_CT_ATTR_ZONE: {
