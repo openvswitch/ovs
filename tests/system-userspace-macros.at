@@ -325,3 +325,8 @@ m4_define([CHECK_L3L4_CONNTRACK_REASM],
 [
     AT_SKIP_IF([:])
 ])
+
+# CHECK_NO_TC_OFFLOAD
+#
+# Userspace tests do not use TC offload.
+m4_define([CHECK_NO_TC_OFFLOAD])

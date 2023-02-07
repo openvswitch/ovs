@@ -1,0 +1,36 @@
+AT_COPYRIGHT([Copyright (c) 2022 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.])
+
+# The goal is to run as many as possible of the system-traffic tests with
+# OVS tc offload enabled. We do this by overriding the
+# OVS_TRAFFIC_VSWITCHD_START() with offloading enabled.
+m4_define([OVS_TRAFFIC_VSWITCHD_START],
+  [AT_CHECK([modprobe openvswitch])
+   on_exit 'modprobe -r openvswitch'
+   m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_lisp], [vport_stt], [vport_vxlan]],
+              [modprobe -q mod || echo "Module mod not loaded."
+               on_exit 'modprobe -q -r mod'
+              ])
+   on_exit 'ovs-dpctl del-dp ovs-system'
+   on_exit 'ovs-appctl dpctl/flush-conntrack'
+   _OVS_VSWITCHD_START([], [-- set Open_vSwitch . other_config:hw-offload=true $3])
+   dnl Add bridges, ports, etc.
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
+])
+
+# Macro to exclude tests that will fail with TC offload enabled.
+m4_define([CHECK_NO_TC_OFFLOAD],
+[
+     AT_SKIP_IF([:])
+])
