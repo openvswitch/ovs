@@ -20,11 +20,8 @@
 #error "Use this header only with sparse.  It is not a correct implementation."
 #endif
 
-/* Include the same headers as the real rte_memcpy(). */
-#include <stdio.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-#include <rte_vect.h>
 
 /* Declare the same functions as the real rte_memcpy.h, without defining them.
  * This gives sparse the information it needs without provoking sparse's
