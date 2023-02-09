@@ -267,25 +267,36 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     int error;
 
     error = jsonrpc_pstream_open(name, &listener, options->dscp);
-    if (error && error != EAFNOSUPPORT) {
-        VLOG_ERR_RL(&rl, "%s: listen failed: %s", name, ovs_strerror(error));
+    switch (error) {
+    case 0:
+    case EAFNOSUPPORT:
+        remote = xmalloc(sizeof *remote);
+        remote->server = svr;
+        remote->listener = listener;
+        ovs_list_init(&remote->sessions);
+        remote->dscp = options->dscp;
+        remote->read_only = options->read_only;
+        remote->role = nullable_xstrdup(options->role);
+        shash_add(&svr->remotes, name, remote);
+        if (!listener) {
+            /* Not a listener, attempt creation of active jsonrpc session. */
+            ovsdb_jsonrpc_session_create(remote,
+                                         jsonrpc_session_open(name, true),
+                                         svr->read_only || remote->read_only);
+        }
+        return remote;
+
+    case EAGAIN:
+        VLOG_DBG_RL(&rl, "%s: listen failed: "
+                         "DNS resolution in progress or host not found", name);
+        return NULL;
+
+    default:
+        VLOG_ERR_RL(&rl, "%s: listen failed: %s", name,
+                    ovs_strerror(error));
         return NULL;
     }
-
-    remote = xmalloc(sizeof *remote);
-    remote->server = svr;
-    remote->listener = listener;
-    ovs_list_init(&remote->sessions);
-    remote->dscp = options->dscp;
-    remote->read_only = options->read_only;
-    remote->role = nullable_xstrdup(options->role);
-    shash_add(&svr->remotes, name, remote);
-
-    if (!listener) {
-        ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name, true),
-                                      svr->read_only || remote->read_only);
-    }
-    return remote;
+    OVS_NOT_REACHED();
 }
 
 static void

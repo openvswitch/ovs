@@ -55,7 +55,8 @@ int inet_open_active(int style, const char *target, int default_port,
                      struct sockaddr_storage *ssp, int *fdp, uint8_t dscp);
 
 bool inet_parse_passive(const char *target, int default_port,
-                        struct sockaddr_storage *ssp);
+                        struct sockaddr_storage *ssp,
+                        bool resolve_host, bool *dns_failure);
 int inet_open_passive(int style, const char *target, int default_port,
                       struct sockaddr_storage *ssp, uint8_t dscp,
                       bool kernel_print_port);

@@ -660,7 +660,8 @@ exit:
  * zeros '*ss' and returns false. */
 bool
 inet_parse_passive(const char *target_, int default_port,
-                   struct sockaddr_storage *ss)
+                   struct sockaddr_storage *ss,
+                   bool resolve_host, bool *dns_failure)
 {
     char *target = xstrdup(target_);
     char *port, *host;
@@ -672,7 +673,7 @@ inet_parse_passive(const char *target_, int default_port,
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
-                                       target_, true, NULL);
+                                       target_, resolve_host, dns_failure);
     }
     if (!ok) {
         memset(ss, 0, sizeof *ss);
@@ -710,8 +711,14 @@ inet_open_passive(int style, const char *target, int default_port,
     struct sockaddr_storage ss;
     int fd = 0, error;
     unsigned int yes = 1;
+    bool dns_failure;
 
-    if (!inet_parse_passive(target, default_port, &ss)) {
+    if (!inet_parse_passive(target, default_port, &ss, true, &dns_failure)) {
+        if (dns_failure) {
+            /* DNS failure means asynchronous DNS resolution is in progress,
+             * or that the name does currently not resolve. */
+            return -EAGAIN;
+        }
         return -EAFNOSUPPORT;
     }
     kernel_chooses_port = ss_get_port(&ss) == 0;
