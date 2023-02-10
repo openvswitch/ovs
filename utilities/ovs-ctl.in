@@ -156,8 +156,8 @@ do_start_ovsdb () {
         [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
         [ "$OVSDB_SERVER_OPTIONS" != "" ] && set "$@" $OVSDB_SERVER_OPTIONS
 
-        start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
-            || return 1
+        start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" \
+            "$OVSDB_SERVER_UMASK" "$@" || return 1
 
         # Initialize database settings.
         ovs_vsctl -- init -- set Open_vSwitch . db-version="$schemaver" \
@@ -226,8 +226,8 @@ do_start_forwarding () {
         [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
         [ "$OVS_VSWITCHD_OPTIONS" != "" ] &&set "$@" $OVS_VSWITCHD_OPTIONS
 
-        start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@" ||
-            return 1
+        start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" \
+            "$OVS_VSWITCHD_UMASK" "$@" || return 1
     fi
 }
 
@@ -348,6 +348,8 @@ set_defaults () {
     OVS_VSWITCHD_WRAPPER=
     OVSDB_SERVER_OPTIONS=
     OVS_VSWITCHD_OPTIONS=
+    OVSDB_SERVER_UMASK=
+    OVS_VSWITCHD_UMASK=
 
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -421,6 +423,12 @@ Other important options for "start", "restart" and "force-reload-kmod":
                      add given key-value pair to Open_vSwitch external-ids
   --delete-bridges   delete all bridges just before starting ovs-vswitchd
   --ovs-user="user[:group]"  pass the --user flag to ovs daemons
+  --ovsdb-server-umask=MODE  Set umask prior to run ovsdb-server daemon.
+                             This is useful to manage daemon's sockets permissions.
+                             Default is not to change umask (inherited from shell).
+  --ovs-vswitchd-umask=MODE  Set umask prior to run ovs-vswitchd daemon.
+                             This is useful to manage daemon's sockets permissions.
+                             Default is not to change umask (inherited from shell).
 
 Less important options for "start", "restart" and "force-reload-kmod":
   --daemon-cwd=DIR               set working dir for OVS daemons (default: $DAEMON_CWD)
