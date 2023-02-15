@@ -1727,26 +1727,23 @@ dpctl_flush_conntrack(int argc, const char *argv[],
 
     /* Report error if there are more than one unparsed argument. */
     if (args > 1) {
-        ds_put_cstr(&ds, "invalid arguments");
         error = EINVAL;
-        goto error;
+        dpctl_error(dpctl_p, error, "invalid arguments: %s", ds_cstr(&ds));
+        goto out;
     }
 
     error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
     if (error) {
-        return error;
+        goto out;
     }
 
     error = ct_dpif_flush(dpif, pzone, ptuple);
-    if (!error) {
-        dpif_close(dpif);
-        return 0;
-    } else {
-        ds_put_cstr(&ds, "failed to flush conntrack");
+    if (error) {
+        dpctl_error(dpctl_p, error, "failed to flush conntrack: %s",
+                    ds_cstr(&ds));
     }
 
-error:
-    dpctl_error(dpctl_p, error, "%s", ds_cstr(&ds));
+out:
     ds_destroy(&ds);
     dpif_close(dpif);
     return error;
