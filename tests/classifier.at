@@ -65,6 +65,94 @@ Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([flow classifier - lookup segmentation - final stage])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=33,tcp,tp_dst=80,tcp_flags=+psh,action=output(2)
+table=0 in_port=1 priority=0,ip,action=drop
+table=0 in_port=2 priority=16,icmp6,nw_ttl=255,icmp_type=135,icmp_code=0,nd_target=1000::1 ,action=output(1)
+table=0 in_port=2 priority=0,ip,action=drop
+table=0 in_port=3 action=resubmit(,1)
+table=1 in_port=3 priority=45,ct_state=+trk+rpl,ct_nw_proto=6,ct_tp_src=3/0x1,tcp,tp_dst=80,tcp_flags=+psh,action=output(2)
+table=1 in_port=3 priority=10,ip,action=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80,tcp_flags=syn'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=80,tcp_flags=-psh
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80,tcp_flags=syn|ack'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=80,tcp_flags=-psh
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80,tcp_flags=ack|psh'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=80,tcp_flags=+psh
+Datapath actions: 2
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=80,tcp_flags=-psh
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=79'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=0x40/0xfff0,tcp_flags=-psh
+Datapath actions: drop
+])
+
+dnl Having both the port and the tcp flags in the resulting megaflow below
+dnl is redundant, but that is how ports trie logic is implemented.
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=81'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,tcp,in_port=1,nw_frag=no,tp_dst=81,tcp_flags=-psh
+Datapath actions: drop
+])
+
+dnl nd_target is redundant in the megaflow below and it is also not relevant
+dnl for an icmp reply.  Datapath may discard that match, but it is OK as long
+dnl as we have prerequisites (icmp_type) in the match as well.
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=2,eth_src=f6:d2:b0:19:5e:7b,eth_dst=d2:49:19:91:78:fe,dl_type=0x86dd,ipv6_src=1000::3,ipv6_dst=1000::4,nw_proto=58,nw_ttl=255,icmpv6_type=128,icmpv6_code=0"], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,icmp6,in_port=2,nw_ttl=255,nw_frag=no,icmp_type=0x80/0xfc,nd_target=::
+Datapath actions: drop
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=2,eth_src=f6:d2:b0:19:5e:7b,eth_dst=d2:49:19:91:78:fe,dl_type=0x86dd,ipv6_src=1000::3,ipv6_dst=1000::4,nw_proto=58,nw_ttl=255,icmpv6_type=135,icmpv6_code=0"], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,icmp6,in_port=2,nw_ttl=255,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=::
+Datapath actions: drop
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=2,eth_src=f6:d2:b0:19:5e:7b,eth_dst=d2:49:19:91:78:fe,dl_type=0x86dd,ipv6_src=1000::3,ipv6_dst=1000::4,nw_proto=58,nw_ttl=255,icmpv6_type=135,icmpv6_code=0,nd_target=1000::1"], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,icmp6,in_port=2,nw_ttl=255,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=1000::1
+Datapath actions: 1
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=2,eth_src=f6:d2:b0:19:5e:7b,eth_dst=d2:49:19:91:78:fe,dl_type=0x86dd,ipv6_src=1000::3,ipv6_dst=1000::4,nw_proto=58,nw_ttl=255,icmpv6_type=135,icmpv6_code=0,nd_target=1000::2"], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,icmp6,in_port=2,nw_ttl=255,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=1000::2
+Datapath actions: drop
+])
+
+dnl Check that ports' mask doesn't affect ct ports.
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=3,ct_state=trk|rpl,ct_nw_proto=6,ct_tp_src=3,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=80,tcp_flags=psh'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,ct_state=+rpl+trk,ct_nw_proto=6,ct_tp_src=0x1/0x1,eth,tcp,in_port=3,nw_frag=no,tp_dst=80,tcp_flags=+psh
+Datapath actions: 2
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=3,ct_state=trk|rpl,ct_nw_proto=6,ct_tp_src=3,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,nw_tos=0,nw_ttl=128,tp_src=8,tp_dst=79,tcp_flags=psh'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,ct_state=+rpl+trk,ct_nw_proto=6,ct_tp_src=0x1/0x1,eth,tcp,in_port=3,nw_frag=no,tp_dst=0x40/0xfff0,tcp_flags=+psh
+Datapath actions: drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([flow classifier prefix lookup])
 AT_SETUP([flow classifier - prefix lookup])
 OVS_VSWITCHD_START

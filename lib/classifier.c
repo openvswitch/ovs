@@ -1695,6 +1695,8 @@ find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
     const struct cls_match *rule = NULL;
     struct flowmap stages_map = FLOWMAP_EMPTY_INITIALIZER;
     unsigned int mask_offset = 0;
+    bool adjust_ports_mask = false;
+    ovs_be32 ports_mask;
     int i;
 
     /* Try to finish early by checking fields in segments. */
@@ -1722,6 +1724,9 @@ find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
                     subtable->index_maps[i], flow, wc)) {
         goto no_match;
     }
+    /* Accumulate the map used so far. */
+    stages_map = flowmap_or(stages_map, subtable->index_maps[i]);
+
     hash = flow_hash_in_minimask_range(flow, &subtable->mask,
                                        subtable->index_maps[i],
                                        &mask_offset, &basis);
@@ -1731,14 +1736,16 @@ find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
          * unwildcarding all the ports bits, use the ports trie to figure out a
          * smaller set of bits to unwildcard. */
         unsigned int mbits;
-        ovs_be32 value, plens, mask;
+        ovs_be32 value, plens;
 
-        mask = miniflow_get_ports(&subtable->mask.masks);
-        value = ((OVS_FORCE ovs_be32 *)flow)[TP_PORTS_OFS32] & mask;
+        ports_mask = miniflow_get_ports(&subtable->mask.masks);
+        value = ((OVS_FORCE ovs_be32 *) flow)[TP_PORTS_OFS32] & ports_mask;
         mbits = trie_lookup_value(&subtable->ports_trie, &value, &plens, 32);
 
-        ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
-            mask & be32_prefix_mask(mbits);
+        ports_mask &= be32_prefix_mask(mbits);
+        ports_mask |= ((OVS_FORCE ovs_be32 *) &wc->masks)[TP_PORTS_OFS32];
+
+        adjust_ports_mask = true;
 
         goto no_match;
     }
@@ -1751,6 +1758,14 @@ no_match:
     /* Unwildcard the bits in stages so far, as they were used in determining
      * there is no match. */
     flow_wildcards_fold_minimask_in_map(wc, &subtable->mask, stages_map);
+    if (adjust_ports_mask) {
+        /* This has to be done after updating flow wildcards to overwrite
+         * the ports mask back.  We can't simply disable the corresponding bit
+         * in the stages map, because it has 64-bit resolution, i.e. one
+         * bit covers not only tp_src/dst, but also ct_tp_src/dst, which are
+         * not covered by the trie. */
+        ((OVS_FORCE ovs_be32 *) &wc->masks)[TP_PORTS_OFS32] = ports_mask;
+    }
     return NULL;
 }
 
