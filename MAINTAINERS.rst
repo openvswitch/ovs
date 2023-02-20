@@ -65,8 +65,6 @@ This is the current list of active Open vSwitch committers:
      - jpettit@ovn.org
    * - Pravin B Shelar
      - pshelar@ovn.org
-   * - Russell Bryant
-     - russell@ovn.org
    * - Simon Horman
      - horms@ovn.org
    * - Thomas Graf
@@ -91,6 +89,8 @@ More information about Emeritus Committers can be found here:
      - ejj@eecs.berkeley.edu
    * - Joe Stringer
      - joe@ovn.org
+   * - Russell Bryant
+     - russell@ovn.org
 
 .. Cut here for the Documentation/internals/maintainers.rst
 
