@@ -450,6 +450,7 @@ Venkata Anil Kommaddi              vkommadi@redhat.com
 Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
 Vlad Buslov                        vladbu@nvidia.com
+Vladislav Odintsov                 odivlad@gmail.com
 Volkan Atlı                        volkan.atli@b-ulltech.com
 Wan Junjie                         wanjunjie@bytedance.com
 Wang Li                            wangli39@baidu.com
