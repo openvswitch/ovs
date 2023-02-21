@@ -1380,7 +1380,7 @@ The ``delete_field`` action
   | ``delete_field:``\ *field*
 
 The ``delete_field`` action deletes a *field* in the syntax described under
-`Field Specifications`_ above.  Currently, only the ``tun_metadta`` fields are
+`Field Specifications`_ above.  Currently, only the ``tun_metadata`` fields are
 supported.
 
 This action was added in Open vSwitch 2.14.
