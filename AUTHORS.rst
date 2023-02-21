@@ -310,6 +310,7 @@ Michal Weglicki                    michalx.weglicki@intel.com
 Michele Baldessari                 michele@acksyn.org
 Mickey Spiegel                     mickeys.dev@gmail.com
 Miguel Angel Ajo                   majopela@redhat.com
+Miika Petäjäniemi                  miika.petajaniemi@solita.fi
 Mijo Safradin                      mijo@linux.vnet.ibm.com
 Mika Vaisanen                      mika.vaisanen@gmail.com
 Mike Pattrick                      mkp@redhat.com
