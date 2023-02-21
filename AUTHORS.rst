@@ -262,6 +262,7 @@ Leif Madsen                        lmadsen@redhat.com
 Leo Alterman
 Li RongQing                        lirongqing@baidu.com
 Lian-min Wang                      liang-min.wang@intel.com
+Liang Mancang                      liangmc1@chinatelecom.cn
 Lin Huang                          linhuang@ruijie.com.cn
 Liu Chang                          liuchang@cmss.chinamobile.com
 Lilijun                            jerry.lilijun@huawei.com
@@ -448,6 +449,7 @@ Usman Ansari                       ua1422@gmail.com
 Valient Gough                      vgough@pobox.com
 Vasu Dasari                        vdasari@gmail.com
 Venkata Anil Kommaddi              vkommadi@redhat.com
+Viacheslav Galaktionov             viacheslav.galaktionov@arknetworks.am
 Vishal Deep Ajmera                 vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande             vbr@soprive.net
 Vlad Buslov                        vladbu@nvidia.com
