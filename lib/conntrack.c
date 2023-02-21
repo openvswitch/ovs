@@ -1512,12 +1512,12 @@ conntrack_clean(struct conntrack *ct, long long now)
     clean_end = n_conn_limit / 64;
 
     for (i = ct->next_sweep; i < N_EXP_LISTS; i++) {
-        count += ct_sweep(ct, &ct->exp_lists[i], now);
-
         if (count > clean_end) {
             next_wakeup = 0;
             break;
         }
+
+        count += ct_sweep(ct, &ct->exp_lists[i], now);
     }
 
     ct->next_sweep = (i < N_EXP_LISTS) ? i : 0;
