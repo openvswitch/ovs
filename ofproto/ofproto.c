@@ -4824,6 +4824,10 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results,
     created = rule->created;
     ovs_mutex_unlock(&rule->mutex);
 
+    if (rule->flow_cookie != 0) {
+        ds_put_format(results, "cookie=0x%"PRIx64", ",
+                      ntohll(rule->flow_cookie));
+    }
     if (rule->table_id != 0) {
         ds_put_format(results, "table_id=%"PRIu8", ", rule->table_id);
     }
