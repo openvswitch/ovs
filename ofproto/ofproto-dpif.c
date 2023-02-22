@@ -714,12 +714,6 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
     free(backer);
 }
 
-/* Datapath port slated for removal from datapath. */
-struct odp_garbage {
-    struct ovs_list list_node;
-    odp_port_t odp_port;
-};
-
 static void check_support(struct dpif_backer *backer);
 
 static int
@@ -729,8 +723,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     struct dpif_port_dump port_dump;
     struct dpif_port port;
     struct shash_node *node;
-    struct ovs_list garbage_list;
-    struct odp_garbage *garbage;
 
     struct sset names;
     char *backer_name;
@@ -792,24 +784,22 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         dpif_flow_flush(backer->dpif);
     }
 
-    /* Loop through the ports already on the datapath and remove any
-     * that we don't need anymore. */
-    ovs_list_init(&garbage_list);
+    /* Loop through the ports already on the datapath and find ones that are
+     * not on the initial OpenFlow ports list.  These are stale ports, that we
+     * do not need anymore, or tunnel backing interfaces, that do not generally
+     * match the name of OpenFlow tunnel ports, or both.  Add all of them to
+     * the list of tunnel backers.  type_run() will garbage collect those that
+     * are not active tunnel backing interfaces during revalidation. */
     dpif_port_dump_start(&port_dump, backer->dpif);
     while (dpif_port_dump_next(&port_dump, &port)) {
         node = shash_find(&init_ofp_ports, port.name);
         if (!node && strcmp(port.name, dpif_base_name(backer->dpif))) {
-            garbage = xmalloc(sizeof *garbage);
-            garbage->odp_port = port.port_no;
-            ovs_list_push_front(&garbage_list, &garbage->list_node);
+            simap_put(&backer->tnl_backers, port.name,
+                      odp_to_u32(port.port_no));
+            backer->need_revalidate = REV_RECONFIGURE;
         }
     }
     dpif_port_dump_done(&port_dump);
-
-    LIST_FOR_EACH_POP (garbage, list_node, &garbage_list) {
-        dpif_port_del(backer->dpif, garbage->odp_port, false);
-        free(garbage);
-    }
 
     shash_add(&all_dpif_backers, type, backer);
 
