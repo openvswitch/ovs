@@ -63,3 +63,62 @@ AT_CHECK([
     [stdout], [Device "br-p1" does not exist.]
 )
 AT_CLEANUP
+
+AT_SETUP([interface - datapath ports garbage collection])
+OVS_CHECK_GENEVE()
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Not relevant for userspace datapath.
+AT_SKIP_IF([! ovs-appctl dpctl/show | grep -q ovs-system])
+
+AT_CHECK([ovs-vsctl add-port br0 tunnel_port dnl
+            -- set Interface tunnel_port dnl
+                   type=geneve options:remote_ip=flow options:key=123])
+
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+on_exit 'ip link del ovs-veth0'
+
+AT_CHECK([ovs-vsctl add-port br0 ovs-veth0])
+
+OVS_WAIT_UNTIL([ip link show | grep -q " genev_sys_[[0-9]]*: .* ovs-system "])
+
+dnl Store the output of ip link for geneve port to compare ifindex later.
+AT_CHECK([ip link show | grep " genev_sys_[[0-9]]*: .* ovs-system " > geneve.0])
+
+AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
+  port 0: ovs-system (internal)
+  port 1: br0 (internal)
+  port 2: genev_sys_6081 (geneve: packet_type=ptap)
+  port 3: ovs-veth0
+])
+
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovs-vswitchd], [ovs-vswitchd.pid])
+
+dnl Check that geneve backing interface is still in the datapath.
+AT_CHECK([ip link show | grep " genev_sys_[[0-9]]*: .* ovs-system " | diff -u - geneve.0])
+
+dnl Remove the veth port from the database while ovs-vswitchd is down.
+AT_CHECK([ovs-vsctl --no-wait del-port ovs-veth0])
+
+dnl Check that it is still tied to the OVS datapath.
+AT_CHECK([ip link show ovs-veth0 | grep -q ovs-system])
+
+dnl Bring ovs-vswitchd back up.
+AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vdpif:dbg],
+         [0], [], [stderr])
+
+dnl Wait for the veth port to be removed from the datapath.
+OVS_WAIT_WHILE([ip link show ovs-veth0 | grep -q ovs-system])
+
+AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
+  port 0: ovs-system (internal)
+  port 1: br0 (internal)
+  port 2: genev_sys_6081 (geneve: packet_type=ptap)
+])
+
+dnl Check that geneve backing interface is still in the datapath and it wasn't
+dnl re-created, i.e. the ifindex is the same.
+AT_CHECK([ip link show | grep " genev_sys_[[0-9]]*: .* ovs-system " | diff -u - geneve.0])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
