@@ -18,6 +18,16 @@ m4_define([OVS_CHECK_ACTIONS], [
            [0], [$1])
 ])
 
+m4_define([CHECK_TC_INGRESS_PPS],
+[
+    AT_SKIP_IF([test $HAVE_TC = "no"])
+    AT_CHECK([ip link add ovs_tc_pps0 type veth peer name ovs_tc_pps1 dnl
+                  || exit 77])
+    on_exit 'ip link del ovs_tc_pps0'
+    AT_CHECK([tc qdisc add dev ovs_tc_pps0 handle ffff: ingress || exit 77])
+    AT_CHECK([tc filter add dev ovs_tc_pps0 parent ffff: u32 match dnl
+                  u32 0 0 police pkts_rate 100 pkts_burst 10 || exit 77])
+])
 
 AT_SETUP([offloads - ping between two ports - offloads disabled])
 OVS_TRAFFIC_VSWITCHD_START()
@@ -132,7 +142,7 @@ AT_CLEANUP
 
 AT_SETUP([offloads - set ingress_policing_kpkts_rate and ingress_policing_kpkts_burst - offloads disabled])
 AT_KEYWORDS([ingress_policing_kpkts])
-AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
+CHECK_TC_INGRESS_PPS()
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=false])
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
@@ -156,7 +166,7 @@ AT_CLEANUP
 
 AT_SETUP([offloads - set ingress_policing_kpkts_rate and ingress_policing_kpkts_burst - offloads enabled])
 AT_KEYWORDS([ingress_policing_kpkts])
-AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
+CHECK_TC_INGRESS_PPS()
 OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 ADD_NAMESPACES(at_ns0)

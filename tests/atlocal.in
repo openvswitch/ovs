@@ -172,17 +172,6 @@ fi
 # Set HAVE_TC
 find_command tc
 
-# When HAVE_TC=yes, check if the current tc supports adding pps filter
-SUPPORT_TC_INGRESS_PPS="no"
-if test $HAVE_TC="yes"; then
-    ip link add veth0 type veth peer name veth1
-    tc qdisc add dev veth0 handle ffff: ingress
-    if tc filter add dev veth0 parent ffff: u32 match u32 0 0 police pkts_rate 100 pkts_burst 10; then
-        SUPPORT_TC_INGRESS_PPS="yes"
-    fi
-    ip link del veth0
-fi
-
 # Set HAVE_TCPDUMP
 find_command tcpdump
 
