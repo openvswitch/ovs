@@ -1,5 +1,7 @@
 Post-v3.1.0
 --------------------
+   - IPFIX template and statistics intervals can now be configured through two
+     new options in the IPFIX table: 'template_interval' and 'stats_interval'.
    - Linux kernel datapath:
      * OVS now collects per-interface upcall statistics that can be obtained
        via 'ovs-appctl dpctl/show -s' or the interface's statistics column

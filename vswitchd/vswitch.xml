@@ -6596,6 +6596,26 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       disabled.
     </column>
 
+    <column name="stats_interval">
+      <p>
+          Interval (in seconds) for sending IPFIX exporting process statistics
+          according to IETF RFC 5101 Section 4.3.
+      </p>
+      <p>
+          Default value is 600
+      </p>
+    </column>
+
+    <column name="template_interval">
+      <p>
+          Interval (in seconds) for sending IPFIX Template information for each
+          Observation Domain ID.
+      </p>
+      <p>
+          Default value is 600
+      </p>
+    </column>
+
     <column name="other_config" key="enable-tunnel-sampling"
             type='{"type": "boolean"}'>
       <p>

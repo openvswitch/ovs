@@ -1542,6 +1542,17 @@ bridge_configure_ipfix(struct bridge *br)
         if (be_cfg->cache_max_flows) {
             be_opts.cache_max_flows = *be_cfg->cache_max_flows;
         }
+        if (be_cfg->stats_interval) {
+            be_opts.stats_interval = *be_cfg->stats_interval;
+        } else {
+            be_opts.stats_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+        }
+        if (be_cfg->template_interval) {
+            be_opts.template_interval = *be_cfg->template_interval;
+        } else {
+            be_opts.template_interval =
+                OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+        }
 
         be_opts.enable_tunnel_sampling = smap_get_bool(&be_cfg->other_config,
                                              "enable-tunnel-sampling", true);
@@ -1570,6 +1581,12 @@ bridge_configure_ipfix(struct bridge *br)
                     ? *fe_cfg->ipfix->cache_active_timeout : 0;
                 opts->cache_max_flows = fe_cfg->ipfix->cache_max_flows
                     ? *fe_cfg->ipfix->cache_max_flows : 0;
+                opts->stats_interval = fe_cfg->ipfix->stats_interval
+                    ? *fe_cfg->ipfix->stats_interval
+                    : OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+                opts->template_interval = fe_cfg->ipfix->template_interval
+                    ? *fe_cfg->ipfix->template_interval
+                    : OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
                 opts->enable_tunnel_sampling = smap_get_bool(
                                                    &fe_cfg->ipfix->other_config,
                                                   "enable-tunnel-sampling", true);

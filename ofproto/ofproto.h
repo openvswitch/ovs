@@ -72,6 +72,11 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
+/* When using UDP, IPFIX Template Records must be re-sent regularly.
+ * The standard default interval is 10 minutes (600 seconds).
+ * Cf. IETF RFC 5101 Section 10.3.6. */
+#define OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL 600
+
 struct ofproto_ipfix_bridge_exporter_options {
     struct sset targets;
     uint32_t sampling_rate;
@@ -79,6 +84,8 @@ struct ofproto_ipfix_bridge_exporter_options {
     uint32_t obs_point_id;  /* Bridge-wide Observation Point ID. */
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    uint32_t template_interval;
+    uint32_t stats_interval;
     bool enable_tunnel_sampling;
     bool enable_input_sampling;
     bool enable_output_sampling;
@@ -90,6 +97,8 @@ struct ofproto_ipfix_flow_exporter_options {
     struct sset targets;
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    uint32_t template_interval;
+    uint32_t stats_interval;
     bool enable_tunnel_sampling;
     char *virtual_obs_id;
 };
