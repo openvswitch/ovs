@@ -47,17 +47,20 @@
 
 #define UPCALL_MAX_BATCH 64
 #define REVALIDATE_MAX_BATCH 50
+#define UINT64_THREE_QUARTERS (UINT64_MAX / 4 * 3)
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
 COVERAGE_DEFINE(dumped_duplicate_flow);
 COVERAGE_DEFINE(dumped_new_flow);
 COVERAGE_DEFINE(handler_duplicate_upcall);
-COVERAGE_DEFINE(upcall_ukey_contention);
-COVERAGE_DEFINE(upcall_ukey_replace);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
+COVERAGE_DEFINE(ukey_dp_change);
+COVERAGE_DEFINE(ukey_invalid_stat_reset);
 COVERAGE_DEFINE(upcall_flow_limit_hit);
 COVERAGE_DEFINE(upcall_flow_limit_kill);
+COVERAGE_DEFINE(upcall_ukey_contention);
+COVERAGE_DEFINE(upcall_ukey_replace);
 
 /* A thread that reads upcalls from dpif, forwards each upcall's packet,
  * and possibly sets up a kernel flow as a cache. */
@@ -287,6 +290,7 @@ struct udpif_key {
 
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
+    const char *dp_layer OVS_GUARDED;         /* Last known dp_layer. */
     long long int created OVS_GUARDED;        /* Estimate of creation time. */
     uint64_t dump_seq OVS_GUARDED;            /* Tracks udpif->dump_seq. */
     uint64_t reval_seq OVS_GUARDED;           /* Tracks udpif->reval_seq. */
@@ -1754,6 +1758,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->created = ukey->flow_time = time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->stats.used = used;
+    ukey->dp_layer = NULL;
     ukey->xcache = NULL;
 
     ukey->offloaded = false;
@@ -2330,6 +2335,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                     ? stats->n_bytes - ukey->stats.n_bytes
                     : 0);
 
+    if (stats->n_packets < ukey->stats.n_packets &&
+        ukey->stats.n_packets < UINT64_THREE_QUARTERS) {
+        /* Report cases where the packet counter is lower than the previous
+         * instance, but exclude the potential wrapping of an uint64_t. */
+        COVERAGE_INC(ukey_invalid_stat_reset);
+    }
+
     if (need_revalidate) {
         if (should_revalidate(udpif, push.n_packets, ukey->stats.used)) {
             if (!ukey->xcache) {
@@ -2443,6 +2455,15 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
             push->tcp_flags = stats->tcp_flags | op->ukey->stats.tcp_flags;
             push->n_packets = stats->n_packets - op->ukey->stats.n_packets;
             push->n_bytes = stats->n_bytes - op->ukey->stats.n_bytes;
+
+            if (stats->n_packets < op->ukey->stats.n_packets &&
+                op->ukey->stats.n_packets < UINT64_THREE_QUARTERS) {
+                /* Report cases where the packet counter is lower than the
+                 * previous instance, but exclude the potential wrapping of an
+                 * uint64_t. */
+                COVERAGE_INC(ukey_invalid_stat_reset);
+            }
+
             ovs_mutex_unlock(&op->ukey->mutex);
         } else {
             push = stats;
@@ -2745,6 +2766,22 @@ revalidate(struct revalidator *revalidator)
                     }
                 }
                 continue;
+            }
+
+            ukey->offloaded = f->attrs.offloaded;
+            if (!ukey->dp_layer
+                || (!dpif_synced_dp_layers(udpif->dpif)
+                    && strcmp(ukey->dp_layer, f->attrs.dp_layer))) {
+
+                if (ukey->dp_layer) {
+                    /* The dp_layer has changed this is probably due to an
+                     * earlier revalidate cycle moving it to/from hw offload.
+                     * In this case we should reset the ukey stored statistics,
+                     * as they are from the deleted DP flow. */
+                    COVERAGE_INC(ukey_dp_change);
+                    memset(&ukey->stats, 0, sizeof ukey->stats);
+                }
+                ukey->dp_layer = f->attrs.dp_layer;
             }
 
             already_dumped = ukey->dump_seq == dump_seq;
