@@ -783,6 +783,17 @@ udpif_get_n_flows(struct udpif *udpif)
         atomic_store_relaxed(&udpif->n_flows_timestamp, now);
         dpif_get_dp_stats(udpif->dpif, &stats);
         flow_count = stats.n_flows;
+
+        if (!dpif_synced_dp_layers(udpif->dpif)) {
+            /* If the dpif layer does not sync the flows, we need to include
+             * the hardware offloaded flows separately. */
+            uint64_t hw_flows;
+
+            if (!dpif_get_n_offloaded_flows(udpif->dpif, &hw_flows)) {
+                flow_count += hw_flows;
+            }
+        }
+
         atomic_store_relaxed(&udpif->n_flows, flow_count);
         ovs_mutex_unlock(&udpif->n_flows_mutex);
     } else {
