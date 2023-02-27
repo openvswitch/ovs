@@ -9527,6 +9527,7 @@ dpif_netdev_bond_stats_get(struct dpif *dpif, uint32_t bond_id,
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     true,                       /* cleanup_required */
+    true,                       /* synced_dp_layers */
     dpif_netdev_init,
     dpif_netdev_enumerate,
     dpif_netdev_port_open_type,

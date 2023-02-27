@@ -4495,6 +4495,7 @@ dpif_netlink_cache_set_size(struct dpif *dpif_, uint32_t level, uint32_t size)
 const struct dpif_class dpif_netlink_class = {
     "system",
     false,                      /* cleanup_required */
+    false,                      /* synced_dp_layers */
     NULL,                       /* init */
     dpif_netlink_enumerate,
     NULL,
