@@ -175,7 +175,7 @@
 
 #if __GNUC__
 #define OVSRCU_TYPE(TYPE) struct { ATOMIC(TYPE) p; }
-#define OVSRCU_INITIALIZER(VALUE) { ATOMIC_VAR_INIT(VALUE) }
+#define OVSRCU_INITIALIZER(VALUE) { VALUE }
 #define ovsrcu_get__(TYPE, VAR, ORDER)                                  \
     ({                                                                  \
         TYPE value__;                                                   \
@@ -207,7 +207,7 @@
 #else  /* not GNU C */
 struct ovsrcu_pointer { ATOMIC(void *) p; };
 #define OVSRCU_TYPE(TYPE) struct ovsrcu_pointer
-#define OVSRCU_INITIALIZER(VALUE) { ATOMIC_VAR_INIT(VALUE) }
+#define OVSRCU_INITIALIZER(VALUE) { VALUE }
 static inline void *
 ovsrcu_get__(const struct ovsrcu_pointer *pointer, memory_order order)
 {

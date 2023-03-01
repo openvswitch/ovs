@@ -118,7 +118,7 @@ static struct ovs_list vlog_modules OVS_GUARDED_BY(log_file_mutex)
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
 
 /* Log facility configuration. */
-static atomic_int log_facility = ATOMIC_VAR_INIT(0);
+static atomic_int log_facility = 0;
 
 /* Facility name and its value. */
 struct vlog_facility {

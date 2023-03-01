@@ -91,10 +91,9 @@
  * Life Cycle
  * ==========
  *
- * To initialize an atomic variable at its point of definition, use
- * ATOMIC_VAR_INIT:
+ * To initialize an atomic variable at its point of definition, use:
  *
- *     static atomic_int ai = ATOMIC_VAR_INIT(123);
+ *     static atomic_int ai = 123;
  *
  * To initialize an atomic variable in code, use atomic_init():
  *

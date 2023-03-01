@@ -420,8 +420,8 @@ static int udpif_flow_unprogram(struct udpif *udpif, struct udpif_key *ukey,
 static upcall_callback upcall_cb;
 static dp_purge_callback dp_purge_cb;
 
-static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
-static atomic_bool enable_ufid = ATOMIC_VAR_INIT(true);
+static atomic_bool enable_megaflows = true;
+static atomic_bool enable_ufid = true;
 
 void
 udpif_init(void)

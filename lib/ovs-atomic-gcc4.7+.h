@@ -30,7 +30,6 @@ typedef enum {
     memory_order_seq_cst = __ATOMIC_SEQ_CST
 } memory_order;
 
-#define ATOMIC_VAR_INIT(VALUE) (VALUE)
 #define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
 
 #define atomic_thread_fence __atomic_thread_fence

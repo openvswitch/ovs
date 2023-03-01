@@ -47,7 +47,7 @@ VLOG_DEFINE_THIS_MODULE(dpdk);
 static FILE *log_stream = NULL;       /* Stream for DPDK log redirection */
 
 /* Indicates successful initialization of DPDK. */
-static atomic_bool dpdk_initialized = ATOMIC_VAR_INIT(false);
+static atomic_bool dpdk_initialized = false;
 
 static bool
 args_contains(const struct svec *args, const char *value)
