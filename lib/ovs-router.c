@@ -359,7 +359,7 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
         is_ipv6 = true;
     } else {
         unixctl_command_reply_error(conn,
-                                    "Invalid 'ip_addr/prefix_len' parameter");
+                                    "Invalid 'ip/plen' parameter");
         return;
     }
 
@@ -537,12 +537,12 @@ ovs_router_init(void)
         fatal_signal_add_hook(ovs_router_flush_handler, NULL, NULL, true);
         classifier_init(&cls, NULL);
         unixctl_command_register("ovs/route/add",
-                                 "ip_addr/prefix_len out_br_name [gw] "
+                                 "ip/plen output_bridge [gw] "
                                  "[pkt_mark=mark]",
                                  2, 4, ovs_router_add, NULL);
         unixctl_command_register("ovs/route/show", "", 0, 0,
                                  ovs_router_show, NULL);
-        unixctl_command_register("ovs/route/del", "ip_addr/prefix_len "
+        unixctl_command_register("ovs/route/del", "ip/plen "
                                  "[pkt_mark=mark]", 1, 2, ovs_router_del,
                                  NULL);
         unixctl_command_register("ovs/route/lookup", "ip_addr "

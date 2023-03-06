@@ -16,7 +16,7 @@ Error while inserting route.
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl ovs/route/add 1.1.foo.bar/24 br0 2.2.2.10], [2], [], [dnl
-Invalid 'ip_addr/prefix_len' parameter
+Invalid 'ip/plen' parameter
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl ovs/route/add 2.2.2.4/24 br0 pkt_mark=baz], [2], [], [dnl
