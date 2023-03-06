@@ -164,6 +164,46 @@ static void rt_init_match(struct match *match, uint32_t mark,
     match->flow.pkt_mark = mark;
 }
 
+static int
+verify_prefsrc(const struct in6_addr *ip6_dst,
+               const char output_bridge[],
+               struct in6_addr *prefsrc)
+{
+    struct in6_addr *mask, *addr6;
+    struct netdev *dev;
+    int err, n_in6, i;
+
+    err = netdev_open(output_bridge, NULL, &dev);
+    if (err) {
+        return err;
+    }
+
+    err = netdev_get_addr_list(dev, &addr6, &mask, &n_in6);
+    if (err) {
+        goto out;
+    }
+
+    for (i = 0; i < n_in6; i++) {
+        struct in6_addr a1, a2;
+        a1 = ipv6_addr_bitand(ip6_dst, &mask[i]);
+        a2 = ipv6_addr_bitand(prefsrc, &mask[i]);
+
+        /* Check that the interface has "prefsrc" and
+         * it is same broadcast domain with "ip6_dst". */
+        if (IN6_ARE_ADDR_EQUAL(prefsrc, &addr6[i]) &&
+            IN6_ARE_ADDR_EQUAL(&a1, &a2)) {
+            goto out;
+        }
+    }
+    err = ENOENT;
+
+out:
+    free(addr6);
+    free(mask);
+    netdev_close(dev);
+    return err;
+}
+
 int
 ovs_router_get_netdev_source_address(const struct in6_addr *ip6_dst,
                                      const char output_bridge[],
@@ -217,8 +257,12 @@ static int
 ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
                     const struct in6_addr *ip6_dst,
                     uint8_t plen, const char output_bridge[],
-                    const struct in6_addr *gw)
+                    const struct in6_addr *gw,
+                    const struct in6_addr *ip6_src)
 {
+    int (*get_src_addr)(const struct in6_addr *ip6_dst,
+                        const char output_bridge[],
+                        struct in6_addr *prefsrc);
     const struct cls_rule *cr;
     struct ovs_router_entry *p;
     struct match match;
@@ -236,11 +280,17 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
     p->plen = plen;
     p->local = local;
     p->priority = priority;
-    err = ovs_router_get_netdev_source_address(ip6_dst, output_bridge,
-                                               &p->src_addr);
+
+    if (ipv6_addr_is_set(ip6_src)) {
+        p->src_addr = *ip6_src;
+        get_src_addr = verify_prefsrc;
+    } else {
+        get_src_addr = ovs_router_get_netdev_source_address;
+    }
+
+    err = get_src_addr(ip6_dst, output_bridge, &p->src_addr);
     if (err && ipv6_addr_is_set(gw)) {
-        err = ovs_router_get_netdev_source_address(gw, output_bridge,
-                                                   &p->src_addr);
+        err = get_src_addr(gw, output_bridge, &p->src_addr);
     }
     if (err) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -274,7 +324,8 @@ ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
 {
     if (use_system_routing_table) {
         uint8_t priority = local ? plen + 64 : plen;
-        ovs_router_insert__(mark, priority, local, ip_dst, plen, output_bridge, gw);
+        ovs_router_insert__(mark, priority, local, ip_dst, plen,
+                            output_bridge, gw, &in6addr_any);
     }
 }
 
@@ -341,10 +392,13 @@ static void
 ovs_router_add(struct unixctl_conn *conn, int argc,
               const char *argv[], void *aux OVS_UNUSED)
 {
+    struct in6_addr src6 = in6addr_any;
     struct in6_addr gw6 = in6addr_any;
+    char src6_s[IPV6_SCAN_LEN + 1];
     struct in6_addr ip6;
     uint32_t mark = 0;
     unsigned int plen;
+    ovs_be32 src = 0;
     ovs_be32 gw = 0;
     bool is_ipv6;
     ovs_be32 ip;
@@ -370,24 +424,36 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
         }
 
         if (is_ipv6) {
+            if (ovs_scan(argv[i], "src="IPV6_SCAN_FMT, src6_s) &&
+                ipv6_parse(src6_s, &src6)) {
+                continue;
+            }
             if (ipv6_parse(argv[i], &gw6)) {
                 continue;
             }
         } else {
+            if (ovs_scan(argv[i], "src="IP_SCAN_FMT, IP_SCAN_ARGS(&src))) {
+                continue;
+            }
             if (ip_parse(argv[i], &gw)) {
                 continue;
             }
         }
 
-        unixctl_command_reply_error(conn, "Invalid pkt_mark or IP gateway");
+        unixctl_command_reply_error(conn,
+                                    "Invalid pkt_mark, IP gateway or src_ip");
         return;
     }
 
     if (gw) {
         in6_addr_set_mapped_ipv4(&gw6, gw);
     }
+    if (src) {
+        in6_addr_set_mapped_ipv4(&src6, src);
+    }
 
-    err = ovs_router_insert__(mark, plen + 32, false, &ip6, plen, argv[2], &gw6);
+    err = ovs_router_insert__(mark, plen + 32, false, &ip6, plen, argv[2],
+                              &gw6, &src6);
     if (err) {
         unixctl_command_reply_error(conn, "Error while inserting route.");
     } else {
@@ -538,8 +604,8 @@ ovs_router_init(void)
         classifier_init(&cls, NULL);
         unixctl_command_register("ovs/route/add",
                                  "ip/plen output_bridge [gw] "
-                                 "[pkt_mark=mark]",
-                                 2, 4, ovs_router_add, NULL);
+                                 "[pkt_mark=mark] [src=src_ip]",
+                                 2, 5, ovs_router_add, NULL);
         unixctl_command_register("ovs/route/show", "", 0, 0,
                                  ovs_router_show, NULL);
         unixctl_command_register("ovs/route/del", "ip/plen "

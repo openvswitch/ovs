@@ -20,13 +20,91 @@ Invalid 'ip/plen' parameter
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl ovs/route/add 2.2.2.4/24 br0 pkt_mark=baz], [2], [], [dnl
-Invalid pkt_mark or IP gateway
+Invalid pkt_mark, IP gateway or src_ip
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [dnl
 User: 1.1.1.0/24 dev br0 GW 2.2.2.10 SRC 2.2.2.2
 User: 1.1.2.0/24 MARK 2 dev br0 GW 2.2.2.10 SRC 2.2.2.2
 User: 2.2.2.3/32 MARK 1 dev br0 SRC 2.2.2.2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/add with src - ipv4])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.168.9.2/24], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.168.9.3/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.9.11/32 br0 src=192.168.9.3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.12/32 br0 192.168.9.1 src=192.168.9.3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.13/32 br0 192.168.9.1 pkt_mark=13 src=192.168.9.3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.14/32 br0 192.168.9.1 pkt_mark=14 src=192.168.9.2], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.15/32 br0 192.168.9.1 src=foo.bar.9.200], [2], [], [dnl
+Invalid pkt_mark, IP gateway or src_ip
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.16/32 br0 192.168.9.1 src=192.168.9.200], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.17/32 br0 192.168.11.1 src=192.168.9.3], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.10.18/32 br0 src=192.168.9.3], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/show | grep User | grep 192.168.10 | sort], [0], [dnl
+User: 192.168.10.12/32 dev br0 GW 192.168.9.1 SRC 192.168.9.3
+User: 192.168.10.13/32 MARK 13 dev br0 GW 192.168.9.1 SRC 192.168.9.3
+User: 192.168.10.14/32 MARK 14 dev br0 GW 192.168.9.1 SRC 192.168.9.2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/add with src - ipv6])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:db8:cafe::2/64], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:db8:cafe::3/64], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:cafe::11/128 br0 src=2001:db8:cafe::3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::12/128 br0 2001:db8:cafe::1 src=2001:db8:cafe::3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::13/128 br0 2001:db8:cafe::1 pkt_mark=13 src=2001:db8:cafe::3], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::14/128 br0 2001:db8:cafe::1 pkt_mark=14 src=2001:db8:cafe::2], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::15/128 br0 2001:db8:cafe::1 src=foo:bar:2001:db8:cafe], [2], [], [dnl
+Invalid pkt_mark, IP gateway or src_ip
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::16/128 br0 2001:db8:cafe::1 src=2001:db8:cafe::200], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::17/128 br0 2001:db8:face::1 src=2001:db8:cafe::3], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:beef::18/128 br0 src=2001:db8:cafe::3], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/show | grep User | grep 2001:db8:beef | sort], [0], [dnl
+User: 2001:db8:beef::12/128 dev br0 GW 2001:db8:cafe::1 SRC 2001:db8:cafe::3
+User: 2001:db8:beef::13/128 MARK 13 dev br0 GW 2001:db8:cafe::1 SRC 2001:db8:cafe::3
+User: 2001:db8:beef::14/128 MARK 14 dev br0 GW 2001:db8:cafe::1 SRC 2001:db8:cafe::2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

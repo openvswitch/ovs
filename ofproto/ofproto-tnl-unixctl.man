@@ -1,8 +1,9 @@
 .SS "OPENVSWITCH TUNNELING COMMANDS"
 These commands query and modify OVS tunnel components.
 .
-.IP "\fBovs/route/add ip/plen output_bridge [gw] [pkt_mark=mark]\fR"
-Adds ip/plen route to vswitchd routing table. output_bridge
+.IP "\fBovs/route/add \fIip\fB/\fIplen\fB \fIoutput_bridge\fB \
+[\fIgw\fB] [pkt_mark=\fImark\fB] [src=\fIsrc_ip\fB]\fR"
+Adds \fIip\fR/\fIplen\fR route to vswitchd routing table. \fIoutput_bridge\fR
 needs to be OVS bridge name.  This command is useful if OVS cached
 routes does not look right.
 .
