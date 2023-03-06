@@ -6,6 +6,8 @@ Post-v3.1.0
      * OVS now collects per-interface upcall statistics that can be obtained
        via 'ovs-appctl dpctl/show -s' or the interface's statistics column
        in OVSDB.  Available with upstream kernel 6.2+.
+   - OVS route table in userspace now takes into account preferred source
+     address from cached kernel routes.
    - ovs-appctl:
      * Add support for selecting the source address with the
        'ovs-appctl ovs/route/add' command.

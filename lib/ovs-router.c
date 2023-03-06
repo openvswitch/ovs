@@ -319,13 +319,13 @@ ovs_router_insert__(uint32_t mark, uint8_t priority, bool local,
 
 void
 ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
-                  bool local, const char output_bridge[], 
-                  const struct in6_addr *gw)
+                  bool local, const char output_bridge[],
+                  const struct in6_addr *gw, const struct in6_addr *prefsrc)
 {
     if (use_system_routing_table) {
         uint8_t priority = local ? plen + 64 : plen;
         ovs_router_insert__(mark, priority, local, ip_dst, plen,
-                            output_bridge, gw, &in6addr_any);
+                            output_bridge, gw, prefsrc);
     }
 }
 
