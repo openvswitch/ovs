@@ -136,8 +136,7 @@ struct netdev_dummy {
 
     struct pcap_file *tx_pcap, *rxq_pcap OVS_GUARDED;
 
-    struct in_addr address, netmask;
-    struct in6_addr ipv6, ipv6_mask;
+    struct ovs_list addrs OVS_GUARDED;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
 
     struct hmap offloaded_flows OVS_GUARDED;
@@ -161,6 +160,12 @@ struct netdev_rxq_dummy {
     struct seq *seq;            /* Reports newly queued packets. */
 };
 
+struct netdev_addr_dummy {
+    struct in6_addr address;
+    struct in6_addr netmask;
+    struct ovs_list node;       /* In netdev_dummy's "addrs" list. */
+};
+
 static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_construct(struct netdev *);
 static void netdev_dummy_queue_packet(struct netdev_dummy *,
@@ -169,6 +174,7 @@ static void netdev_dummy_queue_packet(struct netdev_dummy *,
 static void dummy_packet_stream_close(struct dummy_packet_stream *);
 
 static void pkt_list_delete(struct ovs_list *);
+static void addr_list_delete(struct ovs_list *);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -720,6 +726,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     dummy_packet_conn_init(&netdev->conn);
 
     ovs_list_init(&netdev->rxes);
+    ovs_list_init(&netdev->addrs);
     hmap_init(&netdev->offloaded_flows);
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -756,6 +763,7 @@ netdev_dummy_destruct(struct netdev *netdev_)
         free(off_flow);
     }
     hmap_destroy(&netdev->offloaded_flows);
+    addr_list_delete(&netdev->addrs);
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_destroy(&netdev->mutex);
@@ -803,32 +811,24 @@ netdev_dummy_get_addr_list(const struct netdev *netdev_, struct in6_addr **paddr
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     int cnt = 0, i = 0, err = 0;
     struct in6_addr *addr, *mask;
+    struct netdev_addr_dummy *addr_dummy;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (netdev->address.s_addr != INADDR_ANY) {
-        cnt++;
-    }
 
-    if (ipv6_addr_is_set(&netdev->ipv6)) {
-        cnt++;
-    }
+    cnt = ovs_list_size(&netdev->addrs);
     if (!cnt) {
         err = EADDRNOTAVAIL;
         goto out;
     }
     addr = xmalloc(sizeof *addr * cnt);
     mask = xmalloc(sizeof *mask * cnt);
-    if (netdev->address.s_addr != INADDR_ANY) {
-        in6_addr_set_mapped_ipv4(&addr[i], netdev->address.s_addr);
-        in6_addr_set_mapped_ipv4(&mask[i], netdev->netmask.s_addr);
+
+    LIST_FOR_EACH (addr_dummy, node, &netdev->addrs) {
+        memcpy(&addr[i], &addr_dummy->address, sizeof *addr);
+        memcpy(&mask[i], &addr_dummy->netmask, sizeof *mask);
         i++;
     }
 
-    if (ipv6_addr_is_set(&netdev->ipv6)) {
-        memcpy(&addr[i], &netdev->ipv6, sizeof *addr);
-        memcpy(&mask[i], &netdev->ipv6_mask, sizeof *mask);
-        i++;
-    }
     if (paddr) {
         *paddr = addr;
         *pmask = mask;
@@ -844,14 +844,16 @@ out:
 }
 
 static int
-netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
+netdev_dummy_add_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    struct netdev_addr_dummy *addr_dummy = xmalloc(sizeof *addr_dummy);
 
     ovs_mutex_lock(&netdev->mutex);
-    netdev->address = address;
-    netdev->netmask = netmask;
+    in6_addr_set_mapped_ipv4(&addr_dummy->address, address.s_addr);
+    in6_addr_set_mapped_ipv4(&addr_dummy->netmask, netmask.s_addr);
+    ovs_list_push_back(&netdev->addrs, &addr_dummy->node);
     netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -859,14 +861,16 @@ netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
 }
 
 static int
-netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
+netdev_dummy_add_in6(struct netdev *netdev_, struct in6_addr *in6,
                      struct in6_addr *mask)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    struct netdev_addr_dummy *addr_dummy = xmalloc(sizeof *addr_dummy);
 
     ovs_mutex_lock(&netdev->mutex);
-    netdev->ipv6 = *in6;
-    netdev->ipv6_mask = *mask;
+    addr_dummy->address = *in6;
+    addr_dummy->netmask = *mask;
+    ovs_list_push_back(&netdev->addrs, &addr_dummy->node);
     netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -1178,7 +1182,10 @@ netdev_dummy_send(struct netdev *netdev, int qid,
         dummy_packet_conn_send(&dev->conn, buffer, size);
 
         /* Reply to ARP requests for 'dev''s assigned IP address. */
-        if (dev->address.s_addr) {
+        struct netdev_addr_dummy *addr_dummy;
+        LIST_FOR_EACH (addr_dummy, node, &dev->addrs) {
+            ovs_be32 address = in6_addr_get_mapped_ipv4(&addr_dummy->address);
+
             struct dp_packet dp;
             struct flow flow;
 
@@ -1186,11 +1193,12 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             flow_extract(&dp, &flow);
             if (flow.dl_type == htons(ETH_TYPE_ARP)
                 && flow.nw_proto == ARP_OP_REQUEST
-                && flow.nw_dst == dev->address.s_addr) {
+                && flow.nw_dst == address) {
                 struct dp_packet *reply = dp_packet_new(0);
                 compose_arp(reply, ARP_OP_REPLY, dev->hwaddr, flow.dl_src,
                             false, flow.nw_dst, flow.nw_src);
                 netdev_dummy_queue_packet(dev, reply, NULL, 0);
+                break;
             }
         }
 
@@ -1677,6 +1685,16 @@ pkt_list_delete(struct ovs_list *l)
     }
 }
 
+static void
+addr_list_delete(struct ovs_list *l)
+{
+    struct netdev_addr_dummy *addr_dummy;
+
+    LIST_FOR_EACH_POP (addr_dummy, node, l) {
+        free(addr_dummy);
+    }
+}
+
 static struct dp_packet *
 eth_from_packet(const char *s)
 {
@@ -2009,7 +2027,7 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         error = ip_parse_masked(argv[2], &ip.s_addr, &mask.s_addr);
         if (!error) {
-            netdev_dummy_set_in4(netdev, ip, mask);
+            netdev_dummy_add_in4(netdev, ip, mask);
             unixctl_command_reply(conn, "OK");
         } else {
             unixctl_command_reply_error(conn, error);
@@ -2038,7 +2056,7 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
             struct in6_addr mask;
 
             mask = ipv6_create_mask(plen);
-            netdev_dummy_set_in6(netdev, &ip6, &mask);
+            netdev_dummy_add_in6(netdev, &ip6, &mask);
             unixctl_command_reply(conn, "OK");
         } else {
             unixctl_command_reply_error(conn, error);
