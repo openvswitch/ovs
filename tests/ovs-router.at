@@ -1,13 +1,32 @@
 AT_BANNER([ovs-router])
 
-AT_SETUP([appctl - route/add with gateway])
+AT_SETUP([appctl - route/add with gateway and pkt_mark])
 AT_KEYWORDS([ovs_router])
-OVS_VSWITCHD_START([add-port br0 p2 -- set Interface p2 type=gre \
-                        options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
-                        -- add-port br0 p1  -- set interface p1 type=dummy])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 2.2.2.2/24], [0], [OK
 ])
+AT_CHECK([ovs-appctl ovs/route/add 2.2.2.3/32 br0 pkt_mark=1], [0], [OK
+])
 AT_CHECK([ovs-appctl ovs/route/add 1.1.1.0/24 br0 2.2.2.10], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.0/24 br0 2.2.2.10 pkt_mark=2], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.3.0/24 br0 pkt_mark=3], [2], [], [dnl
+Error while inserting route.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.foo.bar/24 br0 2.2.2.10], [2], [], [dnl
+Invalid 'ip_addr/prefix_len' parameter
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/add 2.2.2.4/24 br0 pkt_mark=baz], [2], [], [dnl
+Invalid pkt_mark or IP gateway
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [dnl
+User: 1.1.1.0/24 dev br0 GW 2.2.2.10 SRC 2.2.2.2
+User: 1.1.2.0/24 MARK 2 dev br0 GW 2.2.2.10 SRC 2.2.2.2
+User: 2.2.2.3/32 MARK 1 dev br0 SRC 2.2.2.2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

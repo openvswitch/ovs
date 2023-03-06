@@ -345,41 +345,46 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
     struct in6_addr ip6;
     uint32_t mark = 0;
     unsigned int plen;
+    ovs_be32 gw = 0;
+    bool is_ipv6;
     ovs_be32 ip;
     int err;
+    int i;
 
     if (scan_ipv4_route(argv[1], &ip, &plen)) {
-        ovs_be32 gw = 0;
-
-        if (argc > 3) {
-            if (!ovs_scan(argv[3], "pkt_mark=%"SCNi32, &mark) &&
-                !ip_parse(argv[3], &gw)) {
-                unixctl_command_reply_error(conn, "Invalid pkt_mark or gateway");
-                return;
-            }
-        }
         in6_addr_set_mapped_ipv4(&ip6, ip);
-        if (gw) {
-            in6_addr_set_mapped_ipv4(&gw6, gw);
-        }
         plen += 96;
+        is_ipv6 = false;
     } else if (scan_ipv6_route(argv[1], &ip6, &plen)) {
-        if (argc > 3) {
-            if (!ovs_scan(argv[3], "pkt_mark=%"SCNi32, &mark) &&
-                !ipv6_parse(argv[3], &gw6)) {
-                unixctl_command_reply_error(conn, "Invalid pkt_mark or IPv6 gateway");
-                return;
-            }
-        }
+        is_ipv6 = true;
     } else {
-        unixctl_command_reply_error(conn, "Invalid parameters");
+        unixctl_command_reply_error(conn,
+                                    "Invalid 'ip_addr/prefix_len' parameter");
         return;
     }
-    if (argc > 4) {
-        if (!ovs_scan(argv[4], "pkt_mark=%"SCNi32, &mark)) {
-            unixctl_command_reply_error(conn, "Invalid pkt_mark");
-            return;
+
+    /* Parse optional parameters. */
+    for (i = 3; i < argc; i++) {
+        if (ovs_scan(argv[i], "pkt_mark=%"SCNi32, &mark)) {
+            continue;
         }
+
+        if (is_ipv6) {
+            if (ipv6_parse(argv[i], &gw6)) {
+                continue;
+            }
+        } else {
+            if (ip_parse(argv[i], &gw)) {
+                continue;
+            }
+        }
+
+        unixctl_command_reply_error(conn, "Invalid pkt_mark or IP gateway");
+        return;
+    }
+
+    if (gw) {
+        in6_addr_set_mapped_ipv4(&gw6, gw);
     }
 
     err = ovs_router_insert__(mark, plen + 32, false, &ip6, plen, argv[2], &gw6);
