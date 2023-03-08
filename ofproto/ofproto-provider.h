@@ -540,6 +540,11 @@ extern unsigned ofproto_max_revalidator;
  * duration exceeds half of max-revalidator config variable. */
 extern unsigned ofproto_min_revalidate_pps;
 
+/* Worst case delay (in ms) it might take before statistics of offloaded flows
+ * are updated. Offloaded flows younger than this delay will always be
+ * revalidated regardless of ofproto_min_revalidate_pps. */
+extern unsigned ofproto_offloaded_stats_delay;
+
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
 extern uint32_t n_handlers, n_revalidators;

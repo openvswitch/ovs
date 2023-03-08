@@ -310,6 +310,7 @@ unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 unsigned ofproto_max_revalidator = OFPROTO_MAX_REVALIDATOR_DEFAULT;
 unsigned ofproto_min_revalidate_pps = OFPROTO_MIN_REVALIDATE_PPS_DEFAULT;
+unsigned ofproto_offloaded_stats_delay = OFPROTO_OFFLOADED_STATS_DELAY;
 
 uint32_t n_handlers, n_revalidators;
 
@@ -724,6 +725,15 @@ void
 ofproto_set_min_revalidate_pps(unsigned min_revalidate_pps)
 {
     ofproto_min_revalidate_pps = min_revalidate_pps ? min_revalidate_pps : 1;
+}
+
+/* Set worst case delay (in ms) it might take before statistics of offloaded
+ * flows are updated. Offloaded flows younger than this delay will always be
+ * revalidated regardless of ofproto_min_revalidate_pps. */
+void
+ofproto_set_offloaded_stats_delay(unsigned offloaded_stats_delay)
+{
+    ofproto_offloaded_stats_delay = offloaded_stats_delay;
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with
