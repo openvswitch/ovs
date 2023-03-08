@@ -216,6 +216,19 @@
         </p>
       </column>
 
+      <column name="other_config" key="offloaded-stats-delay"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          Set worst case delay (in ms) it might take before statistics of
+          offloaded flows are updated. Offloaded flows younger than this
+          delay will always be revalidated regardless of
+          <ref column="other_config" key="min-revalidate-pps"/>.
+        </p>
+        <p>
+          The default is 2000.
+        </p>
+      </column>
+
       <column name="other_config" key="hw-offload"
               type='{"type": "boolean"}'>
         <p>
