@@ -2750,8 +2750,6 @@ revalidate(struct revalidator *revalidator)
             break;
         }
 
-        now = time_msec();
-
         /* In normal operation we want to keep flows around until they have
          * been idle for 'ofproto_max_idle' milliseconds.  However:
          *
@@ -2788,7 +2786,7 @@ revalidate(struct revalidator *revalidator)
 
         max_idle = n_dp_flows > flow_limit ? 100 : ofproto_max_idle;
 
-        udpif->dpif->current_ms = time_msec();
+        udpif->dpif->current_ms = now = time_msec();
         for (f = flows; f < &flows[n_dumped]; f++) {
             long long int used = f->stats.used;
             struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
