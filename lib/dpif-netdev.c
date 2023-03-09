@@ -3421,7 +3421,7 @@ emc_insert(struct emc_cache *cache, const struct netdev_flow_key *key,
         if (!to_be_replaced
             || (emc_entry_alive(to_be_replaced)
                 && !emc_entry_alive(current_entry))
-            || current_entry->key.hash < to_be_replaced->key.hash) {
+            || (emc_entry_alive(to_be_replaced) && current_entry->key.hash < to_be_replaced->key.hash)) {
             to_be_replaced = current_entry;
         }
     }
