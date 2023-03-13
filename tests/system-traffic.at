@@ -2360,8 +2360,10 @@ priority=100,in_port=2,icmp,action=ct(zone=5,commit),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+dp=$(ovs-appctl dpctl/dump-dps)
 
 m4_foreach([FLUSH_CMD], [[ovs-appctl dpctl/flush-conntrack],
+                         [ovs-appctl dpctl/flush-conntrack $dp],
                          [ovs-ofctl ct-flush br0]], [
 AS_BOX([Testing with FLUSH_CMD])
 
@@ -2504,7 +2506,47 @@ udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.
 AT_CHECK([FLUSH_CMD zone=5 '' 'ct_nw_src=10.1.1.1'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [1])
+
+dnl Test UDP from port 1 and 2, flush without arguments
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000 actions=resubmit(,0)"])
+
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
 ])
+
+AT_CHECK([FLUSH_CMD])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [1])
+])
+
+dnl Test flush with invalid arguments
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=invalid 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([grep -q "failed to parse zone" stderr])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=10.1.1.1,invalid=invalid' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([grep -q "invalid conntrack tuple field: invalid" stderr])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=invalid' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([grep -q "failed to parse field ct_nw_src" stderr])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
+AT_CHECK([grep -q "invalid arguments" stderr])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack $dp zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
+AT_CHECK([grep -q "command takes at most 4 arguments" stderr])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack $dp 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
+AT_CHECK([grep -q "invalid arguments" stderr])
+
+AT_CHECK([ovs-ofctl ct-flush br0 zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [1], [ignore], [stderr])
+AT_CHECK([grep -q "command takes at most 4 arguments" stderr])
+
+AT_CHECK([ovs-ofctl ct-flush br0 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [1], [ignore], [stderr])
+AT_CHECK([grep -q "Invalid arguments" stderr])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

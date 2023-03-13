@@ -3089,6 +3089,10 @@ ofctl_ct_flush(struct ovs_cmdl_context *ctx)
         args--;
     }
 
+    if (args > 0) {
+        ovs_fatal(0, "Invalid arguments");
+    }
+
     open_vconn(ctx->argv[1], &vconn);
     enum ofp_version version = vconn_get_version(vconn);
     struct ofpbuf *msg = ofp_ct_match_encode(&match, pzone, version);
