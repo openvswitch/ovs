@@ -3581,7 +3581,7 @@ table=0,in_port=ovs-p1,ct_state=+trk+rel+rpl,icmp,actions=ovs-p0
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 rm p0.pcap
-OVS_DAEMONIZE([tcpdump -l -U -i ovs-p0 -w p0.pcap 2> tcpdump0_err], [tcpdump0.pid])
+NETNS_DAEMONIZE([at_ns0], [tcpdump -l -U -i p0 -w p0.pcap 2> tcpdump0_err], [tcpdump0.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump0_err])
 
 dnl Send UDP packet from 10.1.1.1:1234 to 10.1.1.240:80
@@ -6612,7 +6612,7 @@ table=0,in_port=ovs-p1,ct_state=+trk+rel+rpl,icmp6,actions=ovs-p0
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 rm p0.pcap
-OVS_DAEMONIZE([tcpdump -l -U -i ovs-p0 -w p0.pcap 2> tcpdump0_err], [tcpdump0.pid])
+NETNS_DAEMONIZE([at_ns0], [tcpdump -l -U -i p0 -w p0.pcap 2> tcpdump0_err], [tcpdump0.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump0_err])
 
 dnl Send UDP packet from [[fc00::1]]:1234 to [[fc00::240]]:80
@@ -7303,7 +7303,7 @@ table=2,in_port=ovs-server,ip,ct_state=+trk+rpl,actions=output:ovs-client
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 rm server.pcap
-OVS_DAEMONIZE([tcpdump -l -U -i ovs-server -w server.pcap 2>tcpdump0_err], [tcpdump0.pid])
+NETNS_DAEMONIZE([server], [tcpdump -l -U -i server -w server.pcap 2>tcpdump0_err], [tcpdump0.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump0_err])
 
 dnl Send UDP client->server
@@ -7345,7 +7345,7 @@ dnl Check the ICMP error in reply direction
 AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=42])
 
 rm client.pcap
-OVS_DAEMONIZE([tcpdump -l -U -i ovs-client -w client.pcap 2>tcpdump1_err], [tcpdump1.pid])
+NETNS_DAEMONIZE([client], [tcpdump -l -U -i client -w client.pcap 2>tcpdump1_err], [tcpdump1.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump1_err])
 
 dnl Send UDP client->server
