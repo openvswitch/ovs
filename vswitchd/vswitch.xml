@@ -6309,6 +6309,12 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         translated to an ephemeral port. If there is no collision, no SNAT
         is performed.
       </column>
+      <column name="capabilities" key="ct_flush"
+              type='{"type": "boolean"}'>
+        True if the datapath supports CT flush OpenFlow Nicira extension
+        called <code>NXT_CT_FLUSH</code>. The <code>NXT_CT_FLUSH</code>
+        extensions allows to flush CT entries based on specified parameters.
+      </column>
     </group>
 
     <group title="Common Columns">
