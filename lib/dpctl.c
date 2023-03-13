@@ -1717,10 +1717,16 @@ dpctl_flush_conntrack(int argc, const char *argv[],
     uint16_t zone, *pzone = NULL;
     int error;
     int args = argc - 1;
+    int zone_pos = 1;
+
+    if (dp_arg_exists(argc, argv)) {
+        args--;
+        zone_pos = 2;
+    }
 
     /* Parse zone. */
-    if (args && !strncmp(argv[1], "zone=", 5)) {
-        if (!ovs_scan(argv[1], "zone=%"SCNu16, &zone)) {
+    if (args && !strncmp(argv[zone_pos], "zone=", 5)) {
+        if (!ovs_scan(argv[zone_pos], "zone=%"SCNu16, &zone)) {
             ds_put_cstr(&ds, "failed to parse zone");
             error = EINVAL;
             goto error;
@@ -1748,7 +1754,7 @@ dpctl_flush_conntrack(int argc, const char *argv[],
     }
 
     /* Report error if there is more than one unparsed argument. */
-    if (args > 1) {
+    if (args > 0) {
         ds_put_cstr(&ds, "invalid arguments");
         error = EINVAL;
         goto error;
