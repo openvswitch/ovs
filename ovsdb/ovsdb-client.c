@@ -250,7 +250,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemon_become_new_user(false);
+    daemon_become_new_user(false, false);
     if (optind >= argc) {
         ovs_fatal(0, "missing command name; use --help for help");
     }
@@ -1392,7 +1392,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
 
     daemon_save_fd(STDOUT_FILENO);
     daemon_save_fd(STDERR_FILENO);
-    daemonize_start(false);
+    daemonize_start(false, false);
     if (get_detach()) {
         int error;
 
@@ -2276,7 +2276,7 @@ do_lock(struct jsonrpc *rpc, const char *method, const char *lock)
                                         getting a reply of the previous
                                         request. */
     daemon_save_fd(STDOUT_FILENO);
-    daemonize_start(false);
+    daemonize_start(false, false);
     lock_req_init(&lock_req, method, lock);
 
     if (get_detach()) {

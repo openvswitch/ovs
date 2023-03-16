@@ -88,7 +88,8 @@ static bool switch_user = false;
 static uid_t uid;
 static gid_t gid;
 static char *user = NULL;
-static void daemon_become_new_user__(bool access_datapath);
+static void daemon_become_new_user__(bool access_datapath,
+                                     bool access_hardware_ports);
 
 static void check_already_running(void);
 static int lock_pidfile(FILE *, int command);
@@ -443,13 +444,13 @@ monitor_daemon(pid_t daemon_pid)
  * daemonize_complete()) or that it failed to start up (by exiting with a
  * nonzero exit code). */
 void
-daemonize_start(bool access_datapath)
+daemonize_start(bool access_datapath, bool access_hardware_ports)
 {
     assert_single_threaded();
     daemonize_fd = -1;
 
     if (switch_user) {
-        daemon_become_new_user__(access_datapath);
+        daemon_become_new_user__(access_datapath, access_hardware_ports);
         switch_user = false;
     }
 
@@ -807,7 +808,8 @@ daemon_become_new_user_unix(void)
 /* Linux specific implementation of daemon_become_new_user()
  * using libcap-ng.   */
 static void
-daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
+daemon_become_new_user_linux(bool access_datapath OVS_UNUSED,
+                             bool access_hardware_ports OVS_UNUSED)
 {
 #if defined __linux__ &&  HAVE_LIBCAPNG
     int ret;
@@ -827,6 +829,20 @@ daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
                 ret = capng_update(CAPNG_ADD, cap_sets, CAP_NET_ADMIN)
                       || capng_update(CAPNG_ADD, cap_sets, CAP_NET_RAW)
                       || capng_update(CAPNG_ADD, cap_sets, CAP_NET_BROADCAST);
+#ifdef DPDK_NETDEV
+                if (access_hardware_ports && !ret) {
+                    ret = capng_update(CAPNG_ADD, cap_sets, CAP_SYS_RAWIO);
+                    if (!ret) {
+                        VLOG_INFO("The Linux capability CAP_SYS_RAWIO "
+                                  "is enabled.");
+                    }
+                }
+#else
+                if (access_hardware_ports) {
+                    VLOG_WARN("No driver requires Linux capability "
+                              "CAP_SYS_RAWIO, disabling it.");
+                }
+#endif
             }
         } else {
             ret = -1;
@@ -854,7 +870,7 @@ daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
 }
 
 static void
-daemon_become_new_user__(bool access_datapath)
+daemon_become_new_user__(bool access_datapath, bool access_hardware_ports)
 {
     /* If vlog file has been created, change its owner to the non-root user
      * as specifed by the --user option.  */
@@ -862,7 +878,8 @@ daemon_become_new_user__(bool access_datapath)
 
     if (LINUX) {
         if (LIBCAPNG) {
-            daemon_become_new_user_linux(access_datapath);
+            daemon_become_new_user_linux(access_datapath,
+                                         access_hardware_ports);
         } else {
             VLOG_FATAL("%s: fail to downgrade user using libcap-ng. "
                        "(libcap-ng is not configured at compile time), "
@@ -877,11 +894,11 @@ daemon_become_new_user__(bool access_datapath)
  * However, there in case the user switch needs to be done
  * before daemonize_start(), the following API can be used.  */
 void
-daemon_become_new_user(bool access_datapath)
+daemon_become_new_user(bool access_datapath, bool access_hardware_ports)
 {
     assert_single_threaded();
     if (switch_user) {
-        daemon_become_new_user__(access_datapath);
+        daemon_become_new_user__(access_datapath, access_hardware_ports);
         /* daemonize_start() should not switch user again. */
         switch_user = false;
     }

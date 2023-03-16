@@ -83,7 +83,7 @@ test_unixctl_main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     parse_options(&argc, &argv, &unixctl_path);
 
-    daemonize_start(false);
+    daemonize_start(false, false);
     int retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
         exit(EXIT_FAILURE);

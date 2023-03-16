@@ -341,7 +341,7 @@ main(int argc, char *argv[])
                   &run_command, &sync_from, &sync_exclude, &active);
     is_backup = sync_from && !active;
 
-    daemon_become_new_user(false);
+    daemon_become_new_user(false, false);
 
     /* Create and initialize 'config_tmpfile' as a temporary file to hold
      * ovsdb-server's most basic configuration, and then save our initial
@@ -359,7 +359,7 @@ main(int argc, char *argv[])
     save_config__(config_tmpfile, &remotes, &db_filenames, sync_from,
                   sync_exclude, is_backup);
 
-    daemonize_start(false);
+    daemonize_start(false, false);
 
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames, &sync_from,

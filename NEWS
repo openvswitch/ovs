@@ -17,6 +17,10 @@ Post-v3.1.0
        in order to create OVSDB sockets with access mode of 0770.
    - QoS:
      * Added new configuration option 'jitter' for a linux-netem QoS type.
+   - DPDK:
+     * ovs-vswitchd will keep the CAP_SYS_RAWIO capability when started
+       with the --hw-rawio-access command line option.  This allows the
+       process extra privileges when mapping physical interconnect memory.
 
 
 v3.1.0 - 16 Feb 2023

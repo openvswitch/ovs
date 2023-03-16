@@ -498,7 +498,8 @@ make_pidfile(void)
 }
 
 void
-daemonize_start(bool access_datapath OVS_UNUSED)
+daemonize_start(bool access_datapath OVS_UNUSED,
+                bool access_hardware_ports OVS_UNUSED)
 {
     if (pidfile) {
         make_pidfile();
@@ -526,7 +527,8 @@ daemonize_complete(void)
 }
 
 void
-daemon_become_new_user(bool access_datapath OVS_UNUSED)
+daemon_become_new_user(bool access_datapath OVS_UNUSED,
+                       bool access_hardware_ports OVS_UNUSED)
 {
 }
 

@@ -60,6 +60,9 @@ VLOG_DEFINE_THIS_MODULE(vswitchd);
  * the kernel from paging any of its memory to disk. */
 static bool want_mlockall;
 
+/* --hw-rawio-access: If set, retains CAP_SYS_RAWIO privileges.  */
+static bool hw_rawio_access;
+
 static unixctl_cb_func ovs_vswitchd_exit;
 
 static char *parse_options(int argc, char *argv[], char **unixctl_path);
@@ -89,7 +92,7 @@ main(int argc, char *argv[])
     remote = parse_options(argc, argv, &unixctl_path);
     fatal_ignore_sigpipe();
 
-    daemonize_start(true);
+    daemonize_start(true, hw_rawio_access);
 
     if (want_mlockall) {
 #ifdef HAVE_MLOCKALL
@@ -169,6 +172,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_DPDK,
         SSL_OPTION_ENUMS,
         OPT_DUMMY_NUMA,
+        OPT_HW_RAWIO_ACCESS,
     };
     static const struct option long_options[] = {
         {"help",        no_argument, NULL, 'h'},
@@ -185,6 +189,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"disable-system-route", no_argument, NULL, OPT_DISABLE_SYSTEM_ROUTE},
         {"dpdk", optional_argument, NULL, OPT_DPDK},
         {"dummy-numa", required_argument, NULL, OPT_DUMMY_NUMA},
+        {"hw-rawio-access", no_argument, NULL, OPT_HW_RAWIO_ACCESS},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -247,6 +252,10 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         case OPT_DUMMY_NUMA:
             ovs_numa_set_dummy(optarg);
+            break;
+
+        case OPT_HW_RAWIO_ACCESS:
+            hw_rawio_access = true;
             break;
 
         default:
