@@ -850,7 +850,7 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
                 outport =
                     netdev_ifindex_to_odp_port(action->out.ifindex_out);
                 if (!outport) {
-                    return ENOENT;
+                    return -ENOENT;
                 }
             }
             nl_msg_put_u32(buf, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(outport));
@@ -943,7 +943,7 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             uint32_t meter_id;
 
             if (police_idx_lookup(action->police.index, &meter_id)) {
-                return ENOENT;
+                return -ENOENT;
             }
             nl_msg_put_u32(buf, OVS_ACTION_ATTR_METER, meter_id);
         }
@@ -962,6 +962,9 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
                 buf, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
             i = parse_tc_flower_to_actions__(flower, buf, i + 1,
                                              action->police.result_jump);
+            if (i < 0) {
+                return i;
+            }
             nl_msg_end_nested(buf, act_offset);
 
             act_offset = nl_msg_start_nested(
@@ -973,6 +976,9 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             }
             if (jump != 0) {
                 i = parse_tc_flower_to_actions__(flower, buf, i, jump);
+                if (i < 0) {
+                    return i;
+                }
             }
             nl_msg_end_nested(buf, act_offset);
 
@@ -992,11 +998,11 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
     return i;
 }
 
-static void
+static int
 parse_tc_flower_to_actions(struct tc_flower *flower,
                            struct ofpbuf *buf)
 {
-    parse_tc_flower_to_actions__(flower, buf, 0, 0);
+    return parse_tc_flower_to_actions__(flower, buf, 0, 0);
 }
 
 static int
@@ -1009,9 +1015,10 @@ parse_tc_flower_to_match(const struct netdev *netdev,
                          struct ofpbuf *buf,
                          bool terse)
 {
-    size_t act_off;
     struct tc_flower_key *key = &flower->key;
     struct tc_flower_key *mask = &flower->mask;
+    size_t act_off;
+    int err;
 
     if (terse) {
         return parse_tc_flower_terse_to_match(flower, match, stats, attrs);
@@ -1208,7 +1215,10 @@ parse_tc_flower_to_match(const struct netdev *netdev,
     }
 
     act_off = nl_msg_start_nested(buf, OVS_FLOW_ATTR_ACTIONS);
-    parse_tc_flower_to_actions(flower, buf);
+    err = parse_tc_flower_to_actions(flower, buf);
+    if (err < 0) {
+        return -err;
+    }
     nl_msg_end_nested(buf, act_off);
 
     *actions = ofpbuf_at_assert(buf, act_off, sizeof(struct nlattr));
@@ -2469,15 +2479,23 @@ netdev_tc_flow_get(struct netdev *netdev,
 
     err = tc_get_flower(&id, &flower);
     if (err) {
-        VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
+        VLOG_ERR_RL(&error_rl,
+                    "flow get failed (dev %s prio %d handle %d): %s",
                     netdev_get_name(netdev), id.prio, id.handle,
                     ovs_strerror(err));
         return err;
     }
 
     in_port = netdev_ifindex_to_odp_port(id.ifindex);
-    parse_tc_flower_to_match(netdev, &flower, match, actions,
-                             stats, attrs, buf, false);
+    err = parse_tc_flower_to_match(netdev, &flower, match, actions,
+                                   stats, attrs, buf, false);
+    if (err) {
+        VLOG_ERR_RL(&error_rl,
+                    "flow get parse failed (dev %s prio %d handle %d): %s",
+                    netdev_get_name(netdev), id.prio, id.handle,
+                    ovs_strerror(err));
+        return err;
+    }
 
     if (stats) {
         struct dpif_flow_stats adjust_stats;
