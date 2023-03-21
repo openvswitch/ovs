@@ -3,12 +3,13 @@
 import sys
 import warnings
 
-import cryptography
+from cryptography.utils import CryptographyDeprecationWarning
 warnings.filterwarnings(
     "ignore",
-    category=cryptography.CryptographyDeprecationWarning,
+    category=CryptographyDeprecationWarning,
     message=r"(blowfish|cast5)",
 )
+
 # flake8: noqa: E402
 from scapy.all import RandMAC, RandIP, PcapWriter, RandIP6, RandShort, fuzz
 from scapy.all import IPv6, Dot1Q, IP, Ether, UDP, TCP, random
