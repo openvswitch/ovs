@@ -274,8 +274,8 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
             if (!error) {
                 error = ovsdb_convert(t->db, new_schema, &newdb);
             }
-            ovsdb_schema_destroy(new_schema);
             if (error) {
+                ovsdb_schema_destroy(new_schema);
                 trigger_convert_error(t, error);
                 return false;
             }
@@ -286,7 +286,8 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 
             /* Propose the change. */
             t->progress = ovsdb_txn_propose_schema_change(
-                t->db, new_schema_json, txn_json);
+                t->db, new_schema, txn_json);
+            ovsdb_schema_destroy(new_schema);
             json_destroy(txn_json);
             t->reply = jsonrpc_create_reply(json_object_create(),
                                             t->request->id);

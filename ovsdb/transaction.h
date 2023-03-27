@@ -21,6 +21,7 @@
 
 struct json;
 struct ovsdb;
+struct ovsdb_schema;
 struct ovsdb_table;
 struct uuid;
 
@@ -41,7 +42,7 @@ struct ovsdb_error *ovsdb_txn_propose_commit_block(struct ovsdb_txn *,
 void ovsdb_txn_complete(struct ovsdb_txn *);
 
 struct ovsdb_txn_progress *ovsdb_txn_propose_schema_change(
-    struct ovsdb *, const struct json *schema, const struct json *data);
+    struct ovsdb *, const struct ovsdb_schema *, const struct json *data);
 
 bool ovsdb_txn_progress_is_complete(const struct ovsdb_txn_progress *);
 const struct ovsdb_error *ovsdb_txn_progress_get_error(
