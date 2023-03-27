@@ -66,6 +66,9 @@ struct ovsdb_error *ovsdb_log_read(struct ovsdb_log *, struct json **)
     OVS_WARN_UNUSED_RESULT;
 void ovsdb_log_unread(struct ovsdb_log *);
 
+struct ovsdb_error *ovsdb_log_reset(struct ovsdb_log *)
+    OVS_WARN_UNUSED_RESULT;
+
 void ovsdb_log_compose_record(const struct json *, const char *magic,
                               struct ds *header, struct ds *data);
 
