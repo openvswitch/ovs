@@ -39,6 +39,7 @@
 #include "transaction.h"
 #include "transaction-forward.h"
 #include "trigger.h"
+#include "unixctl.h"
 
 #include "openvswitch/vlog.h"
 VLOG_DEFINE_THIS_MODULE(ovsdb);
@@ -175,6 +176,39 @@ ovsdb_is_valid_version(const char *s)
 {
     struct ovsdb_version version;
     return ovsdb_parse_version(s, &version);
+}
+
+/* If set to 'true', database schema conversion operations in the storage
+ * may not contain the converted data, only the schema.  Currently affects
+ * only the clustered storage. */
+static bool use_no_data_conversion = true;
+
+static void
+ovsdb_no_data_conversion_enable(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                                const char *argv[] OVS_UNUSED,
+                                void *arg OVS_UNUSED)
+{
+    use_no_data_conversion = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+void
+ovsdb_no_data_conversion_disable(void)
+{
+    if (!use_no_data_conversion) {
+        return;
+    }
+    use_no_data_conversion = false;
+    unixctl_command_register("ovsdb/file/no-data-conversion-enable", "",
+                             0, 0, ovsdb_no_data_conversion_enable, NULL);
+}
+
+/* Returns true if the database storage allows conversion records without
+ * data specified. */
+bool
+ovsdb_conversion_with_no_data_supported(const struct ovsdb *db)
+{
+    return use_no_data_conversion && ovsdb_storage_is_clustered(db->storage);
 }
 
 /* Returns the number of tables in 'schema''s root set. */

@@ -1,5 +1,15 @@
 Post-v3.1.0
 --------------------
+   - OVSDB:
+     * Changed format in which ovsdb schema conversion operations are stored in
+       clustered database files.  Such operations are now allowed to contain
+       the bare schema (without data).  This allows to significantly improve
+       the schema conversion performance.
+       New ovsdb-server process will be able to read old database format, but
+       old processes will *fail* to read database created by the new one, if
+       conversion operation is present.  For the cluster service model follow
+       upgrade instructions in 'Upgrading from version 3.1 and earlier to 3.2
+       and later' section of ovsdb(7).
    - IPFIX template and statistics intervals can now be configured through two
      new options in the IPFIX table: 'template_interval' and 'stats_interval'.
    - Linux kernel datapath:

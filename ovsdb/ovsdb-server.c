@@ -1971,6 +1971,7 @@ parse_options(int argc, char *argv[],
         OPT_ACTIVE,
         OPT_NO_DBS,
         OPT_FILE_COLUMN_DIFF,
+        OPT_FILE_NO_DATA_CONVERSION,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
@@ -1996,6 +1997,8 @@ parse_options(int argc, char *argv[],
         {"active", no_argument, NULL, OPT_ACTIVE},
         {"no-dbs", no_argument, NULL, OPT_NO_DBS},
         {"disable-file-column-diff", no_argument, NULL, OPT_FILE_COLUMN_DIFF},
+        {"disable-file-no-data-conversion", no_argument, NULL,
+         OPT_FILE_NO_DATA_CONVERSION},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -2090,6 +2093,10 @@ parse_options(int argc, char *argv[],
 
         case OPT_FILE_COLUMN_DIFF:
             ovsdb_file_column_diff_disable();
+            break;
+
+        case OPT_FILE_NO_DATA_CONVERSION:
+            ovsdb_no_data_conversion_disable();
             break;
 
         case '?':

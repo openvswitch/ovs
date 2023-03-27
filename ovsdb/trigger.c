@@ -280,9 +280,14 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                 return false;
             }
 
-            /* Make the new copy into a transaction log record. */
-            struct json *txn_json = ovsdb_to_txn_json(
-                newdb, "converted by ovsdb-server", true);
+            struct json *txn_json;
+            if (ovsdb_conversion_with_no_data_supported(t->db)) {
+                txn_json = json_null_create();
+            } else {
+                /* Make the new copy into a transaction log record. */
+                txn_json = ovsdb_to_txn_json(
+                                newdb, "converted by ovsdb-server", true);
+            }
 
             /* Propose the change. */
             t->progress = ovsdb_txn_propose_schema_change(
