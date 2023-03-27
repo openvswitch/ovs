@@ -31,6 +31,7 @@
 #include "transaction-forward.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
+#include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(trigger);
 
@@ -52,6 +53,7 @@ ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
     trigger->db = db;
     ovs_list_push_back(&trigger->db->triggers, &trigger->node);
     trigger->request = request;
+    trigger->converted_db = NULL;
     trigger->reply = NULL;
     trigger->progress = NULL;
     trigger->txn_forward = NULL;
@@ -69,6 +71,7 @@ ovsdb_trigger_destroy(struct ovsdb_trigger *trigger)
     ovsdb_txn_progress_destroy(trigger->progress);
     ovsdb_txn_forward_destroy(trigger->db, trigger->txn_forward);
     ovs_list_remove(&trigger->node);
+    ovsdb_destroy(trigger->converted_db);
     jsonrpc_msg_destroy(trigger->request);
     jsonrpc_msg_destroy(trigger->reply);
     free(trigger->role);
@@ -143,6 +146,30 @@ ovsdb_trigger_prereplace_db(struct ovsdb_trigger *trigger)
     }
 }
 
+/* Find among incomplete triggers one that caused database conversion
+ * with specified transaction ID. */
+struct ovsdb *
+ovsdb_trigger_find_and_steal_converted_db(const struct ovsdb *db,
+                                          const struct uuid *txnid)
+{
+    struct ovsdb *converted_db = NULL;
+    struct ovsdb_trigger *t;
+
+    if (uuid_is_zero(txnid)) {
+        return NULL;
+    }
+
+    LIST_FOR_EACH_SAFE (t, node, &db->triggers) {
+        if (t->db == db && t->converted_db
+            && uuid_equals(&t->conversion_txnid, txnid)) {
+            converted_db = t->converted_db;
+            t->converted_db = NULL;
+            break;
+        }
+    }
+    return converted_db;
+}
+
 bool
 ovsdb_trigger_run(struct ovsdb *db, long long int now)
 {
@@ -200,7 +227,6 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
         ovs_assert(!t->progress);
 
         struct ovsdb_txn *txn = NULL;
-        struct ovsdb *newdb = NULL;
         if (!strcmp(t->request->method, "transact")) {
             if (!ovsdb_txn_precheck_prereq(t->db)) {
                 return false;
@@ -272,7 +298,8 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                                     new_schema->name, t->db->schema->name);
             }
             if (!error) {
-                error = ovsdb_convert(t->db, new_schema, &newdb);
+                ovsdb_destroy(t->converted_db);
+                error = ovsdb_convert(t->db, new_schema, &t->converted_db);
             }
             if (error) {
                 ovsdb_schema_destroy(new_schema);
@@ -286,12 +313,12 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
             } else {
                 /* Make the new copy into a transaction log record. */
                 txn_json = ovsdb_to_txn_json(
-                                newdb, "converted by ovsdb-server", true);
+                    t->converted_db, "converted by ovsdb-server", true);
             }
 
             /* Propose the change. */
             t->progress = ovsdb_txn_propose_schema_change(
-                t->db, new_schema, txn_json);
+                t->db, new_schema, txn_json, &t->conversion_txnid);
             ovsdb_schema_destroy(new_schema);
             json_destroy(txn_json);
             t->reply = jsonrpc_create_reply(json_object_create(),
@@ -313,13 +340,13 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
             ovsdb_txn_progress_destroy(t->progress);
             t->progress = NULL;
             ovsdb_trigger_complete(t);
-            if (newdb) {
-                ovsdb_replace(t->db, newdb);
+            if (t->converted_db) {
+                ovsdb_replace(t->db, t->converted_db);
+                t->converted_db = NULL;
                 return true;
             }
             return false;
         }
-        ovsdb_destroy(newdb);
 
         /* Fall through to the general handling for the "committing" state.  We
          * abort the transaction--if and when it eventually commits, we'll read

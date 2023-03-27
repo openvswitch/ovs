@@ -17,6 +17,7 @@
 #define OVSDB_TRIGGER_H 1
 
 #include "openvswitch/list.h"
+#include "openvswitch/uuid.h"
 
 struct ovsdb;
 
@@ -54,6 +55,8 @@ struct ovsdb_trigger {
     struct ovs_list node;
     struct ovsdb_session *session; /* Session that owns this trigger. */
     struct ovsdb *db;           /* Database on which trigger acts. */
+    struct ovsdb *converted_db;   /* Result of the 'convert' request. */
+    struct uuid conversion_txnid; /* txnid of the conversion request. */
     struct jsonrpc_msg *request; /* Database request. */
     struct jsonrpc_msg *reply;   /* Result (null if none yet). */
     struct ovsdb_txn_progress *progress;
@@ -76,6 +79,10 @@ struct jsonrpc_msg *ovsdb_trigger_steal_reply(struct ovsdb_trigger *);
 void ovsdb_trigger_cancel(struct ovsdb_trigger *, const char *reason);
 
 void ovsdb_trigger_prereplace_db(struct ovsdb_trigger *);
+
+struct ovsdb *ovsdb_trigger_find_and_steal_converted_db(
+        const struct ovsdb *, const struct uuid *)
+    OVS_WARN_UNUSED_RESULT;
 
 bool ovsdb_trigger_run(struct ovsdb *, long long int now);
 void ovsdb_trigger_wait(struct ovsdb *, long long int now);

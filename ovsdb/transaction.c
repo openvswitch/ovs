@@ -1252,14 +1252,14 @@ ovsdb_txn_precheck_prereq(const struct ovsdb *db)
 struct ovsdb_txn_progress *
 ovsdb_txn_propose_schema_change(struct ovsdb *db,
                                 const struct ovsdb_schema *schema,
-                                const struct json *data)
+                                const struct json *data,
+                                struct uuid *txnid)
 {
     struct ovsdb_txn_progress *progress = xzalloc(sizeof *progress);
     progress->storage = db->storage;
 
-    struct uuid next;
     struct ovsdb_write *write = ovsdb_storage_write_schema_change(
-        db->storage, schema, data, &db->prereq, &next);
+        db->storage, schema, data, &db->prereq, txnid);
     if (!ovsdb_write_is_complete(write)) {
         progress->write = write;
     } else {

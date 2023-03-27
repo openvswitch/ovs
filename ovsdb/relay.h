@@ -22,10 +22,12 @@
 struct json;
 struct ovsdb;
 struct ovsdb_schema;
+struct uuid;
 
 typedef struct ovsdb_error *(*schema_change_callback)(
                                        struct ovsdb *,
                                        const struct ovsdb_schema *,
+                                       const struct uuid *,
                                        bool conversion_with_no_data,
                                        void *aux);
 

@@ -310,8 +310,8 @@ ovsdb_relay_parse_update(struct relay_ctx *ctx,
     if (update->monitor_reply && ctx->new_schema) {
         /* There was a schema change.  Updating a database with a new schema
          * before processing monitor reply with the new data. */
-        error = ctx->schema_change_cb(ctx->db, ctx->new_schema, false,
-                                      ctx->schema_change_aux);
+        error = ctx->schema_change_cb(ctx->db, ctx->new_schema, &UUID_ZERO,
+                                      false, ctx->schema_change_aux);
         if (error) {
             /* Should never happen, but handle this case anyway. */
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);

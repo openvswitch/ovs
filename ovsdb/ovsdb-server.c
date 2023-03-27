@@ -574,7 +574,9 @@ close_db(struct server_config *config, struct db *db, char *comment)
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-update_schema(struct ovsdb *db, const struct ovsdb_schema *schema,
+update_schema(struct ovsdb *db,
+              const struct ovsdb_schema *schema,
+              const struct uuid *txnid,
               bool conversion_with_no_data, void *aux)
 {
     struct server_config *config = aux;
@@ -591,11 +593,17 @@ update_schema(struct ovsdb *db, const struct ovsdb_schema *schema,
         struct ovsdb *new_db = NULL;
         struct ovsdb_error *error;
 
-        error = ovsdb_convert(db, schema, &new_db);
-        if (error) {
-            /* Should never happen, because conversion should have been
-             * checked before writing the schema to the storage. */
-            return error;
+        /* If conversion was triggered by the current process, we might
+         * already have converted version of a database. */
+        new_db = ovsdb_trigger_find_and_steal_converted_db(db, txnid);
+        if (!new_db) {
+            /* No luck.  Converting. */
+            error = ovsdb_convert(db, schema, &new_db);
+            if (error) {
+                /* Should never happen, because conversion should have been
+                 * checked before writing the schema to the storage. */
+                return error;
+            }
         }
         ovsdb_replace(db, new_db);
     } else {
@@ -635,7 +643,7 @@ parse_txn(struct server_config *config, struct db *db,
             return error;
         }
 
-        error = update_schema(db->db, schema, txn_json == NULL, config);
+        error = update_schema(db->db, schema, txnid, txn_json == NULL, config);
         if (error) {
             return error;
         }
