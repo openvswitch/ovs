@@ -465,6 +465,7 @@ AT_SETUP([ovsdb-tool convert-to-standalone])
 AT_KEYWORDS([ovsdb file positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:s1.raft], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db >/dev/null 2>&1])
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -496,5 +497,73 @@ AT_CHECK([ovsdb-client dump  > standalonedump])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 # Make sure both standalone and cluster db data matches.
+AT_CHECK([diff standalonedump clusterdump])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool convert-to-standalone after schema conversion])
+AT_KEYWORDS([ovsdb file positive])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create-cluster db schema unix:s1.raft], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket dnl
+                       --log-file db >/dev/null 2>&1])
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+dnl Change the schema.
+AT_CHECK([sed 's/5\.1\.3/5.1.4/' < schema > schema2])
+AT_CHECK([sed -i'back' -e '/.*"number":.*/a \
+           "is_seven": {"type": "boolean"},
+           ' schema2])
+
+dnl Convert the database.
+AT_CHECK([ovsdb-client convert unix:socket schema2])
+
+dnl Add a new row with a new column.
+AT_CHECK([ovsdb-client transact unix:socket dnl
+  '[["ordinals",
+     {"op": "insert",
+      "table": "ordinals",
+      "row": {"number": 7, "name": "seven", "is_seven": true}
+     }]]'], [0], [ignore], [ignore])
+
+AT_CHECK([ovsdb-client dump unix:socket > clusterdump])
+
+AT_CHECK([uuidfilt clusterdump], [0], [dnl
+ordinals table
+_uuid                                is_seven name  number
+------------------------------------ -------- ----- ------
+<0> false    one   1
+<1> false    two   2
+<2> false    zero  0
+<3> true     seven 7
+])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+dnl Convert to standalone database from clustered database.
+AT_CHECK(ovsdb-tool cluster-to-standalone db1 db)
+
+dnl Check it's a standalone db.
+AT_CHECK([ovsdb-tool db-is-standalone db1])
+
+dnl Dump the standalone db data.
+AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --detach --no-chdir dnl
+                       --pidfile --log-file --remote=punix:db.sock db1])
+AT_CHECK([ovsdb_client_wait ordinals connected])
+AT_CHECK([ovsdb-client dump > standalonedump])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+dnl Make sure both standalone and cluster db data matches.
 AT_CHECK([diff standalonedump clusterdump])
 AT_CLEANUP

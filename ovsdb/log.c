@@ -551,6 +551,23 @@ ovsdb_log_truncate(struct ovsdb_log *file)
     return error;
 }
 
+/* Removes all the data from the log by moving current offset to zero and
+ * truncating the file to zero bytes.  After this operation the file is empty
+ * and in a write state. */
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_log_reset(struct ovsdb_log *file)
+{
+    ovsdb_error_destroy(file->error);
+    file->offset = file->prev_offset = 0;
+    file->error = ovsdb_log_truncate(file);
+    if (file->error) {
+        file->state = OVSDB_LOG_WRITE_ERROR;
+        return ovsdb_error_clone(file->error);
+    }
+    file->state = OVSDB_LOG_WRITE;
+    return NULL;
+}
+
 /* Composes a log record for 'json' by filling 'header' with a header line and
  * 'data' with a data line (each ending with a new-line).  To write the record
  * to a file, write 'header' followed by 'data'.
