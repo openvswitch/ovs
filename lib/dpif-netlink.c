@@ -2569,7 +2569,7 @@ dpif_netlink_calculate_n_handlers(void)
         n_handlers = MIN(next_prime_num, total_cores);
     }
 
-    return n_handlers;
+    return MAX(n_handlers, 1);
 }
 
 static int
