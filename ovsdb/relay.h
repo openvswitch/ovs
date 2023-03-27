@@ -23,8 +23,11 @@ struct json;
 struct ovsdb;
 struct ovsdb_schema;
 
-typedef void (*schema_change_callback)(struct ovsdb *,
-                                       const struct ovsdb_schema *, void *aux);
+typedef struct ovsdb_error *(*schema_change_callback)(
+                                       struct ovsdb *,
+                                       const struct ovsdb_schema *,
+                                       bool conversion_with_no_data,
+                                       void *aux);
 
 void ovsdb_relay_add_db(struct ovsdb *, const char *remote,
                         schema_change_callback schema_change_cb,

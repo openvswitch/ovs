@@ -1006,7 +1006,8 @@ raft_header_to_standalone_log(const struct raft_header *h,
 }
 
 static void
-raft_record_to_standalone_log(const struct raft_record *r,
+raft_record_to_standalone_log(const char *db_file_name,
+                              const struct raft_record *r,
                               struct ovsdb_log *db_log_data)
 {
     if (r->type == RAFT_REC_ENTRY) {
@@ -1024,15 +1025,30 @@ raft_record_to_standalone_log(const struct raft_record *r,
 
         if (schema_json->type != JSON_NULL) {
             /* This is a database conversion record.  Reset the log and
-             * write the new schema.  Data JSON should also be part of
-             * the conversion. */
+             * write the new schema. */
             struct ovsdb_schema *schema;
 
-            if (data_json->type == JSON_NULL) {
-                ovs_fatal(
-                    0, "Invalid database conversion in the log: no data");
-            }
             check_ovsdb_error(ovsdb_schema_from_json(schema_json, &schema));
+
+            if (data_json->type == JSON_NULL) {
+                /* We have a conversion request with no data.  There is no
+                 * other way as to read back what we have and convert. */
+                struct ovsdb *old_db, *new_db;
+
+                check_ovsdb_error(ovsdb_log_commit_block(db_log_data));
+
+                old_db = ovsdb_file_read(db_file_name, false);
+                check_ovsdb_error(ovsdb_convert(old_db, schema, &new_db));
+                ovsdb_destroy(old_db);
+
+                pa->elems[1] = ovsdb_to_txn_json(
+                                    new_db, "converted by ovsdb-tool", true);
+                ovsdb_destroy(new_db);
+
+                json_destroy(data_json);
+                data_json = pa->elems[1];
+            }
+
             ovsdb_schema_destroy(schema);
             check_ovsdb_error(ovsdb_log_reset(db_log_data));
             check_ovsdb_error(ovsdb_log_write(db_log_data, schema_json));
@@ -1654,7 +1670,8 @@ do_compare_versions(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_convert_to_standalone(struct ovsdb_log *log, struct ovsdb_log *db_log_data)
+do_convert_to_standalone(const char *db_file_name,
+                         struct ovsdb_log *log, struct ovsdb_log *db_log_data)
 {
     for (unsigned int i = 0; ; i++) {
         struct json *json;
@@ -1671,7 +1688,7 @@ do_convert_to_standalone(struct ovsdb_log *log, struct ovsdb_log *db_log_data)
         } else {
             struct raft_record r;
             check_ovsdb_error(raft_record_from_json(&r, json));
-            raft_record_to_standalone_log(&r, db_log_data);
+            raft_record_to_standalone_log(db_file_name, &r, db_log_data);
             raft_record_uninit(&r);
         }
         json_destroy(json);
@@ -1694,7 +1711,7 @@ do_cluster_standalone(struct ovs_cmdl_context *ctx)
     if (strcmp(ovsdb_log_get_magic(log), RAFT_MAGIC) != 0) {
         ovs_fatal(0, "Database is not clustered db.\n");
     }
-    do_convert_to_standalone(log, db_log_data);
+    do_convert_to_standalone(db_file_name, log, db_log_data);
     check_ovsdb_error(ovsdb_log_commit_block(db_log_data));
     ovsdb_log_close(db_log_data);
     ovsdb_log_close(log);
