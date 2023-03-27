@@ -1018,7 +1018,25 @@ raft_record_to_standalone_log(const struct raft_record *r,
         if (pa->n != 2) {
             ovs_fatal(0, "Incorrect raft record array length");
         }
+
+        struct json *schema_json = pa->elems[0];
         struct json *data_json = pa->elems[1];
+
+        if (schema_json->type != JSON_NULL) {
+            /* This is a database conversion record.  Reset the log and
+             * write the new schema.  Data JSON should also be part of
+             * the conversion. */
+            struct ovsdb_schema *schema;
+
+            if (data_json->type == JSON_NULL) {
+                ovs_fatal(
+                    0, "Invalid database conversion in the log: no data");
+            }
+            check_ovsdb_error(ovsdb_schema_from_json(schema_json, &schema));
+            ovsdb_schema_destroy(schema);
+            check_ovsdb_error(ovsdb_log_reset(db_log_data));
+            check_ovsdb_error(ovsdb_log_write(db_log_data, schema_json));
+        }
         if (data_json->type != JSON_NULL) {
             check_ovsdb_error(ovsdb_log_write(db_log_data, data_json));
         }
