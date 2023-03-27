@@ -1251,7 +1251,7 @@ ovsdb_txn_precheck_prereq(const struct ovsdb *db)
 
 struct ovsdb_txn_progress *
 ovsdb_txn_propose_schema_change(struct ovsdb *db,
-                                const struct json *schema,
+                                const struct ovsdb_schema *schema,
                                 const struct json *data)
 {
     struct ovsdb_txn_progress *progress = xzalloc(sizeof *progress);

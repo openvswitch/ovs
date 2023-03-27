@@ -623,7 +623,7 @@ ovsdb_storage_store_snapshot(struct ovsdb_storage *storage,
 
 struct ovsdb_write * OVS_WARN_UNUSED_RESULT
 ovsdb_storage_write_schema_change(struct ovsdb_storage *storage,
-                                  const struct json *schema,
+                                  const struct ovsdb_schema *schema,
                                   const struct json *data,
                                   const struct uuid *prereq,
                                   struct uuid *resultp)
@@ -633,13 +633,23 @@ ovsdb_storage_write_schema_change(struct ovsdb_storage *storage,
     if (storage->error) {
         w->error = ovsdb_error_clone(storage->error);
     } else if (storage->raft) {
-        struct json *txn_json = json_array_create_2(json_clone(schema),
-                                                    json_clone(data));
-        w->command = raft_command_execute(storage->raft, txn_json,
-                                          prereq, &result);
-        json_destroy(txn_json);
+        /* Clustered storage doesn't support ephemeral columns. */
+        w->error = ovsdb_schema_check_for_ephemeral_columns(schema);
+        if (!w->error) {
+            struct json *schema_json, *txn_json;
+
+            schema_json = ovsdb_schema_to_json(schema);
+            txn_json = json_array_create_2(schema_json, json_clone(data));
+            w->command = raft_command_execute(storage->raft, txn_json,
+                                              prereq, &result);
+            json_destroy(txn_json);
+        }
     } else if (storage->log) {
-        w->error = ovsdb_storage_store_snapshot__(storage, schema, data, 0);
+        struct json *schema_json = ovsdb_schema_to_json(schema);
+
+        w->error = ovsdb_storage_store_snapshot__(storage, schema_json,
+                                                  data, 0);
+        json_destroy(schema_json);
     } else {
         /* When 'error' and 'command' are both null, it indicates that the
          * command is complete.  This is fine since this unbacked storage drops
