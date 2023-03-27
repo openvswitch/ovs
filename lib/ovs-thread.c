@@ -674,7 +674,7 @@ count_cpu_cores(void)
     static int cpu_cores;
 
     ovs_mutex_lock(&cpu_cores_mutex);
-    if (now - last_updated >= COUNT_CPU_UPDATE_TIME_MS) {
+    if (!last_updated || now - last_updated >= COUNT_CPU_UPDATE_TIME_MS) {
         last_updated = now;
         cpu_cores = count_cpu_cores__();
     }
