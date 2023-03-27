@@ -609,7 +609,10 @@ ovsdb_monitor_untrack_change_set(struct ovsdb_monitor *dbmon,
     ovs_assert(mcs);
     if (--mcs->n_refs == 0) {
         if (mcs == dbmon->init_change_set) {
-            dbmon->init_change_set = NULL;
+            /* The initial change set should exist as long as the
+             * monitor itself. */
+            mcs->n_refs++;
+            return;
         } else if (mcs == dbmon->new_change_set) {
             dbmon->new_change_set = NULL;
         }
