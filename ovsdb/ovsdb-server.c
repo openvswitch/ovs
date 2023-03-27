@@ -564,8 +564,9 @@ close_db(struct server_config *config, struct db *db, char *comment)
     }
 }
 
-static void
-update_schema(struct ovsdb *db, const struct ovsdb_schema *schema, void *aux)
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+update_schema(struct ovsdb *db, const struct ovsdb_schema *schema,
+              bool conversion_with_no_data, void *aux)
 {
     struct server_config *config = aux;
 
@@ -577,13 +578,27 @@ update_schema(struct ovsdb *db, const struct ovsdb_schema *schema, void *aux)
             : xasprintf("database %s connected to storage", db->name)));
     }
 
-    ovsdb_replace(db, ovsdb_create(ovsdb_schema_clone(schema), NULL));
+    if (db->schema && conversion_with_no_data) {
+        struct ovsdb *new_db = NULL;
+        struct ovsdb_error *error;
+
+        error = ovsdb_convert(db, schema, &new_db);
+        if (error) {
+            /* Should never happen, because conversion should have been
+             * checked before writing the schema to the storage. */
+            return error;
+        }
+        ovsdb_replace(db, new_db);
+    } else {
+        ovsdb_replace(db, ovsdb_create(ovsdb_schema_clone(schema), NULL));
+    }
 
     /* Force update to schema in _Server database. */
     struct db *dbp = shash_find_data(config->all_dbs, db->name);
     if (dbp) {
         dbp->row_uuid = UUID_ZERO;
     }
+    return NULL;
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
@@ -591,23 +606,30 @@ parse_txn(struct server_config *config, struct db *db,
           const struct ovsdb_schema *schema, const struct json *txn_json,
           const struct uuid *txnid)
 {
+    struct ovsdb_error *error = NULL;
+    struct ovsdb_txn *txn = NULL;
+
     if (schema) {
-        /* We're replacing the schema (and the data).  Destroy the database
-         * (first grabbing its storage), then replace it with the new schema.
-         * The transaction must also include the replacement data.
+        /* We're replacing the schema (and the data).  If transaction includes
+         * replacement data, destroy the database (first grabbing its storage),
+         * then replace it with the new schema.  If not, it's a conversion
+         * without data specified.  In this case, convert the current database
+         * to a new schema instead.
          *
          * Only clustered database schema changes and snapshot installs
          * go through this path.
          */
-        ovs_assert(txn_json);
         ovs_assert(ovsdb_storage_is_clustered(db->db->storage));
 
-        struct ovsdb_error *error = ovsdb_schema_check_for_ephemeral_columns(
-            schema);
+        error = ovsdb_schema_check_for_ephemeral_columns(schema);
         if (error) {
             return error;
         }
-        update_schema(db->db, schema, config);
+
+        error = update_schema(db->db, schema, txn_json == NULL, config);
+        if (error) {
+            return error;
+        }
     }
 
     if (txn_json) {
@@ -615,24 +637,25 @@ parse_txn(struct server_config *config, struct db *db,
             return ovsdb_error(NULL, "%s: data without schema", db->filename);
         }
 
-        struct ovsdb_txn *txn;
-        struct ovsdb_error *error;
-
         error = ovsdb_file_txn_from_json(db->db, txn_json, false, &txn);
-        if (!error) {
-            ovsdb_txn_set_txnid(txnid, txn);
-            log_and_free_error(ovsdb_txn_replay_commit(txn));
-        }
-        if (!error && !uuid_is_zero(txnid)) {
-            db->db->prereq = *txnid;
-        }
         if (error) {
             ovsdb_storage_unread(db->db->storage);
             return error;
         }
+    } else if (schema) {
+        /* We just performed conversion without data.  Transaction history
+         * was destroyed.  Commit a dummy transaction to set the txnid. */
+        txn = ovsdb_txn_create(db->db);
     }
 
-    return NULL;
+    if (txn) {
+        ovsdb_txn_set_txnid(txnid, txn);
+        error = ovsdb_txn_replay_commit(txn);
+        if (!error && !uuid_is_zero(txnid)) {
+            db->db->prereq = *txnid;
+        }
+    }
+    return error;
 }
 
 static void

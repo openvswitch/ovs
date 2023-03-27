@@ -283,6 +283,8 @@ static void
 ovsdb_relay_parse_update(struct relay_ctx *ctx,
                          const struct ovsdb_cs_update_event *update)
 {
+    struct ovsdb_error *error = NULL;
+
     if (!ctx->db) {
         return;
     }
@@ -290,15 +292,27 @@ ovsdb_relay_parse_update(struct relay_ctx *ctx,
     if (update->monitor_reply && ctx->new_schema) {
         /* There was a schema change.  Updating a database with a new schema
          * before processing monitor reply with the new data. */
-        ctx->schema_change_cb(ctx->db, ctx->new_schema,
-                              ctx->schema_change_aux);
+        error = ctx->schema_change_cb(ctx->db, ctx->new_schema, false,
+                                      ctx->schema_change_aux);
+        if (error) {
+            /* Should never happen, but handle this case anyway. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            char *s = ovsdb_error_to_string_free(error);
+
+            VLOG_ERR_RL(&rl, "%s", s);
+            free(s);
+
+            ovsdb_cs_flag_inconsistency(ctx->cs);
+            return;
+        }
         ovsdb_schema_destroy(ctx->new_schema);
         ctx->new_schema = NULL;
     }
 
     struct ovsdb_cs_db_update *du;
-    struct ovsdb_error *error = ovsdb_cs_parse_db_update(update->table_updates,
-                                                         update->version, &du);
+
+    error = ovsdb_cs_parse_db_update(update->table_updates,
+                                     update->version, &du);
     if (!error) {
         if (update->clear) {
             error = ovsdb_relay_clear(ctx->db);
