@@ -1261,8 +1261,8 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
             continue;
         }
 
-        if (flower.act_cookie.len) {
-            *ufid = *((ovs_u128 *) flower.act_cookie.data);
+        if (flower.act_cookie.len >= sizeof *ufid) {
+            *ufid = get_32aligned_u128(flower.act_cookie.data);
         } else if (!find_ufid(netdev, &id, ufid)) {
             continue;
         }
