@@ -474,6 +474,14 @@ class ODPFlow(Flow):
                                             }
                                         )
                                     ),
+                                    "srv6": nested_kv_decoder(
+                                        KVDecoders(
+                                            {
+                                                "segments_left": decode_int,
+                                                "segs": decode_default,
+                                            }
+                                        )
+                                    ),
                                 }
                             )
                         ),

@@ -342,6 +342,8 @@ tnl_push(tnl_port(6),header(size=70,type=4,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:1
 tnl_push(tnl_port(6),header(size=70,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=17,tclass=0x0,hlimit=64),udp(src=0,dst=6081,csum=0x0),geneve(oam,vni=0x1c7)),out_port(1))
 tnl_push(tnl_port(6),header(size=78,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=17,tclass=0x0,hlimit=64),udp(src=0,dst=6081,csum=0x0),geneve(crit,vni=0x1c7,options({class=0xffff,type=0x80,len=4,0xa}))),out_port(1))
 tnl_push(tnl_port(6),header(size=70,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=17,tclass=0x0,hlimit=64),udp(src=0,dst=6081,csum=0xffff),geneve(vni=0x1c7)),out_port(1))
+tnl_push(tnl_port(6),header(size=78,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=0,segs(2001:cafe::90))),out_port(1))
+tnl_push(tnl_port(6),header(size=110,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=2,segs(2001:cafe::90,2001:cafe::91,2001:cafe::92))),out_port(1))
 ct
 ct(commit)
 ct(commit,zone=5)
@@ -400,8 +402,14 @@ AT_CLEANUP
 
 AT_SETUP([OVS datapath actions parsing and formatting - invalid forms])
 dnl This caused a hang in older versions.
-AT_CHECK([echo 'encap_nsh@:{@' | ovstest test-odp parse-actions
-], [0], [dnl
+AT_DATA([actions.txt], [dnl
+encap_nsh@:{@
+tnl_push(tnl_port(6),header(size=94,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=2,segs(2001:cafe::90,2001:cafe::91))),out_port(1))
+tnl_push(tnl_port(6),header(size=126,type=112,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=2,segs(2001:cafe::90,2001:cafe::91,2001:cafe::92,2001:cafe::93))),out_port(1))
+])
+AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0], [dnl
+odp_actions_from_string: error
+odp_actions_from_string: error
 odp_actions_from_string: error
 ])
 AT_CLEANUP

@@ -202,6 +202,8 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                        options:remote_ip=flow options:key=123 ofport_request=5\
                     -- add-port int-br t5 -- set Interface t5 type=gre \
                        options:remote_ip=2001:cafe::92 options:key=455 options:packet_type=legacy_l3 ofport_request=6\
+                    -- add-port int-br t6 -- set Interface t6 type=srv6 \
+                       options:remote_ip=2001:cafe::92 ofport_request=7\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -216,12 +218,15 @@ dummy@ovs-dummy: hit:0 missed:0
     t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=2001:cafe::93)
     t4 5/6081: (geneve: key=123, remote_ip=flow)
     t5 6/3: (gre: key=455, packet_type=legacy_l3, remote_ip=2001:cafe::92)
+    t6 7/6: (srv6: remote_ip=2001:cafe::92)
 ])
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
 genev_sys_6081 (6081) ref_cnt=1
 gre_sys (3) ref_cnt=2
+srv6_sys (6) ref_cnt=1
+srv6_sys (6) ref_cnt=1
 vxlan_sys_4789 (4789) ref_cnt=2
 ])
 
@@ -363,6 +368,8 @@ AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
 genev_sys_6081 (6081) ref_cnt=1
 gre_sys (3) ref_cnt=2
+srv6_sys (6) ref_cnt=1
+srv6_sys (6) ref_cnt=1
 vxlan_sys_4789 (4789) ref_cnt=2
 ])
 
@@ -384,6 +391,12 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_pop(6081)
 ])
 
+dnl Check SRv6 tunnel pop
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=4,tclass=0x0,hlimit=64)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: tnl_pop(6)
+])
+
 dnl Check VXLAN tunnel push
 AT_CHECK([ovs-ofctl add-flow int-br action=2])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
@@ -403,6 +416,13 @@ AT_CHECK([ovs-ofctl add-flow int-br action=3])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_push(tnl_port(3),header(size=62,type=109,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=47,tclass=0x0,hlimit=64),gre((flags=0x2000,proto=0x6558),key=0x1c8)),out_port(100)),1
+])
+
+dnl Check SRv6 tunnel push
+AT_CHECK([ovs-ofctl add-flow int-br action=7])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_eth,tnl_push(tnl_port(6),header(size=78,type=112,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x86dd),ipv6(src=2001:cafe::88,dst=2001:cafe::92,label=0,proto=43,tclass=0x0,hlimit=64),srv6(segments_left=0,segs(2001:cafe::92))),out_port(100)),1
 ])
 
 dnl Check Geneve tunnel push
@@ -510,6 +530,8 @@ AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
 genev_sys_6081 (6081) ref_cnt=1
 gre_sys (3) ref_cnt=1
+srv6_sys (6) ref_cnt=1
+srv6_sys (6) ref_cnt=1
 vxlan_sys_4789 (4789) ref_cnt=1
 vxlan_sys_4790 (4790) ref_cnt=1
 ])
@@ -518,6 +540,7 @@ AT_CHECK([ovs-vsctl del-port int-br t1 \
                     -- del-port int-br t2 \
                     -- del-port int-br t4 \
                     -- del-port int-br t5 \
+                    -- del-port int-br t6 \
                        ], [0])
 
 dnl Check tunnel lookup entries after deleting all remaining tunnel ports

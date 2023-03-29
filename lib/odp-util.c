@@ -715,6 +715,24 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         }
 
         ds_put_char(ds, ')');
+    } else if (data->tnl_type == OVS_VPORT_TYPE_SRV6) {
+        const struct srv6_base_hdr *srh;
+        struct in6_addr *segs;
+        int nr_segs;
+        int i;
+
+        srh = (const struct srv6_base_hdr *) l4;
+        segs = ALIGNED_CAST(struct in6_addr *, srh + 1);
+        nr_segs = srh->last_entry + 1;
+
+        ds_put_format(ds, "srv6(");
+        ds_put_format(ds, "segments_left=%d", srh->rt_hdr.segments_left);
+        ds_put_format(ds, ",segs(");
+        for (i = 0; i < nr_segs; i++) {
+            ds_put_format(ds, i > 0 ? "," : "");
+            ipv6_format_addr(&segs[nr_segs - i - 1], ds);
+        }
+        ds_put_format(ds, "))");
     } else if (data->tnl_type == OVS_VPORT_TYPE_GRE ||
                data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
         const struct gre_base_hdr *greh;
@@ -1534,6 +1552,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     uint8_t hwid, dir;
     uint32_t teid;
     uint8_t gtpu_flags, gtpu_msgtype;
+    uint8_t segments_left;
 
     if (!ovs_scan_len(s, &n, "tnl_push(tnl_port(%"SCNi32"),", &data->tnl_port)) {
         return -EINVAL;
@@ -1775,6 +1794,57 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         tnl_type = OVS_VPORT_TYPE_GTPU;
         header_len = sizeof *eth + ip_len +
                      sizeof *udp + sizeof *gtph;
+    } else if (ovs_scan_len(s, &n, "srv6(segments_left=%"SCNu8,
+                            &segments_left)) {
+        struct srv6_base_hdr *srh = (struct srv6_base_hdr *) (ip6 + 1);
+        char seg_s[IPV6_SCAN_LEN + 1];
+        struct in6_addr *segs;
+        struct in6_addr seg;
+        uint8_t n_segs = 0;
+
+        if (segments_left + 1 > SRV6_MAX_SEGS) {
+            return -EINVAL;
+        }
+
+        ip6->ip6_nxt = IPPROTO_ROUTING;
+
+        srh->rt_hdr.hdrlen = 2 * (segments_left + 1);
+        srh->rt_hdr.segments_left = segments_left;
+        srh->rt_hdr.type = IPV6_SRCRT_TYPE_4;
+        srh->last_entry = segments_left;
+
+        tnl_type = OVS_VPORT_TYPE_SRV6;
+        header_len = sizeof *eth + ip_len +
+                     sizeof *srh + 8 * srh->rt_hdr.hdrlen;
+        /* Parse segment list. */
+        if (!ovs_scan_len(s, &n, ",segs(")) {
+            return -EINVAL;
+        }
+
+        segs = ALIGNED_CAST(struct in6_addr *, srh + 1);
+        segs += segments_left;
+
+        while (ovs_scan_len(s, &n, IPV6_SCAN_FMT, seg_s)
+               && inet_pton(AF_INET6, seg_s, &seg) == 1) {
+            if (n_segs == segments_left + 1) {
+                return -EINVAL;
+            }
+
+            memcpy(segs--, &seg, sizeof *segs);
+            n_segs++;
+
+            if (s[n] == ',') {
+                n++;
+            }
+        }
+
+        if (!ovs_scan_len(s, &n, ")))")) {
+            return -EINVAL;
+        }
+
+        if (n_segs != segments_left + 1) {
+            return -EINVAL;
+        }
     } else {
         return -EINVAL;
     }
