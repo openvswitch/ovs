@@ -161,40 +161,28 @@ map_insert_ipdev__(struct ip_device *ip_dev, char dev_name[],
     }
 }
 
-static uint8_t
-tnl_type_to_nw_proto(const char type[])
+static void
+tnl_type_to_nw_proto(const char type[], uint8_t nw_protos[2])
 {
-    if (!strcmp(type, "geneve")) {
-        return IPPROTO_UDP;
+    nw_protos[0] = nw_protos[1] = 0;
+
+    if (!strcmp(type, "geneve") || !strcmp(type, "vxlan") ||
+        !strcmp(type, "gtpu")) {
+        nw_protos[0] = IPPROTO_UDP;
+    } else if (!strcmp(type, "stt")) {
+        nw_protos[0] = IPPROTO_TCP;
+    } else if (!strcmp(type, "gre") || !strcmp(type, "erspan") ||
+               !strcmp(type, "ip6erspan") || !strcmp(type, "ip6gre")) {
+        nw_protos[0] = IPPROTO_GRE;
     }
-    if (!strcmp(type, "stt")) {
-        return IPPROTO_TCP;
-    }
-    if (!strcmp(type, "gre") || !strcmp(type, "erspan") ||
-        !strcmp(type, "ip6erspan") || !strcmp(type, "ip6gre")) {
-        return IPPROTO_GRE;
-    }
-    if (!strcmp(type, "vxlan")) {
-        return IPPROTO_UDP;
-    }
-    if (!strcmp(type, "gtpu")) {
-        return IPPROTO_UDP;
-    }
-    return 0;
 }
 
-void
-tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
-                    const char dev_name[], const char type[])
+static void
+tnl_port_map_insert__(odp_port_t port, ovs_be16 tp_port,
+                      const char dev_name[], uint8_t nw_proto)
 {
     struct tnl_port *p;
     struct ip_device *ip_dev;
-    uint8_t nw_proto;
-
-    nw_proto = tnl_type_to_nw_proto(type);
-    if (!nw_proto) {
-        return;
-    }
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH(p, node, &port_list) {
@@ -218,6 +206,22 @@ tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
 
 out:
     ovs_mutex_unlock(&mutex);
+}
+
+void
+tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
+                    const char dev_name[], const char type[])
+{
+    uint8_t nw_protos[2];
+    int i;
+
+    tnl_type_to_nw_proto(type, nw_protos);
+
+    for (i = 0; i < 2; i++) {
+        if (nw_protos[i]) {
+            tnl_port_map_insert__(port, tp_port, dev_name, nw_protos[i]);
+        }
+    }
 }
 
 static void
@@ -256,14 +260,11 @@ ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 tp_port, uint8_t nw_proto)
     }
 }
 
-void
-tnl_port_map_delete(odp_port_t port, const char type[])
+static void
+tnl_port_map_delete__(odp_port_t port, uint8_t nw_proto)
 {
     struct tnl_port *p;
     struct ip_device *ip_dev;
-    uint8_t nw_proto;
-
-    nw_proto = tnl_type_to_nw_proto(type);
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH_SAFE (p, node, &port_list) {
@@ -278,6 +279,21 @@ tnl_port_map_delete(odp_port_t port, const char type[])
         }
     }
     ovs_mutex_unlock(&mutex);
+}
+
+void
+tnl_port_map_delete(odp_port_t port, const char type[])
+{
+    uint8_t nw_protos[2];
+    int i;
+
+    tnl_type_to_nw_proto(type, nw_protos);
+
+    for (i = 0; i < 2; i++) {
+        if (nw_protos[i]) {
+            tnl_port_map_delete__(port, nw_protos[i]);
+        }
+    }
 }
 
 /* 'flow' is non-const to allow for temporary modifications during the lookup.
