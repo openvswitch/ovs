@@ -301,6 +301,12 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([:])
 ])
 
+# OVS_CHECK_SRV6()
+m4_define([OVS_CHECK_SRV6],
+    [AT_SKIP_IF([! ip -6 route add fc00::1/96 encap seg6 mode encap dev lo 2>&1 >/dev/null])
+     AT_CHECK([ip -6 route del fc00::1/96 2>&1 >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
 # CHECK_LATER_IPV6_FRAGMENTS()
 #
 # Userspace is parsing later IPv6 fragments correctly.

@@ -845,6 +845,136 @@ netdev_gtpu_build_header(const struct netdev *netdev,
     return 0;
 }
 
+int
+netdev_srv6_build_header(const struct netdev *netdev,
+                         struct ovs_action_push_tnl *data,
+                         const struct netdev_tnl_build_header_params *params)
+{
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    struct netdev_tunnel_config *tnl_cfg;
+    const struct in6_addr *segs;
+    struct srv6_base_hdr *srh;
+    struct in6_addr *s;
+    ovs_be16 dl_type;
+    int err = 0;
+    int nr_segs;
+    int i;
+
+    ovs_mutex_lock(&dev->mutex);
+    tnl_cfg = &dev->tnl_cfg;
+
+    if (tnl_cfg->srv6_num_segs) {
+        nr_segs = tnl_cfg->srv6_num_segs;
+        segs = tnl_cfg->srv6_segs;
+    } else {
+        /*
+         * If explicit segment list setting is omitted, tunnel destination
+         * is considered to be the first segment list.
+         */
+        nr_segs = 1;
+        segs = &params->flow->tunnel.ipv6_dst;
+    }
+
+    if (!ipv6_addr_equals(&segs[0], &params->flow->tunnel.ipv6_dst)) {
+        err = EINVAL;
+        goto out;
+    }
+
+    srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING);
+    srh->rt_hdr.segments_left = nr_segs - 1;
+    srh->rt_hdr.type = IPV6_SRCRT_TYPE_4;
+    srh->rt_hdr.hdrlen = 2 * nr_segs;
+    srh->last_entry = nr_segs - 1;
+    srh->flags = 0;
+    srh->tag = 0;
+
+    dl_type = params->flow->dl_type;
+    if (dl_type == htons(ETH_TYPE_IP)) {
+        srh->rt_hdr.nexthdr = IPPROTO_IPIP;
+    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
+        srh->rt_hdr.nexthdr = IPPROTO_IPV6;
+    } else {
+        err = EOPNOTSUPP;
+        goto out;
+    }
+
+    s = ALIGNED_CAST(struct in6_addr *,
+                     (char *) srh + sizeof *srh);
+    for (i = 0; i < nr_segs; i++) {
+        /* Segment list is written to the header in reverse order. */
+        memcpy(s, &segs[nr_segs - i - 1], sizeof *s);
+        s++;
+    }
+
+    data->header_len += sizeof *srh + 8 * srh->rt_hdr.hdrlen;
+    data->tnl_type = OVS_VPORT_TYPE_SRV6;
+out:
+    ovs_mutex_unlock(&dev->mutex);
+
+    return err;
+}
+
+void
+netdev_srv6_push_header(const struct netdev *netdev OVS_UNUSED,
+                        struct dp_packet *packet,
+                        const struct ovs_action_push_tnl *data)
+{
+    int ip_tot_size;
+
+    netdev_tnl_push_ip_header(packet, data->header,
+                              data->header_len, &ip_tot_size);
+}
+
+struct dp_packet *
+netdev_srv6_pop_header(struct dp_packet *packet)
+{
+    const struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+    size_t size = dp_packet_l3_size(packet) - IPV6_HEADER_LEN;
+    struct pkt_metadata *md = &packet->md;
+    struct flow_tnl *tnl = &md->tunnel;
+    const struct ip6_rt_hdr *rt_hdr;
+    uint8_t nw_proto = nh->ip6_nxt;
+    const void *data = nh + 1;
+    uint8_t nw_frag = 0;
+    unsigned int hlen;
+
+    /*
+     * Verifies that the routing header is present in the IPv6
+     * extension headers and that its type is SRv6.
+     */
+    if (!parse_ipv6_ext_hdrs(&data, &size, &nw_proto, &nw_frag,
+                             NULL, &rt_hdr)) {
+        goto err;
+    }
+
+    if (!rt_hdr || rt_hdr->type != IPV6_SRCRT_TYPE_4) {
+        goto err;
+    }
+
+    if (rt_hdr->segments_left > 0) {
+        VLOG_WARN_RL(&err_rl, "invalid srv6 segments_left=%d\n",
+                     rt_hdr->segments_left);
+        goto err;
+    }
+
+    if (rt_hdr->nexthdr == IPPROTO_IPIP) {
+        packet->packet_type = htonl(PT_IPV4);
+    } else if (rt_hdr->nexthdr == IPPROTO_IPV6) {
+        packet->packet_type = htonl(PT_IPV6);
+    } else {
+        goto err;
+    }
+
+    pkt_metadata_init_tnl(md);
+    netdev_tnl_ip_extract_tnl_md(packet, tnl, &hlen);
+    dp_packet_reset_packet(packet, hlen);
+
+    return packet;
+err:
+    dp_packet_delete(packet);
+    return NULL;
+}
+
 struct dp_packet *
 netdev_vxlan_pop_header(struct dp_packet *packet)
 {

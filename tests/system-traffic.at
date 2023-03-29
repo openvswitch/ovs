@@ -1164,6 +1164,130 @@ OVS_WAIT_UNTIL([cat p0.pcap | grep -E "IP6 fc00:100::100 > fc00:100::1: GREv0, .
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping over srv6 tunnel])
+OVS_CHECK_TUNNEL_TSO()
+OVS_CHECK_SRV6()
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0)
+ADD_NAMESPACES(at_ns1)
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.default.seg6_enabled=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv4.conf.default.forwarding=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.default.forwarding=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.all.seg6_enabled=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv4.conf.all.forwarding=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.all.forwarding=1])
+
+dnl Set up underlay link from host into the namespace 'at_ns0'
+dnl using veth pair. Kernel side tunnel endpoint (SID) is
+dnl 'fc00:a::1/128', so add it to the route.
+dnl Only IPPROTO_IPIP(4) and IPPROTO_ICMPV6(58) are needed in underlay link.
+ADD_BR([br-underlay])
+ADD_VETH(p0, at_ns0, br-underlay, "fc00::1/64", [], [], "nodad")
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=1,actions=drop"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=100,ipv6,nw_proto=4,actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=100,ipv6,nw_proto=58,actions=normal"])
+AT_CHECK([ip addr add dev br-underlay "fc00::100/64" nodad])
+AT_CHECK([ip link set dev br-underlay up])
+AT_CHECK([ip route add fc00:a::1/128 dev br-underlay via fc00::1])
+
+dnl Set up tunnel endpoints on OVS outside the namespace.
+ADD_OVS_TUNNEL6([srv6], [br0], [at_srv6], [fc00:a::1], [10.100.100.100/24])
+AT_CHECK([ovs-vsctl set bridge br0 other_config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ip route add 10.1.1.0/24 dev br0 via 10.100.100.1])
+AT_CHECK([arp -s 10.100.100.1 aa:55:aa:55:00:01])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=LOCAL,actions=output:at_srv6])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=at_srv6,actions=mod_dl_dst:aa:55:aa:55:00:00,output:LOCAL])
+
+dnl Set up tunnel endpoints on the namespace 'at_ns0',
+dnl and overlay port on the namespace 'at_ns1'
+ADD_VETH_NS([at_ns0], [veth0], [10.1.1.2/24], [at_ns1], [veth1], [10.1.1.1/24])
+NS_CHECK_EXEC([at_ns0], [ip sr tunsrc set fc00:a::1])
+NS_CHECK_EXEC([at_ns0], [ip route add 10.100.100.0/24 encap seg6 mode encap segs fc00::100 dev p0])
+NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX4 nh4 0.0.0.0 dev veth0])
+NS_CHECK_EXEC([at_ns1], [ip route add 10.100.100.0/24 via 10.1.1.2 dev veth1])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay.
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.100.100.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping6 over srv6 tunnel])
+OVS_CHECK_TUNNEL_TSO()
+OVS_CHECK_SRV6()
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0)
+ADD_NAMESPACES(at_ns1)
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.default.seg6_enabled=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.default.forwarding=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.all.seg6_enabled=1])
+NS_EXEC([at_ns0], [sysctl -w net.ipv6.conf.all.forwarding=1])
+
+dnl Set up underlay link from host into the namespace 'at_ns0'
+dnl using veth pair. Kernel side tunnel endpoint (SID) is
+dnl 'fc00:a::1/128', so add it to the route.
+dnl Only IPPROTO_IPV6(41) and IPPROTO_ICMPV6(58) are needed in underlay link.
+ADD_BR([br-underlay])
+ADD_VETH(p0, at_ns0, br-underlay, "fc00::1/64", [], [], "nodad")
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=1,actions=drop"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=100,ipv6,nw_proto=41,actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "priority=100,ipv6,nw_proto=58,actions=normal"])
+AT_CHECK([ip addr add dev br-underlay "fc00::100/64" nodad])
+AT_CHECK([ip link set dev br-underlay up])
+AT_CHECK([ip -6 route add fc00:a::1/128 dev br-underlay via fc00::1])
+
+dnl Set up tunnel endpoints on OVS outside the namespace.
+ADD_OVS_TUNNEL6([srv6], [br0], [at_srv6], [fc00:a::1], [fc00:100::100/64])
+AT_CHECK([ovs-vsctl set bridge br0 other_config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ip addr add dev br0 fc00:100::100/64])
+AT_CHECK([ip -6 route add fc00:1::1/128 dev br0 via fc00:100::1])
+AT_CHECK([ip -6 neigh add fc00:100::1 lladdr aa:55:aa:55:00:01 dev br0])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=LOCAL,actions=output:at_srv6])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=at_srv6,actions=mod_dl_dst:aa:55:aa:55:00:00,output:LOCAL])
+
+dnl Set up tunnel endpoints on the namespace 'at_ns0',
+dnl and overlay port on the namespace 'at_ns1'
+ADD_VETH_NS([at_ns0], [veth0], [fc00:1::2/64], [at_ns1], [veth1], [fc00:1::1/64])
+NS_CHECK_EXEC([at_ns0], [ip sr tunsrc set fc00:a::1])
+NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:100::0/64 encap seg6 mode encap segs fc00::100 dev p0])
+NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX6 nh6 :: dev veth0])
+NS_CHECK_EXEC([at_ns1], [ip -6 route add fc00:100::/64 via fc00:1::2 dev veth1])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 ping6 -c 1 fc00:100::100])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay.
+NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - clone action])
 OVS_TRAFFIC_VSWITCHD_START()
 

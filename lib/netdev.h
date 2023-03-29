@@ -140,6 +140,10 @@ struct netdev_tunnel_config {
     bool erspan_idx_flow;
     bool erspan_dir_flow;
     bool erspan_hwid_flow;
+
+    uint8_t srv6_num_segs;
+    #define SRV6_MAX_SEGS 6
+    struct in6_addr srv6_segs[SRV6_MAX_SEGS];
 };
 
 void netdev_run(void);

@@ -254,6 +254,7 @@ enum ovs_vport_type {
 	OVS_VPORT_TYPE_IP6GRE = 109,
 	OVS_VPORT_TYPE_GTPU = 110,
 	OVS_VPORT_TYPE_BAREUDP = 111,  /* Bareudp tunnel. */
+	OVS_VPORT_TYPE_SRV6 = 112,  /* SRv6 tunnel. */
 	__OVS_VPORT_TYPE_MAX
 };
 

@@ -202,6 +202,14 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
 ])
 
+# OVS_CHECK_SRV6()
+#
+# The kernel datapath does not support this feature.
+m4_define([OVS_CHECK_SRV6],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_LATER_IPV6_FRAGMENTS()
 #
 # Upstream kernels beetween 4.20 and 5.19 are not parsing IPv6 fragments

@@ -919,6 +919,9 @@ get_vport_type(const struct dpif_netlink_vport *vport)
     case OVS_VPORT_TYPE_GTPU:
         return "gtpu";
 
+    case OVS_VPORT_TYPE_SRV6:
+        return "srv6";
+
     case OVS_VPORT_TYPE_BAREUDP:
         return "bareudp";
 
@@ -957,6 +960,8 @@ netdev_to_ovs_vport_type(const char *type)
         return OVS_VPORT_TYPE_GRE;
     } else if (!strcmp(type, "gtpu")) {
         return OVS_VPORT_TYPE_GTPU;
+    } else if (!strcmp(type, "srv6")) {
+        return OVS_VPORT_TYPE_SRV6;
     } else if (!strcmp(type, "bareudp")) {
         return OVS_VPORT_TYPE_BAREUDP;
     } else {

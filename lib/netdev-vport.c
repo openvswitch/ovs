@@ -424,6 +424,35 @@ parse_tunnel_ip(const char *value, bool accept_mcast, bool *flow,
     return 0;
 }
 
+static int
+parse_srv6_segs(char *s, struct in6_addr *segs, uint8_t *num_segs)
+{
+    char *save_ptr = NULL;
+    char *token;
+
+    if (!s) {
+        return EINVAL;
+    }
+
+    *num_segs = 0;
+
+    while ((token = strtok_r(s, ",", &save_ptr)) != NULL) {
+        if (*num_segs == SRV6_MAX_SEGS) {
+            return EINVAL;
+        }
+
+        if (inet_pton(AF_INET6, token, segs) != 1) {
+            return EINVAL;
+        }
+
+        segs++;
+        (*num_segs)++;
+        s = NULL;
+    }
+
+    return 0;
+}
+
 enum tunnel_layers {
     TNL_L2 = 1 << 0,       /* 1 if a tunnel type can carry Ethernet traffic. */
     TNL_L3 = 1 << 1        /* 1 if a tunnel type can carry L3 traffic. */
@@ -442,6 +471,8 @@ tunnel_supported_layers(const char *type,
     } else if (!strcmp(type, "gtpu")) {
         return TNL_L3;
     } else if (!strcmp(type, "bareudp")) {
+        return TNL_L3;
+    } else if (!strcmp(type, "srv6")) {
         return TNL_L3;
     } else {
         return TNL_L2;
@@ -749,6 +780,17 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                     err = EINVAL;
                     goto out;
                 }
+            }
+        } else if (!strcmp(node->key, "srv6_segs")) {
+            err = parse_srv6_segs(node->value,
+                                  tnl_cfg.srv6_segs,
+                                  &tnl_cfg.srv6_num_segs);
+
+            switch (err) {
+            case EINVAL:
+                ds_put_format(&errors, "%s: bad %s 'srv6_segs'\n",
+                              name, node->value);
+                break;
             }
         } else if (!strcmp(node->key, "payload_type")) {
             if (!strcmp(node->value, "mpls")) {
@@ -1286,6 +1328,17 @@ netdev_vport_tunnel_register(void)
           {
               TUNNEL_FUNCTIONS_COMMON,
               .type = "bareudp",
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
+          },
+          {{NULL, NULL, 0, 0}}
+        },
+        { "srv6_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "srv6",
+              .build_header = netdev_srv6_build_header,
+              .push_header = netdev_srv6_push_header,
+              .pop_header = netdev_srv6_pop_header,
               .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
           },
           {{NULL, NULL, 0, 0}}
