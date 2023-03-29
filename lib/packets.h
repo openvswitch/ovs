@@ -988,6 +988,15 @@ struct ovs_16aligned_ip6_frag {
     ovs_16aligned_be32 ip6f_ident;
 };
 
+#define IP6_RT_HDR_LEN 4
+struct ip6_rt_hdr {
+    uint8_t nexthdr;
+    uint8_t hdrlen;
+    uint8_t type;
+    uint8_t segments_left;
+};
+BUILD_ASSERT_DECL(IP6_RT_HDR_LEN == sizeof(struct ip6_rt_hdr));
+
 #define ICMP6_HEADER_LEN 4
 struct icmp6_header {
     uint8_t icmp6_type;

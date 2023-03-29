@@ -485,9 +485,9 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
     const void *data = l3 + 1;
     size_t datasize = pl;
 
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
-    if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr)
-        || !nw_frag || !frag_hdr) {
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
+    if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr,
+                             NULL) || !nw_frag || !frag_hdr) {
 
         ipf_print_reass_packet("Unparsed reassembled v6 packet; v6 hdr:", l3);
         dp_packet_delete(pkt);
@@ -678,9 +678,9 @@ ipf_is_valid_v6_frag(struct ipf *ipf, struct dp_packet *pkt)
     uint8_t nw_proto = l3->ip6_nxt;
     const void *data = l3 + 1;
     size_t datasize = l3_size - l3_hdr_size;
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
     if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag,
-                             &frag_hdr) || !nw_frag || !frag_hdr) {
+                             &frag_hdr, NULL) || !nw_frag || !frag_hdr) {
         return false;
     }
 
@@ -721,9 +721,10 @@ ipf_v6_key_extract(struct dp_packet *pkt, ovs_be16 dl_type, uint16_t zone,
     uint8_t nw_proto = l3->ip6_nxt;
     const void *data = l3 + 1;
     size_t datasize = dp_packet_l3_size(pkt) - sizeof *l3;
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
 
-    parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr);
+    parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr,
+                        NULL);
     ovs_assert(nw_frag && frag_hdr);
     ovs_be16 ip6f_offlg = frag_hdr->ip6f_offlg;
     *start_data_byte = ntohs(ip6f_offlg & IP6F_OFF_MASK) +

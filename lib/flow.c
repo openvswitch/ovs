@@ -479,9 +479,17 @@ invalid:
 static inline bool
 parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
                       uint8_t *nw_frag,
-                      const struct ovs_16aligned_ip6_frag **frag_hdr)
+                      const struct ovs_16aligned_ip6_frag **frag_hdr,
+                      const struct ip6_rt_hdr **rt_hdr)
 {
-    *frag_hdr = NULL;
+    if (frag_hdr) {
+        *frag_hdr = NULL;
+    }
+
+    if (rt_hdr) {
+        *rt_hdr = NULL;
+    }
+
     while (1) {
         if (OVS_LIKELY((*nw_proto != IPPROTO_HOPOPTS)
                        && (*nw_proto != IPPROTO_ROUTING)
@@ -504,7 +512,6 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
         }
 
         if ((*nw_proto == IPPROTO_HOPOPTS)
-            || (*nw_proto == IPPROTO_ROUTING)
             || (*nw_proto == IPPROTO_DSTOPTS)) {
             /* These headers, while different, have the fields we care
              * about in the same location and with the same
@@ -513,6 +520,18 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
             *nw_proto = ext_hdr->ip6e_nxt;
             if (OVS_UNLIKELY(!data_try_pull(datap, sizep,
                                             (ext_hdr->ip6e_len + 1) * 8))) {
+                return false;
+            }
+        } else if (*nw_proto == IPPROTO_ROUTING) {
+            const struct ip6_rt_hdr *tmp;
+            if (!rt_hdr) {
+                rt_hdr = &tmp;
+            }
+
+            *rt_hdr = *datap;
+            *nw_proto = (*rt_hdr)->nexthdr;
+            if (OVS_UNLIKELY(!data_try_pull(datap, sizep,
+                                            ((*rt_hdr)->hdrlen + 1) * 8))) {
                 return false;
             }
         } else if (*nw_proto == IPPROTO_AH) {
@@ -527,6 +546,11 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
                 return false;
             }
         } else if (*nw_proto == IPPROTO_FRAGMENT) {
+            const struct ovs_16aligned_ip6_frag *tmp;
+            if (!frag_hdr) {
+                frag_hdr = &tmp;
+            }
+
             *frag_hdr = *datap;
 
             *nw_proto = (*frag_hdr)->ip6f_nxt;
@@ -561,15 +585,19 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
  * has FLOW_NW_FRAG_LATER set.  Both first and later fragments have
  * FLOW_NW_FRAG_ANY set in 'nw_frag'.
  *
+ * If a routing header is found, '*rt_hdr' is set to the routing
+ * header and otherwise set to NULL.
+ *
  * A return value of false indicates that there was a problem parsing
  * the extension headers.*/
 bool
 parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
                     uint8_t *nw_frag,
-                    const struct ovs_16aligned_ip6_frag **frag_hdr)
+                    const struct ovs_16aligned_ip6_frag **frag_hdr,
+                    const struct ip6_rt_hdr **rt_hdr)
 {
     return parse_ipv6_ext_hdrs__(datap, sizep, nw_proto, nw_frag,
-                                 frag_hdr);
+                                 frag_hdr, rt_hdr);
 }
 
 bool
@@ -945,9 +973,8 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_ttl = nh->ip6_hlim;
         nw_proto = nh->ip6_nxt;
 
-        const struct ovs_16aligned_ip6_frag *frag_hdr;
-        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag,
-                                   &frag_hdr)) {
+        if (!parse_ipv6_ext_hdrs(&data, &size, &nw_proto, &nw_frag,
+                                 NULL, NULL)) {
             goto out;
         }
 
@@ -1200,10 +1227,9 @@ parse_tcp_flags(struct dp_packet *packet,
         plen = ntohs(nh->ip6_plen); /* Never pull padding. */
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;
-        const struct ovs_16aligned_ip6_frag *frag_hdr;
         nw_proto = nh->ip6_nxt;
-        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag,
-            &frag_hdr)) {
+        if (!parse_ipv6_ext_hdrs(&data, &size, &nw_proto, &nw_frag,
+                                 NULL, NULL)) {
             return 0;
         }
     } else {
