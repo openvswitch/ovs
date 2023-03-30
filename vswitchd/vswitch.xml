@@ -2845,6 +2845,16 @@
             </p>
           </dd>
 
+          <dt><code>srv6</code></dt>
+          <dd>
+            <p>
+            Segment Routing IPv6 (SRv6) tunnel encapsulates L3 traffic as
+            "IPv6 in IPv6" or "IPv4 in IPv6" with Segment Routing Header (SRH)
+            defined in RFC 8754. The segment list in SRH can be set using a
+            SRv6 specific option.
+            </p>
+          </dd>
+
         </dl>
       </column>
     </group>
@@ -2853,8 +2863,8 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>geneve</code>, <code>bareudp</code>, <code>gre</code>,
-        <code>ip6gre</code>, <code>vxlan</code>, <code>lisp</code> and
-        <code>stt</code>.
+        <code>ip6gre</code>, <code>vxlan</code>, <code>lisp</code>,
+        <code>stt</code> and <code>srv6</code>.
       </p>
 
       <p>
@@ -2867,7 +2877,8 @@
         considered more specific than <ref column="options" key="local_ip"/> if
         a port defines one and another port defines the other.
         <ref column="options" key="in_key"/> is not applicable for bareudp
-        tunnels. Hence it is not considered while identifying a bareudp tunnel.
+        and srv6 tunnels. Hence it is not considered while identifying
+        bareudp or srv6 tunnels.
       </p>
 
       <column name="options" key="remote_ip">
@@ -2935,8 +2946,9 @@
 
       <column name="options" key="in_key">
         <p>
-          Optional, not applicable for <code>bareudp</code>. The key that
-          received packets must contain, one of:
+          Optional, not applicable for <code>bareudp</code> and
+          <code>srv6</code>. The key that received packets must contain,
+          one of:
         </p>
 
         <ul>
@@ -2965,8 +2977,9 @@
 
       <column name="options" key="out_key">
       <p>
-        Optional, not applicable for <code>bareudp</code>. The key to be set
-        on outgoing packets, one of:
+        Optional, not applicable for <code>bareudp</code> and
+        <code>srv6</code>. The key to be set on outgoing packets,
+        one of:
       </p>
 
         <ul>
@@ -3260,6 +3273,18 @@
            device is tunnelling. For the tunnels which supports multiple
            ethertypes of a l3 protocol (IP, MPLS) this field specifies the
            protocol name as a string.
+        </p>
+      </column>
+    </group>
+
+    <group title="Tunnel Options: srv6 only">
+      <column name="options" key="srv6_segs">
+        <p>
+           Specifies the segment list in Segment Routing Header (SRH).
+           It consists of a comma-separated list of segments represented
+           in IPv6 format, e.g. "fc00:100::1,fc00:200::1,fc00:300::1".
+           Note that the first segment must be the same as
+           <ref column="options" key="remote_ip"/>.
         </p>
       </column>
     </group>
