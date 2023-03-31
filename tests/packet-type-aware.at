@@ -1021,7 +1021,7 @@ AT_CHECK([
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(p0),packet_type(ns=0,id=0),eth(src=aa:bb:cc:00:00:02,dst=aa:bb:cc:00:00:01),eth_type(0x0800),ipv4(dst=20.0.0.1,proto=47,frag=no), packets:3, bytes:378, used:0.0s, actions:tnl_pop(gre_sys)
 tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x8847),eth_type(0x8847),mpls(label=999/0x0,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:264, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=00:00:00:00:00:00),pop_mpls(eth_type=0x800),recirc(0x1)
-tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0x1),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=00:00:00:00:00:00),eth_type(0x0800),ipv4(ttl=64,frag=no), packets:3, bytes:294, used:0.0s, actions:set(ipv4(ttl=63)),int-br
+tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0x1),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=00:00:00:00:00:00),eth_type(0x0800),ipv4(proto=1,ttl=64,frag=no), packets:3, bytes:294, used:0.0s, actions:set(ipv4(ttl=63)),int-br
 ])
 
 ovs-appctl time/warp 1000

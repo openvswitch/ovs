@@ -5117,6 +5117,7 @@ compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
     }
 
     ctx->wc->masks.nw_ttl = 0xff;
+    WC_MASK_FIELD(ctx->wc, nw_proto);
     if (flow->nw_ttl > 1) {
         flow->nw_ttl--;
         return false;
@@ -6895,6 +6896,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_SET_IPV4_SRC:
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+                WC_MASK_FIELD(wc, nw_proto);
                 flow->nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
@@ -6902,12 +6904,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_SET_IPV4_DST:
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+                WC_MASK_FIELD(wc, nw_proto);
                 flow->nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IP_DSCP:
             if (is_ip_any(flow)) {
+                WC_MASK_FIELD(wc, nw_proto);
                 wc->masks.nw_tos |= IP_DSCP_MASK;
                 flow->nw_tos &= ~IP_DSCP_MASK;
                 flow->nw_tos |= ofpact_get_SET_IP_DSCP(a)->dscp;
@@ -6916,6 +6920,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_IP_ECN:
             if (is_ip_any(flow)) {
+                WC_MASK_FIELD(wc, nw_proto);
                 wc->masks.nw_tos |= IP_ECN_MASK;
                 flow->nw_tos &= ~IP_ECN_MASK;
                 flow->nw_tos |= ofpact_get_SET_IP_ECN(a)->ecn;
@@ -6924,6 +6929,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_IP_TTL:
             if (is_ip_any(flow)) {
+                WC_MASK_FIELD(wc, nw_proto);
                 wc->masks.nw_ttl = 0xff;
                 flow->nw_ttl = ofpact_get_SET_IP_TTL(a)->ttl;
             }
@@ -6986,6 +6992,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
             /* Set the field only if the packet actually has it. */
             if (mf_are_prereqs_ok(mf, flow, wc)) {
+                mf_set_mask_l3_prereqs(mf, flow, wc);
                 mf_mask_field_masked(mf, ofpact_set_field_mask(set_field), wc);
                 mf_set_flow_value_masked(mf, set_field->value,
                                          ofpact_set_field_mask(set_field),
@@ -7042,6 +7049,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_DEC_TTL:
             wc->masks.nw_ttl = 0xff;
+            WC_MASK_FIELD(wc, nw_proto);
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
                 return;
             }

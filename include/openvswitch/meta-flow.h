@@ -2338,6 +2338,10 @@ void mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s);
 void field_array_set(enum mf_field_id id, const union mf_value *,
                      struct field_array *);
 
+/* Mask the required l3 prerequisites if a 'set' action occurs. */
+void mf_set_mask_l3_prereqs(const struct mf_field *, const struct flow *,
+                            struct flow_wildcards *);
+
 #ifdef __cplusplus
 }
 #endif
