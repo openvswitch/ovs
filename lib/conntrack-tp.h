@@ -17,8 +17,15 @@
 #ifndef CONNTRACK_TP_H
 #define CONNTRACK_TP_H 1
 
+#include <stdint.h>
+
 #define CT_DPIF_NETDEV_TP_MIN 30
+
 enum ct_timeout;
+struct conn;
+struct conntrack;
+struct timeout_policy;
+
 void timeout_policy_init(struct conntrack *ct);
 int timeout_policy_update(struct conntrack *ct, struct timeout_policy *tp);
 int timeout_policy_delete(struct conntrack *ct, uint32_t tp_id);
