@@ -849,7 +849,7 @@ table=2 ip actions=set_field:192.168.3.91->ip_src,output(11)
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,nw_frag=no,icmp_type=8,icmp_code=0'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_src=192.168.0.1,nw_frag=no
+  [Megaflow: recirc_id=0,eth,icmp,in_port=1,nw_src=192.168.0.1,nw_frag=no
 Datapath actions: 10,set(ipv4(src=192.168.3.91)),11,set(ipv4(src=192.168.3.90)),13
 ])
 OVS_VSWITCHD_STOP
@@ -912,7 +912,7 @@ AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_ds
 # Must match on the source address to be able to restore it's value for
 # the second bucket
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_src=192.168.0.1,nw_frag=no
+  [Megaflow: recirc_id=0,eth,icmp,in_port=1,nw_src=192.168.0.1,nw_frag=no
 Datapath actions: set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),11
 ])
 OVS_VSWITCHD_STOP
@@ -944,7 +944,7 @@ done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' |  sed 's/packets.*actions:/actions:/' | strip_ufid | strip_used | sort], [0], [dnl
 flow-dump from the main thread:
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:hash(sym_l4(0)),recirc(0x1)
-recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),10
+recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,proto=1,frag=no), actions:set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),10
 ])
 
 OVS_VSWITCHD_STOP
@@ -959,7 +959,7 @@ AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_ds
 # Must match on the source address to be able to restore it's value for
 # the third bucket
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_src=192.168.0.1,nw_frag=no
+  [Megaflow: recirc_id=0,eth,icmp,in_port=1,nw_src=192.168.0.1,nw_frag=no
 Datapath actions: set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),11
 ])
 OVS_VSWITCHD_STOP
@@ -1536,17 +1536,17 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
 AT_CHECK([tail -4 stdout], [0], [
 Final flow: ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=111,nw_tos=0,nw_ecn=0,nw_ttl=1,nw_frag=no
-Megaflow: recirc_id=0,eth,ip,in_port=1,nw_ttl=2,nw_frag=no
+Megaflow: recirc_id=0,eth,ip,in_port=1,nw_proto=111,nw_ttl=2,nw_frag=no
 Datapath actions: set(ipv4(ttl=1)),2,userspace(pid=0,controller(reason=2,dont_send=0,continuation=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535)),4
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=3,frag=no)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_ttl=3,nw_frag=no
+  [Megaflow: recirc_id=0,eth,ip,in_port=1,nw_proto=111,nw_ttl=3,nw_frag=no
 Datapath actions: set(ipv4(ttl=2)),2,set(ipv4(ttl=1)),3,4
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,eth,ipv6,in_port=1,nw_ttl=128,nw_frag=no
+  [Megaflow: recirc_id=0,eth,ipv6,in_port=1,nw_proto=10,nw_ttl=128,nw_frag=no
 Datapath actions: set(ipv6(hlimit=127)),2,set(ipv6(hlimit=126)),3,4
 ])
 
@@ -1656,7 +1656,7 @@ AT_CHECK([ovs-vsctl -- \
         --id=@q2 create Queue dscp=2], [0], [ignore])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(9),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xff,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: recirc_id=0,skb_priority=0,eth,ip,in_port=9,nw_tos=252,nw_frag=no
+  [Megaflow: recirc_id=0,skb_priority=0,eth,icmp,in_port=9,nw_tos=252,nw_frag=no
 Datapath actions: dnl
 100,dnl
 set(ipv4(tos=0x4/0xfc)),set(skb_priority(0x1)),1,dnl
@@ -11884,7 +11884,7 @@ ovs-ofctl dump-flows br0
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -3 stdout], [0], [dnl
-Megaflow: recirc_id=0,eth,ip,reg0=0/0x1,in_port=1,nw_src=10.10.10.2,nw_frag=no
+Megaflow: recirc_id=0,eth,icmp,reg0=0/0x1,in_port=1,nw_src=10.10.10.2,nw_frag=no
 Datapath actions: drop
 Translation failed (Recursion too deep), packet is dropped.
 ])
