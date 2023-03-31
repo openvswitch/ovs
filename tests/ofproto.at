@@ -6538,3 +6538,185 @@ verify_deleted
 
 OVS_VSWITCHD_STOP(["/<invalid/d"])
 AT_CLEANUP
+
+AT_SETUP([ofproto - implicit mask of ipv4 proto with invalid proto field])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=90,ip,nw_dst=192.168.1.20,actions=mod_nw_dst:192.168.20.20,output=2
+table=0 in_port=1 priority=89,ip,nw_dst=192.168.1.21,actions=mod_nw_src:192.168.20.21,output=2
+table=0 in_port=1 priority=88,ip,nw_dst=192.168.1.10,actions=dec_ttl,output=2
+table=0 in_port=1 priority=87,ip,nw_dst=192.168.1.19,actions=mod_nw_ttl:8,output=2
+table=0 in_port=1 priority=86,ip,nw_dst=192.168.1.18,actions=mod_nw_ecn:2,output=2
+table=0 in_port=1 priority=85,ip,nw_dst=192.168.1.17,actions=mod_nw_tos:0x40,output=2
+table=0 in_port=1 priority=84,ip,nw_dst=192.168.1.16,actions=set_field:192.168.20.26->nw_dst,output=2
+table=0 in_port=1 priority=83,ip,nw_dst=192.168.1.15,actions=set_field:192.168.21.26->nw_src,output=2
+table=0 in_port=1 priority=82,ip,nw_dst=192.168.1.14,actions=set_field:0x40->nw_tos,output=2
+table=0 in_port=1 priority=0,actions=drop
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl send a proto 0 packet to try and poison the DP flow path
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+ '5054000000075054000000050800450000548de140004000289fc0a801c4c0a8011408003bf60002001bbf080a640000000032ad010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.20,proto=0,frag=no), packets:0, bytes:0, used:never, actions:2
+])
+
+dnl Send ICMP for mod nw_src and mod nw_dst
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.21,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.20,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will dec TTL
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.10,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will mod TTL
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.19,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will mod ECN
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.18,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will mod TOS
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.17,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will set DST
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.16,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will set SRC
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.15,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+dnl send ICMP that will set TOS
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.14,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.10,proto=1,ttl=64,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(ttl=63)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.14,proto=1,tos=0/0xfc,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(tos=0x40/0xfc)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.16,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(dst=192.168.20.26)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.17,proto=1,tos=0/0xfc,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(tos=0x40/0xfc)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.18,proto=1,tos=0/0x3,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(tos=0x2/0x3)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.19,proto=1,ttl=64,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(ttl=8)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.20,proto=0,frag=no), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.1.20,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(dst=192.168.20.20)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.15,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(src=192.168.21.26)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.1.21,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv4(src=192.168.20.21)),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - implicit mask of ipv6 proto with HOPOPT field])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=77,ip6,ipv6_dst=111:db8::3,actions=dec_ttl,output=2
+table=0 in_port=1 priority=76,ip6,ipv6_dst=111:db8::4,actions=mod_nw_ttl:8,output=2
+table=0 in_port=1 priority=75,ip6,ipv6_dst=111:db8::5,actions=mod_nw_ecn:2,output=2
+table=0 in_port=1 priority=74,ip6,ipv6_dst=111:db8::6,actions=mod_nw_tos:0x40,output=2
+table=0 in_port=1 priority=73,ip6,ipv6_dst=111:db8::7,actions=set_field:2112:db8::2->ipv6_dst,output=2
+table=0 in_port=1 priority=72,ip6,ipv6_dst=111:db8::8,actions=set_field:2112:db8::3->ipv6_src,output=2
+table=0 in_port=1 priority=72,ip6,ipv6_dst=111:db8::9,actions=set_field:44->ipv6_label,output=2
+table=0 in_port=1 priority=0,actions=drop
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl send a proto 0 packet to try and poison the DP flow path
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::3,proto=0,tclass=0,hlimit=64,frag=no)'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::3,proto=0,hlimit=0,frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=2,dont_send=0,continuation=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535))
+])
+
+dnl Send ICMP for mod nw_src and mod nw_dst
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::3,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::4,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+dnl send ICMP that will dec TTL
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::5,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+dnl send ICMP that will mod TTL
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::6,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+dnl send ICMP that will mod ECN
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::7,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+dnl send ICMP that will mod TOS
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::8,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+dnl send ICMP that will set LABEL
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::9,proto=1,tclass=0,hlimit=64,frag=no),icmpv6(type=0,code=8)'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::3,proto=0,hlimit=0,frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=2,dont_send=0,continuation=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::3,proto=1,hlimit=64,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(hlimit=63)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::4,proto=1,hlimit=64,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(hlimit=8)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::5,proto=1,tclass=0/0x3,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(tclass=0x2/0x3)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::6,proto=1,tclass=0/0xfc,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(tclass=0x40/0xfc)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::7,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(dst=2112:db8::2)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(dst=111:db8::9,label=0,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(label=0x2c)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=111:db8::8,proto=1,frag=no), packets:0, bytes:0, used:never, actions:set(ipv6(src=2112:db8::3)),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - implicit mask of ARP OPer field])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 priority=77,arp,arp_sha=00:01:02:03:04:06,actions=set_field:0x1->arp_op,2
+table=0 in_port=1 priority=76,arp,arp_sha=00:01:02:03:04:07,actions=set_field:00:02:03:04:05:06->arp_sha,2
+table=0 in_port=1 priority=75,arp,arp_sha=00:01:02:03:04:08,actions=set_field:ff:00:00:00:00:ff->arp_tha,2
+table=0 in_port=1 priority=74,arp,arp_sha=00:01:02:03:04:09,actions=set_field:172.31.110.26->arp_spa,2
+table=0 in_port=1 priority=73,arp,arp_sha=00:01:02:03:04:0a,actions=set_field:172.31.110.10->arp_tpa,2
+table=0 in_port=1 priority=1,actions=drop
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Send op == 0 packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+ 'ffffffffffffaa55aa550000080600010800060400000001020304070c0a00010000000000000c0a0002'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(op=0,sha=00:01:02:03:04:07), packets:0, bytes:0, used:never, actions:2
+])
+
+dnl Send op 2 -> set op
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0806),arp(sip=172.31.110.1,tip=172.31.110.25,op=2,sha=00:01:02:03:04:06,tha=ff:ff:ff:ff:ff:ff)'])
+
+dnl Send op 1 -> set SHA
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0806),arp(sip=172.31.110.1,tip=172.31.110.25,op=1,sha=00:01:02:03:04:07,tha=ff:ff:ff:ff:ff:ff)'])
+
+dnl Send op 1 -> set THA
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0806),arp(sip=172.31.110.1,tip=172.31.110.25,op=1,sha=00:01:02:03:04:08,tha=ff:ff:ff:ff:ff:ff)'])
+
+dnl Send op 1 -> set SIP
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0806),arp(sip=172.31.110.1,tip=172.31.110.25,op=1,sha=00:01:02:03:04:09,tha=ff:ff:ff:ff:ff:ff)'])
+
+dnl Send op 1 -> set TIP
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0806),arp(sip=172.31.110.1,tip=172.31.110.25,op=1,sha=00:01:02:03:04:0a,tha=ff:ff:ff:ff:ff:ff)'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort], [0], [dnl
+flow-dump from the main thread:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(op=0,sha=00:01:02:03:04:07), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(op=1,sha=00:01:02:03:04:07), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(action))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(op=1,sha=00:01:02:03:04:08,tha=ff:ff:ff:ff:ff:ff), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(action))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(op=2,sha=00:01:02:03:04:06), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(action))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(sip=172.31.110.1,op=1,sha=00:01:02:03:04:09), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(action))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(tip=172.31.110.25,op=1,sha=00:01:02:03:04:0a), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(action))
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
