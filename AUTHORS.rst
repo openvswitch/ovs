@@ -163,6 +163,7 @@ Ethan J. Jackson                   ejj@eecs.berkeley.edu
 Ethan Rahn                         erahn@arista.com
 Eziz Durdyyev                      ezizdurdy@gmail.com
 Fabrizio D'Angelo                  fdangelo@redhat.com
+Faicker Mo                         faicker.mo@ucloud.cn
 Fangrui Song                       maskray@google.com
 Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
