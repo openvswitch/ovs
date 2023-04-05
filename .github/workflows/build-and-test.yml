@@ -242,3 +242,40 @@ jobs:
       with:
         name: deb-packages-${{ matrix.dpdk }}-dpdk
         path: '/home/runner/work/ovs/*.deb'
+
+  build-linux-rpm:
+    name: linux rpm fedora
+    runs-on: ubuntu-latest
+    container: fedora:37
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: install dependencies
+      run: |
+        dnf install -y rpm-build dnf-plugins-core
+        sed -e 's/@VERSION@/0.0.1/' rhel/openvswitch-fedora.spec.in \
+            > /tmp/ovs.spec
+        dnf builddep -y /tmp/ovs.spec
+        rm -f /tmp/ovs.spec
+
+    - name: configure
+      run:  ./boot.sh && ./configure
+
+    - name: build
+      run:  make rpm-fedora
+
+    - name: install
+      run:  dnf install -y rpm/rpmbuild/RPMS/*/*.rpm
+
+    - name: upload rpm packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: rpm-packages
+        path: |
+          rpm/rpmbuild/SRPMS/*.rpm
+          rpm/rpmbuild/RPMS/*/*.rpm
