@@ -1,5 +1,8 @@
-v3.1.1 - xx xxx xxxx
+v3.1.1 - 06 Apr 2023
 --------------------
+   - Bug fixes
+   - Security:
+     * Fixed vulnerability CVE-2023-1668.
 
 v3.1.0 - 16 Feb 2023
 --------------------
