@@ -412,6 +412,7 @@ Shu Shen                           shu.shen@radisys.com
 Simon Horman                       simon.horman@corigine.com
 Sivaprasad Tummala                 sivaprasad.tummala@intel.com
 Somnath Chatterjee                 somnath.b.chatterjee@ericsson.com
+Songtao Zhan                       zhanst1@chinatelecom.cn
 Sorin Vinturis                     svinturis@cloudbasesolutions.com
 Sriharsha Basavapatna              sriharsha.basavapatna@broadcom.com
 Steffen Gebert                     steffen.gebert@informatik.uni-wuerzburg.de
