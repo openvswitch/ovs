@@ -9318,6 +9318,21 @@ dpif_netdev_ct_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
 }
 
 static int
+dpif_netdev_ct_set_sweep_interval(struct dpif *dpif, uint32_t ms)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return conntrack_set_sweep_interval(dp->conntrack, ms);
+}
+
+static int
+dpif_netdev_ct_get_sweep_interval(struct dpif *dpif, uint32_t *ms)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    *ms = conntrack_get_sweep_interval(dp->conntrack);
+    return 0;
+}
+
+static int
 dpif_netdev_ct_set_limits(struct dpif *dpif,
                            const uint32_t *default_limits,
                            const struct ovs_list *zone_limits)
@@ -9668,6 +9683,8 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_get_nconns,
     dpif_netdev_ct_set_tcp_seq_chk,
     dpif_netdev_ct_get_tcp_seq_chk,
+    dpif_netdev_ct_set_sweep_interval,
+    dpif_netdev_ct_get_sweep_interval,
     dpif_netdev_ct_set_limits,
     dpif_netdev_ct_get_limits,
     dpif_netdev_ct_del_limits,

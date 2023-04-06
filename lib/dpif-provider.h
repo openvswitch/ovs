@@ -493,6 +493,10 @@ struct dpif_class {
     int (*ct_set_tcp_seq_chk)(struct dpif *, bool enabled);
     /* Get the TCP sequence checking configuration. */
     int (*ct_get_tcp_seq_chk)(struct dpif *, bool *enabled);
+    /* Updates the sweep interval for the CT sweeper. */
+    int (*ct_set_sweep_interval)(struct dpif *, uint32_t ms);
+    /* Get the current value of the sweep interval for the CT sweeper. */
+    int (*ct_get_sweep_interval)(struct dpif *, uint32_t *ms);
 
 
     /* Connection tracking per zone limit */

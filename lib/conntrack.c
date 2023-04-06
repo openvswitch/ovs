@@ -320,6 +320,7 @@ conntrack_init(void)
     atomic_count_init(&ct->n_conn, 0);
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
     atomic_init(&ct->tcp_seq_chk, true);
+    atomic_init(&ct->sweep_ms, 20000);
     latch_init(&ct->clean_thread_exit);
     ct->clean_thread = ovs_thread_create("ct_clean", clean_thread_main, ct);
     ct->ipf = ipf_init();
@@ -1480,6 +1481,21 @@ set_label(struct dp_packet *pkt, struct conn *conn,
 }
 
 
+int
+conntrack_set_sweep_interval(struct conntrack *ct, uint32_t ms)
+{
+    atomic_store_relaxed(&ct->sweep_ms, ms);
+    return 0;
+}
+
+uint32_t
+conntrack_get_sweep_interval(struct conntrack *ct)
+{
+    uint32_t ms;
+    atomic_read_relaxed(&ct->sweep_ms, &ms);
+    return ms;
+}
+
 static size_t
 ct_sweep(struct conntrack *ct, struct rculist *list, long long now)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -1504,7 +1520,7 @@ ct_sweep(struct conntrack *ct, struct rculist *list, long long now)
 static long long
 conntrack_clean(struct conntrack *ct, long long now)
 {
-    long long next_wakeup = now + 20 * 1000;
+    long long next_wakeup = now + conntrack_get_sweep_interval(ct);
     unsigned int n_conn_limit, i;
     size_t clean_end, count = 0;
 

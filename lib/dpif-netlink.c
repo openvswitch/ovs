@@ -4572,6 +4572,8 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* ct_get_nconns */
     NULL,                       /* ct_set_tcp_seq_chk */
     NULL,                       /* ct_get_tcp_seq_chk */
+    NULL,                       /* ct_set_sweep_interval */
+    NULL,                       /* ct_get_sweep_interval */
     dpif_netlink_ct_set_limits,
     dpif_netlink_ct_get_limits,
     dpif_netlink_ct_del_limits,

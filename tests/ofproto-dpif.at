@@ -11721,6 +11721,28 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Checks the get/set sweep interval
+AT_SETUP([ofproto-dpif - conntrack - change sweep interval])
+OVS_VSWITCHD_START
+
+# Check the default value.
+AT_CHECK([ovs-appctl dpctl/ct-get-sweep-interval], [0], [dnl
+20000
+])
+
+# Set the interval to 5s.
+AT_CHECK([ovs-appctl dpctl/ct-set-sweep-interval 5000], [0], [dnl
+setting sweep interval successful
+])
+
+# Verify that the previous value has been applied.
+AT_CHECK([ovs-appctl dpctl/ct-get-sweep-interval], [0], [dnl
+5000
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - set mtu])
 OVS_VSWITCHD_START
 

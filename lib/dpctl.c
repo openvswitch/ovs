@@ -2301,6 +2301,65 @@ out:
 }
 
 static int
+dpctl_ct_get_sweep(int argc, const char *argv[],
+                   struct dpctl_params *dpctl_p)
+{
+    uint32_t sweep_ms = 0;
+    struct dpif *dpif;
+
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = ct_dpif_sweep(dpif, &sweep_ms);
+    if (error) {
+        dpctl_error(dpctl_p, error, "failed to get the sweep interval");
+    } else {
+        dpctl_print(dpctl_p, "%"PRIu32, sweep_ms);
+    }
+
+    dpif_close(dpif);
+    return error;
+}
+
+static int
+dpctl_ct_set_sweep(int argc, const char *argv[],
+                   struct dpctl_params *dpctl_p)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    uint32_t sweep_ms = 0;
+    struct dpif *dpif;
+
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (error) {
+        return error;
+    }
+
+    if (!ovs_scan(argv[argc - 1], "%"SCNu32, &sweep_ms) ||
+        sweep_ms == 0) {
+        ds_put_format(&ds, "invalid sweep value");
+        error = EINVAL;
+        goto error;
+    }
+
+    error = ct_dpif_sweep(dpif, &sweep_ms);
+    if (!error) {
+        dpctl_print(dpctl_p, "setting sweep interval successful\n");
+        goto out;
+    }
+
+    ds_put_format(&ds, "failed to set the sweep interval");
+
+error:
+    dpctl_error(dpctl_p, error, "%s", ds_cstr(&ds));
+    ds_destroy(&ds);
+out:
+    dpif_close(dpif);
+    return error;
+}
+
+static int
 ipf_set_enabled__(int argc, const char *argv[], struct dpctl_params *dpctl_p,
                   bool enabled)
 {
@@ -2913,6 +2972,8 @@ static const struct dpctl_command all_commands[] = {
         DP_RO },
     { "ct-get-limits", "[dp] [zone=N1[,N2]...]", 0, 2, dpctl_ct_get_limits,
         DP_RO },
+    { "ct-get-sweep-interval", "[dp]", 0, 1, dpctl_ct_get_sweep, DP_RO },
+    { "ct-set-sweep-interval", "[dp] ms", 1, 2, dpctl_ct_set_sweep, DP_RW },
     { "ipf-set-enabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_enabled, DP_RW },
     { "ipf-set-disabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_disabled, DP_RW },
     { "ipf-set-min-frag", "[dp] v4|v6 minfragment", 2, 3,

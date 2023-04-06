@@ -369,6 +369,20 @@ ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *zone_limits)
 }
 
 int
+ct_dpif_sweep(struct dpif *dpif, uint32_t *ms)
+{
+    if (*ms) {
+        return (dpif->dpif_class->ct_set_sweep_interval
+                ? dpif->dpif_class->ct_set_sweep_interval(dpif, *ms)
+                : EOPNOTSUPP);
+    } else {
+        return (dpif->dpif_class->ct_get_sweep_interval
+                ? dpif->dpif_class->ct_get_sweep_interval(dpif, ms)
+                : EOPNOTSUPP);
+    }
+}
+
+int
 ct_dpif_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
 {
     return (dpif->dpif_class->ipf_set_enabled
