@@ -1,5 +1,8 @@
-v2.15.8 - xx xxx xxxx
+v2.15.8 - 06 Apr 2023
 ---------------------
+   - Bug fixes
+   - Security:
+     * Fixed vulnerability CVE-2023-1668.
 
 v2.15.7 - 20 Dec 2022
 ---------------------
