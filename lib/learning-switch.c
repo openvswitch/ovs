@@ -569,6 +569,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     }
 
     /* Prepare packet_out in case we need one. */
+    match_init_catchall(&po.flow_metadata);
     po.buffer_id = buffer_id;
     if (buffer_id == UINT32_MAX) {
         po.packet = dp_packet_data(&pkt);
