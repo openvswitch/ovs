@@ -240,7 +240,7 @@ AT_CLEANUP
 
 AT_SETUP([offloads - check interface meter offloading -  offloads enabled])
 AT_KEYWORDS([offload-meter])
-AT_SKIP_IF([test $SUPPORT_TC_INGRESS_PPS = "no"])
+CHECK_TC_INGRESS_PPS()
 AT_SKIP_IF([test $HAVE_NC = "no"])
 OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
 
