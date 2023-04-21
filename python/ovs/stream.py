@@ -824,7 +824,8 @@ class SSLStream(Stream):
             self.socket.do_handshake()
         except ssl.SSLWantReadError:
             return errno.EAGAIN
-        except ssl.SSLSyscallError as e:
+        except (ssl.SSLSyscallError, ssl.SSLZeroReturnError,
+                ssl.SSLEOFError, OSError) as e:
             return ovs.socket_util.get_exception_errno(e)
 
         return 0
