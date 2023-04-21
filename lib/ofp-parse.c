@@ -71,16 +71,13 @@ str_to_u16(const char *str, const char *name, uint16_t *valuep)
 char * OVS_WARN_UNUSED_RESULT
 str_to_u32(const char *str, uint32_t *valuep)
 {
-    char *tail;
-    uint32_t value;
+    unsigned long long value;
 
     if (!str[0]) {
         return xstrdup("missing required numeric argument");
     }
 
-    errno = 0;
-    value = strtoul(str, &tail, 0);
-    if (errno == EINVAL || errno == ERANGE || *tail) {
+    if (!str_to_ullong(str, 0, &value) || value > UINT32_MAX) {
         return xasprintf("invalid numeric format %s", str);
     }
     *valuep = value;
