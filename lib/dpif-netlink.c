@@ -395,7 +395,7 @@ dpif_netlink_open(const struct dpif_class *class OVS_UNUSED, const char *name,
     dp_request.user_features |= OVS_DP_F_UNALIGNED;
     dp_request.user_features |= OVS_DP_F_VPORT_PIDS;
     dp_request.user_features |= OVS_DP_F_UNSUPPORTED;
-    error = dpif_netlink_dp_transact(&dp_request, &dp, &buf);
+    error = dpif_netlink_dp_transact(&dp_request, NULL, NULL);
     if (error) {
         /* The Open vSwitch kernel module has two modes for dispatching
          * upcalls: per-vport and per-cpu.
