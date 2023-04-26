@@ -280,8 +280,9 @@ Lucas Alvares Gomes                lucasagomes@gmail.com
 Lucian Petrut                      lpetrut@cloudbasesolutions.com
 Luigi Rizzo                        rizzo@iet.unipi.it
 Luis E. P.                         l31g@hotmail.com
-Lukasz Rzasik                      lukasz.rzasik@gmail.com
+Luca Czesla                        luca.czesla@mail.schwarz
 Lukasz Pawlik                      lukaszx.pawlik@intel.com
+Lukasz Rzasik                      lukasz.rzasik@gmail.com
 Maciej Józefczyk                   mjozefcz@redhat.com
 Madhu Challa                       challa@noironetworks.com
 Manohar K C                        manukc@gmail.com
@@ -295,14 +296,15 @@ Mark Michelson                     mmichels@redhat.com
 Markos Chandras                    mchandras@suse.de
 Martin Casado                      casado@cs.stanford.edu
 Martin Fong                        mwfong@csl.sri.com
-Martino Fornasa                    mf@fornasa.it
 Martin Varghese                    martin.varghese@nokia.com
 Martin Xu                          martinxu9.ovs@gmail.com
 Martin Zhang                       martinbj2008@gmail.com
+Martino Fornasa                    mf@fornasa.it
 Maryam Tahhan                      maryam.tahhan@intel.com
 Matteo Croce                       mcroce@redhat.com
 Matthias May                       matthias.may@neratec.com
 Mauricio Vásquez                   mauricio.vasquezbernal@studenti.polito.it
+Max Lamprecht                      max.lamprecht@mail.schwarz
 Maxime Coquelin                    maxime.coquelin@redhat.com
 Mehak Mahajan
 Michael Arnaldi                    arnaldimichael@gmail.com
@@ -415,6 +417,7 @@ Somnath Chatterjee                 somnath.b.chatterjee@ericsson.com
 Songtao Zhan                       zhanst1@chinatelecom.cn
 Sorin Vinturis                     svinturis@cloudbasesolutions.com
 Sriharsha Basavapatna              sriharsha.basavapatna@broadcom.com
+Stefan Hoffmann                    stefan.hoffmann@cloudandheat.com
 Steffen Gebert                     steffen.gebert@informatik.uni-wuerzburg.de
 Sten Spans                         sten@blinkenlights.nl
 Stephane A. Sezer                  sas@cd80.net
