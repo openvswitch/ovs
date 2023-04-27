@@ -504,7 +504,11 @@ delete_chains_from_netdev(struct netdev *netdev, struct tcf_id *id)
          */
         HMAP_FOR_EACH_POP (chain_node, node, &map) {
             id->chain = chain_node->chain;
-            tc_del_flower_filter(id);
+            /* Delete empty chain doesn't seem to work with
+             * tc_del_flower_filter() so use tc_del_filter()
+             * without specifying TCA_KIND.
+             */
+            tc_del_filter(id, NULL);
             free(chain_node);
         }
     }
@@ -2858,8 +2862,9 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     error = tc_add_del_qdisc(ifindex, true, block_id, hook);
 
     if (error && error != EEXIST) {
-        VLOG_INFO("failed adding ingress qdisc required for offloading: %s",
-                  ovs_strerror(error));
+        VLOG_INFO("failed adding ingress qdisc required for offloading "
+                  "on %s: %s",
+                  netdev_get_name(netdev), ovs_strerror(error));
         return error;
     }
 

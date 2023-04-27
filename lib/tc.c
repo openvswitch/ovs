@@ -2350,7 +2350,9 @@ tc_del_filter(struct tcf_id *id, const char *kind)
     struct ofpbuf request;
 
     request_from_tcf_id(id, 0, RTM_DELTFILTER, NLM_F_ACK, &request);
-    nl_msg_put_string(&request, TCA_KIND, kind);
+    if (kind) {
+        nl_msg_put_string(&request, TCA_KIND, kind);
+    }
     return tc_transact(&request, NULL);
 }
 
