@@ -75,6 +75,8 @@ EXTRA_DIST = \
 	MAINTAINERS.rst \
 	README.rst \
 	NOTICE \
+	.ci/dpdk-build.sh \
+	.ci/dpdk-prepare.sh \
 	.ci/linux-build.sh \
 	.ci/linux-prepare.sh \
 	.ci/osx-build.sh \
