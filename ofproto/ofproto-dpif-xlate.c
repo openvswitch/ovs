@@ -66,6 +66,7 @@
 #include "tunnel.h"
 #include "util.h"
 #include "uuid.h"
+#include "vlan-bitmap.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
@@ -1017,7 +1018,10 @@ xlate_xbundle_set(struct xbundle *xbundle,
     xbundle->qinq_ethtype = qinq_ethtype;
     xbundle->vlan = vlan;
     xbundle->trunks = trunks;
-    xbundle->cvlans = cvlans;
+    if (!vlan_bitmap_equal(xbundle->cvlans, cvlans)) {
+        free(xbundle->cvlans);
+        xbundle->cvlans = vlan_bitmap_clone(cvlans);
+    }
     xbundle->use_priority_tags = use_priority_tags;
     xbundle->floodable = floodable;
     xbundle->protected = protected;
@@ -1369,6 +1373,7 @@ xlate_xbundle_remove(struct xlate_cfg *xcfg, struct xbundle *xbundle)
     ovs_list_remove(&xbundle->list_node);
     bond_unref(xbundle->bond);
     lacp_unref(xbundle->lacp);
+    free(xbundle->cvlans);
     free(xbundle->name);
     free(xbundle);
 }
