@@ -135,3 +135,19 @@ AT_CHECK([ovs-appctl dpctl/dump-flows dummy@br0 | sort], [0], [dnl
 AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([dpctl - ct-get-limits ct-del-limits])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [default limit=0
+])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=], [0], [default limit=0
+])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=,], [0], [default limit=0
+])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=x], [2], [],
+  [ovs-vswitchd: invalid zone (Invalid argument)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

@@ -2206,7 +2206,7 @@ parse_ct_limit_zones(const char *argv, struct ovs_list *zone_limits,
     argcopy = xstrdup(argv + 5);
     next_zone = strtok_r(argcopy, ",", &save_ptr);
 
-    do {
+    while (next_zone != NULL) {
         if (ovs_scan(next_zone, "%"SCNu16, &zone)) {
             ct_dpif_push_zone_limit(zone_limits, zone, 0, 0);
         } else {
@@ -2214,7 +2214,8 @@ parse_ct_limit_zones(const char *argv, struct ovs_list *zone_limits,
             free(argcopy);
             return EINVAL;
         }
-    } while ((next_zone = strtok_r(NULL, ",", &save_ptr)) != NULL);
+        next_zone = strtok_r(NULL, ",", &save_ptr);
+    }
 
     free(argcopy);
     return 0;
