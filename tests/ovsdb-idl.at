@@ -28,8 +28,13 @@ m4_define([OVSDB_START_IDLTEST],
 [
   AT_CHECK([ovsdb-tool create db dnl
               m4_if([$2], [], [$abs_srcdir/idltest.ovsschema], [$2])])
+  PKIDIR=$abs_top_builddir/tests
   AT_CHECK([ovsdb-server -vconsole:warn --log-file --detach --no-chdir dnl
               --pidfile --remote=punix:socket dnl
+              m4_if(m4_substr($1, 0, 5), [pssl:],
+                    [--private-key=$PKIDIR/testpki-privkey2.pem dnl
+                     --certificate=$PKIDIR/testpki-cert2.pem dnl
+                     --ca-cert=$PKIDIR/testpki-cacert.pem], []) dnl
               m4_if([$1], [], [], [--remote=$1]) db dnl
   ])
   on_exit 'kill `cat ovsdb-server.pid`'
@@ -2286,14 +2291,26 @@ m4_define([CHECK_STREAM_OPEN_BLOCK],
   [AT_SETUP([Check stream open block - $1 - $3])
    AT_SKIP_IF([test "$3" = "tcp6" && test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test "$3" = "tcp6" && test "$HAVE_IPV6" = "no"])
+   AT_SKIP_IF([test "$3" = "ssl6" && test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([test "$3" = "ssl6" && test "$HAVE_IPV6" = "no"])
+   AT_SKIP_IF([test "$3" = "ssl" && test "$HAVE_OPENSSL" = "no"])
+   $PYTHON3 -c "import ssl"
+   SSL_PRESENT=$?
+   AT_SKIP_IF([test "$3" = "ssl" && test $SSL_PRESENT != 0])
+   AT_SKIP_IF([test "$3" = "ssl6" && test "$HAVE_OPENSSL" = "no"])
+   AT_SKIP_IF([test "$3" = "ssl6" && test $SSL_PRESENT != 0])
    AT_KEYWORDS([ovsdb server stream open_block $3])
-   OVSDB_START_IDLTEST(["ptcp:0:$4"])
+   PKIDIR=$abs_top_builddir/tests
+   m4_define([PROTOCOL], [m4_substr([$3], [0], [3])])
+   OVSDB_START_IDLTEST([m4_join([], [p], PROTOCOL, [:0:], $4)])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
    WRONG_PORT=$(($TCP_PORT + 101))
-   AT_CHECK([$2 tcp:$4:$TCP_PORT], [0], [ignore])
-   AT_CHECK([$2 tcp:$4:$WRONG_PORT], [1], [ignore], [ignore])
+   SSL_KEY_ARGS="$PKIDIR/testpki-privkey.pem $PKIDIR/testpki-cert.pem $PKIDIR/testpki-cacert.pem"
+   AT_CHECK([$2 PROTOCOL:$4:$TCP_PORT $SSL_KEY_ARGS], [0], [ignore])
+   AT_CHECK([$2 PROTOCOL:$4:$WRONG_PORT $SSL_KEY_ARGS], [1], [ignore],
+            [ignore])
    OVSDB_SERVER_SHUTDOWN
-   AT_CHECK([$2 tcp:$4:$TCP_PORT], [1], [ignore], [ignore])
+   AT_CHECK([$2 PROTOCOL:$4:$TCP_PORT $SSL_KEY_ARGS], [1], [ignore], [ignore])
    AT_CLEANUP])
 
 CHECK_STREAM_OPEN_BLOCK([C], [test-stream], [tcp], [127.0.0.1])
@@ -2302,6 +2319,12 @@ CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
                         [tcp], [127.0.0.1])
 CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
                         [tcp6], [[[::1]]])
+CHECK_STREAM_OPEN_BLOCK([C], [test-stream], [ssl], [127.0.0.1])
+CHECK_STREAM_OPEN_BLOCK([C], [test-stream], [ssl6], [[[::1]]])
+CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
+                        [ssl], [127.0.0.1])
+CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
+                        [ssl6], [[[::1]]])
 
 # same as OVSDB_CHECK_IDL but uses Python IDL implementation with tcp
 # with multiple remotes to assert the idl connects to the leader of the Raft cluster

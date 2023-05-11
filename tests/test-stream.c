@@ -19,6 +19,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/vlog.h"
 #include "stream.h"
+#include "stream-ssl.h"
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(test_stream);
@@ -33,7 +34,16 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
 
     if (argc < 2) {
-        ovs_fatal(0, "usage: %s REMOTE", argv[0]);
+        ovs_fatal(0, "usage: %s REMOTE [SSL_KEY] [SSL_CERT] [SSL_CA]",
+                  argv[0]);
+    }
+    if (strncmp("ssl:", argv[1], 4) == 0) {
+        if (argc < 5) {
+            ovs_fatal(0, "usage with ssl: %s REMOTE SSL_KEY SSL_CERT SSL_CA",
+                      argv[0]);
+        }
+        stream_ssl_set_ca_cert_file(argv[4], false);
+        stream_ssl_set_key_and_cert(argv[2], argv[3]);
     }
 
     error = stream_open_block(stream_open(argv[1], &stream, DSCP_DEFAULT),
