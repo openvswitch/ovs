@@ -42,7 +42,7 @@ m4_define([OVS_DPDK_START],
    OVS_DPDK_START_OVSDB()
    dnl Enable DPDK functionality
    AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
-   OVS_DPDK_START_VSWITCHD()
+   OVS_DPDK_START_VSWITCHD($1)
 ])
 
 # OVS_DPDK_START_OVSDB()
@@ -72,7 +72,7 @@ m4_define([OVS_DPDK_START_OVSDB],
 #
 m4_define([OVS_DPDK_START_VSWITCHD],
   [dnl Change DPDK drivers log levels so that tests only catch errors
-   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-extra=--log-level=pmd.*:error])
+   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-extra="--log-level=pmd.*:error $1"])
 
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
