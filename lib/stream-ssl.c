@@ -1075,7 +1075,13 @@ do_ssl_init(void)
         VLOG_ERR("SSL_CTX_new: %s", ERR_error_string(ERR_get_error(), NULL));
         return ENOPROTOOPT;
     }
-    SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+
+    long options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+#ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
+    options |= SSL_OP_IGNORE_UNEXPECTED_EOF;
+#endif
+    SSL_CTX_set_options(ctx, options);
+
 #if OPENSSL_VERSION_NUMBER < 0x3000000fL
     SSL_CTX_set_tmp_dh_callback(ctx, tmp_dh_callback);
 #else
