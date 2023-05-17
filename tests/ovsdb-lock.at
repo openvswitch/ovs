@@ -12,8 +12,8 @@ m4_define([OVSDB_CHECK_LOCK_SETUP],
     AT_KEYWORDS([ovsdb lock $2])
     ordinal_schema > schema
     AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-    AT_CAPTURE_FILE([ovsdb-server-log])
-    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1], [0], [], [])])
+    AT_CAPTURE_FILE([ovsdb-server.log])
+    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])])
 
 #
 # Two sessions create two locks. Both sessions should be able to get their
@@ -23,7 +23,7 @@ AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c1-output 2>&
       [0], [], [])
 AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock1 >c2-output 2>&1],
       [0], [], [])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CHECK([cat c1-output], 0, [{"locked":true}
 ], [])
 AT_CHECK([cat c2-output], 0, [{"locked":true}
@@ -40,7 +40,7 @@ AT_CHECK([ovsdb-client --detach --no-chdir --pidfile lock unix:socket lock0 >c1-
 AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c2-output 2>&1],
       [0], [], [])
 AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CHECK([cat c1-output], 0, [{"locked":true}
 {}
 ])
@@ -60,7 +60,7 @@ AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c1-output 2>&
 AT_CHECK([ovsdb-client --detach --no-chdir --pidfile steal unix:socket lock0 >c2-output 2>&1],
       [0], [], [])
 AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CHECK([cat c1-output], 0, [{"locked":true}
 stolen
 [["lock0"]]

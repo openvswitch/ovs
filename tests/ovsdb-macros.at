@@ -13,6 +13,18 @@ m4_define([OVSDB_INIT],
            "row": {}}]']],
      [0], [ignore], [ignore])])
 
+dnl OVSDB_SERVER_SHUTDOWN([ALLOWLIST])
+dnl
+dnl Gracefully stops ovsdb-server, checking log files for messages with
+dnl severity WARN or higher and signaling an error if any is present.
+dnl The optional ALLOWLIST may contain shell-quoted "sed" commands to
+dnl delete any warnings that are actually expected, e.g.:
+dnl
+dnl   OVSDB_SERVER_SHUTDOWN(["/expected error/d"])
+m4_define([OVSDB_SERVER_SHUTDOWN],
+  [AT_CHECK([check_logs $1])
+   OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])])
+
 # OVSDB_CHECK_POSITIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
 #
 # Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with

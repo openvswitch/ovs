@@ -278,7 +278,10 @@ m4_define([OVSDB_CHECK_IDL_SSL_PY],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
-   OVSDB_SERVER_SHUTDOWN
+   OVSDB_SERVER_SHUTDOWN(["
+     /unexpected SSL connection close/d
+     /Protocol error/d
+   "])
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL],
@@ -2309,7 +2312,10 @@ m4_define([CHECK_STREAM_OPEN_BLOCK],
    AT_CHECK([$2 PROTOCOL:$4:$TCP_PORT $SSL_KEY_ARGS], [0], [ignore])
    AT_CHECK([$2 PROTOCOL:$4:$WRONG_PORT $SSL_KEY_ARGS], [1], [ignore],
             [ignore])
-   OVSDB_SERVER_SHUTDOWN
+   OVSDB_SERVER_SHUTDOWN(["
+     /unexpected SSL connection close/d
+     /Protocol error/d
+   "])
    AT_CHECK([$2 PROTOCOL:$4:$TCP_PORT $SSL_KEY_ARGS], [1], [ignore], [ignore])
    AT_CLEANUP])
 
