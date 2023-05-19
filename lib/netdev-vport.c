@@ -37,6 +37,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport-private.h"
 #include "openvswitch/dynamic-string.h"
+#include "ovs-atomic.h"
 #include "ovs-router.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
@@ -198,6 +199,7 @@ netdev_vport_construct(struct netdev *netdev_)
     uint16_t port = 0;
 
     ovs_mutex_init(&dev->mutex);
+    atomic_count_init(&dev->gre_seqno, 0);
     eth_addr_random(&dev->etheraddr);
 
     if (name && dpif_port && (strlen(name) > strlen(dpif_port) + 1) &&
