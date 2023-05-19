@@ -28,6 +28,8 @@
 struct netdev_vport {
     struct netdev up;
 
+    OVSRCU_TYPE(const struct netdev_tunnel_config *) tnl_cfg;
+
     /* Sequence number for outgoing GRE packets. */
     atomic_count gre_seqno;
 
@@ -38,7 +40,6 @@ struct netdev_vport {
     struct netdev_stats stats;
 
     /* Tunnels. */
-    struct netdev_tunnel_config tnl_cfg;
     char egress_iface[IFNAMSIZ];
     bool carrier_status;
 
