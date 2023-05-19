@@ -130,7 +130,6 @@ struct netdev_tunnel_config {
     enum netdev_pt_mode pt_mode;
 
     bool set_seq;
-    uint32_t seqno;
     uint32_t erspan_idx;
     uint8_t erspan_ver;
     uint8_t erspan_dir;
