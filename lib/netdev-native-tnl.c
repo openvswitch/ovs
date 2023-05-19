@@ -452,7 +452,6 @@ netdev_gre_push_header(const struct netdev *netdev,
                        const struct ovs_action_push_tnl *data)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
     struct gre_base_hdr *greh;
     int ip_tot_size;
 
@@ -468,8 +467,7 @@ netdev_gre_push_header(const struct netdev *netdev,
         int seq_ofs = gre_header_len(greh->flags) - 4;
         ovs_16aligned_be32 *seq_opt =
             ALIGNED_CAST(ovs_16aligned_be32 *, (char *)greh + seq_ofs);
-        tnl_cfg = &dev->tnl_cfg;
-        put_16aligned_be32(seq_opt, htonl(tnl_cfg->seqno++));
+        put_16aligned_be32(seq_opt, htonl(atomic_count_inc(&dev->gre_seqno)));
     }
 }
 
@@ -605,7 +603,6 @@ netdev_erspan_push_header(const struct netdev *netdev,
                           const struct ovs_action_push_tnl *data)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
     struct erspan_base_hdr *ersh;
     struct gre_base_hdr *greh;
     struct erspan_md2 *md2;
@@ -615,9 +612,8 @@ netdev_erspan_push_header(const struct netdev *netdev,
                                      data->header_len, &ip_tot_size);
 
     /* update GRE seqno */
-    tnl_cfg = &dev->tnl_cfg;
     ovs_16aligned_be32 *seqno = (ovs_16aligned_be32 *) (greh + 1);
-    put_16aligned_be32(seqno, htonl(tnl_cfg->seqno++));
+    put_16aligned_be32(seqno, htonl(atomic_count_inc(&dev->gre_seqno)));
 
     /* update v2 timestamp */
     if (greh->protocol == htons(ETH_TYPE_ERSPAN2)) {
@@ -786,7 +782,6 @@ netdev_gtpu_push_header(const struct netdev *netdev,
                         const struct ovs_action_push_tnl *data)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
     struct udp_header *udp;
     struct gtpuhdr *gtpuh;
     int ip_tot_size;
@@ -801,10 +796,9 @@ netdev_gtpu_push_header(const struct netdev *netdev,
 
     gtpuh = ALIGNED_CAST(struct gtpuhdr *, udp + 1);
 
-    tnl_cfg = &dev->tnl_cfg;
-    if (tnl_cfg->set_seq) {
+    if (gtpuh->md.flags & GTPU_S_MASK) {
         ovs_be16 *seqno = ALIGNED_CAST(ovs_be16 *, gtpuh + 1);
-        *seqno = htons(tnl_cfg->seqno++);
+        *seqno = htons(atomic_count_inc(&dev->gre_seqno));
         payload_len += sizeof(struct gtpuhdr_opt);
     }
     gtpuh->len = htons(payload_len);

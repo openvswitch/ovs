@@ -22,10 +22,14 @@
 #include "compiler.h"
 #include "netdev.h"
 #include "netdev-provider.h"
+#include "ovs-atomic.h"
 #include "ovs-thread.h"
 
 struct netdev_vport {
     struct netdev up;
+
+    /* Sequence number for outgoing GRE packets. */
+    atomic_count gre_seqno;
 
     /* Protects all members below. */
     struct ovs_mutex mutex;
