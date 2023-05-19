@@ -100,7 +100,7 @@ struct smap_node *smap_add_nocopy(struct smap *, char *, char *);
 bool smap_add_once(struct smap *, const char *, const char *);
 void smap_add_format(struct smap *, const char *key, const char *, ...)
     OVS_PRINTF_FORMAT(3, 4);
-void smap_add_ipv6(struct smap *, const char *, struct in6_addr *);
+void smap_add_ipv6(struct smap *, const char *, const struct in6_addr *);
 void smap_replace(struct smap *, const char *, const char *);
 void smap_replace_nocopy(struct smap *, const char *, char *);
 
