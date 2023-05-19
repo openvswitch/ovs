@@ -72,6 +72,9 @@ struct sset;
 struct ovs_action_push_tnl;
 
 enum netdev_pt_mode {
+    /* Unknown mode.  The netdev is not configured yet. */
+    NETDEV_PT_UNKNOWN = 0,
+
     /* The netdev is packet type aware.  It can potentially carry any kind of
      * packet.  This "modern" mode is appropriate for both netdevs that handle
      * only a single kind of packet (such as a virtual or physical Ethernet

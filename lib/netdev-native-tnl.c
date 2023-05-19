@@ -320,7 +320,7 @@ netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
 }
 
 static void *
-udp_build_header(struct netdev_tunnel_config *tnl_cfg,
+udp_build_header(const struct netdev_tunnel_config *tnl_cfg,
                  struct ovs_action_push_tnl *data,
                  const struct netdev_tnl_build_header_params *params)
 {
@@ -476,15 +476,10 @@ netdev_gre_build_header(const struct netdev *netdev,
                         struct ovs_action_push_tnl *data,
                         const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
+    const struct netdev_tunnel_config *tnl_cfg;
     struct gre_base_hdr *greh;
     ovs_16aligned_be32 *options;
     unsigned int hlen;
-
-    /* XXX: RCUfy tnl_cfg. */
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
 
     greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
 
@@ -493,8 +488,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     } else if (pt_ns(params->flow->packet_type) == OFPHTN_ETHERTYPE) {
         greh->protocol = pt_ns_type_be(params->flow->packet_type);
     } else {
-        ovs_mutex_unlock(&dev->mutex);
-        return 1;
+        return EINVAL;
     }
     greh->flags = 0;
 
@@ -504,6 +498,8 @@ netdev_gre_build_header(const struct netdev *netdev,
         put_16aligned_be32(options, 0);
         options++;
     }
+
+    tnl_cfg = netdev_get_tunnel_config(netdev);
 
     if (tnl_cfg->out_key_present) {
         greh->flags |= htons(GRE_KEY);
@@ -516,8 +512,6 @@ netdev_gre_build_header(const struct netdev *netdev,
         /* seqno is updated at push header */
         options++;
     }
-
-    ovs_mutex_unlock(&dev->mutex);
 
     hlen = (uint8_t *) options - (uint8_t *) greh;
 
@@ -628,8 +622,7 @@ netdev_erspan_build_header(const struct netdev *netdev,
                            struct ovs_action_push_tnl *data,
                            const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
+    const struct netdev_tunnel_config *tnl_cfg;
     struct gre_base_hdr *greh;
     struct erspan_base_hdr *ersh;
     unsigned int hlen;
@@ -637,20 +630,18 @@ netdev_erspan_build_header(const struct netdev *netdev,
     int erspan_ver;
     uint16_t sid;
 
-    /* XXX: RCUfy tnl_cfg. */
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
     greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
     ersh = ERSPAN_HDR(greh);
 
     tun_id = ntohl(be64_to_be32(params->flow->tunnel.tun_id));
     /* ERSPAN only has 10-bit session ID */
     if (tun_id & ~ERSPAN_SID_MASK) {
-        ovs_mutex_unlock(&dev->mutex);
-        return 1;
+        return EINVAL;
     } else {
         sid = (uint16_t) tun_id;
     }
+
+    tnl_cfg = netdev_get_tunnel_config(netdev);
 
     if (tnl_cfg->erspan_ver_flow) {
         erspan_ver = params->flow->tunnel.erspan_ver;
@@ -698,11 +689,8 @@ netdev_erspan_build_header(const struct netdev *netdev,
         hlen = ERSPAN_GREHDR_LEN + sizeof *ersh + ERSPAN_V2_MDSIZE;
     } else {
         VLOG_WARN_RL(&err_rl, "ERSPAN version error %d", tnl_cfg->erspan_ver);
-        ovs_mutex_unlock(&dev->mutex);
-        return 1;
+        return EINVAL;
     }
-
-    ovs_mutex_unlock(&dev->mutex);
 
     data->header_len += hlen;
 
@@ -809,13 +797,12 @@ netdev_gtpu_build_header(const struct netdev *netdev,
                          struct ovs_action_push_tnl *data,
                          const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
+    const struct netdev_tunnel_config *tnl_cfg;
     struct gtpuhdr *gtph;
     unsigned int gtpu_hlen;
 
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
+    tnl_cfg = netdev_get_tunnel_config(netdev);
+
     gtph = udp_build_header(tnl_cfg, data, params);
 
     /* Set to default if not set in flow. */
@@ -831,7 +818,6 @@ netdev_gtpu_build_header(const struct netdev *netdev,
         gtph->md.flags |= GTPU_S_MASK;
         gtpu_hlen += sizeof(struct gtpuhdr_opt);
     }
-    ovs_mutex_unlock(&dev->mutex);
 
     data->header_len += gtpu_hlen;
     data->tnl_type = OVS_VPORT_TYPE_GTPU;
@@ -844,19 +830,15 @@ netdev_srv6_build_header(const struct netdev *netdev,
                          struct ovs_action_push_tnl *data,
                          const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
+    const struct netdev_tunnel_config *tnl_cfg;
     const struct in6_addr *segs;
     struct srv6_base_hdr *srh;
     struct in6_addr *s;
     ovs_be16 dl_type;
-    int err = 0;
     int nr_segs;
     int i;
 
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
-
+    tnl_cfg = netdev_get_tunnel_config(netdev);
     if (tnl_cfg->srv6_num_segs) {
         nr_segs = tnl_cfg->srv6_num_segs;
         segs = tnl_cfg->srv6_segs;
@@ -870,8 +852,7 @@ netdev_srv6_build_header(const struct netdev *netdev,
     }
 
     if (!ipv6_addr_equals(&segs[0], &params->flow->tunnel.ipv6_dst)) {
-        err = EINVAL;
-        goto out;
+        return EINVAL;
     }
 
     srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING);
@@ -888,8 +869,7 @@ netdev_srv6_build_header(const struct netdev *netdev,
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         srh->rt_hdr.nexthdr = IPPROTO_IPV6;
     } else {
-        err = EOPNOTSUPP;
-        goto out;
+        return EOPNOTSUPP;
     }
 
     s = ALIGNED_CAST(struct in6_addr *,
@@ -902,10 +882,8 @@ netdev_srv6_build_header(const struct netdev *netdev,
 
     data->header_len += sizeof *srh + 8 * srh->rt_hdr.hdrlen;
     data->tnl_type = OVS_VPORT_TYPE_SRV6;
-out:
-    ovs_mutex_unlock(&dev->mutex);
 
-    return err;
+    return 0;
 }
 
 void
@@ -1044,13 +1022,10 @@ netdev_vxlan_build_header(const struct netdev *netdev,
                           struct ovs_action_push_tnl *data,
                           const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
+    const struct netdev_tunnel_config *tnl_cfg;
     struct vxlanhdr *vxh;
 
-    /* XXX: RCUfy tnl_cfg. */
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
+    tnl_cfg = netdev_get_tunnel_config(netdev);
 
     vxh = udp_build_header(tnl_cfg, data, params);
 
@@ -1075,10 +1050,10 @@ netdev_vxlan_build_header(const struct netdev *netdev,
                 vxh->vx_gpe.next_protocol = VXLAN_GPE_NP_ETHERNET;
                 break;
             default:
-                goto drop;
+                return EINVAL;
             }
         } else {
-            goto drop;
+            return EINVAL;
         }
     } else {
         put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
@@ -1086,14 +1061,9 @@ netdev_vxlan_build_header(const struct netdev *netdev,
                            htonl(ntohll(params->flow->tunnel.tun_id) << 8));
     }
 
-    ovs_mutex_unlock(&dev->mutex);
     data->header_len += sizeof *vxh;
     data->tnl_type = OVS_VPORT_TYPE_VXLAN;
     return 0;
-
-drop:
-    ovs_mutex_unlock(&dev->mutex);
-    return 1;
 }
 
 struct dp_packet *
@@ -1157,21 +1127,13 @@ netdev_geneve_build_header(const struct netdev *netdev,
                            struct ovs_action_push_tnl *data,
                            const struct netdev_tnl_build_header_params *params)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
-    struct netdev_tunnel_config *tnl_cfg;
     struct genevehdr *gnh;
     int opt_len;
     bool crit_opt;
 
-    /* XXX: RCUfy tnl_cfg. */
-    ovs_mutex_lock(&dev->mutex);
-    tnl_cfg = &dev->tnl_cfg;
-
-    gnh = udp_build_header(tnl_cfg, data, params);
+    gnh = udp_build_header(netdev_get_tunnel_config(netdev), data, params);
 
     put_16aligned_be32(&gnh->vni, htonl(ntohll(params->flow->tunnel.tun_id) << 8));
-
-    ovs_mutex_unlock(&dev->mutex);
 
     opt_len = tun_metadata_to_geneve_header(&params->flow->tunnel,
                                             gnh->options, &crit_opt);
