@@ -41,40 +41,20 @@ This is the current list of active Open vSwitch committers:
 
    * - Name
      - Email
-   * - Alex Wang
-     - ee07b291@gmail.com
    * - Alin Serdean
      - aserdean@ovn.org
-   * - Andy Zhou
-     - azhou@ovn.org
    * - Ansis Atteka
-     - aatteka@nicira.com
-   * - Daniele Di Proietto
-     - daniele.di.proietto@gmail.com
-   * - Gurucharan Shetty
-     - guru@ovn.org
+     - ansisatteka@gmail.com
    * - Ian Stokes
      - istokes@ovn.org
    * - Ilya Maximets
      - i.maximets@ovn.org
-   * - Jarno Rajahalme
-     - jarno@ovn.org
-   * - Jesse Gross
-     - jesse@kernel.org
-   * - Justin Pettit
-     - jpettit@ovn.org
-   * - Pravin B Shelar
-     - pshelar@ovn.org
    * - Russell Bryant
      - russell@ovn.org
    * - Simon Horman
      - horms@ovn.org
-   * - Thomas Graf
-     - tgraf@noironetworks.com
    * - William Tu
      - u9012063@gmail.com
-   * - YAMAMOTO Takashi
-     - yamamoto@midokura.com
 
 The project also maintains a list of Emeritus Committers (or Maintainers).
 More information about Emeritus Committers can be found here:
@@ -85,12 +65,32 @@ More information about Emeritus Committers can be found here:
 
    * - Name
      - Email
+   * - Alex Wang
+     - ee07b291@gmail.com
+   * - Andy Zhou
+     - azhou@ovn.org
    * - Ben Pfaff
      - blp@ovn.org
+   * - Daniele Di Proietto
+     - daniele.di.proietto@gmail.com
    * - Ethan J. Jackson
      - ejj@eecs.berkeley.edu
+   * - Gurucharan Shetty
+     - guru@ovn.org
+   * - Jarno Rajahalme
+     - jarno@ovn.org
+   * - Jesse Gross
+     - jesse@kernel.org
    * - Joe Stringer
      - joe@ovn.org
+   * - Justin Pettit
+     - jpettit@ovn.org
+   * - Pravin B Shelar
+     - pshelar@ovn.org
+   * - Thomas Graf
+     - tgraf@tgraf.ch
+   * - YAMAMOTO Takashi
+     - yamamoto@midokura.com
 
 .. Cut here for the Documentation/internals/maintainers.rst
 
