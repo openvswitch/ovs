@@ -100,7 +100,7 @@ smap_add_format(struct smap *smap, const char *key, const char *format, ...)
 /* Adds 'key' paired with a string representation of 'addr'. It is the
  * caller's responsibility to avoid duplicate keys if desirable. */
 void
-smap_add_ipv6(struct smap *smap, const char *key, struct in6_addr *addr)
+smap_add_ipv6(struct smap *smap, const char *key, const struct in6_addr *addr)
 {
     char buf[INET6_ADDRSTRLEN];
     ipv6_string_mapped(buf, addr);
