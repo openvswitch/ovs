@@ -859,7 +859,12 @@ netdev_srv6_build_header(const struct netdev *netdev,
         return EINVAL;
     }
 
-    srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING, 0);
+    /* Writes the netdev_srv6_flowlabel enum value to the ipv6
+     * flowlabel field. It must later be replaced by a valid value
+     * in the header push. */
+    srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING,
+                                     htonl(tnl_cfg->srv6_flowlabel));
+
     srh->rt_hdr.segments_left = nr_segs - 1;
     srh->rt_hdr.type = IPV6_SRCRT_TYPE_4;
     srh->rt_hdr.hdrlen = 2 * nr_segs;
@@ -895,10 +900,34 @@ netdev_srv6_push_header(const struct netdev *netdev OVS_UNUSED,
                         struct dp_packet *packet,
                         const struct ovs_action_push_tnl *data)
 {
+    struct ovs_16aligned_ip6_hdr *inner_ip6, *outer_ip6;
+    enum netdev_srv6_flowlabel srv6_flowlabel;
+    ovs_be32 ipv6_label = 0;
     int ip_tot_size;
+    uint32_t flow;
 
-    netdev_tnl_push_ip_header(packet, data->header, data->header_len,
-                              &ip_tot_size, 0);
+    inner_ip6 = dp_packet_l3(packet);
+    outer_ip6 = netdev_tnl_ipv6_hdr((void *) data->header);
+    srv6_flowlabel = ntohl(get_16aligned_be32(&outer_ip6->ip6_flow)) &
+                     IPV6_LABEL_MASK;
+
+    switch (srv6_flowlabel) {
+    case SRV6_FLOWLABEL_COPY:
+        flow = ntohl(get_16aligned_be32(&inner_ip6->ip6_flow));
+        ipv6_label = (flow >> 28) == 6 ? htonl(flow & IPV6_LABEL_MASK) : 0;
+        break;
+
+    case SRV6_FLOWLABEL_ZERO:
+        ipv6_label = 0;
+        break;
+
+    case SRV6_FLOWLABEL_COMPUTE:
+        ipv6_label = htonl(dp_packet_get_rss_hash(packet) & IPV6_LABEL_MASK);
+        break;
+    }
+
+    netdev_tnl_push_ip_header(packet, data->header,
+                              data->header_len, &ip_tot_size, ipv6_label);
 }
 
 struct dp_packet *

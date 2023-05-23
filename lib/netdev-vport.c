@@ -811,6 +811,14 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                               name, node->value);
                 break;
             }
+        } else if (!strcmp(node->key, "srv6_flowlabel")) {
+            if (!strcmp(node->value, "zero")) {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_ZERO;
+            } else if (!strcmp(node->value, "compute")) {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_COMPUTE;
+            } else {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_COPY;
+            }
         } else if (!strcmp(node->key, "payload_type")) {
             if (!strcmp(node->value, "mpls")) {
                  tnl_cfg.payload_ethertype = htons(ETH_TYPE_MPLS);
