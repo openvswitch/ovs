@@ -146,8 +146,8 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
  *
  * Return pointer to the L4 header added to 'packet'. */
 void *
-netdev_tnl_push_ip_header(struct dp_packet *packet,
-               const void *header, int size, int *ip_tot_size)
+netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
+                          int size, int *ip_tot_size, ovs_be32 ipv6_label)
 {
     struct eth_header *eth;
     struct ip_header *ip;
@@ -166,6 +166,7 @@ netdev_tnl_push_ip_header(struct dp_packet *packet,
         ip6 = netdev_tnl_ipv6_hdr(eth);
         *ip_tot_size -= IPV6_HEADER_LEN;
         ip6->ip6_plen = htons(*ip_tot_size);
+        packet_set_ipv6_flow_label(&ip6->ip6_flow, ipv6_label);
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
         return ip6 + 1;
     } else {
@@ -245,7 +246,8 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     struct udp_header *udp;
     int ip_tot_size;
 
-    udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len, &ip_tot_size);
+    udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
+                                    &ip_tot_size, 0);
 
     /* set udp src port */
     udp->udp_src = netdev_tnl_get_src_port(packet);
@@ -455,7 +457,8 @@ netdev_gre_push_header(const struct netdev *netdev,
     struct gre_base_hdr *greh;
     int ip_tot_size;
 
-    greh = netdev_tnl_push_ip_header(packet, data->header, data->header_len, &ip_tot_size);
+    greh = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
+                                     &ip_tot_size, 0);
 
     if (greh->flags & htons(GRE_CSUM)) {
         ovs_be16 *csum_opt = (ovs_be16 *) (greh + 1);
@@ -602,8 +605,8 @@ netdev_erspan_push_header(const struct netdev *netdev,
     struct erspan_md2 *md2;
     int ip_tot_size;
 
-    greh = netdev_tnl_push_ip_header(packet, data->header,
-                                     data->header_len, &ip_tot_size);
+    greh = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
+                                     &ip_tot_size, 0);
 
     /* update GRE seqno */
     ovs_16aligned_be32 *seqno = (ovs_16aligned_be32 *) (greh + 1);
@@ -776,8 +779,8 @@ netdev_gtpu_push_header(const struct netdev *netdev,
     unsigned int payload_len;
 
     payload_len = dp_packet_size(packet);
-    udp = netdev_tnl_push_ip_header(packet, data->header,
-                                    data->header_len, &ip_tot_size);
+    udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
+                                    &ip_tot_size, 0);
     udp->udp_src = netdev_tnl_get_src_port(packet);
     udp->udp_len = htons(ip_tot_size);
     netdev_tnl_calc_udp_csum(udp, packet, ip_tot_size);
@@ -893,8 +896,8 @@ netdev_srv6_push_header(const struct netdev *netdev OVS_UNUSED,
 {
     int ip_tot_size;
 
-    netdev_tnl_push_ip_header(packet, data->header,
-                              data->header_len, &ip_tot_size);
+    netdev_tnl_push_ip_header(packet, data->header, data->header_len,
+                              &ip_tot_size, 0);
 }
 
 struct dp_packet *

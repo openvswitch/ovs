@@ -1274,7 +1274,7 @@ packet_set_ipv6_addr(struct dp_packet *packet, uint8_t proto,
     pkt_metadata_init_conn(&packet->md);
 }
 
-static void
+void
 packet_set_ipv6_flow_label(ovs_16aligned_be32 *flow_label, ovs_be32 flow_key)
 {
     ovs_be32 old_label = get_16aligned_be32(flow_label);

@@ -1622,6 +1622,8 @@ void packet_set_ipv6_addr(struct dp_packet *packet, uint8_t proto,
                           ovs_16aligned_be32 addr[4],
                           const struct in6_addr *new_addr,
                           bool recalculate_csum);
+void packet_set_ipv6_flow_label(ovs_16aligned_be32 *flow_label,
+                                ovs_be32 flow_key);
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);

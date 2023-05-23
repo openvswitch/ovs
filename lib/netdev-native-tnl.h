@@ -138,8 +138,8 @@ void *
 netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                              unsigned int *hlen);
 void *
-netdev_tnl_push_ip_header(struct dp_packet *packet,
-                          const void *header, int size, int *ip_tot_size);
+netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
+                          int size, int *ip_tot_size, ovs_be32 ipv6_label);
 void
 netdev_tnl_egress_port_range(struct unixctl_conn *conn, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
