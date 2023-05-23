@@ -118,7 +118,7 @@ netdev_tnl_ipv6_hdr(void *eth)
 void *
 netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
                            const struct netdev_tnl_build_header_params *params,
-                           uint8_t next_proto);
+                           uint8_t next_proto, ovs_be32 ipv6_label);
 
 extern uint16_t tnl_udp_port_min;
 extern uint16_t tnl_udp_port_max;

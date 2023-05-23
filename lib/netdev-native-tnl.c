@@ -278,7 +278,7 @@ eth_build_header(struct ovs_action_push_tnl *data,
 void *
 netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
                            const struct netdev_tnl_build_header_params *params,
-                           uint8_t next_proto)
+                           uint8_t next_proto, ovs_be32 ipv6_label)
 {
     void *l3;
 
@@ -310,7 +310,8 @@ netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
         ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
 
         put_16aligned_be32(&ip6->ip6_flow, htonl(6 << 28) |
-                           htonl(params->flow->tunnel.ip_tos << 20));
+                           htonl(params->flow->tunnel.ip_tos << 20) |
+                           (ipv6_label & htonl(IPV6_LABEL_MASK)));
         ip6->ip6_hlim = params->flow->tunnel.ip_ttl;
         ip6->ip6_nxt = next_proto;
         memcpy(&ip6->ip6_src, params->s_ip, sizeof(ovs_be32[4]));
@@ -328,7 +329,7 @@ udp_build_header(const struct netdev_tunnel_config *tnl_cfg,
 {
     struct udp_header *udp;
 
-    udp = netdev_tnl_ip_build_header(data, params, IPPROTO_UDP);
+    udp = netdev_tnl_ip_build_header(data, params, IPPROTO_UDP, 0);
     udp->udp_dst = tnl_cfg->dst_port;
 
     if (params->is_ipv6 || params->flow->tunnel.flags & FLOW_TNL_F_CSUM) {
@@ -484,7 +485,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     ovs_16aligned_be32 *options;
     unsigned int hlen;
 
-    greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
+    greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE, 0);
 
     if (params->flow->packet_type == htonl(PT_ETH)) {
         greh->protocol = htons(ETH_TYPE_TEB);
@@ -633,7 +634,7 @@ netdev_erspan_build_header(const struct netdev *netdev,
     int erspan_ver;
     uint16_t sid;
 
-    greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
+    greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE, 0);
     ersh = ERSPAN_HDR(greh);
 
     tun_id = ntohl(be64_to_be32(params->flow->tunnel.tun_id));
@@ -858,7 +859,7 @@ netdev_srv6_build_header(const struct netdev *netdev,
         return EINVAL;
     }
 
-    srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING);
+    srh = netdev_tnl_ip_build_header(data, params, IPPROTO_ROUTING, 0);
     srh->rt_hdr.segments_left = nr_segs - 1;
     srh->rt_hdr.type = IPV6_SRCRT_TYPE_4;
     srh->rt_hdr.hdrlen = 2 * nr_segs;
