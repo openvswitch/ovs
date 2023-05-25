@@ -4303,9 +4303,9 @@ r r c c c.
         <bits name="pln" above="8" below="4" width=".2"/>
         <bits name="op" above="16" width=".2" fill="yes"/>
         <bits name="sha" above="48" width="0.5" fill="yes"/>
-        <bits name="spa" above="16" width="0.3" fill="yes"/>
+        <bits name="spa" above="32" width="0.5" fill="yes"/>
         <bits name="tha" above="48" width="0.5" fill="yes"/>
-        <bits name="tpa" above="16" width="0.3" fill="yes"/>
+        <bits name="tpa" above="32" width="0.5" fill="yes"/>
       </header>
     </diagram>
 
