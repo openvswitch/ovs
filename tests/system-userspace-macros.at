@@ -336,3 +336,11 @@ m4_define([CHECK_L3L4_CONNTRACK_REASM],
 #
 # Userspace tests do not use TC offload.
 m4_define([CHECK_NO_TC_OFFLOAD])
+
+# OVS_CHECK_BAREUDP()
+#
+# The userspace datapath does not support bareudp tunnels.
+m4_define([OVS_CHECK_BAREUDP],
+[
+    AT_SKIP_IF([:])
+])

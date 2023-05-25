@@ -237,3 +237,13 @@ m4_define([CHECK_L3L4_CONNTRACK_REASM])
 #
 # The kernel module tests do not use TC offload.
 m4_define([CHECK_NO_TC_OFFLOAD])
+
+# OVS_CHECK_BAREUDP()
+#
+# The feature needs to be enabled in the kernel configuration (CONFIG_BAREUDP)
+# to work.
+m4_define([OVS_CHECK_BAREUDP],
+[
+    AT_SKIP_IF([! ip link add dev ovs_bareudp0 type bareudp dstport 6635 ethertype mpls_uc 2>&1 >/dev/null])
+    AT_CHECK([ip link del dev ovs_bareudp0])
+])
