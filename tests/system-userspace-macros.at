@@ -325,3 +325,11 @@ m4_define([CHECK_L3L4_CONNTRACK_REASM],
 [
     AT_SKIP_IF([:])
 ])
+
+# OVS_CHECK_BAREUDP()
+#
+# The userspace datapath does not support bareudp tunnels.
+m4_define([OVS_CHECK_BAREUDP],
+[
+    AT_SKIP_IF([:])
+])
