@@ -413,6 +413,13 @@ _ovs_vsctl_get_PS1 () {
         return;
     fi
 
+    # On Bash 4.4+ just use the @P expansion
+    if ((BASH_VERSINFO[0] > 4 ||
+        (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
+        printf '%s\n' "${PS1@P}"
+        return
+    fi
+
     # Original inspiration from
     # http://stackoverflow.com/questions/10060500/bash-how-to-evaluate-ps1-ps2,
     # but changed quite a lot to make it more robust.

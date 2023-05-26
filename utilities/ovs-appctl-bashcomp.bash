@@ -223,6 +223,13 @@ printf_stderr() {
 # The code below is taken from Peter Amidon.  His change makes it more
 # robust.
 extract_bash_prompt() {
+    # On Bash 4.4+ just use the @P expansion
+    if ((BASH_VERSINFO[0] > 4 ||
+        (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
+        _BASH_PROMPT="${PS1@P}"
+        return
+    fi
+
     local myPS1 v
 
     myPS1="$(sed 's/Begin prompt/\\Begin prompt/; s/End prompt/\\End prompt/' <<< "$PS1")"
