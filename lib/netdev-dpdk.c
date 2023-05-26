@@ -1910,18 +1910,56 @@ dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
 
 static void
 dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
-                        const char *flag, int default_size, int *new_size)
+                        struct rte_eth_dev_info *info, bool is_rx)
 {
-    int queue_size = smap_get_int(args, flag, default_size);
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct rte_eth_desc_lim *lim;
+    int default_size, queue_size, cur_size, new_requested_size;
+    int *cur_requested_size;
+    bool reconfig = false;
 
+    if (is_rx) {
+        default_size = NIC_PORT_DEFAULT_RXQ_SIZE;
+        new_requested_size = smap_get_int(args, "n_rxq_desc", default_size);
+        cur_size = dev->rxq_size;
+        cur_requested_size = &dev->requested_rxq_size;
+        lim = info ? &info->rx_desc_lim : NULL;
+    } else {
+        default_size = NIC_PORT_DEFAULT_TXQ_SIZE;
+        new_requested_size = smap_get_int(args, "n_txq_desc", default_size);
+        cur_size = dev->txq_size;
+        cur_requested_size = &dev->requested_txq_size;
+        lim = info ? &info->tx_desc_lim : NULL;
+    }
+
+    queue_size = new_requested_size;
+
+    /* Check for OVS limits. */
     if (queue_size <= 0 || queue_size > NIC_PORT_MAX_Q_SIZE
             || !is_pow2(queue_size)) {
         queue_size = default_size;
     }
 
-    if (queue_size != *new_size) {
-        *new_size = queue_size;
+    if (lim) {
+        /* Check for device limits. */
+        if (lim->nb_align) {
+            queue_size = ROUND_UP(queue_size, lim->nb_align);
+        }
+        queue_size = MIN(queue_size, lim->nb_max);
+        queue_size = MAX(queue_size, lim->nb_min);
+    }
+
+    *cur_requested_size = queue_size;
+
+    if (cur_size != queue_size) {
         netdev_request_reconfigure(netdev);
+        reconfig = true;
+    }
+    if (new_requested_size != queue_size) {
+        VLOG(reconfig ? VLL_INFO : VLL_DBG,
+             "%s: Unable to set the number of %s descriptors to %d. "
+             "Adjusted to %d.", netdev_get_name(netdev),
+             is_rx ? "rx": "tx", new_requested_size, queue_size);
     }
 }
 
@@ -1937,21 +1975,16 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         {RTE_ETH_FC_NONE,     RTE_ETH_FC_TX_PAUSE},
         {RTE_ETH_FC_RX_PAUSE, RTE_ETH_FC_FULL    }
     };
+    struct rte_eth_dev_info info;
     const char *new_devargs;
     const char *vf_mac;
     int err = 0;
+    int ret;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
     dpdk_set_rxq_config(dev, args);
-
-    dpdk_process_queue_size(netdev, args, "n_rxq_desc",
-                            NIC_PORT_DEFAULT_RXQ_SIZE,
-                            &dev->requested_rxq_size);
-    dpdk_process_queue_size(netdev, args, "n_txq_desc",
-                            NIC_PORT_DEFAULT_TXQ_SIZE,
-                            &dev->requested_txq_size);
 
     new_devargs = smap_get(args, "dpdk-devargs");
 
@@ -2007,6 +2040,11 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     if (err) {
         goto out;
     }
+
+    ret = rte_eth_dev_info_get(dev->port_id, &info);
+
+    dpdk_process_queue_size(netdev, args, !ret ? &info : NULL, true);
+    dpdk_process_queue_size(netdev, args, !ret ? &info : NULL, false);
 
     vf_mac = smap_get(args, "dpdk-vf-mac");
     if (vf_mac) {
