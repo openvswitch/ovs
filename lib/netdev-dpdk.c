@@ -1740,14 +1740,8 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "mtu", "%d", dev->mtu);
 
     if (dev->type == DPDK_DEV_ETH) {
-        smap_add_format(args, "requested_rxq_descriptors", "%d",
-                        dev->requested_rxq_size);
-        smap_add_format(args, "configured_rxq_descriptors", "%d",
-                        dev->rxq_size);
-        smap_add_format(args, "requested_txq_descriptors", "%d",
-                        dev->requested_txq_size);
-        smap_add_format(args, "configured_txq_descriptors", "%d",
-                        dev->txq_size);
+        smap_add_format(args, "n_rxq_desc", "%d", dev->rxq_size);
+        smap_add_format(args, "n_txq_desc", "%d", dev->txq_size);
         if (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) {
             smap_add(args, "rx_csum_offload", "true");
         } else {
