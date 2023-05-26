@@ -55,6 +55,10 @@ struct ovsdb_monitor_table_condition {
     struct ovsdb_monitor_table *mt;
     struct ovsdb_condition old_condition;
     struct ovsdb_condition new_condition;
+
+    /* Condition composed from difference between clauses in old and new.
+     * Note: Empty diff condition doesn't mean that old == new. */
+    struct ovsdb_condition diff_condition;
 };
 
 /*  Backend monitor.
@@ -713,6 +717,7 @@ ovsdb_monitor_session_condition_destroy(
 
         ovsdb_condition_destroy(&mtc->new_condition);
         ovsdb_condition_destroy(&mtc->old_condition);
+        ovsdb_condition_destroy(&mtc->diff_condition);
         shash_delete(&condition->tables, node);
         free(mtc);
     }
@@ -733,6 +738,7 @@ ovsdb_monitor_table_condition_create(
     mtc->table = table;
     ovsdb_condition_init(&mtc->old_condition);
     ovsdb_condition_init(&mtc->new_condition);
+    ovsdb_condition_init(&mtc->diff_condition);
 
     if (json_cnd) {
         error = ovsdb_condition_from_json(table->schema,
@@ -746,7 +752,7 @@ ovsdb_monitor_table_condition_create(
     }
 
     shash_add(&condition->tables, table->schema->name, mtc);
-    /* On session startup old == new condition */
+    /* On session startup old == new condition, diff is empty. */
     ovsdb_condition_clone(&mtc->new_condition, &mtc->old_condition);
     ovsdb_monitor_session_condition_set_mode(condition);
 
@@ -758,7 +764,8 @@ ovsdb_monitor_get_table_conditions(
                       const struct ovsdb_monitor_table *mt,
                       const struct ovsdb_monitor_session_condition *condition,
                       struct ovsdb_condition **old_condition,
-                      struct ovsdb_condition **new_condition)
+                      struct ovsdb_condition **new_condition,
+                      struct ovsdb_condition **diff_condition)
 {
     if (!condition) {
         return false;
@@ -772,6 +779,7 @@ ovsdb_monitor_get_table_conditions(
     }
     *old_condition = &mtc->old_condition;
     *new_condition = &mtc->new_condition;
+    *diff_condition = &mtc->diff_condition;
 
     return true;
 }
@@ -800,6 +808,8 @@ ovsdb_monitor_table_condition_update(
     ovsdb_condition_destroy(&mtc->new_condition);
     ovsdb_condition_clone(&mtc->new_condition, &cond);
     ovsdb_condition_destroy(&cond);
+    ovsdb_condition_diff(&mtc->diff_condition,
+                         &mtc->old_condition, &mtc->new_condition);
     ovsdb_monitor_condition_add_columns(dbmon,
                                         table,
                                         &mtc->new_condition);
@@ -815,11 +825,14 @@ ovsdb_monitor_table_condition_updated(struct ovsdb_monitor_table *mt,
         shash_find_data(&condition->tables, mt->table->schema->name);
 
     if (mtc) {
-        /* If conditional monitoring - set old condition to new condition */
+        /* If conditional monitoring - set old condition to new condition
+         * and clear the diff. */
         if (ovsdb_condition_cmp_3way(&mtc->old_condition,
                                      &mtc->new_condition)) {
             ovsdb_condition_destroy(&mtc->old_condition);
             ovsdb_condition_clone(&mtc->old_condition, &mtc->new_condition);
+            ovsdb_condition_destroy(&mtc->diff_condition);
+            ovsdb_condition_init(&mtc->diff_condition);
             ovsdb_monitor_session_condition_set_mode(condition);
         }
     }
@@ -834,29 +847,42 @@ ovsdb_monitor_row_update_type_condition(
                       const struct ovsdb_datum *old,
                       const struct ovsdb_datum *new)
 {
-    struct ovsdb_condition *old_condition, *new_condition;
+    struct ovsdb_condition *old_condition, *new_condition, *diff_condition;
     enum ovsdb_monitor_selection type =
         ovsdb_monitor_row_update_type(initial, old, new);
 
     if (ovsdb_monitor_get_table_conditions(mt,
                                            condition,
                                            &old_condition,
-                                           &new_condition)) {
-        bool old_cond = !old ? false
-            : ovsdb_condition_empty_or_match_any(old,
-                                                old_condition,
-                                                row_type == OVSDB_MONITOR_ROW ?
-                                                mt->columns_index_map :
-                                                NULL);
-        bool new_cond = !new ? false
-            : ovsdb_condition_empty_or_match_any(new,
-                                                new_condition,
-                                                row_type == OVSDB_MONITOR_ROW ?
-                                                mt->columns_index_map :
-                                                NULL);
+                                           &new_condition,
+                                           &diff_condition)) {
+        unsigned int *index_map = row_type == OVSDB_MONITOR_ROW
+                                  ? mt->columns_index_map : NULL;
+        bool old_cond = false, new_cond = false;
 
-        if (!old_cond && !new_cond) {
+        if (old && old == new
+            && !ovsdb_condition_empty_or_match_any(old, diff_condition,
+                                                   index_map)) {
+            /* Condition changed, but not the data.  And the row is not
+             * affected by the condition change.  It either mathes or
+             * doesn't match both old and new conditions at the same time.
+             * In any case, this row should not be part of the update. */
             type = OJMS_NONE;
+        } else {
+            /* The row changed or the condition change affects this row.
+             * Need to fully check old and new conditions. */
+            if (old) {
+                old_cond = ovsdb_condition_empty_or_match_any(
+                                old, old_condition, index_map);
+            }
+            if (new) {
+                new_cond = ovsdb_condition_empty_or_match_any(
+                                new, new_condition, index_map);
+            }
+
+            if (!old_cond && !new_cond) {
+                type = OJMS_NONE;
+            }
         }
 
         switch (type) {
@@ -1155,15 +1181,16 @@ ovsdb_monitor_compose_cond_change_update(
     unsigned long int *changed = xmalloc(bitmap_n_bytes(max_columns));
 
     SHASH_FOR_EACH (node, &dbmon->tables) {
+        struct ovsdb_condition *old_condition, *new_condition, *diff_condition;
         struct ovsdb_monitor_table *mt = node->data;
-        struct ovsdb_row *row;
         struct json *table_json = NULL;
-        struct ovsdb_condition *old_condition, *new_condition;
+        struct ovsdb_row *row;
 
         if (!ovsdb_monitor_get_table_conditions(mt,
                                                 condition,
                                                 &old_condition,
-                                                &new_condition) ||
+                                                &new_condition,
+                                                &diff_condition) ||
             !ovsdb_condition_cmp_3way(old_condition, new_condition)) {
             /* Nothing to update on this table */
             continue;

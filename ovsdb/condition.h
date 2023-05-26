@@ -58,6 +58,9 @@ bool ovsdb_condition_match_any_clause(const struct ovsdb_datum *,
                                       unsigned int index_map[]);
 int ovsdb_condition_cmp_3way(const struct ovsdb_condition *a,
                              const struct ovsdb_condition *b);
+void ovsdb_condition_diff(struct ovsdb_condition *,
+                          const struct ovsdb_condition *,
+                          const struct ovsdb_condition *);
 void ovsdb_condition_clone(struct ovsdb_condition *to,
                            const struct ovsdb_condition *from);
 bool ovsdb_condition_is_true(const struct ovsdb_condition *cond);
@@ -65,6 +68,12 @@ bool ovsdb_condition_is_false(const struct ovsdb_condition *cond);
 const struct ovsdb_column **
 ovsdb_condition_get_columns(const struct ovsdb_condition *cond,
                             size_t *n_columns);
+
+static inline bool
+ovsdb_condition_is_trivial(const struct ovsdb_condition *cond)
+{
+    return ovsdb_condition_is_true(cond) || ovsdb_condition_is_false(cond);
+}
 
 static inline bool
 ovsdb_condition_empty_or_match_any(const struct ovsdb_datum *row_datum,
