@@ -2324,6 +2324,27 @@ exit:
     return result;
 }
 
+static void
+log_unexpected_stats_jump(struct udpif_key *ukey,
+                          const struct dpif_flow_stats *stats)
+    OVS_REQUIRES(ukey->mutex)
+{
+    static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct ofpbuf *actions;
+
+    odp_format_ufid(&ukey->ufid, &ds);
+    ds_put_cstr(&ds, ", ");
+    odp_flow_key_format(ukey->key, ukey->key_len, &ds);
+    ds_put_cstr(&ds, ", actions:");
+    actions = ovsrcu_get(struct ofpbuf *, &ukey->actions);
+    format_odp_actions(&ds, actions->data, actions->size, NULL);
+    VLOG_WARN_RL(&rll, "Unexpected jump in packet stats from %"PRIu64
+                 " to %"PRIu64" when handling ukey %s",
+                 ukey->stats.n_packets, stats->n_packets, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
 /* Verifies that the datapath actions of 'ukey' are still correct, and pushes
  * 'stats' for it.
  *
@@ -2357,18 +2378,15 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 
     push.used = stats->used;
     push.tcp_flags = stats->tcp_flags;
-    push.n_packets = (stats->n_packets > ukey->stats.n_packets
-                      ? stats->n_packets - ukey->stats.n_packets
-                      : 0);
-    push.n_bytes = (stats->n_bytes > ukey->stats.n_bytes
-                    ? stats->n_bytes - ukey->stats.n_bytes
-                    : 0);
+    push.n_packets = stats->n_packets - ukey->stats.n_packets;
+    push.n_bytes = stats->n_bytes - ukey->stats.n_bytes;
 
     if (stats->n_packets < ukey->stats.n_packets &&
         ukey->stats.n_packets < UINT64_THREE_QUARTERS) {
         /* Report cases where the packet counter is lower than the previous
          * instance, but exclude the potential wrapping of an uint64_t. */
         COVERAGE_INC(ukey_invalid_stat_reset);
+        log_unexpected_stats_jump(ukey, stats);
     }
 
     if (need_revalidate) {
