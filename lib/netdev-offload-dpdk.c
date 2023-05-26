@@ -2344,13 +2344,13 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
             ovsrcu_get(void *, &netdev->hw_info.offload_data);
         data->rte_flow_counters[tid]--;
 
-        ufid_to_rte_flow_disassociate(rte_flow_data);
         VLOG_DBG_RL(&rl, "%s/%s: rte_flow 0x%"PRIxPTR
                     " flow destroy %d ufid " UUID_FMT,
                     netdev_get_name(netdev), netdev_get_name(physdev),
                     (intptr_t) rte_flow,
                     netdev_dpdk_get_port_id(physdev),
                     UUID_ARGS((struct uuid *) ufid));
+        ufid_to_rte_flow_disassociate(rte_flow_data);
     } else {
         VLOG_ERR("Failed flow: %s/%s: flow destroy %d ufid " UUID_FMT,
                  netdev_get_name(netdev), netdev_get_name(physdev),
