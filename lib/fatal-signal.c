@@ -35,8 +35,12 @@
 
 #include "openvswitch/type-props.h"
 
-#ifdef HAVE_UNWIND
+#if defined(HAVE_UNWIND) || defined(HAVE_BACKTRACE)
 #include "daemon-private.h"
+#endif
+
+#ifdef HAVE_BACKTRACE
+#include <execinfo.h>
 #endif
 
 #ifndef SIG_ATOMIC_MAX
@@ -94,6 +98,17 @@ fatal_signal_init(void)
         inited = true;
 
         ovs_mutex_init_recursive(&mutex);
+
+        /* The dummy backtrace is needed.
+         * See comment for send_backtrace_to_monitor(). */
+        struct backtrace dummy_bt;
+
+        backtrace_capture(&dummy_bt);
+
+        if (!dummy_bt.n_frames) {
+            VLOG_DBG("Capturing of dummy backtrace has failed.");
+        }
+
 #ifndef _WIN32
         xpipe_nonblocking(signal_fds);
 #else
@@ -181,7 +196,8 @@ llong_to_hex_str(unsigned long long value, char *str)
  * library functions used here must be async-signal-safe.
  */
 static inline void
-send_backtrace_to_monitor(void) {
+send_backtrace_to_monitor(void)
+{
     /* volatile added to prevent a "clobbered" error on ppc64le with gcc */
     volatile int dep;
     struct unw_backtrace unw_bt[UNW_MAX_DEPTH];
@@ -211,11 +227,10 @@ send_backtrace_to_monitor(void) {
         /* Since there is no monitor daemon running, write backtrace
          * in current process.
          */
-        char str[] = "SIGSEGV detected, backtrace:\n";
         char ip_str[16], offset_str[6];
         char line[64], fn_name[UNW_MAX_FUNCN];
 
-        vlog_direct_write_to_log_file_unsafe(str);
+        vlog_direct_write_to_log_file_unsafe(BACKTRACE_DUMP_MSG);
 
         for (int i = 0; i < dep; i++) {
             memset(line, 0, sizeof line);
@@ -237,6 +252,36 @@ send_backtrace_to_monitor(void) {
             strcat(line, ">\n");
             vlog_direct_write_to_log_file_unsafe(line);
         }
+    }
+}
+#elif HAVE_BACKTRACE
+/* Send the backtrace to monitor thread.
+ *
+ * Note that this runs in the signal handling context, any system
+ * library functions used here must be async-signal-safe.
+ * backtrace() is only signal safe if the "libgcc" or equivalent was loaded
+ * before the signal handler. In order to keep it safe the fatal_signal_init()
+ * should always call backtrace_capture which will ensure that "libgcc" or
+ * equivlent is loaded.
+ */
+static inline void
+send_backtrace_to_monitor(void)
+{
+    struct backtrace bt;
+
+    backtrace_capture(&bt);
+
+    if (monitor && daemonize_fd > -1) {
+        ignore(write(daemonize_fd, &bt, sizeof bt));
+    } else {
+        int log_fd = vlog_get_log_file_fd_unsafe();
+
+        if (log_fd < 0) {
+            return;
+        }
+
+        vlog_direct_write_to_log_file_unsafe(BACKTRACE_DUMP_MSG);
+        backtrace_symbols_fd(bt.frames, bt.n_frames, log_fd);
     }
 }
 #else

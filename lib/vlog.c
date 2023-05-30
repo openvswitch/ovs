@@ -664,6 +664,13 @@ vlog_direct_write_to_log_file_unsafe(const char *s)
     }
 }
 
+int
+vlog_get_log_file_fd_unsafe(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    return log_fd;
+}
+
 /* Returns 'false' if 'facility' is not a valid string. If 'facility'
  * is a valid string, sets 'value' with the integer value of 'facility'
  * and returns 'true'. */

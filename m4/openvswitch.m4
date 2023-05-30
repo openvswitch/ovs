@@ -360,8 +360,12 @@ AC_DEFUN([OVS_CHECK_DBDIR],
 dnl Defines HAVE_BACKTRACE if backtrace() is found.
 AC_DEFUN([OVS_CHECK_BACKTRACE],
   [AC_SEARCH_LIBS([backtrace], [execinfo ubacktrace],
-                  [AC_DEFINE([HAVE_BACKTRACE], [1],
-                             [Define to 1 if you have backtrace(3).])])])
+                  [HAVE_BACKTRACE=yes], [HAVE_BACKTRACE=no])
+   if test "$HAVE_BACKTRACE" = "yes"; then
+     AC_DEFINE([HAVE_BACKTRACE], [1], [Define to 1 if you have backtrace(3).])
+   fi
+   AM_CONDITIONAL([HAVE_BACKTRACE], [test "$HAVE_BACKTRACE" = "yes"])
+   AC_SUBST([HAVE_BACKTRACE])])
 
 dnl Defines HAVE_PERF_EVENT if linux/perf_event.h is found.
 AC_DEFUN([OVS_CHECK_PERF_EVENT],

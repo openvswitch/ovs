@@ -148,6 +148,9 @@ void vlog_set_syslog_target(const char *target);
 /* Write directly to log file. */
 void vlog_direct_write_to_log_file_unsafe(const char *s);
 
+/* Return the current log file descriptor. */
+int vlog_get_log_file_fd_unsafe(void);
+
 /* Initialization. */
 void vlog_init(void);
 void vlog_enable_async(void);

@@ -141,12 +141,8 @@ ovsdb_internal_error(struct ovsdb_error *inner_error,
 
     backtrace_capture(&backtrace);
     if (backtrace.n_frames) {
-        int i;
-
         ds_put_cstr(&ds, " (backtrace:");
-        for (i = 0; i < backtrace.n_frames; i++) {
-            ds_put_format(&ds, " 0x%08"PRIxPTR, backtrace.frames[i]);
-        }
+        backtrace_format(&ds, &backtrace, ", ");
         ds_put_char(&ds, ')');
     }
 
