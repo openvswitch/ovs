@@ -2672,7 +2672,7 @@ netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
     if (rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_ENCAPSULATED) {
         if (!vport_netdev->netdev_class ||
             !vport_netdev->netdev_class->pop_header) {
-            VLOG_ERR_RL(&rl, "vport nedtdev=%s with no pop_header method",
+            VLOG_ERR_RL(&rl, "vport netdev=%s with no pop_header method",
                         netdev_get_name(vport_netdev));
             ret = EOPNOTSUPP;
             goto close_vport_netdev;

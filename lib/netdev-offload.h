@@ -72,7 +72,7 @@ struct offload_info {
                                      * sync with datapath recirc ids. */
 
     /*
-     * The flow mark id assigened to the flow. If any pkts hit the flow,
+     * The flow mark id assigned to the flow. If any pkts hit the flow,
      * it will be in the pkt meta data.
      */
     uint32_t flow_mark;
