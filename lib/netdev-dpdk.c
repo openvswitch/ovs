@@ -835,7 +835,7 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
 static struct dpdk_mp *
 dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
 {
-    struct dpdk_mp *dmp, *next;
+    struct dpdk_mp *dmp = NULL, *next;
     bool reuse = false;
 
     ovs_mutex_lock(&dpdk_mp_mutex);
