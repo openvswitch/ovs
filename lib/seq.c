@@ -32,7 +32,7 @@ COVERAGE_DEFINE(seq_change);
 
 /* A sequence number object. */
 struct seq {
-    uint64_t value OVS_GUARDED;
+    atomic_uint64_t value;
     struct hmap waiters OVS_GUARDED; /* Contains 'struct seq_waiter's. */
 };
 
@@ -72,6 +72,7 @@ static void seq_wake_waiters(struct seq *) OVS_REQUIRES(seq_mutex);
 struct seq * OVS_EXCLUDED(seq_mutex)
 seq_create(void)
 {
+    uint64_t seq_value;
     struct seq *seq;
 
     seq_init();
@@ -81,7 +82,8 @@ seq_create(void)
     COVERAGE_INC(seq_change);
 
     ovs_mutex_lock(&seq_mutex);
-    seq->value = seq_next++;
+    seq_value = seq_next++;
+    atomic_store_relaxed(&seq->value, seq_value);
     hmap_init(&seq->waiters);
     ovs_mutex_unlock(&seq_mutex);
 
@@ -126,9 +128,11 @@ void
 seq_change_protected(struct seq *seq)
     OVS_REQUIRES(seq_mutex)
 {
+    uint64_t seq_value = seq_next++;
+
     COVERAGE_INC(seq_change);
 
-    seq->value = seq_next++;
+    atomic_store_explicit(&seq->value, seq_value, memory_order_release);
     seq_wake_waiters(seq);
 }
 
@@ -149,27 +153,13 @@ seq_change(struct seq *seq)
  * when an object changes, even without an ability to lock the object.  See
  * Usage in seq.h for details. */
 uint64_t
-seq_read_protected(const struct seq *seq)
-    OVS_REQUIRES(seq_mutex)
-{
-    return seq->value;
-}
-
-/* Returns 'seq''s current sequence number (which could change immediately).
- *
- * seq_read() and seq_wait() can be used together to yield a race-free wakeup
- * when an object changes, even without an ability to lock the object.  See
- * Usage in seq.h for details. */
-uint64_t
 seq_read(const struct seq *seq)
-    OVS_EXCLUDED(seq_mutex)
 {
     uint64_t value;
 
-    ovs_mutex_lock(&seq_mutex);
-    value = seq_read_protected(seq);
-    ovs_mutex_unlock(&seq_mutex);
-
+    /* Note that the odd CONST_CAST() is here to keep sparse happy. */
+    atomic_read_explicit(&CONST_CAST(struct seq *, seq)->value, &value,
+                         memory_order_acquire);
     return value;
 }
 
@@ -226,7 +216,7 @@ seq_wait_at(const struct seq *seq_, uint64_t value, const char *where)
     struct seq *seq = CONST_CAST(struct seq *, seq_);
 
     ovs_mutex_lock(&seq_mutex);
-    if (value == seq->value) {
+    if (value == seq_read(seq_)) {
         seq_wait__(seq, value, where);
     } else {
         poll_immediate_wake_at(where);
