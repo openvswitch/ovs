@@ -36,6 +36,7 @@
 #include <unistd.h>
 
 #include "byte-order.h"
+#include "coverage.h"
 #include "netlink-socket.h"
 #include "netlink.h"
 #include "openvswitch/ofpbuf.h"
@@ -66,6 +67,8 @@
 #endif
 
 VLOG_DEFINE_THIS_MODULE(tc);
+
+COVERAGE_DEFINE(tc_netlink_malformed_reply);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
@@ -1975,17 +1978,18 @@ int
 parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
                            struct tc_flower *flower, bool terse)
 {
-    struct tcmsg *tc;
+    struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
     struct nlattr *ta[ARRAY_SIZE(tca_policy)];
     const char *kind;
 
-    if (NLMSG_HDRLEN + sizeof *tc > reply->size) {
+    if (!nlmsg || !tc) {
+        COVERAGE_INC(tc_netlink_malformed_reply);
         return EPROTO;
     }
 
     memset(flower, 0, sizeof *flower);
-
-    tc = ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
 
     flower->key.eth_type = (OVS_FORCE ovs_be16) tc_get_minor(tc->tcm_info);
     flower->mask.eth_type = OVS_BE16_MAX;
@@ -2000,8 +2004,7 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
         return EAGAIN;
     }
 
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof *tc,
-                         tca_policy, ta, ARRAY_SIZE(ta))) {
+    if (!nl_policy_parse(&b, 0, tca_policy, ta, ARRAY_SIZE(ta))) {
         VLOG_ERR_RL(&error_rl, "failed to parse tca policy");
         return EPROTO;
     }
@@ -2022,13 +2025,17 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tcf_id *id,
 int
 parse_netlink_to_tc_chain(struct ofpbuf *reply, uint32_t *chain)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
     struct nlattr *ta[ARRAY_SIZE(tca_chain_policy)];
-    struct tcmsg *tc;
 
-    tc = ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+    if (!nlmsg || !tc) {
+        COVERAGE_INC(tc_netlink_malformed_reply);
+        return EPROTO;
+    }
 
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof *tc,
-                         tca_chain_policy, ta, ARRAY_SIZE(ta))) {
+    if (!nl_policy_parse(&b, 0, tca_chain_policy, ta, ARRAY_SIZE(ta))) {
         VLOG_ERR_RL(&error_rl, "failed to parse tca chain policy");
         return EINVAL;
     }
@@ -3283,8 +3290,15 @@ tc_replace_flower(struct tcf_id *id, struct tc_flower *flower)
 
     error = tc_transact(&request, &reply);
     if (!error) {
-        struct tcmsg *tc =
-            ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+        struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
+        struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+        struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
+
+        if (!nlmsg || !tc) {
+            COVERAGE_INC(tc_netlink_malformed_reply);
+            ofpbuf_delete(reply);
+            return EPROTO;
+        }
 
         id->prio = tc_get_major(tc->tcm_info);
         id->handle = tc->tcm_handle;
