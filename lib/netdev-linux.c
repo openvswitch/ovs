@@ -2712,8 +2712,16 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
 
     err = tc_transact(&request, &reply);
     if (!err) {
-        struct tcmsg *tc =
-            ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+        struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
+        struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+        struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
+
+        if (!nlmsg || !tc) {
+            VLOG_ERR_RL(&rl,
+                        "Failed to add match all policer, malformed reply");
+            ofpbuf_delete(reply);
+            return EPROTO;
+        }
         ofpbuf_delete(reply);
     }
 
@@ -5732,26 +5740,27 @@ static int
 tc_update_policer_action_stats(struct ofpbuf *msg,
                                struct ofputil_meter_stats *stats)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(msg->data, msg->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcamsg *tca = ofpbuf_try_pull(&b, sizeof *tca);
     struct ovs_flow_stats stats_dropped;
     struct ovs_flow_stats stats_hw;
     struct ovs_flow_stats stats_sw;
     const struct nlattr *act;
     struct nlattr *prio;
-    struct tcamsg *tca;
     int error = 0;
 
     if (!stats) {
         goto exit;
     }
 
-    if (NLMSG_HDRLEN + sizeof *tca > msg->size) {
+    if (!nlmsg || !tca) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, size error");
         error = EPROTO;
         goto exit;
     }
 
-    tca = ofpbuf_at_assert(msg, NLMSG_HDRLEN, sizeof *tca);
-    act = nl_attr_find(msg, NLMSG_HDRLEN + sizeof *tca, TCA_ACT_TAB);
+    act = nl_attr_find(&b, 0, TCA_ACT_TAB);
     if (!act) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, can't find attribute");
         error = EPROTO;
@@ -6016,20 +6025,26 @@ static int
 tc_parse_class(const struct ofpbuf *msg, unsigned int *handlep,
                struct nlattr **options, struct netdev_queue_stats *stats)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(msg->data, msg->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
     static const struct nl_policy tca_policy[] = {
         [TCA_OPTIONS] = { .type = NL_A_NESTED, .optional = false },
         [TCA_STATS2] = { .type = NL_A_NESTED, .optional = false },
     };
     struct nlattr *ta[ARRAY_SIZE(tca_policy)];
 
-    if (!nl_policy_parse(msg, NLMSG_HDRLEN + sizeof(struct tcmsg),
-                         tca_policy, ta, ARRAY_SIZE(ta))) {
+    if (!nlmsg || !tc) {
+        VLOG_ERR_RL(&rl, "failed to parse class message, malformed reply");
+        goto error;
+    }
+
+    if (!nl_policy_parse(&b, 0, tca_policy, ta, ARRAY_SIZE(ta))) {
         VLOG_WARN_RL(&rl, "failed to parse class message");
         goto error;
     }
 
     if (handlep) {
-        struct tcmsg *tc = ofpbuf_at_assert(msg, NLMSG_HDRLEN, sizeof *tc);
         *handlep = tc->tcm_handle;
     }
 
