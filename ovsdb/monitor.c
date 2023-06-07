@@ -478,6 +478,7 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
                          enum ovsdb_monitor_selection select,
                          bool monitored)
 {
+    struct ovsdb_monitor_change_set *mcs;
     struct ovsdb_monitor_table *mt;
     struct ovsdb_monitor_column *c;
 
@@ -486,6 +487,18 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
     /* Check for column duplication. Return duplicated column name. */
     if (mt->columns_index_map[column->index] != -1) {
         return column->name;
+    }
+
+    mcs = dbmon->init_change_set;
+    if (mcs) {
+        /* A new column is going to be added to the monitor.  Existing
+         * initial change set doesn't have it, so can no longer be used.
+         * Initial change set is never used by more than one session at
+         * the same time, so it's safe to destroy it here. */
+        ovs_assert(mcs->n_refs == 1);
+        ovsdb_monitor_json_cache_destroy(dbmon, mcs);
+        ovsdb_monitor_change_set_destroy(mcs);
+        dbmon->init_change_set = NULL;
     }
 
     if (mt->n_columns >= mt->allocated_columns) {
@@ -614,7 +627,7 @@ ovsdb_monitor_untrack_change_set(struct ovsdb_monitor *dbmon,
     if (--mcs->n_refs == 0) {
         if (mcs == dbmon->init_change_set) {
             /* The initial change set should exist as long as the
-             * monitor itself. */
+             * monitor doesn't change. */
             mcs->n_refs++;
             return;
         } else if (mcs == dbmon->new_change_set) {

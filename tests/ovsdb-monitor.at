@@ -1011,3 +1011,69 @@ row,action,name,number,_version
 ]], [ignore])
 AT_CLEANUP
 
+AT_SETUP([monitor-cond initial reply with condition on non-monitored column])
+AT_KEYWORDS([ovsdb server monitor monitor-cond positive initial non-monitored])
+
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
+            --remote=punix:socket --log-file db], [0], [ignore], [ignore])
+
+dnl Initialize the database content.
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+dnl Start a first client that monitors only the column 'name'.
+on_exit 'kill `cat client-1.pid`'
+AT_CAPTURE_FILE([client-1.out])
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile=client-1.pid --detach --no-chdir \
+            -d json monitor-cond --format=csv unix:socket \
+            ordinals '[[true]]' ordinals ["name"] \
+            > client-1.out 2> client-1.err], [0], [ignore], [ignore])
+dnl Wait for the initial monitor reply.
+OVS_WAIT_UNTIL([grep -q 'initial' client-1.out])
+
+dnl Start a second client that monitors the column 'name', but has a condition
+dnl on column 'number'.
+on_exit 'kill `cat client-2.pid`'
+AT_CAPTURE_FILE([client-2.out])
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile=client-2.pid --detach --no-chdir \
+            -d json monitor-cond --format=csv unix:socket \
+            ordinals '[[["number", "!=", 1]]]' ordinals ["name"] \
+            > client-2.out 2> client-2.err], [0], [ignore], [ignore])
+dnl Wait for the initial monitor reply.
+OVS_WAIT_UNTIL([grep -q 'initial' client-2.out])
+
+OVSDB_SERVER_SHUTDOWN
+OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && \
+                    test ! -e client-1.pid && test ! -e client-2.pid])
+
+dnl The first client should have all the names.
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < client-1.out | uuidfilt],
+         [0], [dnl
+row,action,name
+<0>,initial,"""one"""
+<1>,initial,"""two"""
+<2>,initial,"""zero"""
+])
+
+dnl The second client should not have the name 'one'.
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < client-2.out | uuidfilt],
+         [0], [dnl
+row,action,name
+<0>,initial,"""two"""
+<1>,initial,"""zero"""
+])
+AT_CLEANUP
