@@ -37,7 +37,9 @@ static bool x86_has_isa(uint32_t leaf, enum x86_reg reg, uint32_t bit)
 {
     uint32_t regs[4];
 
-    ovs_assert(__get_cpuid_max(leaf & X86_LEAF_MASK, NULL) >= leaf);
+    if (__get_cpuid_max(leaf & X86_LEAF_MASK, NULL) < leaf) {
+        return false;
+    }
 
     __cpuid_count(leaf, 0, regs[EAX], regs[EBX], regs[ECX], regs[EDX]);
     return (regs[reg] & ((uint32_t) 1 << bit)) != 0;
