@@ -78,6 +78,39 @@ static void call_hooks(int sig_nr);
 static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
 #endif
 
+/* Sets up a pipe or event handle that will be used to wake up the current
+ * process after signal is received, so it can be processed outside of the
+ * signal handler context in fatal_signal_run(). */
+static void
+fatal_signal_create_wakeup_events(void)
+{
+#ifndef _WIN32
+    xpipe_nonblocking(signal_fds);
+#else
+    wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (!wevent) {
+        char *msg_buf = ovs_lasterror_to_string();
+        VLOG_FATAL("Failed to create a event (%s).", msg_buf);
+    }
+#endif
+}
+
+static void
+fatal_signal_destroy_wakeup_events(void)
+{
+#ifndef _WIN32
+    close(signal_fds[0]);
+    signal_fds[0] = -1;
+    close(signal_fds[1]);
+    signal_fds[1] = -1;
+#else
+    ResetEvent(wevent);
+    CloseHandle(wevent);
+    wevent = NULL;
+#endif
+}
+
+
 /* Initializes the fatal signal handling module.  Calling this function is
  * optional, because calling any other function in the module will also
  * initialize it.  However, in a multithreaded program, the module must be
@@ -94,15 +127,10 @@ fatal_signal_init(void)
         inited = true;
 
         ovs_mutex_init_recursive(&mutex);
-#ifndef _WIN32
-        xpipe_nonblocking(signal_fds);
-#else
-        wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        if (!wevent) {
-            char *msg_buf = ovs_lasterror_to_string();
-            VLOG_FATAL("Failed to create a event (%s).", msg_buf);
-        }
 
+        fatal_signal_create_wakeup_events();
+
+#ifdef _WIN32
         /* Register a function to handle Ctrl+C. */
         SetConsoleCtrlHandler(ConsoleHandlerRoutine, true);
 #endif
@@ -456,6 +484,9 @@ do_unlink_files(void)
  * hooks passed a 'cancel_cb' function to fatal_signal_add_hook(), then those
  * functions will be called, allowing them to free resources, etc.
  *
+ * Also re-creates wake-up events, so signals in one of the processes do not
+ * wake up the other one.
+ *
  * Following a fork, one of the resulting processes can call this function to
  * allow it to terminate without calling the hooks registered before calling
  * this function.  New hooks registered after calling this function will take
@@ -466,6 +497,9 @@ fatal_signal_fork(void)
     size_t i;
 
     assert_single_threaded();
+
+    fatal_signal_destroy_wakeup_events();
+    fatal_signal_create_wakeup_events();
 
     for (i = 0; i < n_hooks; i++) {
         struct hook *h = &hooks[i];
