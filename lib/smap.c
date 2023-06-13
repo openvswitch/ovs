@@ -300,6 +300,7 @@ smap_is_empty(const struct smap *smap)
 size_t
 smap_count(const struct smap *smap)
 {
+    ovs_assert(smap);
     return hmap_count(&smap->map);
 }
 
