@@ -428,7 +428,9 @@ AT_CHECK(
   [[[{"rows":[{"managers":"punix:socket1"}]},{"rows":[{"is_connected":false,"target":"punix:socket2"}]}]
 ]], 
   [ignore])
-OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN(["
+  /No status column present in the Manager table/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote])
@@ -2110,7 +2112,9 @@ AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT \
 cat stdout >> output
 AT_CHECK([uuidfilt output], [0], [[[{"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}]]
 ], [ignore])
-OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN(["
+  /No status column present in the Manager table/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server replication with schema mismatch])

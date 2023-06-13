@@ -1232,8 +1232,11 @@ parse_monitor_columns(char *arg, const char *server, const char *database,
         }
         free(nodes);
 
-        add_column(server, ovsdb_table_schema_get_column(table, "_version"),
-                   columns, columns_json);
+        const struct ovsdb_column *version_column =
+                            ovsdb_table_schema_get_column(table, "_version");
+
+        ovs_assert(version_column);
+        add_column(server, version_column, columns, columns_json);
     }
 
     if (!initial || !insert || !delete || !modify) {
