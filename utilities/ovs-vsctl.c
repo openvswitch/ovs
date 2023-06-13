@@ -889,14 +889,23 @@ check_conflicts(struct vsctl_context *vsctl_ctx, const char *name,
 
     port = shash_find_data(&vsctl_ctx->ports, name);
     if (port) {
-        ctl_fatal("%s because a port named %s already exists on "
-                    "bridge %s", msg, name, port->bridge->name);
+        if (port->bridge) {
+            ctl_fatal("%s because a port named %s already exists on "
+                      "bridge %s", msg, name, port->bridge->name);
+        } else {
+            ctl_fatal("%s because a port named %s already exists", msg, name);
+        }
     }
 
     iface = shash_find_data(&vsctl_ctx->ifaces, name);
     if (iface) {
-        ctl_fatal("%s because an interface named %s already exists "
-                    "on bridge %s", msg, name, iface->port->bridge->name);
+        if (iface->port->bridge) {
+            ctl_fatal("%s because an interface named %s already exists "
+                      "on bridge %s", msg, name, iface->port->bridge->name);
+        } else {
+            ctl_fatal("%s because an interface named %s already exists", msg,
+                      name);
+        }
     }
 
     free(msg);
@@ -936,7 +945,7 @@ find_port(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
     ovs_assert(vsctl_ctx->cache_valid);
 
     port = shash_find_data(&vsctl_ctx->ports, name);
-    if (port && !strcmp(name, port->bridge->name)) {
+    if (port && port->bridge && !strcmp(name, port->bridge->name)) {
         port = NULL;
     }
     if (must_exist && !port) {
@@ -954,7 +963,8 @@ find_iface(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
     ovs_assert(vsctl_ctx->cache_valid);
 
     iface = shash_find_data(&vsctl_ctx->ifaces, name);
-    if (iface && !strcmp(name, iface->port->bridge->name)) {
+    if (iface && iface->port->bridge &&
+        !strcmp(name, iface->port->bridge->name)) {
         iface = NULL;
     }
     if (must_exist && !iface) {
