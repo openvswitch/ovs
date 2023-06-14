@@ -698,6 +698,7 @@ mfex_ipv6_set_l2_pad_size(struct dp_packet *pkt,
         return -1;
     }
     dp_packet_set_l2_pad_size(pkt, len_from_ipv6 - (p_len + IPV6_HEADER_LEN));
+    dp_packet_hwol_set_tx_ipv6(pkt);
     return 0;
 }
 
@@ -728,6 +729,10 @@ mfex_ipv4_set_l2_pad_size(struct dp_packet *pkt, struct ip_header *nh,
         return -1;
     }
     dp_packet_set_l2_pad_size(pkt, len_from_ipv4 - ip_tot_len);
+    dp_packet_hwol_set_tx_ipv4(pkt);
+    if (dp_packet_ip_checksum_good(pkt)) {
+        dp_packet_hwol_set_tx_ip_csum(pkt);
+    }
     return 0;
 }
 

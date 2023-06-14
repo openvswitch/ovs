@@ -450,7 +450,6 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
         struct ip_header *nh = dp_packet_l3(packet);
-        ovs_be16 old_csum = ~nh->ip_csum;
 
         /* Load the 20 bytes of the IPv4 header. Without options, which is the
          * most common case it's 20 bytes, but can be up to 60 bytes. */
@@ -463,13 +462,20 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
          * (v_pkt_masked). */
         __m256i v_new_hdr = _mm256_or_si256(v_key_shuf, v_pkt_masked);
 
-        /* Update the IP checksum based on updated IP values. */
-        uint16_t delta = avx512_ipv4_hdr_csum_delta(v_packet, v_new_hdr);
-        uint32_t new_csum = old_csum + delta;
-        delta = csum_finish(new_csum);
+        if (dp_packet_hwol_tx_ip_csum(packet)) {
+            dp_packet_ol_reset_ip_csum_good(packet);
+        } else {
+            ovs_be16 old_csum = ~nh->ip_csum;
 
-        /* Insert new checksum. */
-        v_new_hdr = _mm256_insert_epi16(v_new_hdr, delta, 5);
+            /* Update the IP checksum based on updated IP values. */
+            uint16_t delta = avx512_ipv4_hdr_csum_delta(v_packet, v_new_hdr);
+            uint32_t new_csum = old_csum + delta;
+
+            delta = csum_finish(new_csum);
+
+            /* Insert new checksum. */
+            v_new_hdr = _mm256_insert_epi16(v_new_hdr, delta, 5);
+        }
 
         /* If ip_src or ip_dst has been modified, L4 checksum needs to
          * be updated too. */

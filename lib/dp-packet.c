@@ -21,6 +21,7 @@
 #include "dp-packet.h"
 #include "netdev-afxdp.h"
 #include "netdev-dpdk.h"
+#include "netdev-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "util.h"
 
@@ -529,4 +530,20 @@ dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
         return false;
     }
     return true;
+}
+
+/* Checks if the packet 'p' is compatible with netdev_ol_flags 'flags'
+ * and if not, updates the packet with the software fall back. */
+void
+dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
+{
+    if (dp_packet_hwol_tx_ip_csum(p)) {
+        if (dp_packet_ip_checksum_good(p)) {
+            dp_packet_hwol_reset_tx_ip_csum(p);
+        } else if (!(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
+            dp_packet_ip_set_header_csum(p);
+            dp_packet_ol_set_ip_csum_good(p);
+            dp_packet_hwol_reset_tx_ip_csum(p);
+        }
+    }
 }

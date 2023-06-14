@@ -808,6 +808,14 @@ netdev_send_prepare_packet(const uint64_t netdev_flags,
             return false;
     }
 
+    /* Packet with IP csum offloading enabled was received with verified csum.
+     * Leave the IP csum offloading enabled even with good checksum to the
+     * netdev to decide what would be the best to do.
+     * Provide a software fallback in case the device doesn't support IP csum
+     * offloading. Note: Encapsulated packet must have the inner IP header
+     * csum already calculated. */
+    dp_packet_ol_send_prepare(packet, netdev_flags);
+
     l4_mask = dp_packet_hwol_l4_mask(packet);
     if (l4_mask) {
         if (dp_packet_hwol_l4_is_tcp(packet)) {
@@ -975,7 +983,15 @@ netdev_push_header(const struct netdev *netdev,
                          "not supported: packet dropped",
                          netdev_get_name(netdev));
         } else {
+            /* The packet is going to be encapsulated and there is
+             * no support yet for inner network header csum offloading. */
+            if (dp_packet_hwol_tx_ip_csum(packet)
+                && !dp_packet_ip_checksum_good(packet)) {
+                dp_packet_ip_set_header_csum(packet);
+            }
+
             netdev->netdev_class->push_header(netdev, packet, data);
+
             pkt_metadata_init(&packet->md, data->out_port);
             dp_packet_batch_refill(batch, packet, i);
         }

@@ -25,6 +25,7 @@
 #include <rte_mbuf.h>
 #endif
 
+#include "csum.h"
 #include "netdev-afxdp.h"
 #include "netdev-dpdk.h"
 #include "openvswitch/list.h"
@@ -83,6 +84,8 @@ enum dp_packet_offload_mask {
     DEF_OL_FLAG(DP_PACKET_OL_TX_UDP_CKSUM, RTE_MBUF_F_TX_UDP_CKSUM, 0x400),
     /* Offload SCTP checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_SCTP_CKSUM, RTE_MBUF_F_TX_SCTP_CKSUM, 0x800),
+    /* Offload IP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_IP_CKSUM, RTE_MBUF_F_TX_IP_CKSUM, 0x1000),
     /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
 
@@ -97,7 +100,8 @@ enum dp_packet_offload_mask {
                                      DP_PACKET_OL_TX_IPV6          | \
                                      DP_PACKET_OL_TX_TCP_CKSUM     | \
                                      DP_PACKET_OL_TX_UDP_CKSUM     | \
-                                     DP_PACKET_OL_TX_SCTP_CKSUM)
+                                     DP_PACKET_OL_TX_SCTP_CKSUM    | \
+                                     DP_PACKET_OL_TX_IP_CKSUM)
 
 #define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
                                  DP_PACKET_OL_TX_UDP_CKSUM | \
@@ -239,6 +243,7 @@ static inline bool dp_packet_equal(const struct dp_packet *,
 bool dp_packet_compare_offsets(struct dp_packet *good,
                                struct dp_packet *test,
                                struct ds *err_str);
+void dp_packet_ol_send_prepare(struct dp_packet *, uint64_t);
 
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
@@ -1030,6 +1035,26 @@ dp_packet_hwol_set_tx_ipv6(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_IPV6;
 }
 
+/* Returns 'true' if packet 'p' is marked for IPv4 checksum offloading. */
+static inline bool
+dp_packet_hwol_tx_ip_csum(const struct dp_packet *p)
+{
+    return !!(*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_TX_IP_CKSUM);
+}
+
+/* Marks packet 'p' for IPv4 checksum offloading. */
+static inline void
+dp_packet_hwol_set_tx_ip_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_TX_IP_CKSUM;
+}
+
+static inline void
+dp_packet_hwol_reset_tx_ip_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_IP_CKSUM;
+}
+
 /* Mark packet 'b' for TCP checksum offloading.  It implies that either
  * the packet 'b' is marked for IPv4 or IPv6 checksum offloading. */
 static inline void
@@ -1063,13 +1088,31 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
+/* Returns 'true' if the IP header has good integrity and the
+ * checksum in it is complete. */
 static inline bool
-dp_packet_ip_checksum_valid(const struct dp_packet *p)
+dp_packet_ip_checksum_good(const struct dp_packet *p)
 {
     return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_IP_CKSUM_MASK) ==
             DP_PACKET_OL_RX_IP_CKSUM_GOOD;
 }
 
+/* Marks packet 'p' with good IPv4 checksum. */
+static inline void
+dp_packet_ol_set_ip_csum_good(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_IP_CKSUM_BAD;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RX_IP_CKSUM_GOOD;
+}
+
+/* Resets IP good checksum flag in packet 'p'. */
+static inline void
+dp_packet_ol_reset_ip_csum_good(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_IP_CKSUM_GOOD;
+}
+
+/* Marks packet 'p' with bad IPv4 checksum. */
 static inline bool
 dp_packet_ip_checksum_bad(const struct dp_packet *p)
 {
@@ -1077,8 +1120,21 @@ dp_packet_ip_checksum_bad(const struct dp_packet *p)
             DP_PACKET_OL_RX_IP_CKSUM_BAD;
 }
 
+/* Calculate and set the IPv4 header checksum in packet 'p'. */
+static inline void
+dp_packet_ip_set_header_csum(struct dp_packet *p)
+{
+    struct ip_header *ip = dp_packet_l3(p);
+
+    ovs_assert(ip);
+    ip->ip_csum = 0;
+    ip->ip_csum = csum(ip, sizeof *ip);
+}
+
+/* Returns 'true' if the packet 'p' has good integrity and the
+ * checksum in it is correct. */
 static inline bool
-dp_packet_l4_checksum_valid(const struct dp_packet *p)
+dp_packet_l4_checksum_good(const struct dp_packet *p)
 {
     return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_L4_CKSUM_MASK) ==
             DP_PACKET_OL_RX_L4_CKSUM_GOOD;

@@ -147,6 +147,11 @@ struct netdev_dummy {
     int requested_n_txq OVS_GUARDED;
     int requested_n_rxq OVS_GUARDED;
     int requested_numa_id OVS_GUARDED;
+
+    /* Enable netdev IP csum offload. */
+    bool ol_ip_csum OVS_GUARDED;
+    /* Flag RX packet with good csum. */
+    bool ol_ip_csum_set_good OVS_GUARDED;
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -914,6 +919,13 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
         }
     }
 
+    netdev->ol_ip_csum_set_good = smap_get_bool(args, "ol_ip_csum_set_good",
+                                                false);
+    netdev->ol_ip_csum = smap_get_bool(args, "ol_ip_csum", false);
+    if (netdev->ol_ip_csum) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+    }
+
     netdev_change_seq_changed(netdev_);
 
     /* 'dummy-pmd' specific config. */
@@ -1092,6 +1104,10 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     netdev->rxq_stats[rxq_->queue_id].bytes += dp_packet_size(packet);
     netdev->custom_stats[0].value++;
     netdev->custom_stats[1].value++;
+    if (netdev->ol_ip_csum_set_good) {
+        /* The netdev hardware sets the flag when the packet has good csum. */
+        dp_packet_ol_set_ip_csum_good(packet);
+    }
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_batch_init_packet(batch, packet);
@@ -1171,6 +1187,12 @@ netdev_dummy_send(struct netdev *netdev, int qid,
                 error = EMSGSIZE;
                 break;
             }
+        }
+
+        if (dp_packet_hwol_tx_ip_csum(packet) &&
+            !dp_packet_ip_checksum_good(packet)) {
+            dp_packet_ip_set_header_csum(packet);
+            dp_packet_ol_set_ip_csum_good(packet);
         }
 
         ovs_mutex_lock(&dev->mutex);

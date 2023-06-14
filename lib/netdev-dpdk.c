@@ -411,8 +411,9 @@ enum dpdk_hw_ol_features {
     NETDEV_RX_CHECKSUM_OFFLOAD = 1 << 0,
     NETDEV_RX_HW_CRC_STRIP = 1 << 1,
     NETDEV_RX_HW_SCATTER = 1 << 2,
-    NETDEV_TX_TSO_OFFLOAD = 1 << 3,
-    NETDEV_TX_SCTP_CHECKSUM_OFFLOAD = 1 << 4,
+    NETDEV_TX_IPV4_CKSUM_OFFLOAD = 1 << 3,
+    NETDEV_TX_TSO_OFFLOAD = 1 << 4,
+    NETDEV_TX_SCTP_CHECKSUM_OFFLOAD = 1 << 5,
 };
 
 /*
@@ -1039,6 +1040,10 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         conf.rxmode.offloads |= RTE_ETH_RX_OFFLOAD_KEEP_CRC;
     }
 
+    if (dev->hw_ol_features & NETDEV_TX_IPV4_CKSUM_OFFLOAD) {
+        conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_IPV4_CKSUM;
+    }
+
     if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
         conf.txmode.offloads |= DPDK_TX_TSO_OFFLOAD_FLAGS;
         if (dev->hw_ol_features & NETDEV_TX_SCTP_CHECKSUM_OFFLOAD) {
@@ -1177,6 +1182,12 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     } else {
         /* Do not warn on lack of scatter support */
         dev->hw_ol_features &= ~NETDEV_RX_HW_SCATTER;
+    }
+
+    if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) {
+        dev->hw_ol_features |= NETDEV_TX_IPV4_CKSUM_OFFLOAD;
+    } else {
+        dev->hw_ol_features &= ~NETDEV_TX_IPV4_CKSUM_OFFLOAD;
     }
 
     dev->hw_ol_features &= ~NETDEV_TX_TSO_OFFLOAD;
@@ -2227,12 +2238,15 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
 
-    if (mbuf->ol_flags & RTE_MBUF_F_TX_L4_MASK) {
-        mbuf->l2_len = (char *)dp_packet_l3(pkt) - (char *)dp_packet_eth(pkt);
-        mbuf->l3_len = (char *)dp_packet_l4(pkt) - (char *)dp_packet_l3(pkt);
-        mbuf->outer_l2_len = 0;
-        mbuf->outer_l3_len = 0;
+    if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_L4_MASK
+                            | RTE_MBUF_F_TX_TCP_SEG))) {
+        return true;
     }
+
+    mbuf->l2_len = (char *) dp_packet_l3(pkt) - (char *) dp_packet_eth(pkt);
+    mbuf->l3_len = (char *) dp_packet_l4(pkt) - (char *) dp_packet_l3(pkt);
+    mbuf->outer_l2_len = 0;
+    mbuf->outer_l3_len = 0;
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
         struct tcp_header *th = dp_packet_l4(pkt);
@@ -2292,13 +2306,11 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
     uint32_t nb_tx = 0;
     uint16_t nb_tx_prep = cnt;
 
-    if (userspace_tso_enabled()) {
-        nb_tx_prep = rte_eth_tx_prepare(dev->port_id, qid, pkts, cnt);
-        if (nb_tx_prep != cnt) {
-            VLOG_WARN_RL(&rl, "%s: Output batch contains invalid packets. "
-                         "Only %u/%u are valid: %s", dev->up.name, nb_tx_prep,
-                         cnt, rte_strerror(rte_errno));
-        }
+    nb_tx_prep = rte_eth_tx_prepare(dev->port_id, qid, pkts, cnt);
+    if (nb_tx_prep != cnt) {
+        VLOG_WARN_RL(&rl, "%s: Output batch contains invalid packets. "
+                     "Only %u/%u are valid: %s", netdev_get_name(&dev->up),
+                     nb_tx_prep, cnt, rte_strerror(rte_errno));
     }
 
     while (nb_tx != nb_tx_prep) {
@@ -2637,11 +2649,19 @@ dpdk_copy_dp_packet_to_mbuf(struct rte_mempool *mp, struct dp_packet *pkt_orig)
     memcpy(&pkt_dest->l2_pad_size, &pkt_orig->l2_pad_size,
            sizeof(struct dp_packet) - offsetof(struct dp_packet, l2_pad_size));
 
-    if (mbuf_dest->ol_flags & RTE_MBUF_F_TX_L4_MASK) {
-        mbuf_dest->l2_len = (char *)dp_packet_l3(pkt_dest)
-                                - (char *)dp_packet_eth(pkt_dest);
-        mbuf_dest->l3_len = (char *)dp_packet_l4(pkt_dest)
+    if (dp_packet_l3(pkt_dest)) {
+        if (dp_packet_eth(pkt_dest)) {
+            mbuf_dest->l2_len = (char *) dp_packet_l3(pkt_dest)
+                                - (char *) dp_packet_eth(pkt_dest);
+        } else {
+            mbuf_dest->l2_len = 0;
+        }
+        if (dp_packet_l4(pkt_dest)) {
+            mbuf_dest->l3_len = (char *) dp_packet_l4(pkt_dest)
                                 - (char *) dp_packet_l3(pkt_dest);
+        } else {
+            mbuf_dest->l3_len = 0;
+        }
     }
 
     return pkt_dest;
@@ -2699,11 +2719,9 @@ netdev_dpdk_common_send(struct netdev *netdev, struct dp_packet_batch *batch,
     pkt_cnt = cnt;
 
     /* Prepare each mbuf for hardware offloading. */
-    if (userspace_tso_enabled()) {
-        cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, pkt_cnt);
-        stats->tx_invalid_hwol_drops += pkt_cnt - cnt;
-        pkt_cnt = cnt;
-    }
+    cnt = netdev_dpdk_prep_hwol_batch(dev, pkts, pkt_cnt);
+    stats->tx_invalid_hwol_drops += pkt_cnt - cnt;
+    pkt_cnt = cnt;
 
     /* Apply Quality of Service policy. */
     cnt = netdev_dpdk_qos_run(dev, pkts, pkt_cnt, true);
@@ -5260,6 +5278,13 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     }
 
     err = dpdk_eth_dev_init(dev);
+
+    if (dev->hw_ol_features & NETDEV_TX_IPV4_CKSUM_OFFLOAD) {
+        netdev->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+    } else {
+        netdev->ol_flags &= ~NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+    }
+
     if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
         netdev->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
         netdev->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;

@@ -734,3 +734,81 @@ AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dn
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([userspace offload - ip csum offload])
+OVS_VSWITCHD_START(
+  [add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-port br1 p2 -- \
+       set Interface p2 type=dummy --])
+
+# Modify the ip_dst addr to force changing the IP csum.
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=mod_nw_dst:192.168.1.1,output:p2])
+
+# Check if no offload remains ok.
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+
+# Checksum should change to 0x990 with ip_dst changed to 192.168.1.1
+# by the datapath while processing the packet.
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Check if packets entering the datapath with csum offloading
+# enabled gets the csum updated properly by egress handling
+# in the datapath and not by the netdev.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Check if packets entering the datapath with csum offloading
+# enabled gets the csum updated properly by netdev and not
+# by the datapath.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Push a packet with bad csum and offloading disabled to check
+# if the datapath updates the csum, but does not fix the issue.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060904c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Push a packet with bad csum and offloading enabled to check
+# if the driver updates and fixes the csum.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

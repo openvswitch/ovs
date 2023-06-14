@@ -88,7 +88,10 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
         ovs_be32 ip_src, ip_dst;
 
-        if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(packet))) {
+        /* A packet coming from a network device might have the
+         * csum already checked. In this case, skip the check. */
+        if (OVS_UNLIKELY(!dp_packet_ip_checksum_good(packet))
+            && !dp_packet_hwol_tx_ip_csum(packet)) {
             if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
                 VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
                 return NULL;
@@ -142,7 +145,8 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
  *
  * This function sets the IP header's ip_tot_len field (which should be zeroed
  * as part of 'header') and puts its value into '*ip_tot_size' as well.  Also
- * updates IP header checksum, as well as the l3 and l4 offsets in 'packet'.
+ * updates IP header checksum if not offloaded, as well as the l3 and l4
+ * offsets in the 'packet'.
  *
  * Return pointer to the L4 header added to 'packet'. */
 void *
@@ -168,11 +172,16 @@ netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
         ip6->ip6_plen = htons(*ip_tot_size);
         packet_set_ipv6_flow_label(&ip6->ip6_flow, ipv6_label);
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
+        dp_packet_hwol_set_tx_ipv6(packet);
+        dp_packet_ol_reset_ip_csum_good(packet);
         return ip6 + 1;
     } else {
         ip = netdev_tnl_ip_hdr(eth);
         ip->ip_tot_len = htons(*ip_tot_size);
-        ip->ip_csum = recalc_csum16(ip->ip_csum, 0, ip->ip_tot_len);
+        /* Postpone checksum to when the packet is pushed to the port. */
+        dp_packet_hwol_set_tx_ipv4(packet);
+        dp_packet_hwol_set_tx_ip_csum(packet);
+        dp_packet_ol_reset_ip_csum_good(packet);
         *ip_tot_size -= IP_HEADER_LEN;
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
         return ip + 1;
@@ -191,7 +200,7 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     }
 
     if (udp->udp_csum) {
-        if (OVS_UNLIKELY(!dp_packet_l4_checksum_valid(packet))) {
+        if (OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
             uint32_t csum;
             if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
                 csum = packet_csum_pseudoheader6(dp_packet_l3(packet));
@@ -299,8 +308,8 @@ netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
         ip->ip_frag_off = (params->flow->tunnel.flags & FLOW_TNL_F_DONT_FRAGMENT) ?
                           htons(IP_DF) : 0;
 
-        /* Checksum has already been zeroed by eth_build_header. */
-        ip->ip_csum = csum(ip, sizeof *ip);
+        /* The checksum will be calculated when the headers are pushed
+         * to the packet if offloading is not enabled. */
 
         data->header_len += IP_HEADER_LEN;
         return ip + 1;

@@ -1144,7 +1144,12 @@ packet_set_ipv4_addr(struct dp_packet *packet,
             }
         }
     }
-    nh->ip_csum = recalc_csum32(nh->ip_csum, old_addr, new_addr);
+
+    if (dp_packet_hwol_tx_ip_csum(packet)) {
+        dp_packet_ol_reset_ip_csum_good(packet);
+    } else {
+        nh->ip_csum = recalc_csum32(nh->ip_csum, old_addr, new_addr);
+    }
     put_16aligned_be32(addr, new_addr);
 }
 
@@ -1311,16 +1316,26 @@ packet_set_ipv4(struct dp_packet *packet, ovs_be32 src, ovs_be32 dst,
     if (nh->ip_tos != tos) {
         uint8_t *field = &nh->ip_tos;
 
-        nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t) *field),
-                                    htons((uint16_t) tos));
+        if (dp_packet_hwol_tx_ip_csum(packet)) {
+            dp_packet_ol_reset_ip_csum_good(packet);
+        } else {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t) *field),
+                                        htons((uint16_t) tos));
+        }
+
         *field = tos;
     }
 
     if (nh->ip_ttl != ttl) {
         uint8_t *field = &nh->ip_ttl;
 
-        nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
-                                    htons(ttl << 8));
+        if (dp_packet_hwol_tx_ip_csum(packet)) {
+            dp_packet_ol_reset_ip_csum_good(packet);
+        } else {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
+                                        htons(ttl << 8));
+        }
+
         *field = ttl;
     }
 }
@@ -1931,8 +1946,13 @@ IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
 
         tos |= IP_ECN_CE;
         if (nh->ip_tos != tos) {
-            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
-                                        htons((uint16_t) tos));
+            if (dp_packet_hwol_tx_ip_csum(pkt)) {
+                dp_packet_ol_reset_ip_csum_good(pkt);
+            } else {
+                nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
+                                            htons((uint16_t) tos));
+            }
+
             nh->ip_tos = tos;
         }
     }
