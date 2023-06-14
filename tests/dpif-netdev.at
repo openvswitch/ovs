@@ -650,6 +650,24 @@ AT_CHECK([ovs-appctl revalidator/resume])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - check tx packet checksum offloading])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure])
+
+AT_CHECK([ovs-vsctl get interface p1 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
+tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+], [])
+
+AT_CHECK([ovs-vsctl get interface br0 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
+tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # SEND_UDP_PKTS([p_name], [p_ofport])
 #
 # Sends 128 packets to port 'p_name' with different UDP destination ports.

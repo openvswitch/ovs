@@ -43,6 +43,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-netlink.h"
+#include "openvswitch/json.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "openvswitch/ofp-print.h"
@@ -1373,9 +1374,31 @@ netdev_get_next_hop(const struct netdev *netdev,
 int
 netdev_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    return (netdev->netdev_class->get_status
-            ? netdev->netdev_class->get_status(netdev, smap)
-            : EOPNOTSUPP);
+    int err = EOPNOTSUPP;
+
+    /* Set offload status only if relevant. */
+    if (netdev_get_dpif_type(netdev) &&
+        strcmp(netdev_get_dpif_type(netdev), "system")) {
+
+#define OL_ADD_STAT(name, bit) \
+        smap_add(smap, "tx_" name "_offload", \
+                 netdev->ol_flags & bit ? "true" : "false");
+
+        OL_ADD_STAT("ip_csum", NETDEV_TX_OFFLOAD_IPV4_CKSUM);
+        OL_ADD_STAT("tcp_csum", NETDEV_TX_OFFLOAD_TCP_CKSUM);
+        OL_ADD_STAT("udp_csum", NETDEV_TX_OFFLOAD_UDP_CKSUM);
+        OL_ADD_STAT("sctp_csum", NETDEV_TX_OFFLOAD_SCTP_CKSUM);
+        OL_ADD_STAT("tcp_seg", NETDEV_TX_OFFLOAD_TCP_TSO);
+#undef OL_ADD_STAT
+
+        err = 0;
+    }
+
+    if (!netdev->netdev_class->get_status) {
+        return err;
+    }
+
+    return netdev->netdev_class->get_status(netdev, smap);
 }
 
 /* Returns all assigned IP address to  'netdev' and returns 0.

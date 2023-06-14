@@ -1747,11 +1747,6 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
         } else {
             smap_add(args, "rx_csum_offload", "false");
         }
-        if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
-            smap_add(args, "tx_tso_offload", "true");
-        } else {
-            smap_add(args, "tx_tso_offload", "false");
-        }
         smap_add(args, "lsc_interrupt_mode",
                  dev->lsc_interrupt_mode ? "true" : "false");
 
