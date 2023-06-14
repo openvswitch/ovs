@@ -38,6 +38,9 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     dp_packet_init_specific(b);
     /* By default assume the packet type to be Ethernet. */
     b->packet_type = htonl(PT_ETH);
+    /* Reset csum start and offset. */
+    b->csum_start = 0;
+    b->csum_offset = 0;
 }
 
 static void
@@ -545,5 +548,31 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
             dp_packet_ol_set_ip_csum_good(p);
             dp_packet_hwol_reset_tx_ip_csum(p);
         }
+    }
+
+    if (!dp_packet_hwol_tx_l4_checksum(p)) {
+        return;
+    }
+
+    if (dp_packet_l4_checksum_good(p)) {
+        dp_packet_hwol_reset_tx_l4_csum(p);
+        return;
+    }
+
+    if (dp_packet_hwol_l4_is_tcp(p)
+        && !(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
+        packet_tcp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
+    } else if (dp_packet_hwol_l4_is_udp(p)
+               && !(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
+        packet_udp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
+    } else if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)
+               && dp_packet_hwol_l4_is_sctp(p)) {
+        packet_sctp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
     }
 }

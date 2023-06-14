@@ -799,8 +799,6 @@ static bool
 netdev_send_prepare_packet(const uint64_t netdev_flags,
                            struct dp_packet *packet, char **errormsg)
 {
-    uint64_t l4_mask;
-
     if (dp_packet_hwol_is_tso(packet)
         && !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             /* Fall back to GSO in software. */
@@ -813,35 +811,15 @@ netdev_send_prepare_packet(const uint64_t netdev_flags,
      * netdev to decide what would be the best to do.
      * Provide a software fallback in case the device doesn't support IP csum
      * offloading. Note: Encapsulated packet must have the inner IP header
+     * csum already calculated.
+     * Packet with L4 csum offloading enabled was received with verified csum.
+     * Leave the L4 csum offloading enabled even with good checksum for the
+     * netdev to decide what would be the best to do.
+     * Netdev that requires pseudo header csum needs to calculate that.
+     * Provide a software fallback in case the netdev doesn't support L4 csum
+     * offloading. Note: Encapsulated packet must have the inner L4 header
      * csum already calculated. */
     dp_packet_ol_send_prepare(packet, netdev_flags);
-
-    l4_mask = dp_packet_hwol_l4_mask(packet);
-    if (l4_mask) {
-        if (dp_packet_hwol_l4_is_tcp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-                /* Fall back to TCP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No TCP checksum support");
-                return false;
-            }
-        } else if (dp_packet_hwol_l4_is_udp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
-                /* Fall back to UDP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No UDP checksum support");
-                return false;
-            }
-        } else if (dp_packet_hwol_l4_is_sctp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)) {
-                /* Fall back to SCTP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No SCTP checksum support");
-                return false;
-            }
-        } else {
-            VLOG_ERR_BUF(errormsg, "No L4 checksum support: mask: %"PRIu64,
-                         l4_mask);
-            return false;
-        }
-    }
 
     return true;
 }
@@ -975,20 +953,16 @@ netdev_push_header(const struct netdev *netdev,
     size_t i, size = dp_packet_batch_size(batch);
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
-        if (OVS_UNLIKELY(dp_packet_hwol_is_tso(packet)
-                         || dp_packet_hwol_l4_mask(packet))) {
+        if (OVS_UNLIKELY(dp_packet_hwol_is_tso(packet))) {
             COVERAGE_INC(netdev_push_header_drops);
             dp_packet_delete(packet);
-            VLOG_WARN_RL(&rl, "%s: Tunneling packets with HW offload flags is "
+            VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is "
                          "not supported: packet dropped",
                          netdev_get_name(netdev));
         } else {
             /* The packet is going to be encapsulated and there is
              * no support yet for inner network header csum offloading. */
-            if (dp_packet_hwol_tx_ip_csum(packet)
-                && !dp_packet_ip_checksum_good(packet)) {
-                dp_packet_ip_set_header_csum(packet);
-            }
+            dp_packet_ol_send_prepare(packet, 0);
 
             netdev->netdev_class->push_header(netdev, packet, data);
 

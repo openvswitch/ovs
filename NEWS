@@ -37,9 +37,9 @@ Post-v3.1.0
    - SRv6 Tunnel Protocol
      * Added support for userspace datapath (only).
    - Userspace datapath:
-     * IP checksum offload support is now enabled by default for interfaces
-       that support it.  See the 'status' column in the 'interface' table to
-       check the status.
+     * IP and L4 checksum offload support is now enabled by default for
+       interfaces that support it.  See the 'status' column in the 'interface'
+       table to check the status.
 
 
 v3.1.0 - 16 Feb 2023

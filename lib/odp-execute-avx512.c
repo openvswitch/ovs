@@ -486,9 +486,11 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
             size_t l4_size = dp_packet_l4_size(packet);
 
             if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
-                /* New UDP checksum. */
                 struct udp_header *uh = dp_packet_l4(packet);
-                if (uh->udp_csum) {
+                if (dp_packet_hwol_l4_is_udp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else if (uh->udp_csum) {
+                    /* New UDP checksum. */
                     uint16_t old_udp_checksum = ~uh->udp_csum;
                     uint32_t udp_checksum = old_udp_checksum + delta_checksum;
                     udp_checksum = csum_finish(udp_checksum);
@@ -501,13 +503,17 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
                 }
             } else if (nh->ip_proto == IPPROTO_TCP &&
                        l4_size >= TCP_HEADER_LEN) {
-                /* New TCP checksum. */
-                struct tcp_header *th = dp_packet_l4(packet);
-                uint16_t old_tcp_checksum = ~th->tcp_csum;
-                uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
-                tcp_checksum = csum_finish(tcp_checksum);
+                if (dp_packet_hwol_l4_is_tcp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else {
+                    /* New TCP checksum. */
+                    struct tcp_header *th = dp_packet_l4(packet);
+                    uint16_t old_tcp_checksum = ~th->tcp_csum;
+                    uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+                    tcp_checksum = csum_finish(tcp_checksum);
 
-                th->tcp_csum = tcp_checksum;
+                    th->tcp_csum = tcp_checksum;
+                }
             }
 
             pkt_metadata_init_conn(&packet->md);
@@ -569,11 +575,22 @@ avx512_ipv6_sum_header(__m512i ip6_header)
 
 static inline uint16_t ALWAYS_INLINE
 __attribute__((__target__("avx512vbmi")))
-avx512_ipv6_addr_csum_delta(__m512i old_header, __m512i new_header)
+avx512_ipv6_addr_csum_delta(__m512i v_packet, __m512i v_new_hdr,
+                            bool rh_present)
 {
-    uint16_t old_delta = avx512_ipv6_sum_header(old_header);
-    uint16_t new_delta = avx512_ipv6_sum_header(new_header);
-    uint32_t csum_delta = ((uint16_t) ~old_delta) + new_delta;
+    __m512i v_new_hdr_for_cksum = v_new_hdr;
+    uint32_t csum_delta;
+    uint16_t old_delta;
+    uint16_t new_delta;
+
+    if (rh_present) {
+        v_new_hdr_for_cksum = _mm512_mask_blend_epi64(0x18, v_new_hdr,
+                                                      v_packet);
+    }
+
+    old_delta = avx512_ipv6_sum_header(v_packet);
+    new_delta = avx512_ipv6_sum_header(v_new_hdr_for_cksum);
+    csum_delta = ((uint16_t) ~old_delta) + new_delta;
 
     return ~csum_finish(csum_delta);
 }
@@ -656,25 +673,19 @@ action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
 
         if (do_csum) {
             size_t l4_size = dp_packet_l4_size(packet);
-            __m512i v_new_hdr_for_cksum = v_new_hdr;
             uint16_t delta_checksum;
-
-            /* In case of routing header being present, checksum should not be
-             * updated for the destination address. */
-            if (rh_present) {
-                v_new_hdr_for_cksum = _mm512_mask_blend_epi64(0x18, v_new_hdr,
-                                                              v_packet);
-            }
-
-            delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
-                                                         v_new_hdr_for_cksum);
 
             if (proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
                 struct udp_header *uh = dp_packet_l4(packet);
-
-                if (uh->udp_csum) {
+                if (dp_packet_hwol_l4_is_udp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else if (uh->udp_csum) {
+                    delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                                 v_new_hdr,
+                                                                 rh_present);
                     uint16_t old_udp_checksum = ~uh->udp_csum;
-                    uint32_t udp_checksum = old_udp_checksum + delta_checksum;
+                    uint32_t udp_checksum = old_udp_checksum +
+                                            delta_checksum;
 
                     udp_checksum = csum_finish(udp_checksum);
 
@@ -684,15 +695,26 @@ action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
 
                     uh->udp_csum = udp_checksum;
                 }
-            } else if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-                struct tcp_header *th = dp_packet_l4(packet);
-                uint16_t old_tcp_checksum = ~th->tcp_csum;
-                uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
 
-                tcp_checksum = csum_finish(tcp_checksum);
-                th->tcp_csum = tcp_checksum;
+            } else if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
+                if (dp_packet_hwol_l4_is_tcp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else {
+                    delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                                 v_new_hdr,
+                                                                 rh_present);
+                    struct tcp_header *th = dp_packet_l4(packet);
+                    uint16_t old_tcp_checksum = ~th->tcp_csum;
+                    uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+
+                    tcp_checksum = csum_finish(tcp_checksum);
+                    th->tcp_csum = tcp_checksum;
+                }
             } else if (proto == IPPROTO_ICMPV6 &&
                        l4_size >= sizeof(struct icmp6_header)) {
+                delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                             v_new_hdr,
+                                                             rh_present);
                 struct icmp6_header *icmp = dp_packet_l4(packet);
                 uint16_t old_icmp6_checksum = ~icmp->icmp6_cksum;
                 uint32_t icmp6_checksum = old_icmp6_checksum + delta_checksum;

@@ -530,6 +530,11 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * changes in the device miimon status, so we can use atomic_count. */
 static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
 
+/* Very old kernels from the 2.6 era don't support vnet headers with the tun
+ * device. We can detect this while constructing a netdev, but need this for
+ * packet rx/tx. */
+static bool tap_supports_vnet_hdr = true;
+
 static int netdev_linux_parse_vnet_hdr(struct dp_packet *b);
 static void netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu);
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
@@ -938,14 +943,6 @@ netdev_linux_common_construct(struct netdev *netdev_)
     netnsid_unset(&netdev->netnsid);
     ovs_mutex_init(&netdev->mutex);
 
-    if (userspace_tso_enabled()) {
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
-    }
-
     return 0;
 }
 
@@ -957,6 +954,16 @@ netdev_linux_construct(struct netdev *netdev_)
     int error = netdev_linux_common_construct(netdev_);
     if (error) {
         return error;
+    }
+
+    /* The socket interface doesn't offer the option to enable only
+     * csum offloading without TSO. */
+    if (userspace_tso_enabled()) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
     }
 
     error = get_flags(&netdev->up, &netdev->ifi_flags);
@@ -984,9 +991,12 @@ netdev_linux_construct(struct netdev *netdev_)
 static int
 netdev_linux_construct_tap(struct netdev *netdev_)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static const char tap_dev[] = "/dev/net/tun";
     const char *name = netdev_->name;
+    unsigned long oflags;
+    unsigned int up;
     struct ifreq ifr;
 
     int error = netdev_linux_common_construct(netdev_);
@@ -1004,8 +1014,21 @@ netdev_linux_construct_tap(struct netdev *netdev_)
 
     /* Create tap device. */
     get_flags(&netdev->up, &netdev->ifi_flags);
+
+    if (ovsthread_once_start(&once)) {
+        if (ioctl(netdev->tap_fd, TUNGETFEATURES, &up) == -1) {
+            VLOG_WARN("%s: querying tap features failed: %s", name,
+                      ovs_strerror(errno));
+            tap_supports_vnet_hdr = false;
+        } else if (!(up & IFF_VNET_HDR)) {
+            VLOG_WARN("TAP interfaces do not support virtio-net headers");
+            tap_supports_vnet_hdr = false;
+        }
+        ovsthread_once_done(&once);
+    }
+
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    if (userspace_tso_enabled()) {
+    if (tap_supports_vnet_hdr) {
         ifr.ifr_flags |= IFF_VNET_HDR;
     }
 
@@ -1030,21 +1053,23 @@ netdev_linux_construct_tap(struct netdev *netdev_)
         goto error_close;
     }
 
+    oflags = TUN_F_CSUM;
     if (userspace_tso_enabled()) {
-        /* Old kernels don't support TUNSETOFFLOAD. If TUNSETOFFLOAD is
-         * available, it will return EINVAL when a flag is unknown.
-         * Therefore, try enabling offload with no flags to check
-         * if TUNSETOFFLOAD support is available or not. */
-        if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, 0) == 0 || errno != EINVAL) {
-            unsigned long oflags = TUN_F_CSUM | TUN_F_TSO4 | TUN_F_TSO6;
+        oflags |= (TUN_F_TSO4 | TUN_F_TSO6);
+    }
 
-            if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, oflags) == -1) {
-                VLOG_WARN("%s: enabling tap offloading failed: %s", name,
-                          ovs_strerror(errno));
-                error = errno;
-                goto error_close;
-            }
+    if (tap_supports_vnet_hdr
+        && ioctl(netdev->tap_fd, TUNSETOFFLOAD, oflags) == 0) {
+        netdev_->ol_flags |= (NETDEV_TX_OFFLOAD_IPV4_CKSUM
+                              | NETDEV_TX_OFFLOAD_TCP_CKSUM
+                              | NETDEV_TX_OFFLOAD_UDP_CKSUM);
+
+        if (userspace_tso_enabled()) {
+            netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
         }
+    } else {
+       VLOG_INFO("%s: Disabling checksum and segment offloading due to "
+                 "missing kernel support", name);
     }
 
     netdev->present = true;
@@ -1344,18 +1369,23 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
             pkt = buffers[i];
          }
 
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
-            struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
-            struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+        if (virtio_net_hdr_size) {
+            int ret = netdev_linux_parse_vnet_hdr(pkt);
+            if (OVS_UNLIKELY(ret)) {
+                struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
+                struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-            /* Unexpected error situation: the virtio header is not present
-             * or corrupted. Drop the packet but continue in case next ones
-             * are correct. */
-            dp_packet_delete(pkt);
-            netdev->rx_dropped += 1;
-            VLOG_WARN_RL(&rl, "%s: Dropped packet: Invalid virtio net header",
-                         netdev_get_name(netdev_));
-            continue;
+                /* Unexpected error situation: the virtio header is not
+                 * present or corrupted or contains unsupported features.
+                 * Drop the packet but continue in case next ones are
+                 * correct. */
+                dp_packet_delete(pkt);
+                netdev->rx_dropped += 1;
+                VLOG_WARN_RL(&rl, "%s: Dropped packet: vnet header is missing "
+                             "or corrupt: %s", netdev_get_name(netdev_),
+                             ovs_strerror(ret));
+                continue;
+            }
         }
 
         for (cmsg = CMSG_FIRSTHDR(&mmsgs[i].msg_hdr); cmsg;
@@ -1413,10 +1443,13 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
         /* Use the buffer from the allocated packet below to receive MTU
          * sized packets and an aux_buf for extra TSO data. */
         iovlen = IOV_TSO_SIZE;
-        virtio_net_hdr_size = sizeof(struct virtio_net_hdr);
     } else {
         /* Use only the buffer from the allocated packet. */
         iovlen = IOV_STD_SIZE;
+    }
+    if (OVS_LIKELY(tap_supports_vnet_hdr)) {
+        virtio_net_hdr_size = sizeof(struct virtio_net_hdr);
+    } else {
         virtio_net_hdr_size = 0;
     }
 
@@ -1462,7 +1495,8 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
             pkt = buffer;
         }
 
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
+        if (OVS_LIKELY(virtio_net_hdr_size) &&
+            netdev_linux_parse_vnet_hdr(pkt)) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
@@ -1611,7 +1645,7 @@ netdev_linux_sock_batch_send(int sock, int ifindex, bool tso, int mtu,
  * on other interface types because we attach a socket filter to the rx
  * socket. */
 static int
-netdev_linux_tap_batch_send(struct netdev *netdev_, bool tso, int mtu,
+netdev_linux_tap_batch_send(struct netdev *netdev_, int mtu,
                             struct dp_packet_batch *batch)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -1632,7 +1666,7 @@ netdev_linux_tap_batch_send(struct netdev *netdev_, bool tso, int mtu,
         ssize_t retval;
         int error;
 
-        if (tso) {
+        if (OVS_LIKELY(tap_supports_vnet_hdr)) {
             netdev_linux_prepend_vnet_hdr(packet, mtu);
         }
 
@@ -1765,7 +1799,7 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
         error = netdev_linux_sock_batch_send(sock, ifindex, tso, mtu, batch);
     } else {
-        error = netdev_linux_tap_batch_send(netdev_, tso, mtu, batch);
+        error = netdev_linux_tap_batch_send(netdev_, mtu, batch);
     }
     if (error) {
         if (error == ENOBUFS) {
@@ -6846,53 +6880,76 @@ netdev_linux_parse_l2(struct dp_packet *b, uint16_t *l4proto)
     return 0;
 }
 
+/* Initializes packet 'b' with features enabled in the prepended
+ * struct virtio_net_hdr.  Returns 0 if successful, otherwise a
+ * positive errno value. */
 static int
 netdev_linux_parse_vnet_hdr(struct dp_packet *b)
 {
     struct virtio_net_hdr *vnet = dp_packet_pull(b, sizeof *vnet);
-    uint16_t l4proto = 0;
 
     if (OVS_UNLIKELY(!vnet)) {
-        return -EINVAL;
+        return EINVAL;
     }
 
     if (vnet->flags == 0 && vnet->gso_type == VIRTIO_NET_HDR_GSO_NONE) {
         return 0;
     }
 
-    if (netdev_linux_parse_l2(b, &l4proto)) {
-        return -EINVAL;
-    }
-
     if (vnet->flags == VIRTIO_NET_HDR_F_NEEDS_CSUM) {
-        if (l4proto == IPPROTO_TCP) {
-            dp_packet_hwol_set_csum_tcp(b);
-        } else if (l4proto == IPPROTO_UDP) {
+        uint16_t l4proto = 0;
+
+        if (netdev_linux_parse_l2(b, &l4proto)) {
+            return EINVAL;
+        }
+
+        if (l4proto == IPPROTO_UDP) {
             dp_packet_hwol_set_csum_udp(b);
-        } else if (l4proto == IPPROTO_SCTP) {
-            dp_packet_hwol_set_csum_sctp(b);
         }
+        /* The packet has offloaded checksum. However, there is no
+         * additional information like the protocol used, so it would
+         * require to parse the packet here. The checksum starting point
+         * and offset are going to be verified when the packet headers
+         * are parsed during miniflow extraction. */
+        b->csum_start = (OVS_FORCE uint16_t) vnet->csum_start;
+        b->csum_offset = (OVS_FORCE uint16_t) vnet->csum_offset;
+    } else {
+        b->csum_start = 0;
+        b->csum_offset = 0;
     }
 
-    if (l4proto && vnet->gso_type != VIRTIO_NET_HDR_GSO_NONE) {
-        uint8_t allowed_mask = VIRTIO_NET_HDR_GSO_TCPV4
-                                | VIRTIO_NET_HDR_GSO_TCPV6
-                                | VIRTIO_NET_HDR_GSO_UDP;
-        uint8_t type = vnet->gso_type & allowed_mask;
+    int ret = 0;
+    switch (vnet->gso_type) {
+    case VIRTIO_NET_HDR_GSO_TCPV4:
+    case VIRTIO_NET_HDR_GSO_TCPV6:
+        /* FIXME: The packet has offloaded TCP segmentation. The gso_size
+         * is given and needs to be respected. */
+        dp_packet_hwol_set_tcp_seg(b);
+        break;
 
-        if (type == VIRTIO_NET_HDR_GSO_TCPV4
-            || type == VIRTIO_NET_HDR_GSO_TCPV6) {
-            dp_packet_hwol_set_tcp_seg(b);
-        }
+    case VIRTIO_NET_HDR_GSO_UDP:
+        /* UFO is not supported. */
+        VLOG_WARN_RL(&rl, "Received an unsupported packet with UFO enabled.");
+        ret = ENOTSUP;
+        break;
+
+    case VIRTIO_NET_HDR_GSO_NONE:
+        break;
+
+    default:
+        ret = ENOTSUP;
+        VLOG_WARN_RL(&rl, "Received an unsupported packet with GSO type: 0x%x",
+                     vnet->gso_type);
     }
 
-    return 0;
+    return ret;
 }
 
 static void
 netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
 {
-    struct virtio_net_hdr *vnet = dp_packet_push_zeros(b, sizeof *vnet);
+    struct virtio_net_hdr v;
+    struct virtio_net_hdr *vnet = &v;
 
     if (dp_packet_hwol_is_tso(b)) {
         uint16_t hdr_len = ((char *)dp_packet_l4(b) - (char *)dp_packet_eth(b))
@@ -6902,30 +6959,91 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
         vnet->gso_size = (OVS_FORCE __virtio16)(mtu - hdr_len);
         if (dp_packet_hwol_is_ipv4(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV4;
-        } else {
+        } else if (dp_packet_hwol_tx_ipv6(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
         }
 
     } else {
-        vnet->flags = VIRTIO_NET_HDR_GSO_NONE;
+        vnet->hdr_len = 0;
+        vnet->gso_size = 0;
+        vnet->gso_type = VIRTIO_NET_HDR_GSO_NONE;
     }
 
-    if (dp_packet_hwol_l4_mask(b)) {
-        vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
-        vnet->csum_start = (OVS_FORCE __virtio16)((char *)dp_packet_l4(b)
-                                                  - (char *)dp_packet_eth(b));
-
+    if (dp_packet_l4_checksum_good(b)) {
+        /* The packet has good L4 checksum. No need to validate again. */
+        vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+        vnet->flags = VIRTIO_NET_HDR_F_DATA_VALID;
+    } else if (dp_packet_hwol_tx_l4_checksum(b)) {
+        /* The csum calculation is offloaded. */
         if (dp_packet_hwol_l4_is_tcp(b)) {
+            /* Virtual I/O Device (VIRTIO) Version 1.1
+             * 5.1.6.2 Packet Transmission
+             * If the driver negotiated VIRTIO_NET_F_CSUM, it can skip
+             * checksumming the packet:
+             *  - flags has the VIRTIO_NET_HDR_F_NEEDS_CSUM set,
+             *  - csum_start is set to the offset within the packet
+             *    to begin checksumming, and
+             *  - csum_offset indicates how many bytes after the
+             *    csum_start the new (16 bit ones complement) checksum
+             *    is placed by the device.
+             * The TCP checksum field in the packet is set to the sum of
+             * the TCP pseudo header, so that replacing it by the ones
+             * complement checksum of the TCP header and body will give
+             * the correct result. */
+
+            struct tcp_header *tcp_hdr = dp_packet_l4(b);
+            ovs_be16 csum = 0;
+            if (dp_packet_hwol_is_ipv4(b)) {
+                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
+            } else if (dp_packet_hwol_tx_ipv6(b)) {
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
+            }
+
+            tcp_hdr->tcp_csum = csum;
+            vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
+            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct tcp_header, tcp_csum);
         } else if (dp_packet_hwol_l4_is_udp(b)) {
+            struct udp_header *udp_hdr = dp_packet_l4(b);
+            ovs_be16 csum = 0;
+
+            if (dp_packet_hwol_is_ipv4(b)) {
+                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
+            } else if (dp_packet_hwol_tx_ipv6(b)) {
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
+            }
+
+            udp_hdr->udp_csum = csum;
+            vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
+            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct udp_header, udp_csum);
         } else if (dp_packet_hwol_l4_is_sctp(b)) {
-            vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
-                                    struct sctp_header, sctp_csum);
+            /* The Linux kernel networking stack only supports csum_start
+             * and csum_offset when SCTP GSO is enabled.  See kernel's
+             * skb_csum_hwoffload_help(). Currently there is no SCTP
+             * segmentation offload support in OVS. */
+            vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+            vnet->flags = 0;
         } else {
-            VLOG_WARN_RL(&rl, "Unsupported L4 protocol");
+            /* This should only happen when DP_PACKET_OL_TX_L4_MASK includes
+             * a new flag that is not covered in above checks. */
+            VLOG_WARN_RL(&rl, "Unsupported L4 checksum offload. "
+                         "Flags: %"PRIu64,
+                         (uint64_t)*dp_packet_ol_flags_ptr(b));
+            vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+            vnet->flags = 0;
         }
+    } else {
+        /* Packet L4 csum is unknown. */
+        vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+        vnet->flags = 0;
     }
+
+    dp_packet_push(b, vnet, sizeof *vnet);
 }

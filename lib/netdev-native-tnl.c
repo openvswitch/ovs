@@ -225,28 +225,6 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     return udp + 1;
 }
 
-static void
-netdev_tnl_calc_udp_csum(struct udp_header *udp, struct dp_packet *packet,
-                         int ip_tot_size)
-{
-    uint32_t csum;
-
-    if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
-        csum = packet_csum_pseudoheader6(netdev_tnl_ipv6_hdr(
-                                         dp_packet_data(packet)));
-    } else {
-        csum = packet_csum_pseudoheader(netdev_tnl_ip_hdr(
-                                        dp_packet_data(packet)));
-    }
-
-    csum = csum_continue(csum, udp, ip_tot_size);
-    udp->udp_csum = csum_finish(csum);
-
-    if (!udp->udp_csum) {
-        udp->udp_csum = htons(0xffff);
-    }
-}
-
 void
 netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
                            struct dp_packet *packet,
@@ -262,8 +240,12 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     udp->udp_src = netdev_tnl_get_src_port(packet);
     udp->udp_len = htons(ip_tot_size);
 
+    /* Postpone checksum to the egress netdev. */
+    dp_packet_hwol_set_csum_udp(packet);
     if (udp->udp_csum) {
-        netdev_tnl_calc_udp_csum(udp, packet, ip_tot_size);
+        dp_packet_ol_reset_l4_csum_good(packet);
+    } else {
+        dp_packet_ol_set_l4_csum_good(packet);
     }
 }
 
@@ -793,7 +775,9 @@ netdev_gtpu_push_header(const struct netdev *netdev,
                                     &ip_tot_size, 0);
     udp->udp_src = netdev_tnl_get_src_port(packet);
     udp->udp_len = htons(ip_tot_size);
-    netdev_tnl_calc_udp_csum(udp, packet, ip_tot_size);
+    /* Postpone checksum to the egress netdev. */
+    dp_packet_hwol_set_csum_udp(packet);
+    dp_packet_ol_reset_l4_csum_good(packet);
 
     gtpuh = ALIGNED_CAST(struct gtpuhdr *, udp + 1);
 
