@@ -1,0 +1,48 @@
+# See https://editorconfig.org/ for syntax reference.
+
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.{c,h}]
+indent_style = space
+indent_size = 4
+max_line_length = 79
+
+[include/linux/**.h]
+indent_style = tab
+indent_size = tab
+tab_width = 8
+
+[include/sparse/rte_*.h]
+indent_style = tab
+tab_width = 8
+
+[include/windows/getopt.h]
+indent_style = tab
+indent_size = tab
+tab_width = 8
+
+[include/windows/netinet/{icmp6,ip6}.h]
+indent_style = tab
+indent_size = tab
+tab_width = 8
+
+[lib/getopt_long.c]
+indent_style = tab
+indent_size = tab
+tab_width = 8
+
+[lib/sflow*.{c,h}]
+indent_style = tab
+indent_size = tab
+tab_width = 8
+
+[lib/strsep.c]
+indent_style = tab
+indent_size = tab
+tab_width = 8
