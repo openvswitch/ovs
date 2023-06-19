@@ -55,18 +55,22 @@
 VLOG_DEFINE_THIS_MODULE(dpif);
 
 COVERAGE_DEFINE(dpif_destroy);
-COVERAGE_DEFINE(dpif_port_add);
-COVERAGE_DEFINE(dpif_port_del);
+COVERAGE_DEFINE(dpif_execute);
+COVERAGE_DEFINE(dpif_execute_error);
+COVERAGE_DEFINE(dpif_execute_with_help);
+COVERAGE_DEFINE(dpif_flow_del);
+COVERAGE_DEFINE(dpif_flow_del_error);
 COVERAGE_DEFINE(dpif_flow_flush);
 COVERAGE_DEFINE(dpif_flow_get);
+COVERAGE_DEFINE(dpif_flow_get_error);
 COVERAGE_DEFINE(dpif_flow_put);
-COVERAGE_DEFINE(dpif_flow_del);
-COVERAGE_DEFINE(dpif_execute);
-COVERAGE_DEFINE(dpif_purge);
-COVERAGE_DEFINE(dpif_execute_with_help);
-COVERAGE_DEFINE(dpif_meter_set);
-COVERAGE_DEFINE(dpif_meter_get);
+COVERAGE_DEFINE(dpif_flow_put_error);
 COVERAGE_DEFINE(dpif_meter_del);
+COVERAGE_DEFINE(dpif_meter_get);
+COVERAGE_DEFINE(dpif_meter_set);
+COVERAGE_DEFINE(dpif_port_add);
+COVERAGE_DEFINE(dpif_port_del);
+COVERAGE_DEFINE(dpif_purge);
 
 static const struct dpif_class *base_dpif_classes[] = {
 #if defined(__linux__) || defined(_WIN32)
@@ -1381,8 +1385,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_put);
                     log_flow_put_message(dpif, &this_module, put, error);
-                    if (error && put->stats) {
-                        memset(put->stats, 0, sizeof *put->stats);
+                    if (error) {
+                        COVERAGE_INC(dpif_flow_put_error);
+                        if (put->stats) {
+                            memset(put->stats, 0, sizeof *put->stats);
+                        }
                     }
                     break;
                 }
@@ -1392,10 +1399,10 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_get);
                     if (error) {
+                        COVERAGE_INC(dpif_flow_get_error);
                         memset(get->flow, 0, sizeof *get->flow);
                     }
                     log_flow_get_message(dpif, &this_module, get, error);
-
                     break;
                 }
 
@@ -1404,8 +1411,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_del);
                     log_flow_del_message(dpif, &this_module, del, error);
-                    if (error && del->stats) {
-                        memset(del->stats, 0, sizeof *del->stats);
+                    if (error) {
+                        COVERAGE_INC(dpif_flow_del_error);
+                        if (del->stats) {
+                            memset(del->stats, 0, sizeof *del->stats);
+                        }
                     }
                     break;
                 }
@@ -1414,6 +1424,9 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
                     COVERAGE_INC(dpif_execute);
                     log_execute_message(dpif, &this_module, &op->execute,
                                         false, error);
+                    if (error) {
+                        COVERAGE_INC(dpif_execute_error);
+                    }
                     break;
                 }
             }
