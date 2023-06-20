@@ -2,10 +2,6 @@ AT_BANNER([PMD Auto Load Balance])
 
 m4_divert_push([PREPARE_TESTS])
 
-get_log_next_line_num () {
-    LINENUM=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
-}
-
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([DUMMY_NUMA], [--dummy-numa="0,0"])
