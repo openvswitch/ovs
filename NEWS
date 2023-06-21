@@ -39,6 +39,8 @@ Post-v3.1.0
    - SRv6 Tunnel Protocol
      * Added support for userspace datapath (only).
    - Userspace datapath:
+     * Implementation of OpenFlow meters is now lockless allowing for better
+       multi-thread scalability.
      * IP and L4 checksum offload support is now enabled by default for
        interfaces that support it.  See the 'status' column in the 'interface'
        table to check the status.
