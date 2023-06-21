@@ -45,6 +45,8 @@ This is the current list of active Open vSwitch committers:
      - aserdean@ovn.org
    * - Ansis Atteka
      - ansisatteka@gmail.com
+   * - Eelco Chaudron
+     - echaudro@redhat.com
    * - Ian Stokes
      - istokes@ovn.org
    * - Ilya Maximets
