@@ -2670,6 +2670,72 @@ conntrack_dump_done(struct conntrack_dump *dump OVS_UNUSED)
     return 0;
 }
 
+static void
+exp_node_to_ct_dpif_exp(const struct alg_exp_node *exp,
+                        struct ct_dpif_exp *entry)
+{
+    memset(entry, 0, sizeof *entry);
+
+    conn_key_to_tuple(&exp->key, &entry->tuple_orig);
+    conn_key_to_tuple(&exp->parent_key, &entry->tuple_parent);
+    entry->zone = exp->key.zone;
+    entry->mark = exp->parent_mark;
+    memcpy(&entry->labels, &exp->parent_label, sizeof entry->labels);
+    entry->protoinfo.proto = exp->key.nw_proto;
+}
+
+int
+conntrack_exp_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
+                         const uint16_t *pzone)
+{
+    memset(dump, 0, sizeof(*dump));
+
+    if (pzone) {
+        dump->zone = *pzone;
+        dump->filter_zone = true;
+    }
+
+    dump->ct = ct;
+
+    return 0;
+}
+
+int
+conntrack_exp_dump_next(struct conntrack_dump *dump, struct ct_dpif_exp *entry)
+{
+    struct conntrack *ct = dump->ct;
+    struct alg_exp_node *enode;
+    int ret = EOF;
+
+    ovs_rwlock_rdlock(&ct->resources_lock);
+
+    for (;;) {
+        struct hmap_node *node = hmap_at_position(&ct->alg_expectations,
+                                                  &dump->hmap_pos);
+        if (!node) {
+            break;
+        }
+
+        enode = CONTAINER_OF(node, struct alg_exp_node, node);
+
+        if (!dump->filter_zone || enode->key.zone == dump->zone) {
+            ret = 0;
+            exp_node_to_ct_dpif_exp(enode, entry);
+            break;
+        }
+    }
+
+    ovs_rwlock_unlock(&ct->resources_lock);
+
+    return ret;
+}
+
+int
+conntrack_exp_dump_done(struct conntrack_dump *dump OVS_UNUSED)
+{
+    return 0;
+}
+
 int
 conntrack_flush(struct conntrack *ct, const uint16_t *zone)
 {

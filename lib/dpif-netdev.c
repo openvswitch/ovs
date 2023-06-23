@@ -9268,6 +9268,53 @@ dpif_netdev_ct_dump_done(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
+dpif_netdev_ct_exp_dump_start(struct dpif *dpif,
+                              struct ct_dpif_dump_state **dump_,
+                              const uint16_t *pzone)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_ct_dump *dump;
+
+    dump = xzalloc(sizeof *dump);
+    dump->dp = dp;
+    dump->ct = dp->conntrack;
+
+    conntrack_exp_dump_start(dp->conntrack, &dump->dump, pzone);
+
+    *dump_ = &dump->up;
+
+    return 0;
+}
+
+static int
+dpif_netdev_ct_exp_dump_next(struct dpif *dpif OVS_UNUSED,
+                             struct ct_dpif_dump_state *dump_,
+                             struct ct_dpif_exp *entry)
+{
+    struct dp_netdev_ct_dump *dump;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    return conntrack_exp_dump_next(&dump->dump, entry);
+}
+
+static int
+dpif_netdev_ct_exp_dump_done(struct dpif *dpif OVS_UNUSED,
+                             struct ct_dpif_dump_state *dump_)
+{
+    struct dp_netdev_ct_dump *dump;
+    int err;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    err = conntrack_exp_dump_done(&dump->dump);
+
+    free(dump);
+
+    return err;
+}
+
+static int
 dpif_netdev_ct_flush(struct dpif *dpif, const uint16_t *zone,
                      const struct ct_dpif_tuple *tuple)
 {
@@ -9679,6 +9726,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_dump_start,
     dpif_netdev_ct_dump_next,
     dpif_netdev_ct_dump_done,
+    dpif_netdev_ct_exp_dump_start,
+    dpif_netdev_ct_exp_dump_next,
+    dpif_netdev_ct_exp_dump_done,
     dpif_netdev_ct_flush,
     dpif_netdev_ct_set_maxconns,
     dpif_netdev_ct_get_maxconns,

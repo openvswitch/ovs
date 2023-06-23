@@ -302,6 +302,12 @@ are included. With \fB\-\-statistics\fR timeouts and timestamps are
 added to the output.
 .
 .TP
+\*(DX\fBdump\-conntrack\-exp\fR [\fIdp\fR] [\fBzone=\fIzone\fR]
+Prints to the console all the expectation entries in the tracker used by
+\fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the expectations
+in \fIzone\fR. Only supported for userspace datapath.
+.
+.TP
 \*(DX\fBflush\-conntrack\fR [\fIdp\fR] [\fBzone=\fIzone\fR] [\fIct-origin-tuple\fR [\fIct-reply-tuple\fR]]
 Flushes the connection entries in the tracker used by \fIdp\fR based on
 \fIzone\fR and connection tracking tuple \fIct-origin-tuple\fR.

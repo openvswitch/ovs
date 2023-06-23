@@ -101,6 +101,65 @@ ct_dpif_dump_done(struct ct_dpif_dump_state *dump)
             ? dpif->dpif_class->ct_dump_done(dpif, dump)
             : EOPNOTSUPP);
 }
+
+/* Start dumping the expectations from the connection tracker.
+ *
+ * 'dump' must be the address of a pointer to a struct ct_dpif_dump_state,
+ * which should be passed (unaltered) to ct_exp_dpif_dump_{next,done}().
+ *
+ * If 'zone' is not NULL, it should point to an integer identifing a
+ * conntrack zone to which the dump will be limited.  If it is NULL,
+ * conntrack entries from all zones will be dumped.
+ *
+ * If there has been a problem the function returns a non-zero value
+ * that represents the error.  Otherwise it returns zero. */
+int
+ct_exp_dpif_dump_start(struct dpif *dpif, struct ct_dpif_dump_state **dump,
+                       const uint16_t *zone)
+{
+    int err;
+
+    err = (dpif->dpif_class->ct_exp_dump_start
+           ? dpif->dpif_class->ct_exp_dump_start(dpif, dump, zone)
+           : EOPNOTSUPP);
+
+    if (!err) {
+        (*dump)->dpif = dpif;
+    }
+
+    return err;
+}
+
+/* Dump one expectation and put it in 'entry'.
+ *
+ * 'dump' should have been initialized by ct_exp_dpif_dump_start().
+ *
+ * The function returns 0, if an entry has been dumped succesfully.
+ * Otherwise it returns a non-zero value which can be:
+ * - EOF: meaning that there are no more entries to dump.
+ * - an error value.
+ * In both cases, the user should call ct_exp_dpif_dump_done(). */
+int
+ct_exp_dpif_dump_next(struct ct_dpif_dump_state *dump,
+                      struct ct_dpif_exp *entry)
+{
+    struct dpif *dpif = dump->dpif;
+
+    return (dpif->dpif_class->ct_exp_dump_next
+            ? dpif->dpif_class->ct_exp_dump_next(dpif, dump, entry)
+            : EOPNOTSUPP);
+}
+
+/* Free resources used by 'dump', if any. */
+int
+ct_exp_dpif_dump_done(struct ct_dpif_dump_state *dump)
+{
+    struct dpif *dpif = dump->dpif;
+
+    return (dpif->dpif_class->ct_exp_dump_done
+            ? dpif->dpif_class->ct_exp_dump_done(dpif, dump)
+            : EOPNOTSUPP);
+}
 
 /* Flushing. */
 
@@ -460,6 +519,34 @@ ct_dpif_status_flags(uint32_t flags)
     default:
         return NULL;
     }
+}
+
+void
+ct_dpif_format_exp_entry(const struct ct_dpif_exp *entry, struct ds *ds)
+{
+    ct_dpif_format_ipproto(ds, entry->tuple_orig.ip_proto);
+
+    ds_put_cstr(ds, ",orig=(");
+    ct_dpif_format_tuple(ds, &entry->tuple_orig);
+    ds_put_cstr(ds, ")");
+
+    if (entry->zone) {
+        ds_put_format(ds, ",zone=%"PRIu16, entry->zone);
+    }
+    if (entry->mark) {
+        ds_put_format(ds, ",mark=%"PRIu32, entry->mark);
+    }
+    if (!ovs_u128_is_zero(entry->labels)) {
+        ovs_be128 value;
+
+        ds_put_cstr(ds, ",labels=");
+        value = hton128(entry->labels);
+        ds_put_hex(ds, &value, sizeof value);
+    }
+
+    ds_put_cstr(ds, ",parent=(");
+    ct_dpif_format_tuple(ds, &entry->tuple_parent);
+    ds_put_cstr(ds, ")");
 }
 
 void

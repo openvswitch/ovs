@@ -24,6 +24,8 @@ Post-v3.1.0
      * New commands "dpctl/{ct-get-sweep-interval,ct-set-sweep-interval}" that
        allow to get and set, for the userspace datapath, the sweep interval
        for the conntrack garbage collector.
+     * New commands "dpctl/dump-conntrack-exp" that allows to dump
+       conntrack's expectations for the userspace datapath.
    - ovs-ctl:
      * Added new options --[ovsdb-server|ovs-vswitchd]-umask=MODE to set umask
        value when starting OVS daemons.  E.g., use --ovsdb-server-umask=0002

@@ -179,6 +179,16 @@ enum ct_dpif_status_flags {
 
 #define CT_DPIF_STATUS_MASK ((CT_DPIF_STATUS_UNTRACKED << 1) - 1)
 
+struct ct_dpif_exp {
+    struct ct_dpif_tuple tuple_orig;
+    struct ct_dpif_tuple tuple_parent;
+    uint16_t zone;
+    struct ct_dpif_protoinfo protoinfo;
+    ovs_u128 labels;
+    uint32_t status;
+    uint32_t mark;
+};
+
 struct ct_dpif_entry {
     /* Const members. */
     struct ct_dpif_tuple tuple_orig;
@@ -286,6 +296,10 @@ int ct_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
                        const uint16_t *zone, int *);
 int ct_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_entry *);
 int ct_dpif_dump_done(struct ct_dpif_dump_state *);
+int ct_exp_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
+                           const uint16_t *zone);
+int ct_exp_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_exp *);
+int ct_exp_dpif_dump_done(struct ct_dpif_dump_state *);
 int ct_dpif_flush(struct dpif *, const uint16_t *zone,
                   const struct ofp_ct_match *);
 int ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns);
@@ -310,6 +324,7 @@ int ct_dpif_ipf_dump_done(struct dpif *dpif, void *);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);
+void ct_dpif_format_exp_entry(const struct ct_dpif_exp *, struct ds *);
 void ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto);
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);

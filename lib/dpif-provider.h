@@ -79,6 +79,7 @@ dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
 
 struct ct_dpif_dump_state;
 struct ct_dpif_entry;
+struct ct_dpif_exp;
 struct ct_dpif_tuple;
 struct ct_dpif_timeout_policy;
 enum ct_features;
@@ -470,6 +471,16 @@ struct dpif_class {
     int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *state,
                         struct ct_dpif_entry *entry);
     int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
+
+    /* Starts the dump initializing the structures involved and the zone
+     * filter. */
+    int (*ct_exp_dump_start)(struct dpif *, struct ct_dpif_dump_state **state,
+                             const uint16_t *zone);
+    /* Fill the expectation 'entry' with the related information. */
+    int (*ct_exp_dump_next)(struct dpif *, struct ct_dpif_dump_state *state,
+                            struct ct_dpif_exp *entry);
+    /* Ends the dump cleaning up any potential pending state, if any. */
+    int (*ct_exp_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
 
     /* Flushes the connection tracking tables.  The arguments have the
      * following behavior:

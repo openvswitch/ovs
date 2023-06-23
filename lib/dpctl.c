@@ -1708,6 +1708,53 @@ dpctl_dump_conntrack(int argc, const char *argv[],
 }
 
 static int
+dpctl_dump_conntrack_exp(int argc, const char *argv[],
+                         struct dpctl_params *dpctl_p)
+{
+    struct ct_dpif_dump_state *dump;
+    uint16_t zone, *pzone = NULL;
+    struct ct_dpif_exp cte;
+    struct dpif *dpif;
+    int error;
+
+    if (argc > 1 && ovs_scan(argv[argc - 1], "zone=%"SCNu16, &zone)) {
+        pzone = &zone;
+        argc--;
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = ct_exp_dpif_dump_start(dpif, &dump, pzone);
+    if (error) {
+        dpctl_error(dpctl_p, error, "starting conntrack expectations dump");
+        dpif_close(dpif);
+        return error;
+    }
+
+    while (!(error = ct_exp_dpif_dump_next(dump, &cte))) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+
+        ct_dpif_format_exp_entry(&cte, &s);
+
+        dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
+        ds_destroy(&s);
+    }
+    if (error == EOF) {
+        error = 0;
+    } else if (error) {
+        dpctl_error(dpctl_p, error, "dumping conntrack expectation");
+    }
+
+    ct_exp_dpif_dump_done(dump);
+    dpif_close(dpif);
+
+    return error;
+}
+
+static int
 dpctl_flush_conntrack(int argc, const char *argv[],
                       struct dpctl_params *dpctl_p)
 {
@@ -2951,6 +2998,8 @@ static const struct dpctl_command all_commands[] = {
       0, 1, dpctl_offload_stats_show, DP_RO },
     { "dump-conntrack", "[-m] [-s] [dp] [zone=N]",
       0, 4, dpctl_dump_conntrack, DP_RO },
+    { "dump-conntrack-exp", "[dp] [zone=N]",
+      0, 2, dpctl_dump_conntrack_exp, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-orig-tuple] [ct-reply-tuple]",
       0, 4, dpctl_flush_conntrack, DP_RW },
     { "cache-get-size", "[dp]", 0, 1, dpctl_cache_get_size, DP_RO },

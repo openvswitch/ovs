@@ -123,6 +123,15 @@ m4_define([CHECK_CONNTRACK_TIMEOUT],
     on_exit 'modprobe -r nfnetlink_cttimeout'
 ])
 
+# CHECK_CONNTRACK_DUMP_EXPECTATIONS()
+#
+# Perform requirements checks for dumping conntrack expectations.
+#
+m4_define([CHECK_CONNTRACK_DUMP_EXPECTATIONS],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
 #
 # Perform requirements checks for running ovs-dpctl ct-set-maxconns or

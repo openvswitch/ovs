@@ -5195,6 +5195,50 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - FTP with expectation dump])
+AT_SKIP_IF([test $HAVE_FTP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
+CHECK_CONNTRACK_DUMP_EXPECTATIONS()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(alg=ftp,commit),2
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk+rel,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
+
+OVS_START_L7([at_ns1], [ftp])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+])
+
+dnl Verify that a dump with zero entries in a zone doesn't return any entry.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack-exp zone=42], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack-exp | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),parent=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - FTP over IPv6])
 AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
