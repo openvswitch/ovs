@@ -195,7 +195,7 @@ skip_signoff_check = False
 #
 # Python isn't checked as flake8 performs these checks during build.
 line_length_ignore_list = re.compile(
-    r'\.(am|at|etc|in|m4|mk|patch|py)$|^debian/.*$')
+    r'\.(am|at|etc|in|m4|mk|patch|py|yml)$|^debian/.*$')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
