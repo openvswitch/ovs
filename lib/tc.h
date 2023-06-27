@@ -105,6 +105,12 @@ struct tc_cookie {
     size_t len;
 };
 
+struct tc_tunnel_gbp {
+    ovs_be16 id;
+    uint8_t flags;
+    bool id_present;
+};
+
 struct tc_flower_tunnel {
     struct {
         ovs_be32 ipv4_src;
@@ -118,6 +124,7 @@ struct tc_flower_tunnel {
     uint8_t ttl;
     ovs_be16 tp_src;
     ovs_be16 tp_dst;
+    struct tc_tunnel_gbp gbp;
     ovs_be64 id;
     struct tun_metadata metadata;
 };

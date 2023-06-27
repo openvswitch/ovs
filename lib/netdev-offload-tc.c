@@ -1234,6 +1234,15 @@ parse_tc_flower_to_match(const struct netdev *netdev,
             match_set_tun_tp_dst_masked(match, flower->key.tunnel.tp_dst,
                                         flower->mask.tunnel.tp_dst);
         }
+        if (flower->mask.tunnel.gbp.id) {
+            match_set_tun_gbp_id_masked(match, flower->key.tunnel.gbp.id,
+                                        flower->mask.tunnel.gbp.id);
+        }
+        if (flower->mask.tunnel.gbp.flags) {
+            match_set_tun_gbp_flags_masked(match,
+                                           flower->key.tunnel.gbp.flags,
+                                           flower->mask.tunnel.gbp.flags);
+        }
 
         if (!strcmp(netdev_get_type(netdev), "geneve")) {
             flower_tun_opt_to_match(match, flower);
@@ -2193,6 +2202,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.ttl = tnl->ip_ttl;
         flower.key.tunnel.tp_src = tnl->tp_src;
         flower.key.tunnel.tp_dst = tnl->tp_dst;
+        flower.key.tunnel.gbp.id = tnl->gbp_id;
+        flower.key.tunnel.gbp.flags = tnl->gbp_flags;
+        flower.key.tunnel.gbp.id_present = !!tnl_mask->gbp_id;
 
         flower.mask.tunnel.ipv4.ipv4_src = tnl_mask->ip_src;
         flower.mask.tunnel.ipv4.ipv4_dst = tnl_mask->ip_dst;
@@ -2207,6 +2219,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
          * Degrading the flow down to exact match for now as a workaround. */
         flower.mask.tunnel.tp_dst = OVS_BE16_MAX;
         flower.mask.tunnel.id = (tnl->flags & FLOW_TNL_F_KEY) ? tnl_mask->tun_id : 0;
+        flower.mask.tunnel.gbp.id = tnl_mask->gbp_id;
+        flower.mask.tunnel.gbp.flags = tnl_mask->gbp_flags;
+        flower.mask.tunnel.gbp.id_present = !!tnl_mask->gbp_id;
 
         memset(&tnl_mask->ip_src, 0, sizeof tnl_mask->ip_src);
         memset(&tnl_mask->ip_dst, 0, sizeof tnl_mask->ip_dst);
@@ -2218,6 +2233,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         memset(&tnl_mask->tp_dst, 0, sizeof tnl_mask->tp_dst);
 
         memset(&tnl_mask->tun_id, 0, sizeof tnl_mask->tun_id);
+        memset(&tnl_mask->gbp_id, 0, sizeof tnl_mask->gbp_id);
+        memset(&tnl_mask->gbp_flags, 0, sizeof tnl_mask->gbp_flags);
         tnl_mask->flags &= ~FLOW_TNL_F_KEY;
 
         /* XXX: This is wrong!  We're ignoring DF and CSUM flags configuration
