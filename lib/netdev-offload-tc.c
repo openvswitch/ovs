@@ -52,6 +52,7 @@ static struct hmap tc_to_ufid = HMAP_INITIALIZER(&tc_to_ufid);
 static bool multi_mask_per_prio = false;
 static bool block_support = false;
 static uint16_t ct_state_support;
+static bool vxlan_gbp_support = false;
 
 struct netlink_field {
     int offset;
@@ -668,14 +669,17 @@ static void parse_tc_flower_geneve_opts(struct tc_action *action,
     nl_msg_end_nested(buf, geneve_off);
 }
 
-static void
+static int
 parse_tc_flower_vxlan_tun_opts(struct tc_action *action, struct ofpbuf *buf)
 {
     size_t gbp_off;
     uint32_t gbp_raw;
 
     if (!action->encap.gbp.id_present) {
-        return;
+        return 0;
+    }
+    if (!vxlan_gbp_support) {
+        return -EOPNOTSUPP;
     }
 
     gbp_off = nl_msg_start_nested(buf, OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS);
@@ -683,6 +687,7 @@ parse_tc_flower_vxlan_tun_opts(struct tc_action *action, struct ofpbuf *buf)
                                  action->encap.gbp.id);
     nl_msg_put_u32(buf, OVS_VXLAN_EXT_GBP, gbp_raw);
     nl_msg_end_nested(buf, gbp_off);
+    return 0;
 }
 
 static void
@@ -845,6 +850,7 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             size_t set_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_SET);
             size_t tunnel_offset =
                 nl_msg_start_nested(buf, OVS_KEY_ATTR_TUNNEL);
+            int ret;
 
             if (action->encap.id_present) {
                 nl_msg_put_be64(buf, OVS_TUNNEL_KEY_ATTR_ID, action->encap.id);
@@ -880,7 +886,10 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             if (!action->encap.no_csum) {
                 nl_msg_put_flag(buf, OVS_TUNNEL_KEY_ATTR_CSUM);
             }
-            parse_tc_flower_vxlan_tun_opts(action, buf);
+            ret = parse_tc_flower_vxlan_tun_opts(action, buf);
+            if (ret) {
+                return ret;
+            }
             parse_tc_flower_geneve_opts(action, buf);
             nl_msg_end_nested(buf, tunnel_offset);
             nl_msg_end_nested(buf, set_offset);
@@ -1632,6 +1641,9 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS: {
+            if (!vxlan_gbp_support) {
+                return EOPNOTSUPP;
+            }
             if (odp_vxlan_tun_opts_from_attr(tun_attr,
                                              &action->encap.gbp.id,
                                              &action->encap.gbp.flags,
@@ -2787,6 +2799,51 @@ probe_tc_block_support(int ifindex)
     }
 }
 
+static void
+probe_vxlan_gbp_support(int ifindex)
+{
+    struct tc_flower flower;
+    struct tcf_id id;
+    int block_id = 0;
+    int prio = 1;
+    int error;
+
+    error = tc_add_del_qdisc(ifindex, true, block_id, TC_INGRESS);
+    if (error) {
+        return;
+    }
+
+    memset(&flower, 0, sizeof flower);
+
+    flower.tc_policy = TC_POLICY_SKIP_HW;
+    flower.key.eth_type = htons(ETH_P_IP);
+    flower.mask.eth_type = OVS_BE16_MAX;
+    flower.tunnel = true;
+    flower.mask.tunnel.id = OVS_BE64_MAX;
+    flower.mask.tunnel.ipv4.ipv4_src = OVS_BE32_MAX;
+    flower.mask.tunnel.ipv4.ipv4_dst = OVS_BE32_MAX;
+    flower.mask.tunnel.tp_dst = OVS_BE16_MAX;
+    flower.mask.tunnel.gbp.id = OVS_BE16_MAX;
+    flower.key.tunnel.ipv4.ipv4_src = htonl(0x01010101);
+    flower.key.tunnel.ipv4.ipv4_dst = htonl(0x01010102);
+    flower.key.tunnel.tp_dst = htons(46354);
+    flower.key.tunnel.gbp.id = htons(512);
+
+    id = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
+    error = tc_replace_flower(&id, &flower);
+    if (error) {
+        goto out;
+    }
+
+    tc_del_flower_filter(&id);
+
+    vxlan_gbp_support = true;
+    VLOG_INFO("probe tc: vxlan gbp is supported.");
+
+out:
+    tc_add_del_qdisc(ifindex, false, block_id, TC_INGRESS);
+}
+
 static int
 tc_get_policer_action_ids(struct hmap *map)
 {
@@ -2914,6 +2971,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
         probe_multi_mask_per_prio(ifindex);
         probe_ct_state_support(ifindex);
+        probe_vxlan_gbp_support(ifindex);
 
         ovs_mutex_lock(&meter_police_ids_mutex);
         meter_police_ids = id_pool_create(METER_POLICE_IDS_BASE,
