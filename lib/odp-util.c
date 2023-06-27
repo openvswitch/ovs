@@ -3162,8 +3162,7 @@ odp_tun_key_from_attr__(const struct nlattr *attr, bool is_mask,
             if (ext[OVS_VXLAN_EXT_GBP]) {
                 uint32_t gbp = nl_attr_get_u32(ext[OVS_VXLAN_EXT_GBP]);
 
-                tun->gbp_id = htons(gbp & 0xFFFF);
-                tun->gbp_flags = (gbp >> 16) & 0xFF;
+                odp_decode_gbp_raw(gbp, &tun->gbp_id, &tun->gbp_flags);
             }
 
             break;
@@ -3753,12 +3752,10 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
             ovs_be16 id, id_mask;
             uint8_t flags, flags_mask = 0;
 
-            id = htons(key & 0xFFFF);
-            flags = (key >> 16) & 0xFF;
+            odp_decode_gbp_raw(key, &id, &flags);
             if (ma) {
                 uint32_t mask = nl_attr_get_u32(ma);
-                id_mask = htons(mask & 0xFFFF);
-                flags_mask = (mask >> 16) & 0xFF;
+                odp_decode_gbp_raw(mask, &id_mask, &flags_mask);
             }
 
             ds_put_cstr(ds, "gbp(");

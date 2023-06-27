@@ -374,6 +374,14 @@ void odp_put_push_eth_action(struct ofpbuf *odp_actions,
                              const struct eth_addr *eth_src,
                              const struct eth_addr *eth_dst);
 
+static inline void odp_decode_gbp_raw(uint32_t gbp_raw,
+                                      ovs_be16 *id,
+                                      uint8_t *flags)
+{
+    *id = htons(gbp_raw & 0xFFFF);
+    *flags = (gbp_raw >> 16) & 0xFF;
+}
+
 struct attr_len_tbl {
     int len;
     const struct attr_len_tbl *next;
