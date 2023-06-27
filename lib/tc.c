@@ -2641,13 +2641,9 @@ nl_msg_put_act_tunnel_geneve_option(struct ofpbuf *request,
 }
 
 static void
-nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, bool id_present,
-                              ovs_be64 id, ovs_be32 ipv4_src,
-                              ovs_be32 ipv4_dst, struct in6_addr *ipv6_src,
-                              struct in6_addr *ipv6_dst,
-                              ovs_be16 tp_dst, uint8_t tos, uint8_t ttl,
-                              struct tun_metadata *tun_metadata,
-                              uint8_t no_csum, uint32_t action_pc)
+nl_msg_put_act_tunnel_key_set(struct ofpbuf *request,
+                              struct tc_action_encap *encap,
+                              uint32_t action_pc)
 {
     size_t offset;
 
@@ -2659,30 +2655,33 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, bool id_present,
 
         nl_msg_put_unspec(request, TCA_TUNNEL_KEY_PARMS, &tun, sizeof tun);
 
-        ovs_be32 id32 = be64_to_be32(id);
-        if (id_present) {
+        ovs_be32 id32 = be64_to_be32(encap->id);
+        if (encap->id_present) {
             nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_KEY_ID, id32);
         }
-        if (ipv4_dst) {
-            nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_SRC, ipv4_src);
-            nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_DST, ipv4_dst);
-        } else if (ipv6_addr_is_set(ipv6_dst)) {
+        if (encap->ipv4.ipv4_dst) {
+            nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_SRC,
+                            encap->ipv4.ipv4_src);
+            nl_msg_put_be32(request, TCA_TUNNEL_KEY_ENC_IPV4_DST,
+                            encap->ipv4.ipv4_dst);
+        } else if (ipv6_addr_is_set(&encap->ipv6.ipv6_dst)) {
             nl_msg_put_in6_addr(request, TCA_TUNNEL_KEY_ENC_IPV6_DST,
-                                ipv6_dst);
+                                &encap->ipv6.ipv6_dst);
             nl_msg_put_in6_addr(request, TCA_TUNNEL_KEY_ENC_IPV6_SRC,
-                                ipv6_src);
+                                &encap->ipv6.ipv6_src);
         }
-        if (tos) {
-            nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_TOS, tos);
+        if (encap->tos) {
+            nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_TOS, encap->tos);
         }
-        if (ttl) {
-            nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_TTL, ttl);
+        if (encap->ttl) {
+            nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_TTL, encap->ttl);
         }
-        if (tp_dst) {
-            nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_DST_PORT, tp_dst);
+        if (encap->tp_dst) {
+            nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_DST_PORT,
+                            encap->tp_dst);
         }
-        nl_msg_put_act_tunnel_geneve_option(request, tun_metadata);
-        nl_msg_put_u8(request, TCA_TUNNEL_KEY_NO_CSUM, no_csum);
+        nl_msg_put_act_tunnel_geneve_option(request, &encap->data);
+        nl_msg_put_u8(request, TCA_TUNNEL_KEY_NO_CSUM, encap->no_csum);
     }
     nl_msg_end_nested(request, offset);
 }
@@ -3305,17 +3304,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 }
 
                 act_offset = nl_msg_start_nested(request, act_index++);
-                nl_msg_put_act_tunnel_key_set(request, action->encap.id_present,
-                                              action->encap.id,
-                                              action->encap.ipv4.ipv4_src,
-                                              action->encap.ipv4.ipv4_dst,
-                                              &action->encap.ipv6.ipv6_src,
-                                              &action->encap.ipv6.ipv6_dst,
-                                              action->encap.tp_dst,
-                                              action->encap.tos,
-                                              action->encap.ttl,
-                                              &action->encap.data,
-                                              action->encap.no_csum,
+                nl_msg_put_act_tunnel_key_set(request, &action->encap,
                                               action_pc);
                 nl_msg_put_act_flags(request);
                 nl_msg_end_nested(request, act_offset);

@@ -210,6 +210,25 @@ enum nat_type {
     TC_NAT_RESTORE,
 };
 
+struct tc_action_encap {
+    bool id_present;
+    ovs_be64 id;
+    ovs_be16 tp_src;
+    ovs_be16 tp_dst;
+    uint8_t tos;
+    uint8_t ttl;
+    uint8_t no_csum;
+    struct {
+        ovs_be32 ipv4_src;
+        ovs_be32 ipv4_dst;
+    } ipv4;
+    struct {
+        struct in6_addr ipv6_src;
+        struct in6_addr ipv6_dst;
+    } ipv6;
+    struct tun_metadata data;
+};
+
 struct tc_action {
     union {
         int chain;
@@ -233,24 +252,7 @@ struct tc_action {
             uint8_t bos;
         } mpls;
 
-        struct {
-            bool id_present;
-            ovs_be64 id;
-            ovs_be16 tp_src;
-            ovs_be16 tp_dst;
-            uint8_t tos;
-            uint8_t ttl;
-            uint8_t no_csum;
-            struct {
-                ovs_be32 ipv4_src;
-                ovs_be32 ipv4_dst;
-            } ipv4;
-            struct {
-                struct in6_addr ipv6_src;
-                struct in6_addr ipv6_dst;
-            } ipv6;
-            struct tun_metadata data;
-        } encap;
+        struct tc_action_encap encap;
 
         struct {
             uint16_t zone;
