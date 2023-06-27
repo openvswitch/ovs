@@ -227,6 +227,7 @@ struct tc_action_encap {
         struct in6_addr ipv6_dst;
     } ipv6;
     struct tun_metadata data;
+    struct tc_tunnel_gbp gbp;
 };
 
 struct tc_action {

@@ -669,6 +669,23 @@ static void parse_tc_flower_geneve_opts(struct tc_action *action,
 }
 
 static void
+parse_tc_flower_vxlan_tun_opts(struct tc_action *action, struct ofpbuf *buf)
+{
+    size_t gbp_off;
+    uint32_t gbp_raw;
+
+    if (!action->encap.gbp.id_present) {
+        return;
+    }
+
+    gbp_off = nl_msg_start_nested(buf, OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS);
+    gbp_raw = odp_encode_gbp_raw(action->encap.gbp.flags,
+                                 action->encap.gbp.id);
+    nl_msg_put_u32(buf, OVS_VXLAN_EXT_GBP, gbp_raw);
+    nl_msg_end_nested(buf, gbp_off);
+}
+
+static void
 flower_tun_opt_to_match(struct match *match, struct tc_flower *flower)
 {
     struct geneve_opt *opt, *opt_mask;
@@ -863,7 +880,7 @@ parse_tc_flower_to_actions__(struct tc_flower *flower, struct ofpbuf *buf,
             if (!action->encap.no_csum) {
                 nl_msg_put_flag(buf, OVS_TUNNEL_KEY_ATTR_CSUM);
             }
-
+            parse_tc_flower_vxlan_tun_opts(action, buf);
             parse_tc_flower_geneve_opts(action, buf);
             nl_msg_end_nested(buf, tunnel_offset);
             nl_msg_end_nested(buf, set_offset);
@@ -1552,6 +1569,7 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
 
     action->type = TC_ACT_ENCAP;
     action->encap.id_present = false;
+    action->encap.gbp.id_present = false;
     action->encap.no_csum = 1;
     flower->action_count++;
     NL_ATTR_FOR_EACH_UNSAFE(tun_attr, tun_left, tunnel, tunnel_len) {
@@ -1611,6 +1629,16 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
             memcpy(action->encap.data.opts.gnv, nl_attr_get(tun_attr),
                    nl_attr_get_size(tun_attr));
             action->encap.data.present.len = nl_attr_get_size(tun_attr);
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS: {
+            if (odp_vxlan_tun_opts_from_attr(tun_attr,
+                                             &action->encap.gbp.id,
+                                             &action->encap.gbp.flags,
+                                             &action->encap.gbp.id_present)) {
+                VLOG_ERR_RL(&rl, "error parsing VXLAN options");
+                return EINVAL;
+            }
         }
         break;
         default:

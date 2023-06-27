@@ -292,6 +292,9 @@ enum slow_path_reason commit_odp_actions(const struct flow *,
                                          bool pending_decap,
                                          struct ofpbuf *encap_data);
 
+int odp_vxlan_tun_opts_from_attr(const struct nlattr *tun_attr, ovs_be16 *id,
+                                 uint8_t *flags, bool *id_present);
+
 /* ofproto-dpif interface.
  *
  * The following types and functions are logically part of ofproto-dpif.
