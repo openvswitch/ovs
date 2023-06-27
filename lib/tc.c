@@ -701,7 +701,7 @@ nl_parse_geneve_key(const struct nlattr *in_nlattr,
 
 static int
 nl_parse_flower_tunnel_opts(struct nlattr *options,
-                            struct tun_metadata *metadata)
+                            struct tc_flower_tunnel *tunnel)
 {
     const struct ofpbuf *msg;
     struct nlattr *nla;
@@ -716,7 +716,7 @@ nl_parse_flower_tunnel_opts(struct nlattr *options,
         uint16_t type = nl_attr_type(nla);
         switch (type) {
         case TCA_FLOWER_KEY_ENC_OPTS_GENEVE:
-            err = nl_parse_geneve_key(nla, metadata);
+            err = nl_parse_geneve_key(nla, &tunnel->metadata);
             if (err) {
                 return err;
             }
@@ -828,13 +828,13 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
     if (attrs[TCA_FLOWER_KEY_ENC_OPTS] &&
         attrs[TCA_FLOWER_KEY_ENC_OPTS_MASK]) {
          err = nl_parse_flower_tunnel_opts(attrs[TCA_FLOWER_KEY_ENC_OPTS],
-                                           &flower->key.tunnel.metadata);
+                                           &flower->key.tunnel);
          if (err) {
              return err;
          }
 
          err = nl_parse_flower_tunnel_opts(attrs[TCA_FLOWER_KEY_ENC_OPTS_MASK],
-                                           &flower->mask.tunnel.metadata);
+                                           &flower->mask.tunnel);
          if (err) {
              return err;
          }
@@ -3446,8 +3446,9 @@ nl_msg_put_masked_value(struct ofpbuf *request, uint16_t type,
 
 static void
 nl_msg_put_flower_tunnel_opts(struct ofpbuf *request, uint16_t type,
-                              struct tun_metadata *metadata)
+                              struct tc_flower_tunnel *tunnel)
 {
+    struct tun_metadata *metadata = &tunnel->metadata;
     struct geneve_opt *opt;
     size_t outer, inner;
     int len, cnt = 0;
@@ -3536,9 +3537,9 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_KEY_ID, id);
     }
     nl_msg_put_flower_tunnel_opts(request, TCA_FLOWER_KEY_ENC_OPTS,
-                                  &flower->key.tunnel.metadata);
+                                  &flower->key.tunnel);
     nl_msg_put_flower_tunnel_opts(request, TCA_FLOWER_KEY_ENC_OPTS_MASK,
-                                  &flower->mask.tunnel.metadata);
+                                  &flower->mask.tunnel);
 }
 
 #define FLOWER_PUT_MASKED_VALUE(member, type) \

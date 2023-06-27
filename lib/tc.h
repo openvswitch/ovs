@@ -105,6 +105,23 @@ struct tc_cookie {
     size_t len;
 };
 
+struct tc_flower_tunnel {
+    struct {
+        ovs_be32 ipv4_src;
+        ovs_be32 ipv4_dst;
+    } ipv4;
+    struct {
+        struct in6_addr ipv6_src;
+        struct in6_addr ipv6_dst;
+    } ipv6;
+    uint8_t tos;
+    uint8_t ttl;
+    ovs_be16 tp_src;
+    ovs_be16 tp_dst;
+    ovs_be64 id;
+    struct tun_metadata metadata;
+};
+
 struct tc_flower_key {
     ovs_be16 eth_type;
     uint8_t ip_proto;
@@ -161,22 +178,7 @@ struct tc_flower_key {
         uint8_t rewrite_tclass;
     } ipv6;
 
-    struct {
-        struct {
-            ovs_be32 ipv4_src;
-            ovs_be32 ipv4_dst;
-        } ipv4;
-        struct {
-            struct in6_addr ipv6_src;
-            struct in6_addr ipv6_dst;
-        } ipv6;
-        uint8_t tos;
-        uint8_t ttl;
-        ovs_be16 tp_src;
-        ovs_be16 tp_dst;
-        ovs_be64 id;
-        struct tun_metadata metadata;
-    } tunnel;
+    struct tc_flower_tunnel tunnel;
 };
 
 enum tc_action_type {
