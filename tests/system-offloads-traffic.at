@@ -805,3 +805,53 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/could not open network device ovs-p0/d
 /failed to offload flow/d
 "])
 AT_CLEANUP
+
+AT_SETUP([offloads - ping over vxlan tunnel with gbp - offloads enabled])
+OVS_CHECK_TUNNEL_TSO()
+OVS_CHECK_VXLAN()
+
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
+AT_SKIP_IF([! grep -q "probe tc: vxlan gbp is supported." ovs-vswitchd.log])
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.100/24], [options:exts=gbp])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=br0 actions=load:0x200->NXM_NX_TUN_GBP_ID[], output:at_vxlan0]")
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=at_vxlan0, tun_gbp_id=512 actions=output:br0"])
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [id 0 dstport 4789 gbp])
+NS_CHECK_EXEC([at_ns0], [iptables -I OUTPUT -p ip -j MARK --set-mark 512 2>/dev/null], [0])
+NS_CHECK_EXEC([at_ns0], [iptables -I INPUT -m mark --mark 512 -j ACCEPT 2>/dev/null], [0], [ignore])
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1000 -i 0.01 10.1.1.100 | FORMAT_PING], [0], [dnl
+1000 packets transmitted, 1000 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | grep "tp_dst=4789,vxlan(gbp(id=512))" | wc -l], [0], [dnl
+1
+])
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | grep "tp_dst=4789,vxlan(gbp(id=512,flags=0))" | wc -l], [0], [dnl
+1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
