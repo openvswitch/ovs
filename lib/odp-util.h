@@ -382,6 +382,11 @@ static inline void odp_decode_gbp_raw(uint32_t gbp_raw,
     *flags = (gbp_raw >> 16) & 0xFF;
 }
 
+static inline uint32_t odp_encode_gbp_raw(uint8_t flags, ovs_be16 id)
+{
+    return (flags << 16) | ntohs(id);
+}
+
 struct attr_len_tbl {
     int len;
     const struct attr_len_tbl *next;
