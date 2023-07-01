@@ -53,6 +53,7 @@
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_upcall);
 
 COVERAGE_DEFINE(dumped_duplicate_flow);
+COVERAGE_DEFINE(dumped_inconsistent_flow);
 COVERAGE_DEFINE(dumped_new_flow);
 COVERAGE_DEFINE(handler_duplicate_upcall);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
@@ -258,6 +259,7 @@ enum ukey_state {
     UKEY_CREATED = 0,
     UKEY_VISIBLE,       /* Ukey is in umap, datapath flow install is queued. */
     UKEY_OPERATIONAL,   /* Ukey is in umap, datapath flow is installed. */
+    UKEY_INCONSISTENT,  /* Ukey is in umap, datapath flow is inconsistent. */
     UKEY_EVICTING,      /* Ukey is in umap, datapath flow delete is queued. */
     UKEY_EVICTED,       /* Ukey is in umap, datapath flow is deleted. */
     UKEY_DELETED,       /* Ukey removed from umap, ukey free is deferred. */
@@ -1999,6 +2001,10 @@ transition_ukey_at(struct udpif_key *ukey, enum ukey_state dst,
      * UKEY_VISIBLE -> UKEY_EVICTED
      *  A handler attempts to install the flow, but the datapath rejects it.
      *  Consider that the datapath has already destroyed it.
+     * UKEY_OPERATIONAL -> UKEY_INCONSISTENT
+     *  A revalidator modifies the flow with error returns.
+     * UKEY_INCONSISTENT -> UKEY_EVICTING
+     *  A revalidator decides to evict the datapath flow.
      * UKEY_OPERATIONAL -> UKEY_EVICTING
      *  A revalidator decides to evict the datapath flow.
      * UKEY_EVICTING    -> UKEY_EVICTED
@@ -2006,8 +2012,9 @@ transition_ukey_at(struct udpif_key *ukey, enum ukey_state dst,
      * UKEY_EVICTED     -> UKEY_DELETED
      *  A revalidator has removed the ukey from the umap and is deleting it.
      */
-    if (ukey->state == dst - 1 || (ukey->state == UKEY_VISIBLE &&
-                                   dst < UKEY_DELETED)) {
+    if (ukey->state == dst - 1 ||
+       (ukey->state == UKEY_VISIBLE && dst < UKEY_DELETED) ||
+       (ukey->state == UKEY_OPERATIONAL && dst == UKEY_EVICTING)) {
         ukey->state = dst;
     } else {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -2490,25 +2497,30 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
 
     for (i = 0; i < n_ops; i++) {
         struct ukey_op *op = &ops[i];
-        struct dpif_flow_stats *push, *stats, push_buf;
 
-        stats = op->dop.flow_del.stats;
-        push = &push_buf;
+        if (op->dop.error) {
+            if (op->ukey) {
+                ovs_mutex_lock(&op->ukey->mutex);
+                if (op->dop.type == DPIF_OP_FLOW_DEL) {
+                    transition_ukey(op->ukey, UKEY_EVICTED);
+                } else {
+                    /* Modification of the flow failed. */
+                    transition_ukey(op->ukey, UKEY_INCONSISTENT);
+                }
+                ovs_mutex_unlock(&op->ukey->mutex);
+            }
+            continue;
+        }
 
         if (op->dop.type != DPIF_OP_FLOW_DEL) {
             /* Only deleted flows need their stats pushed. */
             continue;
         }
 
-        if (op->dop.error) {
-            /* flow_del error, 'stats' is unusable. */
-            if (op->ukey) {
-                ovs_mutex_lock(&op->ukey->mutex);
-                transition_ukey(op->ukey, UKEY_EVICTED);
-                ovs_mutex_unlock(&op->ukey->mutex);
-            }
-            continue;
-        }
+        struct dpif_flow_stats *push, *stats, push_buf;
+
+        stats = op->dop.flow_del.stats;
+        push = &push_buf;
 
         if (op->ukey) {
             ovs_mutex_lock(&op->ukey->mutex);
@@ -2857,6 +2869,15 @@ revalidate(struct revalidator *revalidator)
                 continue;
             }
 
+            if (ukey->state == UKEY_INCONSISTENT) {
+                ukey->dump_seq = dump_seq;
+                reval_op_init(&ops[n_ops++], UKEY_DELETE, udpif, ukey,
+                              &recircs, &odp_actions);
+                ovs_mutex_unlock(&ukey->mutex);
+                COVERAGE_INC(dumped_inconsistent_flow);
+                continue;
+            }
+
             if (ukey->state <= UKEY_OPERATIONAL) {
                 /* The flow is now confirmed to be in the datapath. */
                 transition_ukey(ukey, UKEY_OPERATIONAL);
@@ -2945,13 +2966,14 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
             }
             ukey_state = ukey->state;
             if (ukey_state == UKEY_OPERATIONAL
+                || (ukey_state == UKEY_INCONSISTENT)
                 || (ukey_state == UKEY_VISIBLE && purge)) {
                 struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
                 bool seq_mismatch = (ukey->dump_seq != dump_seq
                                      && ukey->reval_seq != reval_seq);
                 enum reval_result result;
 
-                if (purge) {
+                if (purge || ukey_state == UKEY_INCONSISTENT) {
                     result = UKEY_DELETE;
                 } else if (!seq_mismatch) {
                     result = UKEY_KEEP;
