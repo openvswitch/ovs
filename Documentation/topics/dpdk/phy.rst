@@ -131,6 +131,93 @@ possible with DPDK acceleration. It is possible to configure multiple Rx queues
 for ``dpdk`` ports, thus ensuring this is not a bottleneck for performance. For
 information on configuring PMD threads, refer to :doc:`pmd`.
 
+Traffic Rx Steering
+-------------------
+
+.. warning:: This feature is experimental.
+
+Some control protocols are used to maintain link status between forwarding
+engines. In SDN environments, these packets share the same physical network
+with the user data traffic.
+
+When the system is not sized properly, the PMD threads may not be able to
+process all incoming traffic from the configured Rx queues. When a signaling
+packet of such protocols is dropped, it can cause link flapping, worsening the
+situation.
+
+Some physical NICs can be programmed to put these protocols in a dedicated
+hardware Rx queue using the rte_flow__ API.
+
+__ https://doc.dpdk.org/guides-22.11/prog_guide/rte_flow.html
+
+.. warning::
+
+   This feature is not compatible with all NICs. Refer to the DPDK
+   `compatibilty matrix`__ and vendor documentation for more details.
+
+   __ https://doc.dpdk.org/guides-22.11/nics/overview.html
+
+Rx steering must be enabled for specific protocols per port. The
+``rx-steering`` option takes one of the following values:
+
+``rss``
+   Do regular RSS on all configured Rx queues. This is the default behaviour.
+
+``rss+lacp``
+   Do regular RSS on all configured Rx queues. An extra Rx queue is configured
+   for LACP__ packets (ether type ``0x8809``).
+
+   __ https://www.ieee802.org/3/ad/public/mar99/seaman_1_0399.pdf
+
+Example::
+
+   $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:n_rxq=2 \
+        options:rx-steering=rss+lacp
+
+.. note::
+
+   If multiple Rx queues are already configured, regular hash-based RSS
+   (Receive Side Scaling) queue balancing is done on all but the extra Rx
+   queue.
+
+.. tip::
+
+   You can check if Rx steering is supported on a port with the following
+   command::
+
+      $ ovs-vsctl get interface dpdk-p0 status
+      {..., rss_queues="0-1", rx_steering_queue="2"}
+
+   This will also show in ``ovs-vswitchd.log``::
+
+      INFO|dpdk-p0: rx-steering: redirecting lacp traffic to queue 2
+      INFO|dpdk-p0: rx-steering: applying rss on queues 0-1
+
+   If the hardware does not support redirecting the specified protocols to
+   a dedicated queue, it will be explicit::
+
+      $ ovs-vsctl get interface dpdk-p0 status
+      {..., rx_steering=unsupported}
+
+   More details can often be found in ``ovs-vswitchd.log``::
+
+      WARN|dpdk-p0: rx-steering: failed to add lacp flow: Unsupported pattern
+
+To disable Rx steering on a port, use the following command::
+
+   $ ovs-vsctl remove Interface dpdk-p0 options rx-steering
+
+You can see that it has been disabled in ``ovs-vswitchd.log``::
+
+   INFO|dpdk-p0: rx-steering: default rss
+
+.. warning::
+
+   This feature is mutually exclusive with ``other-config:hw-offload`` as it
+   may conflict with the offloaded flows. If both are enabled, ``rx-steering``
+   will fall back to default ``rss`` mode.
+
 .. _dpdk-phy-flow-control:
 
 Flow Control

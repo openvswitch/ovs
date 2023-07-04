@@ -36,6 +36,9 @@ Post-v3.1.0
      * ovs-vswitchd will keep the CAP_SYS_RAWIO capability when started
        with the --hw-rawio-access command line option.  This allows the
        process extra privileges when mapping physical interconnect memory.
+     * New experimental "rx-steering=rss+<protocol>" option to redirect
+       certain protocols (for now, only LACP) to a dedicated hardware queue
+       using the rte_flow API.
    - SRv6 Tunnel Protocol
      * Added support for userspace datapath (only).
    - Userspace datapath:

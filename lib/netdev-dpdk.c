@@ -418,6 +418,10 @@ enum dpdk_hw_ol_features {
     NETDEV_TX_TSO_OFFLOAD = 1 << 7,
 };
 
+enum dpdk_rx_steer_flags {
+    DPDK_RX_STEER_LACP = 1 << 0,
+};
+
 /* Flags for the netdev_dpdk virtio_features_state field.
  * This is used for the virtio features recovery mechanism linked to TSO
  * support. */
@@ -524,6 +528,12 @@ struct netdev_dpdk {
          * netdev_dpdk*_reconfigure() is called */
         int requested_mtu;
         int requested_n_txq;
+        /* User input for n_rxq (see dpdk_set_rxq_config). */
+        int user_n_rxq;
+        /* user_n_rxq + an optional rx steering queue (see
+         * netdev_dpdk_reconfigure). This field is different from the other
+         * requested_* fields as it may contain a different value than the user
+         * input. */
         int requested_n_rxq;
         int requested_rxq_size;
         int requested_txq_size;
@@ -553,6 +563,13 @@ struct netdev_dpdk {
 
         /* VF configuration. */
         struct eth_addr requested_hwaddr;
+
+        /* Requested rx queue steering flags,
+         * from the enum set 'dpdk_rx_steer_flags'. */
+        uint64_t requested_rx_steer_flags;
+        uint64_t rx_steer_flags;
+        size_t rx_steer_flows_num;
+        struct rte_flow **rx_steer_flows;
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1388,10 +1405,15 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
 
     netdev->n_rxq = 0;
     netdev->n_txq = 0;
+    dev->user_n_rxq = NR_QUEUE;
     dev->requested_n_rxq = NR_QUEUE;
     dev->requested_n_txq = NR_QUEUE;
     dev->requested_rxq_size = NIC_PORT_DEFAULT_RXQ_SIZE;
     dev->requested_txq_size = NIC_PORT_DEFAULT_TXQ_SIZE;
+    dev->requested_rx_steer_flags = 0;
+    dev->rx_steer_flags = 0;
+    dev->rx_steer_flows_num = 0;
+    dev->rx_steer_flows = NULL;
 
     /* Initialize the flow control to NULL */
     memset(&dev->fc_conf, 0, sizeof dev->fc_conf);
@@ -1566,12 +1588,17 @@ common_destruct(struct netdev_dpdk *dev)
     ovs_mutex_destroy(&dev->mutex);
 }
 
+static void dpdk_rx_steer_unconfigure(struct netdev_dpdk *);
+
 static void
 netdev_dpdk_destruct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dpdk_mutex);
+
+    /* Destroy any rx-steering flows to allow RXQs to be removed. */
+    dpdk_rx_steer_unconfigure(dev);
 
     rte_eth_dev_stop(dev->port_id);
     dev->started = false;
@@ -1812,7 +1839,7 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
 
-    smap_add_format(args, "requested_rx_queues", "%d", dev->requested_n_rxq);
+    smap_add_format(args, "requested_rx_queues", "%d", dev->user_n_rxq);
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
     smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
@@ -1825,6 +1852,9 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
             smap_add(args, "rx_csum_offload", "true");
         } else {
             smap_add(args, "rx_csum_offload", "false");
+        }
+        if (dev->rx_steer_flags == DPDK_RX_STEER_LACP) {
+            smap_add(args, "rx-steering", "rss+lacp");
         }
         smap_add(args, "lsc_interrupt_mode",
                  dev->lsc_interrupt_mode ? "true" : "false");
@@ -1976,8 +2006,8 @@ dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
     int new_n_rxq;
 
     new_n_rxq = MAX(smap_get_int(args, "n_rxq", NR_QUEUE), 1);
-    if (new_n_rxq != dev->requested_n_rxq) {
-        dev->requested_n_rxq = new_n_rxq;
+    if (new_n_rxq != dev->user_n_rxq) {
+        dev->user_n_rxq = new_n_rxq;
         netdev_request_reconfigure(&dev->up);
     }
 }
@@ -2037,6 +2067,41 @@ dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
     }
 }
 
+static void
+dpdk_set_rx_steer_config(struct netdev *netdev, struct netdev_dpdk *dev,
+                         const struct smap *args, char **errp)
+{
+    const char *arg = smap_get_def(args, "rx-steering", "rss");
+    uint64_t flags = 0;
+
+    if (!strcmp(arg, "rss+lacp")) {
+        flags = DPDK_RX_STEER_LACP;
+    } else if (strcmp(arg, "rss")) {
+        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
+                      "unsupported parameter value '%s'",
+                      netdev_get_name(netdev), arg);
+    }
+
+    if (flags && dev->type != DPDK_DEV_ETH) {
+        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
+                      "is only supported on ethernet ports",
+                      netdev_get_name(netdev));
+        flags = 0;
+    }
+
+    if (flags && netdev_is_flow_api_enabled()) {
+        VLOG_WARN_BUF(errp, "%s: options:rx-steering "
+                      "is incompatible with hw-offload",
+                      netdev_get_name(netdev));
+        flags = 0;
+    }
+
+    if (flags != dev->requested_rx_steer_flags) {
+        dev->requested_rx_steer_flags = flags;
+        netdev_request_reconfigure(netdev);
+    }
+}
+
 static int
 netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
                        char **errp)
@@ -2057,6 +2122,8 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
+
+    dpdk_set_rx_steer_config(netdev, dev, args, errp);
 
     dpdk_set_rxq_config(dev, args);
 
@@ -3939,9 +4006,12 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
+    size_t rx_steer_flows_num;
+    uint64_t rx_steer_flags;
     const char *bus_info;
     uint32_t link_speed;
     uint32_t dev_flags;
+    int n_rxq;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
@@ -3953,6 +4023,9 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     link_speed = dev->link.link_speed;
     dev_flags = *dev_info.dev_flags;
     bus_info = rte_dev_bus_info(dev_info.device);
+    rx_steer_flags = dev->rx_steer_flags;
+    rx_steer_flows_num = dev->rx_steer_flows_num;
+    n_rxq = netdev->n_rxq;
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
@@ -3993,6 +4066,19 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     if (dev_flags & RTE_ETH_DEV_REPRESENTOR) {
         smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
                         ETH_ADDR_ARGS(dev->hwaddr));
+    }
+
+    if (rx_steer_flags) {
+        if (!rx_steer_flows_num) {
+            smap_add(args, "rx_steering", "unsupported");
+        } else {
+            smap_add_format(args, "rx_steering_queue", "%d", n_rxq - 1);
+            if (n_rxq > 2) {
+                smap_add_format(args, "rss_queues", "0-%d", n_rxq - 2);
+            } else {
+                smap_add(args, "rss_queues", "0");
+            }
+        }
     }
 
     return 0;
@@ -5377,15 +5463,210 @@ static const struct dpdk_qos_ops trtcm_policer_ops = {
 };
 
 static int
+dpdk_rx_steer_add_flow(struct netdev_dpdk *dev,
+                      const struct rte_flow_item items[],
+                      const char *desc)
+{
+    const struct rte_flow_attr attr = { .ingress = 1 };
+    const struct rte_flow_action actions[] = {
+        {
+            .type = RTE_FLOW_ACTION_TYPE_QUEUE,
+            .conf = &(const struct rte_flow_action_queue) {
+                .index = dev->up.n_rxq - 1,
+            },
+        },
+        { .type = RTE_FLOW_ACTION_TYPE_END },
+    };
+    struct rte_flow_error error;
+    struct rte_flow *flow;
+    size_t num;
+    int err;
+
+    set_error(&error, RTE_FLOW_ERROR_TYPE_NONE);
+    err = rte_flow_validate(dev->port_id, &attr, items, actions, &error);
+    if (err) {
+        VLOG_WARN("%s: rx-steering: device does not support %s flow: %s",
+                  netdev_get_name(&dev->up), desc,
+                  error.message ? error.message : "");
+        goto out;
+    }
+
+    set_error(&error, RTE_FLOW_ERROR_TYPE_NONE);
+    flow = rte_flow_create(dev->port_id, &attr, items, actions, &error);
+    if (flow == NULL) {
+        VLOG_WARN("%s: rx-steering: failed to add %s flow: %s",
+                  netdev_get_name(&dev->up), desc,
+                  error.message ? error.message : "");
+        err = rte_errno;
+        goto out;
+    }
+
+    num = dev->rx_steer_flows_num + 1;
+    dev->rx_steer_flows = xrealloc(dev->rx_steer_flows, num * sizeof flow);
+    dev->rx_steer_flows[dev->rx_steer_flows_num] = flow;
+    dev->rx_steer_flows_num = num;
+
+    VLOG_INFO("%s: rx-steering: redirected %s traffic to rx queue %d",
+              netdev_get_name(&dev->up), desc, dev->up.n_rxq - 1);
+out:
+    return err;
+}
+
+#define RETA_CONF_SIZE (RTE_ETH_RSS_RETA_SIZE_512 / RTE_ETH_RETA_GROUP_SIZE)
+
+static int
+dpdk_rx_steer_rss_configure(struct netdev_dpdk *dev, int rss_n_rxq)
+{
+    struct rte_eth_rss_reta_entry64 reta_conf[RETA_CONF_SIZE];
+    struct rte_eth_dev_info info;
+    int err;
+
+    rte_eth_dev_info_get(dev->port_id, &info);
+
+    if (info.reta_size % rss_n_rxq != 0 &&
+        info.reta_size < RTE_ETH_RSS_RETA_SIZE_128) {
+        /*
+         * Some drivers set reta_size equal to the total number of rxqs that
+         * are configured when it is a power of two. Since we are actually
+         * reconfiguring the redirection table to exclude the last rxq, we may
+         * end up with an imbalanced redirection table. For example, such
+         * configuration:
+         *
+         *   options:n_rxq=3 options:rx-steering=rss+lacp
+         *
+         * Will actually configure 4 rxqs on the NIC, and the default reta to:
+         *
+         *   [0, 1, 2, 3]
+         *
+         * And dpdk_rx_steer_rss_configure() will reconfigure reta to:
+         *
+         *   [0, 1, 2, 0]
+         *
+         * Causing queue 0 to receive twice as much traffic as queues 1 and 2.
+         *
+         * Work around that corner case by forcing a bigger redirection table
+         * size to 128 entries when reta_size is not a multiple of rss_n_rxq
+         * and when reta_size is less than 128. This value seems to be
+         * supported by most of the drivers that also support rte_flow.
+         */
+        info.reta_size = RTE_ETH_RSS_RETA_SIZE_128;
+    }
+
+    memset(reta_conf, 0, sizeof reta_conf);
+    for (uint16_t i = 0; i < info.reta_size; i++) {
+        uint16_t idx = i / RTE_ETH_RETA_GROUP_SIZE;
+        uint16_t shift = i % RTE_ETH_RETA_GROUP_SIZE;
+
+        reta_conf[idx].mask |= 1ULL << shift;
+        reta_conf[idx].reta[shift] = i % rss_n_rxq;
+    }
+
+    err = rte_eth_dev_rss_reta_update(dev->port_id, reta_conf, info.reta_size);
+    if (err < 0) {
+        VLOG_WARN("%s: failed to configure RSS redirection table: err=%d",
+                  netdev_get_name(&dev->up), err);
+    }
+
+    return err;
+}
+
+static int
+dpdk_rx_steer_configure(struct netdev_dpdk *dev)
+{
+    int err = 0;
+
+    if (dev->up.n_rxq < 2) {
+        err = ENOTSUP;
+        VLOG_WARN("%s: rx-steering: not enough available rx queues",
+                  netdev_get_name(&dev->up));
+        goto out;
+    }
+
+    if (dev->requested_rx_steer_flags & DPDK_RX_STEER_LACP) {
+        const struct rte_flow_item items[] = {
+            {
+                .type = RTE_FLOW_ITEM_TYPE_ETH,
+                .spec = &(const struct rte_flow_item_eth){
+                    .type = htons(ETH_TYPE_LACP),
+                },
+                .mask = &(const struct rte_flow_item_eth){
+                    .type = htons(0xffff),
+                },
+            },
+            { .type = RTE_FLOW_ITEM_TYPE_END },
+        };
+        err = dpdk_rx_steer_add_flow(dev, items, "lacp");
+        if (err) {
+            goto out;
+        }
+    }
+
+    if (dev->rx_steer_flows_num) {
+        /* Reconfigure RSS reta in all but the rx steering queue. */
+        err = dpdk_rx_steer_rss_configure(dev, dev->up.n_rxq - 1);
+        if (err) {
+            goto out;
+        }
+        if (dev->up.n_rxq == 2) {
+            VLOG_INFO("%s: rx-steering: redirected other traffic to "
+                      "rx queue 0", netdev_get_name(&dev->up));
+        } else {
+            VLOG_INFO("%s: rx-steering: applied rss on rx queues 0-%u",
+                      netdev_get_name(&dev->up), dev->up.n_rxq - 2);
+        }
+    }
+
+out:
+    return err;
+}
+
+static void
+dpdk_rx_steer_unconfigure(struct netdev_dpdk *dev)
+{
+    struct rte_flow_error error;
+
+    if (!dev->rx_steer_flows_num) {
+        return;
+    }
+
+    VLOG_DBG("%s: rx-steering: reset flows", netdev_get_name(&dev->up));
+
+    for (int i = 0; i < dev->rx_steer_flows_num; i++) {
+        set_error(&error, RTE_FLOW_ERROR_TYPE_NONE);
+        if (rte_flow_destroy(dev->port_id, dev->rx_steer_flows[i], &error)) {
+            VLOG_WARN("%s: rx-steering: failed to destroy flow: %s",
+                      netdev_get_name(&dev->up),
+                      error.message ? error.message : "");
+        }
+    }
+    free(dev->rx_steer_flows);
+    dev->rx_steer_flows_num = 0;
+    dev->rx_steer_flows = NULL;
+    /*
+     * Most DPDK drivers seem to reset their RSS redirection table in
+     * rte_eth_dev_configure() or rte_eth_dev_start(), both of which are
+     * called in dpdk_eth_dev_init(). No need to explicitly reset it.
+     */
+}
+
+static int
 netdev_dpdk_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    bool try_rx_steer;
     int err = 0;
 
     ovs_mutex_lock(&dev->mutex);
 
+    try_rx_steer = dev->requested_rx_steer_flags != 0;
+    dev->requested_n_rxq = dev->user_n_rxq;
+    if (try_rx_steer) {
+        dev->requested_n_rxq += 1;
+    }
+
     if (netdev->n_txq == dev->requested_n_txq
         && netdev->n_rxq == dev->requested_n_rxq
+        && dev->rx_steer_flags == dev->requested_rx_steer_flags
         && dev->mtu == dev->requested_mtu
         && dev->lsc_interrupt_mode == dev->requested_lsc_interrupt_mode
         && dev->rxq_size == dev->requested_rxq_size
@@ -5397,6 +5678,9 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
         goto out;
     }
+
+retry:
+    dpdk_rx_steer_unconfigure(dev);
 
     if (dev->reset_needed) {
         rte_eth_dev_reset(dev->port_id);
@@ -5422,6 +5706,7 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     dev->txq_size = dev->requested_txq_size;
 
     rte_free(dev->tx_q);
+    dev->tx_q = NULL;
 
     if (!eth_addr_equals(dev->hwaddr, dev->requested_hwaddr)) {
         err = netdev_dpdk_set_etheraddr__(dev, dev->requested_hwaddr);
@@ -5444,6 +5729,23 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
      * will have succeeded to get to this point.
      */
     dev->requested_hwaddr = dev->hwaddr;
+
+    if (try_rx_steer) {
+        err = dpdk_rx_steer_configure(dev);
+        if (err) {
+            /* No hw support, disable & recover gracefully. */
+            try_rx_steer = false;
+            /*
+             * The extra queue must be explicitly removed here to ensure that
+             * it is unconfigured immediately.
+             */
+            dev->requested_n_rxq = dev->user_n_rxq;
+            goto retry;
+        }
+    } else {
+        VLOG_INFO("%s: rx-steering: default rss", netdev_get_name(&dev->up));
+    }
+    dev->rx_steer_flags = dev->requested_rx_steer_flags;
 
     dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
     if (!dev->tx_q) {
@@ -5681,6 +5983,13 @@ netdev_dpdk_flow_api_supported(struct netdev *netdev)
     dev = netdev_dpdk_cast(netdev);
     ovs_mutex_lock(&dev->mutex);
     if (dev->type == DPDK_DEV_ETH) {
+        if (dev->requested_rx_steer_flags) {
+            VLOG_WARN("%s: rx-steering is mutually exclusive with hw-offload,"
+                      " falling back to default rss mode",
+                      netdev_get_name(netdev));
+            dev->requested_rx_steer_flags = 0;
+            netdev_request_reconfigure(netdev);
+        }
         /* TODO: Check if we able to offload some minimal flow. */
         ret = true;
     }

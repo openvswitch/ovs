@@ -3517,6 +3517,50 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <p>This option may only be used with dpdk VF representors.</p>
       </column>
 
+      <column name="options" key="rx-steering"
+              type='{"type": "string", "enum": ["set", ["rss", "rss+lacp"]]}'>
+        <p>
+          Configure hardware Rx queue steering policy.
+        </p>
+        <p>
+          This option takes one of the following values:
+        </p>
+        <dl>
+          <dt><code>rss</code></dt>
+          <dd>
+            Distribution of ingress packets in all Rx queues according to the
+            RSS algorithm. This is the default behaviour.
+          </dd>
+          <dt><code>rss+lacp</code></dt>
+          <dd>
+            Distribution of ingress packets according to the RSS algorithm on
+            all but the last Rx queue. An extra Rx queue is allocated for LACP
+            packets.
+          </dd>
+        </dl>
+        <p>
+          If the user has already configured multiple <ref table="Interface"
+          column="options" key="n_rxq" /> on the port, an additional one will
+          be allocated for the specified protocols. Even if the hardware cannot
+          satisfy the requested number of requested Rx queues, the last Rx
+          queue will be used. If only one Rx queue is available or if the
+          hardware does not support the rte_flow matchers/actions required to
+          redirect the selected protocols, custom <code>rx-steering</code> will
+          fall back to default <code>rss</code> mode.
+        </p>
+        <p>
+          This feature is mutually exclusive with
+          <ref table="Open_vSwitch" column="other_config" key="hw-offload" />
+          as it may conflict with the offloaded flows. If both are enabled,
+          <code>rx-steering</code> will fall back to default <code>rss</code>
+          mode.
+        </p>
+        <p>
+          This option is only applicable to interfaces with type
+          <code>dpdk</code>.
+        </p>
+      </column>
+
       <column name="other_config" key="tx-steering"
               type='{"type": "string",
                      "enum": ["set", ["thread", "hash"]]}'>
