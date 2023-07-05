@@ -1560,11 +1560,11 @@ bridge_configure_ipfix(struct bridge *br)
         be_opts.enable_tunnel_sampling = smap_get_bool(&be_cfg->other_config,
                                              "enable-tunnel-sampling", true);
 
-        be_opts.enable_input_sampling = !smap_get_bool(&be_cfg->other_config,
-                                              "enable-input-sampling", false);
+        be_opts.enable_input_sampling = smap_get_bool(&be_cfg->other_config,
+                                              "enable-input-sampling", true);
 
-        be_opts.enable_output_sampling = !smap_get_bool(&be_cfg->other_config,
-                                              "enable-output-sampling", false);
+        be_opts.enable_output_sampling = smap_get_bool(&be_cfg->other_config,
+                                              "enable-output-sampling", true);
 
         virtual_obs_id = smap_get(&be_cfg->other_config, "virtual_obs_id");
         be_opts.virtual_obs_id = nullable_xstrdup(virtual_obs_id);
