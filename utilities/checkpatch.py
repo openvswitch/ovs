@@ -411,6 +411,8 @@ def check_spelling(line, comment):
     words = filter_comments(line, True) if comment else line
     words = words.replace(':', ' ').split(' ')
 
+    flagged_words = []
+
     for word in words:
         skip = False
         strword = re.subn(r'\W+', '', word)[0].replace(',', '')
@@ -435,9 +437,13 @@ def check_spelling(line, comment):
                 skip = True
 
             if not skip:
-                print_warning("Check for spelling mistakes (e.g. \"%s\")"
-                              % strword)
-                return True
+                flagged_words.append(strword)
+
+    if len(flagged_words) > 0:
+        for mistake in flagged_words:
+            print_warning("Possible misspelled word: \"%s\"" % mistake)
+
+        return True
 
     return False
 
