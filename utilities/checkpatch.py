@@ -412,6 +412,7 @@ def check_spelling(line, comment):
     words = words.replace(':', ' ').split(' ')
 
     flagged_words = []
+    num_suggestions = 3
 
     for word in words:
         skip = False
@@ -442,6 +443,8 @@ def check_spelling(line, comment):
     if len(flagged_words) > 0:
         for mistake in flagged_words:
             print_warning("Possible misspelled word: \"%s\"" % mistake)
+            print("Did you mean: ",
+                  spell_check_dict.suggest(mistake)[:num_suggestions])
 
         return True
 
