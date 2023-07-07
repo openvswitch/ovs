@@ -418,6 +418,18 @@ enum dpdk_hw_ol_features {
     NETDEV_TX_TSO_OFFLOAD = 1 << 7,
 };
 
+/* Flags for the netdev_dpdk virtio_features_state field.
+ * This is used for the virtio features recovery mechanism linked to TSO
+ * support. */
+#define OVS_VIRTIO_F_CLEAN (UINT8_C(1) << 0)
+#define OVS_VIRTIO_F_WORKAROUND (UINT8_C(1) << 1)
+#define OVS_VIRTIO_F_NEGOTIATED (UINT8_C(1) << 2)
+#define OVS_VIRTIO_F_RECONF_PENDING (UINT8_C(1) << 3)
+#define OVS_VIRTIO_F_CLEAN_NEGOTIATED \
+    (OVS_VIRTIO_F_CLEAN | OVS_VIRTIO_F_NEGOTIATED)
+#define OVS_VIRTIO_F_WORKAROUND_NEGOTIATED \
+    (OVS_VIRTIO_F_WORKAROUND | OVS_VIRTIO_F_NEGOTIATED)
+
 /*
  * In order to avoid confusion in variables names, following naming convention
  * should be used, if possible:
@@ -474,7 +486,11 @@ struct netdev_dpdk {
         bool vhost_reconfigured;
 
         atomic_uint8_t vhost_tx_retries_max;
-        /* 2 pad bytes here. */
+
+        /* Flags for virtio features recovery mechanism. */
+        uint8_t virtio_features_state;
+
+        /* 1 pad byte here. */
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1359,6 +1375,7 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
     dev->requested_lsc_interrupt_mode = 0;
     ovsrcu_index_init(&dev->vid, -1);
     dev->vhost_reconfigured = false;
+    dev->virtio_features_state = OVS_VIRTIO_F_CLEAN;
     dev->attached = false;
     dev->started = false;
     dev->reset_needed = false;
@@ -3883,6 +3900,12 @@ netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
                         xasprintf("%d", vring.size));
     }
 
+    if (userspace_tso_enabled()
+        && dev->virtio_features_state & OVS_VIRTIO_F_WORKAROUND) {
+
+        smap_add_format(args, "userspace-tso", "disabled");
+    }
+
     ovs_mutex_unlock(&dev->mutex);
     return 0;
 }
@@ -4245,6 +4268,8 @@ new_device(int vid)
                 newnode = dev->socket_id;
             }
 
+            dev->virtio_features_state |= OVS_VIRTIO_F_NEGOTIATED;
+
             if (dev->requested_n_txq < qp_num
                 || dev->requested_n_rxq < qp_num
                 || dev->requested_socket_id != newnode
@@ -4268,7 +4293,9 @@ new_device(int vid)
                     dev->hw_ol_features |= NETDEV_TX_SCTP_CKSUM_OFFLOAD;
                 }
 
-                if (userspace_tso_enabled()) {
+                if (userspace_tso_enabled()
+                    && dev->virtio_features_state & OVS_VIRTIO_F_CLEAN) {
+
                     if (features & (1ULL << VIRTIO_NET_F_GUEST_TSO4)
                         && features & (1ULL << VIRTIO_NET_F_GUEST_TSO6)) {
 
@@ -4524,6 +4551,45 @@ destroy_connection(int vid)
                 dev->requested_n_txq = qp_num;
                 netdev_request_reconfigure(&dev->up);
             }
+
+            if (!(dev->virtio_features_state & OVS_VIRTIO_F_NEGOTIATED)) {
+                /* The socket disconnected before reaching new_device. It
+                 * likely means that the guest did not agree with the virtio
+                 * features. */
+                VLOG_WARN_RL(&rl, "Connection on socket '%s' closed during "
+                             "initialization.", dev->vhost_id);
+            }
+            if (!(dev->virtio_features_state & OVS_VIRTIO_F_RECONF_PENDING)) {
+                switch (dev->virtio_features_state) {
+                case OVS_VIRTIO_F_CLEAN:
+                    dev->virtio_features_state = OVS_VIRTIO_F_WORKAROUND;
+                    break;
+
+                case OVS_VIRTIO_F_WORKAROUND:
+                    dev->virtio_features_state = OVS_VIRTIO_F_CLEAN;
+                    break;
+
+                case OVS_VIRTIO_F_CLEAN_NEGOTIATED:
+                    /* The virtio features were clean and got accepted by the
+                     * guest. We expect it will be the case in the future and
+                     * change nothing. */
+                    break;
+
+                case OVS_VIRTIO_F_WORKAROUND_NEGOTIATED:
+                    /* Let's try to go with clean virtio features on a next
+                     * connection. */
+                    dev->virtio_features_state = OVS_VIRTIO_F_CLEAN;
+                    break;
+
+                default:
+                    OVS_NOT_REACHED();
+                }
+                if (!(dev->virtio_features_state & OVS_VIRTIO_F_NEGOTIATED)) {
+                    dev->virtio_features_state |= OVS_VIRTIO_F_RECONF_PENDING;
+                    netdev_request_reconfigure(&dev->up);
+                }
+            }
+
             ovs_mutex_unlock(&dev->mutex);
             exists = true;
             break;
@@ -5454,7 +5520,28 @@ static int
 netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    bool unregister = false;
+    char *vhost_id;
     int err;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    if (dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT && dev->vhost_id
+        && dev->virtio_features_state & OVS_VIRTIO_F_RECONF_PENDING) {
+
+        /* This vhost-user port was registered to the vhost library already,
+         * but a socket disconnection happened and configuration must be
+         * re-evaluated wrt dev->virtio_features_state. */
+        dev->vhost_driver_flags &= ~RTE_VHOST_USER_CLIENT;
+        vhost_id = dev->vhost_id;
+        unregister = true;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    if (unregister) {
+        dpdk_vhost_driver_unregister(dev, vhost_id);
+    }
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -5466,6 +5553,11 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT) && dev->vhost_id) {
         uint64_t virtio_unsup_features = 0;
         uint64_t vhost_flags = 0;
+        bool enable_tso;
+
+        enable_tso = userspace_tso_enabled()
+                     && dev->virtio_features_state & OVS_VIRTIO_F_CLEAN;
+        dev->virtio_features_state &= ~OVS_VIRTIO_F_RECONF_PENDING;
 
         /* Register client-mode device. */
         vhost_flags |= RTE_VHOST_USER_CLIENT;
@@ -5487,7 +5579,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         }
 
         /* Enable External Buffers if TCP Segmentation Offload is enabled. */
-        if (userspace_tso_enabled()) {
+        if (enable_tso) {
             vhost_flags |= RTE_VHOST_USER_EXTBUF_SUPPORT;
         }
 
@@ -5512,7 +5604,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
             goto unlock;
         }
 
-        if (userspace_tso_enabled()) {
+        if (enable_tso) {
             virtio_unsup_features = 1ULL << VIRTIO_NET_F_HOST_ECN
                                     | 1ULL << VIRTIO_NET_F_HOST_UFO;
             VLOG_DBG("%s: TSO enabled on vhost port",
