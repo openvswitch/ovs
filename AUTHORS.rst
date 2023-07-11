@@ -211,6 +211,7 @@ Jakub Libosvar                     libosvar@redhat.com
 Jakub Sitnicki                     jsitnicki@gmail.com
 James P.                           roampune@gmail.com
 James Page                         james.page@ubuntu.com
+James Raphael Tiovalen             jamestiotio@gmail.com
 Jamie Lennox                       jamielennox@gmail.com
 Jan Scheurich                      jan.scheurich@ericsson.com
 Jan Vansteenkiste                  jan@vstone.eu
