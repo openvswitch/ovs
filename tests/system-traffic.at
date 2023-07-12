@@ -4701,6 +4701,79 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - SCTP SNAT with port range])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_SCTP()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address e6:66:c1:11:11:11])
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
+
+dnl Allow any traffic from ns0->ns1. Only allow return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+table=0,priority=100,in_port=1,sctp,action=ct(commit,zone=1,nat(src=10.1.1.240:34567)),controller
+table=0,priority=100,in_port=2,ct_state=-trk,sctp,tp_dst=34567,action=ct(table=1,zone=1,nat)
+table=0,priority=0,action=drop
+table=1,priority=100,in_port=2,ct_state=+trk+rpl,ct_zone=1,sctp,action=controller
+table=1,priority=0,action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Simple SCTP association local and remote single homing
+dnl Send INIT.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=e666c1222222e666c111111108004502004400004000408424300a0101010a010102d6b9303900000000c5cc426b0100002470e18ccc0001a000000affff7ae1c142000c00060005000080000004c0000004 actions=resubmit(,0)"])
+dnl Reply INIT_ACK.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=e666c1111111e666c122222208004502012400004000408422610a0101020a0101f03039870770e18ccc97abd49a0200010425bb9dfa0001a000000a000abb90fba5000700e827a048cd1474b111490710816ec95cfc501126b200000000000000000000000000000000fa9dbb25cc8ce17000000000000000002b953b0e1d346d160a000a00a5fb90bb020087070a0101f00000000000000000000000000000000000000000393001000000000080020024fbb82eae13af8d70329bc42bb7cd7e6458d60ff1a181e9b41167c2cab54471bf0000000000000000000000000000000000000000000000000000000000000000000000000100002470e18ccc0001a000000affff7ae1c142000c00060005000080000004c00000040000000000000000000000000000000080000004c0000004 actions=resubmit(,0)"])
+dnl Send COOKIE_ECHO.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=e666c1222222e666c1111111080045020108000040004084236c0a0101010a010102d6b9303925bb9dfaf2c860300a0000e827a048cd1474b111490710816ec95cfc501126b200000000000000000000000000000000fa9dbb25cc8ce17000000000000000002b953b0e1d346d160a000a00a5fb90bb020087070a0101f00000000000000000000000000000000000000000393001000000000080020024fbb82eae13af8d70329bc42bb7cd7e6458d60ff1a181e9b41167c2cab54471bf0000000000000000000000000000000000000000000000000000000000000000000000000100002470e18ccc0001a000000affff7ae1c142000c00060005000080000004c000000400000000000000000000000000000000 actions=resubmit(,0)"])
+dnl Reply COOKIE_ACK.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=e666c1111111e666c122222208004502002400004000408423610a0101020a0101f03039870770e18ccc0391398b0b000004 actions=resubmit(,0)"])
+dnl Send DATA.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=e666c1222222e666c1111111080045020034000140004084243f0a0101010a010102d6b9303925bb9dfabc366345000300147ae1c1420000000000000000666f6f0a actions=resubmit(,0)"])
+dnl Reply SACK.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=e666c1111111e666c122222208004502003042c840004084e08c0a0101020a0101f03039870770e18ccc6a990714030000107ae1c14200019ffc00000000 actions=resubmit(,0)"])
+dnl ABORT the association. The association cannot be gracefully terminated because of
+dnl a small timeouts in SHUTDOWN_SENT in the kernel datapath that would make the test unreliable
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=e666c1222222e666c111111108004500002400010000408464510a0101010a010102d6b9303925bb9dfae3b82c3806000004 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=82 in_port=1 (via action) data_len=82 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=10.1.1.240,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=34567,tp_dst=12345 sctp_csum:9670267b
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=306 ct_state=est|rpl|trk|dnat,ct_zone=1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=132,ct_tp_src=54969,ct_tp_dst=12345,ip,in_port=2 (via action) data_len=306 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:22:22:22,dl_dst=e6:66:c1:11:11:11,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=12345,tp_dst=54969 sctp_csum:49864886
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=278 in_port=1 (via action) data_len=278 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=10.1.1.240,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=34567,tp_dst=12345 sctp_csum:8c816918
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=50 ct_state=est|rpl|trk|dnat,ct_zone=1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=132,ct_tp_src=54969,ct_tp_dst=12345,ip,in_port=2 (via action) data_len=50 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:22:22:22,dl_dst=e6:66:c1:11:11:11,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=12345,tp_dst=54969 sctp_csum:ef4749fc
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=66 in_port=1 (via action) data_len=66 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=10.1.1.240,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=34567,tp_dst=12345 sctp_csum:eb2b2c17
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=62 ct_state=est|rpl|trk|dnat,ct_zone=1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=132,ct_tp_src=54969,ct_tp_dst=12345,ip,in_port=2 (via action) data_len=62 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:22:22:22,dl_dst=e6:66:c1:11:11:11,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=2,nw_ttl=64,nw_frag=no,tp_src=12345,tp_dst=54969 sctp_csum:9b67e853
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=50 in_port=1 (via action) data_len=50 (unbuffered)
+sctp,vlan_tci=0x0000,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=10.1.1.240,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=34567,tp_dst=12345 sctp_csum:4bb49f65
+])
+
+dnl Check the ct entry
+dnl protoinfo has to be removed in order to normalize the current difference between user and kernel output
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed 's/,protoinfo=.*$//' ], [], [dnl
+sctp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),zone=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl Check kernel datapath to make sure conntrack fills in L3 and L4
 dnl protocol information
 AT_SETUP([conntrack - fragment reassembly with L3 L4 protocol information])

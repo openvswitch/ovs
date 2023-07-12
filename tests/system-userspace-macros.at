@@ -106,6 +106,13 @@ m4_define([CHECK_CONNTRACK_NAT])
 #
 m4_define([CHECK_CONNTRACK_ZEROIP_SNAT])
 
+# CHECK_CONNTRACK_SCTP()
+#
+# Perform requirements checks for running conntrack SCTP. The userspace
+# datapath has no dependency, so no check is required.
+#
+m4_define([CHECK_CONNTRACK_SCTP])
+
 # CHECK_CONNTRACK_TIMEOUT()
 #
 # Perform requirements checks for running conntrack customized timeout tests.

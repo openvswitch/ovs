@@ -42,6 +42,7 @@ Post-v3.1.0
    - SRv6 Tunnel Protocol
      * Added support for userspace datapath (only).
    - Userspace datapath:
+     * Connection tracking now supports extraction of SCTP L4 information.
      * Implementation of OpenFlow meters is now lockless allowing for better
        multi-thread scalability.
      * IP and L4 checksum offload support is now enabled by default for
