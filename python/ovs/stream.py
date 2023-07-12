@@ -784,7 +784,7 @@ class SSLStream(Stream):
 
     @staticmethod
     def _open(suffix, dscp):
-        address = ovs.socket_util.inet_parse_active(suffix, 0)
+        address = ovs.socket_util.inet_parse_active(suffix, 0, raises=False)
         family, sock = ovs.socket_util.inet_create_socket_active(
                 socket.SOCK_STREAM, address)
         if sock is None:

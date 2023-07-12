@@ -16,6 +16,7 @@ ovs_pyfiles = \
 	python/ovs/compat/sortedcontainers/sorteddict.py \
 	python/ovs/compat/sortedcontainers/sortedset.py \
 	python/ovs/daemon.py \
+	python/ovs/dns_resolve.py \
 	python/ovs/db/__init__.py \
 	python/ovs/db/custom_index.py \
 	python/ovs/db/data.py \
@@ -55,6 +56,7 @@ ovs_pyfiles = \
 
 ovs_pytests = \
 	python/ovs/tests/test_decoders.py \
+	python/ovs/tests/test_dns_resolve.py \
 	python/ovs/tests/test_filter.py \
 	python/ovs/tests/test_kv.py \
 	python/ovs/tests/test_list.py \

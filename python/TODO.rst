@@ -32,3 +32,10 @@ Python Bindings To-do List
 
   * Support write-only-changed monitor mode (equivalent of
     OVSDB_IDL_WRITE_CHANGED_ONLY).
+
+* socket_util:
+
+  * Add equivalent fuctions to inet_parse_passive, parse_sockaddr_components,
+    et al. to better support using async dns. The reconnect code will
+    currently log a warning when inet_parse_active() returns w/o yet having
+    resolved an address, but will continue to connect and eventually succeed.

@@ -385,6 +385,7 @@ AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon            info       info       info
+dns_resolve       info       info       info
 fatal-signal      info       info       info
 jsonrpc           info       info       info
 poller            info       info       info
@@ -404,6 +405,7 @@ unixctl_server    info       info       info
                  console    syslog    file
                  -------    ------    ------
 daemon            info        err        dbg
+dns_resolve       info       info        dbg
 fatal-signal      info       info        dbg
 jsonrpc           info       info        dbg
 poller            info       info        dbg

@@ -287,6 +287,7 @@ Depends:
 Suggests:
  python3-netaddr,
  python3-pyparsing,
+ python3-unbound,
 Description: Python 3 bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network

@@ -183,10 +183,10 @@ jobs:
       run:  sudo apt update || true
     - name: install common dependencies
       run:  sudo apt install -y ${{ env.dependencies }}
-    - name: install libunbound libunwind
+    - name: install libunbound libunwind python3-unbound
       # GitHub Actions doesn't have 32-bit versions of these libraries.
       if:   matrix.m32 == ''
-      run:  sudo apt install -y libunbound-dev libunwind-dev
+      run:  sudo apt install -y libunbound-dev libunwind-dev python3-unbound
     - name: install 32-bit libraries
       if:   matrix.m32 != ''
       run:  sudo apt install -y gcc-multilib
