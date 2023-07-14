@@ -324,8 +324,8 @@ A user can use this option to set a minimum frequency of Rx queue to PMD
 reassignment due to PMD Auto Load Balance. For example, this could be set
 (in min) such that a reassignment is triggered at most every few hours.
 
-PMD load based sleeping (Experimental)
---------------------------------------
+PMD load based sleeping
+-----------------------
 
 PMD threads constantly poll Rx queues which are assigned to them. In order to
 reduce the CPU cycles they use, they can sleep for small periods of time
