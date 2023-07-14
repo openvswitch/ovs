@@ -1277,35 +1277,57 @@ OVS_VSWITCHD_START
 dnl Check default
 CHECK_DP_SLEEP_MAX([0], [disabled], [])
 
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep:    0 us
+])
+
 dnl Check low value max sleep
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="1"])
 CHECK_DP_SLEEP_MAX([1], [enabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep:    1 us
+])
 
 dnl Check high value max sleep
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="10000"])
 CHECK_DP_SLEEP_MAX([10000], [enabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep: 10000 us
+])
 
 dnl Check setting max sleep to zero
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="0"])
 CHECK_DP_SLEEP_MAX([0], [disabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep:    0 us
+])
 
 dnl Check above high value max sleep
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="10001"])
 CHECK_DP_SLEEP_MAX([10000], [enabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep: 10000 us
+])
 
 dnl Check rounding
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="490"])
 CHECK_DP_SLEEP_MAX([490], [enabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep:  490 us
+])
 
 dnl Check rounding
 get_log_next_line_num
 AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="499"])
 CHECK_DP_SLEEP_MAX([499], [enabled], [+$LINENUM])
+AT_CHECK([ovs-appctl dpif-netdev/pmd-sleep-show], [0], [dnl
+Default max sleep:  499 us
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

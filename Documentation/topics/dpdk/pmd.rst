@@ -353,6 +353,10 @@ and can differ significantly depending on system configuration. The actual
 time not processing packets will be determined by the sleep and processor
 wake-up times and should be tested with each system configuration.
 
+The current configuration of the PMD load based sleeping can be shown with::
+
+    $ ovs-appctl dpif-netdev/pmd-sleep-show
+
 Sleep time statistics for 10 secs can be seen with::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear \

@@ -701,6 +701,7 @@ enum pmd_info_type {
     PMD_INFO_CLEAR_STATS, /* Set the cycles count to 0. */
     PMD_INFO_SHOW_RXQ,    /* Show poll lists of pmd threads. */
     PMD_INFO_PERF_SHOW,   /* Show pmd performance details. */
+    PMD_INFO_SLEEP_SHOW,  /* Show max sleep configuration details. */
 };
 
 static void
@@ -1441,7 +1442,9 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     unsigned int secs = 0;
     unsigned long long max_secs = (PMD_INTERVAL_LEN * PMD_INTERVAL_MAX)
                                       / INTERVAL_USEC_TO_SEC;
-    bool first_show_rxq = true;
+    uint64_t default_max_sleep = 0;
+    bool show_header = true;
+
 
     ovs_mutex_lock(&dp_netdev_mutex);
 
@@ -1489,7 +1492,7 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
             continue;
         }
         if (type == PMD_INFO_SHOW_RXQ) {
-            if (first_show_rxq) {
+            if (show_header) {
                 if (!secs || secs > max_secs) {
                     secs = max_secs;
                 } else {
@@ -1498,7 +1501,7 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
                 }
                 ds_put_format(&reply, "Displaying last %u seconds "
                               "pmd usage %%\n", secs);
-                first_show_rxq = false;
+                show_header = false;
             }
             pmd_info_show_rxq(&reply, pmd, secs);
         } else if (type == PMD_INFO_CLEAR_STATS) {
@@ -1507,6 +1510,14 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
             pmd_info_show_stats(&reply, pmd);
         } else if (type == PMD_INFO_PERF_SHOW) {
             pmd_info_show_perf(&reply, pmd, (struct pmd_perf_params *)aux);
+        } else if (type == PMD_INFO_SLEEP_SHOW) {
+            if (show_header) {
+                atomic_read_relaxed(&dp->pmd_max_sleep, &default_max_sleep);
+                ds_put_format(&reply, "Default max sleep: %4"PRIu64" us",
+                              default_max_sleep);
+                ds_put_cstr(&reply, "\n");
+                show_header = false;
+            }
         }
     }
     free(pmd_list);
@@ -1607,7 +1618,8 @@ dpif_netdev_init(void)
 {
     static enum pmd_info_type show_aux = PMD_INFO_SHOW_STATS,
                               clear_aux = PMD_INFO_CLEAR_STATS,
-                              poll_aux = PMD_INFO_SHOW_RXQ;
+                              poll_aux = PMD_INFO_SHOW_RXQ,
+                              sleep_aux = PMD_INFO_SLEEP_SHOW;
 
     unixctl_command_register("dpif-netdev/pmd-stats-show", "[-pmd core] [dp]",
                              0, 3, dpif_netdev_pmd_info,
@@ -1619,6 +1631,9 @@ dpif_netdev_init(void)
                              "[-secs secs] [dp]",
                              0, 5, dpif_netdev_pmd_info,
                              (void *)&poll_aux);
+    unixctl_command_register("dpif-netdev/pmd-sleep-show", "[dp]",
+                             0, 1, dpif_netdev_pmd_info,
+                             (void *)&sleep_aux);
     unixctl_command_register("dpif-netdev/pmd-perf-show",
                              "[-nh] [-it iter-history-len]"
                              " [-ms ms-history-len]"

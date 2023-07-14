@@ -50,6 +50,8 @@ Post-v3.1.0
        table to check the status.
      * 'pmd-maxsleep' other_config was renamed to 'pmd-sleep-max'.
        'pmd-maxsleep' is deprecated and will be removed in a future release.
+     * 'ovs-appctl dpif-netdev/pmd-sleep-show' command was added to get the
+       max sleep configuration of PMD thread cores.
    - Linux TC offload:
      * Add support for offloading VXLAN tunnels with the GBP extensions.
    - Python
