@@ -1265,36 +1265,36 @@ OVS_WAIT_UNTIL([tail ovs-vswitchd.log | grep "PMD load based sleeps are disabled
 
 dnl Check low value max sleep
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="1"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="1"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 1 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are enabled."])
 
 dnl Check high value max sleep
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="10000"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="10000"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 10000 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are enabled."])
 
 dnl Check setting max sleep to zero
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="0"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="0"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 0 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are disabled."])
 
 dnl Check above high value max sleep
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="10001"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="10001"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 10000 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are enabled."])
 
 dnl Check rounding
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="490"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="490"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 490 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are enabled."])
 dnl Check rounding
 get_log_next_line_num
-AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-maxsleep="499"])
+AT_CHECK([ovs-vsctl set open_vswitch . other_config:pmd-sleep-max="499"])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD max sleep request is 499 usecs."])
 OVS_WAIT_UNTIL([tail -n +$LINENUM ovs-vswitchd.log | grep "PMD load based sleeps are enabled."])
 

@@ -802,7 +802,7 @@
          The default value is <code>25%</code>.
         </p>
       </column>
-      <column name="other_config" key="pmd-maxsleep"
+      <column name="other_config" key="pmd-sleep-max"
               type='{"type": "integer",
                      "minInteger": 0, "maxInteger": 10000}'>
         <p>

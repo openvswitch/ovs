@@ -4982,7 +4982,16 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
 
     set_pmd_auto_lb(dp, autolb_state, log_autolb);
 
-    pmd_max_sleep = smap_get_ullong(other_config, "pmd-maxsleep", 0);
+    pmd_max_sleep = smap_get_ullong(other_config, "pmd-maxsleep", UINT64_MAX);
+    if (pmd_max_sleep != UINT64_MAX) {
+        VLOG_WARN("pmd-maxsleep is deprecated. "
+                  "Please use pmd-sleep-max instead.");
+    } else {
+        pmd_max_sleep = 0;
+    }
+
+    pmd_max_sleep = smap_get_ullong(other_config, "pmd-sleep-max",
+                                    pmd_max_sleep);
     pmd_max_sleep = MIN(PMD_RCU_QUIESCE_INTERVAL, pmd_max_sleep);
     atomic_read_relaxed(&dp->pmd_max_sleep, &cur_pmd_max_sleep);
     if (first_set_config || pmd_max_sleep != cur_pmd_max_sleep) {
