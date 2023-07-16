@@ -489,6 +489,9 @@ struct netdev_dpdk {
 
         /* Array of vhost rxq states, see vring_state_changed. */
         bool *vhost_rxq_enabled;
+
+        /* Ensures that Rx metadata delivery is configured only once. */
+        bool rx_metadata_delivery_configured;
     );
 
     PADDED_MEMBERS(CACHE_LINE_SIZE,
@@ -1140,6 +1143,45 @@ dpdk_eth_flow_ctrl_setup(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
     }
 }
 
+static void
+dpdk_eth_dev_init_rx_metadata(struct netdev_dpdk *dev)
+{
+    uint64_t rx_metadata = 0;
+    int ret;
+
+    if (dev->rx_metadata_delivery_configured) {
+        return;
+    }
+
+    /* For the fallback offload (non-"transfer" rules). */
+    rx_metadata |= RTE_ETH_RX_METADATA_USER_MARK;
+
+#ifdef ALLOW_EXPERIMENTAL_API
+    /* For the tunnel offload.  */
+    rx_metadata |= RTE_ETH_RX_METADATA_TUNNEL_ID;
+#endif /* ALLOW_EXPERIMENTAL_API */
+
+    ret = rte_eth_rx_metadata_negotiate(dev->port_id, &rx_metadata);
+    if (ret == 0) {
+        if (!(rx_metadata & RTE_ETH_RX_METADATA_USER_MARK)) {
+            VLOG_DBG("%s: The NIC will not provide per-packet USER_MARK",
+                     netdev_get_name(&dev->up));
+        }
+#ifdef ALLOW_EXPERIMENTAL_API
+        if (!(rx_metadata & RTE_ETH_RX_METADATA_TUNNEL_ID)) {
+            VLOG_DBG("%s: The NIC will not provide per-packet TUNNEL_ID",
+                     netdev_get_name(&dev->up));
+        }
+#endif /* ALLOW_EXPERIMENTAL_API */
+    } else {
+        VLOG(ret == -ENOTSUP ? VLL_DBG : VLL_WARN,
+             "%s: Cannot negotiate Rx metadata: %s",
+             netdev_get_name(&dev->up), rte_strerror(-ret));
+    }
+
+    dev->rx_metadata_delivery_configured = true;
+}
+
 static int
 dpdk_eth_dev_init(struct netdev_dpdk *dev)
     OVS_REQUIRES(dev->mutex)
@@ -1153,6 +1195,18 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     uint32_t rx_chksm_offload_capa = RTE_ETH_RX_OFFLOAD_UDP_CKSUM |
                                      RTE_ETH_RX_OFFLOAD_TCP_CKSUM |
                                      RTE_ETH_RX_OFFLOAD_IPV4_CKSUM;
+
+    if (netdev_is_flow_api_enabled()) {
+        /*
+         * Full tunnel offload requires that tunnel ID metadata be
+         * delivered with "miss" packets from the hardware to the
+         * PMD. The same goes for megaflow mark metadata which is
+         * used in MARK + RSS offload scenario.
+         *
+         * Request delivery of such metadata.
+         */
+        dpdk_eth_dev_init_rx_metadata(dev);
+    }
 
     rte_eth_dev_info_get(dev->port_id, &info);
 
@@ -1319,6 +1373,8 @@ common_construct(struct netdev *netdev, dpdk_port_t port_no,
 
     /* Initilize the hardware offload flags to 0 */
     dev->hw_ol_features = 0;
+
+    dev->rx_metadata_delivery_configured = false;
 
     dev->flags = NETDEV_UP | NETDEV_PROMISC;
 
