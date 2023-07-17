@@ -166,6 +166,7 @@ Eziz Durdyyev                      ezizdurdy@gmail.com
 Fabrizio D'Angelo                  fdangelo@redhat.com
 Faicker Mo                         faicker.mo@ucloud.cn
 Fangrui Song                       maskray@google.com
+Felix Huettner                     felix.huettner@mail.schwarz
 Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
