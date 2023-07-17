@@ -127,7 +127,7 @@ static struct ovsdb_cs_ops relay_cs_ops = {
 void
 ovsdb_relay_add_db(struct ovsdb *db, const char *remote,
                    schema_change_callback schema_change_cb,
-                   void *schema_change_aux)
+                   void *schema_change_aux, int probe_interval)
 {
     struct relay_ctx *ctx;
 
@@ -152,8 +152,21 @@ ovsdb_relay_add_db(struct ovsdb *db, const char *remote,
     shash_add(&relay_dbs, db->name, ctx);
     ovsdb_cs_set_leader_only(ctx->cs, false);
     ovsdb_cs_set_remote(ctx->cs, remote, true);
+    ovsdb_cs_set_probe_interval(ctx->cs, probe_interval);
 
     VLOG_DBG("added database: %s, %s", db->name, remote);
+}
+
+/* Updates the probe interval for all relay connections to the specified
+ * value. */
+void
+ovsdb_relay_set_probe_interval(int probe_interval)
+{
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &relay_dbs) {
+        struct relay_ctx *ctx = node->data;
+        ovsdb_cs_set_probe_interval(ctx->cs, probe_interval);
+    }
 }
 
 void

@@ -94,6 +94,7 @@ static unixctl_cb_func ovsdb_server_get_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_connect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_disconnect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_set_active_ovsdb_server_probe_interval;
+static unixctl_cb_func ovsdb_server_set_relay_source_interval;
 static unixctl_cb_func ovsdb_server_set_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_status;
@@ -107,6 +108,7 @@ struct server_config {
     char **sync_exclude;
     bool *is_backup;
     int *replication_probe_interval;
+    int *relay_source_probe_interval;
     struct ovsdb_jsonrpc_server *jsonrpc;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
@@ -328,6 +330,7 @@ main(int argc, char *argv[])
     struct shash all_dbs;
     struct shash_node *node;
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
+    int relay_source_probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -377,6 +380,7 @@ main(int argc, char *argv[])
     server_config.sync_exclude = &sync_exclude;
     server_config.is_backup = &is_backup;
     server_config.replication_probe_interval = &replication_probe_interval;
+    server_config.relay_source_probe_interval = &relay_source_probe_interval;
 
     perf_counters_init();
 
@@ -472,6 +476,9 @@ main(int argc, char *argv[])
     unixctl_command_register(
         "ovsdb-server/set-active-ovsdb-server-probe-interval", "", 1, 1,
         ovsdb_server_set_active_ovsdb_server_probe_interval, &server_config);
+    unixctl_command_register(
+        "ovsdb-server/set-relay-source-probe-interval", "", 1, 1,
+        ovsdb_server_set_relay_source_interval, &server_config);
     unixctl_command_register("ovsdb-server/set-sync-exclude-tables", "",
                              0, 1, ovsdb_server_set_sync_exclude_tables,
                              &server_config);
@@ -797,7 +804,8 @@ open_db(struct server_config *config, const char *filename)
     add_db(config, db);
 
     if (is_relay) {
-        ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config);
+        ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config,
+                           *config->relay_source_probe_interval);
     }
     return NULL;
 }
@@ -1476,6 +1484,26 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply(
+            conn, "Invalid probe interval, integer value expected");
+    }
+}
+
+static void
+ovsdb_server_set_relay_source_interval(struct unixctl_conn *conn,
+                                       int argc OVS_UNUSED,
+                                       const char *argv[],
+                                       void *config_)
+{
+    struct server_config *config = config_;
+    int probe_interval;
+
+    if (str_to_int(argv[1], 10, &probe_interval)) {
+        *config->relay_source_probe_interval = probe_interval;
+        save_config(config);
+        ovsdb_relay_set_probe_interval(probe_interval);
+        unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply_error(
             conn, "Invalid probe interval, integer value expected");
     }
 }
