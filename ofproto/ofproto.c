@@ -2476,6 +2476,7 @@ ofport_open(struct ofproto *ofproto,
             struct ofputil_phy_port *pp,
             struct netdev **p_netdev)
 {
+    uint32_t curr_speed, max_speed;
     enum netdev_flags flags;
     struct netdev *netdev;
     int error;
@@ -2514,8 +2515,9 @@ ofport_open(struct ofproto *ofproto,
     pp->state = netdev_get_carrier(netdev) ? 0 : OFPUTIL_PS_LINK_DOWN;
     netdev_get_features(netdev, &pp->curr, &pp->advertised,
                         &pp->supported, &pp->peer);
-    pp->curr_speed = netdev_features_to_bps(pp->curr, 0) / 1000;
-    pp->max_speed = netdev_features_to_bps(pp->supported, 0) / 1000;
+    netdev_get_speed(netdev, &curr_speed, &max_speed);
+    pp->curr_speed = curr_speed * 1000;
+    pp->max_speed = max_speed * 1000;
 
     *p_netdev = netdev;
     return 0;

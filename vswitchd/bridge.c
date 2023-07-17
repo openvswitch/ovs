@@ -1694,11 +1694,12 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
-        enum netdev_features current;
-        unsigned int mbps;
+        uint32_t mbps;
 
-        netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
+        netdev_get_speed(iface->netdev, &mbps, NULL);
+        if (!mbps) {
+            mbps = NETDEV_DEFAULT_BPS / 1000000;
+        }
         port_s->path_cost = stp_convert_speed_to_cost(mbps);
     }
 
@@ -1777,11 +1778,12 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
-        enum netdev_features current;
-        unsigned int mbps;
+        uint32_t mbps;
 
-        netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
+        netdev_get_speed(iface->netdev, &mbps, NULL);
+        if (!mbps) {
+            mbps = NETDEV_DEFAULT_BPS / 1000000;
+        }
         port_s->path_cost = rstp_convert_speed_to_cost(mbps);
     }
 
@@ -2418,6 +2420,7 @@ iface_refresh_netdev_status(struct iface *iface)
     struct eth_addr mac;
     int64_t bps, mtu_64, ifindex64, link_resets;
     int mtu, error;
+    uint32_t mbps;
 
     if (iface_is_synthetic(iface)) {
         return;
@@ -2456,14 +2459,19 @@ iface_refresh_netdev_status(struct iface *iface)
     ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
 
     error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-    bps = !error ? netdev_features_to_bps(current, 0) : 0;
-    if (bps) {
+    if (!error) {
         ovsrec_interface_set_duplex(iface->cfg,
                                     netdev_features_is_full_duplex(current)
                                     ? "full" : "half");
-        ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
     } else {
         ovsrec_interface_set_duplex(iface->cfg, NULL);
+    }
+
+    netdev_get_speed(iface->netdev, &mbps, NULL);
+    if (mbps) {
+        bps = mbps * 1000000ULL;
+        ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
+    } else {
         ovsrec_interface_set_link_speed(iface->cfg, NULL, 0);
     }
 

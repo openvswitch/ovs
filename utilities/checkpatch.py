@@ -671,18 +671,23 @@ checks += [
 
 easy_to_misuse_api = [
         ('ovsrcu_barrier',
-            'lib/ovs-rcu.c',
+            ['lib/ovs-rcu.c'],
             'Are you sure you need to use ovsrcu_barrier(), '
             'in most cases ovsrcu_synchronize() will be fine?'),
+        ('netdev_features_to_bps',
+            ['lib/netdev.c', 'lib/netdev-bsd.c', 'lib/netdev-linux.c'],
+            'Are you sure you need to use netdev_features_to_bps()? '
+            'If you want to retrieve the current and/or maximum link speed, '
+            'consider using netdev_get_speed() instead.'),
         ]
 
 checks += [
     {'regex': r'(\.c)(\.in)?$',
-     'match_name': lambda x: x != location,
+     'match_name': lambda x, loc=locations: x not in loc,
      'prereq': lambda x: not is_comment_line(x),
      'check': regex_function_factory(function_name),
      'print': regex_warn_factory(description)}
-    for (function_name, location, description) in easy_to_misuse_api]
+    for (function_name, locations, description) in easy_to_misuse_api]
 
 
 def regex_operator_factory(operator):

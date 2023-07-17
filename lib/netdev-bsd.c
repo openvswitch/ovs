@@ -1168,6 +1168,27 @@ cleanup:
     return error;
 }
 
+static int
+netdev_bsd_get_speed(const struct netdev *netdev, uint32_t *current,
+                     uint32_t *max)
+{
+    enum netdev_features f_current, f_supported, f_advertised, f_peer;
+    int error;
+
+    error = netdev_bsd_get_features(netdev, &f_current, &f_advertised,
+                                    &f_supported, &f_peer);
+    if (error) {
+        return error;
+    }
+
+    *current = MIN(UINT32_MAX,
+                   netdev_features_to_bps(f_current, 0) / 1000000ULL);
+    *max = MIN(UINT32_MAX,
+               netdev_features_to_bps(f_supported, 0) / 1000000ULL);
+
+    return 0;
+}
+
 /*
  * Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
  * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
@@ -1493,6 +1514,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     .get_carrier = netdev_bsd_get_carrier,           \
     .get_stats = netdev_bsd_get_stats,               \
     .get_features = netdev_bsd_get_features,         \
+    .get_speed = netdev_bsd_get_speed,               \
     .set_in4 = netdev_bsd_set_in4,                   \
     .get_addr_list = netdev_bsd_get_addr_list,       \
     .get_next_hop = netdev_bsd_get_next_hop,         \

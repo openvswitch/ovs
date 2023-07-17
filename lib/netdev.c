@@ -1158,6 +1158,36 @@ netdev_get_features(const struct netdev *netdev,
     return error;
 }
 
+int
+netdev_get_speed(const struct netdev *netdev, uint32_t *current, uint32_t *max)
+{
+    uint32_t current_dummy, max_dummy;
+    int error;
+
+    if (!current) {
+        current = &current_dummy;
+    }
+    if (!max) {
+        max = &max_dummy;
+    }
+
+    error = netdev->netdev_class->get_speed
+            ? netdev->netdev_class->get_speed(netdev, current, max)
+            : EOPNOTSUPP;
+
+    if (error == EOPNOTSUPP) {
+        enum netdev_features current_f, supported_f;
+
+        error = netdev_get_features(netdev, &current_f, NULL,
+                                    &supported_f, NULL);
+        *current = netdev_features_to_bps(current_f, 0) / 1000000;
+        *max = netdev_features_to_bps(supported_f, 0) / 1000000;
+    } else if (error) {
+        *current = *max = 0;
+    }
+    return error;
+}
+
 /* Returns the maximum speed of a network connection that has the NETDEV_F_*
  * bits in 'features', in bits per second.  If no bits that indicate a speed
  * are set in 'features', returns 'default_bps'. */

@@ -2382,7 +2382,6 @@ static void
 netdev_linux_read_features(struct netdev_linux *netdev)
 {
     struct ethtool_cmd ecmd;
-    uint32_t speed;
     int error;
 
     if (netdev->cache_valid & VALID_FEATURES) {
@@ -2496,20 +2495,20 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     }
 
     /* Current settings. */
-    speed = ethtool_cmd_speed(&ecmd);
-    if (speed == SPEED_10) {
+    netdev->current_speed = ethtool_cmd_speed(&ecmd);
+    if (netdev->current_speed == SPEED_10) {
         netdev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
-    } else if (speed == SPEED_100) {
+    } else if (netdev->current_speed == SPEED_100) {
         netdev->current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
-    } else if (speed == SPEED_1000) {
+    } else if (netdev->current_speed == SPEED_1000) {
         netdev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
-    } else if (speed == SPEED_10000) {
+    } else if (netdev->current_speed == SPEED_10000) {
         netdev->current = NETDEV_F_10GB_FD;
-    } else if (speed == 40000) {
+    } else if (netdev->current_speed == 40000) {
         netdev->current = NETDEV_F_40GB_FD;
-    } else if (speed == 100000) {
+    } else if (netdev->current_speed == 100000) {
         netdev->current = NETDEV_F_100GB_FD;
-    } else if (speed == 1000000) {
+    } else if (netdev->current_speed == 1000000) {
         netdev->current = NETDEV_F_1TB_FD;
     } else {
         netdev->current = 0;
@@ -2555,6 +2554,33 @@ netdev_linux_get_features(const struct netdev *netdev_,
         *advertised = netdev->advertised;
         *supported = netdev->supported;
         *peer = 0;              /* XXX */
+    }
+    error = netdev->get_features_error;
+
+exit:
+    ovs_mutex_unlock(&netdev->mutex);
+    return error;
+}
+
+static int
+netdev_linux_get_speed(const struct netdev *netdev_, uint32_t *current,
+                       uint32_t *max)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
+
+    ovs_mutex_lock(&netdev->mutex);
+    if (netdev_linux_netnsid_is_remote(netdev)) {
+        error = EOPNOTSUPP;
+        goto exit;
+    }
+
+    netdev_linux_read_features(netdev);
+    if (!netdev->get_features_error) {
+        *current = netdev->current_speed == SPEED_UNKNOWN
+                   ? 0 : netdev->current_speed;
+        *max = MIN(UINT32_MAX,
+                   netdev_features_to_bps(netdev->supported, 0) / 1000000ULL);
     }
     error = netdev->get_features_error;
 
@@ -3697,6 +3723,7 @@ const struct netdev_class netdev_linux_class = {
     .destruct = netdev_linux_destruct,
     .get_stats = netdev_linux_get_stats,
     .get_features = netdev_linux_get_features,
+    .get_speed = netdev_linux_get_speed,
     .get_status = netdev_linux_get_status,
     .get_block_id = netdev_linux_get_block_id,
     .send = netdev_linux_send,
@@ -3713,6 +3740,7 @@ const struct netdev_class netdev_tap_class = {
     .destruct = netdev_linux_destruct,
     .get_stats = netdev_tap_get_stats,
     .get_features = netdev_linux_get_features,
+    .get_speed = netdev_linux_get_speed,
     .get_status = netdev_linux_get_status,
     .send = netdev_linux_send,
     .rxq_construct = netdev_linux_rxq_construct,

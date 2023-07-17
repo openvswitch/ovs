@@ -122,3 +122,33 @@ AT_CHECK([ip link show | grep " genev_sys_[[0-9]]*: .* ovs-system " | diff -u - 
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([interface - current speed])
+AT_SKIP_IF([test $HAVE_ETHTOOL = "no"])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ip tuntap add tap0 mode tap])
+on_exit 'ip tuntap del tap0 mode tap'
+
+AT_CHECK([ip link set dev tap0 address aa:55:aa:55:00:01])
+AT_CHECK([ethtool -s tap0 speed 50000 duplex full])
+AT_CHECK([ip link set dev tap0 up])
+
+AT_CHECK([ovs-vsctl add-port br0 tap0 -- set int tap0 type=tap])
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-ports-desc br0 tap0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_PORT_DESC reply (OF1.5):
+ 1(tap0): addr:aa:55:aa:55:00:01
+     config:     0
+     state:      LIVE
+     current:    COPPER
+     speed: 50000 Mbps now, 0 Mbps max
+])
+
+AT_CHECK([ovs-vsctl get interface tap0 link_speed], [0], [dnl
+50000000000
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

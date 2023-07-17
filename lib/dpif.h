@@ -91,7 +91,9 @@
  *
  *    - Carrier status (netdev_get_carrier()).
  *
- *    - Speed (netdev_get_features()).
+ *    - Link features (netdev_get_features()).
+ *
+ *    - Speed (netdev_get_speed()).
  *
  *    - QoS queue configuration (netdev_get_queue(), netdev_set_queue() and
  *      related functions.)

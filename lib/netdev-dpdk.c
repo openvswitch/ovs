@@ -3686,6 +3686,57 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     return 0;
 }
 
+static int
+netdev_dpdk_get_speed(const struct netdev *netdev, uint32_t *current,
+                      uint32_t *max)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct rte_eth_dev_info dev_info;
+    struct rte_eth_link link;
+
+    ovs_mutex_lock(&dev->mutex);
+    link = dev->link;
+    rte_eth_dev_info_get(dev->port_id, &dev_info);
+    ovs_mutex_unlock(&dev->mutex);
+
+    *current = link.link_speed != RTE_ETH_SPEED_NUM_UNKNOWN
+               ? link.link_speed : 0;
+
+    if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_200G) {
+        *max = RTE_ETH_SPEED_NUM_200G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_100G) {
+        *max = RTE_ETH_SPEED_NUM_100G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_56G) {
+        *max = RTE_ETH_SPEED_NUM_56G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_50G) {
+        *max = RTE_ETH_SPEED_NUM_50G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_40G) {
+        *max = RTE_ETH_SPEED_NUM_40G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_25G) {
+        *max = RTE_ETH_SPEED_NUM_25G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_20G) {
+        *max = RTE_ETH_SPEED_NUM_20G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_10G) {
+        *max = RTE_ETH_SPEED_NUM_10G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_5G) {
+        *max = RTE_ETH_SPEED_NUM_5G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_2_5G) {
+        *max = RTE_ETH_SPEED_NUM_2_5G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_1G) {
+        *max = RTE_ETH_SPEED_NUM_1G;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_100M ||
+        dev_info.speed_capa & RTE_ETH_LINK_SPEED_100M_HD) {
+        *max = RTE_ETH_SPEED_NUM_100M;
+    } else if (dev_info.speed_capa & RTE_ETH_LINK_SPEED_10M ||
+        dev_info.speed_capa & RTE_ETH_LINK_SPEED_10M_HD) {
+        *max = RTE_ETH_SPEED_NUM_10M;
+    } else {
+        *max = 0;
+    }
+
+    return 0;
+}
+
 static struct ingress_policer *
 netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
 {
@@ -6332,6 +6383,7 @@ parse_vhost_config(const struct smap *ovs_other_config)
     .get_stats = netdev_dpdk_get_stats,                 \
     .get_custom_stats = netdev_dpdk_get_custom_stats,   \
     .get_features = netdev_dpdk_get_features,           \
+    .get_speed = netdev_dpdk_get_speed,                 \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
     .rxq_recv = netdev_dpdk_rxq_recv
