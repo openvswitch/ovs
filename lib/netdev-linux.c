@@ -4601,13 +4601,13 @@ static const struct tc_ops tc_ops_netem = {
 
 struct htb {
     struct tc tc;
-    unsigned int max_rate;      /* In bytes/s. */
+    uint64_t max_rate;          /* In bytes/s. */
 };
 
 struct htb_class {
     struct tc_queue tc_queue;
-    unsigned int min_rate;      /* In bytes/s. */
-    unsigned int max_rate;      /* In bytes/s. */
+    uint64_t min_rate;          /* In bytes/s. */
+    uint64_t max_rate;          /* In bytes/s. */
     unsigned int burst;         /* In bytes. */
     unsigned int priority;      /* Lower values are higher priorities. */
 };
@@ -4695,8 +4695,8 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     if ((class->min_rate / HTB_RATE2QUANTUM) < mtu) {
         opt.quantum = mtu;
     }
-    opt.buffer = tc_calc_buffer(opt.rate.rate, mtu, class->burst);
-    opt.cbuffer = tc_calc_buffer(opt.ceil.rate, mtu, class->burst);
+    opt.buffer = tc_calc_buffer(class->min_rate, mtu, class->burst);
+    opt.cbuffer = tc_calc_buffer(class->max_rate, mtu, class->burst);
     opt.prio = class->priority;
 
     tcmsg = netdev_linux_tc_make_request(netdev, RTM_NEWTCLASS, NLM_F_CREATE,
@@ -4709,15 +4709,26 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
 
     nl_msg_put_string(&request, TCA_KIND, "htb");
     opt_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
+
+#ifdef HAVE_TCA_HTB_RATE64
+    if (class->min_rate > UINT32_MAX) {
+        nl_msg_put_u64(&request, TCA_HTB_RATE64, class->min_rate);
+    }
+    if (class->max_rate > UINT32_MAX) {
+        nl_msg_put_u64(&request, TCA_HTB_CEIL64, class->max_rate);
+    }
+#endif
     nl_msg_put_unspec(&request, TCA_HTB_PARMS, &opt, sizeof opt);
-    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate, 0);
-    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil, 0);
+
+    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate, class->min_rate);
+    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil, class->max_rate);
     nl_msg_end_nested(&request, opt_offset);
 
     error = tc_transact(&request, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to replace %s class %u:%u, parent %u:%u, "
-                     "min_rate=%u max_rate=%u burst=%u prio=%u (%s)",
+                     "min_rate=%"PRIu64" max_rate=%"PRIu64" burst=%u prio=%u "
+                     "(%s)",
                      netdev_get_name(netdev),
                      tc_get_major(handle), tc_get_minor(handle),
                      tc_get_major(parent), tc_get_minor(parent),
@@ -4737,6 +4748,10 @@ htb_parse_tca_options__(struct nlattr *nl_options, struct htb_class *class)
     static const struct nl_policy tca_htb_policy[] = {
         [TCA_HTB_PARMS] = { .type = NL_A_UNSPEC, .optional = false,
                             .min_len = sizeof(struct tc_htb_opt) },
+#ifdef HAVE_TCA_HTB_RATE64
+        [TCA_HTB_RATE64] = { .type = NL_A_U64, .optional = true },
+        [TCA_HTB_CEIL64] = { .type = NL_A_U64, .optional = true },
+#endif
     };
 
     struct nlattr *attrs[ARRAY_SIZE(tca_htb_policy)];
@@ -4751,7 +4766,15 @@ htb_parse_tca_options__(struct nlattr *nl_options, struct htb_class *class)
     htb = nl_attr_get(attrs[TCA_HTB_PARMS]);
     class->min_rate = htb->rate.rate;
     class->max_rate = htb->ceil.rate;
-    class->burst = tc_ticks_to_bytes(htb->rate.rate, htb->buffer);
+#ifdef HAVE_TCA_HTB_RATE64
+    if (attrs[TCA_HTB_RATE64]) {
+        class->min_rate = nl_attr_get_u64(attrs[TCA_HTB_RATE64]);
+    }
+    if (attrs[TCA_HTB_CEIL64]) {
+        class->max_rate = nl_attr_get_u64(attrs[TCA_HTB_CEIL64]);
+    }
+#endif
+    class->burst = tc_ticks_to_bytes(class->min_rate, htb->buffer);
     class->priority = htb->prio;
     return 0;
 }

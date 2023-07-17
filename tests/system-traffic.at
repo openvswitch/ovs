@@ -2354,6 +2354,34 @@ AT_CHECK([tc class show dev ovs-p1 | grep -q 'class htb .* HTB_CONF'])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([QoS - 64bit])
+AT_SKIP_IF([test $HAVE_TC = no])
+AT_SKIP_IF([test $HAVE_TCA_HTB_RATE64 = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Configure the QoS with rates that require 64bits, i.e: > 34Gbps.
+AT_CHECK([ovs-vsctl set port ovs-p0 qos=@qos -- set port ovs-p1 qos=@qos dnl
+            -- --id=@qos create qos dnl
+               type=linux-htb other-config:max-rate=50000000000 queues:0=@queue dnl
+            -- --id=@queue create queue dnl
+               other_config:min-rate=40000000000 other_config:max-rate=50000000000 dnl
+               other_config:burst=5000000],
+         [ignore], [ignore])
+
+OVS_WAIT_UNTIL([tc qdisc show dev ovs-p0 | grep -q htb])
+OVS_WAIT_UNTIL([tc qdisc show dev ovs-p1 | grep -q htb])
+
+m4_define([HTB_CONF], [rate 40Gbit ceil 50Gbit burst 620000b cburst 618750b])
+AT_CHECK([tc class show dev ovs-p0 | grep -q 'class htb .* HTB_CONF'])
+AT_CHECK([tc class show dev ovs-p1 | grep -q 'class htb .* HTB_CONF'])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conntrack])
 
 AT_SETUP([conntrack - controller])
