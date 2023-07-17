@@ -510,6 +510,8 @@ static int tc_delete_class(const struct netdev *, unsigned int handle);
 
 static int tc_del_qdisc(struct netdev *netdev);
 static int tc_query_qdisc(const struct netdev *netdev);
+static void tc_policer_init(struct tc_police *tc_police, uint64_t kbits_rate,
+                            uint64_t kbits_burst);
 
 void
 tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate,
@@ -2661,29 +2663,6 @@ exit:
     return error;
 }
 
-static struct tc_police
-tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
-{
-    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8;
-    unsigned int bps = ((uint64_t) kbits_rate * 1000) / 8;
-    struct tc_police police;
-    struct tc_ratespec rate;
-    int mtu = 65535;
-
-    memset(&rate, 0, sizeof rate);
-    rate.rate = bps;
-    rate.cell_log = tc_calc_cell_log(mtu);
-    rate.mpu = ETH_TOTAL_MIN;
-
-    memset(&police, 0, sizeof police);
-    police.burst = tc_bytes_to_ticks(bps, bsize);
-    police.action = TC_POLICE_SHOT;
-    police.rate = rate;
-    police.mtu = mtu;
-
-    return police;
-}
-
 static void
 nl_msg_act_police_start_nest(struct ofpbuf *request, uint32_t prio,
                              size_t *offset, size_t *act_offset,
@@ -2764,7 +2743,7 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 
-    pol_act = tc_matchall_fill_police(kbits_rate, kbits_burst);
+    tc_policer_init(&pol_act, kbits_rate, kbits_burst);
     nl_msg_put_string(&request, TCA_KIND, "matchall");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
