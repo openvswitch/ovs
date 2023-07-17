@@ -228,6 +228,16 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
                [Define to 1 if TCA_HTB_RATE64 is available.])],
     [AC_SUBST(HAVE_TCA_HTB_RATE64,no)]
     )
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
+        int x = TCA_POLICE_PKTRATE64;
+    ])],
+    [AC_SUBST(HAVE_TCA_POLICE_PKTRATE64,yes)
+     AC_DEFINE([HAVE_TCA_POLICE_PKTRATE64], [1],
+               [Define to 1 if TCA_POLICE_PKTRATE64 is available.])],
+    [AC_SUBST(HAVE_TCA_POLICE_PKTRATE64,no)]
+    )
 ])
 
 dnl OVS_CHECK_LINUX_SCTP_CT

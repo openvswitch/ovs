@@ -8,6 +8,7 @@ EGREP='@EGREP@'
 PYTHON3='@PYTHON3@'
 CFLAGS='@CFLAGS@'
 HAVE_TCA_HTB_RATE64='@HAVE_TCA_HTB_RATE64@'
+HAVE_TCA_POLICE_PKTRATE64='@HAVE_TCA_POLICE_PKTRATE64@'
 
 # PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
 # stderr that breaks almost any Python3 test (PEP 0538)

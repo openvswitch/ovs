@@ -2382,6 +2382,27 @@ AT_CHECK([tc class show dev ovs-p1 | grep -q 'class htb .* HTB_CONF'])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([Ingress Policing - 64-bit])
+AT_SKIP_IF([test $HAVE_TC = no])
+AT_SKIP_IF([test $HAVE_TCA_POLICE_PKTRATE64 = no])
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_NAMESPACES(ns0)
+ADD_VETH(p0, ns0, br0, "10.1.1.1/24")
+
+AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_rate=50000000])
+AT_CHECK([ovs-vsctl set interface ovs-p0 ingress_policing_burst=400000])
+
+AT_CHECK([tc -o -s -d filter show dev ovs-p0 ingress |
+  sed -n 's/.*\(rate [[0-9]]*[[a-zA-Z]]* burst [[0-9]]*[[a-zA-Z]]*\).*/\1/; T; p; q'],
+  [0],[dnl
+rate 50Gbit burst 74500000b
+])
+
+AT_CHECK([tc -s -d filter show dev ovs-p0 ingress |
+            grep -E "basic|matchall" > /dev/null], [0])
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([conntrack])
 
 AT_SETUP([conntrack - controller])

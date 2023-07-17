@@ -1504,6 +1504,8 @@ static const struct nl_policy police_policy[] = {
     [TCA_POLICE_RATE] = { .type = NL_A_UNSPEC,
                           .min_len = 1024,
                           .optional = true, },
+    [TCA_POLICE_RATE64] = { .type = NL_A_U32,
+                            .optional = true, },
     [TCA_POLICE_PEAKRATE] = { .type = NL_A_UNSPEC,
                               .min_len = 1024,
                               .optional = true, },
