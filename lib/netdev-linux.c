@@ -4781,18 +4781,16 @@ htb_parse_tcmsg__(struct ofpbuf *tcmsg, unsigned int *queue_id,
 }
 
 static void
-htb_parse_qdisc_details__(struct netdev *netdev_,
-                          const struct smap *details, struct htb_class *hc)
+htb_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
+                          struct htb_class *hc)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-
     hc->max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!hc->max_rate) {
-        enum netdev_features current;
+        uint32_t current_speed;
 
-        netdev_linux_read_features(netdev);
-        current = !netdev->get_features_error ? netdev->current : 0;
-        hc->max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
+        netdev_get_speed(netdev, &current_speed, NULL);
+        hc->max_rate = current_speed ? current_speed / 8 * 1000000ULL
+                                     : NETDEV_DEFAULT_BPS / 8;
     }
     hc->min_rate = hc->max_rate;
     hc->burst = 0;
@@ -5253,18 +5251,16 @@ hfsc_query_class__(const struct netdev *netdev, unsigned int handle,
 }
 
 static void
-hfsc_parse_qdisc_details__(struct netdev *netdev_, const struct smap *details,
+hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
                            struct hfsc_class *class)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-
     uint32_t max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!max_rate) {
-        enum netdev_features current;
+        uint32_t current_speed;
 
-        netdev_linux_read_features(netdev);
-        current = !netdev->get_features_error ? netdev->current : 0;
-        max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
+        netdev_get_speed(netdev, &current_speed, NULL);
+        max_rate = current_speed ? current_speed / 8 * 1000000ULL
+                                 : NETDEV_DEFAULT_BPS / 8;
     }
 
     class->min_rate = max_rate;
