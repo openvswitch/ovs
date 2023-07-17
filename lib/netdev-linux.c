@@ -484,9 +484,9 @@ static const struct tc_ops *const tcs[] = {
     NULL
 };
 
-static unsigned int tc_ticks_to_bytes(unsigned int rate, unsigned int ticks);
-static unsigned int tc_bytes_to_ticks(unsigned int rate, unsigned int size);
-static unsigned int tc_buffer_per_jiffy(unsigned int rate);
+static unsigned int tc_ticks_to_bytes(uint64_t rate, unsigned int ticks);
+static unsigned int tc_bytes_to_ticks(uint64_t rate, unsigned int size);
+static unsigned int tc_buffer_per_jiffy(uint64_t rate);
 static uint32_t tc_time_to_ticks(uint32_t time);
 
 static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
@@ -512,10 +512,11 @@ static int tc_del_qdisc(struct netdev *netdev);
 static int tc_query_qdisc(const struct netdev *netdev);
 
 void
-tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate);
+tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate,
+            uint64_t rate64);
 static int tc_calc_cell_log(unsigned int mtu);
 static void tc_fill_rate(struct tc_ratespec *rate, uint64_t bps, int mtu);
-static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
+static int tc_calc_buffer(uint64_t Bps, int mtu, uint64_t burst_bytes);
 
 
 /* This is set pretty low because we probably won't learn anything from the
@@ -2723,7 +2724,7 @@ nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
     nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset,
                                  single_action);
     if (police->rate.rate) {
-        tc_put_rtab(request, TCA_POLICE_RATE, &police->rate);
+        tc_put_rtab(request, TCA_POLICE_RATE, &police->rate, 0);
     }
     if (pkts_rate) {
         uint64_t pkt_burst_ticks;
@@ -4709,8 +4710,8 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     nl_msg_put_string(&request, TCA_KIND, "htb");
     opt_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     nl_msg_put_unspec(&request, TCA_HTB_PARMS, &opt, sizeof opt);
-    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate);
-    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil);
+    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate, 0);
+    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil, 0);
     nl_msg_end_nested(&request, opt_offset);
 
     error = tc_transact(&request, NULL);
@@ -6010,7 +6011,7 @@ exit:
 /* Returns the number of bytes that can be transmitted in 'ticks' ticks at a
  * rate of 'rate' bytes per second. */
 static unsigned int
-tc_ticks_to_bytes(unsigned int rate, unsigned int ticks)
+tc_ticks_to_bytes(uint64_t rate, unsigned int ticks)
 {
     read_psched();
     return (rate * ticks) / ticks_per_s;
@@ -6019,7 +6020,7 @@ tc_ticks_to_bytes(unsigned int rate, unsigned int ticks)
 /* Returns the number of ticks that it would take to transmit 'size' bytes at a
  * rate of 'rate' bytes per second. */
 static unsigned int
-tc_bytes_to_ticks(unsigned int rate, unsigned int size)
+tc_bytes_to_ticks(uint64_t rate, unsigned int size)
 {
     read_psched();
     return rate ? ((unsigned long long int) ticks_per_s * size) / rate : 0;
@@ -6028,7 +6029,7 @@ tc_bytes_to_ticks(unsigned int rate, unsigned int size)
 /* Returns the number of bytes that need to be reserved for qdisc buffering at
  * a transmission rate of 'rate' bytes per second. */
 static unsigned int
-tc_buffer_per_jiffy(unsigned int rate)
+tc_buffer_per_jiffy(uint64_t rate)
 {
     read_psched();
     return rate / buffer_hz;
@@ -6391,15 +6392,19 @@ tc_fill_rate(struct tc_ratespec *rate, uint64_t Bps, int mtu)
     /* rate->overhead = 0; */           /* New in 2.6.24, not yet in some */
     /* rate->cell_align = 0; */         /* distro headers. */
     rate->mpu = ETH_TOTAL_MIN;
-    rate->rate = Bps;
+    rate->rate = MIN(UINT32_MAX, Bps);
 }
 
 /* Appends to 'msg' an "rtab" table for the specified 'rate' as a Netlink
  * attribute of the specified "type".
  *
+ * A 64-bit rate can be provided via 'rate64' in bps.
+ * If zero, the rate in 'rate' will be used.
+ *
  * See tc_calc_cell_log() above for a description of "rtab"s. */
 void
-tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
+tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate,
+            uint64_t rate64)
 {
     uint32_t *rtab;
     unsigned int i;
@@ -6410,7 +6415,7 @@ tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
         if (packet_size < rate->mpu) {
             packet_size = rate->mpu;
         }
-        rtab[i] = tc_bytes_to_ticks(rate->rate, packet_size);
+        rtab[i] = tc_bytes_to_ticks(rate64 ? rate64 : rate->rate, packet_size);
     }
 }
 
@@ -6419,7 +6424,7 @@ tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
  * burst size of 'burst_bytes'.  (If no value was requested, a 'burst_bytes' of
  * 0 is fine.) */
 static int
-tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
+tc_calc_buffer(uint64_t Bps, int mtu, uint64_t burst_bytes)
 {
     unsigned int min_burst = tc_buffer_per_jiffy(Bps) + mtu;
     return tc_bytes_to_ticks(Bps, MAX(burst_bytes, min_burst));
