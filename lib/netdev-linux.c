@@ -2689,21 +2689,26 @@ nl_msg_act_police_end_nest(struct ofpbuf *request, size_t offset,
 }
 
 static void
-nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
+nl_msg_put_act_police(struct ofpbuf *request, uint32_t index,
+                      uint64_t kbits_rate, uint64_t kbits_burst,
                       uint64_t pkts_rate, uint64_t pkts_burst,
                       uint32_t notexceed_act, bool single_action)
 {
     size_t offset, act_offset;
+    struct tc_police police;
     uint32_t prio = 0;
 
-    if (!police->rate.rate && !pkts_rate) {
+    if (!kbits_rate && !pkts_rate) {
         return;
     }
 
+    tc_policer_init(&police, kbits_rate, kbits_burst);
+    police.index = index;
+
     nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset,
                                  single_action);
-    if (police->rate.rate) {
-        tc_put_rtab(request, TCA_POLICE_RATE, &police->rate, 0);
+    if (police.rate.rate) {
+        tc_put_rtab(request, TCA_POLICE_RATE, &police.rate, 0);
     }
     if (pkts_rate) {
         uint64_t pkt_burst_ticks;
@@ -2713,7 +2718,7 @@ nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
         nl_msg_put_u64(request, TCA_POLICE_PKTRATE64, pkts_rate);
         nl_msg_put_u64(request, TCA_POLICE_PKTBURST64, pkt_burst_ticks);
     }
-    nl_msg_put_unspec(request, TCA_POLICE_TBF, police, sizeof *police);
+    nl_msg_put_unspec(request, TCA_POLICE_TBF, &police, sizeof police);
     nl_msg_act_police_end_nest(request, offset, act_offset, notexceed_act);
 }
 
@@ -2726,7 +2731,6 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     size_t basic_offset, action_offset;
     uint16_t prio = TC_RESERVED_PRIORITY_POLICE;
     int ifindex, err = 0;
-    struct tc_police pol_act;
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct tcmsg *tcmsg;
@@ -2743,12 +2747,12 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 
-    tc_policer_init(&pol_act, kbits_rate, kbits_burst);
     nl_msg_put_string(&request, TCA_KIND, "matchall");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
-    nl_msg_put_act_police(&request, &pol_act, kpkts_rate * 1000,
-                          kpkts_burst * 1000, TC_ACT_UNSPEC, false);
+    nl_msg_put_act_police(&request, 0, kbits_rate, kbits_burst,
+                          kpkts_rate * 1000, kpkts_burst * 1000, TC_ACT_UNSPEC,
+                          false);
     nl_msg_end_nested(&request, action_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -5743,7 +5747,6 @@ tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
                uint32_t kpkts_burst)
 {
     size_t basic_offset, police_offset;
-    struct tc_police tc_police;
     struct ofpbuf request;
     struct tcmsg *tcmsg;
     int error;
@@ -5760,9 +5763,9 @@ tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
 
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     police_offset = nl_msg_start_nested(&request, TCA_BASIC_ACT);
-    tc_policer_init(&tc_police, kbits_rate, kbits_burst);
-    nl_msg_put_act_police(&request, &tc_police, kpkts_rate * 1000ULL,
-                          kpkts_burst * 1000ULL, TC_ACT_UNSPEC, false);
+    nl_msg_put_act_police(&request, 0, kbits_rate, kbits_burst,
+                          kpkts_rate * 1000ULL, kpkts_burst * 1000ULL,
+                          TC_ACT_UNSPEC, false);
     nl_msg_end_nested(&request, police_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -5779,15 +5782,11 @@ tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
                       uint32_t kbits_burst, uint32_t pkts_rate,
                       uint32_t pkts_burst, bool update)
 {
-    struct tc_police tc_police;
     struct ofpbuf request;
     struct tcamsg *tcamsg;
     size_t offset;
     int flags;
     int error;
-
-    tc_policer_init(&tc_police, kbits_rate, kbits_burst);
-    tc_police.index = index;
 
     flags = (update ? NLM_F_REPLACE : NLM_F_EXCL) | NLM_F_CREATE;
     tcamsg = tc_make_action_request(RTM_NEWACTION, flags, &request);
@@ -5796,8 +5795,8 @@ tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
     }
 
     offset = nl_msg_start_nested(&request, TCA_ACT_TAB);
-    nl_msg_put_act_police(&request, &tc_police, pkts_rate, pkts_burst,
-                          TC_ACT_PIPE, true);
+    nl_msg_put_act_police(&request, index, kbits_rate, kbits_burst, pkts_rate,
+                          pkts_burst, TC_ACT_PIPE, true);
     nl_msg_end_nested(&request, offset);
 
     error = tc_transact(&request, NULL);
