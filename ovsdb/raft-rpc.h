@@ -125,12 +125,15 @@ struct raft_vote_request {
     uint64_t last_log_index; /* Index of candidate's last log entry. */
     uint64_t last_log_term;  /* Term of candidate's last log entry. */
     bool leadership_transfer;  /* True to override minimum election timeout. */
+    bool is_prevote;         /* True: pre-vote; False: real vote (default). */
 };
 
 struct raft_vote_reply {
     struct raft_rpc_common common;
     uint64_t term;          /* Current term, for candidate to update itself. */
     struct uuid vote;       /* Server ID of vote. */
+    bool is_prevote;        /* Copy of the is_prevote from the request,
+                             * primarily for validation. */
 };
 
 struct raft_add_server_request {

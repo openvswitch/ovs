@@ -283,6 +283,9 @@ raft_vote_request_to_jsonrpc(const struct raft_vote_request *rq,
         json_object_put(args, "leadership_transfer",
                         json_boolean_create(true));
     }
+    if (rq->is_prevote) {
+        json_object_put(args, "is_prevote", json_boolean_create(true));
+    }
 }
 
 static void
@@ -294,6 +297,8 @@ raft_vote_request_from_jsonrpc(struct ovsdb_parser *p,
     rq->last_log_term = raft_parse_required_uint64(p, "last_log_term");
     rq->leadership_transfer
         = raft_parse_optional_boolean(p, "leadership_transfer") == 1;
+    rq->is_prevote
+        = raft_parse_optional_boolean(p, "is_prevote") == 1;
 }
 
 static void
@@ -304,6 +309,9 @@ raft_format_vote_request(const struct raft_vote_request *rq, struct ds *s)
     ds_put_format(s, " last_log_term=%"PRIu64, rq->last_log_term);
     if (rq->leadership_transfer) {
         ds_put_cstr(s, " leadership_transfer=true");
+    }
+    if (rq->is_prevote) {
+        ds_put_cstr(s, " is_prevote=true");
     }
 }
 
@@ -326,6 +334,9 @@ raft_vote_reply_to_jsonrpc(const struct raft_vote_reply *rpy,
 {
     raft_put_uint64(args, "term", rpy->term);
     json_object_put_format(args, "vote", UUID_FMT, UUID_ARGS(&rpy->vote));
+    if (rpy->is_prevote) {
+        json_object_put(args, "is_prevote", json_boolean_create(true));
+    }
 }
 
 static void
@@ -334,6 +345,7 @@ raft_vote_reply_from_jsonrpc(struct ovsdb_parser *p,
 {
     rpy->term = raft_parse_required_uint64(p, "term");
     rpy->vote = raft_parse_required_uuid(p, "vote");
+    rpy->is_prevote = raft_parse_optional_boolean(p, "is_prevote") == 1;
 }
 
 static void
@@ -341,6 +353,9 @@ raft_format_vote_reply(const struct raft_vote_reply *rpy, struct ds *s)
 {
     ds_put_format(s, " term=%"PRIu64, rpy->term);
     ds_put_format(s, " vote="SID_FMT, SID_ARGS(&rpy->vote));
+    if (rpy->is_prevote) {
+        ds_put_cstr(s, " is_prevote=true");
+    }
 }
 
 /* raft_add_server_request */
@@ -1007,8 +1022,10 @@ raft_rpc_get_vote(const union raft_rpc *rpc)
     case RAFT_RPC_BECOME_LEADER:
         return NULL;
 
-    case RAFT_RPC_VOTE_REPLY:
-        return &raft_vote_reply_cast(rpc)->vote;
+    case RAFT_RPC_VOTE_REPLY: {
+        const struct raft_vote_reply *rpy = raft_vote_reply_cast(rpc);
+        return rpy->is_prevote ? NULL : &rpy->vote;
+    }
 
     default:
         OVS_NOT_REACHED();

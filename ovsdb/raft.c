@@ -305,6 +305,11 @@ struct raft {
 
     /* Candidates only.  Reinitialized at start of election. */
     int n_votes;                /* Number of votes for me. */
+    bool prevote_passed;        /* Indicates if it passed pre-vote phase.
+                                 * Pre-vote mechanism is introduced in raft
+                                 * paper section 9.6. We implement it as a
+                                 * sub-state of candidate to minimize the
+                                 * change and keep backward compatibility. */
 
     /* Followers and candidates only. */
     bool candidate_retrying;    /* The earlier election timed-out and we are
@@ -372,7 +377,8 @@ static void raft_become_follower(struct raft *);
 static void raft_reset_election_timer(struct raft *);
 static void raft_reset_ping_timer(struct raft *);
 static void raft_send_heartbeats(struct raft *);
-static void raft_start_election(struct raft *, bool leadership_transfer);
+static void raft_start_election(struct raft *, bool is_prevote,
+                                bool leadership_transfer);
 static bool raft_truncate(struct raft *, uint64_t new_end);
 static void raft_get_servers_from_log(struct raft *, enum vlog_level);
 static void raft_get_election_timer_from_log(struct raft *);
@@ -1069,7 +1075,8 @@ raft_open(struct ovsdb_log *log, struct raft **raftp)
         /* If there's only one server, start an election right away so that the
          * cluster bootstraps quickly. */
         if (hmap_count(&raft->servers) == 1) {
-            raft_start_election(raft, false);
+            /* No pre-vote needed since we are the only one. */
+            raft_start_election(raft, false, false);
         }
     } else {
         raft->join_timeout = time_msec() + 1000;
@@ -1360,7 +1367,7 @@ void
 raft_take_leadership(struct raft *raft)
 {
     if (raft->role != RAFT_LEADER) {
-        raft_start_election(raft, true);
+        raft_start_election(raft, false, true);
     }
 }
 
@@ -1766,12 +1773,12 @@ raft_set_term(struct raft *raft, uint64_t term, const struct uuid *vote)
     return true;
 }
 
-static void
+static bool
 raft_accept_vote(struct raft *raft, struct raft_server *s,
                  const struct uuid *vote)
 {
     if (uuid_equals(&s->vote, vote)) {
-        return;
+        return false;
     }
     if (!uuid_is_zero(&s->vote)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -1785,13 +1792,18 @@ raft_accept_vote(struct raft *raft, struct raft_server *s,
     s->vote = *vote;
     if (uuid_equals(vote, &raft->sid)
         && ++raft->n_votes > hmap_count(&raft->servers) / 2) {
-        raft_become_leader(raft);
+        return true;
     }
+    return false;
 }
 
 static void
-raft_start_election(struct raft *raft, bool leadership_transfer)
+raft_start_election(struct raft *raft, bool is_prevote,
+                    bool leadership_transfer)
 {
+    /* Leadership transfer doesn't use pre-vote. */
+    ovs_assert(!is_prevote || !leadership_transfer);
+
     if (raft->leaving) {
         return;
     }
@@ -1801,7 +1813,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
         return;
     }
 
-    if (!raft_set_term(raft, raft->term + 1, &raft->sid)) {
+    if (!is_prevote && !raft_set_term(raft, raft->term + 1, &raft->sid)) {
         return;
     }
 
@@ -1809,26 +1821,33 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
 
     raft->leader_sid = UUID_ZERO;
     raft->role = RAFT_CANDIDATE;
-    /* If there was no leader elected since last election, we know we are
-     * retrying now. */
-    raft->candidate_retrying = !raft->had_leader;
-    raft->had_leader = false;
+    raft->prevote_passed = !is_prevote;
+
+    if (is_prevote || leadership_transfer) {
+        /* If there was no leader elected since last election, we know we are
+         * retrying now. */
+        raft->candidate_retrying = !raft->had_leader;
+        raft->had_leader = false;
+
+        raft->election_start = time_msec();
+        raft->election_won = 0;
+    }
 
     raft->n_votes = 0;
 
-    raft->election_start = time_msec();
-    raft->election_won = 0;
     raft->leadership_transfer = leadership_transfer;
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     if (!VLOG_DROP_INFO(&rl)) {
         long long int now = time_msec();
+        char *comment = is_prevote ? "pre-vote" : "vote";
         if (now >= raft->election_timeout) {
             VLOG_INFO("term %"PRIu64": %lld ms timeout expired, "
-                      "starting election",
-                      raft->term, now - raft->election_base);
+                      "starting election (%s)",
+                      raft->term, now - raft->election_base, comment);
         } else {
-            VLOG_INFO("term %"PRIu64": starting election", raft->term);
+            VLOG_INFO("term %"PRIu64": starting election (%s)",
+                      raft->term, comment);
         }
     }
     raft_reset_election_timer(raft);
@@ -1853,6 +1872,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
                     ? raft->entries[raft->log_end - raft->log_start - 1].term
                     : raft->snap.term),
                 .leadership_transfer = leadership_transfer,
+                .is_prevote = is_prevote,
             },
         };
         if (failure_test != FT_DONT_SEND_VOTE_REQUEST) {
@@ -1861,7 +1881,13 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
     }
 
     /* Vote for ourselves. */
-    raft_accept_vote(raft, me, &raft->sid);
+    if (raft_accept_vote(raft, me, &raft->sid)) {
+        /* We just started vote, so it shouldn't be accepted yet unless this is
+         * a one-node cluster. In such case we don't do pre-vote, and become
+         * leader immediately. */
+        ovs_assert(!is_prevote);
+        raft_become_leader(raft);
+    }
 }
 
 static void
@@ -2041,10 +2067,10 @@ raft_run(struct raft *raft)
                 raft_reset_election_timer(raft);
             } else {
                 raft_become_follower(raft);
-                raft_start_election(raft, false);
+                raft_start_election(raft, true, false);
             }
         } else {
-            raft_start_election(raft, false);
+            raft_start_election(raft, true, false);
         }
 
     }
@@ -3673,6 +3699,10 @@ raft_handle_vote_request__(struct raft *raft,
         return false;
     }
 
+    if (rq->is_prevote) {
+        return true;
+    }
+
     /* Record a vote for the peer. */
     if (!raft_set_term(raft, raft->term, &rq->common.sid)) {
         return false;
@@ -3685,7 +3715,7 @@ raft_handle_vote_request__(struct raft *raft,
 
 static void
 raft_send_vote_reply(struct raft *raft, const struct uuid *dst,
-                     const struct uuid *vote)
+                     const struct uuid *vote, bool is_prevote)
 {
     union raft_rpc rpy = {
         .vote_reply = {
@@ -3695,6 +3725,7 @@ raft_send_vote_reply(struct raft *raft, const struct uuid *dst,
             },
             .term = raft->term,
             .vote = *vote,
+            .is_prevote = is_prevote,
         },
     };
     raft_send(raft, &rpy);
@@ -3705,7 +3736,9 @@ raft_handle_vote_request(struct raft *raft,
                          const struct raft_vote_request *rq)
 {
     if (raft_handle_vote_request__(raft, rq)) {
-        raft_send_vote_reply(raft, &rq->common.sid, &raft->vote);
+        raft_send_vote_reply(raft, &rq->common.sid,
+                             rq->is_prevote ? &rq->common.sid : &raft->vote,
+                             rq->is_prevote);
     }
 }
 
@@ -3723,7 +3756,14 @@ raft_handle_vote_reply(struct raft *raft,
 
     struct raft_server *s = raft_find_peer(raft, &rpy->common.sid);
     if (s) {
-        raft_accept_vote(raft, s, &rpy->vote);
+        if (raft_accept_vote(raft, s, &rpy->vote)) {
+            if (raft->prevote_passed) {
+                raft_become_leader(raft);
+            } else {
+                /* Start the real election. */
+                raft_start_election(raft, false, false);
+            }
+        }
     }
 }
 
@@ -4357,7 +4397,7 @@ raft_handle_become_leader(struct raft *raft,
         VLOG_INFO("received leadership transfer from %s in term %"PRIu64,
                   raft_get_nickname(raft, &rq->common.sid, buf, sizeof buf),
                   rq->term);
-        raft_start_election(raft, true);
+        raft_start_election(raft, false, true);
     }
 }
 

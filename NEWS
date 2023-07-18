@@ -1,5 +1,11 @@
 Post-v3.2.0
 --------------------
+   - OVSDB:
+     * Support pre-vote mechanism in RAFT that protects the cluster against
+       disruptive servers (section 9.6 of the original RAFT paper).  Upgrading
+       from older version is supported but it may trigger more leader elections
+       during the process, and error logs complaining unrecognized fields may
+       be observed on old nodes.
 
 
 v3.2.0 - 17 Aug 2023
