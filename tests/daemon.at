@@ -284,4 +284,8 @@ AT_CHECK([kill -SEGV $child])
 OVS_WAIT_UNTIL([grep -q "backtrace(monitor)|WARN|SIGSEGV detected, backtrace:" ovsdb-server.log])
 OVS_WAIT_UNTIL([grep -q "daemon_unix(monitor)|ERR|1 crashes: pid .* died, killed (Segmentation fault)" ovsdb-server.log])
 
+# Wait until a new process is started before exiting, so it will be
+# stopped correctly.
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test $(cat ovsdb-server.pid) != $child])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
