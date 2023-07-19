@@ -705,13 +705,14 @@ dpif_port_set_config(struct dpif *dpif, odp_port_t port_no,
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.
  *
- * Retuns ENODEV if the port doesn't exist.
+ * Retuns ENODEV if the port doesn't exist.  Will not log a warning in this
+ * case unless 'warn_if_not_found' is true.
  *
  * The caller owns the data in 'port' and must free it with
  * dpif_port_destroy() when it is no longer needed. */
 int
 dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
-                          struct dpif_port *port)
+                          struct dpif_port *port, bool warn_if_not_found)
 {
     int error = dpif->dpif_class->port_query_by_number(dpif, port_no, port);
     if (!error) {
@@ -719,8 +720,13 @@ dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
                     dpif_name(dpif), port_no, port->name);
     } else {
         memset(port, 0, sizeof *port);
-        VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu32": %s",
-                     dpif_name(dpif), port_no, ovs_strerror(error));
+        if (error == ENODEV && !warn_if_not_found) {
+            VLOG_DBG_RL(&dpmsg_rl, "%s: failed to query port %"PRIu32": %s",
+                        dpif_name(dpif), port_no, ovs_strerror(error));
+        } else {
+            VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu32": %s",
+                         dpif_name(dpif), port_no, ovs_strerror(error));
+        }
     }
     return error;
 }
@@ -788,7 +794,7 @@ dpif_port_get_name(struct dpif *dpif, odp_port_t port_no,
 
     ovs_assert(name_size > 0);
 
-    error = dpif_port_query_by_number(dpif, port_no, &port);
+    error = dpif_port_query_by_number(dpif, port_no, &port, true);
     if (!error) {
         ovs_strlcpy(name, port.name, name_size);
         dpif_port_destroy(&port);
