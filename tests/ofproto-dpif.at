@@ -5349,7 +5349,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 3,push_vlan(vid=17,pcp=0),2
+  [Datapath actions: 3,push_vlan(vid=17,pcp=0),2,3
 ])
 
 flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -5388,7 +5388,7 @@ flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x080
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-expected="push_vlan(vid=17,pcp=0),1,pop_vlan,push_vlan(vid=12,pcp=0),1,2,100"
+expected="push_vlan(vid=12,pcp=0),100,2,1,pop_vlan,push_vlan(vid=17,pcp=0),1,pop_vlan,push_vlan(vid=12,pcp=0),100,2,1"
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
 mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
@@ -5656,7 +5656,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: trunc(100),3,push_vlan(vid=17,pcp=0),2
+  [Datapath actions: trunc(100),3,push_vlan(vid=17,pcp=0),2,trunc(100),3
 ])
 
 flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
