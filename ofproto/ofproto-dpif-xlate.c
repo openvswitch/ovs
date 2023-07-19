@@ -6960,6 +6960,107 @@ xlate_ofpact_unroll_xlate(struct xlate_ctx *ctx,
                  "cookie=%#"PRIx64, a->rule_table_id, a->rule_cookie);
 }
 
+/* Reset the mirror context if we modify the packet and would like to mirror
+ * the new copy. */
+static void
+reset_mirror_ctx(struct xlate_ctx *ctx, const struct flow *flow,
+                 const struct ofpact *a)
+{
+    switch (a->type) {
+    case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_POP_MPLS:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_DEC_NSH_TTL:
+    case OFPACT_DEC_TTL:
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
+    case OFPACT_NAT:
+        ctx->mirrors = 0;
+        return;
+
+    case OFPACT_SET_FIELD: {
+        const struct ofpact_set_field *set_field;
+        const struct mf_field *mf;
+
+        set_field = ofpact_get_SET_FIELD(a);
+        mf = set_field->field;
+        if (mf_are_prereqs_ok(mf, flow, NULL)) {
+            ctx->mirrors = 0;
+        }
+        return;
+    }
+
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_IPV4_DST:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            ctx->mirrors = 0;
+        }
+        return;
+
+    case OFPACT_SET_IP_DSCP:
+    case OFPACT_SET_IP_ECN:
+    case OFPACT_SET_IP_TTL:
+        if (is_ip_any(flow)) {
+            ctx->mirrors = 0;
+        }
+        return;
+
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_L4_DST_PORT:
+        if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
+            ctx->mirrors = 0;
+        }
+        return;
+
+    case OFPACT_OUTPUT_REG:
+    case OFPACT_OUTPUT_TRUNC:
+    case OFPACT_GROUP:
+    case OFPACT_OUTPUT:
+    case OFPACT_CONTROLLER:
+    case OFPACT_RESUBMIT:
+    case OFPACT_GOTO_TABLE:
+    case OFPACT_WRITE_METADATA:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_REG_MOVE:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
+    case OFPACT_LEARN:
+    case OFPACT_ENQUEUE:
+    case OFPACT_SET_QUEUE:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_MULTIPATH:
+    case OFPACT_BUNDLE:
+    case OFPACT_EXIT:
+    case OFPACT_UNROLL_XLATE:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_ACTIONS:
+    case OFPACT_METER:
+    case OFPACT_SAMPLE:
+    case OFPACT_CLONE:
+    case OFPACT_DEBUG_RECIRC:
+    case OFPACT_DEBUG_SLOW:
+    case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
+    case OFPACT_CHECK_PKT_LARGER:
+    case OFPACT_DELETE_FIELD:
+    case OFPACT_NOTE:
+    case OFPACT_CONJUNCTION:
+        return;
+    }
+
+    OVS_NOT_REACHED();
+}
+
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx, bool is_last_action,
@@ -7000,6 +7101,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
             break;
         }
+
+        reset_mirror_ctx(ctx, flow, a);
 
         if (OVS_UNLIKELY(ctx->xin->trace)) {
             struct ds s = DS_EMPTY_INITIALIZER;
