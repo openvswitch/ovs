@@ -673,7 +673,7 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
     }
 
     for (int i = 0; i < n_port_nos; i++) {
-        if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port)) {
+        if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port, true)) {
             continue;
         }
 
