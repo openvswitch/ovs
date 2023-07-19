@@ -2161,8 +2161,7 @@ port_destruct(struct ofport *port_, bool del)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
     const char *devname = netdev_get_name(port->up.netdev);
     const char *netdev_type = netdev_get_type(port->up.netdev);
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-    const char *dp_port_name;
+    struct dpif_port dpif_port;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     xlate_txn_start();
@@ -2176,9 +2175,13 @@ port_destruct(struct ofport *port_, bool del)
         del = dpif_cleanup_required(ofproto->backer->dpif);
     }
 
-    dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
-                                              sizeof namebuf);
-    if (del && dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
+    /* Don't try to delete ports that are not part of the datapath. */
+    if (del && port->odp_port == ODPP_NONE) {
+        del = false;
+    }
+
+    if (del && !dpif_port_query_by_number(ofproto->backer->dpif,
+                                          port->odp_port, &dpif_port, false)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of
@@ -2186,6 +2189,7 @@ port_destruct(struct ofport *port_, bool del)
         if (!port->is_tunnel) {
             dpif_port_del(ofproto->backer->dpif, port->odp_port, false);
         }
+        dpif_port_destroy(&dpif_port);
     } else if (del) {
         /* The underlying device is already deleted (e.g. tunctl -d).
          * Calling dpif_port_remove to do local cleanup for the netdev */

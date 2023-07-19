@@ -122,3 +122,60 @@ AT_CHECK([ip link show | grep " genev_sys_[[0-9]]*: .* ovs-system " | diff -u - 
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([interface - datapath port rename])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Not relevant for userspace datapath.
+AT_SKIP_IF([! ovs-appctl dpctl/show | grep -q ovs-system])
+
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+dnl We will rename ovs-veth0, so removing the peer on exit.
+on_exit 'ip link del ovs-veth1'
+
+AT_CHECK([ovs-vsctl add-port br0 ovs-veth0])
+
+OVS_WAIT_UNTIL([ip link show | grep -q "ovs-veth0.* ovs-system "])
+
+AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
+  port 0: ovs-system (internal)
+  port 1: br0 (internal)
+  port 2: ovs-veth0
+])
+
+dnl Rename the interface while attached to OVS.
+AT_CHECK([ip l set ovs-veth0 name ovs-new-port])
+
+dnl Wait for the port to be detached from the OVS datapath.
+OVS_WAIT_UNTIL([ip link show | grep "ovs-new-port" | grep -v "ovs-system"])
+
+dnl Check that database indicates the error.
+AT_CHECK([ovs-vsctl get interface ovs-veth0 error], [0], [dnl
+"could not open network device ovs-veth0 (No such device)"
+])
+
+dnl Check that the port is no longer in the datapath.
+AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
+  port 0: ovs-system (internal)
+  port 1: br0 (internal)
+])
+
+dnl Rename the interface back and check that it is in use again.
+AT_CHECK([ip l set ovs-new-port name ovs-veth0])
+
+OVS_WAIT_UNTIL([ip link show | grep -q "ovs-veth0.* ovs-system "])
+
+AT_CHECK([ovs-vsctl get interface ovs-veth0 error], [0], [dnl
+[[]]
+])
+
+AT_CHECK([ovs-appctl dpctl/show | grep port], [0], [dnl
+  port 0: ovs-system (internal)
+  port 1: br0 (internal)
+  port 2: ovs-veth0
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["
+  /could not open network device ovs-veth0 (No such device)/d
+"])
+AT_CLEANUP
