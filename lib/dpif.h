@@ -463,7 +463,7 @@ void dpif_port_clone(struct dpif_port *, const struct dpif_port *);
 void dpif_port_destroy(struct dpif_port *);
 bool dpif_port_exists(const struct dpif *dpif, const char *devname);
 int dpif_port_query_by_number(const struct dpif *, odp_port_t port_no,
-                              struct dpif_port *);
+                              struct dpif_port *, bool warn_if_not_found);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
 int dpif_port_get_name(struct dpif *, odp_port_t port_no,
