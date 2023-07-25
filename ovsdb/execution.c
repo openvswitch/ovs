@@ -320,7 +320,7 @@ parse_row(const struct json *json, const struct ovsdb_table *table,
     }
 
     row = ovsdb_row_create(table);
-    error = ovsdb_row_from_json(row, json, symtab, columns);
+    error = ovsdb_row_from_json(row, json, symtab, columns, false);
     if (error) {
         ovsdb_row_destroy(row);
         return error;
@@ -764,7 +764,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 
             row = ovsdb_row_create(table);
             error = ovsdb_row_from_json(row, rows->array.elems[i], x->symtab,
-                                        NULL);
+                                        NULL, false);
             if (error) {
                 ovsdb_row_destroy(row);
                 break;
