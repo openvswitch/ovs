@@ -106,7 +106,14 @@ ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
                                       column_name, schema->name);
         }
 
-        error = ovsdb_datum_from_json(&datum, &column->type, node->data, NULL);
+        if (row_contains_diff) {
+            /* Diff may violate the type size rules. */
+            error = ovsdb_transient_datum_from_json(&datum, &column->type,
+                                                    node->data);
+        } else {
+            error = ovsdb_datum_from_json(&datum, &column->type,
+                                          node->data, NULL);
+        }
         if (error) {
             return error;
         }
