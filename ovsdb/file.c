@@ -117,9 +117,7 @@ ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
         if (error) {
             return error;
         }
-        if (row_contains_diff
-            && !ovsdb_datum_is_default(&row->fields[column->index],
-                                       &column->type)) {
+        if (row_contains_diff) {
             error = ovsdb_datum_apply_diff_in_place(
                                            &row->fields[column->index],
                                            &datum, &column->type);
@@ -160,8 +158,7 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
 
         new = ovsdb_row_create(table);
         *ovsdb_row_get_uuid_rw(new) = *row_uuid;
-        error = ovsdb_file_update_row_from_json(new, converting,
-                                                row_contains_diff, json);
+        error = ovsdb_file_update_row_from_json(new, converting, false, json);
         if (error) {
             ovsdb_row_destroy(new);
         } else {
