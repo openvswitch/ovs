@@ -24,6 +24,9 @@ m4_define([OVSDB_SERVER_SHUTDOWN2],
 # If a given UUID appears more than once it is always replaced by the
 # same marker.
 #
+# Additionally, checks that records written to a database file can be
+# read back producing the same in-memory database content.
+#
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
@@ -31,12 +34,22 @@ m4_define([OVSDB_CHECK_EXECUTION],
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    on_exit 'kill `cat *.pid`'
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+                          --remote=punix:socket db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
      [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore])
 cat stdout >> output
 ])
    AT_CHECK([uuidfilt output], [0], [$4], [ignore])
+
+   AT_CHECK([ovsdb-client dump unix:socket], [0], [stdout], [ignore])
+
+   OVSDB_SERVER_SHUTDOWN
+
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+                          --remote=punix:socket db], [0], [ignore], [ignore])
+   OVS_WAIT_UNTIL([ovsdb-client dump unix:socket > dump2; diff stdout dump2])
+
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
