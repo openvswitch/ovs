@@ -870,7 +870,8 @@ do_parse_rows(struct ovs_cmdl_context *ctx)
         row = ovsdb_row_create(table);
 
         json = unbox_json(parse_json(ctx->argv[i]));
-        check_ovsdb_error(ovsdb_row_from_json(row, json, NULL, &columns));
+        check_ovsdb_error(ovsdb_row_from_json(row, json, NULL,
+                                              &columns, false));
         json_destroy(json);
 
         print_and_free_json(ovsdb_row_to_json(row, &all_columns));
@@ -937,7 +938,7 @@ do_compare_rows(struct ovs_cmdl_context *ctx)
         }
         names[i] = xstrdup(json->array.elems[0]->string);
         check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[1],
-                                              NULL, NULL));
+                                              NULL, NULL, false));
         json_destroy(json);
     }
     for (i = 0; i < n_rows; i++) {
@@ -1050,7 +1051,7 @@ do_evaluate_condition__(struct ovs_cmdl_context *ctx, int mode)
     for (i = 0; i < n_rows; i++) {
         rows[i] = ovsdb_row_create(table);
         check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[i],
-                                              NULL, NULL));
+                                              NULL, NULL, false));
     }
     json_destroy(json);
 
@@ -1224,7 +1225,7 @@ do_execute_mutations(struct ovs_cmdl_context *ctx)
     for (i = 0; i < n_rows; i++) {
         rows[i] = ovsdb_row_create(table);
         check_ovsdb_error(ovsdb_row_from_json(rows[i], json->array.elems[i],
-                                              NULL, NULL));
+                                              NULL, NULL, false));
     }
     json_destroy(json);
 
@@ -1338,7 +1339,7 @@ do_query(struct ovs_cmdl_context *ctx)
         struct ovsdb_row *row = ovsdb_row_create(table);
         uuid_generate(ovsdb_row_get_uuid_rw(row));
         check_ovsdb_error(ovsdb_row_from_json(row, json->array.elems[i],
-                                              NULL, NULL));
+                                              NULL, NULL, false));
         if (ovsdb_table_get_row(table, ovsdb_row_get_uuid(row))) {
             ovs_fatal(0, "duplicate UUID "UUID_FMT" in table",
                       UUID_ARGS(ovsdb_row_get_uuid(row)));
@@ -1445,7 +1446,7 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
         row = ovsdb_row_create(table);
         uuid_generate(ovsdb_row_get_uuid_rw(row));
         check_ovsdb_error(ovsdb_row_from_json(row, json->array.elems[i],
-                                              NULL, NULL));
+                                              NULL, NULL, false));
 
         /* Initialize row and find equivalence class. */
         rows[i].uuid = *ovsdb_row_get_uuid(row);
