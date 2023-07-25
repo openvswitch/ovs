@@ -114,7 +114,8 @@ void ovsdb_row_columns_to_string(const struct ovsdb_row *,
 struct ovsdb_error *ovsdb_row_from_json(struct ovsdb_row *,
                                         const struct json *,
                                         struct ovsdb_symbol_table *,
-                                        struct ovsdb_column_set *included)
+                                        struct ovsdb_column_set *included,
+                                        bool is_diff)
     OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_row_to_json(const struct ovsdb_row *,
                                const struct ovsdb_column_set *include);
