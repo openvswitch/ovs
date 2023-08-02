@@ -1094,6 +1094,7 @@ do_show_log_cluster(struct ovsdb_log *log)
             free(s);
         }
 
+        json_destroy(json);
         putchar('\n');
     }
 
