@@ -382,6 +382,7 @@ ovsdb_relay_run(void)
             }
             ovsdb_cs_event_destroy(event);
         }
+        ovsdb_txn_history_run(ctx->db);
     }
 }
 
