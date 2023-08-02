@@ -233,7 +233,7 @@ main_loop(struct server_config *config,
 
         SHASH_FOR_EACH_SAFE (node, all_dbs) {
             struct db *db = node->data;
-            ovsdb_txn_history_run(db->db);
+
             ovsdb_storage_run(db->db->storage);
             read_db(config, db);
             /* Run triggers after storage_run and read_db to make sure new raft
@@ -663,6 +663,7 @@ parse_txn(struct server_config *config, struct db *db,
         if (!error && !uuid_is_zero(txnid)) {
             db->db->prereq = *txnid;
         }
+        ovsdb_txn_history_run(db->db);
     }
     return error;
 }
