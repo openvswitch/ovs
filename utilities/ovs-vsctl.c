@@ -575,15 +575,18 @@ add_bridge_to_cache(struct vsctl_context *vsctl_ctx,
                     struct ovsrec_bridge *br_cfg, const char *name,
                     struct vsctl_bridge *parent, int vlan)
 {
-    struct vsctl_bridge *br = xmalloc(sizeof *br);
+    struct vsctl_bridge *br = xzalloc(sizeof *br);
+
     br->br_cfg = br_cfg;
     br->name = xstrdup(name);
     ovs_list_init(&br->ports);
     br->parent = parent;
     br->vlan = vlan;
     hmap_init(&br->children);
+
     if (parent) {
         struct vsctl_bridge *conflict = find_vlan_bridge(parent, vlan);
+
         if (conflict) {
             VLOG_WARN("%s: bridge has multiple VLAN bridges (%s and %s) "
                       "for VLAN %d, but only one is allowed",
@@ -659,7 +662,7 @@ static struct vsctl_port *
 add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
                   struct ovsrec_port *port_cfg)
 {
-    struct vsctl_port *port;
+    struct vsctl_port *port = xzalloc(sizeof *port);
 
     if (port_cfg->tag
         && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095) {
@@ -671,7 +674,6 @@ add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
         }
     }
 
-    port = xmalloc(sizeof *port);
     ovs_list_push_back(&parent->ports, &port->ports_node);
     ovs_list_init(&port->ifaces);
     port->port_cfg = port_cfg;

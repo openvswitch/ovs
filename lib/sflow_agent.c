@@ -510,8 +510,16 @@ void sfl_agent_sysError(SFLAgent *agent, char *modName, char *msg)
 
 static void * sflAlloc(SFLAgent *agent, size_t bytes)
 {
-    if(agent->allocFn) return (*agent->allocFn)(agent->magic, agent, bytes);
-    else return SFL_ALLOC(bytes);
+    void *alloc;
+
+    if (agent->allocFn) {
+        alloc = (*agent->allocFn)(agent->magic, agent, bytes);
+        ovs_assert(alloc);
+        memset(alloc, 0, bytes);
+    } else {
+        alloc = SFL_ALLOC(bytes);
+    }
+    return alloc;
 }
 
 static void sflFree(SFLAgent *agent, void *obj)
