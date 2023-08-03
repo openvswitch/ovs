@@ -10,7 +10,7 @@ function configure_ovs()
     ./boot.sh && ./configure $*
 }
 
-configure_ovs $EXTRA_OPTS $*
+configure_ovs $EXTRA_OPTS $OPTS $*
 
 if [ "$CC" = "clang" ]; then
     make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
