@@ -416,6 +416,7 @@ Shashwat Srivastava                shashwat.srivastava@tcs.com
 Shih-Hao Li                        shihli@vmware.com
 Shu Shen                           shu.shen@radisys.com
 Simon Horman                       simon.horman@corigine.com
+Simon Jones                        batmanustc@gmail.com
 Sivaprasad Tummala                 sivaprasad.tummala@intel.com
 Somnath Chatterjee                 somnath.b.chatterjee@ericsson.com
 Songtao Zhan                       zhanst1@chinatelecom.cn
