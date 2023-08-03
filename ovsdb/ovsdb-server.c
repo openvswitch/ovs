@@ -2262,6 +2262,7 @@ sset_from_json(struct sset *sset, const struct json *array)
 
     sset_clear(sset);
 
+    ovs_assert(array);
     ovs_assert(array->type == JSON_ARRAY);
     for (i = 0; i < array->array.n; i++) {
         const struct json *elem = array->array.elems[i];

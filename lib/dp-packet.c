@@ -175,6 +175,7 @@ dp_packet_new_with_headroom(size_t size, size_t headroom)
 struct dp_packet *
 dp_packet_clone(const struct dp_packet *buffer)
 {
+    ovs_assert(buffer);
     return dp_packet_clone_with_headroom(buffer, 0);
 }
 

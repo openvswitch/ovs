@@ -1131,6 +1131,8 @@ static void
 ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              struct jsonrpc_msg *request)
 {
+    ovs_assert(db);
+
     /* Check for duplicate ID. */
     size_t hash = json_hash(request->id, 0);
     struct ovsdb_jsonrpc_trigger *t
@@ -1391,6 +1393,8 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              enum ovsdb_monitor_version version,
                              const struct json *request_id)
 {
+    ovs_assert(db);
+
     struct ovsdb_jsonrpc_monitor *m = NULL;
     struct ovsdb_monitor *dbmon = NULL;
     struct json *monitor_id, *monitor_requests;

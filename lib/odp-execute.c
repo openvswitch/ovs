@@ -147,6 +147,8 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
     uint8_t new_tos;
     uint8_t new_ttl;
 
+    ovs_assert(nh);
+
     if (mask->ipv4_src) {
         ip_src_nh = get_16aligned_be32(&nh->ip_src);
         new_ip_src = key->ipv4_src | (ip_src_nh & ~mask->ipv4_src);
@@ -286,6 +288,8 @@ set_arp(struct dp_packet *packet, const struct ovs_key_arp *key,
         const struct ovs_key_arp *mask)
 {
     struct arp_eth_header *arp = dp_packet_l3(packet);
+
+    ovs_assert(arp);
 
     if (!mask) {
         arp->ar_op = key->arp_op;

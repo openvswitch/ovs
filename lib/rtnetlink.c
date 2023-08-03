@@ -112,7 +112,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
         if (parsed) {
             const struct ifinfomsg *ifinfo;
 
-            ifinfo = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *ifinfo);
+            ifinfo = ofpbuf_at_assert(buf, NLMSG_HDRLEN, sizeof *ifinfo);
 
             /* Wireless events can be spammy and cause a
              * lot of unnecessary churn and CPU load in
@@ -175,7 +175,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
         if (parsed) {
             const struct ifaddrmsg *ifaddr;
 
-            ifaddr = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *ifaddr);
+            ifaddr = ofpbuf_at_assert(buf, NLMSG_HDRLEN, sizeof *ifaddr);
 
             change->nlmsg_type     = nlmsg->nlmsg_type;
             change->if_index       = ifaddr->ifa_index;

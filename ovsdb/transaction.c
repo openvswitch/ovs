@@ -34,6 +34,7 @@
 #include "storage.h"
 #include "table.h"
 #include "uuid.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(transaction);
 
@@ -576,6 +577,7 @@ ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
         dst_row = CONST_CAST(struct ovsdb_row *,
                     ovsdb_table_get_row(weak->dst_table, &weak->dst));
 
+        ovs_assert(dst_row);
         ovs_assert(!ovsdb_row_find_weak_ref(dst_row, weak));
         hmap_insert(&dst_row->dst_refs, &weak->dst_node,
                     ovsdb_weak_ref_hash(weak));

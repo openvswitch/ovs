@@ -265,7 +265,7 @@ void *
 shash_find_and_delete_assert(struct shash *sh, const char *name)
 {
     void *data = shash_find_and_delete(sh, name);
-    ovs_assert(data != NULL);
+    ovs_assert(data);
     return data;
 }
 

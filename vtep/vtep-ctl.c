@@ -1065,6 +1065,7 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
             continue;
         }
         ps = shash_find_data(&vtepctl_ctx->pswitches, ps_cfg->name);
+        ovs_assert(ps);
         for (j = 0; j < ps_cfg->n_ports; j++) {
             struct vteprec_physical_port *port_cfg = ps_cfg->ports[j];
             struct vtep_ctl_port *port;

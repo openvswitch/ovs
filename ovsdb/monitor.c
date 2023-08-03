@@ -1322,6 +1322,7 @@ ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
     struct ovsdb_monitor_table * mt;
 
     mt = shash_find_data(&dbmon->tables, table->schema->name);
+    ovs_assert(mt);
     mt->select |= select;
 }
 
@@ -1705,6 +1706,8 @@ ovsdb_monitor_hash(const struct ovsdb_monitor *dbmon, size_t basis)
 
     for (i = 0; i < n; i++) {
         struct ovsdb_monitor_table *mt = nodes[i]->data;
+
+        ovs_assert(mt);
 
         basis = hash_pointer(mt->table, basis);
         basis = hash_3words(mt->select, mt->n_columns, basis);

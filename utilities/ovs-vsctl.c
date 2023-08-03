@@ -820,6 +820,7 @@ vsctl_context_populate_cache(struct ctl_context *ctx)
             continue;
         }
         br = shash_find_data(&vsctl_ctx->bridges, br_cfg->name);
+        ovs_assert(br);
         for (j = 0; j < br_cfg->n_ports; j++) {
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
             struct vsctl_port *port;
