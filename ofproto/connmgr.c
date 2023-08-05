@@ -1649,6 +1649,8 @@ connmgr_send_table_status(struct connmgr *mgr,
     }
 }
 
+COVERAGE_DEFINE(connmgr_async_unsent);
+
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
  * necessary according to their individual configurations. */
 void
@@ -1656,6 +1658,7 @@ connmgr_send_async_msg(struct connmgr *mgr,
                        const struct ofproto_async_msg *am)
 {
     struct ofconn *ofconn;
+    bool sent = false;
 
     LIST_FOR_EACH (ofconn, connmgr_node, &mgr->conns) {
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
@@ -1677,6 +1680,11 @@ connmgr_send_async_msg(struct connmgr *mgr,
                       am->pin.up.base.flow_metadata.flow.in_port.ofp_port,
                       msg, &txq);
         do_send_packet_ins(ofconn, &txq);
+        sent = true;
+    }
+
+    if (!sent) {
+        COVERAGE_INC(connmgr_async_unsent);
     }
 }
 
