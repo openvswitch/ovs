@@ -51,6 +51,8 @@ This is the current list of active Open vSwitch committers:
      - istokes@ovn.org
    * - Ilya Maximets
      - i.maximets@ovn.org
+   * - Kevin Traynor
+     - ktraynor@redhat.com
    * - Russell Bryant
      - russell@ovn.org
    * - Simon Horman
