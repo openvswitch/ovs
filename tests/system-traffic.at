@@ -1202,11 +1202,11 @@ AT_CHECK([ovs-ofctl add-flow br0 in_port=at_srv6,actions=mod_dl_dst:aa:55:aa:55:
 
 dnl Set up tunnel endpoints on the namespace 'at_ns0',
 dnl and overlay port on the namespace 'at_ns1'
-ADD_VETH_NS([at_ns0], [veth0], [10.1.1.2/24], [at_ns1], [veth1], [10.1.1.1/24])
+ADD_VETH_NS([at_ns0], [ovs-veth0], [10.1.1.2/24], [at_ns1], [ovs-veth1], [10.1.1.1/24])
 NS_CHECK_EXEC([at_ns0], [ip sr tunsrc set fc00:a::1])
 NS_CHECK_EXEC([at_ns0], [ip route add 10.100.100.0/24 encap seg6 mode encap segs fc00::100 dev p0])
-NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX4 nh4 0.0.0.0 dev veth0])
-NS_CHECK_EXEC([at_ns1], [ip route add 10.100.100.0/24 via 10.1.1.2 dev veth1])
+NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX4 nh4 0.0.0.0 dev ovs-veth0])
+NS_CHECK_EXEC([at_ns1], [ip route add 10.100.100.0/24 via 10.1.1.2 dev ovs-veth1])
 
 dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
@@ -1263,11 +1263,11 @@ AT_CHECK([ovs-ofctl add-flow br0 in_port=at_srv6,actions=mod_dl_dst:aa:55:aa:55:
 
 dnl Set up tunnel endpoints on the namespace 'at_ns0',
 dnl and overlay port on the namespace 'at_ns1'
-ADD_VETH_NS([at_ns0], [veth0], [fc00:1::2/64], [at_ns1], [veth1], [fc00:1::1/64])
+ADD_VETH_NS([at_ns0], [ovs-veth0], [fc00:1::2/64], [at_ns1], [ovs-veth1], [fc00:1::1/64])
 NS_CHECK_EXEC([at_ns0], [ip sr tunsrc set fc00:a::1])
 NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:100::0/64 encap seg6 mode encap segs fc00::100 dev p0])
-NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX6 nh6 :: dev veth0])
-NS_CHECK_EXEC([at_ns1], [ip -6 route add fc00:100::/64 via fc00:1::2 dev veth1])
+NS_CHECK_EXEC([at_ns0], [ip -6 route add fc00:a::1 encap seg6local action End.DX6 nh6 :: dev ovs-veth0])
+NS_CHECK_EXEC([at_ns1], [ip -6 route add fc00:100::/64 via fc00:1::2 dev ovs-veth1])
 
 dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
