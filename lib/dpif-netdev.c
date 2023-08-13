@@ -3365,14 +3365,13 @@ static inline void
 netdev_flow_key_init(struct netdev_flow_key *key,
                      const struct flow *flow)
 {
-    uint64_t *dst = miniflow_values(&key->mf);
     uint32_t hash = 0;
     uint64_t value;
 
     miniflow_map_init(&key->mf, flow);
     miniflow_init(&key->mf, flow);
 
-    size_t n = dst - miniflow_get_values(&key->mf);
+    size_t n = miniflow_n_values(&key->mf);
 
     FLOW_FOR_EACH_IN_MAPS (value, flow, key->mf.map) {
         hash = hash_add64(hash, value);
