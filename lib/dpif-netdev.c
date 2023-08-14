@@ -4166,7 +4166,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
                 const struct dpif_flow_put *put,
                 struct dpif_flow_stats *stats)
 {
-    struct dp_netdev_flow *netdev_flow;
+    struct dp_netdev_flow *netdev_flow = NULL;
     int error = 0;
 
     if (stats) {
@@ -4174,16 +4174,35 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
     }
 
     ovs_mutex_lock(&pmd->flow_mutex);
-    netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
-    if (!netdev_flow) {
-        if (put->flags & DPIF_FP_CREATE) {
-            dp_netdev_flow_add(pmd, match, ufid, put->actions,
-                               put->actions_len, ODPP_NONE);
-        } else {
-            error = ENOENT;
-        }
+    if (put->ufid) {
+        netdev_flow = dp_netdev_pmd_find_flow(pmd, put->ufid,
+                                              put->key, put->key_len);
     } else {
-        if (put->flags & DPIF_FP_MODIFY) {
+        /* Use key instead of the locally generated ufid
+         * to search netdev_flow. */
+        netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
+    }
+
+    if (put->flags & DPIF_FP_CREATE) {
+        if (!netdev_flow) {
+            dp_netdev_flow_add(pmd, match, ufid,
+                               put->actions, put->actions_len, ODPP_NONE);
+        } else {
+            error = EEXIST;
+        }
+        goto exit;
+    }
+
+    if (put->flags & DPIF_FP_MODIFY) {
+        if (!netdev_flow) {
+            error = ENOENT;
+        } else {
+            if (!put->ufid && !flow_equal(&match->flow, &netdev_flow->flow)) {
+                /* Overlapping flow. */
+                error = EINVAL;
+                goto exit;
+            }
+
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
 
@@ -4214,15 +4233,11 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
                  *   counter, and subtracting it before outputting the stats */
                 error = EOPNOTSUPP;
             }
-
             ovsrcu_postpone(dp_netdev_actions_free, old_actions);
-        } else if (put->flags & DPIF_FP_CREATE) {
-            error = EEXIST;
-        } else {
-            /* Overlapping flow. */
-            error = EINVAL;
         }
     }
+
+exit:
     ovs_mutex_unlock(&pmd->flow_mutex);
     return error;
 }
