@@ -1331,3 +1331,50 @@ Default max sleep:  499 us
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([PMD - revalidator modify overlapping flows])
+
+OVS_VSWITCHD_START(
+[add-port br0 p1 \
+   -- set bridge br0 datapath-type=dummy \
+   -- set interface p1 type=dummy-pmd \
+   -- add-port br0 p2 \
+   -- set interface p2 type=dummy-pmd
+], [], [], [DUMMY_NUMA])
+
+dnl Add one OpenFlow rule and generate a megaflow.
+AT_CHECK([ovs-ofctl add-flow br0 'table=0,in_port=p1,ip,nw_dst=10.1.2.0/24,actions=p2'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.1.2.2,proto=6),tcp(src=1,dst=2)'])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-flows | sed 's/.*core: [[0-9]]*//'], [
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.2.2/255.255.255.0,frag=no), packets:0, bytes:0, used:never, actions:2])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.1.2.2,proto=6),tcp(src=1,dst=2)'])
+dnl Replace OpenFlow rules, trigger the revalidation.
+AT_CHECK([echo 'table=0,in_port=p1,ip,nw_dst=10.1.0.0/16 actions=ct(commit)' | dnl
+          ovs-ofctl --bundle replace-flows br0 -])
+AT_CHECK([ovs-appctl revalidator/wait])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.1.0.2,proto=6),tcp(src=1,dst=2)'])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-flows | sed 's/.*core: [[0-9]]*//' | strip_xout_keep_actions], [
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.0.2/255.255.0.0,frag=no), packets:0, bytes:0, used:never, actions:ct(commit)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.2.2/255.255.255.0,frag=no), packets:0, bytes:0, used:0.0s, actions:ct(commit)])
+
+dnl Hold the prefix 10.1.2.2/24 by another 10s.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.1.2.2,proto=6),tcp(src=1,dst=2)'])
+dnl Send more 10.1.0.2 to make 10.1.0.0/16 tuple prepend 10.1.2.0/24 tuple in the pvector of subtables.
+for i in $(seq 0 256); do
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.1.0.2,proto=6),tcp(src=1,dst=2)'])
+done
+
+AT_CHECK([echo 'table=0,in_port=p1,ip,nw_dst=10.1.0.0/16 actions=p2' | dnl
+          ovs-ofctl --bundle replace-flows br0 -])
+
+AT_CHECK([ovs-appctl revalidator/wait])
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*core: [[0-9]]*//' | strip_xout_keep_actions], [0], [
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.0.2/255.255.0.0,frag=no), packets:0, bytes:0, used:0.0s, actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=10.1.2.2/255.255.255.0,frag=no), packets:0, bytes:0, used:0.0s, actions:2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
