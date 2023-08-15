@@ -171,6 +171,7 @@ Fengqi Li                          lifengqi@inspur.com
 Flavio Fernandes                   flavio@flaviof.com
 Flavio Leitner                     fbl@redhat.com
 Francesco Fusco                    ffusco@redhat.com
+François Rigault                   frigo@amadeus.com
 Frédéric Tobias Christ             fchrist@live.de
 Frode Nordahl                      frode.nordahl@gmail.com
 FUJITA Tomonori                    fujita.tomonori@lab.ntt.co.jp
