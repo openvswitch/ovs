@@ -482,6 +482,7 @@ William Tu                         u9012063@gmail.com
 Wilson Peng                        pweisong@vmware.com
 Xavier Simonart                    xsimonar@redhat.com
 Xiao Liang                         shaw.leon@gmail.com
+Xiaojie Chen                       jackchanx@163.com
 xu rong                            xu.rong@zte.com.cn
 YAMAMOTO Takashi                   yamamoto@midokura.com
 Yalei Li                           liyl43@chinatelecom.cn
@@ -508,6 +509,7 @@ Zoltan Kiss                        zoltan.kiss@citrix.com
 Zoltán Balogh                      zoltan.balogh.eth@gmail.com
 Zongkai LI                         zealokii@gmail.com
 aginwala                           amginwal@gmail.com
+gordonwwang                        gordonwwang@tencent.com
 lic121                             lic121@chinatelecom.cn
 lzhecheng                          lzhecheng@vmware.com
 parameswaran krishnamurthy         parkrish@gmail.com
