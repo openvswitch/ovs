@@ -208,6 +208,7 @@ Ilya Maximets                      i.maximets@ovn.org
 Iman Tabrizian                     tabrizian@outlook.com
 Isaku Yamahata                     yamahata@valinux.co.jp
 Ivan Dyukov                        i.dyukov@samsung.com
+Ivan Malov                         ivan.malov@arknetworks.am
 IWASE Yusuke                       iwase.yusuke@gmail.com
 Jaime Caamaño Ruiz                 jcaamano@suse.com
 Jakub Libosvar                     libosvar@redhat.com
