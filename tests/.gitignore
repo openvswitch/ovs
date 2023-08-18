@@ -3,6 +3,7 @@
 /Makefile.in
 /atconfig
 /atlocal
+/clang-analyzer-results/
 /idltest.c
 /idltest.h
 /idltest.ovsidl
