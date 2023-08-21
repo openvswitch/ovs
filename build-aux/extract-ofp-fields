@@ -216,7 +216,7 @@ def field_to_xml(field_node, f, body, summary):
         """.PP
 \\fB%s Field\\fR
 .TS
-tab(;);
+tab(;),nowarn;
 l lx.
 """
         % title
@@ -317,7 +317,7 @@ def group_xml_to_nroff(group_node, fields):
         '.SH "%s"\n' % build.nroff.text_to_nroff(title.upper() + " FIELDS"),
         '.SS "Summary:"\n',
         ".TS\n",
-        "tab(;);\n",
+        "tab(;),nowarn;\n",
         "l l l l l l l.\n",
         "Name;Bytes;Mask;RW?;Prereqs;NXM/OXM Support\n",
         "\_;\_;\_;\_;\_;\_\n",
@@ -329,7 +329,7 @@ def group_xml_to_nroff(group_node, fields):
 
 
 def make_oxm_classes_xml(document):
-    s = """tab(;);
+    s = """tab(;),nowarn;
 l l l.
 Prefix;Vendor;Class
 \_;\_;\_

@@ -3517,6 +3517,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     </p>
 
     <tbl>
+nowarn;
 r r r r r.
 Criteria        OpenFlow 1.0    OpenFlow 1.1    OpenFlow 1.2+   NXM
 \_      \_      \_      \_      \_
