@@ -451,7 +451,7 @@ lib_libsflow_la_SOURCES = \
 	lib/sflow_poller.c \
 	lib/sflow_receiver.c
 lib_libsflow_la_CPPFLAGS = $(AM_CPPFLAGS)
-lib_libsflow_la_CFLAGS = $(AM_CFLAGS)
+lib_libsflow_la_CFLAGS = $(AM_CFLAGS) -D_BSD_SOURCE -D_DEFAULT_SOURCE
 if HAVE_WNO_UNUSED
 lib_libsflow_la_CFLAGS += -Wno-unused
 endif
