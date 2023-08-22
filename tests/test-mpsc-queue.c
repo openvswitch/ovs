@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include <config.h>
 #undef NDEBUG
 #include <assert.h>
 #include <getopt.h>
 #include <string.h>
-
-#include <config.h>
+#include <sys/time.h>
 
 #include "command-line.h"
 #include "guarded-list.h"
