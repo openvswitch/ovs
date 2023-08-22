@@ -225,6 +225,10 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     install_dpdk $DPDK_VER
 fi
 
+if [ "$STD" ]; then
+    CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -std=$STD"
+fi
+
 if [ "$CC" = "clang" ]; then
     CFLAGS_FOR_OVS="${CFLAGS_FOR_OVS} -Wno-error=unused-command-line-argument"
 elif [ "$M32" ]; then
