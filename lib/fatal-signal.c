@@ -138,10 +138,6 @@ fatal_signal_init(void)
 
         backtrace_capture(&dummy_bt);
 
-        if (!dummy_bt.n_frames) {
-            VLOG_DBG("Capturing of dummy backtrace has failed.");
-        }
-
         fatal_signal_create_wakeup_events();
 
 #ifdef _WIN32
