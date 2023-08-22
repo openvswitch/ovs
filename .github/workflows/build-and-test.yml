@@ -19,6 +19,7 @@ jobs:
       LIBS:        ${{ matrix.libs }}
       M32:         ${{ matrix.m32 }}
       OPTS:        ${{ matrix.opts }}
+      STD:         ${{ matrix.std }}
       TESTSUITE:   ${{ matrix.testsuite }}
 
     name: linux ${{ join(matrix.*, ' ') }}
@@ -33,6 +34,11 @@ jobs:
             opts:         --disable-ssl
           - compiler:     clang
             opts:         --disable-ssl
+
+          - compiler:     gcc
+            std:          c99
+          - compiler:     clang
+            std:          c99
 
           - compiler:     gcc
             testsuite:    test
