@@ -112,7 +112,7 @@ ovs-install-data-local:
 
 .PHONY: python-sdist
 python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON3) setup.py sdist)
+	cd python/ && $(PYTHON3) -m build --sdist
 
 .PHONY: pypi-upload
 pypi-upload: python-sdist
