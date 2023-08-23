@@ -108,6 +108,7 @@ Chuck Short                        zulcss@ubuntu.com
 Cian Ferriter                      cian.ferriter@intel.com
 Ciara Loftus                       ciara.loftus@intel.com
 Clint Byrum                        clint@fewbar.com
+Colin Watson                       cjwatson@ubuntu.com
 Cong Wang                          amwang@redhat.com
 Conner Herriges                    conner.herriges@ibm.com
 Damien Millescamps                 damien.millescamps@6wind.com
@@ -658,6 +659,7 @@ Len Gao                         leng@vmware.com
 Linhaifeng                      haifeng.lin@huawei.com
 Logan Rosen                     logatronico@gmail.com
 Luca Falavigna                  dktrkranz@debian.org
+Lucas Nussbaum                  lucas@debian.org
 Luiz Henrique Ozaki             luiz.ozaki@gmail.com
 Madhu Venugopal                 mavenugo@gmail.com
 Malvika Gupta                   malvika.gupta@arm.com
