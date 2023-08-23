@@ -414,7 +414,7 @@ endif
 CLEANFILES += flake8-check
 
 -include manpages.mk
-manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/build/soutil.py
+manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/ovs_build_helpers/soutil.py
 	@PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON3) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
 	@if cmp -s $(@F).tmp $@; then \
 	  touch $@; \
