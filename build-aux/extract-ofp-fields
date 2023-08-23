@@ -4,9 +4,9 @@ import getopt
 import sys
 import os.path
 import xml.dom.minidom
-import build.nroff
 
-from build.extract_ofp_fields import (
+from ovs_build_helpers import nroff
+from ovs_build_helpers.extract_ofp_fields import (
     extract_ofp_fields,
     PREREQS,
     OXM_CLASSES,
@@ -297,7 +297,7 @@ l lx.
     body += [".TE\n"]
 
     body += [".PP\n"]
-    body += [build.nroff.block_xml_to_nroff(field_node.childNodes)]
+    body += [nroff.block_xml_to_nroff(field_node.childNodes)]
 
 
 def group_xml_to_nroff(group_node, fields):
@@ -310,11 +310,11 @@ def group_xml_to_nroff(group_node, fields):
             id_ = node.attributes["id"].nodeValue
             field_to_xml(node, fields[id_], body, summary)
         else:
-            body += [build.nroff.block_xml_to_nroff([node])]
+            body += [nroff.block_xml_to_nroff([node])]
 
     content = [
         ".bp\n",
-        '.SH "%s"\n' % build.nroff.text_to_nroff(title.upper() + " FIELDS"),
+        '.SH "%s"\n' % nroff.text_to_nroff(title.upper() + " FIELDS"),
         '.SS "Summary:"\n',
         ".TS\n",
         "tab(;),nowarn;\n",
@@ -422,7 +422,7 @@ ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
         elif node.nodeType == node.COMMENT_NODE:
             pass
         else:
-            s += build.nroff.block_xml_to_nroff([node])
+            s += nroff.block_xml_to_nroff([node])
 
     for f in fields:
         if "used" not in f:
