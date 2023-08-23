@@ -24,7 +24,7 @@ import ovs.json
 from ovs.db import error
 import ovs.db.schema
 
-from build.nroff import *
+from ovs_build_helpers.nroff import *
 
 argv0 = sys.argv[0]
 
