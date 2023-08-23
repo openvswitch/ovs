@@ -110,11 +110,14 @@ ovs-install-data-local:
 	$(INSTALL_DATA) python/ovs/dirs.py.tmp $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
 	rm python/ovs/dirs.py.tmp
 
+.PHONY: python-sdist
 python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
 	(cd python/ && $(PYTHON3) setup.py sdist)
 
-pypi-upload: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON3) setup.py sdist upload)
+.PHONY: pypi-upload
+pypi-upload: python-sdist
+	twine upload python/dist/ovs-$(VERSION).tar.gz
+
 install-data-local: ovs-install-data-local
 
 UNINSTALL_LOCAL += ovs-uninstall-local
