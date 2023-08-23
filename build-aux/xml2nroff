@@ -18,7 +18,7 @@ import getopt
 import sys
 import xml.dom.minidom
 
-import build.nroff
+from ovs_build_helpers import nroff
 
 argv0 = sys.argv[0]
 
@@ -90,10 +90,10 @@ def manpage_to_nroff(xml_file, subst, include_path, version=None):
 .  I "\\$1"
 .  RE
 ..
-''' % (build.nroff.text_to_nroff(program), build.nroff.text_to_nroff(section),
-       build.nroff.text_to_nroff(title), build.nroff.text_to_nroff(version))
+''' % (nroff.text_to_nroff(program), nroff.text_to_nroff(section),
+       nroff.text_to_nroff(title), nroff.text_to_nroff(version))
 
-    s += build.nroff.block_xml_to_nroff(doc.childNodes) + "\n"
+    s += nroff.block_xml_to_nroff(doc.childNodes) + "\n"
 
     return s
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     try:
         s = manpage_to_nroff(args[0], subst, include_path, version)
-    except build.nroff.error.Error as e:
+    except nroff.error.Error as e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
     for line in s.splitlines():

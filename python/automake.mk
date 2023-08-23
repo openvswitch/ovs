@@ -45,9 +45,9 @@ ovs_pyfiles = \
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
-	python/build/__init__.py \
-	python/build/nroff.py \
-	python/build/soutil.py
+	python/ovs_build_helpers/__init__.py \
+	python/ovs_build_helpers/nroff.py \
+	python/ovs_build_helpers/soutil.py
 
 # PyPI support.
 EXTRA_DIST += \
@@ -64,10 +64,11 @@ PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 FLAKE8_PYFILES += \
 	$(filter-out python/ovs/compat/% python/ovs/dirs.py,$(PYFILES)) \
-	python/setup.py \
-	python/build/__init__.py \
-	python/build/nroff.py \
-	python/ovs/dirs.py.template
+	python/ovs_build_helpers/__init__.py \
+	python/ovs_build_helpers/nroff.py \
+	python/ovs_build_helpers/soutil.py \
+	python/ovs/dirs.py.template \
+	python/setup.py
 
 nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)
 ovs-install-data-local:
