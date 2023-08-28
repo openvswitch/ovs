@@ -2431,6 +2431,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 
     if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_L4_MASK
                             | RTE_MBUF_F_TX_TCP_SEG))) {
+        mbuf->ol_flags &= ~(RTE_MBUF_F_TX_IPV4 | RTE_MBUF_F_TX_IPV6);
         return true;
     }
 
