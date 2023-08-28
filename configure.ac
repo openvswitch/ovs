@@ -21,7 +21,11 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_TESTDIR([tests])
 AM_INIT_AUTOMAKE([tar-pax])
 
-AC_PROG_CC_C99
+# AC_PROG_CC doesn't try enabling C99 in autoconf 2.69 and below, but
+# AC_PROG_CC_C99 is deprecated in newer ones.  In autoconf 2.70+ both
+# will try enabling features up to C11.
+m4_version_prereq([2.70], [AC_PROG_CC], [AC_PROG_CC_C99])
+
 AM_PROG_CC_C_O
 AC_PROG_CXX
 AC_PROG_CPP
