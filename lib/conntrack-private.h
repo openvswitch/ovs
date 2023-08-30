@@ -49,6 +49,12 @@ struct ct_endpoint {
  * hashing in ct_endpoint_hash_add(). */
 BUILD_ASSERT_DECL(sizeof(struct ct_endpoint) == sizeof(union ct_addr) + 4);
 
+enum key_dir {
+    CT_DIR_FWD = 0,
+    CT_DIR_REV,
+    CT_DIRS,
+};
+
 /* Changes to this structure need to be reflected in conn_key_hash()
  * and conn_key_cmp(). */
 struct conn_key {
@@ -112,20 +118,18 @@ enum ct_timeout {
 
 #define N_EXP_LISTS 100
 
-enum OVS_PACKED_ENUM ct_conn_type {
-    CT_CONN_TYPE_DEFAULT,
-    CT_CONN_TYPE_UN_NAT,
+struct conn_key_node {
+    enum key_dir dir;
+    struct conn_key key;
+    struct cmap_node cm_node;
 };
 
 struct conn {
     /* Immutable data. */
-    struct conn_key key;
-    struct conn_key rev_key;
+    struct conn_key_node key_node[CT_DIRS];
     struct conn_key parent_key; /* Only used for orig_tuple support. */
-    struct cmap_node cm_node;
     uint16_t nat_action;
     char *alg;
-    struct conn *nat_conn; /* The NAT 'conn' context, if there is one. */
     atomic_flag reclaimed; /* False during the lifetime of the connection,
                             * True as soon as a thread has started freeing
                             * its memory. */
@@ -150,7 +154,6 @@ struct conn {
 
     /* Immutable data. */
     bool alg_related; /* True if alg data connection. */
-    enum ct_conn_type conn_type;
 
     uint32_t tp_id; /* Timeout policy ID. */
 };
