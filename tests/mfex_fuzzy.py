@@ -3,12 +3,15 @@
 import sys
 import warnings
 
-from cryptography.utils import CryptographyDeprecationWarning
-warnings.filterwarnings(
-    "ignore",
-    category=CryptographyDeprecationWarning,
-    message=r"(blowfish|cast5)",
-)
+try:
+    from cryptography.utils import CryptographyDeprecationWarning
+    warnings.filterwarnings(
+        "ignore",
+        category=CryptographyDeprecationWarning,
+        message=r"(blowfish|cast5)",
+    )
+except ModuleNotFoundError:
+    pass
 
 # flake8: noqa: E402
 from scapy.all import RandMAC, RandIP, PcapWriter, RandIP6, RandShort, fuzz
