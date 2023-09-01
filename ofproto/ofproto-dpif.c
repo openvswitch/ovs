@@ -4880,7 +4880,7 @@ packet_xlate(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
             if (entry->type == XC_LEARN) {
                 struct ofproto_flow_mod *ofm = entry->learn.ofm;
 
-                error = ofproto_flow_mod_learn_refresh(ofm);
+                error = ofproto_flow_mod_learn_refresh(ofm, time_msec());
                 if (error) {
                     goto error_out;
                 }
