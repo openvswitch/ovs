@@ -104,8 +104,6 @@ ovsdb_test_cluster_disconnect () {
     n=$1
     leader_or_follower=$2
     check_flapping=$3
-    schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-    ordinal_schema > schema
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
     cid=`ovsdb-tool db-cid s1.db`
     schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -221,8 +219,6 @@ AT_SETUP([OVSDB cluster - initial status should be disconnected])
 AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -260,8 +256,6 @@ AT_SETUP([OVSDB cluster - election timer change])
 AT_KEYWORDS([ovsdb server positive unix cluster timer])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -353,8 +347,6 @@ AT_SETUP([OVSDB cluster - install snapshot RPC])
 AT_KEYWORDS([ovsdb server positive unix cluster snapshot])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -433,8 +425,6 @@ AT_SETUP([OVSDB cluster - follower crash while joining])
 AT_KEYWORDS([ovsdb server negative unix cluster join])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db dnl
               $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
@@ -665,8 +655,6 @@ AT_SETUP([OVSDB cluster - competing candidates])
 AT_KEYWORDS([ovsdb server negative unix cluster competing-candidates])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
