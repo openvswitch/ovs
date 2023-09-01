@@ -2022,9 +2022,11 @@ enum ofperr ofproto_flow_mod_init_for_learn(struct ofproto *,
                                             struct ofproto_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
 enum ofperr ofproto_flow_mod_learn(struct ofproto_flow_mod *, bool keep_ref,
-                                   unsigned limit, bool *below_limit)
+                                   unsigned limit, bool *below_limit,
+                                   long long int last_used)
     OVS_EXCLUDED(ofproto_mutex);
-enum ofperr ofproto_flow_mod_learn_refresh(struct ofproto_flow_mod *ofm);
+enum ofperr ofproto_flow_mod_learn_refresh(struct ofproto_flow_mod *ofm,
+                                           long long int last_used);
 enum ofperr ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_flow_mod_learn_revert(struct ofproto_flow_mod *ofm)
