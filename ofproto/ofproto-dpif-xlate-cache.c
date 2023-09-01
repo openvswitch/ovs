@@ -125,7 +125,7 @@ xlate_push_stats_entry(struct xc_entry *entry,
     case XC_LEARN: {
         enum ofperr error;
         error = ofproto_flow_mod_learn(entry->learn.ofm, true,
-                                       entry->learn.limit, NULL);
+                                       entry->learn.limit, NULL, stats->used);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "xcache LEARN action execution failed.");
