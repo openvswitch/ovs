@@ -205,6 +205,10 @@ shash_delete(struct shash *sh, struct shash_node *node)
 char *
 shash_steal(struct shash *sh, struct shash_node *node)
 {
+    if (!node) {
+        return NULL;
+    }
+
     char *name = node->name;
 
     hmap_remove(&sh->map, &node->node);

@@ -406,7 +406,10 @@ ovsdb_row_set_add_row(struct ovsdb_row_set *set, const struct ovsdb_row *row)
         set->rows = x2nrealloc(set->rows, &set->allocated_rows,
                                sizeof *set->rows);
     }
-    set->rows[set->n_rows++] = row;
+
+    if (set->rows) {
+        set->rows[set->n_rows++] = row;
+    }
 }
 
 struct json *

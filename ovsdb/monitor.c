@@ -483,6 +483,7 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
     struct ovsdb_monitor_column *c;
 
     mt = shash_find_data(&dbmon->tables, table->schema->name);
+    ovs_assert(mt);
 
     /* Check for column duplication. Return duplicated column name. */
     if (mt->columns_index_map[column->index] != -1) {
@@ -812,6 +813,8 @@ ovsdb_monitor_table_condition_update(
         shash_find_data(&condition->tables, table->schema->name);
     struct ovsdb_error *error;
     struct ovsdb_condition cond = OVSDB_CONDITION_INITIALIZER(&cond);
+
+    ovs_assert(mtc);
 
     error = ovsdb_condition_from_json(table->schema, cond_json,
                                       NULL, &cond);

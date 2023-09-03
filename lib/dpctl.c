@@ -336,6 +336,12 @@ dpctl_add_if(int argc OVS_UNUSED, const char *argv[],
                 value = "";
             }
 
+            if (!key) {
+                dpctl_error(dpctl_p, 0, "Invalid option format");
+                error = EINVAL;
+                goto next;
+            }
+
             if (!strcmp(key, "type")) {
                 type = value;
             } else if (!strcmp(key, "port_no")) {
@@ -452,6 +458,12 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             value = strtok_r(NULL, "", &save_ptr_2);
             if (!value) {
                 value = "";
+            }
+
+            if (!key) {
+                dpctl_error(dpctl_p, 0, "Invalid option format");
+                error = EINVAL;
+                goto next_destroy_args;
             }
 
             if (!strcmp(key, "type")) {

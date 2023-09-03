@@ -1038,7 +1038,7 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
                                              request->id);
     } else if (!strcmp(request->method, "get_schema")) {
         struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
-        if (!reply) {
+        if (db && !reply) {
             reply = jsonrpc_create_reply(ovsdb_schema_to_json(db->schema),
                                          request->id);
         }
