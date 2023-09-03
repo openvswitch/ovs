@@ -280,10 +280,12 @@ ovs_pcap_read(struct pcap_file *p_file, struct dp_packet **bufp,
 void
 ovs_pcap_write(struct pcap_file *p_file, struct dp_packet *buf)
 {
+    const void *data_dp = dp_packet_data(buf);
     struct pcaprec_hdr prh;
     struct timeval tv;
 
     ovs_assert(dp_packet_is_eth(buf));
+    ovs_assert(data_dp);
 
     xgettimeofday(&tv);
     prh.ts_sec = tv.tv_sec;
@@ -291,7 +293,7 @@ ovs_pcap_write(struct pcap_file *p_file, struct dp_packet *buf)
     prh.incl_len = dp_packet_size(buf);
     prh.orig_len = dp_packet_size(buf);
     ignore(fwrite(&prh, sizeof prh, 1, p_file->file));
-    ignore(fwrite(dp_packet_data(buf), dp_packet_size(buf), 1, p_file->file));
+    ignore(fwrite(data_dp, dp_packet_size(buf), 1, p_file->file));
     fflush(p_file->file);
 }
 
