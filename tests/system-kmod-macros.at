@@ -112,6 +112,17 @@ m4_define([CHECK_CONNTRACK_ZEROIP_SNAT],
     AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ])
 
+# CHECK_CONNTRACK_SCTP()
+#
+# Perform requirements checks for running conntrack SCTP. The kernel
+# optionally support nf proto sctp.
+#
+m4_define([CHECK_CONNTRACK_SCTP],
+[
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([! test -e /proc/sys/net/netfilter/nf_conntrack_sctp_timeout_closed])
+])
+
 # CHECK_CONNTRACK_TIMEOUT()
 #
 # Perform requirements checks for running conntrack customized timeout tests.
