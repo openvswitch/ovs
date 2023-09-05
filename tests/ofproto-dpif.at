@@ -5725,6 +5725,40 @@ OVS_WAIT_UNTIL([check_flows], [ovs-ofctl dump-flows br0])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Checks for regression against a bug in which OVS dropped packets
+dnl originating from a controller passing through a patch port.
+AT_SETUP([ofproto-dpif - packet-out recirculation OFPP_CONTROLLER and patch port])
+OVS_VSWITCHD_START(
+    [add-port br0 patch-br1 -- \
+     set interface patch-br1 type=patch options:peer=patch-br0 -- \
+     add-br br1 -- set bridge br1 datapath-type=dummy fail-mode=secure -- \
+     add-port br1 patch-br0 -- set interface patch-br0 type=patch options:peer=patch-br1
+])
+
+add_of_ports --pcap br1 1
+
+AT_DATA([flows-br0.txt], [dnl
+table=0 icmp actions=output:patch-br1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows-br0.txt])
+
+AT_DATA([flows-br1.txt], [dnl
+table=0, icmp actions=ct(table=1,zone=1)
+table=1, ct_state=+trk, icmp actions=p1
+])
+AT_CHECK([ovs-ofctl add-flows br1 flows-br1.txt])
+
+packet=50540000000750540000000508004500005c000000008001b94dc0a80001c0a80002080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=CONTROLLER packet=$packet actions=table"])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-ofctl dump-flows -m br1 | grep "ct_state" | ofctl_strip], [dnl
+ table=1, n_packets=1, n_bytes=106, ct_state=+trk,icmp actions=output:2])
+
+OVS_WAIT_UNTIL([ovs-pcap p1-tx.pcap | grep -q "$packet"])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - debug_slow action])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
