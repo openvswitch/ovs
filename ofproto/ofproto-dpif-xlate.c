@@ -1615,7 +1615,8 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
         }
 
         ofp_port_t in_port = recirc_id_node->state.metadata.in_port;
-        if (in_port != OFPP_NONE && in_port != OFPP_CONTROLLER) {
+        if (in_port != OFPP_NONE && in_port != OFPP_CONTROLLER &&
+            !uuid_is_zero(&recirc_id_node->state.xport_uuid)) {
             struct uuid xport_uuid = recirc_id_node->state.xport_uuid;
             xport = xport_lookup_by_uuid(xcfg, &xport_uuid);
             if (xport && xport->xbridge && xport->xbridge->ofproto) {
@@ -1626,11 +1627,19 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
              * that the packet originated from the controller via an OpenFlow
              * "packet-out".  The right thing to do is to find just the
              * ofproto.  There is no xport, which is OK.
+             * Also a zeroed xport_uuid with a valid in_port, means that
+             * the packet originated from OFPP_CONTROLLER passed
+             * through a patch port.
              *
              * OFPP_NONE can also indicate that a bond caused recirculation. */
             struct uuid uuid = recirc_id_node->state.ofproto_uuid;
             const struct xbridge *bridge = xbridge_lookup_by_uuid(xcfg, &uuid);
+
             if (bridge && bridge->ofproto) {
+                if (in_port != OFPP_CONTROLLER && in_port != OFPP_NONE &&
+                    !get_ofp_port(bridge, in_port)) {
+                    goto xport_lookup;
+                }
                 if (errorp) {
                     *errorp = NULL;
                 }
@@ -1643,6 +1652,7 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer,
         }
     }
 
+xport_lookup:
     xport = xport_lookup(xcfg, tnl_port_should_receive(flow)
                          ? tnl_port_receive(flow)
                          : odp_port_to_ofport(backer, flow->in_port.odp_port));
