@@ -2267,6 +2267,23 @@ CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
 CHECK_STREAM_OPEN_BLOCK([Python3], [$PYTHON3 $srcdir/test-stream.py],
                         [tcp6], [[[::1]]])
 
+dnl OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS(LOG)
+dnl
+dnl Looks up transaction IDs in the log of OVSDB client application.
+dnl All-zero UUID should not be sent within a monitor request more than once,
+dnl unless some database requests were lost (not replied).
+m4_define([OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS],
+[
+   requests=$(grep -c 'send request' $1)
+   replies=$(grep -c 'received reply' $1)
+
+   if test "$requests" -eq "$replies"; then
+     AT_CHECK([grep 'monitor_cond_since' $1 \
+                | grep -c "00000000-0000-0000-0000-000000000000" | tr -d '\n'],
+              [0], [1])
+   fi
+])
+
 # same as OVSDB_CHECK_IDL but uses Python IDL implementation with tcp
 # with multiple remotes to assert the idl connects to the leader of the Raft cluster
 m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
@@ -2282,10 +2299,11 @@ m4_define([OVSDB_CHECK_IDL_LEADER_ONLY_PY],
    pids=$(cat s2.pid s3.pid s1.pid | tr '\n' ',')
    echo $pids
    AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t30 idl-cluster $srcdir/idltest.ovsschema $remotes $pids $3],
-        [0], [stdout], [ignore])
+        [0], [stdout], [stderr])
    remote=$(ovsdb_cluster_leader $remotes "idltest")
    leader=$(echo $remote | cut -d'|' -f 1)
    AT_CHECK([grep -F -- "${leader}" stdout], [0], [ignore])
+   OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS([stderr])
    AT_CLEANUP])
 
 OVSDB_CHECK_IDL_LEADER_ONLY_PY([Check Python IDL connects to leader], 3, ['remote'])
@@ -2328,6 +2346,7 @@ m4_define([OVSDB_CHECK_CLUSTER_IDL_C],
    AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
             [0], [$5])
    m4_ifval([$8], [AT_CHECK([grep '$8' stderr], [1])], [], [])
+   OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS([stderr])
    AT_CLEANUP])
 
 # Same as OVSDB_CHECK_CLUSTER_IDL_C but uses the Python IDL implementation.
@@ -2348,6 +2367,7 @@ m4_define([OVSDB_CHECK_CLUSTER_IDL_PY],
    AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
             [0], [$5])
    m4_if([$8], [AT_CHECK([grep '$8' stderr], [1])], [], [])
+   OVSDB_CLUSTER_CHECK_MONITOR_COND_SINCE_TXN_IDS([stderr])
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_CLUSTER_IDL],
