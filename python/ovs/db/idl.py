@@ -494,6 +494,7 @@ class Idl(object):
                         if not msg.result[0]:
                             self.__clear()
                         self.__parse_update(msg.result[2], OVSDB_UPDATE3)
+                        self.last_id = msg.result[1]
                     elif self.state == self.IDL_S_DATA_MONITOR_COND_REQUESTED:
                         self.__clear()
                         self.__parse_update(msg.result, OVSDB_UPDATE2)
