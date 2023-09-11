@@ -792,6 +792,36 @@ def run_file_checks(text):
             check['check'](text)
 
 
+def run_subject_checks(subject, spellcheck=False):
+    warnings = False
+
+    if spellcheck and check_spelling(subject, False):
+        warnings = True
+
+    summary = subject[subject.rindex(': ') + 2:]
+    area_summary = subject[subject.index(': ') + 2:]
+    area_summary_len = len(area_summary)
+    if area_summary_len > 70:
+        print_warning("The subject, '<area>: <summary>', is over 70 "
+                      "characters, i.e., %u." % area_summary_len)
+        warnings = True
+
+    if summary[0].isalpha() and summary[0].islower():
+        print_warning(
+            "The subject summary should start with a capital.")
+        warnings = True
+
+    if subject[-1] not in [".", "?", "!"]:
+        print_warning(
+            "The subject summary should end with a dot.")
+        warnings = True
+
+    if warnings:
+        print(subject)
+
+    return warnings
+
+
 def ovs_checkpatch_parse(text, filename, author=None, committer=None):
     global print_file_name, total_line, checking_file, \
         empty_return_check_state
@@ -812,6 +842,7 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
         r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
     is_author = re.compile(r'^(Author|From): (.*)$', re.I | re.M | re.S)
     is_committer = re.compile(r'^(Commit: )(.*)$', re.I | re.M | re.S)
+    is_subject = re.compile(r'^(Subject: )(.*)$', re.I | re.M | re.S)
     is_signature = re.compile(r'^(Signed-off-by: )(.*)$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'^(Co-authored-by: )(.*)$',
@@ -911,6 +942,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                 committer = is_committer.match(line).group(2)
             elif is_author.match(line):
                 author = is_author.match(line).group(2)
+            elif is_subject.match(line):
+                run_subject_checks(line, spellcheck)
             elif is_signature.match(line):
                 m = is_signature.match(line)
                 signatures.append(m.group(2))
@@ -1029,18 +1062,18 @@ def ovs_checkpatch_file(filename):
     result = ovs_checkpatch_parse(part.get_payload(decode=False), filename,
                                   mail.get('Author', mail['From']),
                                   mail['Commit'])
-    if spellcheck:
-        if not mail['Subject'] or not mail['Subject'].strip():
-            if mail['Subject']:
-                mail.replace_header('Subject', sys.argv[-1])
-            else:
-                mail.add_header('Subject', sys.argv[-1])
 
-            print("Subject missing! Your provisional subject is",
-                  mail['Subject'])
+    if not mail['Subject'] or not mail['Subject'].strip():
+        if mail['Subject']:
+            mail.replace_header('Subject', sys.argv[-1])
+        else:
+            mail.add_header('Subject', sys.argv[-1])
 
-        if check_spelling(mail['Subject'], False):
-            print("Subject: %s" % mail['Subject'])
+        print("Subject missing! Your provisional subject is",
+              mail['Subject'])
+
+    if run_subject_checks('Subject: ' + mail['Subject'], spellcheck):
+        result = True
 
     ovs_checkpatch_print_result()
     return result
