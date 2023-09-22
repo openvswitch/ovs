@@ -586,6 +586,7 @@ row,action,name,number,_version
   [[]],
   [],
   [[[[["name","==","one"],["name","==","two"]]]],
+   [[[["name","==","two"],["name","==","one"]]]],
    [[[["name","==","one"]]]],
     [[[false]]],
     [[[true]]]])

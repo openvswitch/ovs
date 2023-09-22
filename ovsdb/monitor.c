@@ -824,6 +824,7 @@ ovsdb_monitor_table_condition_update(
     ovsdb_condition_destroy(&mtc->new_condition);
     ovsdb_condition_clone(&mtc->new_condition, &cond);
     ovsdb_condition_destroy(&cond);
+    ovsdb_condition_destroy(&mtc->diff_condition);
     ovsdb_condition_diff(&mtc->diff_condition,
                          &mtc->old_condition, &mtc->new_condition);
     ovsdb_monitor_condition_add_columns(dbmon,
