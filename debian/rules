@@ -2,7 +2,7 @@
 # -*- makefile -*-
 #export DH_VERBOSE=1
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-export DEB_CFLAGS_MAINT_APPEND = -fPIC
+export DEB_CFLAGS_MAINT_APPEND = -fPIC -fno-lto
 
 %:
 	dh $@
