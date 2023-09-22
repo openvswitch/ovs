@@ -550,9 +550,14 @@ ovsdb_condition_diff(struct ovsdb_condition *diff,
                            &b->clauses[j]);
     }
 
-    diff->optimized = a->optimized && b->optimized;
-    if (diff->optimized) {
-        ovsdb_condition_optimize(diff);
+    if (diff->n_clauses) {
+        diff->optimized = a->optimized && b->optimized;
+        if (diff->optimized) {
+            ovsdb_condition_optimize(diff);
+        }
+    } else {
+        free(diff->clauses);
+        diff->clauses = NULL;
     }
 }
 
