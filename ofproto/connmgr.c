@@ -1209,7 +1209,7 @@ ofconn_create(struct ofservice *ofservice, struct rconn *rconn,
     hmap_init(&ofconn->bundles);
     ofconn->next_bundle_expiry_check = time_msec() + BUNDLE_EXPIRY_INTERVAL;
 
-    ofconn_set_rate_limit(ofconn, settings->rate_limit, settings->burst_limit);
+    ofservice_reconfigure(ofservice, settings);
 
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -1915,10 +1915,7 @@ connmgr_count_hidden_rules(const struct connmgr *mgr)
 }
 
 /* Creates a new ofservice for 'target' in 'mgr'.  Returns 0 if successful,
- * otherwise a positive errno value.
- *
- * ofservice_reconfigure() must be called to fully configure the new
- * ofservice. */
+ * otherwise a positive errno value. */
 static void
 ofservice_create(struct connmgr *mgr, const char *target,
                  const struct ofproto_controller *c)
@@ -1928,7 +1925,8 @@ ofservice_create(struct connmgr *mgr, const char *target,
     struct rconn *rconn = NULL;
     if (!vconn_verify_name(target)) {
         char *name = ofconn_make_name(mgr, target);
-        rconn = rconn_create(5, 8, c->dscp, c->allowed_versions);
+        rconn = rconn_create(c->probe_interval, c->max_backoff,
+                             c->dscp, c->allowed_versions);
         rconn_connect(rconn, target, name);
         free(name);
     } else if (!pvconn_verify_name(target)) {
@@ -1951,7 +1949,6 @@ ofservice_create(struct connmgr *mgr, const char *target,
     ofservice->rconn = rconn;
     ofservice->pvconn = pvconn;
     ofservice->s = *c;
-    ofservice_reconfigure(ofservice, c);
 
     VLOG_INFO("%s: added %s controller \"%s\"",
               mgr->name, ofconn_type_to_string(ofservice->type), target);

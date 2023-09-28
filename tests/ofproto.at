@@ -6720,3 +6720,31 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0806),arp(tip=172.31.1
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - configure inactivity probe interval])
+
+# Set 6 second inactivity probe interval (default is 5 seconds).
+OVS_VSWITCHD_START([set-controller br0 unix:testcontroller \
+                   -- set Controller br0 inactivity_probe=6000], [], [],
+                   [-vfile:rconn:dbg])
+
+# Start test openflow controller.
+AT_CHECK([ovs-testcontroller -vsyslog:off --detach --no-chdir --pidfile punix:testcontroller],
+         [0], [ignore])
+on_exit 'kill `cat ovs-testcontroller.pid`'
+OVS_WAIT_UNTIL([test -e testcontroller])
+
+# After 6 seconds of inactivity there should be a log message.
+OVS_WAIT_UNTIL([grep "idle 6 seconds, sending inactivity probe" ovs-vswitchd.log])
+
+# Restart ovs-vswitchd with an empty ovs-vswitchd log file.
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+mv ovs-vswitchd.log ovs-vswitchd_1.log
+AT_CHECK([ovs-vswitchd --enable-dummy --disable-system --disable-system-route --detach \
+         --no-chdir --pidfile --log-file -vfile:rconn:dbg -vvconn -vofproto_dpif -vunixctl],
+         [0], [], [stderr])
+
+# After 6 seconds of inactivity there should be a log message.
+OVS_WAIT_UNTIL([grep "idle 6 seconds, sending inactivity probe" ovs-vswitchd.log])
+OVS_VSWITCHD_STOP(["/br0<->unix:testcontroller: connection failed/d"])
+AT_CLEANUP
