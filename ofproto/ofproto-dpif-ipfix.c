@@ -494,7 +494,7 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_tcp) == 48);
  *  |                      ... continuing as needed                 |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *
- * When it is greater than or equeal to 255 octets:
+ * When it is greater than or equal to 255 octets:
  *  0                   1                   2                   3
  *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -2804,7 +2804,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     /* Skip BFD packets:
      * Bidirectional Forwarding Detection(BFD) packets are for monitoring
      * the tunnel link status and consumed by ovs itself. No need to
-     * smaple them.
+     * sample them.
      * CF  IETF RFC 5881, BFD control packet is the UDP packet with
      * destination port 3784, and BFD echo packet is the UDP packet with
      * destination port 3785.
