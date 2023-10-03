@@ -276,7 +276,8 @@ conn_update_expiration(struct conntrack *ct, struct conn *conn,
     ovs_mutex_lock(&conn->lock);
     VLOG_DBG_RL(&rl, "Update timeout %s zone=%u with policy id=%d "
                 "val=%u sec.",
-                ct_timeout_str[tm], conn->key.zone, conn->tp_id, val);
+                ct_timeout_str[tm], conn->key_node[CT_DIR_FWD].key.zone,
+                conn->tp_id, val);
 
     conn_update_expiration__(ct, conn, tm, now, val);
 }
@@ -307,7 +308,8 @@ conn_init_expiration(struct conntrack *ct, struct conn *conn,
     }
 
     VLOG_DBG_RL(&rl, "Init timeout %s zone=%u with policy id=%d val=%u sec.",
-                ct_timeout_str[tm], conn->key.zone, conn->tp_id, val);
+                ct_timeout_str[tm], conn->key_node[CT_DIR_FWD].key.zone,
+                conn->tp_id, val);
 
     conn_init_expiration__(ct, conn, tm, now, val);
 }
