@@ -94,9 +94,8 @@ static bool valid_new(struct dp_packet *pkt, struct conn_key *);
 static struct conn *new_conn(struct conntrack *ct, struct dp_packet *pkt,
                              struct conn_key *, long long now,
                              uint32_t tp_id);
-static void delete_conn_cmn(struct conn *);
+static void delete_conn__(struct conn *);
 static void delete_conn(struct conn *);
-static void delete_conn_one(struct conn *conn);
 static enum ct_update_res conn_update(struct conntrack *ct, struct conn *conn,
                                       struct dp_packet *pkt,
                                       struct conn_lookup_ctx *ctx,
@@ -444,9 +443,11 @@ zone_limit_delete(struct conntrack *ct, uint16_t zone)
 }
 
 static void
-conn_clean_cmn(struct conntrack *ct, struct conn *conn)
+conn_clean(struct conntrack *ct, struct conn *conn)
     OVS_REQUIRES(ct->ct_lock)
 {
+    ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
+
     if (conn->alg) {
         expectation_clean(ct, &conn->key);
     }
@@ -458,38 +459,15 @@ conn_clean_cmn(struct conntrack *ct, struct conn *conn)
     if (zl && zl->czl.zone_limit_seq == conn->zone_limit_seq) {
         zl->czl.count--;
     }
-}
 
-/* Must be called with 'conn' of 'conn_type' CT_CONN_TYPE_DEFAULT.  Also
- * removes the associated nat 'conn' from the lookup datastructures. */
-static void
-conn_clean(struct conntrack *ct, struct conn *conn)
-    OVS_REQUIRES(ct->ct_lock)
-{
-    ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
-
-    conn_clean_cmn(ct, conn);
     if (conn->nat_conn) {
-        uint32_t hash = conn_key_hash(&conn->nat_conn->key, ct->hash_basis);
+        hash = conn_key_hash(&conn->nat_conn->key, ct->hash_basis);
         cmap_remove(&ct->conns, &conn->nat_conn->cm_node, hash);
     }
     ovs_list_remove(&conn->exp_node);
     conn->cleaned = true;
     ovsrcu_postpone(delete_conn, conn);
     atomic_count_dec(&ct->n_conn);
-}
-
-static void
-conn_clean_one(struct conntrack *ct, struct conn *conn)
-    OVS_REQUIRES(ct->ct_lock)
-{
-    conn_clean_cmn(ct, conn);
-    if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
-        ovs_list_remove(&conn->exp_node);
-        conn->cleaned = true;
-        atomic_count_dec(&ct->n_conn);
-    }
-    ovsrcu_postpone(delete_conn_one, conn);
 }
 
 /* Destroys the connection tracker 'ct' and frees all the allocated memory.
@@ -505,7 +483,11 @@ conntrack_destroy(struct conntrack *ct)
 
     ovs_mutex_lock(&ct->ct_lock);
     CMAP_FOR_EACH (conn, cm_node, &ct->conns) {
-        conn_clean_one(ct, conn);
+        if (conn->conn_type != CT_CONN_TYPE_DEFAULT) {
+            continue;
+        }
+
+        conn_clean(ct, conn);
     }
     cmap_destroy(&ct->conns);
 
@@ -1009,7 +991,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
 nat_res_exhaustion:
     free(nat_conn);
     ovs_list_remove(&nc->exp_node);
-    delete_conn_cmn(nc);
+    delete_conn__(nc);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
     VLOG_WARN_RL(&rl, "Unable to NAT due to tuple space exhaustion - "
                  "if DoS attack, use firewalling and/or zone partitioning.");
@@ -2475,7 +2457,7 @@ new_conn(struct conntrack *ct, struct dp_packet *pkt, struct conn_key *key,
 }
 
 static void
-delete_conn_cmn(struct conn *conn)
+delete_conn__(struct conn *conn)
 {
     free(conn->alg);
     free(conn);
@@ -2487,17 +2469,7 @@ delete_conn(struct conn *conn)
     ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
     ovs_mutex_destroy(&conn->lock);
     free(conn->nat_conn);
-    delete_conn_cmn(conn);
-}
-
-/* Only used by conn_clean_one(). */
-static void
-delete_conn_one(struct conn *conn)
-{
-    if (conn->conn_type == CT_CONN_TYPE_DEFAULT) {
-        ovs_mutex_destroy(&conn->lock);
-    }
-    delete_conn_cmn(conn);
+    delete_conn__(conn);
 }
 
 /* Convert a conntrack address 'a' into an IP address 'b' based on 'dl_type'.
@@ -2673,8 +2645,12 @@ conntrack_flush(struct conntrack *ct, const uint16_t *zone)
 
     ovs_mutex_lock(&ct->ct_lock);
     CMAP_FOR_EACH (conn, cm_node, &ct->conns) {
+        if (conn->conn_type != CT_CONN_TYPE_DEFAULT) {
+            continue;
+        }
+
         if (!zone || *zone == conn->key.zone) {
-            conn_clean_one(ct, conn);
+            conn_clean(ct, conn);
         }
     }
     ovs_mutex_unlock(&ct->ct_lock);
