@@ -206,6 +206,11 @@ chosen, and the 2nd occurance of that priority is not used. Put in logical
 terms, a subtable is chosen if its priority is greater than the previous
 best candidate.
 
+Note that the ``avx512_gather`` implementation uses instructions which may be
+affected by the Gather Data Sampling (GDS) vulnerability, aka Downfall,
+mitigation (see documentation for CVE-2022-40982 for details). This could
+result in lower performance when these mitigations are enabled.
+
 Optimizing Specific Subtable Search
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
