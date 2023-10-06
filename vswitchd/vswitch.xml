@@ -3701,12 +3701,9 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Interface description string.
           </column>
 
-          <column name="status" key="pci-vendor_id">
-            Vendor ID of PCI device.
-          </column>
-
-          <column name="status" key="pci-device_id">
-            Device ID of PCI device.
+          <column name="status" key="bus_info">
+            Bus name and bus info such as Vendor ID and Device ID of PCI
+            device.
           </column>
 
           <column name="status" key="dpdk-vf-mac">
