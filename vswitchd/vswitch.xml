@@ -3687,6 +3687,10 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Device ID of PCI device.
           </column>
 
+          <column name="status" key="dpdk-vf-mac">
+            Ethernet address set for this VF interface. Only reported for dpdk
+            VF representors.
+          </column>
       </group>
     </group>
 
