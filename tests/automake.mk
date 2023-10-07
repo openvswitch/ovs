@@ -455,6 +455,7 @@ tests_ovstest_SOURCES = \
 	tests/test-barrier.c \
 	tests/test-bundle.c \
 	tests/test-byte-order.c \
+	tests/test-byteq.c \
 	tests/test-classifier.c \
 	tests/test-ccmap.c \
 	tests/test-cmap.c \
