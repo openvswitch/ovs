@@ -855,3 +855,30 @@ AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([offloads - IGMP with ip rewrite - offloads enabled])
+OVS_TRAFFIC_VSWITCHD_START([], [], [-- set Open_vSwitch . other_config:hw-offload=true])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Set up the ip field modify flow.
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 in_port=ovs-p0,ip actions=mod_nw_tos:12,output:ovs-p1"])
+
+dnl Add and del multicast address to send IGMP packet.
+NS_CHECK_EXEC([at_ns0], [ip addr add dev p0 224.10.10.10/24 autojoin 2>/dev/null], [0])
+NS_CHECK_EXEC([at_ns0], [ip addr del dev p0 224.10.10.10/24 2>/dev/null], [0])
+
+OVS_WAIT_UNTIL([test `ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | wc -l` -ge 1])
+
+dnl Check the offloaded flow.
+AT_CHECK([ovs-appctl dpctl/dump-flows type=tc,offloaded | grep "eth_type(0x0800)" | DUMP_CLEAN_SORTED | strip_stats], [0], [dnl
+in_port(2),eth(),eth_type(0x0800),ipv4(proto=2,tos=0xc0/0xfc,frag=no), packets:0, bytes:0, used:0.001s, actions:set(ipv4(tos=0xc/0xfc)),3
+])
+
+dnl Check the tc rule.
+AT_CHECK([tc -d filter show dev ovs-p0 ingress | grep -q "csum (iph)"], [0])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
