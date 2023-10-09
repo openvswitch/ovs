@@ -7097,7 +7097,7 @@ reset_mirror_ctx(struct xlate_ctx *ctx, const struct flow *flow,
 
         set_field = ofpact_get_SET_FIELD(a);
         mf = set_field->field;
-        if (mf_are_prereqs_ok(mf, flow, NULL)) {
+        if (mf_are_prereqs_ok(mf, flow, NULL) && !mf_is_tun_metadata(mf)) {
             ctx->mirrors = 0;
         }
         return;
