@@ -1280,3 +1280,32 @@ AT_CHECK([ovs-vsctl --if-exists del-port p0 -- \
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])]
 AT_CLEANUP
+
+AT_SETUP([tunnel - Geneve metadata mirror])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+add_of_ports br0 90
+AT_CHECK([ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p90 get Port p90 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p90], [0], [stdout])
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
+
+AT_DATA([flows.txt], [dnl
+in_port=2,actions=set_field:0xa->tun_metadata0,set_field:0x1234567890abcdef->tun_metadata1,1
+tun_metadata0=0xb/0xf,actions=2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 90,set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff,type=0,len=4,0xa}{class=0xffff,type=0x1,len=8,0x1234567890abcdef}),flags(df))),6081
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
