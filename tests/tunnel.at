@@ -603,7 +603,7 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - set_field - tun_src/tun_dst/tun_id])
+AT_SETUP([tunnel - set_field - tun_src/tun_dst/tun_id])
 OVS_VSWITCHD_START([dnl
     add-port br0 p1 -- set Interface p1 type=gre options:key=flow \
         options:remote_ip=1.1.1.1 ofport_request=1 \
