@@ -212,6 +212,7 @@ Ivan Dyukov                        i.dyukov@samsung.com
 Ivan Malov                         ivan.malov@arknetworks.am
 IWASE Yusuke                       iwase.yusuke@gmail.com
 Jaime Caamaño Ruiz                 jcaamano@suse.com
+Jakob Meng                         code@jakobmeng.de
 Jakub Libosvar                     libosvar@redhat.com
 Jakub Sitnicki                     jsitnicki@gmail.com
 James P.                           roampune@gmail.com
