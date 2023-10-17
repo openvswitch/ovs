@@ -820,6 +820,7 @@ check_condition(const struct ovsdb_idl_table_class *table,
         type.value.type = OVSDB_TYPE_VOID;
         error = ovsdb_datum_from_string(&b, &type, value_string, symtab);
         if (error) {
+            ovsdb_atom_destroy(&want_key, column->type.key.type);
             goto out;
         }
 
@@ -1374,6 +1375,7 @@ set_column(const struct ovsdb_idl_table_class *table,
         error = ovsdb_atom_from_string(&value, NULL, &column->type.value,
                                        value_string, symtab);
         if (error) {
+            ovsdb_atom_destroy(&key, column->type.key.type);
             goto out;
         }
 
