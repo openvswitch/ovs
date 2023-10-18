@@ -982,7 +982,7 @@ udpif_revalidator(void *arg)
             udpif->reval_exit = latch_is_set(&udpif->exit_latch);
 
             start_time = time_msec();
-            if (!udpif->reval_exit) {
+            if (!udpif->reval_exit && !udpif->pause) {
                 bool terse_dump;
 
                 terse_dump = udpif_use_ufid(udpif);
@@ -991,10 +991,15 @@ udpif_revalidator(void *arg)
             }
         }
 
-        /* Wait for the leader to start the flow dump. */
+        /* Wait for the leader to reach this point. */
         ovs_barrier_block(&udpif->reval_barrier);
         if (udpif->pause) {
             revalidator_pause(revalidator);
+            if (!udpif->reval_exit) {
+                /* The main thread resumed all validators, but the leader
+                 * didn't start the dump, go to next iteration. */
+                continue;
+            }
         }
 
         if (udpif->reval_exit) {
@@ -3152,10 +3157,18 @@ upcall_unixctl_purge(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct udpif *udpif;
 
     LIST_FOR_EACH (udpif, list_node, &all_udpifs) {
+        bool wake_up = false;
         int n;
 
+        if (!latch_is_set(&udpif->pause_latch)) {
+            udpif_pause_revalidators(udpif);
+            wake_up = true;
+        }
         for (n = 0; n < udpif->n_revalidators; n++) {
             revalidator_purge(&udpif->revalidators[n]);
+        }
+        if (wake_up) {
+            udpif_resume_revalidators(udpif);
         }
     }
     unixctl_command_reply(conn, "");
