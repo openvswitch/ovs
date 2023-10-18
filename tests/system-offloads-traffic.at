@@ -851,8 +851,6 @@ AT_CHECK([test $(ovs-appctl dpctl/dump-flows | grep -c "eth_type(0x0800)") -eq 0
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/could not open network device ovs-p0/d
 /on nonexistent port/d
-/failed to flow_get/d
-/Failed to acquire udpif_key/d
 /No such device/d
 /failed to offload flow/d
 "])
