@@ -502,6 +502,7 @@ Yunjian Wang                       wangyunjian@huawei.com
 Yousong Zhou                       yszhou4tech@gmail.com
 Zak Whittington                    zwhitt.vmware@gmail.com
 Zang MingJie                       zealot0630@gmail.com
+Zengyuan Wang                      wangzengyuan@huawei.com
 ZhengLingyun                       konghuarukhr@163.com
 Zhenyu Gao                         sysugaozhenyu@gmail.com
 Zhi Yong Wu                        zwu.kernel@gmail.com
