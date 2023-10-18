@@ -3851,15 +3851,13 @@ log_tc_flower_match(const char *msg,
 
         ds_put_cstr(&s, "\nExpected Actions:\n");
         for (i = 0, action = a->actions; i < a->action_count; i++, action++) {
-            ds_put_cstr(&s, " - ");
-            ds_put_hex(&s, action, sizeof *action);
-            ds_put_cstr(&s, "\n");
+            ds_put_format(&s, " - %d -\n", i);
+            ds_put_sparse_hex_dump(&s, action, sizeof *action, 0, false);
         }
-        ds_put_cstr(&s, "Received Actions:\n");
+        ds_put_cstr(&s, "\nReceived Actions:\n");
         for (i = 0, action = b->actions; i < b->action_count; i++, action++) {
-            ds_put_cstr(&s, " - ");
-            ds_put_hex(&s, action, sizeof *action);
-            ds_put_cstr(&s, "\n");
+            ds_put_format(&s, " - %d -\n", i);
+            ds_put_sparse_hex_dump(&s, action, sizeof *action, 0, false);
         }
     } else {
         /* Only dump the delta in actions. */
@@ -3868,12 +3866,13 @@ log_tc_flower_match(const char *msg,
 
         for (int i = 0; i < a->action_count; i++, action_a++, action_b++) {
             if (memcmp(action_a, action_b, sizeof *action_a)) {
-                ds_put_format(&s,
-                              "\nAction %d mismatch:\n - Expected Action: ",
-                              i);
-                ds_put_hex(&s, action_a, sizeof *action_a);
-                ds_put_cstr(&s, "\n - Received Action: ");
-                ds_put_hex(&s, action_b, sizeof *action_b);
+                ds_put_format(&s, "\nAction %d mismatch:\n"
+                                  " - Expected Action:\n", i);
+                ds_put_sparse_hex_dump(&s, action_a, sizeof *action_a,
+                                       0, false);
+                ds_put_cstr(&s, " - Received Action:\n");
+                ds_put_sparse_hex_dump(&s, action_b, sizeof *action_b,
+                                       0, false);
             }
         }
     }
