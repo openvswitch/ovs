@@ -854,7 +854,7 @@ NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0]
 ])
 
 dnl Start tcpdump to capture the encapsulated packets.
-NETNS_DAEMONIZE([at_ns0], [tcpdump -U -i p0 -w p0.pcap], [tcpdump.pid])
+NETNS_DAEMONIZE([at_ns0], [tcpdump -n -U -i p0 -w p0.pcap], [tcpdump.pid])
 sleep 1
 
 dnl Generate a single packet trough the controler that needs an ARP modification
@@ -5625,7 +5625,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 rm p0.pcap
-tcpdump -U -i ovs-p0 -w p0.pcap &
+tcpdump -n -U -i ovs-p0 -w p0.pcap &
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
@@ -5649,7 +5649,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=
 udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),mark=1
 ])
 
-AT_CHECK([tcpdump -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
+AT_CHECK([tcpdump -n -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -6393,13 +6393,13 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 rm p0.pcap
-tcpdump -U -i ovs-p0 -w p0.pcap &
+tcpdump -n -U -i ovs-p0 -w p0.pcap &
 sleep 1
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
 NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -6 $NC_EOF_OPT -u fc00::2 1"])
 
-AT_CHECK([tcpdump -v "icmp6" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
+AT_CHECK([tcpdump -n -v "icmp6" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 udp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>)
@@ -7161,7 +7161,7 @@ table=2,in_port=ovs-server,ip,ct_state=+trk+rpl,actions=output:ovs-client
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 rm server.pcap
-NETNS_DAEMONIZE([server], [tcpdump -l -U -i server -w server.pcap 2>tcpdump0_err], [tcpdump0.pid])
+NETNS_DAEMONIZE([server], [tcpdump -n -l -U -i server -w server.pcap 2>tcpdump0_err], [tcpdump0.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump0_err])
 
 dnl Send UDP client->server
@@ -7203,7 +7203,7 @@ dnl Check the ICMP error in reply direction
 AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=42])
 
 rm client.pcap
-NETNS_DAEMONIZE([client], [tcpdump -l -U -i client -w client.pcap 2>tcpdump1_err], [tcpdump1.pid])
+NETNS_DAEMONIZE([client], [tcpdump -n -l -U -i client -w client.pcap 2>tcpdump1_err], [tcpdump1.pid])
 OVS_WAIT_UNTIL([grep "listening" tcpdump1_err])
 
 dnl Send UDP client->server
