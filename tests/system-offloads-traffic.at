@@ -39,7 +39,7 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -72,7 +72,7 @@ ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [ignore])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -204,7 +204,7 @@ NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
 NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "actions=normal"])
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -254,7 +254,7 @@ NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
 NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
 
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 "actions=normal"])
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -313,11 +313,11 @@ NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pca
 NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null], [tcpdump4.pid])
 sleep 1
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
@@ -371,11 +371,11 @@ NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3.pca
 NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4.pcap 2>/dev/null], [tcpdump4.pid])
 sleep 1
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
@@ -419,11 +419,11 @@ table=4,in_port=1,reg0=0x0 actions=output:2
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
@@ -447,7 +447,7 @@ table=4,in_port=1,reg0=0x0 actions=output:2
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(5),le(3))])
@@ -463,7 +463,7 @@ table=4,in_port=1,reg0=0x0 actions=output:2
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(drop),le(3))])
@@ -479,7 +479,7 @@ table=4,in_port=1,reg0=0x1 actions=output:2
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(3),le(drop))])
@@ -496,7 +496,7 @@ table=4,in_port=1,reg0=0x1 actions=output:2,4
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(3,5),le(3,4))])
@@ -519,11 +519,11 @@ NETNS_DAEMONIZE([at_ns3], [tcpdump -l -n -U -i p3 dst 10.1.1.2 and icmp > p3_2.p
 NETNS_DAEMONIZE([at_ns4], [tcpdump -l -n -U -i p4 dst 10.1.1.2 and icmp > p4_2.pcap 2>/dev/null], [tcpdump4_2.pid])
 sleep 1
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
@@ -555,7 +555,7 @@ table=4,in_port=1,reg0=0x0 actions=mod_dl_src:00:11:11:11:11:11,output:4
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(set(ipv4(tos=0x4/0xfc)),4),le(set(eth(src=00:11:11:11:11:11)),5)),3])
@@ -573,7 +573,7 @@ table=4,in_port=1,reg0=0x0 actions=mod_nw_tos:8,output:4
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(set(eth(src=00:11:11:11:11:11)),4),le(set(ipv4(tos=0x8/0xfc)),5)),3])
@@ -591,7 +591,7 @@ table=4,in_port=1,reg0=0x0 actions=output:br0
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(1),le(1)),3])
@@ -608,7 +608,7 @@ table=4,in_port=1,reg0=0x1 actions=output:br0
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(1),le(drop)),3])
@@ -625,7 +625,7 @@ table=4,in_port=1,reg0=0x0 actions=output:br0
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 1024 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 
@@ -642,7 +642,7 @@ table=1,in_port=1,reg1=0x2 actions=output:2
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(drop),le(drop)),3])
@@ -662,7 +662,7 @@ table=5,in_port=1,reg0=0x0 actions=output:3
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(check_pkt_len(size=400,gt(5),le(4))),le(5)),3])
@@ -682,7 +682,7 @@ table=5,in_port=1,reg0=0x0 actions=output:3
 ])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
 sleep 1
-NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -w 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 10 -i 0.1 -W 2 -s 64 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ], [], [ovs-appctl dpctl/dump-flows; ovs-ofctl dump-flows br0])
 OVS_CHECK_ACTIONS([check_pkt_len(size=200,gt(5),le(check_pkt_len(size=100,gt(5),le(4)))),3])
@@ -706,7 +706,7 @@ add in_port=ovs-p1,actions=ovs-p0
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -723,7 +723,7 @@ modify in_port=ovs-p1,actions=output(port=ovs-p0, max_len=128)
 AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -735,7 +735,7 @@ recirc_id(<recirc>),in_port(3),eth(),eth_type(0x0800),ipv4(frag=no), packets:10,
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -834,7 +834,7 @@ NS_CHECK_EXEC([at_ns0], [iptables -I OUTPUT -p ip -j MARK --set-mark 512 2>/dev/
 NS_CHECK_EXEC([at_ns0], [iptables -I INPUT -m mark --mark 512 -j ACCEPT 2>/dev/null], [0], [ignore])
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -904,7 +904,7 @@ NS_CHECK_EXEC([at_ns1], [ip link set dev ipip0 up 2>/dev/null], [0])
 NS_CHECK_EXEC([at_ns1], [ip addr add dev ipip0 192.168.1.2/30 2>/dev/null], [0])
 
 dnl Check the tunnel.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 192.168.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 192.168.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 

@@ -10,13 +10,13 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -33,7 +33,7 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -56,13 +56,13 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 ADD_VLAN(p0, at_ns0, 100, "10.2.2.1/24")
 ADD_VLAN(p1, at_ns1, 100, "10.2.2.2/24")
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -88,13 +88,13 @@ ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -116,13 +116,13 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -147,13 +147,13 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -179,13 +179,13 @@ ADD_CVLAN(p1.4094, at_ns1, 100, "fc00:1::2/96")
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -209,13 +209,13 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -253,13 +253,13 @@ priority=0,actions=NORMAL
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::3 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00::3 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::3 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::3 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -278,13 +278,13 @@ ADD_VETH_BOND(p1 p2, at_ns1, br0, bond0, lacp=active bond_mode=balance-tcp, "10.
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -315,18 +315,18 @@ ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [id 0 dstport 4789])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -363,17 +363,17 @@ ADD_VLAN(at_vxlan1, at_ns0, 100, "10.1.1.1/24")
 ADD_VLAN(p0, at_ns0, 42, "172.31.1.1/24")
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -406,18 +406,18 @@ ADD_NATIVE_TUNNEL6([vxlan], [at_vxlan1], [at_ns0], [fc00::100], [10.1.1.1/24],
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -448,18 +448,18 @@ ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
 ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -495,12 +495,12 @@ ADD_NATIVE_TUNNEL6([ip6gretap], [ns_gretap0], [at_ns0], [fc00:100::100],
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -532,12 +532,12 @@ ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [op
 ADD_NATIVE_TUNNEL([erspan], [ns_erspan0], [at_ns0], [172.31.1.100], [10.1.1.1/24], [seq key 1 erspan_ver 1 erspan 7])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-dnl NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+dnl NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 NS_CHECK_EXEC([at_ns0], [ping -s 1200 -i 0.3 -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
@@ -569,12 +569,12 @@ ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [op
 ADD_NATIVE_TUNNEL([erspan], [ns_erspan0], [at_ns0], [172.31.1.100], [10.1.1.1/24], [seq key 1 erspan_ver 2 erspan_dir egress erspan_hwid 7])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-dnl NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+dnl NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 NS_CHECK_EXEC([at_ns0], [ping -s 1200 -i 0.3 -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
@@ -610,12 +610,12 @@ ADD_NATIVE_TUNNEL6([ip6erspan], [ns_erspan0], [at_ns0], [fc00:100::100],
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -651,12 +651,12 @@ ADD_NATIVE_TUNNEL6([ip6erspan], [ns_erspan0], [at_ns0], [fc00:100::100],
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -686,18 +686,18 @@ ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [vni 0])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -739,12 +739,12 @@ ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [vni 0])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl ping over tunnel should work
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -837,18 +837,18 @@ ADD_NATIVE_TUNNEL6([geneve], [ns_gnv0], [at_ns0], [fc00::100], [10.1.1.1/24],
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -883,7 +883,7 @@ AT_CHECK([ovs-ofctl add-flow br0 "table=37,actions=at_gnv0"])
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -930,7 +930,7 @@ NETNS_DAEMONIZE([at_ns0], [tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap 2>/
 sleep 1
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -978,7 +978,7 @@ NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 
 sleep 1
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1031,7 +1031,7 @@ NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap 
 sleep 1
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1088,7 +1088,7 @@ NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap
 sleep 1
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1144,7 +1144,7 @@ NETNS_DAEMONIZE([at_ns0], [tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap
 sleep 1
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1214,12 +1214,12 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay.
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.100.100.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.100.100.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1276,12 +1276,12 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::100])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 ping6 -c 1 fc00:100::100])
 
 dnl First, check the underlay.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay.
-NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -W 2 fc00:100::100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1307,7 +1307,7 @@ priority=10 in_port=2,ip,actions=clone(mod_dl_src(ae:c6:7e:54:8d:4d),mod_dl_dst(
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1348,11 +1348,11 @@ table=1,priority=10 actions=normal
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl add-flows br1 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -1387,11 +1387,11 @@ table=3,priority=10 actions=normal
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl add-flows br1 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2062,7 +2062,7 @@ add in_port=ovs-p1,actions=ovs-p0,br0
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -2081,7 +2081,7 @@ modify in_port=ovs-p1,actions=ovs-p0
 AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -2096,7 +2096,7 @@ recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:19, bytes
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -2563,7 +2563,7 @@ AT_CHECK([FLUSH_CMD zone=5 'ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0])
 
 dnl Test ICMP traffic
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -2763,7 +2763,7 @@ priority=100,in_port=2,icmp,ct_state=+trk+est,action=1
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Pings from ns0->ns1 should work fine.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -2804,7 +2804,7 @@ priority=100,in_port=2,icmp,ct_state=+trk+est,action=1
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Pings from ns0->ns1 should work fine.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -2904,7 +2904,7 @@ NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00::1 | FORMAT_PING], [0], 
 ])
 
 dnl Pings from ns0->ns1 should work fine.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -3855,12 +3855,12 @@ dnl Modify userspace conntrack fragmentation handling.
 DPCTL_MODIFY_FRAGMENTATION()
 
 dnl Ipv4 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -3932,12 +3932,12 @@ dnl Modify userspace conntrack fragmentation handling.
 DPCTL_MODIFY_FRAGMENTATION()
 
 dnl Ipv4 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -3978,22 +3978,22 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 
 dnl Ipv4 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 fragmentation connectivity check. (outer svlan)
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.255.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.255.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 larger fragmentation connectivity check. (outer svlan)
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.255.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.255.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4152,12 +4152,12 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Ipv6 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv6 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4234,12 +4234,12 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Ipv4 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00:1::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv4 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00:1::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4277,22 +4277,22 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::4])
 
 dnl Ipv6 fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00:1::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv6 fragmentation connectivity check. (outer svlan)
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv6 larger fragmentation connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00:1::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Ipv6 larger fragmentation connectivity check. (outer svlan)
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4504,18 +4504,18 @@ ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [id 0 dstport 4789])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4564,18 +4564,18 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -4688,7 +4688,7 @@ dnl The default udp_single and icmp_first timeouts are 30 seconds in
 dnl kernel DP, and 60 seconds in userspace DP.
 
 dnl Send ICMP and UDP traffic
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
@@ -4714,7 +4714,7 @@ done
 AT_CHECK([ovs-vsctl --may-exist add-zone-tp $DP_TYPE zone=5 udp_first=1 udp_single=1 icmp_first=1 icmp_reply=1])
 
 dnl Send ICMP and UDP traffic
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
@@ -4732,7 +4732,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 ])
 
 dnl Re-send ICMP and UDP traffic to test conntrack cache
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
@@ -4753,7 +4753,7 @@ dnl Set the timeout policy to default again.
 AT_CHECK([ovs-vsctl del-zone-tp $DP_TYPE zone=5])
 
 dnl Send ICMP and UDP traffic
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
@@ -5019,7 +5019,7 @@ table=2,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+AT_CHECK([ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -5090,7 +5090,7 @@ table=4,priority=100,ip,action=output:NXM_NX_REG0[[]]
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+AT_CHECK([ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -6872,7 +6872,7 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::240])
 
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::240 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::240 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -7605,12 +7605,12 @@ ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [vni 0])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -7837,7 +7837,7 @@ dnl CVLAN traffic should match the flow and drop
 AT_CHECK([ovs-appctl revalidator/purge])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:vlan-limit=1])
 AT_CHECK([ovs-ofctl add-flow br0 "priority=100 dl_type=0x8100 action=drop"])
-NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -w 3 10.2.2.2], [1], [ignore])
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -W 3 10.2.2.2], [1], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -7887,11 +7887,11 @@ AT_CHECK([ovs-ofctl --bundle add-flows br2 flows-customer-br.txt])
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -7943,11 +7943,11 @@ AT_CHECK([ovs-ofctl --bundle add-flows br2 flows-customer-br.txt])
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -7995,24 +7995,24 @@ AT_CHECK([ovs-vsctl set port ovs-p2 vlan_mode=dot1q-tunnel tag=4094 cvlans=100,2
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.3.2.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.3.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.3.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.3.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.3.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl CVLAN 300 is not permitted by dot1q-tunnel
-NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -w 3 10.4.2.2], [1], [ignore])
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -W 3 10.4.2.2], [1], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/dropping VLAN \(0\|300\) packet received on dot1q-tunnel port/d"])
 AT_CLEANUP
@@ -8041,11 +8041,11 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
