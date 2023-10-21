@@ -16,7 +16,7 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -50,7 +50,7 @@ ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [ignore])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -186,7 +186,7 @@ add in_port=ovs-p1,actions=ovs-p0,br0
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -205,7 +205,7 @@ modify in_port=ovs-p1,actions=ovs-p0
 AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -220,7 +220,7 @@ recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:19, bytes
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -252,7 +252,7 @@ add in_port=ovs-p1,actions=ovs-p0
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -269,7 +269,7 @@ modify in_port=ovs-p1,actions=output(port=ovs-p0, max_len=128)
 AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
@@ -281,7 +281,7 @@ recirc_id(<recirc>),in_port(3),eth(),eth_type(0x0800),ipv4(frag=no), packets:10,
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl revalidator/wait], [0])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 10 packets transmitted, 10 received, 0% packet loss, time 0ms
 ])
 
