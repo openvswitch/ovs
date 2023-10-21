@@ -141,10 +141,10 @@ m4_define([CHECK_ESP_TRAFFIC],
       OVS_WAIT_UNTIL([test `IPSEC_STATUS_LOADED(right)` -eq `IPSEC_STATUS_ACTIVE(right)`])
 
       dnl Ping over IPsec tunnel
-      NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.3 -w 2 192.0.0.2 | FORMAT_PING], [0], [dnl
+      NS_CHECK_EXEC([left], [ping -q -c 3 -i 0.3 -W 2 192.0.0.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-      NS_CHECK_EXEC([right], [ping -q -c 3 -i 0.3 -w 2 192.0.0.1 | FORMAT_PING], [0], [dnl
+      NS_CHECK_EXEC([right], [ping -q -c 3 -i 0.3 -W 2 192.0.0.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
