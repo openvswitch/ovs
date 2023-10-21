@@ -335,7 +335,7 @@ AT_CHECK([
 
 
 # Ping between N1 and N3, via the L2 GRE tunnel between br-in1 and br-in3
-NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N3_IP | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -W 2 $N3_IP | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -363,7 +363,7 @@ AT_CHECK([
 
 
 # Ping between N1 and N2, via the L2 GRE tunnel between br-in1 and br-in2
-NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N2_IP | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -W 2 $N2_IP | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -394,7 +394,7 @@ AT_CHECK([
 
 
 # Ping between N3 and N2, via the L3 GRE tunnel between br-in3 and br-in2
-NS_CHECK_EXEC([ns3], [ping -q -c 3 -i 0.3 -w 2 $N1_IP | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([ns3], [ping -q -c 3 -i 0.3 -W 2 $N1_IP | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 

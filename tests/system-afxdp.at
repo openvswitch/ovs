@@ -39,7 +39,7 @@ AT_CHECK([ovs-vsctl add-port br0 ovs-p0 -- \
                     set interface ovs-p0 type=afxdp-nonpmd options:n_rxq=1],
          [0], [], [stderr])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
