@@ -3683,6 +3683,9 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Each virtqueue will have it's size reported, where n is the
             virtqueue number from 0..(num_of_vrings-1).
           </column>
+          <column name="status" key="userspace-tso">
+            Whether userspace-tso is enabled or disabled.
+          </column>
       </group>
     </group>
 
