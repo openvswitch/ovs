@@ -12,6 +12,8 @@ Open vSwitch
     :target: https://ci.appveyor.com/project/blp/ovs/history
 .. image:: https://api.cirrus-ci.com/github/openvswitch/ovs.svg
     :target: https://cirrus-ci.com/github/openvswitch/ovs
+.. image:: https://readthedocs.org/projects/openvswitch/badge/?version=latest
+    :target: https://docs.openvswitch.org/en/latest/
 
 What is Open vSwitch?
 ---------------------
