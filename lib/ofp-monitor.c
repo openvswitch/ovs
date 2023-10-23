@@ -962,7 +962,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
             return 0;
         } else if (update->event == OFPFME_PAUSED
                    || update->event == OFPFME_RESUMED) {
-            struct ofp_flow_update_paused *ofup;
+            struct ofp_flow_update_paused *ofup OVS_UNUSED;
 
             if (length != sizeof *ofup) {
                 goto bad_len;
