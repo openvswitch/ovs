@@ -1416,7 +1416,7 @@ count_common_prefix_run(const char *ids[], size_t n,
         if (!next) {
             break;
         } else if (next < extra_prefix_len) {
-            next = extra_prefix_len;
+            extra_prefix_len = next;
         }
         i++;
     }
