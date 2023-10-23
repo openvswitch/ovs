@@ -3711,6 +3711,36 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             VF representors.
           </column>
       </group>
+
+      <group title="dpdkvhostuser">
+        <p>
+          dpdkvhostuser and dpdkvhostuserclient
+          netdev specific interface status information.
+        </p>
+          <column name="status" key="mode">
+            client (connecting) or server (listening) in the socket
+            communication.
+          </column>
+          <column name="status" key="features">
+            virtio features bitmap as per virtio specification.
+          </column>
+          <column name="status" key="num_of_vrings">
+            The number of available virtqueues.
+          </column>
+          <column name="status" key="numa">
+            The numa id of the device and guest memory.
+          </column>
+          <column name="status" key="socket">
+            The path to the socket used for communication.
+          </column>
+          <column name="status" key="status">
+            Status of connection to the device.
+          </column>
+          <column name="status" key="vring_n_size">
+            Each virtqueue will have it's size reported, where n is the
+            virtqueue number from 0..(num_of_vrings-1).
+          </column>
+      </group>
     </group>
 
     <group title="Statistics">
