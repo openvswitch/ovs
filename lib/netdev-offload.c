@@ -813,7 +813,8 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
             offload_thread_nb = smap_get_ullong(ovs_other_config,
                                                 "n-offload-threads",
                                                 DEFAULT_OFFLOAD_THREAD_NB);
-            if (offload_thread_nb > MAX_OFFLOAD_THREAD_NB) {
+            if (offload_thread_nb == 0 ||
+                offload_thread_nb > MAX_OFFLOAD_THREAD_NB) {
                 VLOG_WARN("netdev: Invalid number of threads requested: %u",
                           offload_thread_nb);
                 offload_thread_nb = DEFAULT_OFFLOAD_THREAD_NB;

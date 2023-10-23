@@ -315,7 +315,7 @@ print_result(const char *prefix, int reader_elapsed)
     for (i = 0; i < n_threads; i++) {
         avg += thread_working_ms[i];
     }
-    avg /= n_threads;
+    avg /= n_threads ? n_threads : 1;
     printf("%s:  %6d", prefix, reader_elapsed);
     for (i = 0; i < n_threads; i++) {
         printf(" %6" PRIu64, thread_working_ms[i]);
