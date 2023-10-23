@@ -2751,8 +2751,8 @@ static char *
 mf_from_integer_string(const struct mf_field *mf, const char *s,
                        uint8_t *valuep, uint8_t *maskp)
 {
+    const char *err_str;
     char *tail;
-    const char *err_str = "";
     int err;
 
     err = parse_int_string(s, valuep, mf->n_bytes, &tail);
@@ -2785,8 +2785,8 @@ syntax_error:
 static char *
 mf_from_packet_type_string(const char *s, ovs_be32 *packet_type)
 {
+    const char *err_str;
     char *tail;
-    const char *err_str = "";
     int err;
 
     if (*s != '(') {
