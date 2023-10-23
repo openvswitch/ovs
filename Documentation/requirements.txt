@@ -1,2 +1,2 @@
-sphinx>=1.1,<2.0
+sphinx>=1.1
 ovs_sphinx_theme>=1.0,<1.1
