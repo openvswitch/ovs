@@ -237,7 +237,7 @@ print_result(const char *prefix)
     for (i = 0; i < n_threads; i++) {
         avg += thread_working_ms[i];
     }
-    avg /= n_threads;
+    avg /= n_threads ? n_threads : 1;
     printf("%s: ", prefix);
     for (i = 0; i < n_threads; i++) {
         if (thread_working_ms[i] >= TIMEOUT_MS) {
