@@ -4733,6 +4733,10 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
     }
 
     nb_thread = netdev_offload_thread_nb();
+    if (!nb_thread) {
+        return EINVAL;
+    }
+
     /* nb_thread counters for the overall total as well. */
     stats->size = ARRAY_SIZE(hwol_stats) * (nb_thread + 1);
     stats->counters = xcalloc(stats->size, sizeof *stats->counters);
