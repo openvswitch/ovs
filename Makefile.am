@@ -84,6 +84,7 @@ EXTRA_DIST = \
 	.cirrus.yml \
 	.editorconfig \
 	.github/workflows/build-and-test.yml \
+	.readthedocs.yaml \
 	appveyor.yml \
 	boot.sh \
 	poc/builders/Vagrantfile \
