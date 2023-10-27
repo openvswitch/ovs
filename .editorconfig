@@ -2,15 +2,18 @@
 
 root = true
 
-[*]
-end_of_line = lf
-insert_final_newline = true
-trim_trailing_whitespace = true
-charset = utf-8
+# No wildcard sections [*] and [**] because properties cannot be
+# applied safely to any filetype in general.
+
+# Property trim_trailing_whitespace should not be defined at all
+# because it is interpreted differently by editors.
 
 [*.{c,h}]
+charset = utf-8
+end_of_line = lf
 indent_style = space
 indent_size = 4
+insert_final_newline = true
 max_line_length = 79
 
 [include/linux/**.h]
