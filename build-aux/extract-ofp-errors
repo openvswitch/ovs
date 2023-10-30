@@ -22,6 +22,9 @@ tokenRe = "#?" + idRe + "|[0-9]+|."
 inComment = False
 inDirective = False
 
+n_errors = 0
+
+
 def open_file(fn):
     global fileName
     global inputFile
@@ -29,6 +32,7 @@ def open_file(fn):
     fileName = fn
     inputFile = open(fileName)
     lineNumber = 0
+
 
 def tryGetLine():
     global inputFile
@@ -38,9 +42,11 @@ def tryGetLine():
     lineNumber += 1
     return line != ""
 
+
 def getLine():
     if not tryGetLine():
         fatal("unexpected end of input")
+
 
 def getToken():
     global token
@@ -82,36 +88,42 @@ def getToken():
                 line = line[:-2] + inputFile.readline()
                 lineNumber += 1
             if line == "":
-                if token == None:
+                if token is None:
                     fatal("unexpected end of input")
                 token = None
                 return False
 
-n_errors = 0
+
 def error(msg):
     global n_errors
     sys.stderr.write("%s:%d: %s\n" % (fileName, lineNumber, msg))
     n_errors += 1
 
+
 def fatal(msg):
     error(msg)
     sys.exit(1)
+
 
 def skipDirective():
     getToken()
     while token != '$':
         getToken()
 
+
 def isId(s):
-    return re.match(idRe + "$", s) != None
+    return re.match(idRe + "$", s) is not None
+
 
 def forceId():
     if not isId(token):
         fatal("identifier expected")
 
+
 def forceInteger():
-    if not re.match('[0-9]+$', token):
+    if not re.match(r'[0-9]+$', token):
         fatal("integer expected")
+
 
 def match(t):
     if token == t:
@@ -120,9 +132,11 @@ def match(t):
     else:
         return False
 
+
 def forceMatch(t):
     if not match(t):
         fatal("%s expected" % t)
+
 
 def parseTaggedName():
     assert token in ('struct', 'union')
@@ -133,26 +147,26 @@ def parseTaggedName():
     getToken()
     return name
 
+
 def print_enum(tag, constants, storage_class):
-    print ("""
+    print("""
 %(storage_class)sconst char *
 %(tag)s_to_string(uint16_t value)
 {
     switch (value) {\
 """ % {"tag": tag,
-       "bufferlen": len(tag) + 32,
        "storage_class": storage_class})
     for constant in constants:
-        print ("    case %s: return \"%s\";" % (constant, constant))
-    print ("""\
+        print("    case %s: return \"%s\";" % (constant, constant))
+    print("""\
     }
     return NULL;
-}\
-""" % {"tag": tag})
+}""")
+
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print ('''\
+    print('''\
 %(argv0)s, for extracting OpenFlow error codes from header files
 usage: %(argv0)s ERROR_HEADER VENDOR_HEADER
 
@@ -167,6 +181,7 @@ The output is suitable for use as lib/ofp-errors.inc.\
 ''' % {"argv0": argv0})
     sys.exit(0)
 
+
 def extract_vendor_ids(fn):
     global vendor_map
     vendor_map = {}
@@ -174,7 +189,10 @@ def extract_vendor_ids(fn):
 
     open_file(fn)
     while tryGetLine():
-        m = re.match(r'#define\s+([A-Z0-9_]+)_VENDOR_ID\s+(0x[0-9a-fA-F]+|[0-9]+)', line)
+        m = re.match(
+            r'#define\s+([A-Z0-9_]+)_VENDOR_ID\s+(0x[0-9a-fA-F]+|[0-9]+)',
+            line
+        )
         if not m:
             continue
 
@@ -202,9 +220,8 @@ def extract_vendor_ids(fn):
                   % (id_, vendor_reverse_map[id_], name))
         vendor_reverse_map[id_] = name
 
-def extract_ofp_errors(fn):
-    error_types = {}
 
+def extract_ofp_errors(fn):
     comments = []
     names = []
     domain = {}
@@ -220,14 +237,14 @@ def extract_ofp_errors(fn):
 
     while True:
         getLine()
-        if re.match('enum ofperr', line):
+        if re.match(r'enum ofperr', line):
             break
 
     while True:
         getLine()
         if line.startswith('/*') or not line or line.isspace():
             continue
-        elif re.match('}', line):
+        elif re.match(r'}', line):
             break
 
         if not line.lstrip().startswith('/*'):
@@ -241,19 +258,19 @@ def extract_ofp_errors(fn):
             comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
         comment = comment[:-2].rstrip()
 
-        m = re.match('Expected: (.*)\.$', comment)
+        m = re.match(r'Expected: (.*)\.$', comment)
         if m:
             expected_errors[m.group(1)] = (fileName, lineNumber)
             continue
 
-        m = re.match('((?:.(?!\.  ))+.)\.\s+(.*)$', comment)
+        m = re.match(r'((?:.(?!\.  ))+.)\.\s+(.*)$', comment)
         if not m:
             fatal("unexpected syntax between errors")
 
         dsts, comment = m.groups()
 
         getLine()
-        m = re.match('\s+(?:OFPERR_([A-Z0-9_]+))(\s*=\s*OFPERR_OFS)?,',
+        m = re.match(r'\s+(?:OFPERR_([A-Z0-9_]+))(\s*=\s*OFPERR_OFS)?,',
                      line)
         if not m:
             fatal("syntax error expecting OFPERR_ enum value")
@@ -262,11 +279,14 @@ def extract_ofp_errors(fn):
         if enum in names:
             fatal("%s specified twice" % enum)
 
-        comments.append(re.sub('\[[^]]*\]', '', comment))
+        comments.append(re.sub(r'\[[^]]*\]', '', comment))
         names.append(enum)
 
         for dst in dsts.split(', '):
-            m = re.match(r'([A-Z]+)([0-9.]+)(\+|-[0-9.]+)?\((\d+)(?:,(\d+))?\)$', dst)
+            m = re.match(
+                r'([A-Z]+)([0-9.]+)(\+|-[0-9.]+)?\((\d+)(?:,(\d+))?\)$',
+                dst
+            )
             if not m:
                 fatal("%r: syntax error in destination" % dst)
             vendor_name = m.group(1)
@@ -313,8 +333,7 @@ def extract_ofp_errors(fn):
                 # mechanism that includes a type but not a code.
                 if v1 < version_map['1.2'] or v2 < version_map['1.2']:
                     if code is None:
-                        fatal("%s: NX1.0 and NX1.1 domains require code"
-                              % (dst, vendor_name))
+                        fatal("%s: NX1.0 and NX1.1 domains require code" % dst)
                 if v1 >= version_map['1.2'] or v2 >= version_map['1.2']:
                     if code is not None:
                         fatal("%s: NX1.2+ domains do not have codes" % dst)
@@ -340,11 +359,13 @@ def extract_ofp_errors(fn):
                         del expected_errors[msg]
                     else:
                         error("%s: %s." % (dst, msg))
-                        sys.stderr.write("%s:%d: %s: Here is the location "
-                                         "of the previous definition.\n"
-                                         % (domain[version][vendor][type_][code][1],
-                                            domain[version][vendor][type_][code][2],
-                                            dst))
+                        sys.stderr.write(
+                            "%s:%d: %s: Here is the location "
+                            "of the previous definition.\n"
+                            % (domain[version][vendor][type_][code][1],
+                               domain[version][vendor][type_][code][2],
+                               dst)
+                        )
                 else:
                     domain[version][vendor][type_][code] = (enum, fileName,
                                                    lineNumber)
@@ -361,7 +382,7 @@ def extract_ofp_errors(fn):
     if n_errors:
         sys.exit(1)
 
-    print ("""\
+    print("""\
 /* Generated automatically; do not modify!     -*- buffer-read-only: t -*- */
 
 #define OFPERR_N_ERRORS %d
@@ -386,7 +407,7 @@ static const char *error_comments[OFPERR_N_ERRORS] = {
                  for comment in comments)))
 
     def output_domain(map, name, description, version):
-        print ("""
+        print("""
 static enum ofperr
 %s_decode(uint32_t vendor, uint16_t type, uint16_t code)
 {
@@ -405,16 +426,16 @@ static enum ofperr
                 vendor_s = "(%#xULL << 32) | " % vendor
             else:
                 vendor_s = ""
-            print ("    case %s ((uint32_t) %d << 16) | %d:" % (vendor_s,
+            print("    case %s ((uint32_t) %d << 16) | %d:" % (vendor_s,
                                                                type_, code))
-            print ("        return OFPERR_%s;" % enum)
-        print ("""\
+            print("        return OFPERR_%s;" % enum)
+        print("""\
     }
 
     return 0;
 }""")
 
-        print ("""
+        print("""
 static const struct ofperr_domain %s = {
     "%s",
     %d,
@@ -423,19 +444,21 @@ static const struct ofperr_domain %s = {
         for enum in names:
             if enum in map:
                 vendor, type_, code = map[enum]
-                if code == None:
+                if code is None:
                     code = -1
-                print ("        { %#8x, %2d, %3d }, /* %s */" % (vendor, type_, code, enum))
+                print("        { %#8x, %2d, %3d }, /* %s */" % (vendor, type_,
+                                                                code, enum))
             else:
-                print ("        {       -1, -1,  -1 }, /* %s */" % enum)
-        print ("""\
+                print("        {       -1, -1,  -1 }, /* %s */" % enum)
+        print("""\
     },
 };""")
 
     for version_name, id_ in version_map.items():
-        var = 'ofperr_of' + re.sub('[^A-Za-z0-9_]', '', version_name)
+        var = 'ofperr_of' + re.sub(r'[^A-Za-z0-9_]', '', version_name)
         description = "OpenFlow %s" % version_name
         output_domain(reverse[id_], var, description, id_)
+
 
 if __name__ == '__main__':
     if '--help' in sys.argv:
