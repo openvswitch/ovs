@@ -24,6 +24,9 @@ OFPT11_STATS_REQUEST = 18
 OFPT11_STATS_REPLY = 19
 OFPST_VENDOR = 0xffff
 
+n_errors = 0
+
+
 def decode_version_range(range):
     if range in VERSION:
         return (VERSION[range], VERSION[range])
@@ -35,6 +38,7 @@ def decode_version_range(range):
         a, b = re.match(r'^([^-]+)-([^-]+)$', range).groups()
         return (VERSION[a], VERSION[b])
 
+
 def get_line():
     global line
     global line_number
@@ -43,15 +47,17 @@ def get_line():
     if line == "":
         fatal("unexpected end of input")
 
-n_errors = 0
+
 def error(msg):
     global n_errors
     sys.stderr.write("%s:%d: %s\n" % (file_name, line_number, msg))
     n_errors += 1
 
+
 def fatal(msg):
     error(msg)
     sys.exit(1)
+
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
@@ -65,6 +71,7 @@ only controls #line directives in the output.\
 ''' % {"argv0": argv0})
     sys.exit(0)
 
+
 def make_sizeof(s):
     m = re.match(r'(.*) up to (.*)', s)
     if m:
@@ -73,9 +80,8 @@ def make_sizeof(s):
     else:
         return "sizeof(%s)" % s
 
-def extract_ofp_msgs(output_file_name):
-    raw_types = []
 
+def extract_ofp_msgs(output_file_name):
     all_hdrs = {}
     all_raws = {}
     all_raws_order = []
@@ -108,15 +114,16 @@ def extract_ofp_msgs(output_file_name):
             comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
         comment = comment[:-2].rstrip()
 
-        m = re.match(r'([A-Z]+) ([-.+\d]+|<all>) \((\d+)\): ([^.]+)\.$', comment)
+        m = re.match(
+            r'([A-Z]+) ([-.+\d]+|<all>) \((\d+)\): ([^.]+)\.$', comment
+        )
         if not m:
             fatal("unexpected syntax between messages")
         type_, versions, number, contents = m.groups()
         number = int(number)
 
         get_line()
-        m = re.match('\s+(?:OFPRAW_%s)(\d*)_([A-Z0-9_]+),?$' % type_,
-                     line)
+        m = re.match(r'\s+(?:OFPRAW_%s)(\d*)_([A-Z0-9_]+),?$' % type_, line)
         if not m:
             fatal("syntax error expecting OFPRAW_ enum")
         vinfix, name = m.groups()
@@ -300,7 +307,7 @@ def extract_ofp_msgs(output_file_name):
         for hdrs in r['hdrs']:
             output.append("    { {0, NULL}, {%d, %d, %d, 0x%x, %d}, %s, 0 },"
                           % (hdrs + (raw,)))
-                
+
         output.append("};")
 
     output.append("")
@@ -349,8 +356,8 @@ def extract_ofp_msgs(output_file_name):
                               % r["human_name"])
     output.append("};")
 
-    output.append("");
-    output.append("static const char *type_names[] = {");
+    output.append("")
+    output.append("static const char *type_names[] = {")
     for t in all_types:
         output.append("    \"%s\"," % t)
     output.append("};")
@@ -378,4 +385,3 @@ if __name__ == '__main__':
 
         for line in extract_ofp_msgs(sys.argv[2]):
             print(line)
-        
