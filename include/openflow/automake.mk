@@ -22,6 +22,3 @@ HSTAMP_FILES = $(openflowinclude_HEADERS:.h=.hstamp)
 CLEANFILES += $(HSTAMP_FILES)
 ALL_LOCAL += $(HSTAMP_FILES)
 $(HSTAMP_FILES): build-aux/check-structs $(openflowinclude_HEADERS)
-
-EXTRA_DIST += build-aux/check-structs
-
