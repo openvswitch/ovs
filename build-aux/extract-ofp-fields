@@ -167,9 +167,9 @@ def make_nx_match(meta_flow_h):
         print(oline)
 
 
-## ------------------------ ##
-## Documentation Generation ##
-## ------------------------ ##
+# ------------------------ #
+# Documentation Generation #
+# ------------------------ #
 
 
 def field_to_xml(field_node, f, body, summary):
@@ -189,9 +189,9 @@ def field_to_xml(field_node, f, body, summary):
         ovs_version = [int(x) for x in ovs_version_s.split(".")]
         if min_ovs_version is None or ovs_version < min_ovs_version:
             min_ovs_version = ovs_version
-    summary += ["\\fB%s\\fR" % f["name"]]
+    summary += [r"\fB%s\fR" % f["name"]]
     if f["extra_name"]:
-        summary += [" aka \\fB%s\\fR" % f["extra_name"]]
+        summary += [r" aka \fB%s\fR" % f["extra_name"]]
     summary += [";%d" % f["n_bytes"]]
     if f["n_bits"] != 8 * f["n_bytes"]:
         summary += [" (low %d bits)" % f["n_bits"]]
@@ -213,8 +213,8 @@ def field_to_xml(field_node, f, body, summary):
     title = field_node.attributes["title"].nodeValue
 
     body += [
-        """.PP
-\\fB%s Field\\fR
+        r""".PP
+\fB%s Field\fR
 .TS
 tab(;),nowarn;
 l lx.
@@ -222,9 +222,9 @@ l lx.
         % title
     ]
 
-    body += ["Name:;\\fB%s\\fR" % f["name"]]
+    body += [r"Name:;\fB%s\fR" % f["name"]]
     if f["extra_name"]:
-        body += [" (aka \\fB%s\\fR)" % f["extra_name"]]
+        body += [r" (aka \fB%s\fR)" % f["extra_name"]]
     body += ["\n"]
 
     body += ["Width:;"]
@@ -320,7 +320,8 @@ def group_xml_to_nroff(group_node, fields):
         "tab(;),nowarn;\n",
         "l l l l l l l.\n",
         "Name;Bytes;Mask;RW?;Prereqs;NXM/OXM Support\n",
-        "\_;\_;\_;\_;\_;\_\n",
+        r"\_;\_;\_;\_;\_;\_",
+        "\n",
     ]
     content += summary
     content += [".TE\n"]
@@ -329,7 +330,7 @@ def group_xml_to_nroff(group_node, fields):
 
 
 def make_oxm_classes_xml(document):
-    s = """tab(;),nowarn;
+    s = r"""tab(;),nowarn;
 l l l.
 Prefix;Vendor;Class
 \_;\_;\_
@@ -367,42 +368,41 @@ def make_ovs_fields(meta_flow_h, meta_flow_xml):
     doc = document.documentElement
 
     global version
-    if version == None:
+    if version is None:
         version = "UNKNOWN"
 
     print(
-        """\
-'\\" tp
-.\\" -*- mode: troff; coding: utf-8 -*-
+        r"""'\" tp
+.\" -*- mode: troff; coding: utf-8 -*-
 .TH "ovs\-fields" 7 "%s" "Open vSwitch" "Open vSwitch Manual"
-.fp 5 L CR              \\" Make fixed-width font available as \\fL.
+.fp 5 L CR              \" Make fixed-width font available as \fL.
 .de ST
 .  PP
 .  RS -0.15in
-.  I "\\\\$1"
+.  I "\\$1"
 .  RE
 ..
 
 .de SU
 .  PP
-.  I "\\\\$1"
+.  I "\\$1"
 ..
 
 .de IQ
 .  br
 .  ns
-.  IP "\\\\$1"
+.  IP "\\$1"
 ..
 
 .de TQ
 .  br
 .  ns
-.  TP "\\\\$1"
+.  TP "\\$1"
 ..
 .de URL
-\\\\$2 \\(laURL: \\\\$1 \\(ra\\\\$3
+\\$2 \(laURL: \\$1 \(ra\\$3
 ..
-.if \\n[.g] .mso www.tmac
+.if \n[.g] .mso www.tmac
 .SH NAME
 ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
 .
@@ -460,9 +460,9 @@ ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
             print(output[i])
 
 
-## ------------ ##
-## Main Program ##
-## ------------ ##
+# ------------ #
+# Main Program #
+# ------------ #
 
 if __name__ == "__main__":
     argv0 = sys.argv[0]
