@@ -20,7 +20,11 @@ EXTRA_DIST += \
 	build-aux/xml2nroff
 
 FLAKE8_PYFILES += \
-    $(srcdir)/build-aux/xml2nroff \
-    build-aux/dpdkstrip.py \
-    build-aux/sodepends.py \
-    build-aux/soexpand.py
+	build-aux/dpdkstrip.py \
+	build-aux/extract-ofp-actions \
+	build-aux/extract-ofp-errors \
+	build-aux/extract-ofp-fields \
+	build-aux/extract-ofp-msgs \
+	build-aux/sodepends.py \
+	build-aux/soexpand.py \
+	build-aux/xml2nroff
