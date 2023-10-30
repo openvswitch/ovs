@@ -11,53 +11,61 @@ from ovs_build_helpers import nroff
 line = ""
 
 # Maps from user-friendly version number to its protocol encoding.
-VERSION = {"1.0": 0x01,
-           "1.1": 0x02,
-           "1.2": 0x03,
-           "1.3": 0x04,
-           "1.4": 0x05,
-           "1.5": 0x06}
-VERSION_REVERSE = dict((v,k) for k, v in VERSION.items())
+VERSION = {
+    "1.0": 0x01,
+    "1.1": 0x02,
+    "1.2": 0x03,
+    "1.3": 0x04,
+    "1.4": 0x05,
+    "1.5": 0x06,
+}
+VERSION_REVERSE = dict((v, k) for k, v in VERSION.items())
 
-TYPES = {"u8":       (1,   False),
-         "be16":     (2,   False),
-         "be32":     (4,   False),
-         "MAC":      (6,   False),
-         "be64":     (8,   False),
-         "be128":    (16,  False),
-         "tunnelMD": (124, True)}
+TYPES = {
+    "u8": (1, False),
+    "be16": (2, False),
+    "be32": (4, False),
+    "MAC": (6, False),
+    "be64": (8, False),
+    "be128": (16, False),
+    "tunnelMD": (124, True),
+}
 
-FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
-              "ct state":           ("MFS_CT_STATE",     4,   4),
-              "Ethernet":           ("MFS_ETHERNET",     6,   6),
-              "IPv4":               ("MFS_IPV4",         4,   4),
-              "IPv6":               ("MFS_IPV6",        16,  16),
-              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2,   2),
-              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,   4),
-              "frag":               ("MFS_FRAG",         1,   1),
-              "tunnel flags":       ("MFS_TNL_FLAGS",    2,   2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2),
-              "packet type":        ("MFS_PACKET_TYPE",  4,   4)}
+FORMATTING = {
+    "decimal": ("MFS_DECIMAL", 1, 8),
+    "hexadecimal": ("MFS_HEXADECIMAL", 1, 127),
+    "ct state": ("MFS_CT_STATE", 4, 4),
+    "Ethernet": ("MFS_ETHERNET", 6, 6),
+    "IPv4": ("MFS_IPV4", 4, 4),
+    "IPv6": ("MFS_IPV6", 16, 16),
+    "OpenFlow 1.0 port": ("MFS_OFP_PORT", 2, 2),
+    "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4, 4),
+    "frag": ("MFS_FRAG", 1, 1),
+    "tunnel flags": ("MFS_TNL_FLAGS", 2, 2),
+    "TCP flags": ("MFS_TCP_FLAGS", 2, 2),
+    "packet type": ("MFS_PACKET_TYPE", 4, 4),
+}
 
-PREREQS = {"none": "MFP_NONE",
-           "Ethernet": "MFP_ETHERNET",
-           "ARP": "MFP_ARP",
-           "VLAN VID": "MFP_VLAN_VID",
-           "IPv4": "MFP_IPV4",
-           "IPv6": "MFP_IPV6",
-           "IPv4/IPv6": "MFP_IP_ANY",
-           "NSH": "MFP_NSH",
-           "CT": "MFP_CT_VALID",
-           "MPLS": "MFP_MPLS",
-           "TCP": "MFP_TCP",
-           "UDP": "MFP_UDP",
-           "SCTP": "MFP_SCTP",
-           "ICMPv4": "MFP_ICMPV4",
-           "ICMPv6": "MFP_ICMPV6",
-           "ND": "MFP_ND",
-           "ND solicit": "MFP_ND_SOLICIT",
-           "ND advert": "MFP_ND_ADVERT"}
+PREREQS = {
+    "none": "MFP_NONE",
+    "Ethernet": "MFP_ETHERNET",
+    "ARP": "MFP_ARP",
+    "VLAN VID": "MFP_VLAN_VID",
+    "IPv4": "MFP_IPV4",
+    "IPv6": "MFP_IPV6",
+    "IPv4/IPv6": "MFP_IP_ANY",
+    "NSH": "MFP_NSH",
+    "CT": "MFP_CT_VALID",
+    "MPLS": "MFP_MPLS",
+    "TCP": "MFP_TCP",
+    "UDP": "MFP_UDP",
+    "SCTP": "MFP_SCTP",
+    "ICMPv4": "MFP_ICMPV4",
+    "ICMPv6": "MFP_ICMPV6",
+    "ND": "MFP_ND",
+    "ND solicit": "MFP_ND_SOLICIT",
+    "ND advert": "MFP_ND_ADVERT",
+}
 
 # Maps a name prefix into an (experimenter ID, class) pair, so:
 #
@@ -66,20 +74,22 @@ PREREQS = {"none": "MFP_NONE",
 #      - Experimenter OXM classes are written as (<oxm_vender>, 0xffff)
 #
 # If a name matches more than one prefix, the longest one is used.
-OXM_CLASSES = {"NXM_OF_":        (0,          0x0000, 'extension'),
-               "NXM_NX_":        (0,          0x0001, 'extension'),
-               "NXOXM_NSH_":     (0x005ad650, 0xffff, 'extension'),
-               "OXM_OF_":        (0,          0x8000, 'standard'),
-               "OXM_OF_PKT_REG": (0,          0x8001, 'standard'),
-               "ONFOXM_ET_":     (0x4f4e4600, 0xffff, 'standard'),
-               "ERICOXM_OF_":    (0,          0x1000, 'extension'),
+OXM_CLASSES = {
+    "NXM_OF_": (0, 0x0000, "extension"),
+    "NXM_NX_": (0, 0x0001, "extension"),
+    "NXOXM_NSH_": (0x005AD650, 0xFFFF, "extension"),
+    "OXM_OF_": (0, 0x8000, "standard"),
+    "OXM_OF_PKT_REG": (0, 0x8001, "standard"),
+    "ONFOXM_ET_": (0x4F4E4600, 0xFFFF, "standard"),
+    "ERICOXM_OF_": (0, 0x1000, "extension"),
+    # This is the experimenter OXM class for Nicira, which is the
+    # one that OVS would be using instead of NXM_OF_ and NXM_NX_
+    # if OVS didn't have those grandfathered in.  It is currently
+    # used only to test support for experimenter OXM, since there
+    # are barely any real uses of experimenter OXM in the wild.
+    "NXOXM_ET_": (0x00002320, 0xFFFF, "extension"),
+}
 
-               # This is the experimenter OXM class for Nicira, which is the
-               # one that OVS would be using instead of NXM_OF_ and NXM_NX_
-               # if OVS didn't have those grandfathered in.  It is currently
-               # used only to test support for experimenter OXM, since there
-               # are barely any real uses of experimenter OXM in the wild.
-               "NXOXM_ET_":      (0x00002320, 0xffff, 'extension')}
 
 def oxm_name_to_class(name):
     prefix = ''
@@ -164,7 +174,10 @@ match_types = dict()
 def parse_oxm(s, prefix, n_bytes):
     global match_types
 
-    m = re.match('([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$', s)
+    m = re.match(
+        r'([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$',  # noqa: E501
+        s
+    )
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
 
@@ -211,7 +224,8 @@ def parse_field(mff, comment):
     f = {'mff': mff}
 
     # First line of comment is the field name.
-    m = re.match(r'"([^"]+)"(?:\s+\(aka "([^"]+)"\))?(?:\s+\(.*\))?\.', comment[0])
+    m = re.match(r'"([^"]+)"(?:\s+\(aka "([^"]+)"\))?(?:\s+\(.*\))?\.',
+                 comment[0])
     if not m:
         fatal("%s lacks field name" % mff)
     f['name'], f['extra_name'] = m.groups()
@@ -323,8 +337,11 @@ def protocols_to_c(protocols):
 
 def autogen_c_comment():
     return [
-"/* Generated automatically; do not modify!    -*- buffer-read-only: t -*- */",
-""]
+        "/* Generated automatically; do not modify!    "
+        "-*- buffer-read-only: t -*- */",
+        "",
+    ]
+
 
 def make_meta_flow(meta_flow_h):
     fields = extract_ofp_fields(meta_flow_h)
@@ -433,20 +450,18 @@ def extract_ofp_fields(fn):
 
     while True:
         get_line()
-        if re.match('enum.*mf_field_id', line):
+        if re.match(r'enum.*mf_field_id', line):
             break
 
     while True:
         get_line()
-        first_line_number = line_number
-        here = '%s:%d' % (file_name, line_number)
         if (line.startswith('/*')
             or line.startswith(' *')
             or line.startswith('#')
             or not line
             or line.isspace()):
             continue
-        elif re.match('}', line) or re.match('\s+MFF_N_IDS', line):
+        elif re.match(r'}', line) or re.match(r'\s+MFF_N_IDS', line):
             break
 
         # Parse the comment preceding an MFF_ constant into 'comment',
@@ -495,7 +510,7 @@ def extract_ofp_fields(fn):
         # Parse the MFF_ constant(s).
         mffs = []
         while True:
-            m = re.match('\s+(MFF_[A-Z0-9_]+),?\s?$', line)
+            m = re.match(r'\s+(MFF_[A-Z0-9_]+),?\s?$', line)
             if not m:
                 break
             mffs += [m.group(1)]
@@ -506,7 +521,7 @@ def extract_ofp_fields(fn):
         if len(mffs) > 1 or '<N>' in comment[0]:
             for mff in mffs:
                 # Extract trailing integer.
-                m = re.match('.*[^0-9]([0-9]+)$', mff)
+                m = re.match(r'.*[^0-9]([0-9]+)$', mff)
                 if not m:
                     fatal("%s lacks numeric suffix in register group" % mff)
                 n = m.group(1)
@@ -516,10 +531,10 @@ def extract_ofp_fields(fn):
                 instance = []
                 for x in comment:
                     y = x.replace('<N>', n)
-                    if re.search('<[0-9]+>', y):
+                    if re.search(r'<[0-9]+>', y):
                         if ('<%s>' % n) not in y:
                             continue
-                        y = re.sub('<[0-9]+>', '', y)
+                        y = re.sub(r'<[0-9]+>', '', y)
                     instance += [y.strip()]
                 fields += [parse_field(mff, instance)]
         else:
@@ -533,9 +548,10 @@ def extract_ofp_fields(fn):
 
     return fields
 
-## ------------------------ ##
-## Documentation Generation ##
-## ------------------------ ##
+# ------------------------ #
+# Documentation Generation #
+# ------------------------ #
+
 
 def field_to_xml(field_node, f, body, summary):
     f["used"] = True
@@ -553,9 +569,9 @@ def field_to_xml(field_node, f, body, summary):
         ovs_version = [int(x) for x in ovs_version_s.split('.')]
         if min_ovs_version is None or ovs_version < min_ovs_version:
             min_ovs_version = ovs_version
-    summary += ["\\fB%s\\fR" % f["name"]]
+    summary += [r"\fB%s\fR" % f["name"]]
     if f["extra_name"]:
-        summary += [" aka \\fB%s\\fR" % f["extra_name"]]
+        summary += [r" aka \fB%s\fR" % f["extra_name"]]
     summary += [";%d" % f["n_bytes"]]
     if f["n_bits"] != 8 * f["n_bytes"]:
         summary += [" (low %d bits)" % f["n_bits"]]
@@ -576,16 +592,16 @@ def field_to_xml(field_node, f, body, summary):
 
     title = field_node.attributes['title'].nodeValue
 
-    body += [""".PP
-\\fB%s Field\\fR
+    body += [r""".PP
+\fB%s Field\fR
 .TS
 tab(;),nowarn;
 l lx.
 """ % title]
 
-    body += ["Name:;\\fB%s\\fR" % f["name"]]
+    body += [r"Name:;\fB%s\fR" % f["name"]]
     if f["extra_name"]:
-        body += [" (aka \\fB%s\\fR)" % f["extra_name"]]
+        body += [r" (aka \fB%s\fR)" % f["extra_name"]]
     body += ['\n']
 
     body += ["Width:;"]
@@ -620,16 +636,30 @@ l lx.
     body += ["OpenFlow 1.1:;%s\n" % of11[f["OF1.1"]]]
 
     oxms = []
-    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if is_standard_oxm(x[1])]:
+    for header, name, of_version_nr, ovs_version in [
+        x
+        for x in sorted(f['OXM'], key=lambda x: x[2])
+        if is_standard_oxm(x[1])
+    ]:
         of_version = VERSION_REVERSE[of_version_nr]
-        oxms += [r"\fB%s\fR (%d) since OpenFlow %s and Open vSwitch %s" % (name, header[2], of_version, ovs_version)]
+        oxms += [
+            r"\fB%s\fR (%d) since OpenFlow %s and Open vSwitch %s"
+            % (name, header[2], of_version, ovs_version)
+        ]
     if not oxms:
         oxms = ['none']
     body += ['OXM:;T{\n%s\nT}\n' % r'\[char59] '.join(oxms)]
 
     nxms = []
-    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if not is_standard_oxm(x[1])]:
-        nxms += [r"\fB%s\fR (%d) since Open vSwitch %s" % (name, header[2], ovs_version)]
+    for header, name, of_version_nr, ovs_version in [
+        x
+        for x in sorted(f['OXM'], key=lambda x: x[2])
+        if not is_standard_oxm(x[1])
+    ]:
+        nxms += [
+            r"\fB%s\fR (%d) since Open vSwitch %s"
+            % (name, header[2], ovs_version)
+        ]
     if not nxms:
         nxms = ['none']
     body += ['NXM:;T{\n%s\nT}\n' % r'\[char59] '.join(nxms)]
@@ -638,6 +668,7 @@ l lx.
 
     body += ['.PP\n']
     body += [nroff.block_xml_to_nroff(field_node.childNodes)]
+
 
 def group_xml_to_nroff(group_node, fields):
     title = group_node.attributes['title'].nodeValue
@@ -659,14 +690,17 @@ def group_xml_to_nroff(group_node, fields):
         'tab(;),nowarn;\n',
         'l l l l l l l.\n',
         'Name;Bytes;Mask;RW?;Prereqs;NXM/OXM Support\n',
-        '\_;\_;\_;\_;\_;\_\n']
+        r'\_;\_;\_;\_;\_;\_',
+        '\n',
+    ]
     content += summary
     content += ['.TE\n']
     content += body
     return ''.join(content)
 
+
 def make_oxm_classes_xml(document):
-    s = '''tab(;),nowarn;
+    s = r'''tab(;),nowarn;
 l l l.
 Prefix;Vendor;Class
 \_;\_;\_
@@ -684,6 +718,7 @@ Prefix;Vendor;Class
     e.appendChild(document.createTextNode(s))
     return e
 
+
 def recursively_replace(node, name, replacement):
     for child in node.childNodes:
         if child.nodeType == node.ELEMENT_NODE:
@@ -691,6 +726,7 @@ def recursively_replace(node, name, replacement):
                 node.replaceChild(replacement, child)
             else:
                 recursively_replace(child, name, replacement)
+
 
 def make_ovs_fields(meta_flow_h, meta_flow_xml):
     fields = extract_ofp_fields(meta_flow_h)
@@ -702,46 +738,45 @@ def make_ovs_fields(meta_flow_h, meta_flow_xml):
     doc = document.documentElement
 
     global version
-    if version == None:
+    if version is None:
         version = "UNKNOWN"
 
-    print('''\
-'\\" tp
-.\\" -*- mode: troff; coding: utf-8 -*-
+    print(r"""'\" tp
+.\" -*- mode: troff; coding: utf-8 -*-
 .TH "ovs\-fields" 7 "%s" "Open vSwitch" "Open vSwitch Manual"
-.fp 5 L CR              \\" Make fixed-width font available as \\fL.
+.fp 5 L CR              \" Make fixed-width font available as \fL.
 .de ST
 .  PP
 .  RS -0.15in
-.  I "\\\\$1"
+.  I "\\$1"
 .  RE
 ..
 
 .de SU
 .  PP
-.  I "\\\\$1"
+.  I "\\$1"
 ..
 
 .de IQ
 .  br
 .  ns
-.  IP "\\\\$1"
+.  IP "\\$1"
 ..
 
 .de TQ
 .  br
 .  ns
-.  TP "\\\\$1"
+.  TP "\\$1"
 ..
 .de URL
-\\\\$2 \\(laURL: \\\\$1 \\(ra\\\\$3
+\\$2 \(laURL: \\$1 \(ra\\$3
 ..
-.if \\n[.g] .mso www.tmac
+.if \n[.g] .mso www.tmac
 .SH NAME
 ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
 .
 .PP
-''' % version)
+""" % version)
 
     recursively_replace(doc, 'oxm_classes', make_oxm_classes_xml(document))
 
@@ -790,9 +825,10 @@ ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
         if output[i] is not None:
             print(output[i])
 
-## ------------ ##
-## Main Program ##
-## ------------ ##
+# ------------ #
+# Main Program #
+# ------------ #
+
 
 if __name__ == "__main__":
     argv0 = sys.argv[0]
