@@ -640,7 +640,6 @@ lib/nx-match.inc: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/met
 	$(AM_V_at)mv $@.tmp $@
 lib/nx-match.lo: lib/nx-match.inc
 CLEANFILES += lib/meta-flow.inc lib/nx-match.inc
-EXTRA_DIST += build-aux/extract-ofp-fields
 
 lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 	$(AM_V_GEN)$(run_python) $< prototypes $(srcdir)/lib/ofp-actions.c > $@.tmp && mv $@.tmp $@
@@ -648,7 +647,6 @@ lib/ofp-actions.inc2: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
 	$(AM_V_GEN)$(run_python) $< definitions $(srcdir)/lib/ofp-actions.c > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
-EXTRA_DIST += build-aux/extract-ofp-actions
 
 lib/ofp-errors.inc: include/openvswitch/ofp-errors.h include/openflow/openflow-common.h \
 	$(srcdir)/build-aux/extract-ofp-errors
@@ -658,14 +656,12 @@ lib/ofp-errors.inc: include/openvswitch/ofp-errors.h include/openflow/openflow-c
 	mv $@.tmp $@
 lib/ofp-errors.lo: lib/ofp-errors.inc
 CLEANFILES += lib/ofp-errors.inc
-EXTRA_DIST += build-aux/extract-ofp-errors
 
 lib/ofp-msgs.inc: include/openvswitch/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/include/openvswitch/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
 lib/ofp-msgs.lo: lib/ofp-msgs.inc
 CLEANFILES += lib/ofp-msgs.inc
-EXTRA_DIST += build-aux/extract-ofp-msgs
 
 # _server IDL
 OVSIDL_BUILT += lib/ovsdb-server-idl.c lib/ovsdb-server-idl.h lib/ovsdb-server-idl.ovsidl

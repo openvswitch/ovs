@@ -8,7 +8,6 @@ include/odp-netlink-macros.h: include/odp-netlink.h \
                               build-aux/extract-odp-netlink-macros-h
 	$(AM_V_GEN)sh -f $(srcdir)/build-aux/extract-odp-netlink-macros-h $< > $@
 
-EXTRA_DIST += build-aux/extract-odp-netlink-h build-aux/extract-odp-netlink-macros-h
 CLEANFILES += include/odp-netlink.h include/odp-netlink-macros.h
 
 include include/openflow/automake.mk
