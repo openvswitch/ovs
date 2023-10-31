@@ -199,13 +199,13 @@ notify REMOTE METHOD PARAMS  send notification and exit
         sys.exit(1)
 
     func, n_args = commands[command_name]
-    if type(n_args) == tuple:
+    if type(n_args) is tuple:
         if len(args) < n_args[0]:
             sys.stderr.write("%s: \"%s\" requires at least %d arguments but "
                              "only %d provided\n"
                              % (argv[0], command_name, n_args, len(args)))
             sys.exit(1)
-    elif type(n_args) == int:
+    elif type(n_args) is int:
         if len(args) != n_args:
             sys.stderr.write("%s: \"%s\" requires %d arguments but %d "
                              "provided\n"
