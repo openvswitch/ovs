@@ -37,7 +37,7 @@ vlog.init(None)
 
 
 def unbox_json(json):
-    if type(json) == list and len(json) == 1:
+    if type(json) is list and len(json) == 1:
         return json[0]
     else:
         return json
@@ -325,9 +325,9 @@ def substitute_uuids(json, symtab):
         symbol = symtab.get(json)
         if symbol:
             return str(symbol)
-    elif type(json) == list:
+    elif type(json) is list:
         return [substitute_uuids(element, symtab) for element in json]
-    elif type(json) == dict:
+    elif type(json) is dict:
         d = {}
         for key, value in json.items():
             d[key] = substitute_uuids(value, symtab)
@@ -341,10 +341,10 @@ def parse_uuids(json, symtab):
         name = "#%d#" % len(symtab)
         sys.stderr.write("%s = %s\n" % (name, json))
         symtab[name] = json
-    elif type(json) == list:
+    elif type(json) is list:
         for element in json:
             parse_uuids(element, symtab)
-    elif type(json) == dict:
+    elif type(json) is dict:
         for value in json.values():
             parse_uuids(value, symtab)
 
@@ -1033,14 +1033,14 @@ def main(argv):
         sys.exit(1)
 
     func, n_args = commands[command_name]
-    if type(n_args) == tuple:
+    if type(n_args) is tuple:
         if len(args) < n_args[0]:
             sys.stderr.write("%s: \"%s\" requires at least %d arguments but "
                              "only %d provided\n"
                              % (ovs.util.PROGRAM_NAME, command_name,
                                 n_args[0], len(args)))
             sys.exit(1)
-    elif type(n_args) == int:
+    elif type(n_args) is int:
         if len(args) != n_args:
             sys.stderr.write("%s: \"%s\" requires %d arguments but %d "
                              "provided\n"
