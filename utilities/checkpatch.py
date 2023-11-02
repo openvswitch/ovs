@@ -408,6 +408,9 @@ def check_spelling(line, comment):
     if not spell_check_dict or not spellcheck:
         return False
 
+    if line.startswith('Fixes: '):
+        return False
+
     words = filter_comments(line, True) if comment else line
     words = words.replace(':', ' ').split(' ')
 
