@@ -318,7 +318,7 @@ def group_xml_to_nroff(group_node, fields):
         '.SS "Summary:"\n',
         ".TS\n",
         "tab(;),nowarn;\n",
-        "l l l l l l l.\n",
+        "l l l l l l.\n",
         "Name;Bytes;Mask;RW?;Prereqs;NXM/OXM Support\n",
         r"\_;\_;\_;\_;\_;\_",
         "\n",
