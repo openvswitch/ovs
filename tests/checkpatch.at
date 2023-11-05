@@ -1,7 +1,7 @@
 AT_BANNER([checkpatch])
 
 OVS_START_SHELL_HELPERS
-# try_checkpatch PATCH [ERRORS]
+# try_checkpatch PATCH [ERRORS] [checkpatch-args]
 #
 # Runs checkpatch, if installed, on the given PATCH, expecting the
 # specified set of ERRORS (and warnings).
@@ -29,11 +29,11 @@ Subject: Patch this is.
     fi
 
     if test -s expout; then
-        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py -q test.patch],
+        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py $3 -q test.patch],
                  [1], [stdout])
         AT_CHECK([sed '/^Lines checked:/,$d' stdout], [0], [expout])
     else
-        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py -q test.patch])
+        AT_CHECK([$PYTHON3 $top_srcdir/utilities/checkpatch.py $3 -q test.patch])
     fi
 }
 OVS_END_SHELL_HELPERS
@@ -587,5 +587,25 @@ try_checkpatch \
     Signed-off-by: A" \
     "WARNING: The subject, '<area>: <summary>', is over 70 characters, i.e., 85.
     Subject: netdev: This is a way to long commit summary and therefor it should report a WARNING!"
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - ignore committer as signoff])
+try_checkpatch \
+   "Author: A
+    Commit: B
+    Subject: netdev: Subject.
+
+    Signed-off-by: A" \
+    "ERROR: Committer B needs to sign off."
+
+try_checkpatch \
+   "Author: A
+    Commit: B
+    Subject: netdev: Subject.
+
+    Signed-off-by: A" \
+    "" \
+    "--skip-committer-signoff"
 
 AT_CLEANUP
