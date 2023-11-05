@@ -189,6 +189,7 @@ skip_trailing_whitespace_check = False
 skip_gerrit_change_id_check = False
 skip_block_whitespace_check = False
 skip_signoff_check = False
+skip_committer_signoff_check = False
 
 # Don't enforce character limit on files that include these characters in their
 # name, as they may have legitimate reasons to have longer lines.
@@ -920,7 +921,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                             break
                     if (committer
                         and author != committer
-                        and committer not in signatures):
+                        and committer not in signatures
+                        and not skip_committer_signoff_check):
                         print_error("Committer %s needs to sign off."
                                     % committer)
 
@@ -1038,7 +1040,8 @@ Check options:
 -S|--spellcheck                Check C comments and commit-message for possible
                                spelling mistakes
 -t|--skip-trailing-whitespace  Skips the trailing whitespace test
-   --skip-gerrit-change-id     Skips the gerrit change id test"""
+   --skip-gerrit-change-id     Skips the gerrit change id test
+   --skip-committer-signoff    Skips the committer sign-off test"""
           % sys.argv[0])
 
 
@@ -1109,6 +1112,7 @@ if __name__ == '__main__':
                                        "skip-signoff-lines",
                                        "skip-trailing-whitespace",
                                        "skip-gerrit-change-id",
+                                       "skip-committer-signoff",
                                        "spellcheck",
                                        "quiet"])
     except:
@@ -1129,6 +1133,8 @@ if __name__ == '__main__':
             skip_trailing_whitespace_check = True
         elif o in ("--skip-gerrit-change-id"):
             skip_gerrit_change_id_check = True
+        elif o in ("--skip-committer-signoff"):
+            skip_committer_signoff_check = True
         elif o in ("-f", "--check-file"):
             checking_file = True
         elif o in ("-S", "--spellcheck"):
