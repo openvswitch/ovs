@@ -72,13 +72,13 @@ ovs-appctl time/warp 5000
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:02:00),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)'])
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:01,dst=50:54:00:00:02:00),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:01,dst=50:54:00:00:02:00),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
 ])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:06:00),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.6,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)' --len 1024])
    OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:06:00),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.6,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:06:00),eth_type(0x0800),ipv4(src=10.0.0.5,dst=10.0.0.6,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -139,7 +139,7 @@ m4_define([DPIF_NETDEV_MISS_FLOW_INSTALL],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
@@ -152,11 +152,11 @@ recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:
 
    OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions: <del>
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions: <del>
 ])
 
    OVS_VSWITCHD_STOP
@@ -187,7 +187,7 @@ m4_define([DPIF_NETDEV_FLOW_PUT_MODIFY],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no))
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no))
 ])
    ovs-appctl revalidator/wait
    # Dump the datapath flow to see that it goes to p2 ("actions:2").
@@ -236,11 +236,11 @@ m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
    ovs-appctl revalidator/wait
    AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),dp_hash(0/0),skb_priority(0/0),in_port(1),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
 
    # Now, the same again without megaflows.
@@ -252,12 +252,12 @@ skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label
 
    OVS_WAIT_UNTIL([test `grep -c "miss upcall" ovs-vswitchd.log` -ge 2])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
    ovs-appctl revalidator/wait
    AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
+recirc_id(0),dp_hash(0/0),skb_priority(0/0),in_port(1),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
 
    OVS_VSWITCHD_STOP
@@ -423,7 +423,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no)
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no)
 ])
    # Check that flow successfully offloaded.
    OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
@@ -489,7 +489,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),dnl
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),dnl
 packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=17,tos=0,ttl=64,frag=no),udp(src=81,dst=82))
 ])
    # Check that flow successfully offloaded.
@@ -566,7 +566,7 @@ m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD_OFFSETS_VID_ARP],
 
    OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
    AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),dnl
+recirc_id(0),dp_hash(0),skb_priority(0),in_port(1),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),dnl
 packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806),arp(sip=127.0.0.1,tip=127.0.0.1,op=1,sha=00:0b:0c:0d:0e:0f,tha=00:00:00:00:00:00))
 ])
    # Check that flow successfully offloaded.
@@ -636,6 +636,38 @@ OVS_VSWITCHD_STOP(["/flow: in_port is not an exact match/d
 /failed to put/d"])
 AT_CLEANUP
 
+AT_SETUP([dpif-netdev - check dpctl/add-flow wider ip match])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy])
+
+AT_CHECK([ovs-appctl revalidator/pause])
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth_type(0x0800),ipv4(src=0.0.0.0/192.0.0.0,dst=0.0.0.0/192.0.0.0,frag=no)" "3"])
+AT_CHECK([ovs-appctl dpctl/add-flow "in_port(1),eth_type(0x0800),ipv4(src=192.1.1.1/0.0.0.0,dst=49.1.1.1/0.0.0.0,frag=no)" "3"])
+AT_CHECK([ovs-appctl revalidator/resume])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([dpif-netdev - check tx packet checksum offloading])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock \
+   -- set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure])
+
+AT_CHECK([ovs-vsctl get interface p1 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
+tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+], [])
+
+AT_CHECK([ovs-vsctl get interface br0 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
+tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # SEND_UDP_PKTS([p_name], [p_ofport])
 #
 # Sends 128 packets to port 'p_name' with different UDP destination ports.
@@ -701,4 +733,125 @@ AT_CHECK([test `ovs-vsctl get Interface p2 statistics:tx_q0_packets` -gt 0 -a dn
                `ovs-vsctl get Interface p2 statistics:tx_q1_packets` -gt 0])
 
 OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([userspace offload - ip csum offload])
+OVS_VSWITCHD_START(
+  [add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-port br1 p2 -- \
+       set Interface p2 type=dummy --])
+
+# Modify the ip_dst addr to force changing the IP csum.
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=mod_nw_dst:192.168.1.1,output:p2])
+
+# Check if no offload remains ok.
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+
+# Checksum should change to 0x990 with ip_dst changed to 192.168.1.1
+# by the datapath while processing the packet.
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Check if packets entering the datapath with csum offloading
+# enabled gets the csum updated properly by egress handling
+# in the datapath and not by the netdev.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Check if packets entering the datapath with csum offloading
+# enabled gets the csum updated properly by netdev and not
+# by the datapath.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Push a packet with bad csum and offloading disabled to check
+# if the datapath updates the csum, but does not fix the issue.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060904c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+
+# Push a packet with bad csum and offloading enabled to check
+# if the driver updates and fixes the csum.
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
+AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+])
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
+0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([dpif-netdev - revalidators handle dp modification fail correctly])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set interface p1 type=dummy \
+   -- set bridge br0 datapath-type=dummy \
+   -- add-port br0 p2 \
+   -- set interface p2 type=dummy --
+   ])
+
+AT_CHECK([ovs-ofctl add-flow br0 'table=0,in_port=p1,actions=p2'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.0.0.2),tcp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'ipv4(src=10.0.0.1,dst=10.0.0.2),tcp(src=1,dst=2)'])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*thread://' | strip_xout_keep_actions ], [0], [
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:2
+])
+
+dnl Wait for the dp flow to enter OPERATIONAL state.
+AT_CHECK([ovs-appctl revalidator/wait])
+
+AT_CHECK([ovs-appctl revalidator/pause])
+
+dnl Delete all dp flows, so flow modification will fail.
+AT_CHECK([ovs-appctl dpctl/del-flows])
+
+AT_CHECK([ovs-appctl revalidator/resume])
+
+dnl Replace OpenFlow rules, trigger revalidation and wait for it to complete.
+AT_CHECK([echo 'table=0,in_port=p1,ip actions=ct(commit)' | ovs-ofctl --bundle replace-flows br0 -])
+AT_CHECK([ovs-appctl revalidator/wait])
+
+dnl Inconsistent ukey should be deleted.
+AT_CHECK([ovs-appctl upcall/show | grep keys | grep -q -v 0], [1])
+
+dnl Check the log for the flow modification error.
+AT_CHECK([grep -q -E ".*failed to put.*$" ovs-vswitchd.log])
+
+dnl Remove warning logs to let test suite pass.
+OVS_VSWITCHD_STOP(["dnl
+  /.*failed to put.*$/d
+  /.*failed to flow_del.*$/d"])
 AT_CLEANUP

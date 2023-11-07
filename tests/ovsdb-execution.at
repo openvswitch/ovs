@@ -728,6 +728,53 @@ dnl collide (only) with their previous values (succeeds).
 [{"count":2},{"uuid":["uuid","<6>"]},{"uuid":["uuid","<7>"]},{"rows":[{"name":"new one","number":1},{"name":"new two","number":2},{"name":"old one","number":10},{"name":"old two","number":20}]}]
 ]])
 
+OVSDB_CHECK_EXECUTION([size constraints on sets],
+  [constraint_schema],
+  [
+   [[["constraints",
+      {"op": "insert",
+       "table": "b",
+       "row": {"b": 1}
+      }]]],
+   [[["constraints",
+      {"op": "mutate",
+       "table": "b",
+       "where": [],
+       "mutations": [["x", "delete", 0]]
+      }]]],
+   [[["constraints",
+      {"op": "mutate",
+       "table": "b",
+       "where": [],
+       "mutations": [["x", "insert", 1]]
+      }]]],
+   [[["constraints",
+      {"op": "update",
+       "table": "b",
+       "where": [],
+       "row": {"x": ["set", [3, 4]]}
+      }]]],
+   [[["constraints",
+      {"op": "mutate",
+       "table": "b",
+       "where": [],
+       "mutations": [["x", "insert", 5]]
+      }]]],
+   [[["constraints",
+      {"op": "mutate",
+       "table": "b",
+       "where": [],
+       "mutations": [["x", "delete", 4], ["x", "insert", 5]]
+      }]]]
+  ],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"details":"Attempted to store 0 elements in set of 1 to 2 integers.","error":"constraint violation"}]
+[{"count":1}]
+[{"count":1}]
+[{"details":"Attempted to store 3 elements in set of 1 to 2 integers.","error":"constraint violation"}]
+[{"count":1}]
+]])
+
 OVSDB_CHECK_EXECUTION([referential integrity -- simple],
   [constraint_schema],
   [[[["constraints",
@@ -751,12 +798,6 @@ OVSDB_CHECK_EXECUTION([referential integrity -- simple],
       {"op": "delete",
        "table": "b",
        "where": []}]]],
-dnl Check that "mutate" honors number-of-elements constraints on sets and maps.
-   [[["constraints",
-      {"op": "mutate",
-       "table": "b",
-       "where": [],
-       "mutations": [["x", "delete", 0]]}]]],
    [[["constraints",
       {"op": "delete",
        "table": "a",
@@ -783,7 +824,6 @@ dnl Check that "mutate" honors number-of-elements constraints on sets and maps.
        "where": []}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]
 [{"count":1},{"details":"cannot delete b row <0> because of 3 remaining reference(s)","error":"referential integrity violation"}]
-[{"details":"Attempted to store 0 elements in set of 1 to 2 integers.","error":"constraint violation"}]
 [{"count":1}]
 [{"count":1},{"details":"cannot delete b row <0> because of 2 remaining reference(s)","error":"referential integrity violation"}]
 [{"count":1}]

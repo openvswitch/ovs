@@ -23,3 +23,6 @@ m4_include([tests/system-common-macros.at])
 m4_include([tests/system-kmod-macros.at])
 
 m4_include([tests/system-offloads-traffic.at])
+
+m4_include([tests/system-offloads-testsuite-macros.at])
+m4_include([tests/system-traffic.at])

@@ -124,15 +124,24 @@ struct dpif_ipfix_port {
     uint32_t ifindex;
 };
 
+struct dpif_ipfix_domain {
+    struct hmap_node hmap_node; /* In struct dpif_ipfix_exporter's domains. */
+    time_t last_template_set_time;
+};
+
 struct dpif_ipfix_exporter {
     uint32_t exporter_id; /* Exporting Process identifier */
-    struct collectors *collectors;
     uint32_t seq_number;
-    time_t last_template_set_time;
+    struct collectors *collectors;
+    struct hmap domains; /* Contains struct dpif_ipfix_domain indexed by
+                            observation domain id. */
+    time_t last_stats_sent_time;
     struct hmap cache_flow_key_map;  /* ipfix_flow_cache_entry. */
     struct ovs_list cache_flow_start_timestamp_list;  /* ipfix_flow_cache_entry. */
     uint32_t cache_active_timeout;  /* In seconds. */
     uint32_t cache_max_flows;
+    uint32_t stats_interval;
+    uint32_t template_interval;
     char *virtual_obs_id;
     uint8_t virtual_obs_len;
 
@@ -166,11 +175,6 @@ struct dpif_ipfix {
 };
 
 #define IPFIX_VERSION 0x000a
-
-/* When using UDP, IPFIX Template Records must be re-sent regularly.
- * The standard default interval is 10 minutes (600 seconds).
- * Cf. IETF RFC 5101 Section 10.3.6. */
-#define IPFIX_TEMPLATE_INTERVAL 600
 
 /* Cf. IETF RFC 5101 Section 3.1. */
 OVS_PACKED(
@@ -617,6 +621,9 @@ static void get_export_time_now(uint64_t *, uint32_t *);
 
 static void dpif_ipfix_cache_expire_now(struct dpif_ipfix_exporter *, bool);
 
+static void dpif_ipfix_exporter_del_domain(struct dpif_ipfix_exporter *,
+                                           struct dpif_ipfix_domain *);
+
 static bool
 ofproto_ipfix_bridge_exporter_options_equal(
     const struct ofproto_ipfix_bridge_exporter_options *a,
@@ -627,6 +634,8 @@ ofproto_ipfix_bridge_exporter_options_equal(
             && a->sampling_rate == b->sampling_rate
             && a->cache_active_timeout == b->cache_active_timeout
             && a->cache_max_flows == b->cache_max_flows
+            && a->stats_interval == b->stats_interval
+            && a->template_interval == b->template_interval
             && a->enable_tunnel_sampling == b->enable_tunnel_sampling
             && a->enable_input_sampling == b->enable_input_sampling
             && a->enable_output_sampling == b->enable_output_sampling
@@ -664,6 +673,8 @@ ofproto_ipfix_flow_exporter_options_equal(
     return (a->collector_set_id == b->collector_set_id
             && a->cache_active_timeout == b->cache_active_timeout
             && a->cache_max_flows == b->cache_max_flows
+            && a->stats_interval == b->stats_interval
+            && a->template_interval == b->template_interval
             && a->enable_tunnel_sampling == b->enable_tunnel_sampling
             && sset_equals(&a->targets, &b->targets)
             && nullable_string_is_equal(a->virtual_obs_id, b->virtual_obs_id));
@@ -697,13 +708,17 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
     exporter->exporter_id = ++exporter_total_count;
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = 0;
+    exporter->last_stats_sent_time = 0;
     hmap_init(&exporter->cache_flow_key_map);
     ovs_list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
+    exporter->stats_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+    exporter->template_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+    exporter->last_stats_sent_time = 0;
     exporter->virtual_obs_id = NULL;
     exporter->virtual_obs_len = 0;
+    hmap_init(&exporter->domains);
 
     memset(&exporter->ipfix_global_stats, 0,
            sizeof(struct dpif_ipfix_global_stats));
@@ -711,6 +726,7 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
 
 static void
 dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     /* Flush the cache with flow end reason "forced end." */
     dpif_ipfix_cache_expire_now(exporter, true);
@@ -719,12 +735,20 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
     exporter->exporter_id = 0;
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = 0;
+    exporter->last_stats_sent_time = 0;
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
+    exporter->stats_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+    exporter->template_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+    exporter->last_stats_sent_time = 0;
     free(exporter->virtual_obs_id);
     exporter->virtual_obs_id = NULL;
     exporter->virtual_obs_len = 0;
+
+    struct dpif_ipfix_domain *dom;
+    HMAP_FOR_EACH_SAFE (dom, hmap_node, &exporter->domains) {
+        dpif_ipfix_exporter_del_domain(exporter, dom);
+    }
 
     memset(&exporter->ipfix_global_stats, 0,
            sizeof(struct dpif_ipfix_global_stats));
@@ -732,9 +756,11 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
 
 static void
 dpif_ipfix_exporter_destroy(struct dpif_ipfix_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     dpif_ipfix_exporter_clear(exporter);
     hmap_destroy(&exporter->cache_flow_key_map);
+    hmap_destroy(&exporter->domains);
 }
 
 static bool
@@ -742,7 +768,9 @@ dpif_ipfix_exporter_set_options(struct dpif_ipfix_exporter *exporter,
                                 const struct sset *targets,
                                 const uint32_t cache_active_timeout,
                                 const uint32_t cache_max_flows,
-                                const char *virtual_obs_id)
+                                const uint32_t stats_interval,
+                                const uint32_t template_interval,
+                                const char *virtual_obs_id) OVS_REQUIRES(mutex)
 {
     size_t virtual_obs_len;
     collectors_destroy(exporter->collectors);
@@ -756,6 +784,8 @@ dpif_ipfix_exporter_set_options(struct dpif_ipfix_exporter *exporter,
     }
     exporter->cache_active_timeout = cache_active_timeout;
     exporter->cache_max_flows = cache_max_flows;
+    exporter->stats_interval = stats_interval;
+    exporter->template_interval = template_interval;
     virtual_obs_len = virtual_obs_id ? strlen(virtual_obs_id) : 0;
     if (virtual_obs_len > IPFIX_VIRTUAL_OBS_MAX_LEN) {
         VLOG_WARN_RL(&rl, "Virtual obsevation ID too long (%d bytes), "
@@ -767,6 +797,37 @@ dpif_ipfix_exporter_set_options(struct dpif_ipfix_exporter *exporter,
     exporter->virtual_obs_len = virtual_obs_len;
     exporter->virtual_obs_id = nullable_xstrdup(virtual_obs_id);
     return true;
+}
+
+static struct dpif_ipfix_domain *
+dpif_ipfix_exporter_find_domain(const struct dpif_ipfix_exporter *exporter,
+                                uint32_t domain_id) OVS_REQUIRES(mutex)
+{
+    struct dpif_ipfix_domain *dom;
+    HMAP_FOR_EACH_WITH_HASH (dom, hmap_node, hash_int(domain_id, 0),
+                             &exporter->domains) {
+        return dom;
+    }
+    return NULL;
+}
+
+static struct dpif_ipfix_domain *
+dpif_ipfix_exporter_insert_domain(struct dpif_ipfix_exporter *exporter,
+                                  const uint32_t domain_id) OVS_REQUIRES(mutex)
+{
+    struct dpif_ipfix_domain *dom = xmalloc(sizeof *dom);
+    dom->last_template_set_time = 0;
+    hmap_insert(&exporter->domains, &dom->hmap_node, hash_int(domain_id, 0));
+    return dom;
+}
+
+static void
+dpif_ipfix_exporter_del_domain(struct dpif_ipfix_exporter *exporter,
+                               struct dpif_ipfix_domain *dom)
+    OVS_REQUIRES(mutex)
+{
+    hmap_remove(&exporter->domains, &dom->hmap_node);
+    free(dom);
 }
 
 static struct dpif_ipfix_port *
@@ -909,6 +970,7 @@ dpif_ipfix_bridge_exporter_init(struct dpif_ipfix_bridge_exporter *exporter)
 
 static void
 dpif_ipfix_bridge_exporter_clear(struct dpif_ipfix_bridge_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     dpif_ipfix_exporter_clear(&exporter->exporter);
     ofproto_ipfix_bridge_exporter_options_destroy(exporter->options);
@@ -918,6 +980,7 @@ dpif_ipfix_bridge_exporter_clear(struct dpif_ipfix_bridge_exporter *exporter)
 
 static void
 dpif_ipfix_bridge_exporter_destroy(struct dpif_ipfix_bridge_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     dpif_ipfix_bridge_exporter_clear(exporter);
     dpif_ipfix_exporter_destroy(&exporter->exporter);
@@ -927,7 +990,7 @@ static void
 dpif_ipfix_bridge_exporter_set_options(
     struct dpif_ipfix_bridge_exporter *exporter,
     const struct ofproto_ipfix_bridge_exporter_options *options,
-    bool *options_changed)
+    bool *options_changed) OVS_REQUIRES(mutex)
 {
     if (!options || sset_is_empty(&options->targets)) {
         /* No point in doing any work if there are no targets. */
@@ -955,6 +1018,7 @@ dpif_ipfix_bridge_exporter_set_options(
         if (!dpif_ipfix_exporter_set_options(
                 &exporter->exporter, &options->targets,
                 options->cache_active_timeout, options->cache_max_flows,
+                options->stats_interval, options->template_interval,
                 options->virtual_obs_id)) {
             return;
         }
@@ -969,6 +1033,14 @@ dpif_ipfix_bridge_exporter_set_options(
     exporter->options = ofproto_ipfix_bridge_exporter_options_clone(options);
     exporter->probability =
         MAX(1, UINT32_MAX / exporter->options->sampling_rate);
+
+    /* Configure static observation_domain_id. */
+    struct dpif_ipfix_domain *dom;
+    HMAP_FOR_EACH_SAFE (dom, hmap_node, &(exporter->exporter.domains)) {
+        dpif_ipfix_exporter_del_domain(&exporter->exporter, dom);
+    }
+    dpif_ipfix_exporter_insert_domain(&exporter->exporter,
+                                      options->obs_domain_id);
 
     /* Run over the cache as some entries might have expired after
      * changing the timeouts. */
@@ -1003,6 +1075,7 @@ dpif_ipfix_flow_exporter_init(struct dpif_ipfix_flow_exporter *exporter)
 
 static void
 dpif_ipfix_flow_exporter_clear(struct dpif_ipfix_flow_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     dpif_ipfix_exporter_clear(&exporter->exporter);
     ofproto_ipfix_flow_exporter_options_destroy(exporter->options);
@@ -1011,6 +1084,7 @@ dpif_ipfix_flow_exporter_clear(struct dpif_ipfix_flow_exporter *exporter)
 
 static void
 dpif_ipfix_flow_exporter_destroy(struct dpif_ipfix_flow_exporter *exporter)
+    OVS_REQUIRES(mutex)
 {
     dpif_ipfix_flow_exporter_clear(exporter);
     dpif_ipfix_exporter_destroy(&exporter->exporter);
@@ -1020,7 +1094,7 @@ static bool
 dpif_ipfix_flow_exporter_set_options(
     struct dpif_ipfix_flow_exporter *exporter,
     const struct ofproto_ipfix_flow_exporter_options *options,
-    bool *options_changed)
+    bool *options_changed) OVS_REQUIRES(mutex)
 {
     if (sset_is_empty(&options->targets)) {
         /* No point in doing any work if there are no targets. */
@@ -1048,6 +1122,7 @@ dpif_ipfix_flow_exporter_set_options(
         if (!dpif_ipfix_exporter_set_options(
                 &exporter->exporter, &options->targets,
                 options->cache_active_timeout, options->cache_max_flows,
+                options->stats_interval, options->template_interval,
                 options->virtual_obs_id)) {
             return false;
         }
@@ -1071,6 +1146,7 @@ dpif_ipfix_flow_exporter_set_options(
 static void
 remove_flow_exporter(struct dpif_ipfix *di,
                      struct dpif_ipfix_flow_exporter_map_node *node)
+                     OVS_REQUIRES(mutex)
 {
     hmap_remove(&di->flow_exporter_map, &node->node);
     dpif_ipfix_flow_exporter_destroy(&node->exporter);
@@ -2000,6 +2076,7 @@ static void
 ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
                    struct ipfix_flow_cache_entry *entry,
                    enum ipfix_sampled_packet_type sampled_pkt_type)
+                   OVS_REQUIRES(mutex)
 {
     struct ipfix_flow_cache_entry *old_entry;
     size_t current_flows = 0;
@@ -2811,14 +2888,36 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     ovs_mutex_unlock(&mutex);
 }
 
+static bool
+dpif_ipfix_should_send_template(struct dpif_ipfix_exporter *exporter,
+                                const uint32_t observation_domain_id,
+                                const uint32_t export_time_sec)
+    OVS_REQUIRES(mutex)
+{
+    struct dpif_ipfix_domain *domain;
+    domain = dpif_ipfix_exporter_find_domain(exporter,
+                                             observation_domain_id);
+    if (!domain) {
+        /* First time we see this obs_domain_id. */
+        domain = dpif_ipfix_exporter_insert_domain(exporter,
+                                                   observation_domain_id);
+    }
+
+    if ((domain->last_template_set_time + exporter->template_interval)
+        <= export_time_sec) {
+        domain->last_template_set_time = export_time_sec;
+        return true;
+    }
+    return false;
+}
+
 static void
 dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
                         bool forced_end, const uint64_t export_time_usec,
-                        const uint32_t export_time_sec)
+                        const uint32_t export_time_sec) OVS_REQUIRES(mutex)
 {
     struct ipfix_flow_cache_entry *entry;
     uint64_t max_flow_start_timestamp_usec;
-    bool template_msg_sent = false;
     enum ipfix_flow_end_reason flow_end_reason;
 
     if (ovs_list_is_empty(&exporter->cache_flow_start_timestamp_list)) {
@@ -2844,24 +2943,24 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
             break;
         }
 
+        if ((exporter->last_stats_sent_time + exporter->stats_interval)
+             <= export_time_sec) {
+            exporter->last_stats_sent_time = export_time_sec;
+            ipfix_send_exporter_data_msg(exporter, export_time_sec);
+        }
+
+        if (dpif_ipfix_should_send_template(exporter,
+                                            entry->flow_key.obs_domain_id,
+                                            export_time_sec)) {
+            VLOG_DBG("Sending templates for ObservationDomainID %"PRIu32,
+                     entry->flow_key.obs_domain_id);
+            ipfix_send_template_msgs(exporter, export_time_sec,
+                                     entry->flow_key.obs_domain_id);
+        }
+
         ovs_list_remove(&entry->cache_flow_start_timestamp_list_node);
         hmap_remove(&exporter->cache_flow_key_map,
                     &entry->flow_key_map_node);
-
-         /* XXX: Make frequency of the (Options) Template and Exporter Process
-          * Statistics transmission configurable.
-          * Cf. IETF RFC 5101 Section 4.3. and 10.3.6. */
-        if (!template_msg_sent
-            && (exporter->last_template_set_time + IPFIX_TEMPLATE_INTERVAL)
-                <= export_time_sec) {
-            ipfix_send_template_msgs(exporter, export_time_sec,
-                                     entry->flow_key.obs_domain_id);
-            exporter->last_template_set_time = export_time_sec;
-            template_msg_sent = true;
-
-            /* Send Exporter Process Statistics. */
-            ipfix_send_exporter_data_msg(exporter, export_time_sec);
-        }
 
         /* XXX: Group multiple data records for the same obs domain id
          * into the same message. */
@@ -2883,7 +2982,7 @@ get_export_time_now(uint64_t *export_time_usec, uint32_t *export_time_sec)
 
 static void
 dpif_ipfix_cache_expire_now(struct dpif_ipfix_exporter *exporter,
-                            bool forced_end)
+                            bool forced_end) OVS_REQUIRES(mutex)
 {
     uint64_t export_time_usec;
     uint32_t export_time_sec;

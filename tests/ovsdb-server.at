@@ -1,15 +1,17 @@
 AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 
-m4_define([OVSDB_SERVER_SHUTDOWN],
-  [OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])])
-
+dnl OVSDB_SERVER_SHUTDOWN_N(N, [ALLOWLIST])
+dnl
+dnl Similar to OVSDB_SERVER_SHUTDOWN, but stops the server started with N.pid
+dnl pidfile and unixctlN socket.
 m4_define([OVSDB_SERVER_SHUTDOWN_N],
-  [cp $1.pid savepid$1
+  [AT_CHECK([check_logs $2])
+   cp $1.pid savepid$1
    AT_CHECK([ovs-appctl -t "`pwd`"/unixctl$1 -e exit], [0], [ignore], [ignore])
    OVS_WAIT_WHILE([kill -0 `cat savepid$1`], [kill `cat savepid$1`])])
 
 m4_define([OVSDB_SERVER_SHUTDOWN2],
-  [OVSDB_SERVER_SHUTDOWN_N([2])])
+  [OVSDB_SERVER_SHUTDOWN_N([2], $1)])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -24,6 +26,9 @@ m4_define([OVSDB_SERVER_SHUTDOWN2],
 # If a given UUID appears more than once it is always replaced by the
 # same marker.
 #
+# Additionally, checks that records written to a database file can be
+# read back producing the same in-memory database content.
+#
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
@@ -31,12 +36,22 @@ m4_define([OVSDB_CHECK_EXECUTION],
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    on_exit 'kill `cat *.pid`'
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+                          --remote=punix:socket db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
      [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore])
 cat stdout >> output
 ])
    AT_CHECK([uuidfilt output], [0], [$4], [ignore])
+
+   AT_CHECK([ovsdb-client dump unix:socket], [0], [stdout], [ignore])
+
+   OVSDB_SERVER_SHUTDOWN
+
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile \
+                          --remote=punix:socket db], [0], [ignore], [ignore])
+   OVS_WAIT_UNTIL([ovsdb-client dump unix:socket > dump2; diff stdout dump2])
+
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -157,7 +172,7 @@ constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db1 db2], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:db.sock db1 db2], [0], [ignore], [ignore])
 CHECK_DBS([constraints
 ordinals
 ])
@@ -177,7 +192,7 @@ AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 
 # Start ovsdb-server with just a single database - db1.
-AT_CHECK([ovsdb-server -vfile -vvlog:off --log-file --detach --no-chdir --pidfile --remote=punix:db.sock db1], [0])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --log-file --detach --no-chdir --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
 CHECK_DBS([ordinals
 ])
 
@@ -280,7 +295,7 @@ AT_CHECK([uuidfilt db-change-unaware.stdout], [0], [dnl
 <0> initial _Server
 ])
 
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["/no database named ordinals/d"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db with --monitor])
@@ -298,7 +313,7 @@ AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1], [0], [ignore], [ignore])
 
 # Add the second database.
 constraint_schema > schema2
@@ -319,7 +334,10 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 CHECK_DBS([constraints
 ordinals
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["
+    /backtrace/d
+    /killed/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
@@ -339,7 +357,7 @@ AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1 db2])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1 db2], [0], [ignore], [ignore])
 
 # Remove the second database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints])
@@ -356,7 +374,10 @@ OVS_WAIT_UNTIL(
 OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 CHECK_DBS([ordinals
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["
+    /backtrace/d
+    /killed/d
+"])
 AT_CLEANUP
 
 AT_SETUP([--remote=db: implementation])
@@ -400,7 +421,7 @@ AT_CHECK(
         "uuid-name": "x",
         "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options db], [0], [ignore], [ignore])
 ovs-appctl -t ovsdb-server time/warp 6000 1000
 AT_CHECK(
   [[ovsdb-client transact unix:socket1 \
@@ -420,7 +441,9 @@ AT_CHECK(
   [[[{"rows":[{"managers":"punix:socket1"}]},{"rows":[{"is_connected":false,"target":"punix:socket2"}]}]
 ]], 
   [ignore])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["
+  /No status column present in the Manager table/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote])
@@ -428,7 +451,7 @@ AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile db], [0], [ignore], [ignore])
 
 AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket1])
@@ -473,7 +496,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-remote punix:socket2])
 OVS_WAIT_UNTIL([test ! -e socket2])
 AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote with --monitor])
@@ -491,7 +514,7 @@ AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db], [0], [ignore], [ignore])
 
 # Add a remote.
 AT_CHECK([test ! -e socket1])
@@ -512,7 +535,10 @@ OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 OVS_WAIT_UNTIL([test -S socket1])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["
+    /backtrace/d
+    /killed/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
@@ -530,7 +556,7 @@ AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db], [0], [ignore], [ignore])
 
 # Add a remote.
 AT_CHECK([test ! -e socket1])
@@ -555,7 +581,10 @@ OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 AT_CHECK([test ! -e socket1])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN(["
+    /backtrace/d
+    /killed/d
+"])
 AT_CLEANUP
 
 AT_SETUP([SSL db: implementation])
@@ -674,7 +703,10 @@ AT_CHECK_UNQUOTED(
   [grep "sslv3 alert handshake failure" output], [0],
   [stdout],
   [ignore])
-OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN(["
+  /stream_ssl|WARN/d
+  /Protocol error/d
+"])
 AT_CLEANUP
 
 OVS_START_SHELL_HELPERS
@@ -701,7 +733,7 @@ ovsdb_check_online_compaction() {
               fi])
     dnl Start ovsdb-server.
     on_exit 'kill `cat *.pid`'
-    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0])
+    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
     AT_CHECK([ovsdb_client_wait unix:socket ordinals connected])
     AT_CAPTURE_FILE([ovsdb-server.log])
     dnl Do a bunch of random transactions that put crap in the database log.
@@ -837,8 +869,8 @@ _uuid                                name  number
     dnl Then check that the dumped data is correct.  This time first kill
     dnl and restart the database server to ensure that the data is correct on
     dnl disk as well as in memory.
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db])
+    OVSDB_SERVER_SHUTDOWN
+    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
     AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout])
     AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -893,7 +925,7 @@ ovsdb_check_online_conversion() {
               fi])
 
     dnl Start the database server.
-    AT_CHECK([ovsdb-server -vfile -vvlog:off -vconsole:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db], [0])
+    AT_CHECK([ovsdb-server -vfile -vvlog:off -vconsole:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db], [0], [ignore], [ignore])
     AT_CAPTURE_FILE([ovsdb-server.log])
 
     dnl Put some data in the database.
@@ -1109,9 +1141,9 @@ _uuid                                number
 ])
     dnl Now kill and restart the database server to ensure that the data is
     dnl correct on disk as well as in memory.
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+    OVSDB_SERVER_SHUTDOWN
     AT_CHECK([[ovsdb-server -vfile -vvlog:off -vconsole:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db]],
-      [0])
+      [0], [ignore], [ignore])
     AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
 ordinals table
 _uuid                                number
@@ -1134,7 +1166,7 @@ _uuid                                number
         AT_CHECK([test -f dir/.db.~lock~])
     fi
 
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+    OVSDB_SERVER_SHUTDOWN
 }
 OVS_END_SHELL_HELPERS
 
@@ -1243,7 +1275,7 @@ AT_CHECK([test $logged_updates -lt $logged_nonblock_updates])
 AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
   [xyzzy$counter
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server transaction history size])
@@ -1270,7 +1302,7 @@ dnl a case where there is only one transaction in a history.
 get_memory_value () {
     n=$(ovs-appctl -t ovsdb-server memory/show dnl
             | tr ' ' '\n' | grep "^$1:" | cut -d ':' -f 2)
-    if test X"$n" == "X"; then
+    if test X"$n" = "X"; then
         n=0
     fi
     echo $n
@@ -1308,7 +1340,25 @@ dnl After removing all the bridges, the number of atoms in the database
 dnl should return to its initial value.
 AT_CHECK([test $(get_memory_value atoms) -eq $initial_db_atoms])
 
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+dnl Add a few more resources.
+for i in $(seq 1 10); do
+    cmd=$(add_ports $i $(($i / 4 + 1)))
+    AT_CHECK([ovs-vsctl --no-wait add-br br$i $cmd])
+done
+check_atoms
+
+db_atoms_before_conversion=$(get_memory_value atoms)
+
+dnl Trigger online conversion.
+AT_CHECK([ovsdb-client convert $abs_top_srcdir/vswitchd/vswitch.ovsschema],
+         [0], [ignore], [ignore])
+
+dnl Check that conversion didn't change the number of atoms and the history
+dnl still has a reasonable size.
+check_atoms
+AT_CHECK([test $(get_memory_value atoms) -eq $db_atoms_before_conversion])
+
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
@@ -1691,7 +1741,7 @@ AT_KEYWORDS([ovsdb server replication get-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --sync-from=tcp:127.0.0.1:9999 db])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --sync-from=tcp:127.0.0.1:9999 db], [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
   [0], [tcp:127.0.0.1:9999
@@ -1704,7 +1754,7 @@ AT_KEYWORDS([ovsdb server replication set-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile db], [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/set-active-ovsdb-server tcp:127.0.0.1:9999])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
@@ -1718,7 +1768,7 @@ AT_KEYWORDS([ovsdb server replication get-exclude-tables])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --sync-exclude-tables=mydb:db1,mydb:db2 db])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --sync-exclude-tables=mydb:db1,mydb:db2 db], [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-sync-exclude-tables],
   [0], [mydb:db1,mydb:db2
@@ -2061,7 +2111,7 @@ AT_CHECK(
         "row": {"target": "ptcp:0:127.0.0.1",
                "read_only": true}}]']], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile --remote=db:mydb,Root,managers db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=db:mydb,Root,managers db], [0], [ignore], [ignore])
 PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
 AT_CHECK([ovsdb-client get-schema-version tcp:127.0.0.1:$TCP_PORT mydb], [0], [5.1.3
 ])
@@ -2075,7 +2125,9 @@ AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT \
 cat stdout >> output
 AT_CHECK([uuidfilt output], [0], [[[{"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}]]
 ], [ignore])
-OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN(["
+  /No status column present in the Manager table/d
+"])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server replication with schema mismatch])
@@ -2292,8 +2344,8 @@ AT_CHECK([uuidfilt monitor.stdout | sed '/^$/d'], [0], [dnl
 <8> delete 4 four
 <9> insert 4 four
 ])
-OVSDB_SERVER_SHUTDOWN
-OVSDB_SERVER_SHUTDOWN2
+OVSDB_SERVER_SHUTDOWN(["/Address already in use/d"])
+OVSDB_SERVER_SHUTDOWN2(["/Address already in use/d"])
 
 dnl Starting a replay.
 AT_CHECK([ovsdb-server --replay=./replay_dir                      dnl

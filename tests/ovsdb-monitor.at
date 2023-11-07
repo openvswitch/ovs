@@ -28,7 +28,7 @@ ovsdb_check_monitor () {
     for txn in ${1+"$@"} '[["'$db'"]]'; do
       AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
     done
-    OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])
+    OVSDB_SERVER_SHUTDOWN
     OVS_WAIT_UNTIL([test ! -e ovsdb-client.pid])
     AT_CHECK_UNQUOTED([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$output], [ignore])
 }
@@ -88,10 +88,10 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
    for txn in m4_foreach([txn], [$3], ['txn' ]); do
      AT_CHECK([ovsdb-tool transact db "$txn"], [0], [ignore], [ignore])
    done
-   AT_CAPTURE_FILE([ovsdb-server-log])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+   AT_CAPTURE_FILE([ovsdb-server.log])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
    on_exit 'kill `cat ovsdb-server.pid`'
-   AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output],
+   AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output 2> ovsdb-client.stderr],
           [0], [ignore], [ignore])
    on_exit 'kill `cat ovsdb-client.pid`'
    for txn in m4_foreach([txn], [$6], ['txn' ]); do
@@ -103,7 +103,7 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
    done
    AT_CHECK([ovsdb-client transact unix:socket '[["$4"]]'], [0],
             [ignore], [ignore])
-   AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+   OVSDB_SERVER_SHUTDOWN
    OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
    AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$7], [ignore])
    AT_CLEANUP])
@@ -586,6 +586,7 @@ row,action,name,number,_version
   [[]],
   [],
   [[[[["name","==","one"],["name","==","two"]]]],
+   [[[["name","==","two"],["name","==","one"]]]],
    [[[["name","==","one"]]]],
     [[[false]]],
     [[[true]]]])
@@ -595,9 +596,9 @@ AT_SETUP(monitor-cond-change with many sessions pending)
 AT_KEYWORDS([ovsdb server monitor monitor-cond negative])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
+AT_CAPTURE_FILE([ovsdb-server.log])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -619,14 +620,14 @@ done
 
 cond='[[["name","==","ten"]]]'
 for i in `seq 1 990`; do
-    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"]], [0], [ignore], [ignore])
+    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"] >ovsdb-client$i.out 2>&1], [0], [ignore], [ignore])
 done
 
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"] > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"] > output  2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 
 for i in `seq 991 1000`; do
-    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"]], [0], [ignore], [ignore])
+    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"] >ovsdb-client$i.out 2>&1 ], [0], [ignore], [ignore])
 done
 
 for txn in m4_foreach([txn], [[[["ordinals",
@@ -647,7 +648,7 @@ sleep 1
 
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN("/Too many open files/d")
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [[row,action,name
 <0>,insert,"""ten"""
@@ -666,8 +667,8 @@ AT_SETUP([monitor-cond-since not found])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:db.raft], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -684,7 +685,7 @@ done
 
 # Omitting the last_id parameter in ovsdb-client monitor-cond-since command
 # will by default using all zero uuid, which doesn't exist in any history txn.
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
@@ -699,7 +700,7 @@ for txn in m4_foreach([txn], [[[["ordinals",
 done
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
@@ -720,8 +721,8 @@ AT_SETUP([monitor-cond-since db restart])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:db.raft], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -736,19 +737,18 @@ for txn in m4_foreach([txn], [[[["ordinals",
   AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
 done
 
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 OVS_WAIT_UNTIL([grep last_id output])
 
-kill `cat ovsdb-client.pid`
-kill `cat ovsdb-server.pid`
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 
 # Remember the last_id, which will be used for monitor-cond-since later.
 last_id=`grep last_id output | awk '{print $4}'`
 
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 
 # Some new changes made to db after restarting the server.
 for txn in m4_foreach([txn], [[[["ordinals",
@@ -763,12 +763,12 @@ for txn in m4_foreach([txn], [[[["ordinals",
 done
 
 # Use last_id to monitor and get only the new changes.
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: true, last_id: <0>
@@ -784,8 +784,8 @@ AT_SETUP([monitor-cond-since found but no new rows])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:db.raft], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -799,7 +799,7 @@ for txn in m4_foreach([txn], [[[["ordinals",
        "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
   AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
 done
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 OVS_WAIT_UNTIL([grep last_id output])
@@ -807,12 +807,12 @@ OVS_WAIT_UNTIL([grep last_id output])
 kill `cat ovsdb-client.pid`
 OVS_WAIT_UNTIL([test ! -e ovsdb-client.pid])
 last_id=`grep last_id output | awk '{print $4}'`
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: true, last_id: <0>
@@ -825,17 +825,17 @@ AT_SETUP([monitor-cond-since empty db])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:db.raft], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 OVS_WAIT_UNTIL([grep last_id output])
 
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
@@ -848,8 +848,8 @@ AT_SETUP([monitor-cond-since condition change])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:db.raft], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file -vjsonrpc:file:dbg db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -863,7 +863,8 @@ for txn in m4_foreach([txn], [[[["ordinals",
        "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
   AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
 done
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[]]' ordinals > output], [0], [ignore], [ignore])
+AT_CAPTURE_FILE([ovsdb-client.log])
+AT_CHECK([ovsdb-client -vjsonrpc --log-file --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[]]' ordinals > output 2> ovsdb-client.stderr])
 on_exit 'kill `cat ovsdb-client.pid`'
 for cond in m4_foreach([cond],
                        [[[[["name","==","one"],["name","==","two"]]]],
@@ -874,7 +875,7 @@ for cond in m4_foreach([cond],
 done
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0],
          [[found: false, last_id: <0>
@@ -909,8 +910,8 @@ AT_SETUP([monitor-cond-since non-cluster])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -925,7 +926,7 @@ for txn in m4_foreach([txn], [[[["ordinals",
   AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
 done
 
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals '[[["name","==","one"],["name","==","ten"]]]' ordinals > output 2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
@@ -940,7 +941,7 @@ for txn in m4_foreach([txn], [[[["ordinals",
 done
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 
 # Transaction shouldn't be found, and last_id returned should always
@@ -962,8 +963,8 @@ AT_SETUP([monitor-cond-since non-cluster non-zero last_id])
 AT_KEYWORDS([ovsdb server monitor monitor-cond-since negative])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-AT_CAPTURE_FILE([ovsdb-server-log])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-server.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -980,7 +981,7 @@ done
 
 # A non-zero uuid
 last_id=11111111-1111-1111-1111-111111111111
-AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output],
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond-since --format=csv unix:socket ordinals $last_id '[[["name","==","one"],["name","==","ten"]]]' ordinals > output  2> ovsdb-client.stderr],
        [0], [ignore], [ignore])
 on_exit 'kill `cat ovsdb-client.pid`'
 for txn in m4_foreach([txn], [[[["ordinals",
@@ -995,7 +996,7 @@ for txn in m4_foreach([txn], [[[["ordinals",
 done
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
 
 # Transaction shouldn't be found, and last_id returned should always
@@ -1011,3 +1012,69 @@ row,action,name,number,_version
 ]], [ignore])
 AT_CLEANUP
 
+AT_SETUP([monitor-cond initial reply with condition on non-monitored column])
+AT_KEYWORDS([ovsdb server monitor monitor-cond positive initial non-monitored])
+
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
+AT_CAPTURE_FILE([ovsdb-server.log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
+            --remote=punix:socket --log-file db], [0], [ignore], [ignore])
+
+dnl Initialize the database content.
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+dnl Start a first client that monitors only the column 'name'.
+on_exit 'kill `cat client-1.pid`'
+AT_CAPTURE_FILE([client-1.out])
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile=client-1.pid --detach --no-chdir \
+            -d json monitor-cond --format=csv unix:socket \
+            ordinals '[[true]]' ordinals ["name"] \
+            > client-1.out 2> client-1.err], [0], [ignore], [ignore])
+dnl Wait for the initial monitor reply.
+OVS_WAIT_UNTIL([grep -q 'initial' client-1.out])
+
+dnl Start a second client that monitors the column 'name', but has a condition
+dnl on column 'number'.
+on_exit 'kill `cat client-2.pid`'
+AT_CAPTURE_FILE([client-2.out])
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile=client-2.pid --detach --no-chdir \
+            -d json monitor-cond --format=csv unix:socket \
+            ordinals '[[["number", "!=", 1]]]' ordinals ["name"] \
+            > client-2.out 2> client-2.err], [0], [ignore], [ignore])
+dnl Wait for the initial monitor reply.
+OVS_WAIT_UNTIL([grep -q 'initial' client-2.out])
+
+OVSDB_SERVER_SHUTDOWN
+OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && \
+                    test ! -e client-1.pid && test ! -e client-2.pid])
+
+dnl The first client should have all the names.
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < client-1.out | uuidfilt],
+         [0], [dnl
+row,action,name
+<0>,initial,"""one"""
+<1>,initial,"""two"""
+<2>,initial,"""zero"""
+])
+
+dnl The second client should not have the name 'one'.
+AT_CHECK([$PYTHON3 $srcdir/ovsdb-monitor-sort.py < client-2.out | uuidfilt],
+         [0], [dnl
+row,action,name
+<0>,initial,"""two"""
+<1>,initial,"""zero"""
+])
+AT_CLEANUP

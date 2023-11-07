@@ -230,18 +230,28 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
     uint64_t tot_iter = histogram_samples(&s->pkts);
     uint64_t idle_iter = s->pkts.bin[0];
     uint64_t busy_iter = tot_iter >= idle_iter ? tot_iter - idle_iter : 0;
+    uint64_t sleep_iter = stats[PMD_SLEEP_ITER];
+    uint64_t tot_sleep_cycles = stats[PMD_CYCLES_SLEEP];
 
     ds_put_format(str,
             "  Iterations:         %12"PRIu64"  (%.2f us/it)\n"
             "  - Used TSC cycles:  %12"PRIu64"  (%5.1f %% of total cycles)\n"
             "  - idle iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n"
-            "  - busy iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n",
-            tot_iter, tot_cycles * us_per_cycle / tot_iter,
+            "  - busy iterations:  %12"PRIu64"  (%5.1f %% of used cycles)\n"
+            "  - sleep iterations: %12"PRIu64"  (%5.1f %% of iterations)\n"
+            "  Sleep time (us):    %12.0f  (%3.0f us/iteration avg.)\n",
+            tot_iter,
+            tot_iter
+                ? (tot_cycles + tot_sleep_cycles) * us_per_cycle / tot_iter
+                : 0,
             tot_cycles, 100.0 * (tot_cycles / duration) / tsc_hz,
             idle_iter,
-            100.0 * stats[PMD_CYCLES_ITER_IDLE] / tot_cycles,
+            tot_cycles ? 100.0 * stats[PMD_CYCLES_ITER_IDLE] / tot_cycles : 0,
             busy_iter,
-            100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles);
+            tot_cycles ? 100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles : 0,
+            sleep_iter, tot_iter ? 100.0 * sleep_iter / tot_iter : 0,
+            tot_sleep_cycles * us_per_cycle,
+            sleep_iter ? (tot_sleep_cycles * us_per_cycle) / sleep_iter : 0);
     if (rx_packets > 0) {
         ds_put_format(str,
             "  Rx packets:         %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
@@ -327,29 +337,32 @@ pmd_perf_format_histograms(struct ds *str, struct pmd_perf_stats *s)
                   ">", s->max_vhost_qfill.bin[i],
                   ">", s->upcalls.bin[i],
                   ">", s->cycles_per_upcall.bin[i]);
-    if (s->totals.iterations > 0) {
-        ds_put_cstr(str,
-                    "-----------------------------------------------------"
-                    "-----------------------------------------------------"
-                    "------------------------------------------------\n");
-        ds_put_format(str,
-                      "   %-21s  %-21s  %-21s  %-21s  %-21s  %-21s  %-21s\n",
-                      "cycles/it", "packets/it", "cycles/pkt", "pkts/batch",
-                      "vhost qlen", "upcalls/it", "cycles/upcall");
-        ds_put_format(str,
-                      "   %-21"PRIu64"  %-21.5f  %-21"PRIu64
-                      "  %-21.5f  %-21.5f  %-21.5f  %-21"PRIu32"\n",
-                      s->totals.cycles / s->totals.iterations,
-                      1.0 * s->totals.pkts / s->totals.iterations,
-                      s->totals.pkts
-                          ? s->totals.busy_cycles / s->totals.pkts : 0,
-                      s->totals.batches
-                          ? 1.0 * s->totals.pkts / s->totals.batches : 0,
-                      1.0 * s->totals.max_vhost_qfill / s->totals.iterations,
-                      1.0 * s->totals.upcalls / s->totals.iterations,
-                      s->totals.upcalls
-                          ? s->totals.upcall_cycles / s->totals.upcalls : 0);
-    }
+    ds_put_cstr(str,
+                "-----------------------------------------------------"
+                "-----------------------------------------------------"
+                "------------------------------------------------\n");
+    ds_put_format(str,
+                  "   %-21s  %-21s  %-21s  %-21s  %-21s  %-21s  %-21s\n",
+                  "cycles/it", "packets/it", "cycles/pkt", "pkts/batch",
+                  "vhost qlen", "upcalls/it", "cycles/upcall");
+    ds_put_format(str,
+                  "   %-21"PRIu64"  %-21.5f  %-21"PRIu64
+                  "  %-21.5f  %-21.5f  %-21.5f  %-21"PRIu32"\n",
+                  s->totals.iterations
+                      ? s->totals.cycles / s->totals.iterations : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.pkts / s->totals.iterations : 0,
+                  s->totals.pkts
+                      ? s->totals.busy_cycles / s->totals.pkts : 0,
+                  s->totals.batches
+                      ? 1.0 * s->totals.pkts / s->totals.batches : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.max_vhost_qfill / s->totals.iterations
+                      : 0,
+                  s->totals.iterations
+                      ? 1.0 * s->totals.upcalls / s->totals.iterations : 0,
+                  s->totals.upcalls
+                      ? s->totals.upcall_cycles / s->totals.upcalls : 0);
 }
 
 void
@@ -518,14 +531,15 @@ OVS_REQUIRES(s->stats_mutex)
 
 void
 pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
-                       int tx_packets, bool full_metrics)
+                       int tx_packets, uint64_t sleep_cycles,
+                       bool full_metrics)
 {
     uint64_t now_tsc = cycles_counter_update(s);
     struct iter_stats *cum_ms;
     uint64_t cycles, cycles_per_pkt = 0;
     char *reason = NULL;
 
-    cycles = now_tsc - s->start_tsc;
+    cycles = now_tsc - s->start_tsc - sleep_cycles;
     s->current.timestamp = s->iteration_cnt;
     s->current.cycles = cycles;
     s->current.pkts = rx_packets;
@@ -538,6 +552,11 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
     /* Add iteration samples to histograms. */
     histogram_add_sample(&s->cycles, cycles);
     histogram_add_sample(&s->pkts, rx_packets);
+
+    if (sleep_cycles) {
+        pmd_perf_update_counter(s, PMD_SLEEP_ITER, 1);
+        pmd_perf_update_counter(s, PMD_CYCLES_SLEEP, sleep_cycles);
+    }
 
     if (!full_metrics) {
         return;

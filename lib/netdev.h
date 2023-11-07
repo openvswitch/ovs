@@ -72,6 +72,9 @@ struct sset;
 struct ovs_action_push_tnl;
 
 enum netdev_pt_mode {
+    /* Unknown mode.  The netdev is not configured yet. */
+    NETDEV_PT_UNKNOWN = 0,
+
     /* The netdev is packet type aware.  It can potentially carry any kind of
      * packet.  This "modern" mode is appropriate for both netdevs that handle
      * only a single kind of packet (such as a virtual or physical Ethernet
@@ -95,6 +98,17 @@ enum netdev_pt_mode {
      * controllers that are not prepared to handle OpenFlow 1.5+
      * "packet_type". */
     NETDEV_PT_LEGACY_L3,
+};
+
+enum netdev_srv6_flowlabel {
+    /* Copy the flowlabel of inner packet. */
+    SRV6_FLOWLABEL_COPY,
+
+    /* Simply set flowlabel to 0. */
+    SRV6_FLOWLABEL_ZERO,
+
+    /* Set flowlabel to a hash over L3/L4 fields of the inner packet. */
+    SRV6_FLOWLABEL_COMPUTE,
 };
 
 /* Configuration specific to tunnels. */
@@ -130,7 +144,6 @@ struct netdev_tunnel_config {
     enum netdev_pt_mode pt_mode;
 
     bool set_seq;
-    uint32_t seqno;
     uint32_t erspan_idx;
     uint8_t erspan_ver;
     uint8_t erspan_dir;
@@ -140,6 +153,11 @@ struct netdev_tunnel_config {
     bool erspan_idx_flow;
     bool erspan_dir_flow;
     bool erspan_hwid_flow;
+
+    uint8_t srv6_num_segs;
+    #define SRV6_MAX_SEGS 6
+    struct in6_addr srv6_segs[SRV6_MAX_SEGS];
+    enum netdev_srv6_flowlabel srv6_flowlabel;
 };
 
 void netdev_run(void);

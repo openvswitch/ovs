@@ -165,9 +165,9 @@ install_dir () {
 }
 
 start_daemon () {
-    priority=$1
-    wrapper=$2
-    shift; shift
+    priority=$1 && shift
+    wrapper=$1 && shift
+    umask=$1 && shift
     daemon=$1
     strace=""
 
@@ -223,7 +223,18 @@ start_daemon () {
         set nice -n "$priority" "$@"
     fi
 
+    # Set requested umask if any and turn previous value back.
+    if [ -n "$umask" ]; then
+        previuos_umask_value=$(umask)
+        umask "$umask"
+    fi
+
     action "Starting $daemon" "$@" || return 1
+
+    # If umask was set, turn umask value to previous value.
+    if [ -n "$umask" ]; then
+        umask "$previuos_umask_value"
+    fi
 
     if test X"$strace" != X; then
         # Strace doesn't have the -D option so we attach after the fact.

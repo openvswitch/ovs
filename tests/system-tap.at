@@ -22,7 +22,7 @@ AT_CHECK([ip netns exec at_ns1 ip link set dev tap1 up])
 AT_CHECK([ip netns exec at_ns0 ip addr add 10.1.1.1/24 dev tap0])
 AT_CHECK([ip netns exec at_ns1 ip addr add 10.1.1.2/24 dev tap1])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 

@@ -371,5 +371,7 @@ cat stdout >> output
 AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
-OVSDB_SERVER_SHUTDOWN
+OVSDB_SERVER_SHUTDOWN(["
+  /No status column present in the Connection table/d
+"])
 AT_CLEANUP

@@ -694,7 +694,8 @@ encapsulated in an OpenFlow ``packet-in`` message.  The supported options are:
     Limit to *max_len* the number of bytes of the packet to send in the
     ``packet-in.``  A *max_len* of 0 prevents any of the packet from being
     sent (thus, only metadata is included).  By default, the entire packet is
-    sent, equivalent to a *max_len* of 65535.
+    sent, equivalent to a *max_len* of 65535.  This option has no effect in
+    Open vSwith 2.7 and later: the entire packet will always be sent.
 
   ``reason=``\ *reason*
     Specify *reason* as the reason for sending the message in the
@@ -732,6 +733,12 @@ encapsulated in an OpenFlow ``packet-in`` message.  The supported options are:
   ``reason=action``) and ``controller_id`` (option than ``controller_id=0``)
   options require the Open vSwitch ``NXAST_CONTROLLER`` extension action added
   in Open vSwitch 1.6.
+
+  Open vSwitch 2.7 and later is configured to not buffer packets for the
+  packet-in event.  As a result, the full packet is always sent to
+  controllers.  This means that the ``max_len`` option has no effect on the
+  ``controller`` action, and all values (even 0) are equivalent to the default
+  value of 65535.
 
 
 The ``enqueue`` action
@@ -1380,7 +1387,7 @@ The ``delete_field`` action
   | ``delete_field:``\ *field*
 
 The ``delete_field`` action deletes a *field* in the syntax described under
-`Field Specifications`_ above.  Currently, only the ``tun_metadta`` fields are
+`Field Specifications`_ above.  Currently, only the ``tun_metadata`` fields are
 supported.
 
 This action was added in Open vSwitch 2.14.

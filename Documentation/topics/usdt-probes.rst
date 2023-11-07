@@ -214,6 +214,10 @@ Available probes in ``ovs_vswitchd``:
 - dpif_recv:recv_upcall
 - main:poll_block
 - main:run_start
+- revalidate_ukey\_\_:entry
+- revalidate_ukey\_\_:exit
+- udpif_revalidator:start_dump
+- udpif_revalidator:sweep_done
 
 
 dpif_netlink_operate\_\_:op_flow_del
@@ -254,6 +258,7 @@ DPIF_OP_FLOW_EXECUTE operation as part of the dpif ``operate()`` callback.
 
 **Script references**:
 
+- ``utilities/usdt-scripts/dpif_nl_exec_monitor.py``
 - ``utilities/usdt-scripts/upcall_cost.py``
 
 
@@ -327,6 +332,7 @@ probe main:run_start
 ~~~~~~~~~~~~~~~~~~~~
 
 **Description**:
+
 The ovs-vswitchd's main process contains a loop that runs every time some work
 needs to be done. This probe gets triggered every time the loop starts from the
 beginning. See also the ``main:poll_block`` probe below.
@@ -344,6 +350,7 @@ probe main:poll_block
 ~~~~~~~~~~~~~~~~~~~~~
 
 **Description**:
+
 The ovs-vswitchd's main process contains a loop that runs every time some work
 needs to be done. This probe gets triggered every time the loop is done, and
 it's about to wait for being re-started by a poll_block() call returning.
@@ -356,6 +363,84 @@ See also the ``main:run_start`` probe above.
 **Script references**:
 
 - ``utilities/usdt-scripts/bridge_loop.bt``
+
+
+revalidate_ukey\_\_:entry
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered on entry of the revalidate_ukey__() function.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(struct udpif_key *) ukey``
+- *arg2*: ``(uint16_t) tcp_flags``
+- *arg3*: ``(struct ofpbuf *) odp_actions``
+- *arg4*: ``(struct recirc_refs *) recircs``
+- *arg5*: ``(struct xlate_cache *) xcache``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/reval_monitor.py``
+
+
+revalidate_ukey\_\_:exit
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+This probe gets triggered right before the revalidate_ukey__() function exits.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(struct udpif_key *) ukey``
+- *arg2*: ``(enum reval_result) result``
+
+**Script references**:
+
+*None*
+
+
+udpif_revalidator:start_dump
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+The ovs-vswitchd's revalidator process contains a loop that runs every time
+revalidation work is needed. This probe gets triggered every time the
+dump phase has started.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(size_t) n_flows``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/reval_monitor.py``
+
+
+udpif_revalidator:sweep_done
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+
+The ovs-vswitchd's revalidator process contains a loop that runs every time
+revalidation work is needed. This probe gets triggered every time the
+sweep phase was completed.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(size_t) n_flows``
+- *arg2*: ``(unsigned) MIN(ofproto_max_idle, ofproto_max_revalidator)``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/reval_monitor.py``
 
 
 Adding your own probes

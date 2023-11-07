@@ -43,6 +43,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-netlink.h"
+#include "openvswitch/json.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "openvswitch/ofp-print.h"
@@ -798,8 +799,6 @@ static bool
 netdev_send_prepare_packet(const uint64_t netdev_flags,
                            struct dp_packet *packet, char **errormsg)
 {
-    uint64_t l4_mask;
-
     if (dp_packet_hwol_is_tso(packet)
         && !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
             /* Fall back to GSO in software. */
@@ -807,32 +806,20 @@ netdev_send_prepare_packet(const uint64_t netdev_flags,
             return false;
     }
 
-    l4_mask = dp_packet_hwol_l4_mask(packet);
-    if (l4_mask) {
-        if (dp_packet_hwol_l4_is_tcp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-                /* Fall back to TCP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No TCP checksum support");
-                return false;
-            }
-        } else if (dp_packet_hwol_l4_is_udp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
-                /* Fall back to UDP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No UDP checksum support");
-                return false;
-            }
-        } else if (dp_packet_hwol_l4_is_sctp(packet)) {
-            if (!(netdev_flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)) {
-                /* Fall back to SCTP csum in software. */
-                VLOG_ERR_BUF(errormsg, "No SCTP checksum support");
-                return false;
-            }
-        } else {
-            VLOG_ERR_BUF(errormsg, "No L4 checksum support: mask: %"PRIu64,
-                         l4_mask);
-            return false;
-        }
-    }
+    /* Packet with IP csum offloading enabled was received with verified csum.
+     * Leave the IP csum offloading enabled even with good checksum to the
+     * netdev to decide what would be the best to do.
+     * Provide a software fallback in case the device doesn't support IP csum
+     * offloading. Note: Encapsulated packet must have the inner IP header
+     * csum already calculated.
+     * Packet with L4 csum offloading enabled was received with verified csum.
+     * Leave the L4 csum offloading enabled even with good checksum for the
+     * netdev to decide what would be the best to do.
+     * Netdev that requires pseudo header csum needs to calculate that.
+     * Provide a software fallback in case the netdev doesn't support L4 csum
+     * offloading. Note: Encapsulated packet must have the inner L4 header
+     * csum already calculated. */
+    dp_packet_ol_send_prepare(packet, netdev_flags);
 
     return true;
 }
@@ -966,15 +953,19 @@ netdev_push_header(const struct netdev *netdev,
     size_t i, size = dp_packet_batch_size(batch);
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
-        if (OVS_UNLIKELY(dp_packet_hwol_is_tso(packet)
-                         || dp_packet_hwol_l4_mask(packet))) {
+        if (OVS_UNLIKELY(dp_packet_hwol_is_tso(packet))) {
             COVERAGE_INC(netdev_push_header_drops);
             dp_packet_delete(packet);
-            VLOG_WARN_RL(&rl, "%s: Tunneling packets with HW offload flags is "
+            VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is "
                          "not supported: packet dropped",
                          netdev_get_name(netdev));
         } else {
+            /* The packet is going to be encapsulated and there is
+             * no support yet for inner network header csum offloading. */
+            dp_packet_ol_send_prepare(packet, 0);
+
             netdev->netdev_class->push_header(netdev, packet, data);
+
             pkt_metadata_init(&packet->md, data->out_port);
             dp_packet_batch_refill(batch, packet, i);
         }
@@ -1163,6 +1154,36 @@ netdev_get_features(const struct netdev *netdev,
                     : EOPNOTSUPP;
     if (error) {
         *current = *advertised = *supported = *peer = 0;
+    }
+    return error;
+}
+
+int
+netdev_get_speed(const struct netdev *netdev, uint32_t *current, uint32_t *max)
+{
+    uint32_t current_dummy, max_dummy;
+    int error;
+
+    if (!current) {
+        current = &current_dummy;
+    }
+    if (!max) {
+        max = &max_dummy;
+    }
+
+    error = netdev->netdev_class->get_speed
+            ? netdev->netdev_class->get_speed(netdev, current, max)
+            : EOPNOTSUPP;
+
+    if (error == EOPNOTSUPP) {
+        enum netdev_features current_f, supported_f;
+
+        error = netdev_get_features(netdev, &current_f, NULL,
+                                    &supported_f, NULL);
+        *current = netdev_features_to_bps(current_f, 0) / 1000000;
+        *max = netdev_features_to_bps(supported_f, 0) / 1000000;
+    } else if (error) {
+        *current = *max = 0;
     }
     return error;
 }
@@ -1373,9 +1394,31 @@ netdev_get_next_hop(const struct netdev *netdev,
 int
 netdev_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    return (netdev->netdev_class->get_status
-            ? netdev->netdev_class->get_status(netdev, smap)
-            : EOPNOTSUPP);
+    int err = EOPNOTSUPP;
+
+    /* Set offload status only if relevant. */
+    if (netdev_get_dpif_type(netdev) &&
+        strcmp(netdev_get_dpif_type(netdev), "system")) {
+
+#define OL_ADD_STAT(name, bit) \
+        smap_add(smap, "tx_" name "_offload", \
+                 netdev->ol_flags & bit ? "true" : "false");
+
+        OL_ADD_STAT("ip_csum", NETDEV_TX_OFFLOAD_IPV4_CKSUM);
+        OL_ADD_STAT("tcp_csum", NETDEV_TX_OFFLOAD_TCP_CKSUM);
+        OL_ADD_STAT("udp_csum", NETDEV_TX_OFFLOAD_UDP_CKSUM);
+        OL_ADD_STAT("sctp_csum", NETDEV_TX_OFFLOAD_SCTP_CKSUM);
+        OL_ADD_STAT("tcp_seg", NETDEV_TX_OFFLOAD_TCP_TSO);
+#undef OL_ADD_STAT
+
+        err = 0;
+    }
+
+    if (!netdev->netdev_class->get_status) {
+        return err;
+    }
+
+    return netdev->netdev_class->get_status(netdev, smap);
 }
 
 /* Returns all assigned IP address to  'netdev' and returns 0.

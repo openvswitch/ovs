@@ -118,7 +118,7 @@ static struct ovs_list vlog_modules OVS_GUARDED_BY(log_file_mutex)
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
 
 /* Log facility configuration. */
-static atomic_int log_facility = ATOMIC_VAR_INIT(0);
+static atomic_int log_facility = 0;
 
 /* Facility name and its value. */
 struct vlog_facility {
@@ -662,6 +662,13 @@ vlog_direct_write_to_log_file_unsafe(const char *s)
     if (log_fd >= 0) {
         ignore(write(log_fd, s, strlen(s)));
     }
+}
+
+int
+vlog_get_log_file_fd_unsafe(void)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    return log_fd;
 }
 
 /* Returns 'false' if 'facility' is not a valid string. If 'facility'

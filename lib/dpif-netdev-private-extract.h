@@ -117,6 +117,10 @@ enum dpif_miniflow_extract_impl_idx {
     MFEX_IMPL_VBMI_DOT1Q_IPv6_UDP,
 #endif
     MFEX_IMPL_DOT1Q_IPv6_UDP,
+#if HAVE_AVX512VBMI
+    MFEX_IMPL_VBMI_IPv4_NVGRE,
+#endif
+    MFEX_IMPL_IPv4_NVGRE,
 #endif
     MFEX_IMPL_MAX
 };
@@ -230,6 +234,7 @@ DECLARE_AVX512_MFEX_PROTOTYPE(ipv6_udp);
 DECLARE_AVX512_MFEX_PROTOTYPE(ipv6_tcp);
 DECLARE_AVX512_MFEX_PROTOTYPE(dot1q_ipv6_tcp);
 DECLARE_AVX512_MFEX_PROTOTYPE(dot1q_ipv6_udp);
+DECLARE_AVX512_MFEX_PROTOTYPE(ip_nvgre);
 
 #endif /* __x86_64__ */
 

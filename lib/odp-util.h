@@ -292,6 +292,9 @@ enum slow_path_reason commit_odp_actions(const struct flow *,
                                          bool pending_decap,
                                          struct ofpbuf *encap_data);
 
+int odp_vxlan_tun_opts_from_attr(const struct nlattr *tun_attr, ovs_be16 *id,
+                                 uint8_t *flags, bool *id_present);
+
 /* ofproto-dpif interface.
  *
  * The following types and functions are logically part of ofproto-dpif.
@@ -373,6 +376,19 @@ void odp_put_pop_eth_action(struct ofpbuf *odp_actions);
 void odp_put_push_eth_action(struct ofpbuf *odp_actions,
                              const struct eth_addr *eth_src,
                              const struct eth_addr *eth_dst);
+
+static inline void odp_decode_gbp_raw(uint32_t gbp_raw,
+                                      ovs_be16 *id,
+                                      uint8_t *flags)
+{
+    *id = htons(gbp_raw & 0xFFFF);
+    *flags = (gbp_raw >> 16) & 0xFF;
+}
+
+static inline uint32_t odp_encode_gbp_raw(uint8_t flags, ovs_be16 id)
+{
+    return (flags << 16) | ntohs(id);
+}
 
 struct attr_len_tbl {
     int len;

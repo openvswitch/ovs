@@ -68,7 +68,7 @@ as follows.
 connection is established, `TSO` is thus advertised to the guest as an
 available feature:
 
-QEMU Command Line Parameter::
+1. QEMU Command Line Parameter::
 
     $ sudo $QEMU_DIR/x86_64-softmmu/qemu-system-x86_64 \
     ...
@@ -77,11 +77,33 @@ QEMU Command Line Parameter::
     ...
 
 2. Ethtool. Assuming that the guest's OS also supports `TSO`, ethtool can be
-used to enable same::
+   used to enable same::
 
     $ ethtool -K eth0 sg on     # scatter-gather is a prerequisite for TSO
     $ ethtool -K eth0 tso on
     $ ethtool -k eth0
+
+**Note:** Enabling this feature impacts the virtio features exposed by the DPDK
+vHost User backend to a guest. If a guest was already connected to OvS before
+enabling TSO and restarting OvS, this guest ports won't have TSO available::
+
+    $ ovs-vsctl get interface vhost0 status:tx_tcp_seg_offload
+    "false"
+
+To help diagnose the issue, those ports have some additional information in
+their status field in ovsdb::
+
+    $ ovs-vsctl get interface vhost0 status:userspace-tso
+    disabled
+
+To restore TSO for this guest ports, this guest QEMU process must be stopped,
+then started again. OvS will then report::
+
+   $ ovs-vsctl get interface vhost0 status:tx_tcp_seg_offload
+   "true"
+
+   $ ovs-vsctl get interface vhost0 status:userspace-tso
+   ovs-vsctl: no key "userspace-tso" in Interface record "vhost0" column status
 
 ~~~~~~~~~~~
 Limitations

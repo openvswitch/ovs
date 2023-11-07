@@ -107,6 +107,8 @@ void ovsdb_base_type_clone(struct ovsdb_base_type *,
 void ovsdb_base_type_destroy(struct ovsdb_base_type *);
 
 bool ovsdb_base_type_is_valid(const struct ovsdb_base_type *);
+bool ovsdb_base_type_equals(const struct ovsdb_base_type *,
+                            const struct ovsdb_base_type *);
 bool ovsdb_base_type_has_constraints(const struct ovsdb_base_type *);
 void ovsdb_base_type_clear_constraints(struct ovsdb_base_type *);
 const struct ovsdb_type *ovsdb_base_type_get_enum_type(enum ovsdb_atomic_type);
@@ -157,6 +159,7 @@ void ovsdb_type_clone(struct ovsdb_type *, const struct ovsdb_type *);
 void ovsdb_type_destroy(struct ovsdb_type *);
 
 bool ovsdb_type_is_valid(const struct ovsdb_type *);
+bool ovsdb_type_equals(const struct ovsdb_type *, const struct ovsdb_type *);
 
 static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *);
 static inline bool ovsdb_type_is_optional(const struct ovsdb_type *);

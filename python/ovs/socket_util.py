@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import errno
+import ipaddress
 import os
 import os.path
 import random
 import socket
 import sys
 
+from ovs import dns_resolve
 import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
@@ -216,7 +218,7 @@ def is_valid_ipv4_address(address):
     return True
 
 
-def inet_parse_active(target, default_port):
+def _inet_parse_active(target, default_port):
     address = target.split(":")
     if len(address) >= 2:
         host_name = ":".join(address[0:-1]).lstrip('[').rstrip(']')
@@ -229,7 +231,22 @@ def inet_parse_active(target, default_port):
         host_name = address[0]
     if not host_name:
         raise ValueError("%s: bad peer name format" % target)
+    try:
+        host_name = str(ipaddress.ip_address(host_name))
+    except ValueError:
+        host_name = dns_resolve.resolve(host_name)
+    if not host_name:
+        raise ValueError("%s: bad peer name format" % target)
     return (host_name, port)
+
+
+def inet_parse_active(target, default_port, raises=True):
+    try:
+        return _inet_parse_active(target, default_port)
+    except ValueError:
+        if raises:
+            raise
+        return ("", default_port)
 
 
 def inet_create_socket_active(style, address):
@@ -262,7 +279,7 @@ def inet_connect_active(sock, address, family, dscp):
 
 
 def inet_open_active(style, target, default_port, dscp):
-    address = inet_parse_active(target, default_port)
+    address = inet_parse_active(target, default_port, raises=False)
     family, sock = inet_create_socket_active(style, address)
     if sock is None:
         return family, sock

@@ -116,9 +116,9 @@ struct mpsc_queue {
 };
 
 #define MPSC_QUEUE_INITIALIZER(Q) { \
-    .head = ATOMIC_VAR_INIT(&(Q)->stub), \
-    .tail = ATOMIC_VAR_INIT(&(Q)->stub), \
-    .stub = { .next = ATOMIC_VAR_INIT(NULL) }, \
+    .head = &(Q)->stub, \
+    .tail = &(Q)->stub, \
+    .stub = { .next = NULL }, \
     .read_lock = OVS_MUTEX_INITIALIZER, \
 }
 

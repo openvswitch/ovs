@@ -180,6 +180,7 @@ main(int argc, char *argv[])
     ovsdb_idl_set_shuffle_remotes(idl, shuffle_remotes);
     ovsdb_idl_set_remote(idl, db, retry);
     ovsdb_idl_set_leader_only(idl, leader_only);
+    ovsdb_idl_set_db_change_aware(idl, false);
     run_prerequisites(commands, n_commands, idl);
 
     /* Execute the commands.
@@ -574,15 +575,18 @@ add_bridge_to_cache(struct vsctl_context *vsctl_ctx,
                     struct ovsrec_bridge *br_cfg, const char *name,
                     struct vsctl_bridge *parent, int vlan)
 {
-    struct vsctl_bridge *br = xmalloc(sizeof *br);
+    struct vsctl_bridge *br = xzalloc(sizeof *br);
+
     br->br_cfg = br_cfg;
     br->name = xstrdup(name);
     ovs_list_init(&br->ports);
     br->parent = parent;
     br->vlan = vlan;
     hmap_init(&br->children);
+
     if (parent) {
         struct vsctl_bridge *conflict = find_vlan_bridge(parent, vlan);
+
         if (conflict) {
             VLOG_WARN("%s: bridge has multiple VLAN bridges (%s and %s) "
                       "for VLAN %d, but only one is allowed",
@@ -658,7 +662,7 @@ static struct vsctl_port *
 add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
                   struct ovsrec_port *port_cfg)
 {
-    struct vsctl_port *port;
+    struct vsctl_port *port = xzalloc(sizeof *port);
 
     if (port_cfg->tag
         && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095) {
@@ -670,7 +674,6 @@ add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
         }
     }
 
-    port = xmalloc(sizeof *port);
     ovs_list_push_back(&parent->ports, &port->ports_node);
     ovs_list_init(&port->ifaces);
     port->port_cfg = port_cfg;
@@ -817,6 +820,7 @@ vsctl_context_populate_cache(struct ctl_context *ctx)
             continue;
         }
         br = shash_find_data(&vsctl_ctx->bridges, br_cfg->name);
+        ovs_assert(br);
         for (j = 0; j < br_cfg->n_ports; j++) {
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
             struct vsctl_port *port;
@@ -888,14 +892,23 @@ check_conflicts(struct vsctl_context *vsctl_ctx, const char *name,
 
     port = shash_find_data(&vsctl_ctx->ports, name);
     if (port) {
-        ctl_fatal("%s because a port named %s already exists on "
-                    "bridge %s", msg, name, port->bridge->name);
+        if (port->bridge) {
+            ctl_fatal("%s because a port named %s already exists on "
+                      "bridge %s", msg, name, port->bridge->name);
+        } else {
+            ctl_fatal("%s because a port named %s already exists", msg, name);
+        }
     }
 
     iface = shash_find_data(&vsctl_ctx->ifaces, name);
     if (iface) {
-        ctl_fatal("%s because an interface named %s already exists "
-                    "on bridge %s", msg, name, iface->port->bridge->name);
+        if (iface->port->bridge) {
+            ctl_fatal("%s because an interface named %s already exists "
+                      "on bridge %s", msg, name, iface->port->bridge->name);
+        } else {
+            ctl_fatal("%s because an interface named %s already exists", msg,
+                      name);
+        }
     }
 
     free(msg);
@@ -935,7 +948,7 @@ find_port(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
     ovs_assert(vsctl_ctx->cache_valid);
 
     port = shash_find_data(&vsctl_ctx->ports, name);
-    if (port && !strcmp(name, port->bridge->name)) {
+    if (port && port->bridge && !strcmp(name, port->bridge->name)) {
         port = NULL;
     }
     if (must_exist && !port) {
@@ -953,7 +966,8 @@ find_iface(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
     ovs_assert(vsctl_ctx->cache_valid);
 
     iface = shash_find_data(&vsctl_ctx->ifaces, name);
-    if (iface && !strcmp(name, iface->port->bridge->name)) {
+    if (iface && iface->port->bridge &&
+        !strcmp(name, iface->port->bridge->name)) {
         iface = NULL;
     }
     if (must_exist && !iface) {

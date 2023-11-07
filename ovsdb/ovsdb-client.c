@@ -250,7 +250,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemon_become_new_user(false);
+    daemon_become_new_user(false, false);
     if (optind >= argc) {
         ovs_fatal(0, "missing command name; use --help for help");
     }
@@ -1232,8 +1232,11 @@ parse_monitor_columns(char *arg, const char *server, const char *database,
         }
         free(nodes);
 
-        add_column(server, ovsdb_table_schema_get_column(table, "_version"),
-                   columns, columns_json);
+        const struct ovsdb_column *version_column =
+                            ovsdb_table_schema_get_column(table, "_version");
+
+        ovs_assert(version_column);
+        add_column(server, version_column, columns, columns_json);
     }
 
     if (!initial || !insert || !delete || !modify) {
@@ -1392,7 +1395,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
 
     daemon_save_fd(STDOUT_FILENO);
     daemon_save_fd(STDERR_FILENO);
-    daemonize_start(false);
+    daemonize_start(false, false);
     if (get_detach()) {
         int error;
 
@@ -1840,7 +1843,7 @@ do_dump(struct jsonrpc *rpc, const char *database,
     struct ovsdb_schema *schema;
     struct json *transaction;
 
-    const struct shash_node *node, **tables;
+    const struct shash_node *node, **tables = NULL;
     size_t n_tables;
     struct ovsdb_table_schema *tschema;
     const struct shash *columns;
@@ -1866,8 +1869,10 @@ do_dump(struct jsonrpc *rpc, const char *database,
             shash_add(&custom_columns, argv[i], node->data);
         }
     } else {
-        tables = shash_sort(&schema->tables);
         n_tables = shash_count(&schema->tables);
+        if (n_tables) {
+            tables = shash_sort(&schema->tables);
+        }
     }
 
     /* Construct transaction to retrieve entire database. */
@@ -2276,7 +2281,7 @@ do_lock(struct jsonrpc *rpc, const char *method, const char *lock)
                                         getting a reply of the previous
                                         request. */
     daemon_save_fd(STDOUT_FILENO);
-    daemonize_start(false);
+    daemonize_start(false, false);
     lock_req_init(&lock_req, method, lock);
 
     if (get_detach()) {

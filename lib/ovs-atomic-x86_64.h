@@ -120,7 +120,6 @@ typedef enum {
 #define IS_LOCKLESS_ATOMIC(OBJECT)                      \
     (sizeof(OBJECT) <= 8 && IS_POW2(sizeof(OBJECT)))
 
-#define ATOMIC_VAR_INIT(VALUE) VALUE
 #define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
 
 /*

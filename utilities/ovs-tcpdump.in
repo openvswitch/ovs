@@ -96,6 +96,10 @@ def _install_dst_if_linux(tap_name, mtu_value=None):
         *(['ip', 'link', 'set', 'dev', str(tap_name), 'up']))
     pipe.wait()
 
+    pipe = _doexec(
+        *(['ip', '-6', 'addr', 'flush', 'dev', str(tap_name)]))
+    pipe.wait()
+
 
 def _remove_dst_if_linux(tap_name):
     _doexec(
@@ -538,6 +542,17 @@ def main():
             print(data.decode('utf-8'))
         raise KeyboardInterrupt
     except KeyboardInterrupt:
+        # If there is a pipe behind ovs-tcpdump (such as ovs-tcpdump
+        # -i eth0 | grep "192.168.1.1"), the pipe is no longer available
+        # after received Ctrl+C.
+        # If we write data to an unavailable pipe, a pipe error will be
+        # reported, so we turn off stdout to avoid subsequent flushing
+        # of data into the pipe.
+        try:
+            sys.stdout.close()
+        except IOError:
+            pass
+
         if pipes.poll() is None:
             pipes.terminate()
 

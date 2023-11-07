@@ -92,6 +92,7 @@ struct netdev_linux {
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
     enum netdev_features supported;  /* Cached from ETHTOOL_GSET. */
+    uint32_t current_speed;          /* Cached from ETHTOOL_GSET. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;

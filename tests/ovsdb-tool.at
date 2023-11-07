@@ -118,11 +118,11 @@ AT_CHECK([[uuidfilt db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | \
 
 dnl Dump out and check the actual database contents.
 on_exit 'kill `cat ovsdb-server.pid`'
-AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
+AT_CHECK([[ovsdb-server --detach --pidfile --log-file --no-chdir --remote=punix:socket db]],
          [0], [stdout], [ignore])
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
          [0], [stdout], [ignore])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -151,11 +151,11 @@ dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same too:
-AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
+AT_CHECK([[ovsdb-server --detach --pidfile --log-file --no-chdir --remote=punix:socket db]],
          [0], [stdout], [ignore])
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
          [0], [stdout], [ignore])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -196,8 +196,8 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
-  [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:socket db],
+  [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -210,7 +210,7 @@ _uuid                                name  number
 <4> two   2
 <5> zero  0
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 dnl Now convert the database in-place.
 touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
@@ -220,8 +220,8 @@ dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the removed column:
-AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
-  [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:socket db],
+  [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -234,7 +234,7 @@ _uuid                                number
 <4> 4
 <5> 5
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool convert -- adding a column])
@@ -262,8 +262,8 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
-  [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:socket db],
+  [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -276,7 +276,7 @@ _uuid                                number
 <4> 4
 <5> 5
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 dnl Now convert the database in-place.
 touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
@@ -286,8 +286,8 @@ dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the added column:
-AT_CHECK([[ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db]],
-  [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:socket db],
+  [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore])
 AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
@@ -300,7 +300,7 @@ _uuid                                name number
 <4> ""   4
 <5> ""   5
 ])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool unsupported cluster operations])
@@ -446,7 +446,7 @@ AT_CHECK(
 # Dump the data.
 AT_CHECK([ovsdb-server -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
 AT_CHECK([ovsdb-client dump > expout])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 
 # Create a clustered database from the standalone one.
 ovsdb-tool create-cluster db2 db1 unix:s1.raft
@@ -455,7 +455,7 @@ ovsdb-tool create-cluster db2 db1 unix:s1.raft
 AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db2])
 AT_CHECK([ovsdb_client_wait ordinals connected])
 AT_CHECK([ovsdb-client dump > dump2])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 
 # Make sure that the clustered data matched the standalone data.
 AT_CHECK([cat dump2], [0], [expout])
@@ -465,6 +465,7 @@ AT_SETUP([ovsdb-tool convert-to-standalone])
 AT_KEYWORDS([ovsdb file positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create-cluster db schema unix:s1.raft], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db >/dev/null 2>&1])
 for txn in m4_foreach([txn], [[[["ordinals",
       {"op": "insert",
@@ -481,7 +482,7 @@ done
 AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket > clusterdump])
-AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVSDB_SERVER_SHUTDOWN
 
 # Convert to standalone database from clustered database.
 AT_CHECK(ovsdb-tool cluster-to-standalone db1 db)
@@ -493,8 +494,76 @@ AT_CHECK([ovsdb-tool db-is-standalone db1])
 AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
 AT_CHECK([ovsdb_client_wait ordinals connected])
 AT_CHECK([ovsdb-client dump  > standalonedump])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVSDB_SERVER_SHUTDOWN
 
 # Make sure both standalone and cluster db data matches.
+AT_CHECK([diff standalonedump clusterdump])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool convert-to-standalone after schema conversion])
+AT_KEYWORDS([ovsdb file positive])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create-cluster db schema unix:s1.raft], [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket dnl
+                       --log-file db >/dev/null 2>&1])
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+dnl Change the schema.
+AT_CHECK([sed 's/5\.1\.3/5.1.4/' < schema > schema2])
+AT_CHECK([sed -i'back' -e '/.*"number":.*/a \
+           "is_seven": {"type": "boolean"},
+           ' schema2])
+
+dnl Convert the database.
+AT_CHECK([ovsdb-client convert unix:socket schema2])
+
+dnl Add a new row with a new column.
+AT_CHECK([ovsdb-client transact unix:socket dnl
+  '[["ordinals",
+     {"op": "insert",
+      "table": "ordinals",
+      "row": {"number": 7, "name": "seven", "is_seven": true}
+     }]]'], [0], [ignore], [ignore])
+
+AT_CHECK([ovsdb-client dump unix:socket > clusterdump])
+
+AT_CHECK([uuidfilt clusterdump], [0], [dnl
+ordinals table
+_uuid                                is_seven name  number
+------------------------------------ -------- ----- ------
+<0> false    one   1
+<1> false    two   2
+<2> false    zero  0
+<3> true     seven 7
+])
+
+OVSDB_SERVER_SHUTDOWN
+
+dnl Convert to standalone database from clustered database.
+AT_CHECK(ovsdb-tool cluster-to-standalone db1 db)
+
+dnl Check it's a standalone db.
+AT_CHECK([ovsdb-tool db-is-standalone db1])
+
+dnl Dump the standalone db data.
+AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --detach --no-chdir dnl
+                       --pidfile --log-file --remote=punix:db.sock db1])
+AT_CHECK([ovsdb_client_wait ordinals connected])
+AT_CHECK([ovsdb-client dump > standalonedump])
+OVSDB_SERVER_SHUTDOWN
+
+dnl Make sure both standalone and cluster db data matches.
 AT_CHECK([diff standalonedump clusterdump])
 AT_CLEANUP

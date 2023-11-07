@@ -101,12 +101,20 @@ core cycles for each Rx queue::
 
 .. note::
 
-   A history of one minute is recorded and shown for each Rx queue to allow for
-   traffic pattern spikes. Any changes in the Rx queue's PMD core cycles usage,
-   due to traffic pattern or reconfig changes, will take one minute to be fully
-   reflected in the stats.
+   By default a history of one minute is recorded and shown for each Rx queue
+   to allow for traffic pattern spikes. Any changes in the Rx queue's PMD core
+   cycles usage, due to traffic pattern or reconfig changes, will take one
+   minute to be fully reflected in the stats by default.
 
-   .. versionchanged:: 2.6.0
+PMD thread usage of an Rx queue can be displayed for a shorter period of time,
+from the last 5 seconds up to the default 60 seconds in 5 second steps.
+
+To see the port/Rx queue assignment and the last 5 secs of measured usage
+history of PMD core cycles for each Rx queue::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-show -secs 5
+
+.. versionchanged:: 2.6.0
 
       The ``pmd-rxq-show`` command was added in OVS 2.6.0.
 
@@ -114,6 +122,11 @@ core cycles for each Rx queue::
 
    A ``overhead`` statistics is shown per PMD: it represents the number of
    cycles inherently consumed by the OVS PMD processing loop.
+
+.. versionchanged:: 3.1.0
+
+      The ``-secs`` parameter was added to the dpif-netdev/pmd-rxq-show
+      command.
 
 Rx queue to PMD assignment takes place whenever there are configuration changes
 or can be triggered by using::
@@ -278,10 +291,10 @@ If a PMD core is detected to be above the load threshold and the minimum
 pre-requisites are met, a dry-run using the current PMD assignment algorithm is
 performed.
 
-The current variance of load between the PMD cores and estimated variance from
-the dry-run are both calculated. If the estimated dry-run variance is improved
-from the current one by the variance threshold, a new Rx queue to PMD
-assignment will be performed.
+For each numa node, the current variance of load between the PMD cores and
+estimated variance from the dry-run are both calculated. If any numa's
+estimated dry-run variance is improved from the current one by the variance
+threshold, a new Rx queue to PMD assignment will be performed.
 
 For example, to set the variance improvement threshold to 40%::
 
@@ -310,6 +323,61 @@ where ``<interval>`` is a value in minutes. The default interval is 1 minute.
 A user can use this option to set a minimum frequency of Rx queue to PMD
 reassignment due to PMD Auto Load Balance. For example, this could be set
 (in min) such that a reassignment is triggered at most every few hours.
+
+PMD load based sleeping
+-----------------------
+
+PMD threads constantly poll Rx queues which are assigned to them. In order to
+reduce the CPU cycles they use, they can sleep for small periods of time
+when there is no load or very-low load on all the Rx queues they poll.
+
+This can be enabled by setting the max requested sleep time (in microseconds)
+for a PMD thread::
+
+    $ ovs-vsctl set open_vswitch . other_config:pmd-sleep-max=50
+
+.. note::
+
+    Previous config name 'pmd-maxsleep' is deprecated and will be removed in a
+    future release.
+
+With a non-zero max value a PMD may request to sleep by an incrementing amount
+of time up to the maximum time. If at any point the threshold of at least half
+a batch of packets (i.e. 16) is received from an Rx queue that the PMD is
+polling is met, the requested sleep time will be reset to 0. At that point no
+sleeps will occur until the no/low load conditions return.
+
+Sleeping in a PMD thread will mean there is a period of time when the PMD
+thread will not process packets. Sleep times requested are not guaranteed
+and can differ significantly depending on system configuration. The actual
+time not processing packets will be determined by the sleep and processor
+wake-up times and should be tested with each system configuration.
+
+The current configuration of the PMD load based sleeping can be shown with::
+
+    $ ovs-appctl dpif-netdev/pmd-sleep-show
+
+Sleep time statistics for 10 secs can be seen with::
+
+    $ ovs-appctl dpif-netdev/pmd-stats-clear \
+        && sleep 10 && ovs-appctl dpif-netdev/pmd-perf-show
+
+Example output, showing that during the last 10 seconds, 74.5% of iterations
+had a sleep of some length. The total amount of sleep time was 9.06 seconds
+and the average sleep time where a sleep was requested was 9 microseconds::
+
+   - sleep iterations:       977037  ( 74.5 % of iterations)
+   Sleep time (us):         9068841  (  9 us/iteration avg.)
+
+Any potential power saving from PMD load based sleeping is dependent on the
+system configuration (e.g. enabling processor C-states) and workloads.
+
+.. note::
+
+    If there is a sudden spike of packets while the PMD thread is sleeping and
+    the processor is in a low-power state it may result in some lost packets or
+    extra latency before the PMD thread returns to processing packets at full
+    rate.
 
 .. _ovs-vswitchd(8):
     http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html

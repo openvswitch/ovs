@@ -36,7 +36,7 @@ struct versions {
 };
 
 #define VERSIONS_INITIALIZER(ADD, REMOVE) \
-    (struct versions){ ADD, ATOMIC_VAR_INIT(REMOVE) }
+    (struct versions){ ADD, REMOVE }
 
 static inline void
 versions_set_remove_version(struct versions *versions, ovs_version_t version)

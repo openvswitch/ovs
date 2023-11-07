@@ -423,10 +423,6 @@ Helpful Tools
 There are a number of tools, online and offline, which can be used to preview
 documents are you edit them:
 
-- `rst.ninjs.org <http://rst.ninjs.org/>`__
-
-  An online rST editor/previewer
-
 - `ReText <https://github.com/retext-project/retext>`__
 
   A simple but powerful editor for Markdown and reStructuredText. ReText is

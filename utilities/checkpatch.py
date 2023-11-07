@@ -195,7 +195,7 @@ skip_signoff_check = False
 #
 # Python isn't checked as flake8 performs these checks during build.
 line_length_ignore_list = re.compile(
-    r'\.(am|at|etc|in|m4|mk|patch|py)$|^debian/.*$')
+    r'\.(am|at|etc|in|m4|mk|patch|py|yml)$|^debian/.*$')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
@@ -408,8 +408,14 @@ def check_spelling(line, comment):
     if not spell_check_dict or not spellcheck:
         return False
 
+    if line.startswith('Fixes: '):
+        return False
+
     words = filter_comments(line, True) if comment else line
     words = words.replace(':', ' ').split(' ')
+
+    flagged_words = []
+    num_suggestions = 3
 
     for word in words:
         skip = False
@@ -435,9 +441,15 @@ def check_spelling(line, comment):
                 skip = True
 
             if not skip:
-                print_warning("Check for spelling mistakes (e.g. \"%s\")"
-                              % strword)
-                return True
+                flagged_words.append(strword)
+
+    if len(flagged_words) > 0:
+        for mistake in flagged_words:
+            print_warning("Possible misspelled word: \"%s\"" % mistake)
+            print("Did you mean: ",
+                  spell_check_dict.suggest(mistake)[:num_suggestions])
+
+        return True
 
     return False
 
@@ -662,18 +674,23 @@ checks += [
 
 easy_to_misuse_api = [
         ('ovsrcu_barrier',
-            'lib/ovs-rcu.c',
+            ['lib/ovs-rcu.c'],
             'Are you sure you need to use ovsrcu_barrier(), '
             'in most cases ovsrcu_synchronize() will be fine?'),
+        ('netdev_features_to_bps',
+            ['lib/netdev.c', 'lib/netdev-bsd.c', 'lib/netdev-linux.c'],
+            'Are you sure you need to use netdev_features_to_bps()? '
+            'If you want to retrieve the current and/or maximum link speed, '
+            'consider using netdev_get_speed() instead.'),
         ]
 
 checks += [
     {'regex': r'(\.c)(\.in)?$',
-     'match_name': lambda x: x != location,
+     'match_name': lambda x, loc=locations: x not in loc,
      'prereq': lambda x: not is_comment_line(x),
      'check': regex_function_factory(function_name),
      'print': regex_warn_factory(description)}
-    for (function_name, location, description) in easy_to_misuse_api]
+    for (function_name, locations, description) in easy_to_misuse_api]
 
 
 def regex_operator_factory(operator):
@@ -778,6 +795,36 @@ def run_file_checks(text):
             check['check'](text)
 
 
+def run_subject_checks(subject, spellcheck=False):
+    warnings = False
+
+    if spellcheck and check_spelling(subject, False):
+        warnings = True
+
+    summary = subject[subject.rindex(': ') + 2:]
+    area_summary = subject[subject.index(': ') + 2:]
+    area_summary_len = len(area_summary)
+    if area_summary_len > 70:
+        print_warning("The subject, '<area>: <summary>', is over 70 "
+                      "characters, i.e., %u." % area_summary_len)
+        warnings = True
+
+    if summary[0].isalpha() and summary[0].islower():
+        print_warning(
+            "The subject summary should start with a capital.")
+        warnings = True
+
+    if subject[-1] not in [".", "?", "!"]:
+        print_warning(
+            "The subject summary should end with a dot.")
+        warnings = True
+
+    if warnings:
+        print(subject)
+
+    return warnings
+
+
 def ovs_checkpatch_parse(text, filename, author=None, committer=None):
     global print_file_name, total_line, checking_file, \
         empty_return_check_state
@@ -798,6 +845,7 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
         r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
     is_author = re.compile(r'^(Author|From): (.*)$', re.I | re.M | re.S)
     is_committer = re.compile(r'^(Commit: )(.*)$', re.I | re.M | re.S)
+    is_subject = re.compile(r'^(Subject: )(.*)$', re.I | re.M | re.S)
     is_signature = re.compile(r'^(Signed-off-by: )(.*)$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'^(Co-authored-by: )(.*)$',
@@ -897,6 +945,8 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                 committer = is_committer.match(line).group(2)
             elif is_author.match(line):
                 author = is_author.match(line).group(2)
+            elif is_subject.match(line):
+                run_subject_checks(line, spellcheck)
             elif is_signature.match(line):
                 m = is_signature.match(line)
                 signatures.append(m.group(2))
@@ -1015,6 +1065,19 @@ def ovs_checkpatch_file(filename):
     result = ovs_checkpatch_parse(part.get_payload(decode=False), filename,
                                   mail.get('Author', mail['From']),
                                   mail['Commit'])
+
+    if not mail['Subject'] or not mail['Subject'].strip():
+        if mail['Subject']:
+            mail.replace_header('Subject', sys.argv[-1])
+        else:
+            mail.add_header('Subject', sys.argv[-1])
+
+        print("Subject missing! Your provisional subject is",
+              mail['Subject'])
+
+    if run_subject_checks('Subject: ' + mail['Subject'], spellcheck):
+        result = True
+
     ovs_checkpatch_print_result()
     return result
 

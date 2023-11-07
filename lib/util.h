@@ -593,6 +593,8 @@ ovs_u128_is_superset(ovs_u128 super, ovs_u128 sub)
 
 void xsleep(unsigned int seconds);
 void xnanosleep(uint64_t nanoseconds);
+void xnanosleep_no_quiesce(uint64_t nanoseconds);
+void set_timer_resolution(unsigned long nanoseconds);
 
 bool is_stdout_a_tty(void);
 

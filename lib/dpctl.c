@@ -41,6 +41,7 @@
 #include "netlink.h"
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/ofp-ct.h"
 #include "packets.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
@@ -335,6 +336,12 @@ dpctl_add_if(int argc OVS_UNUSED, const char *argv[],
                 value = "";
             }
 
+            if (!key) {
+                dpctl_error(dpctl_p, 0, "Invalid option format");
+                error = EINVAL;
+                goto next;
+            }
+
             if (!strcmp(key, "type")) {
                 type = value;
             } else if (!strcmp(key, "port_no")) {
@@ -451,6 +458,12 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             value = strtok_r(NULL, "", &save_ptr_2);
             if (!value) {
                 value = "";
+            }
+
+            if (!key) {
+                dpctl_error(dpctl_p, 0, "Invalid option format");
+                error = EINVAL;
+                goto next_destroy_args;
             }
 
             if (!strcmp(key, "type")) {
@@ -672,7 +685,7 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
     }
 
     for (int i = 0; i < n_port_nos; i++) {
-        if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port)) {
+        if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port, true)) {
             continue;
         }
 
@@ -748,6 +761,10 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
                 print_human_size(dpctl_p, s.rx_bytes);
                 print_stat(dpctl_p, "  TX bytes:", s.tx_bytes);
                 print_human_size(dpctl_p, s.tx_bytes);
+                dpctl_print(dpctl_p, "\n");
+
+                print_stat(dpctl_p, "    UPCALL packets:", s.upcall_packets);
+                print_stat(dpctl_p, " errors:", s.upcall_errors);
                 dpctl_print(dpctl_p, "\n");
             } else {
                 dpctl_print(dpctl_p, ", could not retrieve stats (%s)",
@@ -1703,41 +1720,112 @@ dpctl_dump_conntrack(int argc, const char *argv[],
 }
 
 static int
+dpctl_dump_conntrack_exp(int argc, const char *argv[],
+                         struct dpctl_params *dpctl_p)
+{
+    struct ct_dpif_dump_state *dump;
+    uint16_t zone, *pzone = NULL;
+    struct ct_dpif_exp cte;
+    struct dpif *dpif;
+    int error;
+
+    if (argc > 1 && ovs_scan(argv[argc - 1], "zone=%"SCNu16, &zone)) {
+        pzone = &zone;
+        argc--;
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = ct_exp_dpif_dump_start(dpif, &dump, pzone);
+    if (error) {
+        dpctl_error(dpctl_p, error, "starting conntrack expectations dump");
+        dpif_close(dpif);
+        return error;
+    }
+
+    while (!(error = ct_exp_dpif_dump_next(dump, &cte))) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+
+        ct_dpif_format_exp_entry(&cte, &s);
+
+        dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
+        ds_destroy(&s);
+    }
+    if (error == EOF) {
+        error = 0;
+    } else if (error) {
+        dpctl_error(dpctl_p, error, "dumping conntrack expectation");
+    }
+
+    ct_exp_dpif_dump_done(dump);
+    dpif_close(dpif);
+
+    return error;
+}
+
+static int
 dpctl_flush_conntrack(int argc, const char *argv[],
                       struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif = NULL;
-    struct ct_dpif_tuple tuple, *ptuple = NULL;
+    struct ofp_ct_match match = {0};
     struct ds ds = DS_EMPTY_INITIALIZER;
     uint16_t zone, *pzone = NULL;
     int error;
     int args = argc - 1;
+    int zone_pos = 1;
 
-    /* Parse ct tuple */
-    if (args && ct_dpif_parse_tuple(&tuple, argv[args], &ds)) {
-        ptuple = &tuple;
+    if (dp_arg_exists(argc, argv)) {
         args--;
+        zone_pos = 2;
     }
 
-    /* Parse zone */
-    if (args && ovs_scan(argv[args], "zone=%"SCNu16, &zone)) {
+    /* Parse zone. */
+    if (args && !strncmp(argv[zone_pos], "zone=", 5)) {
+        if (!ovs_scan(argv[zone_pos], "zone=%"SCNu16, &zone)) {
+            ds_put_cstr(&ds, "failed to parse zone");
+            error = EINVAL;
+            goto error;
+        }
         pzone = &zone;
         args--;
     }
 
-    /* Report error if there are more than one unparsed argument. */
-    if (args > 1) {
+    /* Parse ct tuples. */
+    for (int i = 0; i < 2; i++) {
+        if (!args) {
+            break;
+        }
+
+        struct ofp_ct_tuple *tuple =
+            i ? &match.tuple_reply : &match.tuple_orig;
+        const char *arg = argv[argc - args];
+
+        if (arg[0] && !ofp_ct_tuple_parse(tuple, arg, &ds, &match.ip_proto,
+                                          &match.l3_type)) {
+            error = EINVAL;
+            goto error;
+        }
+        args--;
+    }
+
+    /* Report error if there is more than one unparsed argument. */
+    if (args > 0) {
         ds_put_cstr(&ds, "invalid arguments");
         error = EINVAL;
         goto error;
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    error = opt_dpif_open(argc, argv, dpctl_p, 5, &dpif);
     if (error) {
+        dpctl_error(dpctl_p, error, "Cannot open dpif");
         return error;
     }
 
-    error = ct_dpif_flush(dpif, pzone, ptuple);
+    error = ct_dpif_flush(dpif, pzone, &match);
     if (!error) {
         dpif_close(dpif);
         return 0;
@@ -2177,7 +2265,7 @@ parse_ct_limit_zones(const char *argv, struct ovs_list *zone_limits,
     argcopy = xstrdup(argv + 5);
     next_zone = strtok_r(argcopy, ",", &save_ptr);
 
-    do {
+    while (next_zone != NULL) {
         if (ovs_scan(next_zone, "%"SCNu16, &zone)) {
             ct_dpif_push_zone_limit(zone_limits, zone, 0, 0);
         } else {
@@ -2185,7 +2273,8 @@ parse_ct_limit_zones(const char *argv, struct ovs_list *zone_limits,
             free(argcopy);
             return EINVAL;
         }
-    } while ((next_zone = strtok_r(NULL, ",", &save_ptr)) != NULL);
+        next_zone = strtok_r(NULL, ",", &save_ptr);
+    }
 
     free(argcopy);
     return 0;
@@ -2267,6 +2356,65 @@ out:
     ds_destroy(&ds);
     ct_dpif_free_zone_limits(&list_query);
     ct_dpif_free_zone_limits(&list_reply);
+    dpif_close(dpif);
+    return error;
+}
+
+static int
+dpctl_ct_get_sweep(int argc, const char *argv[],
+                   struct dpctl_params *dpctl_p)
+{
+    uint32_t sweep_ms = 0;
+    struct dpif *dpif;
+
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+    if (error) {
+        return error;
+    }
+
+    error = ct_dpif_sweep(dpif, &sweep_ms);
+    if (error) {
+        dpctl_error(dpctl_p, error, "failed to get the sweep interval");
+    } else {
+        dpctl_print(dpctl_p, "%"PRIu32, sweep_ms);
+    }
+
+    dpif_close(dpif);
+    return error;
+}
+
+static int
+dpctl_ct_set_sweep(int argc, const char *argv[],
+                   struct dpctl_params *dpctl_p)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    uint32_t sweep_ms = 0;
+    struct dpif *dpif;
+
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    if (error) {
+        return error;
+    }
+
+    if (!ovs_scan(argv[argc - 1], "%"SCNu32, &sweep_ms) ||
+        sweep_ms == 0) {
+        ds_put_format(&ds, "invalid sweep value");
+        error = EINVAL;
+        goto error;
+    }
+
+    error = ct_dpif_sweep(dpif, &sweep_ms);
+    if (!error) {
+        dpctl_print(dpctl_p, "setting sweep interval successful\n");
+        goto out;
+    }
+
+    ds_put_format(&ds, "failed to set the sweep interval");
+
+error:
+    dpctl_error(dpctl_p, error, "%s", ds_cstr(&ds));
+    ds_destroy(&ds);
+out:
     dpif_close(dpif);
     return error;
 }
@@ -2862,8 +3010,10 @@ static const struct dpctl_command all_commands[] = {
       0, 1, dpctl_offload_stats_show, DP_RO },
     { "dump-conntrack", "[-m] [-s] [dp] [zone=N]",
       0, 4, dpctl_dump_conntrack, DP_RO },
-    { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
-      dpctl_flush_conntrack, DP_RW },
+    { "dump-conntrack-exp", "[dp] [zone=N]",
+      0, 2, dpctl_dump_conntrack_exp, DP_RO },
+    { "flush-conntrack", "[dp] [zone=N] [ct-orig-tuple] [ct-reply-tuple]",
+      0, 4, dpctl_flush_conntrack, DP_RW },
     { "cache-get-size", "[dp]", 0, 1, dpctl_cache_get_size, DP_RO },
     { "cache-set-size", "dp cache <size>", 3, 3, dpctl_cache_set_size, DP_RW },
     { "ct-stats-show", "[dp] [zone=N]",
@@ -2884,6 +3034,8 @@ static const struct dpctl_command all_commands[] = {
         DP_RO },
     { "ct-get-limits", "[dp] [zone=N1[,N2]...]", 0, 2, dpctl_ct_get_limits,
         DP_RO },
+    { "ct-get-sweep-interval", "[dp]", 0, 1, dpctl_ct_get_sweep, DP_RO },
+    { "ct-set-sweep-interval", "[dp] ms", 1, 2, dpctl_ct_set_sweep, DP_RW },
     { "ipf-set-enabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_enabled, DP_RW },
     { "ipf-set-disabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_disabled, DP_RW },
     { "ipf-set-min-frag", "[dp] v4|v6 minfragment", 2, 3,

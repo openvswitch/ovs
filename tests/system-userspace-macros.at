@@ -106,11 +106,24 @@ m4_define([CHECK_CONNTRACK_NAT])
 #
 m4_define([CHECK_CONNTRACK_ZEROIP_SNAT])
 
+# CHECK_CONNTRACK_SCTP()
+#
+# Perform requirements checks for running conntrack SCTP. The userspace
+# datapath has no dependency, so no check is required.
+#
+m4_define([CHECK_CONNTRACK_SCTP])
+
 # CHECK_CONNTRACK_TIMEOUT()
 #
 # Perform requirements checks for running conntrack customized timeout tests.
 #
 m4_define([CHECK_CONNTRACK_TIMEOUT])
+
+# CHECK_CONNTRACK_DUMP_EXPECTATIONS()
+#
+# Perform requirements checks for dumping conntrack expectations.
+#
+m4_define([CHECK_CONNTRACK_DUMP_EXPECTATIONS])
 
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
 #
@@ -301,6 +314,12 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([:])
 ])
 
+# OVS_CHECK_SRV6()
+m4_define([OVS_CHECK_SRV6],
+    [AT_SKIP_IF([! ip -6 route add fc00::1/96 encap seg6 mode encap dev lo 2>&1 >/dev/null])
+     AT_CHECK([ip -6 route del fc00::1/96 2>&1 >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
 # CHECK_LATER_IPV6_FRAGMENTS()
 #
 # Userspace is parsing later IPv6 fragments correctly.
@@ -322,6 +341,19 @@ m4_define([VSCTL_ADD_DATAPATH_TABLE],
 # or necessary for the userspace datapath as it is checking for a kernel
 # specific regression.
 m4_define([CHECK_L3L4_CONNTRACK_REASM],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_NO_TC_OFFLOAD
+#
+# Userspace tests do not use TC offload.
+m4_define([CHECK_NO_TC_OFFLOAD])
+
+# OVS_CHECK_BAREUDP()
+#
+# The userspace datapath does not support bareudp tunnels.
+m4_define([OVS_CHECK_BAREUDP],
 [
     AT_SKIP_IF([:])
 ])

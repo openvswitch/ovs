@@ -329,6 +329,7 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow10 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.0 "instruction" translations])
@@ -359,6 +360,7 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-instructions OpenFlow10 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.1 action translation])
@@ -502,6 +504,7 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow11 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.1 instruction translation])
@@ -737,6 +740,7 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow12 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 dnl Our primary goal here is to verify OpenFlow 1.3-specific changes,
@@ -798,6 +802,7 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow13 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 dnl Our primary goal here is to verify that OpenFlow 1.5-specific changes,
@@ -827,17 +832,20 @@ AT_CAPTURE_FILE([experr])
 AT_CHECK(
   [ovs-ofctl '-vPATTERN:console:%c|%p|%m' parse-actions OpenFlow15 < input.txt],
   [0], [expout], [experr])
+AT_CHECK([cat expout | grep 'actions=' | test-ofparse.py])
 AT_CLEANUP
 
 AT_SETUP([ofp-actions - inconsistent MPLS actions])
 OVS_VSWITCHD_START
 dnl OK: Use fin_timeout action on TCP flow
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=fin_timeout(idle_timeout=1)'])
+AT_CHECK([echo 'tcp actions=fin_timeout(idle_timeout=1)' | test-ofparse.py])
 dnl Bad: Use fin_timeout action on TCP flow that has been converted to MPLS
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=push_mpls:0x8847,fin_timeout(idle_timeout=1)'],
          [1], [], [dnl
 ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed flow formats (OpenFlow11)
 ])
+AT_CHECK([echo 'tcp actions=push_mpls:0x8847,fin_timeout(idle_timeout=1)' | test-ofparse.py])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -853,6 +861,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
 NXST_FLOW reply:
  mpls actions=load:0xa->OXM_OF_MPLS_LABEL[[]]
 ])
+AT_CHECK([echo 'mpls actions=set_field:10->mpls_label' | test-ofparse.py])
+AT_CHECK([echo 'mpls actions=load:0xa->OXM_OF_MPLS_LABEL[[]]'| test-ofparse.py])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -862,14 +872,17 @@ OVS_VSWITCHD_START
 dnl OpenFlow 1.0 has an "enqueue" action.  For OpenFlow 1.1+, we translate
 dnl it to a series of actions that accomplish the same thing.
 AT_CHECK([ovs-ofctl -O OpenFlow10 add-flow br0 'actions=enqueue(123,456)'])
+AT_CHECK([echo 'actions=enqueue(123,456)' | test-ofparse.py])
 AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
 NXST_FLOW reply:
  actions=enqueue:123:456
 ])
+AT_CHECK([echo 'actions=enqueue:123:456' | test-ofparse.py])
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.3):
  reset_counts actions=set_queue:456,output:123,pop_queue
 ])
+AT_CHECK([echo 'actions=set_queue:456,output:123,pop_queue' | test-ofparse.py])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -887,6 +900,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.1):
  ip actions=mod_nw_ttl:123
 ])
+AT_CHECK([echo 'ip,actions=mod_nw_ttl:123' | test-ofparse.py])
+AT_CHECK([echo 'ip actions=load:0x7b->NXM_NX_IP_TTL[[]]' | test-ofparse.py])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -898,10 +913,12 @@ dnl OpenFlow 1.1, but no other version, has a "mod_nw_ecn" action.
 dnl Check that we translate it properly for OF1.0 and OF1.2.
 dnl (OF1.3+ should be the same as OF1.2.)
 AT_CHECK([ovs-ofctl -O OpenFlow11 add-flow br0 'ip,actions=mod_nw_ecn:2'])
+AT_CHECK([echo 'ip,actions=mod_nw_ecn:2' | test-ofparse.py])
 AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
 NXST_FLOW reply:
  ip actions=load:0x2->NXM_NX_IP_ECN[[]]
 ])
+AT_CHECK([echo 'ip actions=load:0x2->NXM_NX_IP_ECN[[]]' | test-ofparse.py])
 AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.1):
  ip actions=mod_nw_ecn:2
@@ -910,6 +927,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.2):
  ip actions=set_field:2->nw_ecn
 ])
+AT_CHECK([echo 'ip actions=set_field:2->nw_ecn' | test-ofparse.py])
 
 dnl Check that OF1.2+ set_field to set ECN is translated into the OF1.1
 dnl mod_nw_ecn action.

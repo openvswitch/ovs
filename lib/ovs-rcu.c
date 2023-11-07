@@ -170,7 +170,7 @@ ovsrcu_try_quiesce(void)
     ovs_assert(!single_threaded());
     perthread = ovsrcu_perthread_get();
     if (!seq_try_lock()) {
-        perthread->seqno = seq_read_protected(global_seqno);
+        perthread->seqno = seq_read(global_seqno);
         if (perthread->cbset) {
             ovsrcu_flush_cbset__(perthread, true);
         }

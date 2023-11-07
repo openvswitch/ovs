@@ -8,7 +8,7 @@ ovsdb_check_cluster () {
     $schema_func > schema
     schema=`ovsdb-tool schema-name schema`
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [stderr])
-    if test X$local_config == X"yes"; then
+    if test X$local_config = X"yes"; then
         for i in `seq $n`; do
             AT_CHECK([ovsdb-tool create c$i.db $top_srcdir/ovsdb/local-config.ovsschema], [0], [], [stderr])
             local ctxn="[[\"Local_Config\",
@@ -30,7 +30,7 @@ ovsdb_check_cluster () {
     for i in `seq $n`; do
         local remote=punix:s$i.ovsdb
         local config_db=
-        if test X$local_config == X"yes"; then
+        if test X$local_config = X"yes"; then
             remote=db:Local_Config,Config,connections
             config_db=c$i.db
         fi
@@ -104,8 +104,6 @@ ovsdb_test_cluster_disconnect () {
     n=$1
     leader_or_follower=$2
     check_flapping=$3
-    schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-    ordinal_schema > schema
     AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
     cid=`ovsdb-tool db-cid s1.db`
     schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -129,7 +127,7 @@ ovsdb_test_cluster_disconnect () {
     # When a node is disconnected from the cluster, the IDL should disconnect
     # and retry even if it uses a single remote, because the remote IP can be
     # a VIP on a load-balance. So we use single remote to test here.
-    if test $leader_or_follower == "leader"; then
+    if test $leader_or_follower = "leader"; then
         target=1
         shutdown=`seq $(($n/2 + 1)) $n`
         cleanup=`seq $(($n/2))`
@@ -188,13 +186,13 @@ ovsdb_test_cluster_disconnect () {
     count_old=`grep "raft_is_connected: true" raft_is_connected.log | wc -l`
     echo count_old $count_old
 
-    if test X$check_flapping == X"yes"; then
+    if test X$check_flapping = X"yes"; then
         sleep 10
     fi
     # Make sure raft_is_connected didn't flap from false to true.
     count_new=`grep "raft_is_connected: true" raft_is_connected.log | wc -l`
     echo count_new $count_new
-    AT_CHECK([test $count_new == $count_old])
+    AT_CHECK([test $count_new = $count_old])
 
     for i in $cleanup; do
         OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
@@ -221,8 +219,6 @@ AT_SETUP([OVSDB cluster - initial status should be disconnected])
 AT_KEYWORDS([ovsdb server negative unix cluster disconnect])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -260,8 +256,6 @@ AT_SETUP([OVSDB cluster - election timer change])
 AT_KEYWORDS([ovsdb server positive unix cluster timer])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -353,8 +347,6 @@ AT_SETUP([OVSDB cluster - install snapshot RPC])
 AT_KEYWORDS([ovsdb server positive unix cluster snapshot])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -433,8 +425,6 @@ AT_SETUP([OVSDB cluster - follower crash while joining])
 AT_KEYWORDS([ovsdb server negative unix cluster join])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db dnl
               $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
@@ -493,7 +483,7 @@ ovsdb_cluster_failure_test () {
     remote_2=$2
     crash_node=$3
     crash_command=$4
-    if test "$crash_node" == "1"; then
+    if test "$crash_node" = "1"; then
         new_leader=$5
     fi
     log_grep=$6
@@ -536,7 +526,7 @@ ovsdb_cluster_failure_test () {
     # To ensure $new_leader node the new leader, we delay election timer for
     # the other follower.
     if test -n "$new_leader"; then
-        if test "$new_leader" == "2"; then
+        if test "$new_leader" = "2"; then
             delay_election_node=3
         else
             delay_election_node=2
@@ -665,8 +655,6 @@ AT_SETUP([OVSDB cluster - competing candidates])
 AT_KEYWORDS([ovsdb server negative unix cluster competing-candidates])
 
 n=3
-schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
-ordinal_schema > schema
 AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
 cid=`ovsdb-tool db-cid s1.db`
 schema_name=`ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema`
@@ -711,6 +699,49 @@ done
 
 for i in `seq $n`; do
     OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/s$i], [s$i.pid])
+done
+
+AT_CLEANUP
+
+
+AT_SETUP([OVSDB cluster - disruptive server])
+AT_KEYWORDS([ovsdb server negative unix cluster disruptive])
+
+n=3
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster \
+            s1.db $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=$(ovsdb-tool db-cid s1.db)
+schema_name=$(ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema)
+for i in $(seq 2 $n); do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill $(cat *.pid)'
+for i in $(seq $n); do
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off --detach --no-chdir \
+                --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i \
+                --remote=punix:s$i.ovsdb s$i.db])
+done
+for i in $(seq $n); do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+# An unstable follower shouldn't disrupt the healthy cluster - shouldn't
+# trigger term change.
+AT_CHECK([ovs-appctl -t $(pwd)/s2 cluster/failure-test stop-raft-rpc], [0], [ignore])
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s2 cluster/status $schema_name | grep "Role: candidate"])
+AT_CHECK([ovs-appctl -t $(pwd)/s2 cluster/failure-test clear], [0], [ignore])
+
+# Should step back to follower.
+OVS_WAIT_UNTIL([ovs-appctl -t $(pwd)/s2 cluster/status $schema_name | grep "Role: follower"])
+
+# No term change.
+for i in $(seq $n); do
+    AT_CHECK([ovs-appctl -t $(pwd)/s$i cluster/status $schema_name | grep "Term: 1"], [0], [ignore])
+done
+
+for i in $(seq $n); do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s$i], [s$i.pid])
 done
 
 AT_CLEANUP

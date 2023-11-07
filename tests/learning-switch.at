@@ -1,0 +1,23 @@
+AT_BANNER([learning switch])
+
+### -----------------------------------------------------------------
+###   learning switch OpenFlow15 test case
+### -----------------------------------------------------------------
+
+AT_SETUP([learning switch - OpenFlow15])
+dnl Start ovs-testcontroller
+AT_CHECK([ovs-testcontroller --no-chdir --detach punix:controller --pidfile -v ptcp:], [0], [ignore])
+dnl Start ovs
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    set-controller br0 tcp:127.0.0.1:6653])
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+AT_CHECK([kill `cat ovs-testcontroller.pid`])
+
+OVS_WAIT_UNTIL([! test -e controller])
+OVS_VSWITCHD_STOP(["/cannot find route for controller/d"])
+AT_CLEANUP

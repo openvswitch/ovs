@@ -17,6 +17,7 @@
 #include <config.h>
 #include "simap.h"
 #include "hash.h"
+#include "util.h"
 
 static size_t hash_name(const char *, size_t length);
 static struct simap_node *simap_find__(const struct simap *,
@@ -84,6 +85,7 @@ simap_is_empty(const struct simap *simap)
 size_t
 simap_count(const struct simap *simap)
 {
+    ovs_assert(simap);
     return hmap_count(&simap->map);
 }
 

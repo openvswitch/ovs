@@ -127,7 +127,7 @@ static struct ovsdb_cs_ops relay_cs_ops = {
 void
 ovsdb_relay_add_db(struct ovsdb *db, const char *remote,
                    schema_change_callback schema_change_cb,
-                   void *schema_change_aux)
+                   void *schema_change_aux, int probe_interval)
 {
     struct relay_ctx *ctx;
 
@@ -152,8 +152,21 @@ ovsdb_relay_add_db(struct ovsdb *db, const char *remote,
     shash_add(&relay_dbs, db->name, ctx);
     ovsdb_cs_set_leader_only(ctx->cs, false);
     ovsdb_cs_set_remote(ctx->cs, remote, true);
+    ovsdb_cs_set_probe_interval(ctx->cs, probe_interval);
 
     VLOG_DBG("added database: %s, %s", db->name, remote);
+}
+
+/* Updates the probe interval for all relay connections to the specified
+ * value. */
+void
+ovsdb_relay_set_probe_interval(int probe_interval)
+{
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &relay_dbs) {
+        struct relay_ctx *ctx = node->data;
+        ovsdb_cs_set_probe_interval(ctx->cs, probe_interval);
+    }
 }
 
 void
@@ -301,6 +314,8 @@ static void
 ovsdb_relay_parse_update(struct relay_ctx *ctx,
                          const struct ovsdb_cs_update_event *update)
 {
+    struct ovsdb_error *error = NULL;
+
     if (!ctx->db) {
         return;
     }
@@ -308,15 +323,27 @@ ovsdb_relay_parse_update(struct relay_ctx *ctx,
     if (update->monitor_reply && ctx->new_schema) {
         /* There was a schema change.  Updating a database with a new schema
          * before processing monitor reply with the new data. */
-        ctx->schema_change_cb(ctx->db, ctx->new_schema,
-                              ctx->schema_change_aux);
+        error = ctx->schema_change_cb(ctx->db, ctx->new_schema, &UUID_ZERO,
+                                      false, ctx->schema_change_aux);
+        if (error) {
+            /* Should never happen, but handle this case anyway. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            char *s = ovsdb_error_to_string_free(error);
+
+            VLOG_ERR_RL(&rl, "%s", s);
+            free(s);
+
+            ovsdb_cs_flag_inconsistency(ctx->cs);
+            return;
+        }
         ovsdb_schema_destroy(ctx->new_schema);
         ctx->new_schema = NULL;
     }
 
     struct ovsdb_cs_db_update *du;
-    struct ovsdb_error *error = ovsdb_cs_parse_db_update(update->table_updates,
-                                                         update->version, &du);
+
+    error = ovsdb_cs_parse_db_update(update->table_updates,
+                                     update->version, &du);
     if (!error) {
         if (update->clear) {
             error = ovsdb_relay_clear(ctx->db);
@@ -386,6 +413,7 @@ ovsdb_relay_run(void)
             }
             ovsdb_cs_event_destroy(event);
         }
+        ovsdb_txn_history_run(ctx->db);
     }
 }
 

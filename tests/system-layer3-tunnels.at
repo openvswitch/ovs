@@ -34,15 +34,15 @@ AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.2 action=mod_dl_
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -83,15 +83,15 @@ AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.2 action=mod_dl_
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2])
 
 dnl First, check the underlay
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
 dnl Okay, now check the overlay with different packet sizes
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
-NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
@@ -154,7 +154,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([layer3 - ping over MPLS Bareudp])
-OVS_CHECK_MIN_KERNEL(5, 7)
+OVS_CHECK_BAREUDP()
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -191,18 +191,18 @@ AT_CHECK([ovs-vsctl add-port br1 patch1])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows0.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br1 flows1.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([layer3 - ping over Bareudp])
-OVS_CHECK_MIN_KERNEL(5, 7)
+OVS_CHECK_BAREUDP()
 OVS_TRAFFIC_VSWITCHD_START([_ADD_BR([br1])])
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -239,11 +239,11 @@ AT_CHECK([ovs-vsctl add-port br1 patch1])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows0.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br1 flows1.txt])
 
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 OVS_TRAFFIC_VSWITCHD_STOP

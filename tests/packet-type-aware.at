@@ -327,7 +327,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(gre_sys)
-tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:03)),n3
+recirc_id(0),tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:03)),n3
 ])
 
 # Clear up megaflow cache
@@ -345,7 +345,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p1)),set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(gre_sys)
-tunnel(src=20.0.0.1,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=46:1e:7d:1a:95:a1),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:02)),n2
+recirc_id(0),tunnel(src=20.0.0.1,dst=20.0.0.2,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=46:1e:7d:1a:95:a1),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:02)),n2
 ])
 
 # Clear up megaflow cache
@@ -363,7 +363,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p2)),set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(gre_sys)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=3a:6d:d2:09:9c:ab),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:01)),n1
+recirc_id(0),tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=3a:6d:d2:09:9c:ab),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:01)),n1
 ])
 
 # Clear up megaflow cache
@@ -381,8 +381,8 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p2)),set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(gre_sys)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(gre_sys)
-tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:03)),n3
+recirc_id(0),tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(gre_sys)
+recirc_id(0),tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:03)),n3
 ])
 
 # Clear up megaflow cache
@@ -400,8 +400,8 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br-p3)),set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(gre_sys)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),n1
-tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:1, bytes:84, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br-p2)),set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(gre_sys)
+recirc_id(0),tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),n1
+recirc_id(0),tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:1, bytes:84, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br-p2)),set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(gre_sys)
 ])
 
 # Clear up megaflow cache
@@ -419,7 +419,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(br-p3)),set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(gre_sys)
-tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=46:1e:7d:1a:95:a1),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:02)),n2
+recirc_id(0),tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=46:1e:7d:1a:95:a1),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:98, used:0.0s, actions:set(eth(dst=aa:55:aa:55:00:02)),n2
 ])
 
 ### Check the received packets
@@ -505,7 +505,7 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(n3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br-p3)),set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(gre_sys)
-tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:84, used:0.0s, actions:drop
+recirc_id(0),tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),in_port(gre_sys),packet_type(ns=1,id=0x800),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:84, used:0.0s, actions:drop
 ])
 
 OVS_VSWITCHD_STOP(["/The Open vSwitch kernel module is probably not loaded/d"])
@@ -1020,8 +1020,8 @@ AT_CHECK([
     ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from the main thread:
 recirc_id(0),in_port(p0),packet_type(ns=0,id=0),eth(src=aa:bb:cc:00:00:02,dst=aa:bb:cc:00:00:01),eth_type(0x0800),ipv4(dst=20.0.0.1,proto=47,frag=no), packets:3, bytes:378, used:0.0s, actions:tnl_pop(gre_sys)
-tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x8847),eth_type(0x8847),mpls(label=999/0x0,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:264, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=00:00:00:00:00:00),pop_mpls(eth_type=0x800),recirc(0x1)
-tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0x1),in_port(gre_sys),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(ttl=64,frag=no), packets:3, bytes:294, used:0.0s, actions:set(ipv4(ttl=63)),int-br
+recirc_id(0),tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),in_port(gre_sys),packet_type(ns=1,id=0x8847),eth_type(0x8847),mpls(label=999/0x0,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:264, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=00:00:00:00:00:00),pop_mpls(eth_type=0x800),recirc(0x1)
+recirc_id(0x1),tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),in_port(gre_sys),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=1,ttl=64,frag=no), packets:3, bytes:294, used:0.0s, actions:set(ipv4(ttl=63)),int-br
 ])
 
 ovs-appctl time/warp 1000

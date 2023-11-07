@@ -109,7 +109,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemon_become_new_user(false);
+    daemon_become_new_user(false, false);
 
     if (argc - optind < 1) {
         ovs_fatal(0, "at least one vconn argument required; "
@@ -148,7 +148,7 @@ main(int argc, char *argv[])
         ovs_fatal(0, "no active or passive switch connections");
     }
 
-    daemonize_start(false);
+    daemonize_start(false, false);
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {

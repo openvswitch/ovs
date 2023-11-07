@@ -31,7 +31,12 @@ class ListDecoders(object):
             value_str (str): The value string to decode.
         """
         if index < 0 or index >= len(self._decoders):
-            return self._default_decoder(index, value_str)
+            if self._default_decoder:
+                return self._default_decoder(index, value_str)
+            else:
+                raise ParseError(
+                    f"Cannot decode element {index} in list: {value_str}"
+                )
 
         try:
             key = self._decoders[index][0]

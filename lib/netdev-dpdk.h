@@ -52,6 +52,17 @@ netdev_dpdk_rte_flow_query_count(struct netdev *netdev,
 int
 netdev_dpdk_get_port_id(struct netdev *netdev);
 
+static inline void
+set_error(struct rte_flow_error *error, enum rte_flow_error_type type)
+{
+    if (!error) {
+        return;
+    }
+    error->type = type;
+    error->cause = NULL;
+    error->message = NULL;
+}
+
 #ifdef ALLOW_EXPERIMENTAL_API
 
 int netdev_dpdk_rte_flow_tunnel_decap_set(struct netdev *,
@@ -78,17 +89,6 @@ int netdev_dpdk_rte_flow_tunnel_item_release(struct netdev *,
                                              struct rte_flow_error *);
 
 #else
-
-static inline void
-set_error(struct rte_flow_error *error, enum rte_flow_error_type type)
-{
-    if (!error) {
-        return;
-    }
-    error->type = type;
-    error->cause = NULL;
-    error->message = NULL;
-}
 
 static inline int
 netdev_dpdk_rte_flow_tunnel_decap_set(

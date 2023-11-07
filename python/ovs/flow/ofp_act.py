@@ -1,17 +1,20 @@
 """Defines decoders for OpenFlow actions.
 """
-
-import functools
-
 from ovs.flow.decoders import (
     decode_default,
     decode_time,
     decode_flag,
     decode_int,
 )
-from ovs.flow.kv import nested_kv_decoder, KVDecoders, KeyValue, KVParser
+from ovs.flow.kv import (
+    nested_kv_decoder,
+    KVDecoders,
+    KeyValue,
+    KVParser,
+    ParseError,
+)
 from ovs.flow.list import nested_list_decoder, ListDecoders
-from ovs.flow.ofp_fields import field_decoders
+from ovs.flow.ofp_fields import field_decoders, field_aliases
 
 
 def decode_output(value):
@@ -20,7 +23,9 @@ def decode_output(value):
     Does not support field specification.
     """
     if len(value.split(",")) > 1:
-        return nested_kv_decoder()(value)
+        return nested_kv_decoder(
+            KVDecoders({"port": decode_default, "max_len": decode_int})
+        )(value)
     try:
         return {"port": int(value)}
     except ValueError:
@@ -30,7 +35,7 @@ def decode_output(value):
 def decode_controller(value):
     """Decodes the controller action."""
     if not value:
-        return KeyValue("output", "controller")
+        return KeyValue("output", {"port": "CONTROLLER"})
     else:
         # Try controller:max_len
         try:
@@ -41,7 +46,17 @@ def decode_controller(value):
         except ValueError:
             pass
         # controller(key[=val], ...)
-        return nested_kv_decoder()(value)
+        return nested_kv_decoder(
+            KVDecoders(
+                {
+                    "max_len": decode_int,
+                    "reason": decode_default,
+                    "id": decode_int,
+                    "userdata": decode_default,
+                    "pause": decode_flag,
+                }
+            )
+        )(value)
 
 
 def decode_bundle_load(value):
@@ -141,6 +156,12 @@ def decode_field(value):
     man page:
     http://www.openvswitch.org/support/dist-docs/ovs-actions.7.txt."""
     parts = value.strip("]\n\r").split("[")
+    if (
+        parts[0] not in field_decoders.keys()
+        and parts[0] not in field_aliases.keys()
+    ):
+        raise ParseError("Field not supported: {}".format(parts[0]))
+
     result = {
         "field": parts[0],
     }
@@ -234,19 +255,6 @@ def decode_zone(value):
     return decode_field(value)
 
 
-def decode_exec(action_decoders, value):
-    """Decodes the value of the 'exec' keyword (part of the ct action).
-
-    Args:
-        decode_actions (KVDecoders): The decoders to be used to decode the
-            nested exec.
-        value (string): The string to be decoded.
-    """
-    exec_parser = KVParser(value, action_decoders)
-    exec_parser.parse()
-    return [{kv.key: kv.value} for kv in exec_parser.kv()]
-
-
 def decode_learn(action_decoders):
     """Create the decoder to be used to decode the 'learn' action.
 
@@ -269,31 +277,36 @@ def decode_learn(action_decoders):
             action decoding.
     """
 
-    def decode_learn_field(decoder, value):
-        """Generates a decoder to be used for the 'field' argument of the
-        'learn' action.
-
-        The field can hold a value that should be decoded, either as a field,
-        or as a the value (see man(7) ovs-actions).
-
-        Args:
-            decoder (callable): The decoder.
+    def learn_field_decoding_kv(key, value):
+        """Decodes a key, value pair from the learn action.
+        The key must be a decodable field. The value can be either a value
+        in the format defined for the field or another field.
         """
-        if value in field_decoders.keys():
-            # It's a field
-            return value
-        else:
-            return decoder(value)
+        key_field = decode_field(key)
+        try:
+            return key, decode_field(value)
+        except ParseError:
+            return key, field_decoders.get(key_field.get("field"))(value)
 
-    learn_field_decoders = {
-        field: functools.partial(decode_learn_field, decoder)
-        for field, decoder in field_decoders.items()
-    }
+    def learn_field_decoding_free(key):
+        """Decodes the free fields found in the learn action.
+        Free fields indicate that the filed is to be copied from the original.
+        In order to express that in a dictionary, return the fieldspec as
+        value. So, the free fild NXM_OF_IP_SRC[], is encoded as:
+            "NXM_OF_IP_SRC[]": {
+                "field": "NXM_OF_IP_SRC"
+            }
+        That way we also ensure the actual free key is correct.
+        """
+        key_field = decode_field(key)
+        return key, key_field
+
     learn_decoders = {
         **action_decoders,
-        **learn_field_decoders,
         "idle_timeout": decode_time,
         "hard_timeout": decode_time,
+        "fin_idle_timeout": decode_time,
+        "fin_hard_timeout": decode_time,
         "priority": decode_int,
         "cookie": decode_int,
         "send_flow_rem": decode_flag,
@@ -303,4 +316,10 @@ def decode_learn(action_decoders):
         "result_dst": decode_field,
     }
 
-    return functools.partial(decode_exec, KVDecoders(learn_decoders))
+    learn_decoder = KVDecoders(
+        learn_decoders,
+        default=learn_field_decoding_kv,
+        default_free=learn_field_decoding_free,
+    )
+
+    return nested_kv_decoder(learn_decoder, is_list=True)

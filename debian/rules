@@ -23,21 +23,26 @@ override_dh_auto_configure:
 	test -d _debian || mkdir _debian
 	cd _debian && ( \
 		test -e Makefile || \
-		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-					 --sysconfdir=/etc \
-					 $(DATAPATH_CONFIGURE_OPTS) \
-					 $(EXTRA_CONFIGURE_OPTS) \
-					 )
+		../configure --prefix=/usr --localstatedir=/var \
+					--enable-ssl \
+					--disable-afxdp \
+					--sysconfdir=/etc \
+					$(DATAPATH_CONFIGURE_OPTS) \
+					$(EXTRA_CONFIGURE_OPTS) \
+					)
 ifneq (,$(filter i386 amd64 ppc64el arm64, $(DEB_HOST_ARCH)))
 ifeq (,$(filter nodpdk, $(DEB_BUILD_OPTIONS)))
 	test -d _dpdk || mkdir _dpdk
 	cd _dpdk && ( \
 		test -e Makefile || \
-        ../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-                     --with-dpdk=shared --sysconfdir=/etc \
-					 $(DATAPATH_CONFIGURE_OPTS) \
-					 $(EXTRA_CONFIGURE_OPTS) \
-					 )
+		../configure --prefix=/usr --localstatedir=/var \
+					--enable-ssl \
+					--disable-afxdp \
+					--with-dpdk=shared \
+					--sysconfdir=/etc \
+					$(DATAPATH_CONFIGURE_OPTS) \
+					$(EXTRA_CONFIGURE_OPTS) \
+					)
 endif
 endif
 
@@ -129,8 +134,8 @@ override_dh_python3:
 # Helper target for creating snapshots from upstream git
 DATE=$(shell date +%Y%m%d)
 # Upstream branch to track
-BRANCH=branch-3.0
-VERSION=3.0.0
+BRANCH=branch-3.2
+VERSION=3.2.0
 
 get-orig-snapshot:
 	rm -Rf openvswitch-upstream

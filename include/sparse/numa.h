@@ -18,10 +18,21 @@
 #error "Use this header only with sparse.  It is not a correct implementation."
 #endif
 
-/* Avoid sparse warning: non-ANSI function declaration of function" */
-#define numa_get_membind_compat() numa_get_membind_compat(void)
-#define numa_get_interleave_mask_compat() numa_get_interleave_mask_compat(void)
-#define numa_get_run_node_mask_compat() numa_get_run_node_mask_compat(void)
+#ifndef __NUMA_H_SPARSE
+#define __NUMA_H_SPARSE 1
 
-/* Get actual <numa.h> definitions for us to annotate and build on. */
-#include_next<numa.h>
+/* Avoid sparse warning "non-ANSI function declaration of function" with
+ * libnuma < 2.0.13. */
+
+struct bitmask {
+    unsigned long size;
+    unsigned long *maskp;
+};
+
+int numa_available(void);
+struct bitmask *numa_allocate_nodemask(void);
+void numa_bitmask_free(struct bitmask *);
+void numa_set_localalloc(void);
+void numa_set_preferred(int node);
+
+#endif /* <numa.h> for sparse. */

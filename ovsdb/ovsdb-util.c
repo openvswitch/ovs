@@ -291,9 +291,15 @@ ovsdb_util_write_string_string_column(struct ovsdb_row *row,
     size_t i;
 
     column = ovsdb_table_schema_get_column(row->table->schema, column_name);
+    if (!column) {
+        VLOG_WARN("No %s column present in the %s table",
+                  column_name, row->table->schema->name);
+        goto unwind;
+    }
     datum = ovsdb_util_get_datum(row, column_name, OVSDB_TYPE_STRING,
                                 OVSDB_TYPE_STRING, UINT_MAX);
     if (!datum) {
+unwind:
         for (i = 0; i < n; i++) {
             free(keys[i]);
             free(values[i]);

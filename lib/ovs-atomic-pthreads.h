@@ -42,7 +42,6 @@ typedef enum {
     memory_order_seq_cst
 } memory_order;
 
-#define ATOMIC_VAR_INIT(VALUE) (VALUE)
 #define atomic_init(OBJECT, VALUE) (*(OBJECT) = (VALUE), (void) 0)
 
 static inline void

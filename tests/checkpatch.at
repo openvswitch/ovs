@@ -8,7 +8,14 @@ OVS_START_SHELL_HELPERS
 try_checkpatch() {
     # Take the patch to test from $1.  Remove an initial four-space indent
     # from it and, if it is just headers with no body, add a null body.
+    # If it does not have a 'Subject', add a valid one.
     echo "$1" | sed 's/^    //' > test.patch
+    if grep 'Subject\:' test.patch >/dev/null 2>&1; then :
+    else
+        sed -i'' -e '1i\
+Subject: Patch this is.
+' test.patch
+    fi
     if grep '---' expout >/dev/null 2>&1; then :
     else
         printf '\n---\n' >> test.patch
@@ -558,5 +565,27 @@ try_checkpatch \
     "FIXES_TAG_ERROR
 1: Fixes: 123456789abc (\"some very long commit name that doesn\'t fit into
 "
+
+AT_CLEANUP
+
+AT_SETUP([checkpatch - subject])
+try_checkpatch \
+   "Author: A
+    Commit: A
+    Subject: netdev: invalid case and dot ending
+
+    Signed-off-by: A" \
+    "WARNING: The subject summary should start with a capital.
+    WARNING: The subject summary should end with a dot.
+    Subject: netdev: invalid case and dot ending"
+
+try_checkpatch \
+   "Author: A
+    Commit: A
+    Subject: netdev: This is a way to long commit summary and therefor it should report a WARNING!
+
+    Signed-off-by: A" \
+    "WARNING: The subject, '<area>: <summary>', is over 70 characters, i.e., 85.
+    Subject: netdev: This is a way to long commit summary and therefor it should report a WARNING!"
 
 AT_CLEANUP

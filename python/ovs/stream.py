@@ -784,7 +784,7 @@ class SSLStream(Stream):
 
     @staticmethod
     def _open(suffix, dscp):
-        address = ovs.socket_util.inet_parse_active(suffix, 0)
+        address = ovs.socket_util.inet_parse_active(suffix, 0, raises=False)
         family, sock = ovs.socket_util.inet_create_socket_active(
                 socket.SOCK_STREAM, address)
         if sock is None:
@@ -824,7 +824,8 @@ class SSLStream(Stream):
             self.socket.do_handshake()
         except ssl.SSLWantReadError:
             return errno.EAGAIN
-        except ssl.SSLSyscallError as e:
+        except (ssl.SSLSyscallError, ssl.SSLZeroReturnError,
+                ssl.SSLEOFError, OSError) as e:
             return ovs.socket_util.get_exception_errno(e)
 
         return 0

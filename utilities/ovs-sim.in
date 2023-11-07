@@ -131,7 +131,7 @@ EOF
 export -f as
 
 sim_add() {
-    if test "$1" == --help; then
+    if test "$1" = --help; then
         cat <<EOF
 $FUNCNAME: create a new sandboxed Open vSwitch instance
 usage: $FUNCNAME SANDBOX
@@ -178,7 +178,7 @@ EOF
 export -f sim_add
 
 net_add() {
-    if test "$1" == --help; then
+    if test "$1" = --help; then
         cat <<EOF
 $FUNCNAME: create a new interconnection network
 usage: $FUNCNAME NETWORK
@@ -198,7 +198,7 @@ EOF
 export -f net_add
 
 net_attach() {
-    if test "$1" == --help; then
+    if test "$1" = --help; then
         cat <<EOF
 $FUNCNAME: attach the default sandbox to an interconnection network
 usage: $FUNCNAME NETWORK BRIDGE

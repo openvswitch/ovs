@@ -3517,23 +3517,24 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
     </p>
 
     <tbl>
+tab(;);
 r r r r r.
-Criteria        OpenFlow 1.0    OpenFlow 1.1    OpenFlow 1.2+   NXM
-\_      \_      \_      \_      \_
-[1]     \fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR     \fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR     \fL0000\fR/\fL0000\fR,\fL--\fR  \fL0000\fR/\fL0000\fR
-[2]     \fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR     \fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR     \fL0000\fR/\fLffff\fR,\fL--\fR  \fL0000\fR/\fLffff\fR
-[3]     \fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR     \fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR     \fL1xxx\fR/\fLffff\fR,\fL--\fR  \fL1xxx\fR/\fL1fff\fR
-[4]     \fL????\fR/\fL1\fR,\fL0y\fR/\fL0\fR     \fLfffe\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL1000\fR/\fL1000\fR,\fL0y\fR  \fLz000\fR/\fLf000\fR
-[5]     \fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL1xxx\fR/\fLffff\fR,\fL0y\fR  \fLzxxx\fR/\fLffff\fR
+Criteria;OpenFlow 1.0;OpenFlow 1.1;OpenFlow 1.2+;NXM
+\_;\_;\_;\_;\_
+[1];\fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR;\fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR;\fL0000\fR/\fL0000\fR,\fL--\fR;\fL0000\fR/\fL0000\fR
+[2];\fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR;\fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR;\fL0000\fR/\fLffff\fR,\fL--\fR;\fL0000\fR/\fLffff\fR
+[3];\fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR;\fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR;\fL1xxx\fR/\fLffff\fR,\fL--\fR;\fL1xxx\fR/\fL1fff\fR
+[4];\fL????\fR/\fL1\fR,\fL0y\fR/\fL0\fR;\fLfffe\fR/\fL0\fR,\fL0y\fR/\fL0\fR;\fL1000\fR/\fL1000\fR,\fL0y\fR;\fLz000\fR/\fLf000\fR
+[5];\fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR;\fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR;\fL1xxx\fR/\fLffff\fR,\fL0y\fR;\fLzxxx\fR/\fLffff\fR
 .T&amp;
-r r c c r.
-[6]     (none)  (none)  \fL1001\fR/\fL1001\fR,\fL--\fR  \fL1001\fR/\fL1001\fR
+r c c r r.
+[6];(none);(none);\fL1001\fR/\fL1001\fR,\fL--\fR;\fL1001\fR/\fL1001\fR
 .T&amp;
-r r c c c.
-[7]     (none)  (none)  (none)  \fL3000\fR/\fL3000\fR
-[8]     (none)  (none)  (none)  \fL0000\fR/\fL0fff\fR
-[9]     (none)  (none)  (none)  \fL0000\fR/\fLf000\fR
-[10]    (none)  (none)  (none)  \fL0000\fR/\fLefff\fR
+r c c c r.
+[7];(none);(none);(none);\fL3000\fR/\fL3000\fR
+[8];(none);(none);(none);\fL0000\fR/\fL0fff\fR
+[9];(none);(none);(none);\fL0000\fR/\fLf000\fR
+[10];(none);(none);(none);\fL0000\fR/\fLefff\fR
     </tbl>
 
     <p>
@@ -4312,9 +4313,9 @@ r r c c c.
         <bits name="pln" above="8" below="4" width=".2"/>
         <bits name="op" above="16" width=".2" fill="yes"/>
         <bits name="sha" above="48" width="0.5" fill="yes"/>
-        <bits name="spa" above="16" width="0.3" fill="yes"/>
+        <bits name="spa" above="32" width="0.5" fill="yes"/>
         <bits name="tha" above="48" width="0.5" fill="yes"/>
-        <bits name="tpa" above="16" width="0.3" fill="yes"/>
+        <bits name="tpa" above="32" width="0.5" fill="yes"/>
       </header>
     </diagram>
 

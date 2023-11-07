@@ -37,6 +37,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport-private.h"
 #include "openvswitch/dynamic-string.h"
+#include "ovs-atomic.h"
 #include "ovs-router.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
@@ -68,8 +69,8 @@ static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
 static bool tunnel_check_status_change__(struct netdev_vport *);
 static void update_vxlan_global_cfg(struct netdev *,
-                                    struct netdev_tunnel_config *,
-                                    struct netdev_tunnel_config *);
+                                    const struct netdev_tunnel_config *,
+                                    const struct netdev_tunnel_config *);
 
 struct vport_class {
     const char *dpif_port;
@@ -91,9 +92,15 @@ vport_class_cast(const struct netdev_class *class)
 }
 
 static const struct netdev_tunnel_config *
+vport_tunnel_config(struct netdev_vport *netdev)
+{
+    return ovsrcu_get(const struct netdev_tunnel_config *, &netdev->tnl_cfg);
+}
+
+static const struct netdev_tunnel_config *
 get_netdev_tunnel_config(const struct netdev *netdev)
 {
-    return &netdev_vport_cast(netdev)->tnl_cfg;
+    return vport_tunnel_config(netdev_vport_cast(netdev));
 }
 
 bool
@@ -134,8 +141,6 @@ netdev_vport_get_dpif_port(const struct netdev *netdev,
     }
 
     if (netdev_vport_needs_dst_port(netdev)) {
-        const struct netdev_vport *vport = netdev_vport_cast(netdev);
-
         /*
          * Note: IFNAMSIZ is 16 bytes long. Implementations should choose
          * a dpif port name that is short enough to fit including any
@@ -144,7 +149,7 @@ netdev_vport_get_dpif_port(const struct netdev *netdev,
         BUILD_ASSERT(NETDEV_VPORT_NAME_BUFSIZE >= IFNAMSIZ);
         ovs_assert(strlen(dpif_port) + 6 < IFNAMSIZ);
         snprintf(namebuf, bufsize, "%s_%d", dpif_port,
-                 ntohs(vport->tnl_cfg.dst_port));
+                 ntohs(netdev_get_tunnel_config(netdev)->dst_port));
         return namebuf;
     } else {
         return dpif_port;
@@ -162,12 +167,14 @@ netdev_vport_route_changed(void)
 
     vports = netdev_get_vports(&n_vports);
     for (i = 0; i < n_vports; i++) {
+        const struct netdev_tunnel_config *tnl_cfg;
         struct netdev *netdev_ = vports[i];
         struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
         ovs_mutex_lock(&netdev->mutex);
         /* Finds all tunnel vports. */
-        if (ipv6_addr_is_set(&netdev->tnl_cfg.ipv6_dst)) {
+        tnl_cfg = netdev_get_tunnel_config(netdev_);
+        if (tnl_cfg && ipv6_addr_is_set(&tnl_cfg->ipv6_dst)) {
             if (tunnel_check_status_change__(netdev)) {
                 netdev_change_seq_changed(netdev_);
             }
@@ -198,6 +205,7 @@ netdev_vport_construct(struct netdev *netdev_)
     uint16_t port = 0;
 
     ovs_mutex_init(&dev->mutex);
+    atomic_count_init(&dev->gre_seqno, 0);
     eth_addr_random(&dev->etheraddr);
 
     if (name && dpif_port && (strlen(name) > strlen(dpif_port) + 1) &&
@@ -206,26 +214,31 @@ netdev_vport_construct(struct netdev *netdev_)
         port = atoi(p);
     }
 
+    struct netdev_tunnel_config *tnl_cfg = xzalloc(sizeof *tnl_cfg);
+
     /* If a destination port for tunnel ports is specified in the netdev
      * name, use it instead of the default one. Otherwise, use the default
      * destination port */
     if (!strcmp(type, "geneve")) {
-        dev->tnl_cfg.dst_port = port ? htons(port) : htons(GENEVE_DST_PORT);
+        tnl_cfg->dst_port = port ? htons(port) : htons(GENEVE_DST_PORT);
     } else if (!strcmp(type, "vxlan")) {
-        dev->tnl_cfg.dst_port = port ? htons(port) : htons(VXLAN_DST_PORT);
-        update_vxlan_global_cfg(netdev_, NULL, &dev->tnl_cfg);
+        tnl_cfg->dst_port = port ? htons(port) : htons(VXLAN_DST_PORT);
+        update_vxlan_global_cfg(netdev_, NULL, tnl_cfg);
     } else if (!strcmp(type, "lisp")) {
-        dev->tnl_cfg.dst_port = port ? htons(port) : htons(LISP_DST_PORT);
+        tnl_cfg->dst_port = port ? htons(port) : htons(LISP_DST_PORT);
     } else if (!strcmp(type, "stt")) {
-        dev->tnl_cfg.dst_port = port ? htons(port) : htons(STT_DST_PORT);
+        tnl_cfg->dst_port = port ? htons(port) : htons(STT_DST_PORT);
     } else if (!strcmp(type, "gtpu")) {
-        dev->tnl_cfg.dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
+        tnl_cfg->dst_port = port ? htons(port) : htons(GTPU_DST_PORT);
     } else if (!strcmp(type, "bareudp")) {
-        dev->tnl_cfg.dst_port = htons(port);
+        tnl_cfg->dst_port = htons(port);
     }
 
-    dev->tnl_cfg.dont_fragment = true;
-    dev->tnl_cfg.ttl = DEFAULT_TTL;
+    tnl_cfg->dont_fragment = true;
+    tnl_cfg->ttl = DEFAULT_TTL;
+
+    ovsrcu_set(&dev->tnl_cfg, tnl_cfg);
+
     return 0;
 }
 
@@ -233,12 +246,15 @@ static void
 netdev_vport_destruct(struct netdev *netdev_)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+    const struct netdev_tunnel_config *tnl_cfg = vport_tunnel_config(netdev);
     const char *type = netdev_get_type(netdev_);
 
     if (!strcmp(type, "vxlan")) {
-        update_vxlan_global_cfg(netdev_, &netdev->tnl_cfg, NULL);
+        update_vxlan_global_cfg(netdev_, tnl_cfg, NULL);
     }
 
+    ovsrcu_set(&netdev->tnl_cfg, NULL);
+    ovsrcu_postpone(free, CONST_CAST(struct netdev_tunnel_config *, tnl_cfg));
     free(netdev->peer);
     ovs_mutex_destroy(&netdev->mutex);
 }
@@ -281,15 +297,16 @@ static bool
 tunnel_check_status_change__(struct netdev_vport *netdev)
     OVS_REQUIRES(netdev->mutex)
 {
+    const struct netdev_tunnel_config *tnl_cfg = vport_tunnel_config(netdev);
+    const struct in6_addr *route;
     char iface[IFNAMSIZ];
     bool status = false;
-    struct in6_addr *route;
     struct in6_addr gw;
     uint32_t mark;
 
     iface[0] = '\0';
-    route = &netdev->tnl_cfg.ipv6_dst;
-    mark = netdev->tnl_cfg.egress_pkt_mark;
+    route = &tnl_cfg->ipv6_dst;
+    mark = tnl_cfg->egress_pkt_mark;
     if (ovs_router_lookup(mark, route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
@@ -424,6 +441,35 @@ parse_tunnel_ip(const char *value, bool accept_mcast, bool *flow,
     return 0;
 }
 
+static int
+parse_srv6_segs(char *s, struct in6_addr *segs, uint8_t *num_segs)
+{
+    char *save_ptr = NULL;
+    char *token;
+
+    if (!s) {
+        return EINVAL;
+    }
+
+    *num_segs = 0;
+
+    while ((token = strtok_r(s, ",", &save_ptr)) != NULL) {
+        if (*num_segs == SRV6_MAX_SEGS) {
+            return EINVAL;
+        }
+
+        if (inet_pton(AF_INET6, token, segs) != 1) {
+            return EINVAL;
+        }
+
+        segs++;
+        (*num_segs)++;
+        s = NULL;
+    }
+
+    return 0;
+}
+
 enum tunnel_layers {
     TNL_L2 = 1 << 0,       /* 1 if a tunnel type can carry Ethernet traffic. */
     TNL_L3 = 1 << 1        /* 1 if a tunnel type can carry L3 traffic. */
@@ -442,6 +488,8 @@ tunnel_supported_layers(const char *type,
     } else if (!strcmp(type, "gtpu")) {
         return TNL_L3;
     } else if (!strcmp(type, "bareudp")) {
+        return TNL_L3;
+    } else if (!strcmp(type, "srv6")) {
         return TNL_L3;
     } else {
         return TNL_L2;
@@ -465,8 +513,8 @@ vxlan_get_port_ext_gbp_str(uint16_t port, bool gbp,
 
 static void
 update_vxlan_global_cfg(struct netdev *netdev,
-                        struct netdev_tunnel_config *old_cfg,
-                        struct netdev_tunnel_config *new_cfg)
+                        const struct netdev_tunnel_config *old_cfg,
+                        const struct netdev_tunnel_config *new_cfg)
 {
     unsigned int count;
     char namebuf[20];
@@ -510,19 +558,20 @@ static bool
 is_concomitant_vxlan_tunnel_present(struct netdev_vport *dev,
                                     const struct netdev_tunnel_config *tnl_cfg)
 {
-    char namebuf[20];
-    const char *type = netdev_get_type(&dev->up);
+    const struct netdev_tunnel_config *dev_tnl_cfg = vport_tunnel_config(dev);
     struct vport_class *vclass = vport_class_cast(netdev_get_class(&dev->up));
+    const char *type = netdev_get_type(&dev->up);
+    char namebuf[20];
 
     if (strcmp(type, "vxlan")) {
         return false;
     }
 
-    if (dev->tnl_cfg.dst_port == tnl_cfg->dst_port &&
-        (dev->tnl_cfg.exts & (1 << OVS_VXLAN_EXT_GBP)) ==
+    if (dev_tnl_cfg->dst_port == tnl_cfg->dst_port &&
+        (dev_tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP)) ==
         (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP))) {
 
-        if (ntohs(dev->tnl_cfg.dst_port) == VXLAN_DST_PORT) {
+        if (ntohs(dev_tnl_cfg->dst_port) == VXLAN_DST_PORT) {
             /* Special case where we kept the default port/gbp, only ok if
                the opposite of the default does not exits */
             vxlan_get_port_ext_gbp_str(ntohs(tnl_cfg->dst_port),
@@ -538,9 +587,9 @@ is_concomitant_vxlan_tunnel_present(struct netdev_vport *dev,
     }
 
     /* Same port: ok if no one is left with the previous configuration */
-    if (dev->tnl_cfg.dst_port == tnl_cfg->dst_port) {
-        vxlan_get_port_ext_gbp_str(ntohs(dev->tnl_cfg.dst_port),
-                                   dev->tnl_cfg.exts &
+    if (dev_tnl_cfg->dst_port == tnl_cfg->dst_port) {
+        vxlan_get_port_ext_gbp_str(ntohs(dev_tnl_cfg->dst_port),
+                                   dev_tnl_cfg->exts &
                                    (1 << OVS_VXLAN_EXT_GBP),
                                    namebuf, sizeof(namebuf));
 
@@ -568,6 +617,7 @@ static int
 set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 {
     struct netdev_vport *dev = netdev_vport_cast(dev_);
+    const struct netdev_tunnel_config *curr_tnl_cfg;
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
     struct ds errors = DS_EMPTY_INITIALIZER;
@@ -750,6 +800,25 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                     goto out;
                 }
             }
+        } else if (!strcmp(node->key, "srv6_segs")) {
+            err = parse_srv6_segs(node->value,
+                                  tnl_cfg.srv6_segs,
+                                  &tnl_cfg.srv6_num_segs);
+
+            switch (err) {
+            case EINVAL:
+                ds_put_format(&errors, "%s: bad %s 'srv6_segs'\n",
+                              name, node->value);
+                break;
+            }
+        } else if (!strcmp(node->key, "srv6_flowlabel")) {
+            if (!strcmp(node->value, "zero")) {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_ZERO;
+            } else if (!strcmp(node->value, "compute")) {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_COMPUTE;
+            } else {
+                tnl_cfg.srv6_flowlabel = SRV6_FLOWLABEL_COPY;
+            }
         } else if (!strcmp(node->key, "payload_type")) {
             if (!strcmp(node->value, "mpls")) {
                  tnl_cfg.payload_ethertype = htons(ETH_TYPE_MPLS);
@@ -858,11 +927,16 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         err = EEXIST;
         goto out;
     }
-    update_vxlan_global_cfg(dev_, &dev->tnl_cfg, &tnl_cfg);
 
     ovs_mutex_lock(&dev->mutex);
-    if (memcmp(&dev->tnl_cfg, &tnl_cfg, sizeof tnl_cfg)) {
-        dev->tnl_cfg = tnl_cfg;
+
+    curr_tnl_cfg = vport_tunnel_config(dev);
+    update_vxlan_global_cfg(dev_, curr_tnl_cfg, &tnl_cfg);
+
+    if (memcmp(curr_tnl_cfg, &tnl_cfg, sizeof tnl_cfg)) {
+        ovsrcu_set(&dev->tnl_cfg, xmemdup(&tnl_cfg, sizeof tnl_cfg));
+        ovsrcu_postpone(free, CONST_CAST(struct netdev_tunnel_config *,
+                                         curr_tnl_cfg));
         tunnel_check_status_change__(dev);
         netdev_change_seq_changed(dev_);
     }
@@ -887,61 +961,60 @@ out:
 static int
 get_tunnel_config(const struct netdev *dev, struct smap *args)
 {
-    struct netdev_vport *netdev = netdev_vport_cast(dev);
+    const struct netdev_tunnel_config *tnl_cfg = netdev_get_tunnel_config(dev);
     const char *type = netdev_get_type(dev);
-    struct netdev_tunnel_config tnl_cfg;
 
-    ovs_mutex_lock(&netdev->mutex);
-    tnl_cfg = netdev->tnl_cfg;
-    ovs_mutex_unlock(&netdev->mutex);
+    if (!tnl_cfg) {
+        return 0;
+    }
 
-    if (ipv6_addr_is_set(&tnl_cfg.ipv6_dst)) {
-        smap_add_ipv6(args, "remote_ip", &tnl_cfg.ipv6_dst);
-    } else if (tnl_cfg.ip_dst_flow) {
+    if (ipv6_addr_is_set(&tnl_cfg->ipv6_dst)) {
+        smap_add_ipv6(args, "remote_ip", &tnl_cfg->ipv6_dst);
+    } else if (tnl_cfg->ip_dst_flow) {
         smap_add(args, "remote_ip", "flow");
     }
 
-    if (ipv6_addr_is_set(&tnl_cfg.ipv6_src)) {
-        smap_add_ipv6(args, "local_ip", &tnl_cfg.ipv6_src);
-    } else if (tnl_cfg.ip_src_flow) {
+    if (ipv6_addr_is_set(&tnl_cfg->ipv6_src)) {
+        smap_add_ipv6(args, "local_ip", &tnl_cfg->ipv6_src);
+    } else if (tnl_cfg->ip_src_flow) {
         smap_add(args, "local_ip", "flow");
     }
 
-    if (tnl_cfg.in_key_flow && tnl_cfg.out_key_flow) {
+    if (tnl_cfg->in_key_flow && tnl_cfg->out_key_flow) {
         smap_add(args, "key", "flow");
-    } else if (tnl_cfg.in_key_present && tnl_cfg.out_key_present
-               && tnl_cfg.in_key == tnl_cfg.out_key) {
-        smap_add_format(args, "key", "%"PRIu64, ntohll(tnl_cfg.in_key));
+    } else if (tnl_cfg->in_key_present && tnl_cfg->out_key_present
+               && tnl_cfg->in_key == tnl_cfg->out_key) {
+        smap_add_format(args, "key", "%"PRIu64, ntohll(tnl_cfg->in_key));
     } else {
-        if (tnl_cfg.in_key_flow) {
+        if (tnl_cfg->in_key_flow) {
             smap_add(args, "in_key", "flow");
-        } else if (tnl_cfg.in_key_present) {
+        } else if (tnl_cfg->in_key_present) {
             smap_add_format(args, "in_key", "%"PRIu64,
-                            ntohll(tnl_cfg.in_key));
+                            ntohll(tnl_cfg->in_key));
         }
 
-        if (tnl_cfg.out_key_flow) {
+        if (tnl_cfg->out_key_flow) {
             smap_add(args, "out_key", "flow");
-        } else if (tnl_cfg.out_key_present) {
+        } else if (tnl_cfg->out_key_present) {
             smap_add_format(args, "out_key", "%"PRIu64,
-                            ntohll(tnl_cfg.out_key));
+                            ntohll(tnl_cfg->out_key));
         }
     }
 
-    if (tnl_cfg.ttl_inherit) {
+    if (tnl_cfg->ttl_inherit) {
         smap_add(args, "ttl", "inherit");
-    } else if (tnl_cfg.ttl != DEFAULT_TTL) {
-        smap_add_format(args, "ttl", "%"PRIu8, tnl_cfg.ttl);
+    } else if (tnl_cfg->ttl != DEFAULT_TTL) {
+        smap_add_format(args, "ttl", "%"PRIu8, tnl_cfg->ttl);
     }
 
-    if (tnl_cfg.tos_inherit) {
+    if (tnl_cfg->tos_inherit) {
         smap_add(args, "tos", "inherit");
-    } else if (tnl_cfg.tos) {
-        smap_add_format(args, "tos", "0x%x", tnl_cfg.tos);
+    } else if (tnl_cfg->tos) {
+        smap_add_format(args, "tos", "0x%x", tnl_cfg->tos);
     }
 
-    if (tnl_cfg.dst_port) {
-        uint16_t dst_port = ntohs(tnl_cfg.dst_port);
+    if (tnl_cfg->dst_port) {
+        uint16_t dst_port = ntohs(tnl_cfg->dst_port);
 
         if ((!strcmp("geneve", type) && dst_port != GENEVE_DST_PORT) ||
             (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
@@ -953,33 +1026,33 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         }
     }
 
-    if (tnl_cfg.csum) {
+    if (tnl_cfg->csum) {
         smap_add(args, "csum", "true");
     }
 
-    if (tnl_cfg.set_seq) {
+    if (tnl_cfg->set_seq) {
         smap_add(args, "seq", "true");
     }
 
-    enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
-    if (tnl_cfg.pt_mode != default_pt_mode(layers)) {
+    enum tunnel_layers layers = tunnel_supported_layers(type, tnl_cfg);
+    if (tnl_cfg->pt_mode != default_pt_mode(layers)) {
         smap_add(args, "packet_type",
-                 tnl_cfg.pt_mode == NETDEV_PT_LEGACY_L2 ? "legacy_l2"
-                 : tnl_cfg.pt_mode == NETDEV_PT_LEGACY_L3 ? "legacy_l3"
+                 tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L2 ? "legacy_l2"
+                 : tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L3 ? "legacy_l3"
                  : "ptap");
     }
 
-    if (!tnl_cfg.dont_fragment) {
+    if (!tnl_cfg->dont_fragment) {
         smap_add(args, "df_default", "false");
     }
 
-    if (tnl_cfg.set_egress_pkt_mark) {
+    if (tnl_cfg->set_egress_pkt_mark) {
         smap_add_format(args, "egress_pkt_mark",
-                        "%"PRIu32, tnl_cfg.egress_pkt_mark);
+                        "%"PRIu32, tnl_cfg->egress_pkt_mark);
     }
 
     if (!strcmp("erspan", type) || !strcmp("ip6erspan", type)) {
-        if (tnl_cfg.erspan_ver_flow) {
+        if (tnl_cfg->erspan_ver_flow) {
             /* since version number is not determined,
              * assume print all other as flow
              */
@@ -988,27 +1061,27 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
             smap_add(args, "erspan_dir", "flow");
             smap_add(args, "erspan_hwid", "flow");
         } else {
-            smap_add_format(args, "erspan_ver", "%d", tnl_cfg.erspan_ver);
+            smap_add_format(args, "erspan_ver", "%d", tnl_cfg->erspan_ver);
 
-            if (tnl_cfg.erspan_ver == 1) {
-                if (tnl_cfg.erspan_idx_flow) {
+            if (tnl_cfg->erspan_ver == 1) {
+                if (tnl_cfg->erspan_idx_flow) {
                     smap_add(args, "erspan_idx", "flow");
                 } else {
                     smap_add_format(args, "erspan_idx", "0x%x",
-                                    tnl_cfg.erspan_idx);
+                                    tnl_cfg->erspan_idx);
                 }
-            } else if (tnl_cfg.erspan_ver == 2) {
-                if (tnl_cfg.erspan_dir_flow) {
+            } else if (tnl_cfg->erspan_ver == 2) {
+                if (tnl_cfg->erspan_dir_flow) {
                     smap_add(args, "erspan_dir", "flow");
                 } else {
                     smap_add_format(args, "erspan_dir", "%d",
-                                    tnl_cfg.erspan_dir);
+                                    tnl_cfg->erspan_dir);
                 }
-                if (tnl_cfg.erspan_hwid_flow) {
+                if (tnl_cfg->erspan_hwid_flow) {
                     smap_add(args, "erspan_hwid", "flow");
                 } else {
                     smap_add_format(args, "erspan_hwid", "0x%x",
-                                    tnl_cfg.erspan_hwid);
+                                    tnl_cfg->erspan_hwid);
                 }
             }
         }
@@ -1138,9 +1211,11 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 static enum netdev_pt_mode
 netdev_vport_get_pt_mode(const struct netdev *netdev)
 {
-    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    const struct netdev_tunnel_config *tnl_cfg;
 
-    return dev->tnl_cfg.pt_mode;
+    tnl_cfg = netdev_get_tunnel_config(netdev);
+
+    return tnl_cfg ? tnl_cfg->pt_mode : NETDEV_PT_UNKNOWN;
 }
 
 
@@ -1286,6 +1361,17 @@ netdev_vport_tunnel_register(void)
           {
               TUNNEL_FUNCTIONS_COMMON,
               .type = "bareudp",
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
+          },
+          {{NULL, NULL, 0, 0}}
+        },
+        { "srv6_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "srv6",
+              .build_header = netdev_srv6_build_header,
+              .push_header = netdev_srv6_push_header,
+              .pop_header = netdev_srv6_pop_header,
               .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
           },
           {{NULL, NULL, 0, 0}}

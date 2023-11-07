@@ -51,6 +51,7 @@ struct route_data {
 
     /* Extracted from Netlink attributes. */
     struct in6_addr rta_dst; /* 0 if missing. */
+    struct in6_addr rta_prefsrc; /* 0 if missing. */
     struct in6_addr rta_gw;
     char ifname[IFNAMSIZ]; /* Interface name. */
     uint32_t mark;
@@ -201,6 +202,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         [RTA_OIF] = { .type = NL_A_U32, .optional = true },
         [RTA_GATEWAY] = { .type = NL_A_U32, .optional = true },
         [RTA_MARK] = { .type = NL_A_U32, .optional = true },
+        [RTA_PREFSRC] = { .type = NL_A_U32, .optional = true },
     };
 
     static const struct nl_policy policy6[] = {
@@ -208,6 +210,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         [RTA_OIF] = { .type = NL_A_U32, .optional = true },
         [RTA_MARK] = { .type = NL_A_U32, .optional = true },
         [RTA_GATEWAY] = { .type = NL_A_IPV6, .optional = true },
+        [RTA_PREFSRC] = { .type = NL_A_IPV6, .optional = true },
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -274,6 +277,16 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         } else if (ipv4) {
             in6_addr_set_mapped_ipv4(&change->rd.rta_dst, 0);
         }
+        if (attrs[RTA_PREFSRC]) {
+            if (ipv4) {
+                ovs_be32 prefsrc;
+                prefsrc = nl_attr_get_be32(attrs[RTA_PREFSRC]);
+                in6_addr_set_mapped_ipv4(&change->rd.rta_prefsrc, prefsrc);
+            } else {
+                change->rd.rta_prefsrc =
+                    nl_attr_get_in6_addr(attrs[RTA_PREFSRC]);
+            }
+        }
         if (attrs[RTA_GATEWAY]) {
             if (ipv4) {
                 ovs_be32 gw;
@@ -309,7 +322,8 @@ route_table_handle_msg(const struct route_table_msg *change)
         const struct route_data *rd = &change->rd;
 
         ovs_router_insert(rd->mark, &rd->rta_dst, rd->rtm_dst_len,
-                          rd->local, rd->ifname, &rd->rta_gw);
+                          rd->local, rd->ifname, &rd->rta_gw,
+                          &rd->rta_prefsrc);
     }
 }
 

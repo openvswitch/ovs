@@ -85,7 +85,7 @@ struct ovsdb_error *ovsdb_storage_store_snapshot(struct ovsdb_storage *storage,
 
 struct ovsdb_write *ovsdb_storage_write_schema_change(
     struct ovsdb_storage *,
-    const struct json *schema, const struct json *data,
+    const struct ovsdb_schema *, const struct json *data,
     const struct uuid *prereq, struct uuid *result)
     OVS_WARN_UNUSED_RESULT;
 

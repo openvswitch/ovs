@@ -583,6 +583,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 
                 switch(tlv_subtype) {
                 case LLDP_TLV_AA_ELEMENT_SUBTYPE:
+                    CHECK_TLV_SIZE(50, "ELEMENT");
                     PEEK_BYTES(&msg_auth_digest, sizeof msg_auth_digest);
 
                     aa_element_dword = PEEK_UINT32;
@@ -629,6 +630,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                     break;
 
                 case LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE:
+                    CHECK_TLV_SIZE(36, "ISID_VLAN_ASGNS");
                     PEEK_BYTES(&msg_auth_digest, sizeof msg_auth_digest);
 
                     /* Subtract off tlv type and length (2Bytes) + OUI (3B) +

@@ -26,8 +26,8 @@
 %bcond_without libcapng
 # To enable DPDK support, specify '--with dpdk' when building
 %bcond_with dpdk
-# To enable AF_XDP support, specify '--with afxdp' when building
-%bcond_with afxdp
+# To disable AF_XDP support, specify '--without afxdp' when building
+%bcond_without afxdp
 
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
@@ -75,7 +75,7 @@ BuildRequires: dpdk-devel >= 22.11
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 %if %{with afxdp}
-BuildRequires: libbpf-devel numactl-devel
+BuildRequires: libxdp-devel libbpf-devel numactl-devel
 %endif
 BuildRequires: unbound unbound-devel
 
@@ -113,7 +113,7 @@ Summary: Open vSwitch python3 bindings
 License: ASL 2.0
 BuildArch: noarch
 Requires: python3
-Suggests: python3-netaddr python3-pyparsing
+Suggests: python3-netaddr python3-pyparsing python3-unbound
 %{?python_provide:%python_provide python3-openvswitch = %{version}-%{release}}
 
 %description -n python3-openvswitch
@@ -171,6 +171,8 @@ This package provides IPsec tunneling support for OVS tunnels.
 %endif
 %if %{with afxdp}
         --enable-afxdp \
+%else
+        --disable-afxdp \
 %endif
         --enable-ssl \
         --disable-static \
@@ -339,12 +341,6 @@ for base in conf.db .conf.db.~lock~; do
     if test ! -e $old && test ! -h $old; then
         ln -s $new $old
     fi
-    touch $new
-%if %{with dpdk}
-    chown openvswitch:hugetlbfs $new
-%else
-    chown openvswitch:openvswitch $new
-%endif
 done
 
 %if 0%{?systemd_post:1}
@@ -402,6 +398,7 @@ fi
 %{_bindir}/ovs-pcap
 %{_bindir}/ovs-tcpdump
 %{_bindir}/ovs-tcpundump
+%{_datadir}/openvswitch/scripts/usdt/*
 %{_mandir}/man8/ovs-test.8*
 %{_mandir}/man8/ovs-vlan-test.8*
 %{_mandir}/man8/ovs-l3ping.8*
@@ -505,7 +502,11 @@ fi
 %{_prefix}/lib/udev/rules.d/91-vfio.rules
 %endif
 %doc NOTICE README.rst NEWS rhel/README.RHEL.rst
-/var/lib/openvswitch
+%if %{with dpdk}
+%attr(750,openvswitch,hugetlbfs) /var/lib/openvswitch
+%else
+%attr(750,openvswitch,openvswitch) /var/lib/openvswitch
+%endif
 %attr(750,root,root) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 %ghost %attr(644,root,root) %{_rundir}/openvswitch.useropts

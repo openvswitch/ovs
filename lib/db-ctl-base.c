@@ -820,6 +820,7 @@ check_condition(const struct ovsdb_idl_table_class *table,
         type.value.type = OVSDB_TYPE_VOID;
         error = ovsdb_datum_from_string(&b, &type, value_string, symtab);
         if (error) {
+            ovsdb_atom_destroy(&want_key, column->type.key.type);
             goto out;
         }
 
@@ -1374,6 +1375,7 @@ set_column(const struct ovsdb_idl_table_class *table,
         error = ovsdb_atom_from_string(&value, NULL, &column->type.value,
                                        value_string, symtab);
         if (error) {
+            ovsdb_atom_destroy(&key, column->type.key.type);
             goto out;
         }
 
@@ -1492,7 +1494,7 @@ cmd_add(struct ctl_context *ctx)
     const struct ovsdb_idl_column *column;
     const struct ovsdb_idl_row *row;
     const struct ovsdb_type *type;
-    struct ovsdb_datum new;
+    struct ovsdb_datum old;
     int i;
 
     ctx->error = get_table(table_name, &table);
@@ -1516,13 +1518,7 @@ cmd_add(struct ctl_context *ctx)
     }
 
     type = &column->type;
-
-    if (ctx->last_command) {
-        ovsdb_datum_init_empty(&new);
-    } else {
-        ovsdb_datum_clone(&new, ovsdb_idl_read(row, column));
-    }
-
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column));
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
@@ -1533,41 +1529,23 @@ cmd_add(struct ctl_context *ctx)
         ctx->error = ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
                                              ctx->symtab);
         if (ctx->error) {
-            ovsdb_datum_destroy(&new, &column->type);
+            ovsdb_datum_destroy(&old, &column->type);
             return;
         }
-        ovsdb_datum_union(&new, &add, type);
+        ovsdb_datum_union(&old, &add, type);
         ovsdb_datum_destroy(&add, type);
     }
-
-    if (!ctx->last_command && new.n > type->n_max) {
+    if (old.n > type->n_max) {
         ctl_error(ctx, "\"add\" operation would put %u %s in column %s of "
                   "table %s but the maximum number is %u",
-                  new.n,
+                  old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_max);
-        ovsdb_datum_destroy(&new, &column->type);
+        ovsdb_datum_destroy(&old, &column->type);
         return;
     }
-
-    if (ctx->last_command) {
-        /* Partial updates can only be made one by one. */
-        for (i = 0; i < new.n; i++) {
-            struct ovsdb_datum *datum = xmalloc(sizeof *datum);
-
-            ovsdb_datum_init_empty(datum);
-            ovsdb_datum_add_from_index_unsafe(datum, &new, i, type);
-            if (ovsdb_type_is_map(type)) {
-                ovsdb_idl_txn_write_partial_map(row, column, datum);
-            } else {
-                ovsdb_idl_txn_write_partial_set(row, column, datum);
-            }
-        }
-        ovsdb_datum_destroy(&new, &column->type);
-    } else {
-        ovsdb_idl_txn_verify(row, column);
-        ovsdb_idl_txn_write(row, column, &new);
-    }
+    ovsdb_idl_txn_verify(row, column);
+    ovsdb_idl_txn_write(row, column, &old);
 
     invalidate_cache(ctx);
 }

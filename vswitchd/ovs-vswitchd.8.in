@@ -81,6 +81,15 @@ unavailable or unsuccessful.
 .SS "DPDK Options"
 For details on initializing \fBovs\-vswitchd\fR to use DPDK ports,
 refer to the documentation or \fBovs\-vswitchd.conf.db\fR(5).
+.SS "DPDK HW Access Options"
+.IP "\fB\-\-hw\-rawio\-access\fR"
+Tells \fBovs\-vswitchd\fR to retain the \fBCAP_SYS_RAWIO\fR capability,
+to allow userspace drivers access to raw hardware memory.  This will
+also allow the \fBovs\-vswitchd\fR daemon to call \fBiopl()\fR and
+\fBioperm()\fR functions as well as access memory devices to set port
+access.  This is a \fBvery\fR powerful capability, so generally only
+enable as needed for specific hardware (for example mlx5 with full
+hardware offload via rte_flow).
 .SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \

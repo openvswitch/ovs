@@ -126,6 +126,22 @@ m4_define([ADD_VETH_BOND],
     ]
 )
 
+# ADD_VETH_NS([ns1], [port1], [ip_addr1], [ns2], [port2], [ip_addr2])
+#
+# Add a pair of veth ports in 'ns1' and 'ns2'. The port names are 'port1'
+# and 'port2' respectively, and the IP addresses 'ip_addr1' and 'ip_addr2'
+# are assigned to each port.
+m4_define([ADD_VETH_NS],
+    [ AT_CHECK([ip link add $2 type veth peer name $5]),
+      AT_CHECK([ip link set $2 netns $1])
+      AT_CHECK([ip link set $5 netns $4])
+      NS_CHECK_EXEC([$1], [ip link set $2 up])
+      NS_CHECK_EXEC([$4], [ip link set $5 up])
+      NS_CHECK_EXEC([$1], [ip addr add $3 dev $2])
+      NS_CHECK_EXEC([$4], [ip addr add $6 dev $5])
+    ]
+)
+
 # ADD_VLAN([port], [namespace], [vlan-id], [ip-addr])
 #
 # Add a VLAN device named 'port' within 'namespace'. It will be configured

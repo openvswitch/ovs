@@ -27,6 +27,11 @@ AT_CHECK([ovstest test-hindex], [0], [.....................
 ])
 AT_CLEANUP
 
+AT_SETUP([test rcu linked lists])
+AT_CHECK([ovstest test-rculist], [0], [.....
+])
+AT_CLEANUP
+
 AT_SETUP([cuckoo hash])
 AT_KEYWORDS([cmap])
 AT_CHECK([ovstest test-cmap check 1], [0], [...
@@ -81,6 +86,19 @@ AT_CLEANUP
 AT_SETUP([byte order conversion])
 AT_KEYWORDS([byte order])
 AT_CHECK([ovstest test-byte-order])
+AT_CLEANUP
+
+AT_SETUP([byteq - basic])
+AT_KEYWORDS([byteq])
+AT_CHECK([ovstest test-byteq basic], [0], [...
+])
+AT_CLEANUP
+
+AT_SETUP([byteq - write_read])
+AT_KEYWORDS([byteq])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+AT_CHECK([ovstest test-byteq write_read], [0], [.
+])
 AT_CLEANUP
 
 AT_SETUP([random number generator])

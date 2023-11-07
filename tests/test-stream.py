@@ -15,10 +15,28 @@
 import sys
 
 import ovs.stream
+import ovs.util
 
 
 def main(argv):
+    if len(argv) < 2:
+        ovs.util.ovs_fatal(0,
+                           "usage: %s REMOTE [SSL_KEY] [SSL_CERT] [SSL_CA]",
+                           argv[0],
+                           )
     remote = argv[1]
+
+    if remote.startswith("ssl:"):
+        if len(argv) < 5:
+            ovs.util.ovs_fatal(
+                0,
+                "usage with ssl: %s REMOTE [SSL_KEY] [SSL_CERT] [SSL_CA]",
+                argv[0],
+            )
+        ovs.stream.SSLStream.ssl_set_ca_cert_file(argv[4])
+        ovs.stream.SSLStream.ssl_set_certificate_file(argv[3])
+        ovs.stream.SSLStream.ssl_set_private_key_file(argv[2])
+
     err, stream = ovs.stream.Stream.open_block(
             ovs.stream.Stream.open(remote), 10000)
 

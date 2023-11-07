@@ -160,14 +160,24 @@ static struct odp_support dp_netdev_support = {
 
 /* Time in microseconds of the interval in which rxq processing cycles used
  * in rxq to pmd assignments is measured and stored. */
-#define PMD_INTERVAL_LEN 10000000LL
+#define PMD_INTERVAL_LEN 5000000LL
+/* For converting PMD_INTERVAL_LEN to secs. */
+#define INTERVAL_USEC_TO_SEC 1000000LL
 
 /* Number of intervals for which cycles are stored
  * and used during rxq to pmd assignment. */
-#define PMD_INTERVAL_MAX 6
+#define PMD_INTERVAL_MAX 12
 
 /* Time in microseconds to try RCU quiescing. */
 #define PMD_RCU_QUIESCE_INTERVAL 10000LL
+
+/* Timer resolution for PMD threads in nanoseconds. */
+#define PMD_TIMER_RES_NS 1000
+
+/* Number of pkts Rx on an interface that will stop pmd thread sleeping. */
+#define PMD_SLEEP_THRESH (NETDEV_MAX_BURST / 2)
+/* Time in uS to increment a pmd thread sleep time. */
+#define PMD_SLEEP_INC_US 1
 
 struct dpcls {
     struct cmap_node node;      /* Within dp_netdev_pmd_thread.classifiers */
@@ -202,21 +212,21 @@ static void dpcls_remove(struct dpcls *, struct dpcls_rule *);
 struct dp_meter_band {
     uint32_t rate;
     uint32_t burst_size;
-    uint64_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
-    uint64_t packet_count;
-    uint64_t byte_count;
+    atomic_uint64_t bucket;          /* In 1/1000 packets for PKTPS,
+                                      * or in bits for KBPS. */
+    atomic_uint64_t packet_count;
+    atomic_uint64_t byte_count;
 };
 
 struct dp_meter {
     struct cmap_node node;
-    struct ovs_mutex lock;
     uint32_t id;
     uint16_t flags;
     uint16_t n_bands;
     uint32_t max_delta_t;
-    uint64_t used;
-    uint64_t packet_count;
-    uint64_t byte_count;
+    atomic_uint64_t used;  /* Time of a last use in milliseconds. */
+    atomic_uint64_t packet_count;
+    atomic_uint64_t byte_count;
     struct dp_meter_band bands[];
 };
 
@@ -277,6 +287,8 @@ struct dp_netdev {
     atomic_uint32_t emc_insert_min;
     /* Enable collection of PMD performance metrics. */
     atomic_bool pmd_perf_metrics;
+    /* Max load based sleep request. */
+    atomic_uint64_t pmd_max_sleep;
     /* Enable the SMC cache from ovsdb config */
     atomic_bool smc_enable_db;
 
@@ -428,7 +440,7 @@ struct dp_netdev_rxq {
                                           pinned. OVS_CORE_UNSPEC if the
                                           queue doesn't need to be pinned to a
                                           particular core. */
-    unsigned intrvl_idx;               /* Write index for 'cycles_intrvl'. */
+    atomic_count intrvl_idx;           /* Write index for 'cycles_intrvl'. */
     struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
     bool is_vhost;                     /* Is rxq of a vhost port. */
 
@@ -615,6 +627,9 @@ dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
                            unsigned long long cycles);
 static uint64_t
 dp_netdev_rxq_get_intrvl_cycles(struct dp_netdev_rxq *rx, unsigned idx);
+static uint64_t
+get_interval_values(atomic_ullong *source, atomic_count *cur_idx,
+                    int num_to_read);
 static void
 dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
                                bool purge);
@@ -686,6 +701,7 @@ enum pmd_info_type {
     PMD_INFO_CLEAR_STATS, /* Set the cycles count to 0. */
     PMD_INFO_SHOW_RXQ,    /* Show poll lists of pmd threads. */
     PMD_INFO_PERF_SHOW,   /* Show pmd performance details. */
+    PMD_INFO_SLEEP_SHOW,  /* Show max sleep configuration details. */
 };
 
 static void
@@ -869,14 +885,16 @@ sorted_poll_list(struct dp_netdev_pmd_thread *pmd, struct rxq_poll **list,
 }
 
 static void
-pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
+pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd,
+                  int secs)
 {
     if (pmd->core_id != NON_PMD_CORE_ID) {
         struct rxq_poll *list;
         size_t n_rxq;
-        uint64_t total_cycles = 0;
-        uint64_t busy_cycles = 0;
+        uint64_t total_pmd_cycles = 0;
+        uint64_t busy_pmd_cycles = 0;
         uint64_t total_rxq_proc_cycles = 0;
+        unsigned int intervals;
 
         ds_put_format(reply,
                       "pmd thread numa_id %d core_id %u:\n  isolated : %s\n",
@@ -887,18 +905,17 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
         sorted_poll_list(pmd, &list, &n_rxq);
 
         /* Get the total pmd cycles for an interval. */
-        atomic_read_relaxed(&pmd->intrvl_cycles, &total_cycles);
+        atomic_read_relaxed(&pmd->intrvl_cycles, &total_pmd_cycles);
+        /* Calculate how many intervals are to be used. */
+        intervals = DIV_ROUND_UP(secs,
+                                 PMD_INTERVAL_LEN / INTERVAL_USEC_TO_SEC);
         /* Estimate the cycles to cover all intervals. */
-        total_cycles *= PMD_INTERVAL_MAX;
-
-        for (int j = 0; j < PMD_INTERVAL_MAX; j++) {
-            uint64_t cycles;
-
-            atomic_read_relaxed(&pmd->busy_cycles_intrvl[j], &cycles);
-            busy_cycles += cycles;
-        }
-        if (busy_cycles > total_cycles) {
-            busy_cycles = total_cycles;
+        total_pmd_cycles *= intervals;
+        busy_pmd_cycles = get_interval_values(pmd->busy_cycles_intrvl,
+                                              &pmd->intrvl_idx,
+                                              intervals);
+        if (busy_pmd_cycles > total_pmd_cycles) {
+            busy_pmd_cycles = total_pmd_cycles;
         }
 
         for (int i = 0; i < n_rxq; i++) {
@@ -906,18 +923,18 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
             const char *name = netdev_rxq_get_name(rxq->rx);
             uint64_t rxq_proc_cycles = 0;
 
-            for (int j = 0; j < PMD_INTERVAL_MAX; j++) {
-                rxq_proc_cycles += dp_netdev_rxq_get_intrvl_cycles(rxq, j);
-            }
+            rxq_proc_cycles = get_interval_values(rxq->cycles_intrvl,
+                                                  &rxq->intrvl_idx,
+                                                  intervals);
             total_rxq_proc_cycles += rxq_proc_cycles;
             ds_put_format(reply, "  port: %-16s  queue-id: %2d", name,
                           netdev_rxq_get_queue_id(list[i].rxq->rx));
             ds_put_format(reply, " %s", netdev_rxq_enabled(list[i].rxq->rx)
                                         ? "(enabled) " : "(disabled)");
             ds_put_format(reply, "  pmd usage: ");
-            if (total_cycles) {
+            if (total_pmd_cycles) {
                 ds_put_format(reply, "%2"PRIu64"",
-                              rxq_proc_cycles * 100 / total_cycles);
+                              rxq_proc_cycles * 100 / total_pmd_cycles);
                 ds_put_cstr(reply, " %");
             } else {
                 ds_put_format(reply, "%s", "NOT AVAIL");
@@ -927,14 +944,14 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
 
         if (n_rxq > 0) {
             ds_put_cstr(reply, "  overhead: ");
-            if (total_cycles) {
+            if (total_pmd_cycles) {
                 uint64_t overhead_cycles = 0;
 
-                if (total_rxq_proc_cycles < busy_cycles) {
-                    overhead_cycles = busy_cycles - total_rxq_proc_cycles;
+                if (total_rxq_proc_cycles < busy_pmd_cycles) {
+                    overhead_cycles = busy_pmd_cycles - total_rxq_proc_cycles;
                 }
                 ds_put_format(reply, "%2"PRIu64" %%",
-                              overhead_cycles * 100 / total_cycles);
+                              overhead_cycles * 100 / total_pmd_cycles);
             } else {
                 ds_put_cstr(reply, "NOT AVAIL");
             }
@@ -1422,6 +1439,12 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     unsigned int core_id;
     bool filter_on_pmd = false;
     size_t n;
+    unsigned int secs = 0;
+    unsigned long long max_secs = (PMD_INTERVAL_LEN * PMD_INTERVAL_MAX)
+                                      / INTERVAL_USEC_TO_SEC;
+    uint64_t default_max_sleep = 0;
+    bool show_header = true;
+
 
     ovs_mutex_lock(&dp_netdev_mutex);
 
@@ -1429,6 +1452,14 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
         if (!strcmp(argv[1], "-pmd") && argc > 2) {
             if (str_to_uint(argv[2], 10, &core_id)) {
                 filter_on_pmd = true;
+            }
+            argc -= 2;
+            argv += 2;
+        } else if (type == PMD_INFO_SHOW_RXQ &&
+                       !strcmp(argv[1], "-secs") &&
+                       argc > 2) {
+            if (!str_to_uint(argv[2], 10, &secs)) {
+                secs = max_secs;
             }
             argc -= 2;
             argv += 2;
@@ -1461,13 +1492,32 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
             continue;
         }
         if (type == PMD_INFO_SHOW_RXQ) {
-            pmd_info_show_rxq(&reply, pmd);
+            if (show_header) {
+                if (!secs || secs > max_secs) {
+                    secs = max_secs;
+                } else {
+                    secs = ROUND_UP(secs,
+                                    PMD_INTERVAL_LEN / INTERVAL_USEC_TO_SEC);
+                }
+                ds_put_format(&reply, "Displaying last %u seconds "
+                              "pmd usage %%\n", secs);
+                show_header = false;
+            }
+            pmd_info_show_rxq(&reply, pmd, secs);
         } else if (type == PMD_INFO_CLEAR_STATS) {
             pmd_perf_stats_clear(&pmd->perf_stats);
         } else if (type == PMD_INFO_SHOW_STATS) {
             pmd_info_show_stats(&reply, pmd);
         } else if (type == PMD_INFO_PERF_SHOW) {
             pmd_info_show_perf(&reply, pmd, (struct pmd_perf_params *)aux);
+        } else if (type == PMD_INFO_SLEEP_SHOW) {
+            if (show_header) {
+                atomic_read_relaxed(&dp->pmd_max_sleep, &default_max_sleep);
+                ds_put_format(&reply, "Default max sleep: %4"PRIu64" us",
+                              default_max_sleep);
+                ds_put_cstr(&reply, "\n");
+                show_header = false;
+            }
         }
     }
     free(pmd_list);
@@ -1568,7 +1618,8 @@ dpif_netdev_init(void)
 {
     static enum pmd_info_type show_aux = PMD_INFO_SHOW_STATS,
                               clear_aux = PMD_INFO_CLEAR_STATS,
-                              poll_aux = PMD_INFO_SHOW_RXQ;
+                              poll_aux = PMD_INFO_SHOW_RXQ,
+                              sleep_aux = PMD_INFO_SLEEP_SHOW;
 
     unixctl_command_register("dpif-netdev/pmd-stats-show", "[-pmd core] [dp]",
                              0, 3, dpif_netdev_pmd_info,
@@ -1576,9 +1627,13 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[-pmd core] [dp]",
                              0, 3, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
-    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[-pmd core] [dp]",
-                             0, 3, dpif_netdev_pmd_info,
+    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[-pmd core] "
+                             "[-secs secs] [dp]",
+                             0, 5, dpif_netdev_pmd_info,
                              (void *)&poll_aux);
+    unixctl_command_register("dpif-netdev/pmd-sleep-show", "[dp]",
+                             0, 1, dpif_netdev_pmd_info,
+                             (void *)&sleep_aux);
     unixctl_command_register("dpif-netdev/pmd-perf-show",
                              "[-nh] [-it iter-history-len]"
                              " [-ms ms-history-len]"
@@ -3320,6 +3375,27 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
+/* Initializes 'key' as a copy of 'flow'. */
+static inline void
+netdev_flow_key_init(struct netdev_flow_key *key,
+                     const struct flow *flow)
+{
+    uint32_t hash = 0;
+    uint64_t value;
+
+    miniflow_map_init(&key->mf, flow);
+    miniflow_init(&key->mf, flow);
+
+    size_t n = miniflow_n_values(&key->mf);
+
+    FLOW_FOR_EACH_IN_MAPS (value, flow, key->mf.map) {
+        hash = hash_add64(hash, value);
+    }
+
+    key->hash = hash_finish(hash, n * 8);
+    key->len = netdev_flow_key_size(n);
+}
+
 static inline void
 emc_change_entry(struct emc_entry *ce, struct dp_netdev_flow *flow,
                  const struct netdev_flow_key *key)
@@ -4129,7 +4205,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
                 const struct dpif_flow_put *put,
                 struct dpif_flow_stats *stats)
 {
-    struct dp_netdev_flow *netdev_flow;
+    struct dp_netdev_flow *netdev_flow = NULL;
     int error = 0;
 
     if (stats) {
@@ -4137,16 +4213,35 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
     }
 
     ovs_mutex_lock(&pmd->flow_mutex);
-    netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
-    if (!netdev_flow) {
-        if (put->flags & DPIF_FP_CREATE) {
-            dp_netdev_flow_add(pmd, match, ufid, put->actions,
-                               put->actions_len, ODPP_NONE);
-        } else {
-            error = ENOENT;
-        }
+    if (put->ufid) {
+        netdev_flow = dp_netdev_pmd_find_flow(pmd, put->ufid,
+                                              put->key, put->key_len);
     } else {
-        if (put->flags & DPIF_FP_MODIFY) {
+        /* Use key instead of the locally generated ufid
+         * to search netdev_flow. */
+        netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
+    }
+
+    if (put->flags & DPIF_FP_CREATE) {
+        if (!netdev_flow) {
+            dp_netdev_flow_add(pmd, match, ufid,
+                               put->actions, put->actions_len, ODPP_NONE);
+        } else {
+            error = EEXIST;
+        }
+        goto exit;
+    }
+
+    if (put->flags & DPIF_FP_MODIFY) {
+        if (!netdev_flow) {
+            error = ENOENT;
+        } else {
+            if (!put->ufid && !flow_equal(&match->flow, &netdev_flow->flow)) {
+                /* Overlapping flow. */
+                error = EINVAL;
+                goto exit;
+            }
+
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
 
@@ -4177,15 +4272,11 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
                  *   counter, and subtracting it before outputting the stats */
                 error = EOPNOTSUPP;
             }
-
             ovsrcu_postpone(dp_netdev_actions_free, old_actions);
-        } else if (put->flags & DPIF_FP_CREATE) {
-            error = EEXIST;
-        } else {
-            /* Overlapping flow. */
-            error = EINVAL;
         }
     }
+
+exit:
     ovs_mutex_unlock(&pmd->flow_mutex);
     return error;
 }
@@ -4194,7 +4285,7 @@ static int
 dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct netdev_flow_key key, mask;
+    struct netdev_flow_key key;
     struct dp_netdev_pmd_thread *pmd;
     struct match match;
     ovs_u128 ufid;
@@ -4243,9 +4334,12 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 
     /* Must produce a netdev_flow_key for lookup.
      * Use the same method as employed to create the key when adding
-     * the flow to the dplcs to make sure they match. */
-    netdev_flow_mask_init(&mask, &match);
-    netdev_flow_key_init_masked(&key, &match.flow, &mask);
+     * the flow to the dplcs to make sure they match.
+     * We need to put in the unmasked key as flow_put_on_pmd() will first try
+     * to see if an entry exists doing a packet type lookup. As masked-out
+     * fields are interpreted as zeros, they could falsely match a wider IP
+     * address mask. Installation of the flow will use the match variable. */
+    netdev_flow_key_init(&key, &match.flow);
 
     if (put->pmd_id == PMD_ID_NULL) {
         if (cmap_count(&dp->poll_threads) == 0) {
@@ -4654,6 +4748,10 @@ dpif_netdev_offload_stats_get(struct dpif *dpif,
     }
 
     nb_thread = netdev_offload_thread_nb();
+    if (!nb_thread) {
+        return EINVAL;
+    }
+
     /* nb_thread counters for the overall total as well. */
     stats->size = ARRAY_SIZE(hwol_stats) * (nb_thread + 1);
     stats->counters = xcalloc(stats->size, sizeof *stats->counters);
@@ -4766,8 +4864,10 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     uint64_t rebalance_intvl;
     uint8_t cur_rebalance_load;
     uint32_t rebalance_load, rebalance_improve;
+    uint64_t  pmd_max_sleep, cur_pmd_max_sleep;
     bool log_autolb = false;
     enum sched_assignment_type pmd_rxq_assign_type;
+    static bool first_set_config = true;
 
     tx_flush_interval = smap_get_int(other_config, "tx-flush-interval",
                                      DEFAULT_TX_FLUSH_INTERVAL);
@@ -4914,6 +5014,27 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     bool autolb_state = smap_get_bool(other_config, "pmd-auto-lb", false);
 
     set_pmd_auto_lb(dp, autolb_state, log_autolb);
+
+    pmd_max_sleep = smap_get_ullong(other_config, "pmd-maxsleep", UINT64_MAX);
+    if (pmd_max_sleep != UINT64_MAX) {
+        VLOG_WARN("pmd-maxsleep is deprecated. "
+                  "Please use pmd-sleep-max instead.");
+    } else {
+        pmd_max_sleep = 0;
+    }
+
+    pmd_max_sleep = smap_get_ullong(other_config, "pmd-sleep-max",
+                                    pmd_max_sleep);
+    pmd_max_sleep = MIN(PMD_RCU_QUIESCE_INTERVAL, pmd_max_sleep);
+    atomic_read_relaxed(&dp->pmd_max_sleep, &cur_pmd_max_sleep);
+    if (first_set_config || pmd_max_sleep != cur_pmd_max_sleep) {
+        atomic_store_relaxed(&dp->pmd_max_sleep, pmd_max_sleep);
+        VLOG_INFO("PMD max sleep request is %"PRIu64" usecs.", pmd_max_sleep);
+        VLOG_INFO("PMD load based sleeps are %s.",
+                  pmd_max_sleep ? "enabled" : "disabled" );
+    }
+
+    first_set_config  = false;
     return 0;
 }
 
@@ -5149,7 +5270,7 @@ static void
 dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
                                 unsigned long long cycles)
 {
-    unsigned int idx = rx->intrvl_idx++ % PMD_INTERVAL_MAX;
+    unsigned int idx = atomic_count_inc(&rx->intrvl_idx) % PMD_INTERVAL_MAX;
     atomic_store_relaxed(&rx->cycles_intrvl[idx], cycles);
 }
 
@@ -6076,39 +6197,33 @@ rxq_scheduling(struct dp_netdev *dp)
 static uint64_t variance(uint64_t a[], int n);
 
 static uint64_t
-sched_numa_list_variance(struct sched_numa_list *numa_list)
+sched_numa_variance(struct sched_numa *numa)
 {
-    struct sched_numa *numa;
     uint64_t *percent_busy = NULL;
-    unsigned total_pmds = 0;
     int n_proc = 0;
     uint64_t var;
 
-    HMAP_FOR_EACH (numa, node, &numa_list->numas) {
-        total_pmds += numa->n_pmds;
-        percent_busy = xrealloc(percent_busy,
-                                total_pmds * sizeof *percent_busy);
+    percent_busy = xmalloc(numa->n_pmds * sizeof *percent_busy);
 
-        for (unsigned i = 0; i < numa->n_pmds; i++) {
-            struct sched_pmd *sched_pmd;
-            uint64_t total_cycles = 0;
+    for (unsigned i = 0; i < numa->n_pmds; i++) {
+        struct sched_pmd *sched_pmd;
+        uint64_t total_cycles = 0;
 
-            sched_pmd = &numa->pmds[i];
-            /* Exclude isolated PMDs from variance calculations. */
-            if (sched_pmd->isolated == true) {
-                continue;
-            }
-            /* Get the total pmd cycles for an interval. */
-            atomic_read_relaxed(&sched_pmd->pmd->intrvl_cycles, &total_cycles);
+        sched_pmd = &numa->pmds[i];
+        /* Exclude isolated PMDs from variance calculations. */
+        if (sched_pmd->isolated == true) {
+            continue;
+        }
+        /* Get the total pmd cycles for an interval. */
+        atomic_read_relaxed(&sched_pmd->pmd->intrvl_cycles, &total_cycles);
 
-            if (total_cycles) {
-                /* Estimate the cycles to cover all intervals. */
-                total_cycles *= PMD_INTERVAL_MAX;
-                percent_busy[n_proc++] = (sched_pmd->pmd_proc_cycles * 100)
-                                             / total_cycles;
-            } else {
-                percent_busy[n_proc++] = 0;
-            }
+        if (total_cycles) {
+            /* Estimate the cycles to cover all intervals. */
+            total_cycles *= PMD_INTERVAL_MAX;
+            percent_busy[n_proc++] = (sched_pmd->pmd_proc_cycles * 100)
+                                            / total_cycles;
+        } else {
+            percent_busy[n_proc++] = 0;
         }
     }
     var = variance(percent_busy, n_proc);
@@ -6182,6 +6297,7 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
     struct sched_numa_list numa_list_est;
     bool thresh_met = false;
     uint64_t current_var, estimate_var;
+    struct sched_numa *numa_cur, *numa_est;
     uint64_t improvement = 0;
 
     VLOG_DBG("PMD auto load balance performing dry run.");
@@ -6200,25 +6316,29 @@ pmd_rebalance_dry_run(struct dp_netdev *dp)
             sched_numa_list_count(&numa_list_est) == 1) {
 
         /* Calculate variances. */
-        current_var = sched_numa_list_variance(&numa_list_cur);
-        estimate_var = sched_numa_list_variance(&numa_list_est);
-
-        if (estimate_var < current_var) {
-             improvement = ((current_var - estimate_var) * 100) / current_var;
+        HMAP_FOR_EACH (numa_cur, node, &numa_list_cur.numas) {
+            numa_est = sched_numa_list_lookup(&numa_list_est,
+                                              numa_cur->numa_id);
+            if (!numa_est) {
+                continue;
+            }
+            current_var = sched_numa_variance(numa_cur);
+            estimate_var = sched_numa_variance(numa_est);
+            if (estimate_var < current_var) {
+                improvement = ((current_var - estimate_var) * 100)
+                              / current_var;
+            }
+            VLOG_DBG("Numa node %d. Current variance %"PRIu64" Estimated "
+                     "variance %"PRIu64". Variance improvement %"PRIu64"%%.",
+                     numa_cur->numa_id, current_var,
+                     estimate_var, improvement);
+            if (improvement >= dp->pmd_alb.rebalance_improve_thresh) {
+                thresh_met = true;
+            }
         }
-        VLOG_DBG("Current variance %"PRIu64" Estimated variance %"PRIu64".",
-                 current_var, estimate_var);
-        VLOG_DBG("Variance improvement %"PRIu64"%%.", improvement);
-
-        if (improvement >= dp->pmd_alb.rebalance_improve_thresh) {
-            thresh_met = true;
-            VLOG_DBG("PMD load variance improvement threshold %u%% "
-                     "is met.", dp->pmd_alb.rebalance_improve_thresh);
-        } else {
-            VLOG_DBG("PMD load variance improvement threshold "
-                     "%u%% is not met.",
-                      dp->pmd_alb.rebalance_improve_thresh);
-        }
+        VLOG_DBG("PMD load variance improvement threshold %u%% is %s.",
+                 dp->pmd_alb.rebalance_improve_thresh,
+                 thresh_met ? "met" : "not met");
     } else {
         VLOG_DBG("PMD auto load balance detected cross-numa polling with "
                  "multiple numa nodes. Unable to accurately estimate.");
@@ -6875,6 +6995,7 @@ pmd_thread_main(void *f_)
     int poll_cnt;
     int i;
     int process_packets = 0;
+    uint64_t sleep_time = 0;
 
     poll_list = NULL;
 
@@ -6885,9 +7006,13 @@ pmd_thread_main(void *f_)
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
     dfc_cache_init(&pmd->flow_cache);
     pmd_alloc_static_tx_qid(pmd);
+    set_timer_resolution(PMD_TIMER_RES_NS);
 
 reload:
     atomic_count_init(&pmd->pmd_overloaded, 0);
+
+    pmd->intrvl_tsc_prev = 0;
+    atomic_store_relaxed(&pmd->intrvl_cycles, 0);
 
     if (!dpdk_attached) {
         dpdk_attached = dpdk_attach_thread(pmd->core_id);
@@ -6920,12 +7045,10 @@ reload:
         }
     }
 
-    pmd->intrvl_tsc_prev = 0;
-    atomic_store_relaxed(&pmd->intrvl_cycles, 0);
     for (i = 0; i < PMD_INTERVAL_MAX; i++) {
         atomic_store_relaxed(&pmd->busy_cycles_intrvl[i], 0);
     }
-    pmd->intrvl_idx = 0;
+    atomic_count_set(&pmd->intrvl_idx, 0);
     cycles_counter_update(s);
 
     pmd->next_rcu_quiesce = pmd->ctx.now + PMD_RCU_QUIESCE_INTERVAL;
@@ -6934,10 +7057,13 @@ reload:
     ovs_mutex_lock(&pmd->perf_stats.stats_mutex);
     for (;;) {
         uint64_t rx_packets = 0, tx_packets = 0;
+        uint64_t time_slept = 0;
+        uint64_t max_sleep;
 
         pmd_perf_start_iteration(s);
 
         atomic_read_relaxed(&pmd->dp->smc_enable_db, &pmd->ctx.smc_enable_db);
+        atomic_read_relaxed(&pmd->dp->pmd_max_sleep, &max_sleep);
 
         for (i = 0; i < poll_cnt; i++) {
 
@@ -6956,6 +7082,9 @@ reload:
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq,
                                            poll_list[i].port_no);
             rx_packets += process_packets;
+            if (process_packets >= PMD_SLEEP_THRESH) {
+                sleep_time = 0;
+            }
         }
 
         if (!rx_packets) {
@@ -6963,7 +7092,30 @@ reload:
              * Check if we need to send something.
              * There was no time updates on current iteration. */
             pmd_thread_ctx_time_update(pmd);
-            tx_packets = dp_netdev_pmd_flush_output_packets(pmd, false);
+            tx_packets = dp_netdev_pmd_flush_output_packets(pmd,
+                                                   max_sleep && sleep_time
+                                                   ? true : false);
+        }
+
+        if (max_sleep) {
+            /* Check if a sleep should happen on this iteration. */
+            if (sleep_time) {
+                struct cycle_timer sleep_timer;
+
+                cycle_timer_start(&pmd->perf_stats, &sleep_timer);
+                xnanosleep_no_quiesce(sleep_time * 1000);
+                time_slept = cycle_timer_stop(&pmd->perf_stats, &sleep_timer);
+                pmd_thread_ctx_time_update(pmd);
+            }
+            if (sleep_time < max_sleep) {
+                /* Increase sleep time for next iteration. */
+                sleep_time += PMD_SLEEP_INC_US;
+            } else {
+                sleep_time = max_sleep;
+            }
+        } else {
+            /* Reset sleep time as max sleep policy may have been changed. */
+            sleep_time = 0;
         }
 
         /* Do RCU synchronization at fixed interval.  This ensures that
@@ -7003,7 +7155,7 @@ reload:
             break;
         }
 
-        pmd_perf_end_iteration(s, rx_packets, tx_packets,
+        pmd_perf_end_iteration(s, rx_packets, tx_packets, time_slept,
                                pmd_perf_metrics_enabled(pmd));
     }
     ovs_mutex_unlock(&pmd->perf_stats.stats_mutex);
@@ -7055,22 +7207,56 @@ dpif_netdev_meter_get_features(const struct dpif * dpif OVS_UNUSED,
     features->max_color = 0;
 }
 
+/* Tries to atomically add 'n' to 'value' in terms of saturation arithmetic,
+ * i.e., if the result will be larger than 'max_value', will store 'max_value'
+ * instead. */
+static void
+atomic_sat_add(atomic_uint64_t *value, uint64_t n, uint64_t max_value)
+{
+    uint64_t current, new_value;
+
+    atomic_read_relaxed(value, &current);
+    do {
+        new_value = current + n;
+        new_value = MIN(new_value, max_value);
+    } while (!atomic_compare_exchange_weak_relaxed(value, &current,
+                                                   new_value));
+}
+
+/* Tries to atomically subtract 'n' from 'value'.  Does not perform the
+ * operation and returns 'false' if the result will be less than 'min_value'.
+ * Otherwise, stores the result and returns 'true'. */
+static bool
+atomic_bound_sub(atomic_uint64_t *value, uint64_t n, uint64_t min_value)
+{
+    uint64_t current;
+
+    atomic_read_relaxed(value, &current);
+    do {
+        if (current < min_value + n) {
+            return false;
+        }
+    } while (!atomic_compare_exchange_weak_relaxed(value, &current,
+                                                   current - n));
+    return true;
+}
+
 /* Applies the meter identified by 'meter_id' to 'packets_'.  Packets
  * that exceed a band are dropped in-place. */
 static void
 dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
-                    uint32_t meter_id, long long int now)
+                    uint32_t meter_id, long long int now_ms)
 {
-    struct dp_meter *meter;
+    const size_t cnt = dp_packet_batch_size(packets_);
+    uint32_t exceeded_rate[NETDEV_MAX_BURST];
+    uint32_t exceeded_band[NETDEV_MAX_BURST];
+    uint64_t bytes, volume, meter_used, old;
+    uint64_t band_packets[MAX_BANDS];
+    uint64_t band_bytes[MAX_BANDS];
     struct dp_meter_band *band;
     struct dp_packet *packet;
-    long long int long_delta_t; /* msec */
-    uint32_t delta_t; /* msec */
-    const size_t cnt = dp_packet_batch_size(packets_);
-    uint32_t bytes, volume;
-    int exceeded_band[NETDEV_MAX_BURST];
-    uint32_t exceeded_rate[NETDEV_MAX_BURST];
-    int exceeded_pkt = cnt; /* First packet that exceeded a band rate. */
+    struct dp_meter *meter;
+    bool exceeded = false;
 
     if (meter_id >= MAX_METERS) {
         return;
@@ -7086,116 +7272,101 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     /* Initialize as zeroes. */
     memset(exceeded_rate, 0, cnt * sizeof *exceeded_rate);
 
-    ovs_mutex_lock(&meter->lock);
-    /* All packets will hit the meter at the same time. */
-    long_delta_t = now / 1000 - meter->used / 1000; /* msec */
+    atomic_read_relaxed(&meter->used, &meter_used);
+    do {
+        if (meter_used >= now_ms) {
+            /* The '>' condition means that we have several threads hitting the
+             * same meter, and the other one already advanced the time. */
+            meter_used = now_ms;
+            break;
+        }
+    } while (!atomic_compare_exchange_weak_relaxed(&meter->used,
+                                                   &meter_used, now_ms));
 
-    if (long_delta_t < 0) {
-        /* This condition means that we have several threads fighting for a
-           meter lock, and the one who received the packets a bit later wins.
-           Assuming that all racing threads received packets at the same time
-           to avoid overflow. */
-        long_delta_t = 0;
+    /* Refill all buckets right away, since other threads may use them. */
+    if (meter_used < now_ms) {
+        /* All packets will hit the meter at the same time. */
+        uint64_t delta_t = now_ms - meter_used;
+
+        /* Make sure delta_t will not be too large, so that bucket will not
+         * wrap around below. */
+        delta_t = MIN(delta_t, meter->max_delta_t);
+
+        for (int m = 0; m < meter->n_bands; m++) {
+            band = &meter->bands[m];
+            /* Update band's bucket.  We can't just use atomic add here,
+             * because we should never add above the max capacity. */
+            atomic_sat_add(&band->bucket, delta_t * band->rate,
+                           band->burst_size * 1000ULL);
+        }
     }
 
-    /* Make sure delta_t will not be too large, so that bucket will not
-     * wrap around below. */
-    delta_t = (long_delta_t > (long long int)meter->max_delta_t)
-        ? meter->max_delta_t : (uint32_t)long_delta_t;
-
     /* Update meter stats. */
-    meter->used = now;
-    meter->packet_count += cnt;
+    atomic_add_relaxed(&meter->packet_count, cnt, &old);
     bytes = 0;
     DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
         bytes += dp_packet_size(packet);
     }
-    meter->byte_count += bytes;
+    atomic_add_relaxed(&meter->byte_count, bytes, &old);
 
     /* Meters can operate in terms of packets per second or kilobits per
      * second. */
     if (meter->flags & OFPMF13_PKTPS) {
-        /* Rate in packets/second, bucket 1/1000 packets. */
-        /* msec * packets/sec = 1/1000 packets. */
+        /* Rate in packets/second, bucket 1/1000 packets.
+         * msec * packets/sec = 1/1000 packets. */
         volume = cnt * 1000; /* Take 'cnt' packets from the bucket. */
     } else {
-        /* Rate in kbps, bucket in bits. */
-        /* msec * kbps = bits */
+        /* Rate in kbps, bucket in bits.
+         * msec * kbps = bits */
         volume = bytes * 8;
     }
 
-    /* Update all bands and find the one hit with the highest rate for each
-     * packet (if any). */
-    for (int m = 0; m < meter->n_bands; ++m) {
-        uint64_t max_bucket_size;
-
+    /* Find the band hit with the highest rate for each packet (if any). */
+    for (int m = 0; m < meter->n_bands; m++) {
         band = &meter->bands[m];
-        max_bucket_size = band->burst_size * 1000ULL;
-        /* Update band's bucket. */
-        band->bucket += (uint64_t) delta_t * band->rate;
-        if (band->bucket > max_bucket_size) {
-            band->bucket = max_bucket_size;
-        }
 
         /* Drain the bucket for all the packets, if possible. */
-        if (band->bucket >= volume) {
-            band->bucket -= volume;
-        } else {
-            int band_exceeded_pkt;
+        if (atomic_bound_sub(&band->bucket, volume, 0)) {
+            continue;
+        }
 
-            /* Band limit hit, must process packet-by-packet. */
-            if (meter->flags & OFPMF13_PKTPS) {
-                band_exceeded_pkt = band->bucket / 1000;
-                band->bucket %= 1000; /* Remainder stays in bucket. */
+        /* Band limit hit, must process packet-by-packet. */
+        DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
+            uint64_t packet_volume = (meter->flags & OFPMF13_PKTPS)
+                                     ? 1000 : (dp_packet_size(packet) * 8);
 
-                /* Update the exceeding band for each exceeding packet.
-                 * (Only one band will be fired by a packet, and that
-                 * can be different for each packet.) */
-                for (int i = band_exceeded_pkt; i < cnt; i++) {
-                    if (band->rate > exceeded_rate[i]) {
-                        exceeded_rate[i] = band->rate;
-                        exceeded_band[i] = m;
-                    }
+            if (!atomic_bound_sub(&band->bucket, packet_volume, 0)) {
+                /* Update the exceeding band for the exceeding packet.
+                 * Only one band will be fired by a packet, and that can
+                 * be different for each packet. */
+                if (band->rate > exceeded_rate[i]) {
+                    exceeded_rate[i] = band->rate;
+                    exceeded_band[i] = m;
+                    exceeded = true;
                 }
-            } else {
-                /* Packet sizes differ, must process one-by-one. */
-                band_exceeded_pkt = cnt;
-                DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
-                    uint32_t bits = dp_packet_size(packet) * 8;
-
-                    if (band->bucket >= bits) {
-                        band->bucket -= bits;
-                    } else {
-                        if (i < band_exceeded_pkt) {
-                            band_exceeded_pkt = i;
-                        }
-                        /* Update the exceeding band for the exceeding packet.
-                         * (Only one band will be fired by a packet, and that
-                         * can be different for each packet.) */
-                        if (band->rate > exceeded_rate[i]) {
-                            exceeded_rate[i] = band->rate;
-                            exceeded_band[i] = m;
-                        }
-                    }
-                }
-            }
-            /* Remember the first exceeding packet. */
-            if (exceeded_pkt > band_exceeded_pkt) {
-                exceeded_pkt = band_exceeded_pkt;
             }
         }
+    }
+
+    /* No need to iterate over packets if there are no drops. */
+    if (!exceeded) {
+        return;
     }
 
     /* Fire the highest rate band exceeded by each packet, and drop
      * packets if needed. */
+
+    memset(band_packets, 0, sizeof band_packets);
+    memset(band_bytes,   0, sizeof band_bytes);
+
     size_t j;
     DP_PACKET_BATCH_REFILL_FOR_EACH (j, cnt, packet, packets_) {
-        if (exceeded_band[j] >= 0) {
+        uint32_t m = exceeded_band[j];
+
+        if (m != UINT32_MAX) {
             /* Meter drop packet. */
-            band = &meter->bands[exceeded_band[j]];
-            band->packet_count += 1;
-            band->byte_count += dp_packet_size(packet);
-            COVERAGE_INC(datapath_drop_meter);
+            band_packets[m]++;
+            band_bytes[m] += dp_packet_size(packet);
             dp_packet_delete(packet);
         } else {
             /* Meter accepts packet. */
@@ -7203,7 +7374,15 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
         }
     }
 
-    ovs_mutex_unlock(&meter->lock);
+    for (int m = 0; m < meter->n_bands; m++) {
+        if (!band_packets[m]) {
+            continue;
+        }
+        band = &meter->bands[m];
+        atomic_add_relaxed(&band->packet_count, band_packets[m], &old);
+        atomic_add_relaxed(&band->byte_count,   band_bytes[m],   &old);
+        COVERAGE_ADD(datapath_drop_meter, band_packets[m]);
+    }
 }
 
 /* Meter set/get/del processing is still single-threaded. */
@@ -7244,13 +7423,13 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
     meter->flags = config->flags;
     meter->n_bands = config->n_bands;
     meter->max_delta_t = 0;
-    meter->used = time_usec();
     meter->id = mid;
-    ovs_mutex_init_adaptive(&meter->lock);
+    atomic_init(&meter->used, time_msec());
 
     /* set up bands */
     for (i = 0; i < config->n_bands; ++i) {
         uint32_t band_max_delta_t;
+        uint64_t bucket_size;
 
         /* Set burst size to a workable value if none specified. */
         if (config->bands[i].burst_size == 0) {
@@ -7260,11 +7439,11 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
         meter->bands[i].rate = config->bands[i].rate;
         meter->bands[i].burst_size = config->bands[i].burst_size;
         /* Start with a full bucket. */
-        meter->bands[i].bucket = meter->bands[i].burst_size * 1000ULL;
+        bucket_size = meter->bands[i].burst_size * 1000ULL;
+        atomic_init(&meter->bands[i].bucket, bucket_size);
 
         /* Figure out max delta_t that is enough to fill any bucket. */
-        band_max_delta_t
-            = meter->bands[i].bucket / meter->bands[i].rate;
+        band_max_delta_t = bucket_size / meter->bands[i].rate;
         if (band_max_delta_t > meter->max_delta_t) {
             meter->max_delta_t = band_max_delta_t;
         }
@@ -7287,7 +7466,7 @@ dpif_netdev_meter_get(const struct dpif *dpif,
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     uint32_t meter_id = meter_id_.uint32;
-    const struct dp_meter *meter;
+    struct dp_meter *meter;
 
     if (meter_id >= MAX_METERS) {
         return EFBIG;
@@ -7301,17 +7480,15 @@ dpif_netdev_meter_get(const struct dpif *dpif,
     if (stats) {
         int i = 0;
 
-        ovs_mutex_lock(&meter->lock);
-
-        stats->packet_in_count = meter->packet_count;
-        stats->byte_in_count = meter->byte_count;
+        atomic_read_relaxed(&meter->packet_count, &stats->packet_in_count);
+        atomic_read_relaxed(&meter->byte_count, &stats->byte_in_count);
 
         for (i = 0; i < n_bands && i < meter->n_bands; ++i) {
-            stats->bands[i].packet_count = meter->bands[i].packet_count;
-            stats->bands[i].byte_count = meter->bands[i].byte_count;
+            atomic_read_relaxed(&meter->bands[i].packet_count,
+                                &stats->bands[i].packet_count);
+            atomic_read_relaxed(&meter->bands[i].byte_count,
+                                &stats->bands[i].byte_count);
         }
-
-        ovs_mutex_unlock(&meter->lock);
         stats->n_bands = i;
     }
 
@@ -7802,6 +7979,8 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 
         ds_destroy(&ds);
     }
+
+    dp_packet_ol_send_prepare(packet_, 0);
 
     return dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
                          actions, wc, put_actions, dp->upcall_aux);
@@ -9061,7 +9240,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     case OVS_ACTION_ATTR_METER:
         dp_netdev_run_meter(pmd->dp, packets_, nl_attr_get_u32(a),
-                            pmd->ctx.now);
+                            pmd->ctx.now / 1000);
         break;
 
     case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -9156,6 +9335,53 @@ dpif_netdev_ct_dump_done(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
+dpif_netdev_ct_exp_dump_start(struct dpif *dpif,
+                              struct ct_dpif_dump_state **dump_,
+                              const uint16_t *pzone)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_ct_dump *dump;
+
+    dump = xzalloc(sizeof *dump);
+    dump->dp = dp;
+    dump->ct = dp->conntrack;
+
+    conntrack_exp_dump_start(dp->conntrack, &dump->dump, pzone);
+
+    *dump_ = &dump->up;
+
+    return 0;
+}
+
+static int
+dpif_netdev_ct_exp_dump_next(struct dpif *dpif OVS_UNUSED,
+                             struct ct_dpif_dump_state *dump_,
+                             struct ct_dpif_exp *entry)
+{
+    struct dp_netdev_ct_dump *dump;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    return conntrack_exp_dump_next(&dump->dump, entry);
+}
+
+static int
+dpif_netdev_ct_exp_dump_done(struct dpif *dpif OVS_UNUSED,
+                             struct ct_dpif_dump_state *dump_)
+{
+    struct dp_netdev_ct_dump *dump;
+    int err;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    err = conntrack_exp_dump_done(&dump->dump);
+
+    free(dump);
+
+    return err;
+}
+
+static int
 dpif_netdev_ct_flush(struct dpif *dpif, const uint16_t *zone,
                      const struct ct_dpif_tuple *tuple)
 {
@@ -9204,6 +9430,21 @@ dpif_netdev_ct_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     *enabled = conntrack_get_tcp_seq_chk(dp->conntrack);
+    return 0;
+}
+
+static int
+dpif_netdev_ct_set_sweep_interval(struct dpif *dpif, uint32_t ms)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return conntrack_set_sweep_interval(dp->conntrack, ms);
+}
+
+static int
+dpif_netdev_ct_get_sweep_interval(struct dpif *dpif, uint32_t *ms)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    *ms = conntrack_get_sweep_interval(dp->conntrack);
     return 0;
 }
 
@@ -9506,6 +9747,7 @@ dpif_netdev_bond_stats_get(struct dpif *dpif, uint32_t bond_id,
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     true,                       /* cleanup_required */
+    true,                       /* synced_dp_layers */
     dpif_netdev_init,
     dpif_netdev_enumerate,
     dpif_netdev_port_open_type,
@@ -9551,12 +9793,17 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_dump_start,
     dpif_netdev_ct_dump_next,
     dpif_netdev_ct_dump_done,
+    dpif_netdev_ct_exp_dump_start,
+    dpif_netdev_ct_exp_dump_next,
+    dpif_netdev_ct_exp_dump_done,
     dpif_netdev_ct_flush,
     dpif_netdev_ct_set_maxconns,
     dpif_netdev_ct_get_maxconns,
     dpif_netdev_ct_get_nconns,
     dpif_netdev_ct_set_tcp_seq_chk,
     dpif_netdev_ct_get_tcp_seq_chk,
+    dpif_netdev_ct_set_sweep_interval,
+    dpif_netdev_ct_get_sweep_interval,
     dpif_netdev_ct_set_limits,
     dpif_netdev_ct_get_limits,
     dpif_netdev_ct_del_limits,
@@ -9854,7 +10101,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                            struct polled_queue *poll_list, int poll_cnt)
 {
     struct dpcls *cls;
-    uint64_t tot_idle = 0, tot_proc = 0;
+    uint64_t tot_idle = 0, tot_proc = 0, tot_sleep = 0;
     unsigned int pmd_load = 0;
 
     if (pmd->ctx.now > pmd->next_cycle_store) {
@@ -9871,10 +10118,13 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                        pmd->prev_stats[PMD_CYCLES_ITER_IDLE];
             tot_proc = pmd->perf_stats.counters.n[PMD_CYCLES_ITER_BUSY] -
                        pmd->prev_stats[PMD_CYCLES_ITER_BUSY];
+            tot_sleep = pmd->perf_stats.counters.n[PMD_CYCLES_SLEEP] -
+                        pmd->prev_stats[PMD_CYCLES_SLEEP];
 
             if (pmd_alb->is_enabled && !pmd->isolated) {
                 if (tot_proc) {
-                    pmd_load = ((tot_proc * 100) / (tot_idle + tot_proc));
+                    pmd_load = ((tot_proc * 100) /
+                                    (tot_idle + tot_proc + tot_sleep));
                 }
 
                 atomic_read_relaxed(&pmd_alb->rebalance_load_thresh,
@@ -9891,6 +10141,8 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                         pmd->perf_stats.counters.n[PMD_CYCLES_ITER_IDLE];
         pmd->prev_stats[PMD_CYCLES_ITER_BUSY] =
                         pmd->perf_stats.counters.n[PMD_CYCLES_ITER_BUSY];
+        pmd->prev_stats[PMD_CYCLES_SLEEP] =
+                        pmd->perf_stats.counters.n[PMD_CYCLES_SLEEP];
 
         /* Get the cycles that were used to process each queue and store. */
         for (unsigned i = 0; i < poll_cnt; i++) {
@@ -9906,7 +10158,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
             atomic_store_relaxed(&pmd->intrvl_cycles,
                                  curr_tsc - pmd->intrvl_tsc_prev);
         }
-        idx = pmd->intrvl_idx++ % PMD_INTERVAL_MAX;
+        idx = atomic_count_inc(&pmd->intrvl_idx) % PMD_INTERVAL_MAX;
         atomic_store_relaxed(&pmd->busy_cycles_intrvl[idx], tot_proc);
         pmd->intrvl_tsc_prev = curr_tsc;
         /* Start new measuring interval */
@@ -9927,6 +10179,27 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                                      + DPCLS_OPTIMIZATION_INTERVAL;
         }
     }
+}
+
+/* Returns the sum of a specified number of newest to
+ * oldest interval values. 'cur_idx' is where the next
+ * write will be and wrap around needs to be handled.
+ */
+static uint64_t
+get_interval_values(atomic_ullong *source, atomic_count *cur_idx,
+                    int num_to_read) {
+    unsigned int i;
+    uint64_t total = 0;
+
+    i = atomic_count_get(cur_idx) % PMD_INTERVAL_MAX;
+    for (int read = 0; read < num_to_read; read++) {
+        uint64_t interval_value;
+
+        i = i ? i - 1 : PMD_INTERVAL_MAX - 1;
+        atomic_read_relaxed(&source[i], &interval_value);
+        total += interval_value;
+    }
+    return total;
 }
 
 /* Insert 'rule' into 'cls'. */

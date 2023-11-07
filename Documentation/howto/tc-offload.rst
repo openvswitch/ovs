@@ -112,3 +112,14 @@ First flow packet not processed by meter
 Packets that are received by ovs-vswitchd through an upcall before the actual
 meter flow is installed, are not passing TC police action and therefore are
 not considered for policing.
+
+Conntrack Application Layer Gateways (ALG)
+++++++++++++++++++++++++++++++++++++++++++
+
+TC does not support conntrack helpers, i.e., ALGs. TC will not offload flows if
+the ALG keyword is present within the ct() action. However, this will not allow
+ALGs to work within the datapath, as the return traffic without the ALG keyword
+might run through a TC rule, which internally will not call the conntrack
+helper required.
+
+So if ALG support is required, tc offload must be disabled.

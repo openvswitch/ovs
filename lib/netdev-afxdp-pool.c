@@ -15,6 +15,8 @@
  */
 #include <config.h>
 
+#include <errno.h>
+
 #include "dp-packet.h"
 #include "netdev-afxdp-pool.h"
 #include "openvswitch/util.h"

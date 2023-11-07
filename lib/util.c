@@ -25,6 +25,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 #include "bitmap.h"
@@ -642,6 +645,12 @@ set_subprogram_name(const char *subprogram_name)
     free(subprogram_name_set(pname));
 
 #if HAVE_GLIBC_PTHREAD_SETNAME_NP
+    /* The maximum supported thread name including '\0' is 16.
+     * Add '>' at 0th position to highlight that the name was truncated. */
+    if (strlen(pname) > 15) {
+        memmove(pname, &pname[strlen(pname) - 15], 15 + 1);
+        pname[0] = '>';
+    }
     pthread_setname_np(pthread_self(), pname);
 #elif HAVE_NETBSD_PTHREAD_SETNAME_NP
     pthread_setname_np(pthread_self(), "%s", pname);
@@ -2371,11 +2380,9 @@ xsleep(unsigned int seconds)
     ovsrcu_quiesce_end();
 }
 
-/* High resolution sleep. */
-void
-xnanosleep(uint64_t nanoseconds)
+static void
+xnanosleep__(uint64_t nanoseconds)
 {
-    ovsrcu_quiesce_start();
 #ifndef _WIN32
     int retval;
     struct timespec ts_sleep;
@@ -2403,8 +2410,36 @@ xnanosleep(uint64_t nanoseconds)
                        ovs_lasterror_to_string());
     }
 #endif
+}
+
+/* High resolution sleep with thread quiesce. */
+void
+xnanosleep(uint64_t nanoseconds)
+{
+    ovsrcu_quiesce_start();
+    xnanosleep__(nanoseconds);
     ovsrcu_quiesce_end();
 }
+
+/* High resolution sleep without thread quiesce. */
+void
+xnanosleep_no_quiesce(uint64_t nanoseconds)
+{
+    xnanosleep__(nanoseconds);
+}
+
+#if __linux__
+void
+set_timer_resolution(unsigned long nanoseconds)
+{
+    prctl(PR_SET_TIMERSLACK, nanoseconds);
+}
+#else
+void
+set_timer_resolution(unsigned long nanoseconds OVS_UNUSED)
+{
+}
+#endif
 
 /* Determine whether standard output is a tty or not. This is useful to decide
  * whether to use color output or not when --color option for utilities is set

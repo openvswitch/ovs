@@ -194,6 +194,7 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define PATTERN_IPV4_MASK PATTERN_IPV4_GEN(0xFF, 0xBF, 0xFF, 0xFF)
 #define PATTERN_IPV4_UDP PATTERN_IPV4_GEN(0x45, 0, 0, 0x11)
 #define PATTERN_IPV4_TCP PATTERN_IPV4_GEN(0x45, 0, 0, 0x06)
+#define PATTERN_IPV4_NVGRE PATTERN_IPV4_GEN(0x45, 0, 0, 0x2f)
 
 #define PATTERN_TCP_GEN(data_offset)                                    \
   0, 0, 0, 0, /* sport, dport */                                        \
@@ -217,6 +218,12 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
   26, 27, 28, 29, 30, 31, 32, 33, NU, NU, NU, NU, 20, 15, 22, 23, /* IPv4 */  \
   NU, NU, NU, NU, NU, NU, NU, NU, 34, 35, 36, 37, NU, NU, NU, NU, /* TCP */   \
   NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused. */
+
+#define PATTERN_IPV4_NVGRE_SHUFFLE \
+   0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, NU, NU, /* Ether */ \
+  26, 27, 28, 29, 30, 31, 32, 33, NU, NU, NU, NU, 20, 15, 22, 23, /* IPv4 */  \
+  NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused */\
+  NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, /* Unused */
 
 #define PATTERN_DT1Q_IPV4_UDP_SHUFFLE                                         \
   /* Ether (2 blocks): Note that *VLAN* type is written here. */              \
@@ -286,6 +293,9 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define KMASK_DT1Q_IPV6      0xFF0FULL
 #define KMASK_IPV6_NOHDR     0x00FFULL
 
+#define PATTERN_IPV4_KMASK \
+    (KMASK_ETHER | (KMASK_IPV4 << 16))
+
 #define PATTERN_IPV4_UDP_KMASK \
     (KMASK_ETHER | (KMASK_IPV4 << 16) | (KMASK_UDP << 32))
 
@@ -332,6 +342,7 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
 #define PKT_OFFSET_VLAN_IPV6_L4   (PKT_OFFSET_VLAN_L3 + IPV6_HEADER_LEN)
 #define PKT_OFFSET_IPV6_L4        (PKT_OFFSET_L3 + IPV6_HEADER_LEN)
 
+#define PKT_MIN_ETH_IPV4          (ETH_HEADER_LEN + IP_HEADER_LEN)
 #define PKT_MIN_ETH_IPV4_UDP      (PKT_OFFSET_IPV4_L4 + UDP_HEADER_LEN)
 #define PKT_MIN_ETH_VLAN_IPV4_UDP (PKT_OFFSET_VLAN_IPV4_L4 + UDP_HEADER_LEN)
 #define PKT_MIN_ETH_IPV4_TCP      (PKT_OFFSET_IPV4_L4 + TCP_HEADER_LEN)
@@ -352,8 +363,8 @@ _mm512_maskz_permutexvar_epi8_selector(__mmask64 k_shuf, __m512i v_shuf,
                        | MF_BIT(dl_dst) | MF_BIT(dl_src)| MF_BIT(dl_type))
 #define MF_ETH_VLAN   (MF_ETH | MF_BIT(vlans))
 
-#define MF_IPV4_UDP   (MF_BIT(nw_src) | MF_BIT(ipv6_label) | MF_BIT(tp_src) | \
-                       MF_BIT(tp_dst))
+#define MF_IPV4       (MF_BIT(nw_src) | MF_BIT(ipv6_label))
+#define MF_IPV4_UDP   (MF_IPV4 | MF_BIT(tp_src) | MF_BIT(tp_dst))
 #define MF_IPV4_TCP   (MF_IPV4_UDP | MF_BIT(tcp_flags) | MF_BIT(arp_tha.ea[2]))
 
 #define MF_IPV6_UDP   (MF_BIT(ipv6_label) | MF_WORD(ipv6_src, 2) |            \
@@ -449,6 +460,7 @@ enum MFEX_PROFILES {
     PROFILE_ETH_IPV6_TCP,
     PROFILE_ETH_VLAN_IPV6_TCP,
     PROFILE_ETH_VLAN_IPV6_UDP,
+    PROFILE_ETH_IPV4_NVGRE,
     PROFILE_COUNT,
 };
 
@@ -608,6 +620,21 @@ static const struct mfex_profile mfex_profiles[PROFILE_COUNT] =
         },
         .dp_pkt_min_size = PKT_MIN_ETH_VLAN_IPV6_UDP,
     },
+
+    [PROFILE_ETH_IPV4_NVGRE] = {
+        .probe_mask.u8_data = { PATTERN_ETHERTYPE_MASK PATTERN_IPV4_MASK },
+        .probe_data.u8_data = { PATTERN_ETHERTYPE_IPV4 PATTERN_IPV4_NVGRE},
+
+        .store_shuf.u8_data = { PATTERN_IPV4_NVGRE_SHUFFLE },
+        .strip_mask.u8_data = { PATTERN_STRIP_IPV4_MASK },
+        .store_kmsk = PATTERN_IPV4_KMASK,
+
+        .mf_bits = { MF_ETH, MF_IPV4},
+        .dp_pkt_offs = {
+            0, UINT16_MAX, PKT_OFFSET_L3, PKT_OFFSET_IPV4_L4,
+        },
+        .dp_pkt_min_size = PKT_MIN_ETH_IPV4,
+    },
 };
 
 /* IPv6 header helper function to fix TC, flow label and next header. */
@@ -731,6 +758,45 @@ mfex_check_tcp_data_offset(const struct tcp_header *tcp)
     return ret;
 }
 
+static void
+mfex_ipv4_set_hwol(struct dp_packet *pkt)
+{
+    dp_packet_hwol_set_tx_ipv4(pkt);
+    if (dp_packet_ip_checksum_good(pkt)) {
+        dp_packet_hwol_set_tx_ip_csum(pkt);
+    }
+}
+
+static void
+mfex_ipv6_set_hwol(struct dp_packet *pkt)
+{
+    dp_packet_hwol_set_tx_ipv6(pkt);
+}
+
+static void
+mfex_tcp_set_hwol(struct dp_packet *pkt)
+{
+    dp_packet_ol_l4_csum_check_partial(pkt, pkt->l4_ofs,
+                                 offsetof(struct tcp_header,
+                                          tcp_csum));
+    if (dp_packet_l4_checksum_good(pkt)
+        || dp_packet_ol_l4_csum_partial(pkt)) {
+        dp_packet_hwol_set_csum_tcp(pkt);
+    }
+}
+
+static void
+mfex_udp_set_hwol(struct dp_packet *pkt)
+{
+    dp_packet_ol_l4_csum_check_partial(pkt, pkt->l4_ofs,
+                                 offsetof(struct udp_header,
+                                          udp_csum));
+    if (dp_packet_l4_checksum_good(pkt)
+        || dp_packet_ol_l4_csum_partial(pkt)) {
+        dp_packet_hwol_set_csum_udp(pkt);
+    }
+}
+
 /* Generic loop to process any mfex profile. This code is specialized into
  * multiple actual MFEX implementation functions. Its marked ALWAYS_INLINE
  * to ensure the compiler specializes each instance. The code is marked "hot"
@@ -832,6 +898,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 const struct tcp_header *tcp = (void *)&pkt[38];
                 mfex_handle_tcp_flags(tcp, &blocks[7]);
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                mfex_ipv4_set_hwol(packet);
+                mfex_tcp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV4_UDP: {
@@ -844,6 +912,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                mfex_ipv4_set_hwol(packet);
+                mfex_udp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_IPV4_TCP: {
@@ -859,6 +929,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                mfex_ipv4_set_hwol(packet);
+                mfex_tcp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_IPV4_UDP: {
@@ -870,6 +942,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                     continue;
                 }
                 dp_packet_update_rss_hash_ipv4_tcp_udp(packet);
+                mfex_ipv4_set_hwol(packet);
+                mfex_udp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_IPV6_UDP: {
@@ -888,6 +962,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[54], &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
+                mfex_ipv6_set_hwol(packet);
+                mfex_udp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_IPV6_TCP: {
@@ -911,6 +987,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[9]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
+                mfex_ipv6_set_hwol(packet);
+                mfex_tcp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_TCP: {
@@ -937,6 +1015,8 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 }
                 mfex_handle_tcp_flags(tcp, &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
+                mfex_ipv6_set_hwol(packet);
+                mfex_tcp_set_hwol(packet);
             } break;
 
         case PROFILE_ETH_VLAN_IPV6_UDP: {
@@ -958,7 +1038,22 @@ mfex_avx512_process(struct dp_packet_batch *packets,
                 /* Process UDP header. */
                 mfex_handle_ipv6_l4((void *)&pkt[58], &blocks[10]);
                 dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
+                mfex_ipv6_set_hwol(packet);
+                mfex_udp_set_hwol(packet);
             } break;
+
+        case PROFILE_ETH_IPV4_NVGRE: {
+                /* Handle dynamic l2_pad_size. */
+                uint32_t size_from_ipv4 = size - sizeof(struct eth_header);
+                struct ip_header *nh = (void *)&pkt[sizeof(struct eth_header)];
+                if (mfex_ipv4_set_l2_pad_size(packet, nh, size_from_ipv4, 0)) {
+                    continue;
+                }
+                dp_packet_update_rss_hash_ipv4(packet);
+                mfex_ipv4_set_hwol(packet);
+                mfex_udp_set_hwol(packet);
+            } break;
+
         default:
             break;
         };
@@ -1013,6 +1108,7 @@ DECLARE_MFEX_FUNC(ipv6_udp, PROFILE_ETH_IPV6_UDP)
 DECLARE_MFEX_FUNC(ipv6_tcp, PROFILE_ETH_IPV6_TCP)
 DECLARE_MFEX_FUNC(dot1q_ipv6_tcp, PROFILE_ETH_VLAN_IPV6_TCP)
 DECLARE_MFEX_FUNC(dot1q_ipv6_udp, PROFILE_ETH_VLAN_IPV6_UDP)
+DECLARE_MFEX_FUNC(ip_nvgre, PROFILE_ETH_IPV4_NVGRE)
 
 #endif /* __CHECKER__ */
 #endif /* __x86_64__ */

@@ -25,3 +25,42 @@ OVS_WAIT_UNTIL([test `ovs-appctl ovs/route/show | grep -c 'p1-route'` -eq 0 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ovs-route - add system route with src - ipv4])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ip link set br0 up])
+
+AT_CHECK([ip addr add 192.168.9.2/24 dev br0], [0], [stdout])
+AT_CHECK([ip addr add 192.168.9.3/24 dev br0], [0], [stdout])
+
+AT_CHECK([ip route add 192.168.10.12/32 dev br0 via 192.168.9.1 src 192.168.9.2], [0], [stdout])
+AT_CHECK([ip route add 192.168.10.13/32 dev br0 via 192.168.9.1 src 192.168.9.3], [0], [stdout])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep -E '192.168.10.1[[23]]/32' | sort], [dnl
+Cached: 192.168.10.12/32 dev br0 GW 192.168.9.1 SRC 192.168.9.2
+Cached: 192.168.10.13/32 dev br0 GW 192.168.9.1 SRC 192.168.9.3])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ovs-route - add system route with src - ipv6])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ip link set br0 up])
+
+AT_CHECK([ip -6 addr add fc00:db8:cafe::2/64 dev br0], [0], [stdout])
+AT_CHECK([ip -6 addr add fc00:db8:cafe::3/64 dev br0], [0], [stdout])
+
+dnl If we try to add a route immediately after assigning ipv6 addresses,
+dnl iproute2 would give us "Invalid source address" error,
+dnl so wait a while to succeed.
+OVS_WAIT_UNTIL([ip -6 route add fc00:db8:beef::12/128 via fc00:db8:cafe::1 dev br0 src fc00:db8:cafe::3])
+OVS_WAIT_UNTIL([ip -6 route add fc00:db8:beef::13/128 via fc00:db8:cafe::1 dev br0 src fc00:db8:cafe::2])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep -E 'fc00:db8:beef::1[[23]]/128' | sort], [dnl
+Cached: fc00:db8:beef::12/128 dev br0 GW fc00:db8:cafe::1 SRC fc00:db8:cafe::3
+Cached: fc00:db8:beef::13/128 dev br0 GW fc00:db8:cafe::1 SRC fc00:db8:cafe::2])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

@@ -277,9 +277,9 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | grep -e .*ipv4 | sort | dnl
           sed 's/pid=[[0-9]]*,//
                s/,packet_type(ns=[[0-9]]*,id=[[0-9]]*),/,/'],
                      [0], [dnl
-ct_state(+new-inv+trk),recirc_id(<recirc>),in_port(1),eth_type(0x0800),ipv4(proto=1,frag=no), packets:0, bytes:0, used:never, actions:2
-ct_state(+new-inv+trk),recirc_id(<recirc>),in_port(1),eth_type(0x0800),ipv4(proto=2,frag=no), packets:0, bytes:0, used:never, actions:userspace(controller(reason=1,dont_send=0,continuation=0,recirc_id=<recirc>,rule_cookie=0,controller_id=0,max_len=65535))
 recirc_id(<recirc>),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:ct(zone=64000),recirc(<recirc>)
+recirc_id(<recirc>),in_port(1),ct_state(+new-inv+trk),eth_type(0x0800),ipv4(proto=1,frag=no), packets:0, bytes:0, used:never, actions:2
+recirc_id(<recirc>),in_port(1),ct_state(+new-inv+trk),eth_type(0x0800),ipv4(proto=2,frag=no), packets:0, bytes:0, used:never, actions:userspace(controller(reason=1,dont_send=0,continuation=0,recirc_id=<recirc>,rule_cookie=0,controller_id=0,max_len=65535))
 ])
 
 AT_CLEANUP

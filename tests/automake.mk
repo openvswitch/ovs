@@ -19,6 +19,8 @@ EXTRA_DIST += \
 	$(OVSDB_CLUSTER_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
+	$(srcdir)/tests/test-dpparse.py \
+	$(srcdir)/tests/test-ofparse.py \
 	$(srcdir)/tests/testsuite \
 	$(srcdir)/tests/testsuite.patch
 
@@ -108,7 +110,8 @@ TESTSUITE_AT = \
 	tests/mcast-snooping.at \
 	tests/packet-type-aware.at \
 	tests/nsh.at \
-	tests/drop-stats.at
+	tests/drop-stats.at \
+	tests/learning-switch.at
 
 EXTRA_DIST += $(FUZZ_REGRESSION_TESTS)
 FUZZ_REGRESSION_TESTS = \
@@ -184,7 +187,8 @@ SYSTEM_TESTSUITE_AT = \
 SYSTEM_OFFLOADS_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-offloads-traffic.at \
-	tests/system-offloads-testsuite.at
+	tests/system-offloads-testsuite.at \
+	tests/system-offloads-testsuite-macros.at
 
 SYSTEM_DPDK_TESTSUITE_AT = \
 	tests/system-common-macros.at \
@@ -451,6 +455,7 @@ tests_ovstest_SOURCES = \
 	tests/test-barrier.c \
 	tests/test-bundle.c \
 	tests/test-byte-order.c \
+	tests/test-byteq.c \
 	tests/test-classifier.c \
 	tests/test-ccmap.c \
 	tests/test-cmap.c \
@@ -474,6 +479,7 @@ tests_ovstest_SOURCES = \
 	tests/test-packets.c \
 	tests/test-random.c \
 	tests/test-rcu.c \
+	tests/test-rculist.c \
 	tests/test-reconnect.c \
 	tests/test-rstp.c \
 	tests/test-sflow.c \
@@ -519,9 +525,11 @@ CHECK_PYFILES = \
 	tests/mfex_fuzzy.py \
 	tests/ovsdb-monitor-sort.py \
 	tests/test-daemon.py \
+	tests/test-dpparse.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
 	tests/test-l7.py \
+	tests/test-ofparse.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/test-stream.py \

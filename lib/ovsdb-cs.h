@@ -142,6 +142,9 @@ unsigned int ovsdb_cs_set_condition(struct ovsdb_cs *, const char *table,
                                     const struct json *condition);
 unsigned int ovsdb_cs_get_condition_seqno(const struct ovsdb_cs *);
 
+/* Database change awareness. */
+void ovsdb_cs_set_db_change_aware(struct ovsdb_cs *, bool set_db_change_aware);
+
 /* Clustered servers. */
 void ovsdb_cs_set_leader_only(struct ovsdb_cs *, bool leader_only);
 void ovsdb_cs_set_shuffle_remotes(struct ovsdb_cs *, bool shuffle);

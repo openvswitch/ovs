@@ -1,5 +1,90 @@
-Post-v3.0.0
+Post-v3.2.0
 --------------------
+   - OVSDB:
+     * Support pre-vote mechanism in RAFT that protects the cluster against
+       disruptive servers (section 9.6 of the original RAFT paper).  Upgrading
+       from older version is supported but it may trigger more leader elections
+       during the process, and error logs complaining unrecognized fields may
+       be observed on old nodes.
+
+
+v3.2.0 - 17 Aug 2023
+--------------------
+   - OVSDB:
+     * Changed format in which ovsdb schema conversion operations are stored in
+       clustered database files.  Such operations are now allowed to contain
+       the bare schema (without data).  This allows to significantly improve
+       the schema conversion performance.
+       New ovsdb-server process will be able to read old database format, but
+       old processes will *fail* to read database created by the new one, if
+       conversion operation is present.  For the cluster service model follow
+       upgrade instructions in 'Upgrading from version 3.1 and earlier to 3.2
+       and later' section of ovsdb(7).
+     * When ovsdb-server is running in relay mode, the probe interval is
+       now configurable via 'ovsdb-server/set-relay-source-probe-interval'
+       unixctl command.
+   - IPFIX template and statistics intervals can now be configured through two
+     new options in the IPFIX table: 'template_interval' and 'stats_interval'.
+   - Linux kernel datapath:
+     * OVS now collects per-interface upcall statistics that can be obtained
+       via 'ovs-appctl dpctl/show -s' or the interface's statistics column
+       in OVSDB.  Available with upstream kernel 6.2+.
+   - OVS route table in userspace now takes into account preferred source
+     address from cached kernel routes.
+   - ovs-appctl:
+     * Add support for selecting the source address with the
+       'ovs-appctl ovs/route/add' command.
+     * New commands "dpctl/{ct-get-sweep-interval,ct-set-sweep-interval}" that
+       allow to get and set, for the userspace datapath, the sweep interval
+       for the conntrack garbage collector.
+     * New commands "dpctl/dump-conntrack-exp" that allows to dump
+       conntrack's expectations for the userspace datapath.
+   - ovs-ctl:
+     * Added new options --[ovsdb-server|ovs-vswitchd]-umask=MODE to set umask
+       value when starting OVS daemons.  E.g., use --ovsdb-server-umask=0002
+       in order to create OVSDB sockets with access mode of 0770.
+   - QoS:
+     * Added new configuration option 'jitter' for a linux-netem QoS type.
+     * 'linux-htb' QoS type now supports rates higher than 34 Gbps.
+   - Ingress Policing:
+     * Ingress policing byte rates can now be configured higher than 34 Gbps.
+   - DPDK:
+     * ovs-vswitchd will keep the CAP_SYS_RAWIO capability when started
+       with the --hw-rawio-access command line option.  This allows the
+       process extra privileges when mapping physical interconnect memory.
+     * New experimental "rx-steering=rss+<protocol>" option to redirect
+       certain protocols (for now, only LACP) to a dedicated hardware queue
+       using the rte_flow API.
+   - SRv6 Tunnel Protocol
+     * Added support for userspace datapath (only).
+   - Userspace datapath:
+     * Connection tracking now supports extraction of SCTP L4 information.
+     * Implementation of OpenFlow meters is now lockless allowing for better
+       multi-thread scalability.
+     * IP and L4 checksum offload support is now enabled by default for
+       interfaces that support it.  See the 'status' column in the 'interface'
+       table to check the status.
+     * 'pmd-maxsleep' other_config was renamed to 'pmd-sleep-max'.
+       'pmd-maxsleep' is deprecated and will be removed in a future release.
+     * 'ovs-appctl dpif-netdev/pmd-sleep-show' command was added to get the
+       max sleep configuration of PMD thread cores.
+     * Removed experimental tag from PMD load based sleeping.
+   - Linux TC offload:
+     * Add support for offloading VXLAN tunnels with the GBP extensions.
+   - Python
+     * Added async DNS support.
+     * Dropped support for Python < 3.6.
+
+
+v3.1.0 - 16 Feb 2023
+--------------------
+   - ovs-vswitchd now detects changes in CPU affinity and adjusts the number
+     of handler and revalidator threads if necessary.
+   - AF_XDP:
+     * Added support for building with libxdp and libbpf >= 0.7.
+     * Support for AF_XDP is now enabled by default if all dependencies are
+       available at the build time.  Use --disable-afxdp to disable.
+       Use --enable-afxdp to fail the build if dependencies are not present.
    - ovs-appctl:
      * "ovs-appctl ofproto/trace" command can now display port names with the
        "--names" option.
@@ -14,6 +99,27 @@ Post-v3.0.0
      10 Gbps link speed by default in case the actual link speed cannot be
      determined.  Previously it was 10 Mbps.  Values can still be overridden
      by specifying 'max-rate' or '[r]stp-path-cost' accordingly.
+   - OpenFlow:
+     * New OpenFlow extension NXT_CT_FLUSH to flush connections matching
+       the specified fields.
+   - ovs-ctl:
+     * New option '--dump-hugepages' to include hugepages in core dumps. This
+       can assist with postmortem analysis involving DPDK, but may also produce
+       significantly larger core dump files.
+   - ovs-dpctl and 'ovs-appctl dpctl/' commands:
+     * 'flush-conntrack' is now capable of handling partial 5-tuple,
+        with additional optional parameter to specify the reply direction.
+   - ovs-ofctl:
+     * New command 'flush-conntrack' that accepts zone and 5-tuple (or partial
+       5-tuple) for both directions.
+   - Support for travis-ci.org based continuous integration builds has been
+     dropped.
+   - Userspace datapath:
+     * Add '-secs' argument to appctl 'dpif-netdev/pmd-rxq-show' to show
+       the pmd usage of an Rx queue over a configurable time period.
+     * Add new experimental PMD load based sleeping feature. PMD threads can
+       request to sleep up to a user configured 'pmd-maxsleep' value under
+       low load conditions.
 
 
 v3.0.0 - 15 Aug 2022

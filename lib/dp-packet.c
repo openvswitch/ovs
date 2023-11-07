@@ -21,6 +21,7 @@
 #include "dp-packet.h"
 #include "netdev-afxdp.h"
 #include "netdev-dpdk.h"
+#include "netdev-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "util.h"
 
@@ -37,6 +38,9 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     dp_packet_init_specific(b);
     /* By default assume the packet type to be Ethernet. */
     b->packet_type = htonl(PT_ETH);
+    /* Reset csum start and offset. */
+    b->csum_start = 0;
+    b->csum_offset = 0;
 }
 
 static void
@@ -146,7 +150,11 @@ dp_packet_uninit(struct dp_packet *b)
 struct dp_packet *
 dp_packet_new(size_t size)
 {
+#ifdef DPDK_NETDEV
+    struct dp_packet *b = xmalloc_cacheline(sizeof *b);
+#else
     struct dp_packet *b = xmalloc(sizeof *b);
+#endif
     dp_packet_init(b, size);
     return b;
 }
@@ -167,6 +175,7 @@ dp_packet_new_with_headroom(size_t size, size_t headroom)
 struct dp_packet *
 dp_packet_clone(const struct dp_packet *buffer)
 {
+    ovs_assert(buffer);
     return dp_packet_clone_with_headroom(buffer, 0);
 }
 
@@ -176,12 +185,15 @@ dp_packet_clone(const struct dp_packet *buffer)
 struct dp_packet *
 dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 {
+    const void *data_dp = dp_packet_data(buffer);
     struct dp_packet *new_buffer;
     uint32_t mark;
 
-    new_buffer = dp_packet_clone_data_with_headroom(dp_packet_data(buffer),
-                                                 dp_packet_size(buffer),
-                                                 headroom);
+    ovs_assert(data_dp);
+
+    new_buffer = dp_packet_clone_data_with_headroom(data_dp,
+                                                    dp_packet_size(buffer),
+                                                    headroom);
     /* Copy the following fields into the returned buffer: l2_pad_size,
      * l2_5_ofs, l3_ofs, l4_ofs, cutlen, packet_type and md. */
     memcpy(&new_buffer->l2_pad_size, &buffer->l2_pad_size,
@@ -318,8 +330,12 @@ dp_packet_shift(struct dp_packet *b, int delta)
                : true);
 
     if (delta != 0) {
-        char *dst = (char *) dp_packet_data(b) + delta;
-        memmove(dst, dp_packet_data(b), dp_packet_size(b));
+        const void *data_dp = dp_packet_data(b);
+        char *dst = (char *) data_dp + delta;
+
+        ovs_assert(data_dp);
+
+        memmove(dst, data_dp, dp_packet_size(b));
         dp_packet_set_data(b, dst);
     }
 }
@@ -344,7 +360,7 @@ void *
 dp_packet_put_zeros(struct dp_packet *b, size_t size)
 {
     void *dst = dp_packet_put_uninit(b, size);
-    memset(dst, 0, size);
+    nullable_memset(dst, 0, size);
     return dst;
 }
 
@@ -355,7 +371,7 @@ void *
 dp_packet_put(struct dp_packet *b, const void *p, size_t size)
 {
     void *dst = dp_packet_put_uninit(b, size);
-    memcpy(dst, p, size);
+    nullable_memcpy(dst, p, size);
     return dst;
 }
 
@@ -427,7 +443,7 @@ void *
 dp_packet_push_zeros(struct dp_packet *b, size_t size)
 {
     void *dst = dp_packet_push_uninit(b, size);
-    memset(dst, 0, size);
+    nullable_memset(dst, 0, size);
     return dst;
 }
 
@@ -438,7 +454,7 @@ void *
 dp_packet_push(struct dp_packet *b, const void *p, size_t size)
 {
     void *dst = dp_packet_push_uninit(b, size);
-    memcpy(dst, p, size);
+    nullable_memcpy(dst, p, size);
     return dst;
 }
 
@@ -525,4 +541,46 @@ dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
         return false;
     }
     return true;
+}
+
+/* Checks if the packet 'p' is compatible with netdev_ol_flags 'flags'
+ * and if not, updates the packet with the software fall back. */
+void
+dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
+{
+    if (dp_packet_hwol_tx_ip_csum(p)) {
+        if (dp_packet_ip_checksum_good(p)) {
+            dp_packet_hwol_reset_tx_ip_csum(p);
+        } else if (!(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
+            dp_packet_ip_set_header_csum(p);
+            dp_packet_ol_set_ip_csum_good(p);
+            dp_packet_hwol_reset_tx_ip_csum(p);
+        }
+    }
+
+    if (!dp_packet_hwol_tx_l4_checksum(p)) {
+        return;
+    }
+
+    if (dp_packet_l4_checksum_good(p)) {
+        dp_packet_hwol_reset_tx_l4_csum(p);
+        return;
+    }
+
+    if (dp_packet_hwol_l4_is_tcp(p)
+        && !(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
+        packet_tcp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
+    } else if (dp_packet_hwol_l4_is_udp(p)
+               && !(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
+        packet_udp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
+    } else if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)
+               && dp_packet_hwol_l4_is_sctp(p)) {
+        packet_sctp_complete_csum(p);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_tx_l4_csum(p);
+    }
 }

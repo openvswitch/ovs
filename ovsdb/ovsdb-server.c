@@ -94,6 +94,7 @@ static unixctl_cb_func ovsdb_server_get_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_connect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_disconnect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_set_active_ovsdb_server_probe_interval;
+static unixctl_cb_func ovsdb_server_set_relay_source_interval;
 static unixctl_cb_func ovsdb_server_set_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_status;
@@ -107,6 +108,7 @@ struct server_config {
     char **sync_exclude;
     bool *is_backup;
     int *replication_probe_interval;
+    int *relay_source_probe_interval;
     struct ovsdb_jsonrpc_server *jsonrpc;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
@@ -233,7 +235,7 @@ main_loop(struct server_config *config,
 
         SHASH_FOR_EACH_SAFE (node, all_dbs) {
             struct db *db = node->data;
-            ovsdb_txn_history_run(db->db);
+
             ovsdb_storage_run(db->db->storage);
             read_db(config, db);
             /* Run triggers after storage_run and read_db to make sure new raft
@@ -328,6 +330,7 @@ main(int argc, char *argv[])
     struct shash all_dbs;
     struct shash_node *node;
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
+    int relay_source_probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -341,7 +344,7 @@ main(int argc, char *argv[])
                   &run_command, &sync_from, &sync_exclude, &active);
     is_backup = sync_from && !active;
 
-    daemon_become_new_user(false);
+    daemon_become_new_user(false, false);
 
     /* Create and initialize 'config_tmpfile' as a temporary file to hold
      * ovsdb-server's most basic configuration, and then save our initial
@@ -359,7 +362,7 @@ main(int argc, char *argv[])
     save_config__(config_tmpfile, &remotes, &db_filenames, sync_from,
                   sync_exclude, is_backup);
 
-    daemonize_start(false);
+    daemonize_start(false, false);
 
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames, &sync_from,
@@ -377,6 +380,7 @@ main(int argc, char *argv[])
     server_config.sync_exclude = &sync_exclude;
     server_config.is_backup = &is_backup;
     server_config.replication_probe_interval = &replication_probe_interval;
+    server_config.relay_source_probe_interval = &relay_source_probe_interval;
 
     perf_counters_init();
 
@@ -472,6 +476,9 @@ main(int argc, char *argv[])
     unixctl_command_register(
         "ovsdb-server/set-active-ovsdb-server-probe-interval", "", 1, 1,
         ovsdb_server_set_active_ovsdb_server_probe_interval, &server_config);
+    unixctl_command_register(
+        "ovsdb-server/set-relay-source-probe-interval", "", 1, 1,
+        ovsdb_server_set_relay_source_interval, &server_config);
     unixctl_command_register("ovsdb-server/set-sync-exclude-tables", "",
                              0, 1, ovsdb_server_set_sync_exclude_tables,
                              &server_config);
@@ -573,8 +580,11 @@ close_db(struct server_config *config, struct db *db, char *comment)
     }
 }
 
-static void
-update_schema(struct ovsdb *db, const struct ovsdb_schema *schema, void *aux)
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+update_schema(struct ovsdb *db,
+              const struct ovsdb_schema *schema,
+              const struct uuid *txnid,
+              bool conversion_with_no_data, void *aux)
 {
     struct server_config *config = aux;
 
@@ -586,13 +596,33 @@ update_schema(struct ovsdb *db, const struct ovsdb_schema *schema, void *aux)
             : xasprintf("database %s connected to storage", db->name)));
     }
 
-    ovsdb_replace(db, ovsdb_create(ovsdb_schema_clone(schema), NULL));
+    if (db->schema && conversion_with_no_data) {
+        struct ovsdb *new_db = NULL;
+        struct ovsdb_error *error;
+
+        /* If conversion was triggered by the current process, we might
+         * already have converted version of a database. */
+        new_db = ovsdb_trigger_find_and_steal_converted_db(db, txnid);
+        if (!new_db) {
+            /* No luck.  Converting. */
+            error = ovsdb_convert(db, schema, &new_db);
+            if (error) {
+                /* Should never happen, because conversion should have been
+                 * checked before writing the schema to the storage. */
+                return error;
+            }
+        }
+        ovsdb_replace(db, new_db);
+    } else {
+        ovsdb_replace(db, ovsdb_create(ovsdb_schema_clone(schema), NULL));
+    }
 
     /* Force update to schema in _Server database. */
     struct db *dbp = shash_find_data(config->all_dbs, db->name);
     if (dbp) {
         dbp->row_uuid = UUID_ZERO;
     }
+    return NULL;
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
@@ -600,23 +630,30 @@ parse_txn(struct server_config *config, struct db *db,
           const struct ovsdb_schema *schema, const struct json *txn_json,
           const struct uuid *txnid)
 {
+    struct ovsdb_error *error = NULL;
+    struct ovsdb_txn *txn = NULL;
+
     if (schema) {
-        /* We're replacing the schema (and the data).  Destroy the database
-         * (first grabbing its storage), then replace it with the new schema.
-         * The transaction must also include the replacement data.
+        /* We're replacing the schema (and the data).  If transaction includes
+         * replacement data, destroy the database (first grabbing its storage),
+         * then replace it with the new schema.  If not, it's a conversion
+         * without data specified.  In this case, convert the current database
+         * to a new schema instead.
          *
          * Only clustered database schema changes and snapshot installs
          * go through this path.
          */
-        ovs_assert(txn_json);
         ovs_assert(ovsdb_storage_is_clustered(db->db->storage));
 
-        struct ovsdb_error *error = ovsdb_schema_check_for_ephemeral_columns(
-            schema);
+        error = ovsdb_schema_check_for_ephemeral_columns(schema);
         if (error) {
             return error;
         }
-        update_schema(db->db, schema, config);
+
+        error = update_schema(db->db, schema, txnid, txn_json == NULL, config);
+        if (error) {
+            return error;
+        }
     }
 
     if (txn_json) {
@@ -624,24 +661,26 @@ parse_txn(struct server_config *config, struct db *db,
             return ovsdb_error(NULL, "%s: data without schema", db->filename);
         }
 
-        struct ovsdb_txn *txn;
-        struct ovsdb_error *error;
-
         error = ovsdb_file_txn_from_json(db->db, txn_json, false, &txn);
-        if (!error) {
-            ovsdb_txn_set_txnid(txnid, txn);
-            log_and_free_error(ovsdb_txn_replay_commit(txn));
-        }
-        if (!error && !uuid_is_zero(txnid)) {
-            db->db->prereq = *txnid;
-        }
         if (error) {
             ovsdb_storage_unread(db->db->storage);
             return error;
         }
+    } else if (schema) {
+        /* We just performed conversion without data.  Transaction history
+         * was destroyed.  Commit a dummy transaction to set the txnid. */
+        txn = ovsdb_txn_create(db->db);
     }
 
-    return NULL;
+    if (txn) {
+        ovsdb_txn_set_txnid(txnid, txn);
+        error = ovsdb_txn_replay_commit(txn);
+        if (!error && !uuid_is_zero(txnid)) {
+            db->db->prereq = *txnid;
+        }
+        ovsdb_txn_history_run(db->db);
+    }
+    return error;
 }
 
 static void
@@ -766,7 +805,8 @@ open_db(struct server_config *config, const char *filename)
     add_db(config, db);
 
     if (is_relay) {
-        ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config);
+        ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config,
+                           *config->relay_source_probe_interval);
     }
     return NULL;
 }
@@ -1450,6 +1490,26 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
 }
 
 static void
+ovsdb_server_set_relay_source_interval(struct unixctl_conn *conn,
+                                       int argc OVS_UNUSED,
+                                       const char *argv[],
+                                       void *config_)
+{
+    struct server_config *config = config_;
+    int probe_interval;
+
+    if (str_to_int(argv[1], 10, &probe_interval)) {
+        *config->relay_source_probe_interval = probe_interval;
+        save_config(config);
+        ovsdb_relay_set_probe_interval(probe_interval);
+        unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply_error(
+            conn, "Invalid probe interval, integer value expected");
+    }
+}
+
+static void
 ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED,
                                      const char *argv[],
@@ -1600,6 +1660,8 @@ ovsdb_server_memory_trim_on_compaction(struct unixctl_conn *conn,
                                        const char *argv[],
                                        void *arg OVS_UNUSED)
 {
+    bool old_trim_memory = trim_memory;
+    static bool have_logged = false;
     const char *command = argv[1];
 
 #if !HAVE_DECL_MALLOC_TRIM
@@ -1615,8 +1677,11 @@ ovsdb_server_memory_trim_on_compaction(struct unixctl_conn *conn,
         unixctl_command_reply_error(conn, "invalid argument");
         return;
     }
-    VLOG_INFO("memory trimming after compaction %s.",
-              trim_memory ? "enabled" : "disabled");
+    if (!have_logged || (trim_memory != old_trim_memory)) {
+        have_logged = true;
+        VLOG_INFO("memory trimming after compaction %s.",
+                  trim_memory ? "enabled" : "disabled");
+    }
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1943,6 +2008,7 @@ parse_options(int argc, char *argv[],
         OPT_ACTIVE,
         OPT_NO_DBS,
         OPT_FILE_COLUMN_DIFF,
+        OPT_FILE_NO_DATA_CONVERSION,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
@@ -1968,6 +2034,8 @@ parse_options(int argc, char *argv[],
         {"active", no_argument, NULL, OPT_ACTIVE},
         {"no-dbs", no_argument, NULL, OPT_NO_DBS},
         {"disable-file-column-diff", no_argument, NULL, OPT_FILE_COLUMN_DIFF},
+        {"disable-file-no-data-conversion", no_argument, NULL,
+         OPT_FILE_NO_DATA_CONVERSION},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -2062,6 +2130,10 @@ parse_options(int argc, char *argv[],
 
         case OPT_FILE_COLUMN_DIFF:
             ovsdb_file_column_diff_disable();
+            break;
+
+        case OPT_FILE_NO_DATA_CONVERSION:
+            ovsdb_no_data_conversion_disable();
             break;
 
         case '?':
@@ -2190,6 +2262,7 @@ sset_from_json(struct sset *sset, const struct json *array)
 
     sset_clear(sset);
 
+    ovs_assert(array);
     ovs_assert(array->type == JSON_ARRAY);
     for (i = 0; i < array->array.n; i++) {
         const struct json *elem = array->array.elems[i];

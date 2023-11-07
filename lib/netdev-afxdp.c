@@ -21,6 +21,11 @@
 #include "netdev-afxdp.h"
 #include "netdev-afxdp-pool.h"
 
+#ifdef HAVE_LIBXDP
+#include <xdp/xsk.h>
+#else
+#include <bpf/xsk.h>
+#endif
 #include <errno.h>
 #include <inttypes.h>
 #include <linux/rtnetlink.h>
@@ -29,6 +34,7 @@
 #include <numa.h>
 #include <numaif.h>
 #include <poll.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
@@ -44,6 +50,7 @@
 #include "openvswitch/list.h"
 #include "openvswitch/thread.h"
 #include "openvswitch/vlog.h"
+#include "ovs-atomic.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "socket-util.h"
@@ -72,7 +79,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define PROD_NUM_DESCS      XSK_RING_PROD__DEFAULT_NUM_DESCS
 #define CONS_NUM_DESCS      XSK_RING_CONS__DEFAULT_NUM_DESCS
 
-#ifdef HAVE_XDP_NEED_WAKEUP
+#ifdef XDP_USE_NEED_WAKEUP
 #define NEED_WAKEUP_DEFAULT true
 #else
 #define NEED_WAKEUP_DEFAULT false
@@ -169,7 +176,7 @@ struct netdev_afxdp_tx_lock {
     );
 };
 
-#ifdef HAVE_XDP_NEED_WAKEUP
+#ifdef XDP_USE_NEED_WAKEUP
 static inline void
 xsk_rx_wakeup_if_needed(struct xsk_umem_info *umem,
                         struct netdev *netdev, int fd)
@@ -201,7 +208,7 @@ xsk_tx_need_wakeup(struct xsk_socket_info *xsk_info)
     return xsk_ring_prod__needs_wakeup(&xsk_info->tx);
 }
 
-#else /* !HAVE_XDP_NEED_WAKEUP */
+#else /* !XDP_USE_NEED_WAKEUP */
 static inline void
 xsk_rx_wakeup_if_needed(struct xsk_umem_info *umem OVS_UNUSED,
                         struct netdev *netdev OVS_UNUSED,
@@ -215,7 +222,7 @@ xsk_tx_need_wakeup(struct xsk_socket_info *xsk_info OVS_UNUSED)
 {
     return true;
 }
-#endif /* HAVE_XDP_NEED_WAKEUP */
+#endif /* XDP_USE_NEED_WAKEUP */
 
 static void
 netdev_afxdp_cleanup_unused_pool(struct unused_pool *pool)
@@ -351,7 +358,7 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
     cfg.bind_flags = xdp_modes[mode].bind_flags;
     cfg.xdp_flags = xdp_modes[mode].xdp_flags | XDP_FLAGS_UPDATE_IF_NOEXIST;
 
-#ifdef HAVE_XDP_NEED_WAKEUP
+#ifdef XDP_USE_NEED_WAKEUP
     if (use_need_wakeup) {
         cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
     }
@@ -377,7 +384,11 @@ xsk_configure_socket(struct xsk_umem_info *umem, uint32_t ifindex,
     }
 
     /* Make sure the built-in AF_XDP program is loaded. */
+#ifdef HAVE_BPF_XDP_QUERY_ID
+    ret = bpf_xdp_query_id(ifindex, cfg.xdp_flags, &prog_id);
+#else
     ret = bpf_get_link_xdp_id(ifindex, &prog_id, cfg.xdp_flags);
+#endif
     if (ret || !prog_id) {
         if (ret) {
             VLOG_ERR("Get XDP prog ID failed (%s)", ovs_strerror(errno));
@@ -423,7 +434,11 @@ xsk_configure(int ifindex, int xdp_queue_id, enum afxdp_mode mode,
 
     /* Umem memory region. */
     bufs = xmalloc_pagealign(NUM_FRAMES * FRAME_SIZE);
+#ifndef __CHECKER__
+    /* Sparse complains about a very large memset, but it is OK in this case.
+     * So, hiding it from the checker. */
     memset(bufs, 0, NUM_FRAMES * FRAME_SIZE);
+#endif
 
     /* Create AF_XDP socket. */
     umem = xsk_configure_umem(bufs, NUM_FRAMES * FRAME_SIZE);
@@ -630,9 +645,9 @@ netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
     }
 
     need_wakeup = smap_get_bool(args, "use-need-wakeup", NEED_WAKEUP_DEFAULT);
-#ifndef HAVE_XDP_NEED_WAKEUP
+#ifndef XDP_USE_NEED_WAKEUP
     if (need_wakeup) {
-        VLOG_WARN("XDP need_wakeup is not supported in libbpf.");
+        VLOG_WARN("XDP need_wakeup is not supported in libbpf/libxdp.");
         need_wakeup = false;
     }
 #endif
@@ -742,7 +757,11 @@ xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode mode)
     uint32_t ret, prog_id = 0;
 
     /* Check whether XDP program is loaded. */
+#ifdef HAVE_BPF_XDP_QUERY_ID
+    ret = bpf_xdp_query_id(ifindex, flags, &prog_id);
+#else
     ret = bpf_get_link_xdp_id(ifindex, &prog_id, flags);
+#endif
     if (ret) {
         VLOG_ERR("Failed to get XDP prog id (%s)", ovs_strerror(errno));
         return;
@@ -753,7 +772,14 @@ xsk_remove_xdp_program(uint32_t ifindex, enum afxdp_mode mode)
         return;
     }
 
-    bpf_set_link_xdp_fd(ifindex, -1, flags);
+#ifdef HAVE_BPF_XDP_DETACH
+    if (bpf_xdp_detach(ifindex, flags, NULL) != 0) {
+#else
+    if (bpf_set_link_xdp_fd(ifindex, -1, flags) != 0) {
+#endif
+        VLOG_ERR("Failed to detach XDP program (%s) at ifindex %d",
+                 ovs_strerror(errno), ifindex);
+    }
 }
 
 void
@@ -868,8 +894,21 @@ netdev_afxdp_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
                             OVS_XDP_HEADROOM);
         dp_packet_set_size(packet, len);
 
+#if __GNUC__ >= 11 && !__clang__
+        /* GCC 11+ generates a false-positive warning about free() being
+         * called on DPBUF_AFXDP packet, but it is an imposisible code path.
+         * Disabling a warning to avoid build failures.
+         * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108187 */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+
         /* Add packet into batch, increase batch->count. */
         dp_packet_batch_add(batch, packet);
+
+#if __GNUC__ && !__clang__
+#pragma GCC diagnostic pop
+#endif
 
         idx_rx++;
     }

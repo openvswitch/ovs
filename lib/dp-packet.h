@@ -25,6 +25,7 @@
 #include <rte_mbuf.h>
 #endif
 
+#include "csum.h"
 #include "netdev-afxdp.h"
 #include "netdev-dpdk.h"
 #include "openvswitch/list.h"
@@ -83,6 +84,8 @@ enum dp_packet_offload_mask {
     DEF_OL_FLAG(DP_PACKET_OL_TX_UDP_CKSUM, RTE_MBUF_F_TX_UDP_CKSUM, 0x400),
     /* Offload SCTP checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_SCTP_CKSUM, RTE_MBUF_F_TX_SCTP_CKSUM, 0x800),
+    /* Offload IP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_IP_CKSUM, RTE_MBUF_F_TX_IP_CKSUM, 0x1000),
     /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
 
@@ -97,7 +100,8 @@ enum dp_packet_offload_mask {
                                      DP_PACKET_OL_TX_IPV6          | \
                                      DP_PACKET_OL_TX_TCP_CKSUM     | \
                                      DP_PACKET_OL_TX_UDP_CKSUM     | \
-                                     DP_PACKET_OL_TX_SCTP_CKSUM)
+                                     DP_PACKET_OL_TX_SCTP_CKSUM    | \
+                                     DP_PACKET_OL_TX_IP_CKSUM)
 
 #define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
                                  DP_PACKET_OL_TX_UDP_CKSUM | \
@@ -136,6 +140,8 @@ struct dp_packet {
                                       or UINT16_MAX. */
     uint32_t cutlen;               /* length in bytes to cut from the end. */
     ovs_be32 packet_type;          /* Packet type as defined in OpenFlow */
+    uint16_t csum_start;           /* Position to start checksumming from. */
+    uint16_t csum_offset;          /* Offset to place checksum. */
     union {
         struct pkt_metadata md;
         uint64_t data[DP_PACKET_CONTEXT_SIZE / 8];
@@ -239,6 +245,7 @@ static inline bool dp_packet_equal(const struct dp_packet *,
 bool dp_packet_compare_offsets(struct dp_packet *good,
                                struct dp_packet *test,
                                struct ds *err_str);
+void dp_packet_ol_send_prepare(struct dp_packet *, uint64_t);
 
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
@@ -257,7 +264,11 @@ dp_packet_delete(struct dp_packet *b)
         }
 
         dp_packet_uninit(b);
+#ifdef DPDK_NETDEV
+        free_cacheline(b);
+#else
         free(b);
+#endif
     }
 }
 
@@ -988,6 +999,13 @@ dp_packet_hwol_is_ipv4(const struct dp_packet *b)
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_IPV4);
 }
 
+/* Returns 'true' if packet 'p' is marked as IPv6. */
+static inline bool
+dp_packet_hwol_tx_ipv6(const struct dp_packet *p)
+{
+    return !!(*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_TX_IPV6);
+}
+
 /* Returns 'true' if packet 'b' is marked for TCP checksum offloading. */
 static inline bool
 dp_packet_hwol_l4_is_tcp(const struct dp_packet *b)
@@ -1012,18 +1030,46 @@ dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
             DP_PACKET_OL_TX_SCTP_CKSUM;
 }
 
-/* Mark packet 'b' for IPv4 checksum offloading. */
 static inline void
-dp_packet_hwol_set_tx_ipv4(struct dp_packet *b)
+dp_packet_hwol_reset_tx_l4_csum(struct dp_packet *p)
 {
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_IPV4;
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_L4_MASK;
 }
 
-/* Mark packet 'b' for IPv6 checksum offloading. */
+/* Mark packet 'p' as IPv4. */
 static inline void
-dp_packet_hwol_set_tx_ipv6(struct dp_packet *b)
+dp_packet_hwol_set_tx_ipv4(struct dp_packet *p)
 {
-    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_IPV6;
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_IPV6;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_TX_IPV4;
+}
+
+/* Mark packet 'a' as IPv6. */
+static inline void
+dp_packet_hwol_set_tx_ipv6(struct dp_packet *a)
+{
+    *dp_packet_ol_flags_ptr(a) &= ~DP_PACKET_OL_TX_IPV4;
+    *dp_packet_ol_flags_ptr(a) |= DP_PACKET_OL_TX_IPV6;
+}
+
+/* Returns 'true' if packet 'p' is marked for IPv4 checksum offloading. */
+static inline bool
+dp_packet_hwol_tx_ip_csum(const struct dp_packet *p)
+{
+    return !!(*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_TX_IP_CKSUM);
+}
+
+/* Marks packet 'p' for IPv4 checksum offloading. */
+static inline void
+dp_packet_hwol_set_tx_ip_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_TX_IP_CKSUM;
+}
+
+static inline void
+dp_packet_hwol_reset_tx_ip_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_IP_CKSUM;
 }
 
 /* Mark packet 'b' for TCP checksum offloading.  It implies that either
@@ -1059,13 +1105,31 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
+/* Returns 'true' if the IP header has good integrity and the
+ * checksum in it is complete. */
 static inline bool
-dp_packet_ip_checksum_valid(const struct dp_packet *p)
+dp_packet_ip_checksum_good(const struct dp_packet *p)
 {
     return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_IP_CKSUM_MASK) ==
             DP_PACKET_OL_RX_IP_CKSUM_GOOD;
 }
 
+/* Marks packet 'p' with good IPv4 checksum. */
+static inline void
+dp_packet_ol_set_ip_csum_good(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_IP_CKSUM_BAD;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RX_IP_CKSUM_GOOD;
+}
+
+/* Resets IP good checksum flag in packet 'p'. */
+static inline void
+dp_packet_ol_reset_ip_csum_good(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_IP_CKSUM_GOOD;
+}
+
+/* Marks packet 'p' with bad IPv4 checksum. */
 static inline bool
 dp_packet_ip_checksum_bad(const struct dp_packet *p)
 {
@@ -1073,8 +1137,21 @@ dp_packet_ip_checksum_bad(const struct dp_packet *p)
             DP_PACKET_OL_RX_IP_CKSUM_BAD;
 }
 
+/* Calculate and set the IPv4 header checksum in packet 'p'. */
+static inline void
+dp_packet_ip_set_header_csum(struct dp_packet *p)
+{
+    struct ip_header *ip = dp_packet_l3(p);
+
+    ovs_assert(ip);
+    ip->ip_csum = 0;
+    ip->ip_csum = csum(ip, sizeof *ip);
+}
+
+/* Returns 'true' if the packet 'p' has good integrity and the
+ * checksum in it is correct. */
 static inline bool
-dp_packet_l4_checksum_valid(const struct dp_packet *p)
+dp_packet_l4_checksum_good(const struct dp_packet *p)
 {
     return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_L4_CKSUM_MASK) ==
             DP_PACKET_OL_RX_L4_CKSUM_GOOD;
@@ -1087,6 +1164,94 @@ dp_packet_l4_checksum_bad(const struct dp_packet *p)
             DP_PACKET_OL_RX_L4_CKSUM_BAD;
 }
 
+/* Returns 'true' if the packet has good integrity though the
+ * checksum in the packet 'p' is not complete. */
+static inline bool
+dp_packet_ol_l4_csum_partial(const struct dp_packet *p)
+{
+    return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_L4_CKSUM_MASK) ==
+            DP_PACKET_OL_RX_L4_CKSUM_MASK;
+}
+
+/* Marks packet 'p' with good integrity though the checksum in the
+ * packet is not complete. */
+static inline void
+dp_packet_ol_set_l4_csum_partial(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RX_L4_CKSUM_MASK;
+}
+
+/* Marks packet 'p' with good L4 checksum. */
+static inline void
+dp_packet_ol_set_l4_csum_good(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_L4_CKSUM_BAD;
+    *dp_packet_ol_flags_ptr(p) |= DP_PACKET_OL_RX_L4_CKSUM_GOOD;
+}
+
+/* Marks packet 'p' with good L4 checksum as modified. */
+static inline void
+dp_packet_ol_reset_l4_csum_good(struct dp_packet *p)
+{
+    if (!dp_packet_ol_l4_csum_partial(p)) {
+        *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_RX_L4_CKSUM_GOOD;
+    }
+}
+
+/* Marks packet 'p' with good integrity if the 'start' and 'offset'
+ * matches with the 'csum_start' and 'csum_offset' in packet 'p'.
+ * The 'start' is the offset from the begin of the packet headers.
+ * The 'offset' is the offset from start to place the checksum.
+ * The csum_start and csum_offset fields are set from the virtio_net_hdr
+ * struct that may be provided by a netdev on packet ingress. */
+static inline void
+dp_packet_ol_l4_csum_check_partial(struct dp_packet *p, uint16_t start,
+                             uint16_t offset)
+{
+    if (p->csum_start == start && p->csum_offset == offset) {
+        dp_packet_ol_set_l4_csum_partial(p);
+    }
+}
+
+static inline uint32_t ALWAYS_INLINE
+dp_packet_calc_hash_ipv4(const uint8_t *pkt, const uint16_t l3_ofs,
+                         uint32_t hash)
+{
+    const void *ipv4_src = &pkt[l3_ofs + offsetof(struct ip_header, ip_src)];
+    const void *ipv4_dst = &pkt[l3_ofs + offsetof(struct ip_header, ip_dst)];
+    uint32_t ip_src, ip_dst;
+
+    memcpy(&ip_src, ipv4_src, sizeof ip_src);
+    memcpy(&ip_dst, ipv4_dst, sizeof ip_dst);
+
+    /* IPv4 Src and Dst. */
+    hash = hash_add(hash, ip_src);
+    hash = hash_add(hash, ip_dst);
+
+    /* IPv4 proto. */
+    hash = hash_add(hash, pkt[l3_ofs + offsetof(struct ip_header, ip_proto)]);
+
+    return hash;
+}
+
+static inline void ALWAYS_INLINE
+dp_packet_update_rss_hash_ipv4(struct dp_packet *packet)
+{
+    if (dp_packet_rss_valid(packet)) {
+        return;
+    }
+
+    const uint8_t *pkt = dp_packet_data(packet);
+    const uint16_t l3_ofs = packet->l3_ofs;
+    uint32_t hash = 0;
+
+    /* IPv4 Src, Dst and proto. */
+    hash = dp_packet_calc_hash_ipv4(pkt, l3_ofs, hash);
+
+    hash = hash_finish(hash, 42);
+    dp_packet_set_rss_hash(packet, hash);
+}
+
 static inline void ALWAYS_INLINE
 dp_packet_update_rss_hash_ipv4_tcp_udp(struct dp_packet *packet)
 {
@@ -1095,27 +1260,19 @@ dp_packet_update_rss_hash_ipv4_tcp_udp(struct dp_packet *packet)
     }
 
     const uint8_t *pkt = dp_packet_data(packet);
-    const uint16_t l3_ofs = packet->l3_ofs;
-    const void *ipv4_src = &pkt[l3_ofs + offsetof(struct ip_header, ip_src)];
-    const void *ipv4_dst = &pkt[l3_ofs + offsetof(struct ip_header, ip_dst)];
     const void *l4_ports = &pkt[packet->l4_ofs];
-    uint32_t ip_src, ip_dst, ports;
+    const uint16_t l3_ofs = packet->l3_ofs;
     uint32_t hash = 0;
+    uint32_t ports;
 
-    memcpy(&ip_src, ipv4_src, sizeof ip_src);
-    memcpy(&ip_dst, ipv4_dst, sizeof ip_dst);
-    memcpy(&ports,  l4_ports, sizeof ports);
+    /* IPv4 Src, Dst and proto. */
+    hash = dp_packet_calc_hash_ipv4(pkt, l3_ofs, hash);
 
-    /* IPv4 Src and Dst. */
-    hash = hash_add(hash, ip_src);
-    hash = hash_add(hash, ip_dst);
-    /* IPv4 proto. */
-    hash = hash_add(hash,
-                    pkt[l3_ofs + offsetof(struct ip_header, ip_proto)]);
     /* L4 ports. */
+    memcpy(&ports,  l4_ports, sizeof ports);
     hash = hash_add(hash, ports);
-    hash = hash_finish(hash, 42);
 
+    hash = hash_finish(hash, 42);
     dp_packet_set_rss_hash(packet, hash);
 }
 

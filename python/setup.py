@@ -99,8 +99,7 @@ setup_args = dict(
         'Topic :: System :: Networking',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
     ext_modules=[setuptools.Extension("ovs._json",
                                       sources=["ovs/_json.c"],
@@ -110,7 +109,8 @@ setup_args = dict(
     cmdclass={'build_ext': try_build_ext},
     install_requires=['sortedcontainers'],
     extras_require={':sys_platform == "win32"': ['pywin32 >= 1.0'],
-                    'flow': ['netaddr', 'pyparsing']},
+                    'flow': ['netaddr', 'pyparsing'],
+                    'dns': ['unbound']},
 )
 
 try:

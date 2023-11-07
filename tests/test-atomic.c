@@ -28,7 +28,7 @@ VLOG_DEFINE_THIS_MODULE(test_atomic);
 
 #define TEST_ATOMIC_TYPE(ATOMIC_TYPE, BASE_TYPE)        \
     {                                                   \
-        ATOMIC_TYPE x = ATOMIC_VAR_INIT(1);             \
+        ATOMIC_TYPE x = 1;                              \
         BASE_TYPE value, orig;                          \
                                                         \
         atomic_read(&x, &value);                        \
@@ -71,7 +71,7 @@ VLOG_DEFINE_THIS_MODULE(test_atomic);
 #define TEST_ATOMIC_TYPE_EXPLICIT(ATOMIC_TYPE, BASE_TYPE,               \
                                   ORDER_READ, ORDER_STORE, ORDER_RMW)   \
     {                                                                   \
-        ATOMIC_TYPE x = ATOMIC_VAR_INIT(1);                             \
+        ATOMIC_TYPE x = 1;                                              \
         BASE_TYPE value, orig;                                          \
                                                                         \
         atomic_read_explicit(&x, &value, ORDER_READ);                   \
@@ -181,7 +181,7 @@ struct atomic_aux {
     ATOMIC(uint64_t) data64;
 };
 
-static ATOMIC(struct atomic_aux *) paux = ATOMIC_VAR_INIT(NULL);
+static ATOMIC(struct atomic_aux *) paux = NULL;
 static struct atomic_aux *auxes = NULL;
 
 #define ATOMIC_ITEM_COUNT 1000000
@@ -229,7 +229,7 @@ atomic_producer(void * arg1 OVS_UNUSED)
     for (i = 0; i < ATOMIC_ITEM_COUNT; i++) {
         struct atomic_aux *aux = &auxes[i];
 
-        aux->count = ATOMIC_VAR_INIT(i);
+        aux->count = i;
         aux->b = i + 42;
 
         /* Publish the new item. */
@@ -337,9 +337,9 @@ test_acq_rel(void)
     a = 0;
     aux->b = 0;
 
-    aux->count = ATOMIC_VAR_INIT(0);
+    aux->count = 0;
     atomic_init(&aux->data, NULL);
-    aux->data64 = ATOMIC_VAR_INIT(0);
+    aux->data64 = 0;
 
     reader = ovs_thread_create("reader", atomic_reader, aux);
     writer = ovs_thread_create("writer", atomic_writer, aux);

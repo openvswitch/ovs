@@ -2242,7 +2242,7 @@ netdev_offload_dpdk_actions(struct netdev *netdev,
                             struct nlattr *nl_actions,
                             size_t actions_len)
 {
-    const struct rte_flow_attr flow_attr = { .ingress = 1, .transfer = 1 };
+    const struct rte_flow_attr flow_attr = { .transfer = 1, };
     struct flow_actions actions = {
         .actions = NULL,
         .cnt = 0,
@@ -2345,13 +2345,13 @@ netdev_offload_dpdk_flow_destroy(struct ufid_to_rte_flow_data *rte_flow_data)
             ovsrcu_get(void *, &netdev->hw_info.offload_data);
         data->rte_flow_counters[tid]--;
 
-        ufid_to_rte_flow_disassociate(rte_flow_data);
         VLOG_DBG_RL(&rl, "%s/%s: rte_flow 0x%"PRIxPTR
                     " flow destroy %d ufid " UUID_FMT,
                     netdev_get_name(netdev), netdev_get_name(physdev),
                     (intptr_t) rte_flow,
                     netdev_dpdk_get_port_id(physdev),
                     UUID_ARGS((struct uuid *) ufid));
+        ufid_to_rte_flow_disassociate(rte_flow_data);
     } else {
         VLOG_ERR("Failed flow: %s/%s: flow destroy %d ufid " UUID_FMT,
                  netdev_get_name(netdev), netdev_get_name(physdev),
@@ -2537,15 +2537,15 @@ out:
     return ret;
 }
 
-static int
-netdev_offload_dpdk_flow_flush(struct netdev *netdev)
+static void
+flush_netdev_flows_in_related(struct netdev *netdev, struct netdev *related)
 {
-    struct cmap *map = offload_data_map(netdev);
-    struct ufid_to_rte_flow_data *data;
     unsigned int tid = netdev_offload_thread_id();
+    struct cmap *map = offload_data_map(related);
+    struct ufid_to_rte_flow_data *data;
 
     if (!map) {
-        return -1;
+        return;
     }
 
     CMAP_FOR_EACH (data, node, map) {
@@ -2555,6 +2555,31 @@ netdev_offload_dpdk_flow_flush(struct netdev *netdev)
         if (data->creation_tid == tid) {
             netdev_offload_dpdk_flow_destroy(data);
         }
+    }
+}
+
+static bool
+flush_in_vport_cb(struct netdev *vport,
+                  odp_port_t odp_port OVS_UNUSED,
+                  void *aux)
+{
+    struct netdev *netdev = aux;
+
+    /* Only vports are related to physical devices. */
+    if (netdev_vport_is_vport_class(vport->netdev_class)) {
+        flush_netdev_flows_in_related(netdev, vport);
+    }
+
+    return false;
+}
+
+static int
+netdev_offload_dpdk_flow_flush(struct netdev *netdev)
+{
+    flush_netdev_flows_in_related(netdev, netdev);
+
+    if (!netdev_vport_is_vport_class(netdev->netdev_class)) {
+        netdev_ports_traverse(netdev->dpif_type, flush_in_vport_cb, netdev);
     }
 
     return 0;
@@ -2672,7 +2697,7 @@ netdev_offload_dpdk_hw_miss_packet_recover(struct netdev *netdev,
     if (rte_restore_info.flags & RTE_FLOW_RESTORE_INFO_ENCAPSULATED) {
         if (!vport_netdev->netdev_class ||
             !vport_netdev->netdev_class->pop_header) {
-            VLOG_ERR_RL(&rl, "vport nedtdev=%s with no pop_header method",
+            VLOG_ERR_RL(&rl, "vport netdev=%s with no pop_header method",
                         netdev_get_name(vport_netdev));
             ret = EOPNOTSUPP;
             goto close_vport_netdev;

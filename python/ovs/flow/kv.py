@@ -85,12 +85,17 @@ class KVDecoders(object):
     reason, the default_free decoder, must return both the key and value to be
     stored.
 
+    Globally defined "strict" variable controls what to do when decoders do not
+    contain a valid decoder for a key and a default function is not provided.
+    If set to True (default), a ParseError is raised.
+    If set to False, the value will be decoded as a string.
+
     Args:
         decoders (dict): Optional; A dictionary of decoders indexed by keyword.
-        default (callable): Optional; A decoder used if a match is not found in
-            configured decoders. If not provided, the default behavior is to
-            try to decode the value into an integer and, if that fails,
-            just return the string as-is.
+        default (callable): Optional; A function to use if a match is not
+            found in configured decoders. If not provided, the default behavior
+            depends on "strict". The function must accept a the key and a value
+            and return the decoded (key, value) tuple back.
         default_free (callable): Optional; The decoder used if a match is not
             found in configured decoders and it's a free value (e.g:
             a value without a key) Defaults to returning the free value as
@@ -98,10 +103,19 @@ class KVDecoders(object):
             The callable must accept a string and return a key-value pair.
     """
 
-    def __init__(self, decoders=None, default=None, default_free=None):
-        self._decoders = decoders or dict()
-        self._default = default or decode_default
+    strict = True
+
+    def __init__(self, decoders=None, default=None, default_free=None,
+                 ignore_case=False):
+        if not decoders:
+            self._decoders = dict()
+        elif ignore_case:
+            self._decoders = {k.lower(): v for k, v in decoders.items()}
+        else:
+            self._decoders = decoders
+        self._default = default
         self._default_free = default_free or self._default_free_decoder
+        self._ignore_case = ignore_case
 
     def decode(self, keyword, value_str):
         """Decode a keyword and value.
@@ -114,7 +128,11 @@ class KVDecoders(object):
             The key (str) and value(any) to be stored.
         """
 
-        decoder = self._decoders.get(keyword)
+        decoder = None
+        if self._ignore_case:
+            decoder = self._decoders.get(keyword.lower())
+        else:
+            decoder = self._decoders.get(keyword)
         if decoder:
             result = decoder(value_str)
             if isinstance(result, KeyValue):
@@ -126,9 +144,14 @@ class KVDecoders(object):
             return keyword, value
         else:
             if value_str:
-                return keyword, self._default(value_str)
-            else:
-                return self._default_free(keyword)
+                if self._default:
+                    return self._default(keyword, value_str)
+                if self.strict:
+                    raise ParseError(
+                        "Cannot parse key {}: No decoder found".format(keyword)
+                    )
+                return keyword, decode_default(value_str)
+            return self._default_free(keyword)
 
     @staticmethod
     def _default_free_decoder(key):
@@ -308,7 +331,26 @@ def decode_nested_kv(decoders, value):
     return {kv.key: kv.value for kv in parser.kv()}
 
 
-def nested_kv_decoder(decoders=None):
+def decode_nested_kv_list(decoders, value):
+    """A key-value decoder that extracts nested key-value pairs and returns
+    them in a list of dictionary.
+
+    Args:
+        decoders (KVDecoders): The KVDecoders to use.
+        value (str): The value string to decode.
+    """
+    if not value:
+        # Mark as flag
+        return True
+
+    parser = KVParser(value, decoders)
+    parser.parse()
+    return [{kv.key: kv.value} for kv in parser.kv()]
+
+
+def nested_kv_decoder(decoders=None, is_list=False):
     """Helper function that creates a nested kv decoder with given
     KVDecoders."""
+    if is_list:
+        return functools.partial(decode_nested_kv_list, decoders)
     return functools.partial(decode_nested_kv, decoders)

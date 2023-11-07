@@ -71,7 +71,7 @@ latch_set(struct latch *latch)
 bool
 latch_is_set(const struct latch *latch)
 {
-    struct pollfd pfd;
+    struct pollfd pfd = {0};
     int retval;
 
     pfd.fd = latch->fds[0];

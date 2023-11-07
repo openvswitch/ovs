@@ -19,7 +19,7 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for vtep-ctl to connect to.
 m4_define([VTEP_CTL_SETUP],
   [VTEP_OVSDB_INIT([db])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db >/dev/null 2>&1], [0], [ignore], [ignore])])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file --pidfile --remote=punix:socket db], [0], [ignore], [ignore])])
 
 dnl VTEP_CTL_CLEANUP
 dnl

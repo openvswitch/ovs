@@ -360,8 +360,12 @@ AC_DEFUN([OVS_CHECK_DBDIR],
 dnl Defines HAVE_BACKTRACE if backtrace() is found.
 AC_DEFUN([OVS_CHECK_BACKTRACE],
   [AC_SEARCH_LIBS([backtrace], [execinfo ubacktrace],
-                  [AC_DEFINE([HAVE_BACKTRACE], [1],
-                             [Define to 1 if you have backtrace(3).])])])
+                  [HAVE_BACKTRACE=yes], [HAVE_BACKTRACE=no])
+   if test "$HAVE_BACKTRACE" = "yes"; then
+     AC_DEFINE([HAVE_BACKTRACE], [1], [Define to 1 if you have backtrace(3).])
+   fi
+   AM_CONDITIONAL([HAVE_BACKTRACE], [test "$HAVE_BACKTRACE" = "yes"])
+   AC_SUBST([HAVE_BACKTRACE])])
 
 dnl Defines HAVE_PERF_EVENT if linux/perf_event.h is found.
 AC_DEFUN([OVS_CHECK_PERF_EVENT],
@@ -371,16 +375,16 @@ dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
 
-dnl Checks for Python 3.4 or later.
+dnl Checks for Python 3.6 or later.
 AC_DEFUN([OVS_CHECK_PYTHON3],
   [AC_CACHE_CHECK(
-     [for Python 3 (version 3.4 or later)],
+     [for Python 3 (version 3.6 or later)],
      [ovs_cv_python3],
      [if test -n "$PYTHON3"; then
         ovs_cv_python3=$PYTHON3
       else
         ovs_cv_python3=no
-        for binary in python3 python3.4 python3.5 python3.6 python3.7; do
+        for binary in python3 python3.6 python3.7 python3.8 python3.9 python3.10 python3.11 python3.12; do
           ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
           for dir in $PATH; do
             IFS=$ovs_save_IFS
@@ -397,7 +401,7 @@ else:
         done
       fi])
    if test "$ovs_cv_python3" = no; then
-     AC_MSG_ERROR([Python 3.4 or later is required but not found in $PATH, please install it or set $PYTHON3 to point to it])
+     AC_MSG_ERROR([Python 3.6 or later is required but not found in $PATH, please install it or set $PYTHON3 to point to it])
    fi
    AC_ARG_VAR([PYTHON3])
    PYTHON3=$ovs_cv_python3])

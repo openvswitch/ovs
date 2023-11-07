@@ -30,8 +30,7 @@ This document describes how to build and install Open vSwitch using
 AF_XDP netdev.
 
 .. warning::
-  The AF_XDP support of Open vSwitch is considered 'experimental',
-  and it is not compiled in by default.
+  The AF_XDP support of Open vSwitch is considered 'experimental'.
 
 
 Introduction
@@ -88,7 +87,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with AF_XDP will require the following:
 
-- libbpf from kernel source tree (kernel 5.0.0 or later)
+- ``libbpf`` and ``libxdp`` (if version of ``libbpf`` if higher than ``0.6``).
 
 - Linux kernel XDP support, with the following options (required)
 
@@ -125,40 +124,20 @@ vSwitch with AF_XDP will require the following:
 Installing
 ----------
 For OVS to use AF_XDP netdev, it has to be configured with LIBBPF support.
-First, clone a recent version of Linux bpf-next tree::
 
-  git clone git://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git
+First, install ``libbpf`` and ``libxdp``.  For example, on Fedora these
+libraries along with development headers can be obtained by installing
+``libbpf-devel`` and ``libxdp-devel`` packages.  For Ubuntu that will be
+``libbpf-dev`` package with additional ``libxdp-dev`` on Ubuntu 22.10
+or later.
 
-Second, go into the Linux source directory and build libbpf in the tools
-directory::
-
-  cd bpf-next/
-  cd tools/lib/bpf/
-  make && make install
-  make install_headers
-
-.. note::
-   Make sure xsk.h and bpf.h are installed in system's library path,
-   e.g. /usr/local/include/bpf/ or /usr/include/bpf/
-
-Make sure the libbpf.so is installed correctly::
-
-  ldconfig
-  ldconfig -p | grep libbpf
-
-.. note::
-   Check /etc/ld.so.conf if libbpf is installed but can not be found by
-   ldconfig.
-
-Third, ensure the standard OVS requirements are installed and
+Next, ensure the standard OVS requirements are installed and
 bootstrap/configure the package::
 
   ./boot.sh && ./configure --enable-afxdp
 
-.. note::
-   If you encounter "WARNING: bpf/libbpf.h: present but cannot be compiled",
-   check the Linux headers are in line with libbpf. For example, in Ubuntu,
-   check the installed linux-headers* and linux-libc-dev* dpkg.
+``--enable-afxdp`` here is optional, but it will ensure that all dependencies
+are available at the build time.
 
 Finally, build and install OVS::
 
@@ -182,7 +161,7 @@ If a test case fails, check the log at::
 
 Setup AF_XDP netdev
 -------------------
-Before running OVS with AF_XDP, make sure the libbpf, libelf, and libnuma are
+Before running OVS with AF_XDP, make sure the libbpf and libnuma are
 set-up right::
 
   ldd vswitchd/ovs-vswitchd

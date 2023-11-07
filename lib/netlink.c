@@ -523,6 +523,15 @@ nl_msg_start_nested(struct ofpbuf *msg, uint16_t type)
     return offset;
 }
 
+/* Adds the header for nested Netlink attributes to 'msg', with the specified
+ * 'type', and returns the header's offset within 'msg'. It's similar to
+ * nl_msg_start_nested() and uses NLA_F_NESTED flag mandatorily. */
+size_t
+nl_msg_start_nested_with_flag(struct ofpbuf *msg, uint16_t type)
+{
+    return nl_msg_start_nested(msg, type | NLA_F_NESTED);
+}
+
 /* Finalizes a nested Netlink attribute in 'msg'.  'offset' should be the value
  * returned by nl_msg_start_nested(). */
 void

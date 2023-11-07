@@ -26,7 +26,8 @@
  * ==========
  *
  * Based on Diego Ongaro's Ph.D. thesis, "Consensus: Bridging Theory and
- * Practice", available at https://ramcloud.stanford.edu/~ongaro/thesis.pdf.
+ * Practice", available at
+ * https://github.com/ongardie/dissertation/blob/master/stanford.pdf.
  * References to sections, pages, and figures are from this thesis.  Quotations
  * in comments also come from this work, in accordance with its license notice,
  * reproduced below:

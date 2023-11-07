@@ -66,14 +66,14 @@ ingress path. In the egress path, it is the other way round. In addition, there
 is a object identifier (OID) interface for control operations Eg. addition of a
 port. The workflow for the calls is similar in nature to the packets, where
 higher level layers call into the lower level layers. A good representational
-diagram of this architecture is in [4]_.
+diagram of this architecture is in [3]_.
 
-Windows Filtering Platform (WFP) [5]_ is a platform implemented on Hyper-V that
+Windows Filtering Platform (WFP) [4]_ is a platform implemented on Hyper-V that
 provides APIs and services for filtering packets. WFP has been utilized to
 filter on some of the packets that OVS is not equipped to handle directly. More
 details in later sections.
 
-IP Helper [6]_ is a set of API available on Hyper-V to retrieve information
+IP Helper [5]_ is a set of API available on Hyper-V to retrieve information
 related to the network configuration information on the host machine. IP Helper
 has been used to retrieve some of the configuration information that OVS needs.
 
@@ -188,10 +188,10 @@ The userspace portion of the OVS solution is mostly POSIX code, and not very
 Linux specific. Majority of the userspace code does not interface directly with
 the kernel datapath and was ported independently of the kernel datapath effort.
 
-As explained in the OVS porting design document [7]_, DPIF is the portion of
+As explained in the OVS porting design document [6]_, DPIF is the portion of
 userspace that interfaces with the kernel portion of the OVS. The interface
-that each DPIF provider has to implement is defined in ``dpif-provider.h``
-[3]_.  Though each platform is allowed to have its own implementation of the
+that each DPIF provider has to implement is defined in ``dpif-provider.h``.
+Though each platform is allowed to have its own implementation of the
 DPIF provider, it was found, via community feedback, that it is desired to
 share code whenever possible. Thus, the DPIF provider for OVS on Hyper-V shares
 code with the DPIF provider on Linux. This interface is implemented in
@@ -253,7 +253,7 @@ Netlink Message Parser
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The communication between OVS userspace and OVS kernel datapath is in the form
-of Netlink messages [1]_, [8]_. More details about this are provided below.  In
+of Netlink messages [1]_, [7]_. More details about this are provided below.  In
 the kernel, a full fledged netlink message parser has been implemented along
 the lines of the netlink message parser in OVS userspace. In fact, a lot of the
 code is ported code.
@@ -407,7 +407,7 @@ As has been mentioned in earlier sections, the netlink socket and netlink
 message based DPIF provider on Linux has been ported to Windows.
 
 Most of the code is common. Some divergence is in the code to receive packets.
-The Linux implementation uses epoll() [9]_ which is not natively supported on
+The Linux implementation uses epoll() [8]_ which is not natively supported on
 Windows.
 
 netdev-windows
@@ -501,10 +501,9 @@ References
 
 .. [1] Hyper-V Extensible Switch https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch
 .. [2] Hyper-V Extensible Switch Extensions https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch-extensions
-.. [3] DPIF Provider http://openvswitch.sourcearchive.com/documentation/1.1.0-1/dpif-provider_8h_source.html
-.. [4] Hyper-V Extensible Switch Components https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch-components
-.. [5] Windows Filtering Platform https://msdn.microsoft.com/en-us/library/windows/desktop/aa366510(v=vs.85).aspx
-.. [6] IP Helper https://msdn.microsoft.com/windows/hardware/drivers/network/ip-helper
-.. [7] How to Port Open vSwitch to New Software or Hardware :doc:`porting`
-.. [8] Netlink https://en.wikipedia.org/wiki/Netlink
-.. [9] epoll https://en.wikipedia.org/wiki/Epoll
+.. [3] Hyper-V Extensible Switch Components https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch-components
+.. [4] Windows Filtering Platform https://msdn.microsoft.com/en-us/library/windows/desktop/aa366510(v=vs.85).aspx
+.. [5] IP Helper https://msdn.microsoft.com/windows/hardware/drivers/network/ip-helper
+.. [6] How to Port Open vSwitch to New Software or Hardware :doc:`porting`
+.. [7] Netlink https://en.wikipedia.org/wiki/Netlink
+.. [8] epoll https://en.wikipedia.org/wiki/Epoll

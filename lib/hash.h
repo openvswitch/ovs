@@ -187,20 +187,82 @@ static inline uint32_t hash_finish(uint64_t hash, uint64_t final)
     return hash ^ (uint32_t)hash >> 16; /* Increase entropy in LSBs. */
 }
 
+static inline uint32_t
+hash_finish32(uint64_t hash, uint32_t final, uint32_t semifinal)
+{
+    /* The finishing multiplier 0x805204f3 has been experimentally
+     * derived to pass the testsuite hash tests. */
+    hash = _mm_crc32_u32(hash, semifinal);
+    hash = _mm_crc32_u32(hash, final) * 0x805204f3;
+    return hash ^ ((uint32_t) hash >> 16); /* Increase entropy in LSBs. */
+}
+
+static inline uint32_t
+hash_words_32aligned(const uint32_t *p, size_t n_words, uint32_t basis)
+{
+    uint32_t hash1 = basis;
+    uint32_t hash2 = 0;
+    uint32_t hash3 = n_words;
+    const uint32_t *endp = (const uint32_t *) p + n_words;
+    const uint32_t *limit = p + n_words - 6;
+
+    while (p <= limit) {
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        hash1 = _mm_crc32_u32(hash1, p[1]);
+        hash2 = _mm_crc32_u32(hash2, p[2]);
+        hash2 = _mm_crc32_u32(hash2, p[3]);
+        hash3 = _mm_crc32_u32(hash3, p[4]);
+        hash3 = _mm_crc32_u32(hash3, p[5]);
+        p += 6;
+    }
+    switch (endp - (const uint32_t *) p) {
+    case 1:
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        break;
+    case 2:
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        hash1 = _mm_crc32_u32(hash1, p[1]);
+        break;
+    case 3:
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        hash1 = _mm_crc32_u32(hash1, p[1]);
+        hash2 = _mm_crc32_u32(hash2, p[2]);
+        break;
+    case 4:
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        hash1 = _mm_crc32_u32(hash1, p[1]);
+        hash2 = _mm_crc32_u32(hash2, p[2]);
+        hash2 = _mm_crc32_u32(hash2, p[3]);
+        break;
+    case 5:
+        hash1 = _mm_crc32_u32(hash1, p[0]);
+        hash1 = _mm_crc32_u32(hash1, p[1]);
+        hash2 = _mm_crc32_u32(hash2, p[2]);
+        hash2 = _mm_crc32_u32(hash2, p[3]);
+        hash3 = _mm_crc32_u32(hash3, p[4]);
+        break;
+    }
+    return hash_finish32(hash1, hash2, hash3);
+}
+
 /* Returns the hash of the 'n' 32-bit words at 'p_', starting from 'basis'.
  * We access 'p_' as a uint64_t pointer, which is fine for __SSE_4_2__.
  *
  * This is inlined for the compiler to have access to the 'n_words', which
  * in many cases is a constant. */
 static inline uint32_t
-hash_words_inline(const uint32_t p_[], size_t n_words, uint32_t basis)
+hash_words_inline(const uint32_t *p_, size_t n_words, uint32_t basis)
 {
-    const uint64_t *p = (const void *)p_;
+    const uint64_t *p = ALIGNED_CAST(const uint64_t *, p_);
     uint64_t hash1 = basis;
     uint64_t hash2 = 0;
     uint64_t hash3 = n_words;
     const uint32_t *endp = (const uint32_t *)p + n_words;
     const uint64_t *limit = p + n_words / 2 - 3;
+
+    if (OVS_UNLIKELY(((intptr_t) p & ((sizeof(uint64_t)) - 1)) != 0)) {
+        return hash_words_32aligned(p_, n_words, basis);
+    }
 
     while (p <= limit) {
         hash1 = _mm_crc32_u64(hash1, p[0]);

@@ -55,18 +55,22 @@
 VLOG_DEFINE_THIS_MODULE(dpif);
 
 COVERAGE_DEFINE(dpif_destroy);
-COVERAGE_DEFINE(dpif_port_add);
-COVERAGE_DEFINE(dpif_port_del);
+COVERAGE_DEFINE(dpif_execute);
+COVERAGE_DEFINE(dpif_execute_error);
+COVERAGE_DEFINE(dpif_execute_with_help);
+COVERAGE_DEFINE(dpif_flow_del);
+COVERAGE_DEFINE(dpif_flow_del_error);
 COVERAGE_DEFINE(dpif_flow_flush);
 COVERAGE_DEFINE(dpif_flow_get);
+COVERAGE_DEFINE(dpif_flow_get_error);
 COVERAGE_DEFINE(dpif_flow_put);
-COVERAGE_DEFINE(dpif_flow_del);
-COVERAGE_DEFINE(dpif_execute);
-COVERAGE_DEFINE(dpif_purge);
-COVERAGE_DEFINE(dpif_execute_with_help);
-COVERAGE_DEFINE(dpif_meter_set);
-COVERAGE_DEFINE(dpif_meter_get);
+COVERAGE_DEFINE(dpif_flow_put_error);
 COVERAGE_DEFINE(dpif_meter_del);
+COVERAGE_DEFINE(dpif_meter_get);
+COVERAGE_DEFINE(dpif_meter_set);
+COVERAGE_DEFINE(dpif_port_add);
+COVERAGE_DEFINE(dpif_port_del);
+COVERAGE_DEFINE(dpif_purge);
 
 static const struct dpif_class *base_dpif_classes[] = {
 #if defined(__linux__) || defined(_WIN32)
@@ -701,13 +705,14 @@ dpif_port_set_config(struct dpif *dpif, odp_port_t port_no,
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.
  *
- * Retuns ENODEV if the port doesn't exist.
+ * Retuns ENODEV if the port doesn't exist.  Will not log a warning in this
+ * case unless 'warn_if_not_found' is true.
  *
  * The caller owns the data in 'port' and must free it with
  * dpif_port_destroy() when it is no longer needed. */
 int
 dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
-                          struct dpif_port *port)
+                          struct dpif_port *port, bool warn_if_not_found)
 {
     int error = dpif->dpif_class->port_query_by_number(dpif, port_no, port);
     if (!error) {
@@ -715,8 +720,13 @@ dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
                     dpif_name(dpif), port_no, port->name);
     } else {
         memset(port, 0, sizeof *port);
-        VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu32": %s",
-                     dpif_name(dpif), port_no, ovs_strerror(error));
+        if (error == ENODEV && !warn_if_not_found) {
+            VLOG_DBG_RL(&dpmsg_rl, "%s: failed to query port %"PRIu32": %s",
+                        dpif_name(dpif), port_no, ovs_strerror(error));
+        } else {
+            VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu32": %s",
+                         dpif_name(dpif), port_no, ovs_strerror(error));
+        }
     }
     return error;
 }
@@ -784,7 +794,7 @@ dpif_port_get_name(struct dpif *dpif, odp_port_t port_no,
 
     ovs_assert(name_size > 0);
 
-    error = dpif_port_query_by_number(dpif, port_no, &port);
+    error = dpif_port_query_by_number(dpif, port_no, &port, true);
     if (!error) {
         ovs_strlcpy(name, port.name, name_size);
         dpif_port_destroy(&port);
@@ -1213,7 +1223,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
             /* The Linux kernel datapath throws away the tunnel information
              * that we supply as metadata.  We have to use a "set" action to
              * supply it. */
-            if (md->tunnel.ip_dst) {
+            if (flow_tnl_dst_is_set(&md->tunnel)) {
                 odp_put_tunnel_action(&md->tunnel, &execute_actions, NULL);
             }
             ofpbuf_put(&execute_actions, action, NLA_ALIGN(action->nla_len));
@@ -1381,8 +1391,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_put);
                     log_flow_put_message(dpif, &this_module, put, error);
-                    if (error && put->stats) {
-                        memset(put->stats, 0, sizeof *put->stats);
+                    if (error) {
+                        COVERAGE_INC(dpif_flow_put_error);
+                        if (put->stats) {
+                            memset(put->stats, 0, sizeof *put->stats);
+                        }
                     }
                     break;
                 }
@@ -1392,10 +1405,10 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_get);
                     if (error) {
+                        COVERAGE_INC(dpif_flow_get_error);
                         memset(get->flow, 0, sizeof *get->flow);
                     }
                     log_flow_get_message(dpif, &this_module, get, error);
-
                     break;
                 }
 
@@ -1404,8 +1417,11 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
 
                     COVERAGE_INC(dpif_flow_del);
                     log_flow_del_message(dpif, &this_module, del, error);
-                    if (error && del->stats) {
-                        memset(del->stats, 0, sizeof *del->stats);
+                    if (error) {
+                        COVERAGE_INC(dpif_flow_del_error);
+                        if (del->stats) {
+                            memset(del->stats, 0, sizeof *del->stats);
+                        }
                     }
                     break;
                 }
@@ -1414,6 +1430,9 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
                     COVERAGE_INC(dpif_execute);
                     log_execute_message(dpif, &this_module, &op->execute,
                                         false, error);
+                    if (error) {
+                        COVERAGE_INC(dpif_execute_error);
+                    }
                     break;
                 }
             }
@@ -2108,4 +2127,10 @@ dpif_cache_set_size(struct dpif *dpif, uint32_t level, uint32_t size)
     return dpif->dpif_class->cache_set_size
            ? dpif->dpif_class->cache_set_size(dpif, level, size)
            : EOPNOTSUPP;
+}
+
+bool
+dpif_synced_dp_layers(struct dpif *dpif)
+{
+    return dpif->dpif_class->synced_dp_layers;
 }

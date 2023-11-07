@@ -29,7 +29,7 @@ struct netdev;
 int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
                                   const char *flag_name, bool enable);
 int linux_get_ifindex(const char *netdev_name);
-int tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
+int tc_add_policer_action(uint32_t index, uint64_t kbits_rate,
                           uint32_t kbits_burst, uint32_t pkts_rate,
                           uint32_t pkts_burst, bool update);
 int tc_del_policer_action(uint32_t index, struct ofputil_meter_stats *stats);

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include <config.h>
+#undef NDEBUG
 #include <getopt.h>
 
-#include <config.h>
-
-#include "ovs-thread.h"
-#include "ovs-rcu.h"
 #include "ovstest.h"
+#include "ovs-rcu.h"
+#include "ovs-thread.h"
 #include "random.h"
 #include "util.h"
 

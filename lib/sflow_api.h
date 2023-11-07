@@ -337,7 +337,7 @@ void sfl_agent_sysError(SFLAgent *agent, char *modName, char *msg);
 
 u_int32_t sfl_receiver_samplePacketsSent(SFLReceiver *receiver);
 
-#define SFL_ALLOC malloc
+#define SFL_ALLOC xzalloc
 #define SFL_FREE free
 
 #endif /* SFLOW_API_H */

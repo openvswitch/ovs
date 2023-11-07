@@ -47,7 +47,10 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
 
         /* Column and arg fields are not being used with boolean functions.
          * Use dummy values */
-        clause->column = ovsdb_table_schema_get_column(ts, "_uuid");
+        const struct ovsdb_column *uuid_column =
+                                  ovsdb_table_schema_get_column(ts, "_uuid");
+        ovs_assert(uuid_column);
+        clause->column = uuid_column;
         clause->index = clause->column->index;
         ovsdb_datum_init_default(&clause->arg, &clause->column->type);
         return NULL;
@@ -495,6 +498,67 @@ ovsdb_condition_cmp_3way(const struct ovsdb_condition *a,
     }
 
     return 0;
+}
+
+/* Given conditions 'a' and 'b', composes a new condition 'diff' that contains
+ * clauses that are present in one of the conditions, but not in the other.
+ *
+ * If some data doesn't match the resulted 'diff' condition, that means one of:
+ *  1. The data matches both 'a' and 'b'.
+ *  2. The data does not match either 'a' or 'b'.
+ *
+ * However, that is not true if one of the original conditions is a trivial
+ * True or False.  In this case the function will currently just return an
+ * empty (True) condition. */
+void
+ovsdb_condition_diff(struct ovsdb_condition *diff,
+                     const struct ovsdb_condition *a,
+                     const struct ovsdb_condition *b)
+{
+    size_t i, j;
+    int cmp;
+
+    ovsdb_condition_init(diff);
+
+    if (ovsdb_condition_is_trivial(a) || ovsdb_condition_is_trivial(b)) {
+        return;
+    }
+
+    diff->clauses = xcalloc(a->n_clauses + b->n_clauses,
+                            sizeof *diff->clauses);
+
+    /* Clauses are sorted. */
+    for (i = j = 0; i < a->n_clauses && j < b->n_clauses;) {
+        cmp = compare_clauses_3way_with_data(&a->clauses[i], &b->clauses[j]);
+        if (cmp < 0) {
+            ovsdb_clause_clone(&diff->clauses[diff->n_clauses++],
+                               &a->clauses[i++]);
+        } else if (cmp > 0) {
+            ovsdb_clause_clone(&diff->clauses[diff->n_clauses++],
+                               &b->clauses[j++]);
+        } else {
+            i++;
+            j++;
+        }
+    }
+    for (; i < a->n_clauses; i++) {
+        ovsdb_clause_clone(&diff->clauses[diff->n_clauses++],
+                           &a->clauses[i]);
+    }
+    for (; j < b->n_clauses; j++) {
+        ovsdb_clause_clone(&diff->clauses[diff->n_clauses++],
+                           &b->clauses[j]);
+    }
+
+    if (diff->n_clauses) {
+        diff->optimized = a->optimized && b->optimized;
+        if (diff->optimized) {
+            ovsdb_condition_optimize(diff);
+        }
+    } else {
+        free(diff->clauses);
+        diff->clauses = NULL;
+    }
 }
 
 void

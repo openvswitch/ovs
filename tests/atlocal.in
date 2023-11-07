@@ -2,9 +2,13 @@
 HAVE_OPENSSL='@HAVE_OPENSSL@'
 OPENSSL_SUPPORTS_SNI='@OPENSSL_SUPPORTS_SNI@'
 HAVE_UNBOUND='@HAVE_UNBOUND@'
+HAVE_BACKTRACE='@HAVE_BACKTRACE@'
+HAVE_UNWIND='@HAVE_UNWIND@'
 EGREP='@EGREP@'
 PYTHON3='@PYTHON3@'
 CFLAGS='@CFLAGS@'
+HAVE_TCA_HTB_RATE64='@HAVE_TCA_HTB_RATE64@'
+HAVE_TCA_POLICE_PKTRATE64='@HAVE_TCA_POLICE_PKTRATE64@'
 
 # PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
 # stderr that breaks almost any Python3 test (PEP 0538)
@@ -172,22 +176,14 @@ fi
 # Set HAVE_TC
 find_command tc
 
-# When HAVE_TC=yes, check if the current tc supports adding pps filter
-SUPPORT_TC_INGRESS_PPS="no"
-if test $HAVE_TC="yes"; then
-    ip link add veth0 type veth peer name veth1
-    tc qdisc add dev veth0 handle ffff: ingress
-    if tc filter add dev veth0 parent ffff: u32 match u32 0 0 police pkts_rate 100 pkts_burst 10; then
-        SUPPORT_TC_INGRESS_PPS="yes"
-    fi
-    ip link del veth0
-fi
-
 # Set HAVE_TCPDUMP
 find_command tcpdump
 
 # Set HAVE_LFTP
 find_command lftp
+
+# Set HAVE_ETHTOOL
+find_command ethtool
 
 CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 

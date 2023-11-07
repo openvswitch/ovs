@@ -213,6 +213,12 @@ Open vSwitch 2.6 introduced support for the active-backup service model.
    `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
    `Downgrading from version 2.15 and later to 2.14 and earlier`_.
 
+   Another change happened in version 3.2.  To upgrade/downgrade the
+   ``ovsdb-server`` processes across this version follow the instructions
+   described under
+   `Upgrading from version 3.1 and earlier to 3.2 and later`_ and
+   `Downgrading from version 3.2 and later to 3.1 and earlier`_.
+
 Clustered Database Service Model
 --------------------------------
 
@@ -287,6 +293,12 @@ schema, which is covered later under `Upgrading or Downgrading a Database`_.)
    `Upgrading from version 2.14 and earlier to 2.15 and later`_ and
    `Downgrading from version 2.15 and later to 2.14 and earlier`_.
 
+   Another change happened in version 3.2.  To upgrade/downgrade the
+   ``ovsdb-server`` processes across this version follow the instructions
+   described under
+   `Upgrading from version 3.1 and earlier to 3.2 and later`_ and
+   `Downgrading from version 3.2 and later to 3.1 and earlier`_.
+
 Clustered OVSDB does not support the OVSDB "ephemeral columns" feature.
 ``ovsdb-tool`` and ``ovsdb-client`` change ephemeral columns into persistent
 ones when they work with schemas for clustered databases.  Future versions of
@@ -338,6 +350,57 @@ For all service models it's required to:
    service models).
 
 2. Compact all database files with ``ovsdb-tool compact`` command.
+
+3. Downgrade and restart ``ovsdb-server`` processes.
+
+Upgrading from version 3.1 and earlier to 3.2 and later
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is another change of a database file format in version 3.2 that doesn't
+allow older versions of ``ovsdb-server`` to read the database file modified by
+the ``ovsdb-server`` version 3.2 or later.  This also affects runtime
+communications between servers in **cluster** service models.  To upgrade the
+``ovsdb-server`` processes from one version of Open vSwitch (3.1 or earlier) to
+another (3.2 or higher) instructions below should be followed. (This is
+different from upgrading a database schema, which is covered later under
+`Upgrading or Downgrading a Database`_.)
+
+In case of **standalone** or **active-backup** service model no special
+handling during upgrade is required.
+
+For the **cluster** service model recommended upgrade strategy is following:
+
+1. Upgrade processes one at a time.  Each ``ovsdb-server`` process after
+   upgrade should be started with ``--disable-file-no-data-conversion`` command
+   line argument.
+
+2. When all ``ovsdb-server`` processes upgraded, use ``ovs-appctl`` to invoke
+   ``ovsdb/file/no-data-conversion-enable`` command on each of them or restart
+   all ``ovsdb-server`` processes one at a time without
+   ``--disable-file-no-data-conversion`` command line option.
+
+Downgrading from version 3.2 and later to 3.1 and earlier
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Similar to upgrading covered under `Upgrading from version 3.1 and earlier to
+3.2 and later`_, downgrading from the ``ovsdb-server`` version 3.2 and later
+to 3.1 and earlier requires additional steps. (This is different from
+upgrading a database schema, which is covered later under
+`Upgrading or Downgrading a Database`_.)
+
+For all service models it's required to:
+
+1. Compact all database files via ``ovsdb-server/compact`` command with
+   ``ovs-appctl`` utility.  This should be done for each involved
+   ``ovsdb-server`` process separately (single process for **standalone**
+   service model, all involved processes for **active-backup** and **cluster**
+   service models).
+
+2. Stop all ``ovsdb-server`` processes.  Make sure that no database schema
+   conversion operations were performed between steps 1 and 2.  For
+   **standalone** and **active-backup** service models, the database compaction
+   can be performed after stopping all the processes instead with the
+   ``ovsdb-tool compact`` command.
 
 3. Downgrade and restart ``ovsdb-server`` processes.
 

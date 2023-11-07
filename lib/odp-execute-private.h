@@ -78,6 +78,7 @@ BUILD_ASSERT_DECL(ACTION_IMPL_AUTOVALIDATOR == 1);
 #define ACTION_IMPL_BEGIN (ACTION_IMPL_AUTOVALIDATOR + 1)
 
 bool action_avx512_isa_probe(void);
+bool action_avx512vbmi_isa_probe(void);
 
 /* Odp execute init handles setting up the state of the actions functions at
  * initialization time. It cannot return errors, as it must always succeed in

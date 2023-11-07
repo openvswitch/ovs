@@ -205,13 +205,27 @@
       </column>
 
       <column name="other_config" key="min-revalidate-pps"
-              type='{"type": "integer", "minInteger": 1}'>
+              type='{"type": "integer", "minInteger": 0}'>
         <p>
           Set minimum pps that flow must have in order to be revalidated when
           revalidation duration exceeds half of max-revalidator config variable.
+          Setting to 0 means always revalidate flows regardless of pps.
         </p>
         <p>
           The default is 5.
+        </p>
+      </column>
+
+      <column name="other_config" key="offloaded-stats-delay"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          Set worst case delay (in ms) it might take before statistics of
+          offloaded flows are updated. Offloaded flows younger than this
+          delay will always be revalidated regardless of
+          <ref column="other_config" key="min-revalidate-pps"/>.
+        </p>
+        <p>
+          The default is 2000.
         </p>
       </column>
 
@@ -786,6 +800,28 @@
         </p>
         <p>
          The default value is <code>25%</code>.
+        </p>
+      </column>
+      <column name="other_config" key="pmd-sleep-max"
+              type='{"type": "integer",
+                     "minInteger": 0, "maxInteger": 10000}'>
+        <p>
+          Specifies the maximum sleep time that will be requested in
+          microseconds per iteration for a PMD thread which has received zero
+          or a small amount of packets from the Rx queues it is polling.
+        </p>
+        <p>
+          The actual sleep time requested is based on the load
+          of the Rx queues that the PMD polls and may be less than
+          the maximum value.
+        </p>
+        <p>
+          The default value is <code>0 microseconds</code>, which means
+          that the PMD will not sleep regardless of the load from the
+          Rx queues that it polls.
+        </p>
+        <p>
+          The maximum value is <code>10000 microseconds</code>.
         </p>
       </column>
       <column name="other_config" key="userspace-tso-enable"
@@ -2809,6 +2845,16 @@
             </p>
           </dd>
 
+          <dt><code>srv6</code></dt>
+          <dd>
+            <p>
+            Segment Routing IPv6 (SRv6) tunnel encapsulates L3 traffic as
+            "IPv6 in IPv6" or "IPv4 in IPv6" with Segment Routing Header (SRH)
+            defined in RFC 8754. The segment list in SRH can be set using a
+            SRv6 specific option.
+            </p>
+          </dd>
+
         </dl>
       </column>
     </group>
@@ -2817,8 +2863,8 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>geneve</code>, <code>bareudp</code>, <code>gre</code>,
-        <code>ip6gre</code>, <code>vxlan</code>, <code>lisp</code> and
-        <code>stt</code>.
+        <code>ip6gre</code>, <code>vxlan</code>, <code>lisp</code>,
+        <code>stt</code> and <code>srv6</code>.
       </p>
 
       <p>
@@ -2831,7 +2877,8 @@
         considered more specific than <ref column="options" key="local_ip"/> if
         a port defines one and another port defines the other.
         <ref column="options" key="in_key"/> is not applicable for bareudp
-        tunnels. Hence it is not considered while identifying a bareudp tunnel.
+        and srv6 tunnels. Hence it is not considered while identifying
+        bareudp or srv6 tunnels.
       </p>
 
       <column name="options" key="remote_ip">
@@ -2899,8 +2946,9 @@
 
       <column name="options" key="in_key">
         <p>
-          Optional, not applicable for <code>bareudp</code>. The key that
-          received packets must contain, one of:
+          Optional, not applicable for <code>bareudp</code> and
+          <code>srv6</code>. The key that received packets must contain,
+          one of:
         </p>
 
         <ul>
@@ -2929,8 +2977,9 @@
 
       <column name="options" key="out_key">
       <p>
-        Optional, not applicable for <code>bareudp</code>. The key to be set
-        on outgoing packets, one of:
+        Optional, not applicable for <code>bareudp</code> and
+        <code>srv6</code>. The key to be set on outgoing packets,
+        one of:
       </p>
 
         <ul>
@@ -3228,6 +3277,44 @@
       </column>
     </group>
 
+    <group title="Tunnel Options: srv6 only">
+      <column name="options" key="srv6_segs">
+        <p>
+           Specifies the segment list in Segment Routing Header (SRH).
+           It consists of a comma-separated list of segments represented
+           in IPv6 format, e.g. "fc00:100::1,fc00:200::1,fc00:300::1".
+           Note that the first segment must be the same as
+           <ref column="options" key="remote_ip"/>.
+        </p>
+      </column>
+      <column name="options" key="srv6_flowlabel"
+              type='{"type": "string",
+                     "enum": ["set", ["zero", "copy", "compute"]]}'>
+        <p>
+          Optional.
+          This option controls how flowlabel in outer IPv6 header is
+          configured. It gives the benefit of IPv6 flow label based
+          load balancing, which is supported by some popular vendor
+          appliances. Like net.ipv6.seg6_flowlabel sysconfig, it is
+          one of the three values below:
+        </p>
+        <ul>
+          <li>
+            By default, or if this option is <code>copy</code>, copy the
+            flowlabel of inner IPv6 header to the flowlabel of outer IPv6
+            header. If inner header is not IPv6, it is set to 0.
+          </li>
+          <li>
+            If this option is <code>zero</code>, simply set flowlabel to 0.
+          </li>
+          <li>
+            If this option is <code>compute</code>, set flowlabel to a hash
+            over the L3/L4 fields of the inner packet.
+          </li>
+        </ul>
+      </column>
+    </group>
+
     <group title="Patch Options">
       <p>
         These options apply only to <dfn>patch ports</dfn>, that is, interfaces
@@ -3428,6 +3515,50 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           </li>
         </ul>
         <p>This option may only be used with dpdk VF representors.</p>
+      </column>
+
+      <column name="options" key="rx-steering"
+              type='{"type": "string", "enum": ["set", ["rss", "rss+lacp"]]}'>
+        <p>
+          Configure hardware Rx queue steering policy.
+        </p>
+        <p>
+          This option takes one of the following values:
+        </p>
+        <dl>
+          <dt><code>rss</code></dt>
+          <dd>
+            Distribution of ingress packets in all Rx queues according to the
+            RSS algorithm. This is the default behaviour.
+          </dd>
+          <dt><code>rss+lacp</code></dt>
+          <dd>
+            Distribution of ingress packets according to the RSS algorithm on
+            all but the last Rx queue. An extra Rx queue is allocated for LACP
+            packets.
+          </dd>
+        </dl>
+        <p>
+          If the user has already configured multiple <ref table="Interface"
+          column="options" key="n_rxq" /> on the port, an additional one will
+          be allocated for the specified protocols. Even if the hardware cannot
+          satisfy the requested number of requested Rx queues, the last Rx
+          queue will be used. If only one Rx queue is available or if the
+          hardware does not support the rte_flow matchers/actions required to
+          redirect the selected protocols, custom <code>rx-steering</code> will
+          fall back to default <code>rss</code> mode.
+        </p>
+        <p>
+          This feature is mutually exclusive with
+          <ref table="Open_vSwitch" column="other_config" key="hw-offload" />
+          as it may conflict with the offloaded flows. If both are enabled,
+          <code>rx-steering</code> will fall back to default <code>rss</code>
+          mode.
+        </p>
+        <p>
+          This option is only applicable to interfaces with type
+          <code>dpdk</code>.
+        </p>
       </column>
 
       <column name="other_config" key="tx-steering"
@@ -3666,14 +3797,62 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Interface description string.
           </column>
 
-          <column name="status" key="pci-vendor_id">
-            Vendor ID of PCI device.
+          <column name="status" key="bus_info">
+            Bus name and bus info such as Vendor ID and Device ID of PCI
+            device.
           </column>
 
-          <column name="status" key="pci-device_id">
-            Device ID of PCI device.
+          <column name="status" key="dpdk-vf-mac">
+            Ethernet address set for this VF interface. Only reported for dpdk
+            VF representors.
           </column>
 
+          <column name="status" key="rx_steering">
+            Hardware Rx queue steering policy in use.
+          </column>
+
+          <column name="status" key="rx_steering_queue">
+            ID of rx steering queue. Only reported if <code>rx-steering</code>
+            is supported by hardware.
+          </column>
+
+          <column name="status" key="rss_queues">
+            IDs of rss queues. Only reported if <code>rx-steering</code> is
+            supported by hardware.
+          </column>
+      </group>
+
+      <group title="dpdkvhostuser">
+        <p>
+          dpdkvhostuser and dpdkvhostuserclient
+          netdev specific interface status information.
+        </p>
+          <column name="status" key="mode">
+            client (connecting) or server (listening) in the socket
+            communication.
+          </column>
+          <column name="status" key="features">
+            virtio features bitmap as per virtio specification.
+          </column>
+          <column name="status" key="num_of_vrings">
+            The number of available virtqueues.
+          </column>
+          <column name="status" key="numa">
+            The numa id of the device and guest memory.
+          </column>
+          <column name="status" key="socket">
+            The path to the socket used for communication.
+          </column>
+          <column name="status" key="status">
+            Status of connection to the device.
+          </column>
+          <column name="status" key="vring_n_size">
+            Each virtqueue will have it's size reported, where n is the
+            virtqueue number from 0..(num_of_vrings-1).
+          </column>
+          <column name="status" key="userspace-tso">
+            Whether userspace-tso is enabled or disabled.
+          </column>
       </group>
     </group>
 
@@ -4871,6 +5050,10 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       <column name="other_config" key="loss" type='{"type": "integer"}'>
         Adds an independent loss probability to the packets outgoing from the
         chosen network interface.
+      </column>
+      <column name="other_config" key="jitter" type='{"type": "integer"}'>
+        Adds the provided jitter to the latency outgoing to the
+        chosen network interface. The jitter value expressed in us.
       </column>
     </group>
 
@@ -6274,6 +6457,12 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         translated to an ephemeral port. If there is no collision, no SNAT
         is performed.
       </column>
+      <column name="capabilities" key="ct_flush"
+              type='{"type": "boolean"}'>
+        True if the datapath supports CT flush OpenFlow Nicira extension
+        called <code>NXT_CT_FLUSH</code>. The <code>NXT_CT_FLUSH</code>
+        extensions allows to flush CT entries based on specified parameters.
+      </column>
     </group>
 
     <group title="Common Columns">
@@ -6567,6 +6756,26 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       The maximum number of IPFIX flow records that can be cached at a
       time.  If not specified, defaults to 0.  If 0, caching is
       disabled.
+    </column>
+
+    <column name="stats_interval">
+      <p>
+          Interval (in seconds) for sending IPFIX exporting process statistics
+          according to IETF RFC 5101 Section 4.3.
+      </p>
+      <p>
+          Default value is 600
+      </p>
+    </column>
+
+    <column name="template_interval">
+      <p>
+          Interval (in seconds) for sending IPFIX Template information for each
+          Observation Domain ID.
+      </p>
+      <p>
+          Default value is 600
+      </p>
     </column>
 
     <column name="other_config" key="enable-tunnel-sampling"

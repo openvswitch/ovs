@@ -48,7 +48,7 @@ get_detach(void)
 void
 daemonize(void)
 {
-    daemonize_start(false);
+    daemonize_start(false, false);
     daemonize_complete();
 }
 

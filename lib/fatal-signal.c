@@ -35,8 +35,12 @@
 
 #include "openvswitch/type-props.h"
 
-#ifdef HAVE_UNWIND
+#if defined(HAVE_UNWIND) || defined(HAVE_BACKTRACE)
 #include "daemon-private.h"
+#endif
+
+#ifdef HAVE_BACKTRACE
+#include <execinfo.h>
 #endif
 
 #ifndef SIG_ATOMIC_MAX
@@ -78,6 +82,39 @@ static void call_hooks(int sig_nr);
 static BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType);
 #endif
 
+/* Sets up a pipe or event handle that will be used to wake up the current
+ * process after signal is received, so it can be processed outside of the
+ * signal handler context in fatal_signal_run(). */
+static void
+fatal_signal_create_wakeup_events(void)
+{
+#ifndef _WIN32
+    xpipe_nonblocking(signal_fds);
+#else
+    wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (!wevent) {
+        char *msg_buf = ovs_lasterror_to_string();
+        VLOG_FATAL("Failed to create a event (%s).", msg_buf);
+    }
+#endif
+}
+
+static void
+fatal_signal_destroy_wakeup_events(void)
+{
+#ifndef _WIN32
+    close(signal_fds[0]);
+    signal_fds[0] = -1;
+    close(signal_fds[1]);
+    signal_fds[1] = -1;
+#else
+    ResetEvent(wevent);
+    CloseHandle(wevent);
+    wevent = NULL;
+#endif
+}
+
+
 /* Initializes the fatal signal handling module.  Calling this function is
  * optional, because calling any other function in the module will also
  * initialize it.  However, in a multithreaded program, the module must be
@@ -94,15 +131,16 @@ fatal_signal_init(void)
         inited = true;
 
         ovs_mutex_init_recursive(&mutex);
-#ifndef _WIN32
-        xpipe_nonblocking(signal_fds);
-#else
-        wevent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        if (!wevent) {
-            char *msg_buf = ovs_lasterror_to_string();
-            VLOG_FATAL("Failed to create a event (%s).", msg_buf);
-        }
 
+        /* The dummy backtrace is needed.
+         * See comment for send_backtrace_to_monitor(). */
+        struct backtrace dummy_bt;
+
+        backtrace_capture(&dummy_bt);
+
+        fatal_signal_create_wakeup_events();
+
+#ifdef _WIN32
         /* Register a function to handle Ctrl+C. */
         SetConsoleCtrlHandler(ConsoleHandlerRoutine, true);
 #endif
@@ -181,7 +219,8 @@ llong_to_hex_str(unsigned long long value, char *str)
  * library functions used here must be async-signal-safe.
  */
 static inline void
-send_backtrace_to_monitor(void) {
+send_backtrace_to_monitor(void)
+{
     /* volatile added to prevent a "clobbered" error on ppc64le with gcc */
     volatile int dep;
     struct unw_backtrace unw_bt[UNW_MAX_DEPTH];
@@ -211,11 +250,10 @@ send_backtrace_to_monitor(void) {
         /* Since there is no monitor daemon running, write backtrace
          * in current process.
          */
-        char str[] = "SIGSEGV detected, backtrace:\n";
         char ip_str[16], offset_str[6];
         char line[64], fn_name[UNW_MAX_FUNCN];
 
-        vlog_direct_write_to_log_file_unsafe(str);
+        vlog_direct_write_to_log_file_unsafe(BACKTRACE_DUMP_MSG);
 
         for (int i = 0; i < dep; i++) {
             memset(line, 0, sizeof line);
@@ -237,6 +275,36 @@ send_backtrace_to_monitor(void) {
             strcat(line, ">\n");
             vlog_direct_write_to_log_file_unsafe(line);
         }
+    }
+}
+#elif HAVE_BACKTRACE
+/* Send the backtrace to monitor thread.
+ *
+ * Note that this runs in the signal handling context, any system
+ * library functions used here must be async-signal-safe.
+ * backtrace() is only signal safe if the "libgcc" or equivalent was loaded
+ * before the signal handler. In order to keep it safe the fatal_signal_init()
+ * should always call backtrace_capture which will ensure that "libgcc" or
+ * equivlent is loaded.
+ */
+static inline void
+send_backtrace_to_monitor(void)
+{
+    struct backtrace bt;
+
+    backtrace_capture(&bt);
+
+    if (monitor && daemonize_fd > -1) {
+        ignore(write(daemonize_fd, &bt, sizeof bt));
+    } else {
+        int log_fd = vlog_get_log_file_fd_unsafe();
+
+        if (log_fd < 0) {
+            return;
+        }
+
+        vlog_direct_write_to_log_file_unsafe(BACKTRACE_DUMP_MSG);
+        backtrace_symbols_fd(bt.frames, bt.n_frames, log_fd);
     }
 }
 #else
@@ -456,6 +524,9 @@ do_unlink_files(void)
  * hooks passed a 'cancel_cb' function to fatal_signal_add_hook(), then those
  * functions will be called, allowing them to free resources, etc.
  *
+ * Also re-creates wake-up events, so signals in one of the processes do not
+ * wake up the other one.
+ *
  * Following a fork, one of the resulting processes can call this function to
  * allow it to terminate without calling the hooks registered before calling
  * this function.  New hooks registered after calling this function will take
@@ -466,6 +537,9 @@ fatal_signal_fork(void)
     size_t i;
 
     assert_single_threaded();
+
+    fatal_signal_destroy_wakeup_events();
+    fatal_signal_create_wakeup_events();
 
     for (i = 0; i < n_hooks; i++) {
         struct hook *h = &hooks[i];

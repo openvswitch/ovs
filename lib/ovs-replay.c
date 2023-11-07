@@ -34,7 +34,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
 static struct ovs_mutex replay_mutex = OVS_MUTEX_INITIALIZER;
 static int replay_seqno OVS_GUARDED_BY(replay_mutex) = 0;
-static atomic_int replay_state = ATOMIC_VAR_INIT(OVS_REPLAY_NONE);
+static atomic_int replay_state = OVS_REPLAY_NONE;
 
 static char *dirname = NULL;
 

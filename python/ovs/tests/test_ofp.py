@@ -2,7 +2,7 @@ import netaddr
 import pytest
 
 from ovs.flow.ofp import OFPFlow
-from ovs.flow.kv import KeyValue
+from ovs.flow.kv import KeyValue, ParseError
 from ovs.flow.decoders import EthMask, IPMask, decode_mask
 
 
@@ -22,7 +22,7 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
         (
             "actions=controller,controller:200",
             [
-                KeyValue("output", "controller"),
+                KeyValue("output", {"port": "CONTROLLER"}),
                 KeyValue("controller", {"max_len": 200}),
             ],
         ),
@@ -331,12 +331,12 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
                         {"table": 69},
                         {"delete_learned": True},
                         {"cookie": 3664728752},
-                        {"OXM_OF_METADATA[]": True},
+                        {"OXM_OF_METADATA[]": {"field": "OXM_OF_METADATA"}},
                         {"eth_type": 2048},
-                        {"NXM_OF_IP_SRC[]": True},
+                        {"NXM_OF_IP_SRC[]": {"field": "NXM_OF_IP_SRC"}},
                         {"ip_dst": IPMask("172.30.204.105/32")},
                         {"nw_proto": 6},
-                        {"NXM_OF_TCP_SRC[]": "NXM_OF_TCP_DST[]"},
+                        {"NXM_OF_TCP_SRC[]": {"field": "NXM_OF_TCP_DST"}},
                         {
                             "load": {
                                 "value": 1,
@@ -509,11 +509,73 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
                 ),
             ],
         ),
+        (
+            "actions=POP_VLAN,push_vlan:0x8100,NORMAL,clone(MOD_NW_SRC:192.168.1.1,resubmit(,10))",  # noqa: E501
+            [
+                KeyValue("POP_VLAN", True),
+                KeyValue("push_vlan", 0x8100),
+                KeyValue("output", {"port": "NORMAL"}),
+                KeyValue(
+                    "clone",
+                    [
+                        {"MOD_NW_SRC": netaddr.IPAddress("192.168.1.1")},
+                        {"resubmit": {"port": "", "table": 10}},
+                    ]
+                ),
+            ],
+        ),
+        (
+            "actions=MOD_NW_SRC:192.168.1.1,CONTROLLER,CONTROLLER:123",
+            [
+                KeyValue("MOD_NW_SRC", netaddr.IPAddress("192.168.1.1")),
+                KeyValue("output", {"port": "CONTROLLER"}),
+                KeyValue("CONTROLLER", {"max_len": 123}),
+            ],
+        ),
+        (
+            "actions=LOCAL,clone(myport,CONTROLLER)",
+            [
+                KeyValue("output", {"port": "LOCAL"}),
+                KeyValue(
+                    "clone",
+                    [
+                        {"output": {"port": "myport"}},
+                        {"output": {"port": "CONTROLLER"}},
+                    ]
+                ),
+            ],
+        ),
+        (
+            "actions=doesnotexist(1234)",
+            ParseError,
+        ),
+        (
+            "actions=learn(eth_type=nofield)",
+            ParseError,
+        ),
+        (
+            "actions=learn(nofield=eth_type)",
+            ParseError,
+        ),
+        (
+            "nofield=0x123 actions=drop",
+            ParseError,
+        ),
+        (
+            "actions=load:0x12334->NOFILED",
+            ParseError,
+        ),
     ],
 )
 def test_act(input_string, expected):
+    if isinstance(expected, type):
+        with pytest.raises(expected):
+            ofp = OFPFlow(input_string)
+        return
+
     ofp = OFPFlow(input_string)
     actions = ofp.actions_kv
+
     for i in range(len(expected)):
         assert expected[i].key == actions[i].key
         assert expected[i].value == actions[i].value

@@ -579,7 +579,8 @@ nl_ct_put_tuple_proto(struct ofpbuf *buf, const struct ct_dpif_tuple *tuple)
         nl_msg_put_u8(buf, CTA_PROTO_ICMPV6_TYPE, tuple->icmp_type);
         nl_msg_put_u8(buf, CTA_PROTO_ICMPV6_CODE, tuple->icmp_code);
     } else if (tuple->ip_proto == IPPROTO_TCP ||
-               tuple->ip_proto == IPPROTO_UDP) {
+               tuple->ip_proto == IPPROTO_UDP ||
+               tuple->ip_proto == IPPROTO_SCTP) {
         nl_msg_put_be16(buf, CTA_PROTO_SRC_PORT, tuple->src_port);
         nl_msg_put_be16(buf, CTA_PROTO_DST_PORT, tuple->dst_port);
     } else {

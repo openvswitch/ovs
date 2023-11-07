@@ -112,6 +112,17 @@ m4_define([CHECK_CONNTRACK_ZEROIP_SNAT],
     AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ])
 
+# CHECK_CONNTRACK_SCTP()
+#
+# Perform requirements checks for running conntrack SCTP. The kernel
+# optionally support nf proto sctp.
+#
+m4_define([CHECK_CONNTRACK_SCTP],
+[
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([! test -e /proc/sys/net/netfilter/nf_conntrack_sctp_timeout_closed])
+])
+
 # CHECK_CONNTRACK_TIMEOUT()
 #
 # Perform requirements checks for running conntrack customized timeout tests.
@@ -121,6 +132,15 @@ m4_define([CHECK_CONNTRACK_TIMEOUT],
     AT_SKIP_IF([! cat /boot/config-$(uname -r) | grep NF_CONNTRACK_TIMEOUT | grep '=y' > /dev/null])
     modprobe nfnetlink_cttimeout
     on_exit 'modprobe -r nfnetlink_cttimeout'
+])
+
+# CHECK_CONNTRACK_DUMP_EXPECTATIONS()
+#
+# Perform requirements checks for dumping conntrack expectations.
+#
+m4_define([CHECK_CONNTRACK_DUMP_EXPECTATIONS],
+[
+    AT_SKIP_IF([:])
 ])
 
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
@@ -202,6 +222,14 @@ m4_define([OVS_CHECK_KERNEL_EXCL],
     AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
 ])
 
+# OVS_CHECK_SRV6()
+#
+# The kernel datapath does not support this feature.
+m4_define([OVS_CHECK_SRV6],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_LATER_IPV6_FRAGMENTS()
 #
 # Upstream kernels beetween 4.20 and 5.19 are not parsing IPv6 fragments
@@ -224,3 +252,18 @@ m4_define([VSCTL_ADD_DATAPATH_TABLE],
 # or necessary for the userspace datapath as it is checking for a kernel
 # specific regression.
 m4_define([CHECK_L3L4_CONNTRACK_REASM])
+
+# CHECK_NO_TC_OFFLOAD
+#
+# The kernel module tests do not use TC offload.
+m4_define([CHECK_NO_TC_OFFLOAD])
+
+# OVS_CHECK_BAREUDP()
+#
+# The feature needs to be enabled in the kernel configuration (CONFIG_BAREUDP)
+# to work.
+m4_define([OVS_CHECK_BAREUDP],
+[
+    AT_SKIP_IF([! ip link add dev ovs_bareudp0 type bareudp dstport 6635 ethertype mpls_uc 2>&1 >/dev/null])
+    AT_CHECK([ip link del dev ovs_bareudp0])
+])

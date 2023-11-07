@@ -30,6 +30,8 @@
 #    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 #    - ovs_dump_packets <struct dp_packet_batch|dp_packet> [tcpdump options]
+#    - ovs_dump_cmap <struct cmap *> {[<structure>] [<member>] {dump}]}
+#    - ovs_dump_hmap <struct hmap *> <structure> <member> {dump}
 #    - ovs_dump_simap <struct simap *>
 #    - ovs_dump_smap <struct smap *>
 #    - ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
@@ -876,7 +878,7 @@ class CmdDumpCmap(gdb.Command):
     """
     def __init__(self):
         super(CmdDumpCmap, self).__init__("ovs_dump_cmap",
-                                             gdb.COMMAND_DATA)
+                                          gdb.COMMAND_DATA)
 
     def invoke(self, arg, from_tty):
         arg_list = gdb.string_to_argv(arg)
@@ -912,6 +914,54 @@ class CmdDumpCmap(gdb.Command):
                         node,
                         gdb.lookup_type(typeobj).pointer(),
                         member).dereference()))
+
+
+#
+# Implements the GDB "ovs_dump_hmap" command
+#
+class CmdDumpHmap(gdb.Command):
+    """Dump all nodes of a given hmap
+    Usage:
+      ovs_dump_hmap <struct hmap *> <structure> <member> {dump}
+
+    For example dump all the bridges when the all_bridges variable is
+    optimized out due to LTO:
+
+    (gdb) ovs_dump_hmap "&'all_bridges.lto_priv.0'" "struct bridge" "node"
+    (struct bridge *) 0x55ec43069c70
+    (struct bridge *) 0x55ec430428a0
+    (struct bridge *) 0x55ec430a55f0
+
+    The 'dump' option will also include the full structure content in the
+    output.
+    """
+    def __init__(self):
+        super(CmdDumpHmap, self).__init__("ovs_dump_hmap",
+                                          gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+        typeobj = None
+        member = None
+        dump = False
+
+        if len(arg_list) != 3 and len(arg_list) != 4:
+            print("usage: ovs_dump_hmap <struct hmap *> "
+                  "<structure> <member> {dump}")
+            return
+
+        hmap = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct hmap').pointer())
+
+        typeobj = arg_list[1]
+        member = arg_list[2]
+        if len(arg_list) == 4 and arg_list[3] == "dump":
+            dump = True
+
+        for node in ForEachHMAP(hmap.dereference(), typeobj, member):
+            print("({} *) {} {}".format(typeobj, node, "=" if dump else ""))
+            if dump:
+                print("  {}\n".format(node.dereference()))
 
 
 #
@@ -1515,6 +1565,7 @@ CmdDumpOfpacts()
 CmdDumpOvsList()
 CmdDumpPackets()
 CmdDumpCmap()
+CmdDumpHmap()
 CmdDumpSimap()
 CmdDumpSmap()
 CmdDumpUdpifKeys()

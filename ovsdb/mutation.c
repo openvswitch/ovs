@@ -236,7 +236,8 @@ ovsdb_mutation_set_destroy(struct ovsdb_mutation_set *set)
 enum ovsdb_mutation_scalar_error {
     ME_OK,
     ME_DOM,
-    ME_RANGE
+    ME_RANGE,
+    ME_NOTSUP
 };
 
 struct ovsdb_scalar_mutation {
@@ -266,6 +267,9 @@ ovsdb_mutation_scalar_error(enum ovsdb_mutation_scalar_error error,
         return ovsdb_error("range error",
                            "Result of \"%s\" operation is out of range.",
                            ovsdb_mutator_to_string(mutator));
+
+    case ME_NOTSUP:
+        return ovsdb_error(NULL, "Operation not supported.");
 
     default:
         return OVSDB_BUG("unexpected error");
@@ -514,6 +518,12 @@ div_double(double *x, double y)
     }
 }
 
+static int
+mod_double(double *x OVS_UNUSED, double y OVS_UNUSED)
+{
+    return ME_NOTSUP;
+}
+
 static const struct ovsdb_scalar_mutation add_mutation = {
     add_int, add_double, OVSDB_M_ADD
 };
@@ -531,5 +541,5 @@ static const struct ovsdb_scalar_mutation div_mutation = {
 };
 
 static const struct ovsdb_scalar_mutation mod_mutation = {
-    mod_int, NULL, OVSDB_M_MOD
+    mod_int, mod_double, OVSDB_M_MOD
 };

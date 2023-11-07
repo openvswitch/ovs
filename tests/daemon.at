@@ -234,3 +234,58 @@ OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep STOPPED > /dev/null 2>
 AT_CHECK([sc delete ovsdb-server], [0], [[[SC]] DeleteService SUCCESS
 ])
 AT_CLEANUP
+
+AT_SETUP([backtrace without monitor])
+AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+
+# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --no-db \
+                       --log-file --verbose=DBG], [0], [ignore], [ignore])
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
+child=$(cat ovsdb-server.pid)
+
+AT_CAPTURE_FILE([ovsdb-server.log])
+
+AT_CHECK([kill -SEGV $child])
+
+OVS_WAIT_UNTIL([grep -q "^SIGSEGV detected, backtrace:" ovsdb-server.log])
+
+AT_CLEANUP
+
+AT_SETUP([backtrace with monitor])
+AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+
+# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
+# Skip it if UB Sanitizer is being used.  There's no way to disable the
+# SEGV check at runtime.
+AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+
+on_exit 'kill $(cat *.pid)'
+
+AT_CHECK([ovsdb-server --detach --monitor --no-chdir --pidfile --no-db \
+                       --log-file --verbose=DBG], [0], [ignore], [ignore])
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
+child=$(cat ovsdb-server.pid)
+
+AT_CAPTURE_FILE([ovsdb-server.log])
+
+AT_CHECK([kill -SEGV $child])
+
+OVS_WAIT_UNTIL([grep -q "backtrace(monitor)|WARN|SIGSEGV detected, backtrace:" ovsdb-server.log])
+OVS_WAIT_UNTIL([grep -q "daemon_unix(monitor)|ERR|1 crashes: pid .* died, killed (Segmentation fault)" ovsdb-server.log])
+
+# Wait until a new process is started before exiting, so it will be
+# stopped correctly.
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test $(cat ovsdb-server.pid) != $child])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP

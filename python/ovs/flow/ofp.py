@@ -31,7 +31,6 @@ from ovs.flow.ofp_act import (
     decode_dec_ttl,
     decode_chk_pkt_larger,
     decode_zone,
-    decode_exec,
     decode_learn,
 )
 
@@ -105,9 +104,6 @@ class OFPFlow(Flow):
             ValueError if the string is malformed.
             ParseError if an error in parsing occurs.
         """
-        if " reply " in ofp_string:
-            return None
-
         sections = list()
         parts = ofp_string.split("actions=")
         if len(parts) != 2:
@@ -243,10 +239,12 @@ class OFPFlow(Flow):
             **OFPFlow._fw_action_decoders_args(),
             **OFPFlow._control_action_decoders_args(),
             **OFPFlow._other_action_decoders_args(),
+            **OFPFlow._instruction_action_decoders_args(),
         }
         clone_actions = OFPFlow._clone_actions_decoders_args(actions)
         actions.update(clone_actions)
-        return KVDecoders(actions, default_free=decode_free_output)
+        return KVDecoders(actions, default_free=decode_free_output,
+                          ignore_case=True)
 
     @staticmethod
     def _output_actions_decoders_args():
@@ -272,6 +270,8 @@ class OFPFlow(Flow):
             "pop_vlan": decode_flag,
             "strip_vlan": decode_flag,
             "push_vlan": decode_default,
+            "pop_mpls": decode_int,
+            "push_mpls": decode_int,
             "decap": decode_flag,
             "encap": decode_encap,
         }
@@ -286,8 +286,8 @@ class OFPFlow(Flow):
             "set_mpls_ttl",
             "mod_nw_tos",
             "mod_nw_ecn",
-            "mod_tcp_src",
-            "mod_tcp_dst",
+            "mod_tp_src",
+            "mod_tp_dst",
         ]
         return {
             "load": decode_load_field,
@@ -299,9 +299,15 @@ class OFPFlow(Flow):
             "mod_dl_src": EthMask,
             "mod_nw_dst": IPMask,
             "mod_nw_src": IPMask,
+            "mod_nw_ttl": decode_int,
+            "mod_vlan_vid": decode_int,
+            "set_vlan_vid": decode_int,
+            "mod_vlan_pcp": decode_int,
+            "set_vlan_pcp": decode_int,
             "dec_ttl": decode_dec_ttl,
             "dec_mpls_ttl": decode_flag,
             "dec_nsh_ttl": decode_flag,
+            "delete_field": decode_field,
             "check_pkt_larger": decode_chk_pkt_larger,
             **{field: decode_default for field in field_default_decoders},
         }
@@ -327,8 +333,7 @@ class OFPFlow(Flow):
                         "table": decode_int,
                         "nat": decode_nat,
                         "force": decode_flag,
-                        "exec": functools.partial(
-                            decode_exec,
+                        "exec": nested_kv_decoder(
                             KVDecoders(
                                 {
                                     **OFPFlow._encap_actions_decoders_args(),
@@ -336,12 +341,22 @@ class OFPFlow(Flow):
                                     **OFPFlow._meta_action_decoders_args(),
                                 }
                             ),
+                            is_list=True,
                         ),
                         "alg": decode_default,
                     }
                 )
             ),
             "ct_clear": decode_flag,
+            "fin_timeout": nested_kv_decoder(
+                KVDecoders(
+                    {
+                        "idle_timeout": decode_time,
+                        "hard_timeout": decode_time,
+                    }
+                )
+            ),
+            # learn moved to _clone actions.
         }
 
     @staticmethod
@@ -382,21 +397,14 @@ class OFPFlow(Flow):
             actions.
         """
         return {
-            "learn": decode_learn(
-                {
-                    **action_decoders,
-                    "fin_timeout": nested_kv_decoder(
-                        KVDecoders(
-                            {
-                                "idle_timeout": decode_time,
-                                "hard_timeout": decode_time,
-                            }
-                        )
-                    ),
-                }
+            "learn": decode_learn(action_decoders),
+            "clone": nested_kv_decoder(
+                KVDecoders(action_decoders, default_free=decode_free_output,
+                           ignore_case=True), is_list=True
             ),
-            "clone": functools.partial(
-                decode_exec, KVDecoders(action_decoders)
+            "write_actions": nested_kv_decoder(
+                KVDecoders(action_decoders, default_free=decode_free_output,
+                           ignore_case=True), is_list=True
             ),
         }
 
@@ -425,4 +433,16 @@ class OFPFlow(Flow):
                     }
                 )
             ),
+        }
+
+    @staticmethod
+    def _instruction_action_decoders_args():
+        """Generate the decoder arguments for instruction actions
+        (see man(7) ovs-actions)."""
+        return {
+            "meter": decode_int,
+            "clear_actions": decode_flag,
+            # write_actions moved to _clone actions
+            "write_metadata": decode_mask(64),
+            "goto_table": decode_int,
         }

@@ -17,6 +17,7 @@
 #include <config.h>
 #include "openvswitch/shash.h"
 #include "hash.h"
+#include "util.h"
 
 static struct shash_node *shash_find__(const struct shash *,
                                        const char *name, size_t name_len,
@@ -100,6 +101,7 @@ shash_is_empty(const struct shash *shash)
 size_t
 shash_count(const struct shash *shash)
 {
+    ovs_assert(shash);
     return hmap_count(&shash->map);
 }
 
@@ -203,6 +205,10 @@ shash_delete(struct shash *sh, struct shash_node *node)
 char *
 shash_steal(struct shash *sh, struct shash_node *node)
 {
+    if (!node) {
+        return NULL;
+    }
+
     char *name = node->name;
 
     hmap_remove(&sh->map, &node->node);
@@ -263,7 +269,7 @@ void *
 shash_find_and_delete_assert(struct shash *sh, const char *name)
 {
     void *data = shash_find_and_delete(sh, name);
-    ovs_assert(data != NULL);
+    ovs_assert(data);
     return data;
 }
 

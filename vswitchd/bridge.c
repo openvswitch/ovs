@@ -832,6 +832,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_min_revalidate_pps(
         smap_get_uint(&ovs_cfg->other_config, "min-revalidate-pps",
                      OFPROTO_MIN_REVALIDATE_PPS_DEFAULT));
+    ofproto_set_offloaded_stats_delay(
+        smap_get_uint(&ovs_cfg->other_config, "offloaded-stats-delay",
+                      OFPROTO_OFFLOADED_STATS_DELAY));
     ofproto_set_vlan_limit(smap_get_int(&ovs_cfg->other_config, "vlan-limit",
                                        LEGACY_MAX_VLAN_HEADERS));
     ofproto_set_bundle_idle_timeout(smap_get_uint(&ovs_cfg->other_config,
@@ -1542,15 +1545,26 @@ bridge_configure_ipfix(struct bridge *br)
         if (be_cfg->cache_max_flows) {
             be_opts.cache_max_flows = *be_cfg->cache_max_flows;
         }
+        if (be_cfg->stats_interval) {
+            be_opts.stats_interval = *be_cfg->stats_interval;
+        } else {
+            be_opts.stats_interval = OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+        }
+        if (be_cfg->template_interval) {
+            be_opts.template_interval = *be_cfg->template_interval;
+        } else {
+            be_opts.template_interval =
+                OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+        }
 
         be_opts.enable_tunnel_sampling = smap_get_bool(&be_cfg->other_config,
                                              "enable-tunnel-sampling", true);
 
-        be_opts.enable_input_sampling = !smap_get_bool(&be_cfg->other_config,
-                                              "enable-input-sampling", false);
+        be_opts.enable_input_sampling = smap_get_bool(&be_cfg->other_config,
+                                              "enable-input-sampling", true);
 
-        be_opts.enable_output_sampling = !smap_get_bool(&be_cfg->other_config,
-                                              "enable-output-sampling", false);
+        be_opts.enable_output_sampling = smap_get_bool(&be_cfg->other_config,
+                                              "enable-output-sampling", true);
 
         virtual_obs_id = smap_get(&be_cfg->other_config, "virtual_obs_id");
         be_opts.virtual_obs_id = nullable_xstrdup(virtual_obs_id);
@@ -1570,6 +1584,12 @@ bridge_configure_ipfix(struct bridge *br)
                     ? *fe_cfg->ipfix->cache_active_timeout : 0;
                 opts->cache_max_flows = fe_cfg->ipfix->cache_max_flows
                     ? *fe_cfg->ipfix->cache_max_flows : 0;
+                opts->stats_interval = fe_cfg->ipfix->stats_interval
+                    ? *fe_cfg->ipfix->stats_interval
+                    : OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
+                opts->template_interval = fe_cfg->ipfix->template_interval
+                    ? *fe_cfg->ipfix->template_interval
+                    : OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL;
                 opts->enable_tunnel_sampling = smap_get_bool(
                                                    &fe_cfg->ipfix->other_config,
                                                   "enable-tunnel-sampling", true);
@@ -1674,11 +1694,12 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
-        enum netdev_features current;
-        unsigned int mbps;
+        uint32_t mbps;
 
-        netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
+        netdev_get_speed(iface->netdev, &mbps, NULL);
+        if (!mbps) {
+            mbps = NETDEV_DEFAULT_BPS / 1000000;
+        }
         port_s->path_cost = stp_convert_speed_to_cost(mbps);
     }
 
@@ -1757,11 +1778,12 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
-        enum netdev_features current;
-        unsigned int mbps;
+        uint32_t mbps;
 
-        netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-        mbps = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 1000000;
+        netdev_get_speed(iface->netdev, &mbps, NULL);
+        if (!mbps) {
+            mbps = NETDEV_DEFAULT_BPS / 1000000;
+        }
         port_s->path_cost = rstp_convert_speed_to_cost(mbps);
     }
 
@@ -2398,6 +2420,7 @@ iface_refresh_netdev_status(struct iface *iface)
     struct eth_addr mac;
     int64_t bps, mtu_64, ifindex64, link_resets;
     int mtu, error;
+    uint32_t mbps;
 
     if (iface_is_synthetic(iface)) {
         return;
@@ -2436,14 +2459,19 @@ iface_refresh_netdev_status(struct iface *iface)
     ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
 
     error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-    bps = !error ? netdev_features_to_bps(current, 0) : 0;
-    if (bps) {
+    if (!error) {
         ovsrec_interface_set_duplex(iface->cfg,
                                     netdev_features_is_full_duplex(current)
                                     ? "full" : "half");
-        ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
     } else {
         ovsrec_interface_set_duplex(iface->cfg, NULL);
+    }
+
+    netdev_get_speed(iface->netdev, &mbps, NULL);
+    if (mbps) {
+        bps = mbps * 1000000ULL;
+        ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
+    } else {
         ovsrec_interface_set_link_speed(iface->cfg, NULL, 0);
     }
 
@@ -2626,7 +2654,9 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_undersized_errors,    "rx_undersized_errors")     \
     IFACE_STAT(rx_oversize_errors,      "rx_oversize_errors")       \
     IFACE_STAT(rx_fragmented_errors,    "rx_fragmented_errors")     \
-    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")
+    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")         \
+    IFACE_STAT(upcall_packets,          "upcall_packets")           \
+    IFACE_STAT(upcall_errors,           "upcall_errors")
 
 #define IFACE_STAT(MEMBER, NAME) + 1
     enum { N_IFACE_STATS = IFACE_STATS };

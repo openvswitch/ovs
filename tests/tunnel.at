@@ -126,7 +126,7 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 AT_CHECK([ovs-appctl dpctl/add-flow "tunnel(dst=1.1.1.1,src=3.3.3.200/255.255.255.0,tp_dst=123,tp_src=1,ttl=64),recirc_id(0),in_port(1),eth(),eth_type(0x0800),ipv4()" "2"])
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | tail -1], [0], [dnl
-tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),recirc_id(0),in_port(1),eth(),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),in_port(1),eth(),eth_type(0x0800), packets:0, bytes:0, used:never, actions:2
 ])
 
 OVS_VSWITCHD_STOP
@@ -603,7 +603,7 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - set_field - tun_src/tun_dst/tun_id])
+AT_SETUP([tunnel - set_field - tun_src/tun_dst/tun_id])
 OVS_VSWITCHD_START([dnl
     add-port br0 p1 -- set Interface p1 type=gre options:key=flow \
         options:remote_ip=1.1.1.1 ofport_request=1 \
@@ -1222,4 +1222,89 @@ AT_CHECK([ovs-vsctl add-port br0 p1 -- set int p1 type=dummy])
 
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])]
+AT_CLEANUP
+
+AT_SETUP([tunnel - SRV6 basic])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy \
+                    ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=srv6 \
+                    options:remote_ip=flow \
+                    ofport_request=2])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 fc00::1/64], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add fc00::0/64 br0], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/show], [0], [dnl
+Route Table:
+User: fc00::/64 dev br0 SRC fc00::1
+])
+
+AT_DATA([flows.txt], [dnl
+in_port=1,actions=set_field:fc00::2->tun_ipv6_dst,output:2
+in_port=2,actions=1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (dummy)
+    p2 2/6: (srv6: remote_ip=flow)
+])
+
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+srv6_sys (6) ref_cnt=1
+srv6_sys (6) ref_cnt=1
+])
+
+AT_CHECK([ovs-appctl ofproto/list-tunnels], [0], [dnl
+port 6: p2 (srv6: ::->flow, key=0, legacy_l3, dp port=6, ttl=64)
+])
+
+dnl Encap: ipv4 inner packet
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(ipv6_dst=fc00::2,ttl=64,flags(df))),pop_eth,6
+])
+
+dnl Encap: ipv6 inner packet
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=47,tclass=0x0,hlimit=64)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(ipv6_dst=fc00::2,ttl=64,flags(df))),pop_eth,6
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - Geneve metadata mirror])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+add_of_ports br0 90
+AT_CHECK([ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p90 get Port p90 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p90], [0], [stdout])
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
+
+AT_DATA([flows.txt], [dnl
+in_port=2,actions=set_field:0xa->tun_metadata0,set_field:0x1234567890abcdef->tun_metadata1,1
+tun_metadata0=0xb/0xf,actions=2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 90,set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=6081,geneve({class=0xffff,type=0,len=4,0xa}{class=0xffff,type=0x1,len=8,0x1234567890abcdef}),flags(df))),6081
+])
+
+OVS_VSWITCHD_STOP
 AT_CLEANUP

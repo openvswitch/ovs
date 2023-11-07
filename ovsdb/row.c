@@ -302,11 +302,13 @@ ovsdb_row_columns_to_string(const struct ovsdb_row *row,
 struct ovsdb_error *
 ovsdb_row_from_json(struct ovsdb_row *row, const struct json *json,
                     struct ovsdb_symbol_table *symtab,
-                    struct ovsdb_column_set *included)
+                    struct ovsdb_column_set *included, bool is_diff)
 {
     struct ovsdb_table_schema *schema = row->table->schema;
     struct ovsdb_error *error;
     struct shash_node *node;
+
+    ovs_assert(!is_diff || !symtab);
 
     if (json->type != JSON_OBJECT) {
         return ovsdb_syntax_error(json, NULL, "row must be JSON object");
@@ -324,8 +326,13 @@ ovsdb_row_from_json(struct ovsdb_row *row, const struct json *json,
                                       column_name, schema->name);
         }
 
-        error = ovsdb_datum_from_json(&datum, &column->type, node->data,
-                                      symtab);
+        if (is_diff) {
+            error = ovsdb_transient_datum_from_json(&datum, &column->type,
+                                                    node->data);
+        } else {
+            error = ovsdb_datum_from_json(&datum, &column->type, node->data,
+                                          symtab);
+        }
         if (error) {
             return error;
         }
@@ -399,7 +406,10 @@ ovsdb_row_set_add_row(struct ovsdb_row_set *set, const struct ovsdb_row *row)
         set->rows = x2nrealloc(set->rows, &set->allocated_rows,
                                sizeof *set->rows);
     }
-    set->rows[set->n_rows++] = row;
+
+    if (set->rows) {
+        set->rows[set->n_rows++] = row;
+    }
 }
 
 struct json *

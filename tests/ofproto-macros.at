@@ -265,6 +265,13 @@ check_logs () {
 /|EMER|/p" ${logs}
 }
 
+# Gets the last line number in ovs-vswitchd.log +1. This can be used to
+# help ensure that an output in the log is newly written as the result of
+# a test command and it is not just matching an earlier log line.
+get_log_next_line_num () {
+    LINENUM=$(($(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])+1))
+}
+
 # add_of_br BRNUM [ARG...]
 add_of_br () {
     local brnum=$1; shift

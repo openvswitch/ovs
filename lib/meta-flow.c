@@ -2751,8 +2751,8 @@ static char *
 mf_from_integer_string(const struct mf_field *mf, const char *s,
                        uint8_t *valuep, uint8_t *maskp)
 {
+    const char *err_str;
     char *tail;
-    const char *err_str = "";
     int err;
 
     err = parse_int_string(s, valuep, mf->n_bytes, &tail);
@@ -2785,8 +2785,8 @@ syntax_error:
 static char *
 mf_from_packet_type_string(const char *s, ovs_be32 *packet_type)
 {
+    const char *err_str;
     char *tail;
-    const char *err_str = "";
     int err;
 
     if (*s != '(') {
@@ -3675,4 +3675,29 @@ mf_bitmap_not(struct mf_bitmap x)
 {
     bitmap_not(x.bm, MFF_N_IDS);
     return x;
+}
+
+void
+mf_set_mask_l3_prereqs(const struct mf_field *mf, const struct flow *fl,
+                       struct flow_wildcards *wc)
+{
+    if (is_ip_any(fl) &&
+        ((mf->id == MFF_IPV4_SRC) ||
+         (mf->id == MFF_IPV4_DST) ||
+         (mf->id == MFF_IPV6_SRC) ||
+         (mf->id == MFF_IPV6_DST) ||
+         (mf->id == MFF_IPV6_LABEL) ||
+         (mf->id == MFF_IP_DSCP) ||
+         (mf->id == MFF_IP_ECN) ||
+         (mf->id == MFF_IP_TTL))) {
+        WC_MASK_FIELD(wc, nw_proto);
+    } else if ((fl->dl_type == htons(ETH_TYPE_ARP)) &&
+               ((mf->id == MFF_ARP_OP) ||
+                (mf->id == MFF_ARP_SHA) ||
+                (mf->id == MFF_ARP_THA) ||
+                (mf->id == MFF_ARP_SPA) ||
+                (mf->id == MFF_ARP_TPA))) {
+        /* mask only the lower 8 bits. */
+        wc->masks.nw_proto = 0xff;
+    }
 }

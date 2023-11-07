@@ -147,6 +147,8 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
     uint8_t new_tos;
     uint8_t new_ttl;
 
+    ovs_assert(nh);
+
     if (mask->ipv4_src) {
         ip_src_nh = get_16aligned_be32(&nh->ip_src);
         new_ip_src = key->ipv4_src | (ip_src_nh & ~mask->ipv4_src);
@@ -169,9 +171,14 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
         new_tos = key->ipv4_tos | (nh->ip_tos & ~mask->ipv4_tos);
 
         if (nh->ip_tos != new_tos) {
-            nh->ip_csum = recalc_csum16(nh->ip_csum,
-                                        htons((uint16_t) nh->ip_tos),
-                                        htons((uint16_t) new_tos));
+            if (dp_packet_hwol_tx_ip_csum(packet)) {
+                dp_packet_ol_reset_ip_csum_good(packet);
+            } else {
+                nh->ip_csum = recalc_csum16(nh->ip_csum,
+                                            htons((uint16_t) nh->ip_tos),
+                                            htons((uint16_t) new_tos));
+            }
+
             nh->ip_tos = new_tos;
         }
     }
@@ -180,8 +187,14 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
         new_ttl = key->ipv4_ttl | (nh->ip_ttl & ~mask->ipv4_ttl);
 
         if (OVS_LIKELY(nh->ip_ttl != new_ttl)) {
-            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_ttl << 8),
-                                        htons(new_ttl << 8));
+            if (dp_packet_hwol_tx_ip_csum(packet)) {
+                dp_packet_ol_reset_ip_csum_good(packet);
+            } else {
+                nh->ip_csum = recalc_csum16(nh->ip_csum,
+                                            htons(nh->ip_ttl << 8),
+                                            htons(new_ttl << 8));
+            }
+
             nh->ip_ttl = new_ttl;
         }
     }
@@ -275,6 +288,8 @@ set_arp(struct dp_packet *packet, const struct ovs_key_arp *key,
         const struct ovs_key_arp *mask)
 {
     struct arp_eth_header *arp = dp_packet_l3(packet);
+
+    ovs_assert(arp);
 
     if (!mask) {
         arp->ar_op = key->arp_op;

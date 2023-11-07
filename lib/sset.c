@@ -261,6 +261,11 @@ char *
 sset_pop(struct sset *set)
 {
     const char *name = SSET_FIRST(set);
+
+    if (!name) {
+        return NULL;
+    }
+
     char *copy = xstrdup(name);
     sset_delete(set, SSET_NODE_FROM_NAME(name));
     return copy;

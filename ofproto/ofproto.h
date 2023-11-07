@@ -72,6 +72,11 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
+/* When using UDP, IPFIX Template Records must be re-sent regularly.
+ * The standard default interval is 10 minutes (600 seconds).
+ * Cf. IETF RFC 5101 Section 10.3.6. */
+#define OFPROTO_IPFIX_DEFAULT_TEMPLATE_INTERVAL 600
+
 struct ofproto_ipfix_bridge_exporter_options {
     struct sset targets;
     uint32_t sampling_rate;
@@ -79,6 +84,8 @@ struct ofproto_ipfix_bridge_exporter_options {
     uint32_t obs_point_id;  /* Bridge-wide Observation Point ID. */
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    uint32_t template_interval;
+    uint32_t stats_interval;
     bool enable_tunnel_sampling;
     bool enable_input_sampling;
     bool enable_output_sampling;
@@ -90,6 +97,8 @@ struct ofproto_ipfix_flow_exporter_options {
     struct sset targets;
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    uint32_t template_interval;
+    uint32_t stats_interval;
     bool enable_tunnel_sampling;
     char *virtual_obs_id;
 };
@@ -311,6 +320,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 #define OFPROTO_MAX_IDLE_DEFAULT 10000 /* ms */
 #define OFPROTO_MAX_REVALIDATOR_DEFAULT 500 /* ms */
 #define OFPROTO_MIN_REVALIDATE_PPS_DEFAULT 5
+#define OFPROTO_OFFLOADED_STATS_DELAY 2000 /* ms */
 
 const char *ofproto_port_open_type(const struct ofproto *,
                                    const char *port_type);
@@ -340,6 +350,7 @@ void ofproto_set_flow_limit(unsigned limit);
 void ofproto_set_max_idle(unsigned max_idle);
 void ofproto_set_max_revalidator(unsigned max_revalidator);
 void ofproto_set_min_revalidate_pps(unsigned min_revalidate_pps);
+void ofproto_set_offloaded_stats_delay(unsigned offloaded_stats_delay);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);

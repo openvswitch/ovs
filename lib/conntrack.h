@@ -100,7 +100,10 @@ void conntrack_clear(struct dp_packet *packet);
 struct conntrack_dump {
     struct conntrack *ct;
     unsigned bucket;
-    struct cmap_position cm_pos;
+    union {
+        struct cmap_position cm_pos;
+        struct hmap_position hmap_pos;
+    };
     bool filter_zone;
     uint16_t zone;
 };
@@ -132,6 +135,11 @@ int conntrack_dump_start(struct conntrack *, struct conntrack_dump *,
 int conntrack_dump_next(struct conntrack_dump *, struct ct_dpif_entry *);
 int conntrack_dump_done(struct conntrack_dump *);
 
+int conntrack_exp_dump_start(struct conntrack *, struct conntrack_dump *,
+                             const uint16_t *);
+int conntrack_exp_dump_next(struct conntrack_dump *, struct ct_dpif_exp *);
+int conntrack_exp_dump_done(struct conntrack_dump *);
+
 int conntrack_flush(struct conntrack *, const uint16_t *zone);
 int conntrack_flush_tuple(struct conntrack *, const struct ct_dpif_tuple *,
                           uint16_t zone);
@@ -139,6 +147,8 @@ int conntrack_set_maxconns(struct conntrack *ct, uint32_t maxconns);
 int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
 int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
 int conntrack_set_tcp_seq_chk(struct conntrack *ct, bool enabled);
+int conntrack_set_sweep_interval(struct conntrack *ct, uint32_t ms);
+uint32_t conntrack_get_sweep_interval(struct conntrack *ct);
 bool conntrack_get_tcp_seq_chk(struct conntrack *ct);
 struct ipf *conntrack_ipf_ctx(struct conntrack *ct);
 struct conntrack_zone_limit zone_limit_get(struct conntrack *ct,

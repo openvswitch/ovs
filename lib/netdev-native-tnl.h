@@ -65,6 +65,16 @@ netdev_gtpu_build_header(const struct netdev *netdev,
                          struct ovs_action_push_tnl *data,
                          const struct netdev_tnl_build_header_params *p);
 
+struct dp_packet *netdev_srv6_pop_header(struct dp_packet *);
+
+void netdev_srv6_push_header(const struct netdev *,
+                             struct dp_packet *,
+                             const struct ovs_action_push_tnl *);
+
+int netdev_srv6_build_header(const struct netdev *,
+                             struct ovs_action_push_tnl *,
+                             const struct netdev_tnl_build_header_params *);
+
 void
 netdev_tnl_push_udp_header(const struct netdev *netdev,
                            struct dp_packet *packet,
@@ -108,7 +118,7 @@ netdev_tnl_ipv6_hdr(void *eth)
 void *
 netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
                            const struct netdev_tnl_build_header_params *params,
-                           uint8_t next_proto);
+                           uint8_t next_proto, ovs_be32 ipv6_label);
 
 extern uint16_t tnl_udp_port_min;
 extern uint16_t tnl_udp_port_max;
@@ -128,8 +138,8 @@ void *
 netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
                              unsigned int *hlen);
 void *
-netdev_tnl_push_ip_header(struct dp_packet *packet,
-                          const void *header, int size, int *ip_tot_size);
+netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
+                          int size, int *ip_tot_size, ovs_be32 ipv6_label);
 void
 netdev_tnl_egress_port_range(struct unixctl_conn *conn, int argc,
                              const char *argv[], void *aux OVS_UNUSED);

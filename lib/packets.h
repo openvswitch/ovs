@@ -706,6 +706,10 @@ char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
 #define IPPROTO_IGMP 2
 #endif
 
+#ifndef IPPROTO_IPIP
+#define IPPROTO_IPIP 4
+#endif
+
 #ifndef IPPROTO_UDPLITE
 #define IPPROTO_UDPLITE 136
 #endif
@@ -850,6 +854,17 @@ struct sctp_header {
 };
 BUILD_ASSERT_DECL(SCTP_HEADER_LEN == sizeof(struct sctp_header));
 
+#define SCTP_CHUNK_HEADER_LEN 4
+struct sctp_chunk_header {
+    uint8_t type;
+    uint8_t flags;
+    ovs_be16 length;
+};
+BUILD_ASSERT_DECL(SCTP_CHUNK_HEADER_LEN == sizeof(struct sctp_chunk_header));
+
+#define SCTP_NEXT_CHUNK(sh, off) \
+    ALIGNED_CAST(struct sctp_chunk_header *, (uint8_t *) sh + off)
+
 #define UDP_HEADER_LEN 8
 struct udp_header {
     ovs_be16 udp_src;
@@ -987,6 +1002,15 @@ struct ovs_16aligned_ip6_frag {
     ovs_be16 ip6f_offlg;
     ovs_16aligned_be32 ip6f_ident;
 };
+
+#define IP6_RT_HDR_LEN 4
+struct ip6_rt_hdr {
+    uint8_t nexthdr;
+    uint8_t hdrlen;
+    uint8_t type;
+    uint8_t segments_left;
+};
+BUILD_ASSERT_DECL(IP6_RT_HDR_LEN == sizeof(struct ip6_rt_hdr));
 
 #define ICMP6_HEADER_LEN 4
 struct icmp6_header {
@@ -1514,6 +1538,17 @@ BUILD_ASSERT_DECL(sizeof(struct vxlanhdr) == 8);
 #define VXLAN_F_GPE  0x4000
 #define VXLAN_HF_GPE 0x04000000
 
+/* SRv6 protocol header. */
+#define IPV6_SRCRT_TYPE_4 4
+#define SRV6_BASE_HDR_LEN 8
+struct srv6_base_hdr {
+    struct ip6_rt_hdr rt_hdr;
+    uint8_t last_entry;
+    uint8_t flags;
+    ovs_be16 tag;
+};
+BUILD_ASSERT_DECL(sizeof(struct srv6_base_hdr) == SRV6_BASE_HDR_LEN);
+
 /* Input values for PACKET_TYPE macros have to be in host byte order.
  * The _BE postfix indicates result is in network byte order. Otherwise result
  * is in host byte order. */
@@ -1598,6 +1633,8 @@ void packet_set_ipv6_addr(struct dp_packet *packet, uint8_t proto,
                           ovs_16aligned_be32 addr[4],
                           const struct in6_addr *new_addr,
                           bool recalculate_csum);
+void packet_set_ipv6_flow_label(ovs_16aligned_be32 *flow_label,
+                                ovs_be32 flow_key);
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
@@ -1642,7 +1679,12 @@ void packet_put_ra_prefix_opt(struct dp_packet *,
                               ovs_be32 preferred_lifetime,
                               const ovs_be128 router_prefix);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
+bool packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr,
+                       bool *first_frag);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
+void packet_tcp_complete_csum(struct dp_packet *);
+void packet_udp_complete_csum(struct dp_packet *);
+void packet_sctp_complete_csum(struct dp_packet *);
 
 #define DNS_HEADER_LEN 12
 struct dns_header {

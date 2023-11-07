@@ -714,12 +714,6 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
     free(backer);
 }
 
-/* Datapath port slated for removal from datapath. */
-struct odp_garbage {
-    struct ovs_list list_node;
-    odp_port_t odp_port;
-};
-
 static void check_support(struct dpif_backer *backer);
 
 static int
@@ -729,8 +723,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     struct dpif_port_dump port_dump;
     struct dpif_port port;
     struct shash_node *node;
-    struct ovs_list garbage_list;
-    struct odp_garbage *garbage;
 
     struct sset names;
     char *backer_name;
@@ -792,24 +784,22 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         dpif_flow_flush(backer->dpif);
     }
 
-    /* Loop through the ports already on the datapath and remove any
-     * that we don't need anymore. */
-    ovs_list_init(&garbage_list);
+    /* Loop through the ports already on the datapath and find ones that are
+     * not on the initial OpenFlow ports list.  These are stale ports, that we
+     * do not need anymore, or tunnel backing interfaces, that do not generally
+     * match the name of OpenFlow tunnel ports, or both.  Add all of them to
+     * the list of tunnel backers.  type_run() will garbage collect those that
+     * are not active tunnel backing interfaces during revalidation. */
     dpif_port_dump_start(&port_dump, backer->dpif);
     while (dpif_port_dump_next(&port_dump, &port)) {
         node = shash_find(&init_ofp_ports, port.name);
         if (!node && strcmp(port.name, dpif_base_name(backer->dpif))) {
-            garbage = xmalloc(sizeof *garbage);
-            garbage->odp_port = port.port_no;
-            ovs_list_push_front(&garbage_list, &garbage->list_node);
+            simap_put(&backer->tnl_backers, port.name,
+                      odp_to_u32(port.port_no));
+            backer->need_revalidate = REV_RECONFIGURE;
         }
     }
     dpif_port_dump_done(&port_dump);
-
-    LIST_FOR_EACH_POP (garbage, list_node, &garbage_list) {
-        dpif_port_del(backer->dpif, garbage->odp_port, false);
-        free(garbage);
-    }
 
     shash_add(&all_dpif_backers, type, backer);
 
@@ -2171,8 +2161,7 @@ port_destruct(struct ofport *port_, bool del)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
     const char *devname = netdev_get_name(port->up.netdev);
     const char *netdev_type = netdev_get_type(port->up.netdev);
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-    const char *dp_port_name;
+    struct dpif_port dpif_port;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     xlate_txn_start();
@@ -2186,9 +2175,13 @@ port_destruct(struct ofport *port_, bool del)
         del = dpif_cleanup_required(ofproto->backer->dpif);
     }
 
-    dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
-                                              sizeof namebuf);
-    if (del && dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
+    /* Don't try to delete ports that are not part of the datapath. */
+    if (del && port->odp_port == ODPP_NONE) {
+        del = false;
+    }
+
+    if (del && !dpif_port_query_by_number(ofproto->backer->dpif,
+                                          port->odp_port, &dpif_port, false)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of
@@ -2196,6 +2189,7 @@ port_destruct(struct ofport *port_, bool del)
         if (!port->is_tunnel) {
             dpif_port_del(ofproto->backer->dpif, port->odp_port, false);
         }
+        dpif_port_destroy(&dpif_port);
     } else if (del) {
         /* The underlying device is already deleted (e.g. tunctl -d).
          * Calling dpif_port_remove to do local cleanup for the netdev */
@@ -4886,7 +4880,7 @@ packet_xlate(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
             if (entry->type == XC_LEARN) {
                 struct ofproto_flow_mod *ofm = entry->learn.ofm;
 
-                error = ofproto_flow_mod_learn_refresh(ofm);
+                error = ofproto_flow_mod_learn_refresh(ofm, time_msec());
                 if (error) {
                     goto error_out;
                 }
@@ -5358,11 +5352,12 @@ type_set_config(const char *type, const struct smap *other_config)
 }
 
 static void
-ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
+ct_flush(const struct ofproto *ofproto_, const uint16_t *zone,
+         const struct ofp_ct_match *match)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    ct_dpif_flush(ofproto->backer->dpif, zone, NULL);
+    ct_dpif_flush(ofproto->backer->dpif, zone, match);
 }
 
 static struct ct_timeout_policy *
@@ -5674,6 +5669,10 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
     smap_add(cap, "add_mpls", s.add_mpls ? "true" : "false");
+
+    /* The ct_tuple_flush is implemented on dpif level, so it is supported
+     * for all backers. */
+    smap_add(cap, "ct_flush", "true");
 }
 
 /* Gets timeout policy name in 'backer' based on 'zone', 'dl_type' and

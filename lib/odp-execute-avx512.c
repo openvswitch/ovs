@@ -20,6 +20,9 @@
 
 #include <config.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netinet/ip6.h>
 
 #include "csum.h"
 #include "dp-packet.h"
@@ -28,6 +31,7 @@
 #include "odp-execute-private.h"
 #include "odp-netlink.h"
 #include "openvswitch/vlog.h"
+#include "packets.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_execute_avx512);
 
@@ -74,6 +78,26 @@ BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_proto) +
 BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv4, ipv4_tos) +
                   MEMBER_SIZEOF(struct ovs_key_ipv4, ipv4_tos) ==
                   offsetof(struct ovs_key_ipv4, ipv4_ttl));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_src) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv6, ipv6_src) ==
+                  offsetof(struct ovs_key_ipv6, ipv6_dst));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_dst) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv6, ipv6_dst) ==
+                  offsetof(struct ovs_key_ipv6, ipv6_label));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_label) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv6, ipv6_label) ==
+                  offsetof(struct ovs_key_ipv6, ipv6_proto));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_proto) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv6, ipv6_proto) ==
+                  offsetof(struct ovs_key_ipv6, ipv6_tclass));
+
+BUILD_ASSERT_DECL(offsetof(struct ovs_key_ipv6, ipv6_tclass) +
+                  MEMBER_SIZEOF(struct ovs_key_ipv6, ipv6_tclass) ==
+                  offsetof(struct ovs_key_ipv6, ipv6_hlimit));
 
 /* Array of callback functions, one for each masked operation. */
 odp_execute_action_cb impl_set_masked_funcs[__OVS_KEY_ATTR_MAX];
@@ -426,7 +450,6 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
         struct ip_header *nh = dp_packet_l3(packet);
-        ovs_be16 old_csum = ~nh->ip_csum;
 
         /* Load the 20 bytes of the IPv4 header. Without options, which is the
          * most common case it's 20 bytes, but can be up to 60 bytes. */
@@ -439,13 +462,20 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
          * (v_pkt_masked). */
         __m256i v_new_hdr = _mm256_or_si256(v_key_shuf, v_pkt_masked);
 
-        /* Update the IP checksum based on updated IP values. */
-        uint16_t delta = avx512_ipv4_hdr_csum_delta(v_packet, v_new_hdr);
-        uint32_t new_csum = old_csum + delta;
-        delta = csum_finish(new_csum);
+        if (dp_packet_hwol_tx_ip_csum(packet)) {
+            dp_packet_ol_reset_ip_csum_good(packet);
+        } else {
+            ovs_be16 old_csum = ~nh->ip_csum;
 
-        /* Insert new checksum. */
-        v_new_hdr = _mm256_insert_epi16(v_new_hdr, delta, 5);
+            /* Update the IP checksum based on updated IP values. */
+            uint16_t delta = avx512_ipv4_hdr_csum_delta(v_packet, v_new_hdr);
+            uint32_t new_csum = old_csum + delta;
+
+            delta = csum_finish(new_csum);
+
+            /* Insert new checksum. */
+            v_new_hdr = _mm256_insert_epi16(v_new_hdr, delta, 5);
+        }
 
         /* If ip_src or ip_dst has been modified, L4 checksum needs to
          * be updated too. */
@@ -456,9 +486,11 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
             size_t l4_size = dp_packet_l4_size(packet);
 
             if (nh->ip_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
-                /* New UDP checksum. */
                 struct udp_header *uh = dp_packet_l4(packet);
-                if (uh->udp_csum) {
+                if (dp_packet_hwol_l4_is_udp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else if (uh->udp_csum) {
+                    /* New UDP checksum. */
                     uint16_t old_udp_checksum = ~uh->udp_csum;
                     uint32_t udp_checksum = old_udp_checksum + delta_checksum;
                     udp_checksum = csum_finish(udp_checksum);
@@ -471,13 +503,17 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
                 }
             } else if (nh->ip_proto == IPPROTO_TCP &&
                        l4_size >= TCP_HEADER_LEN) {
-                /* New TCP checksum. */
-                struct tcp_header *th = dp_packet_l4(packet);
-                uint16_t old_tcp_checksum = ~th->tcp_csum;
-                uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
-                tcp_checksum = csum_finish(tcp_checksum);
+                if (dp_packet_hwol_l4_is_tcp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else {
+                    /* New TCP checksum. */
+                    struct tcp_header *th = dp_packet_l4(packet);
+                    uint16_t old_tcp_checksum = ~th->tcp_csum;
+                    uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+                    tcp_checksum = csum_finish(tcp_checksum);
 
-                th->tcp_csum = tcp_checksum;
+                    th->tcp_csum = tcp_checksum;
+                }
             }
 
             pkt_metadata_init_conn(&packet->md);
@@ -486,6 +522,214 @@ action_avx512_ipv4_set_addrs(struct dp_packet_batch *batch,
         _mm256_mask_storeu_epi32((void *) nh, 0x1F, v_new_hdr);
     }
 }
+
+#if HAVE_AVX512VBMI
+static inline uint16_t ALWAYS_INLINE
+__attribute__((__target__("avx512vbmi")))
+avx512_ipv6_sum_header(__m512i ip6_header)
+{
+    __m256i v_zeros = _mm256_setzero_si256();
+    __m512i v_shuf_src_dst = _mm512_setr_epi64(0x01, 0x02, 0x03, 0x04,
+                                               0xFF, 0xFF, 0xFF, 0xFF);
+
+    /* Shuffle ip6 src and dst to beginning of register. */
+    __m512i v_ip6_hdr_shuf = _mm512_permutexvar_epi64(v_shuf_src_dst,
+                                                      ip6_header);
+
+    /* Extract ip6 src and dst into smaller 256-bit wide register. */
+    __m256i v_ip6_src_dst = _mm512_extracti64x4_epi64(v_ip6_hdr_shuf, 0);
+
+    /* These two shuffle masks, v_swap16a and v_swap16b, are to shuffle the
+     * src and dst fields and add padding after each 16-bit value for the
+     * following carry over addition. */
+    __m256i v_swap16a = _mm256_setr_epi16(0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0x0504, 0xFFFF, 0x0706, 0xFFFF,
+                                          0x0100, 0xFFFF, 0x0302, 0xFFFF,
+                                          0x0504, 0xFFFF, 0x0706, 0xFFFF);
+    __m256i v_swap16b = _mm256_setr_epi16(0x0908, 0xFFFF, 0x0B0A, 0xFFFF,
+                                          0x0D0C, 0xFFFF, 0x0F0E, 0xFFFF,
+                                          0x0908, 0xFFFF, 0x0B0A, 0xFFFF,
+                                          0x0D0C, 0xFFFF, 0x0F0E, 0xFFFF);
+    __m256i v_shuf_old1 = _mm256_shuffle_epi8(v_ip6_src_dst, v_swap16a);
+    __m256i v_shuf_old2 = _mm256_shuffle_epi8(v_ip6_src_dst, v_swap16b);
+
+    /* Add each part of the old and new headers together. */
+    __m256i v_delta = _mm256_add_epi32(v_shuf_old1, v_shuf_old2);
+
+    /* Perform horizontal add to go from 8x32-bits to 2x32-bits. */
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+
+    /* Shuffle 32-bit value from 3rd lane into first lane for final
+     * horizontal add. */
+    __m256i v_swap32a = _mm256_setr_epi32(0x0, 0x4, 0xF, 0xF,
+                                          0xF, 0xF, 0xF, 0xF);
+
+    v_delta = _mm256_permutexvar_epi32(v_swap32a, v_delta);
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_hadd_epi16(v_delta, v_zeros);
+
+    /* Extract delta value. */
+    return _mm256_extract_epi16(v_delta, 0);
+}
+
+static inline uint16_t ALWAYS_INLINE
+__attribute__((__target__("avx512vbmi")))
+avx512_ipv6_addr_csum_delta(__m512i v_packet, __m512i v_new_hdr,
+                            bool rh_present)
+{
+    __m512i v_new_hdr_for_cksum = v_new_hdr;
+    uint32_t csum_delta;
+    uint16_t old_delta;
+    uint16_t new_delta;
+
+    if (rh_present) {
+        v_new_hdr_for_cksum = _mm512_mask_blend_epi64(0x18, v_new_hdr,
+                                                      v_packet);
+    }
+
+    old_delta = avx512_ipv6_sum_header(v_packet);
+    new_delta = avx512_ipv6_sum_header(v_new_hdr_for_cksum);
+    csum_delta = ((uint16_t) ~old_delta) + new_delta;
+
+    return ~csum_finish(csum_delta);
+}
+
+/* This function performs the same operation on each packet in the batch as
+ * the scalar odp_set_ipv6() function. */
+static void
+__attribute__((__target__("avx512vbmi")))
+action_avx512_set_ipv6(struct dp_packet_batch *batch, const struct nlattr *a)
+{
+    const struct ovs_key_ipv6 *key, *mask;
+    struct dp_packet *packet;
+
+    a = nl_attr_get(a);
+    key = nl_attr_get(a);
+    mask = odp_get_key_mask(a, struct ovs_key_ipv6);
+
+    /* Read the content of the key and mask in the respective registers. We
+     * only load the size of the actual structure, which is only 40 bytes. */
+    __m512i v_key = _mm512_maskz_loadu_epi64(0x1F, (void *) key);
+    __m512i v_mask = _mm512_maskz_loadu_epi64(0x1F, (void *) mask);
+
+    /* This shuffle mask v_shuffle, is to shuffle key and mask to match the
+     * ip6_hdr structure layout. */
+    static const uint8_t ip_shuffle_mask[64] = {
+        0x20, 0x21, 0x22, 0x23, 0xFF, 0xFF, 0x24, 0x26,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0XFF, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0XFF, 0xFF
+    };
+
+    __m512i v_shuffle = _mm512_loadu_si512((void *) ip_shuffle_mask);
+
+    /* This shuffle is required for key and mask to match the layout of the
+     * ip6_hdr struct. */
+    __m512i v_key_shuf = _mm512_permutexvar_epi8(v_shuffle, v_key);
+    __m512i v_mask_shuf = _mm512_permutexvar_epi8(v_shuffle, v_mask);
+
+    /* Set the v_zero register to all zero's. */
+    const __m128i v_zeros = _mm_setzero_si128();
+
+    /* Set the v_all_ones register to all one's. */
+    const __m128i v_all_ones = _mm_cmpeq_epi16(v_zeros, v_zeros);
+
+    /* Load ip6 src and dst masks respectively into 128-bit wide registers. */
+    __m128i v_src = _mm_loadu_si128((void *) &mask->ipv6_src);
+    __m128i v_dst = _mm_loadu_si128((void *) &mask->ipv6_dst);
+
+    /* Perform a bitwise OR between src and dst registers. */
+    __m128i v_or = _mm_or_si128(v_src, v_dst);
+
+    /* Will return true if any bit has been set in v_or, else it will return
+     * false. */
+    bool do_checksum = !_mm_test_all_zeros(v_or, v_all_ones);
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+
+        /* Load the 40 bytes of the IPv6 header. */
+        __m512i v_packet = _mm512_maskz_loadu_epi64(0x1F, (void *) nh);
+
+        /* AND the v_pkt_mask to the packet data (v_packet). */
+        __m512i v_pkt_masked = _mm512_andnot_si512(v_mask_shuf, v_packet);
+
+        /* OR the new addresses (v_key_shuf) with the masked packet addresses
+         * (v_pkt_masked). */
+        __m512i v_new_hdr = _mm512_or_si512(v_key_shuf, v_pkt_masked);
+
+        /* If ip6_src or ip6_dst has been modified, L4 checksum needs to be
+         * updated. */
+        uint8_t proto = 0;
+        bool rh_present;
+        bool do_csum = do_checksum;
+
+        rh_present = packet_rh_present(packet, &proto, &do_csum);
+
+        if (do_csum) {
+            size_t l4_size = dp_packet_l4_size(packet);
+            uint16_t delta_checksum;
+
+            if (proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
+                struct udp_header *uh = dp_packet_l4(packet);
+                if (dp_packet_hwol_l4_is_udp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else if (uh->udp_csum) {
+                    delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                                 v_new_hdr,
+                                                                 rh_present);
+                    uint16_t old_udp_checksum = ~uh->udp_csum;
+                    uint32_t udp_checksum = old_udp_checksum +
+                                            delta_checksum;
+
+                    udp_checksum = csum_finish(udp_checksum);
+
+                    if (!udp_checksum) {
+                        udp_checksum = htons(0xffff);
+                    }
+
+                    uh->udp_csum = udp_checksum;
+                }
+
+            } else if (proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
+                if (dp_packet_hwol_l4_is_tcp(packet)) {
+                    dp_packet_ol_reset_l4_csum_good(packet);
+                } else {
+                    delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                                 v_new_hdr,
+                                                                 rh_present);
+                    struct tcp_header *th = dp_packet_l4(packet);
+                    uint16_t old_tcp_checksum = ~th->tcp_csum;
+                    uint32_t tcp_checksum = old_tcp_checksum + delta_checksum;
+
+                    tcp_checksum = csum_finish(tcp_checksum);
+                    th->tcp_csum = tcp_checksum;
+                }
+            } else if (proto == IPPROTO_ICMPV6 &&
+                       l4_size >= sizeof(struct icmp6_header)) {
+                delta_checksum = avx512_ipv6_addr_csum_delta(v_packet,
+                                                             v_new_hdr,
+                                                             rh_present);
+                struct icmp6_header *icmp = dp_packet_l4(packet);
+                uint16_t old_icmp6_checksum = ~icmp->icmp6_cksum;
+                uint32_t icmp6_checksum = old_icmp6_checksum + delta_checksum;
+
+                icmp6_checksum = csum_finish(icmp6_checksum);
+                icmp->icmp6_cksum = icmp6_checksum;
+            }
+
+            pkt_metadata_init_conn(&packet->md);
+        }
+        /* Write back the modified IPv6 addresses. */
+        _mm512_mask_storeu_epi64((void *) nh, 0x1F, v_new_hdr);
+    }
+}
+#endif /* HAVE_AVX512VBMI */
 
 static void
 action_avx512_set_masked(struct dp_packet_batch *batch, const struct nlattr *a)
@@ -517,6 +761,12 @@ action_avx512_init(struct odp_execute_action_impl *self OVS_UNUSED)
      * SET_MASKED action. */
     impl_set_masked_funcs[OVS_KEY_ATTR_ETHERNET] = action_avx512_eth_set_addrs;
     impl_set_masked_funcs[OVS_KEY_ATTR_IPV4] = action_avx512_ipv4_set_addrs;
+
+#if HAVE_AVX512VBMI
+    if (action_avx512vbmi_isa_probe()) {
+        impl_set_masked_funcs[OVS_KEY_ATTR_IPV6] = action_avx512_set_ipv6;
+    }
+#endif
 
     return 0;
 }

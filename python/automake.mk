@@ -16,6 +16,7 @@ ovs_pyfiles = \
 	python/ovs/compat/sortedcontainers/sorteddict.py \
 	python/ovs/compat/sortedcontainers/sortedset.py \
 	python/ovs/daemon.py \
+	python/ovs/dns_resolve.py \
 	python/ovs/db/__init__.py \
 	python/ovs/db/custom_index.py \
 	python/ovs/db/data.py \
@@ -55,6 +56,7 @@ ovs_pyfiles = \
 
 ovs_pytests = \
 	python/ovs/tests/test_decoders.py \
+	python/ovs/tests/test_dns_resolve.py \
 	python/ovs/tests/test_filter.py \
 	python/ovs/tests/test_kv.py \
 	python/ovs/tests/test_list.py \
@@ -64,10 +66,10 @@ ovs_pytests = \
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
-	python/build/__init__.py \
-	python/build/extract_ofp_fields.py \
-	python/build/nroff.py \
-	python/build/soutil.py
+	python/ovs_build_helpers/__init__.py \
+	python/ovs_build_helpers/extract_ofp_fields.py \
+	python/ovs_build_helpers/nroff.py \
+	python/ovs_build_helpers/soutil.py
 
 # PyPI support.
 EXTRA_DIST += \
@@ -86,10 +88,10 @@ PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 FLAKE8_PYFILES += \
 	$(filter-out python/ovs/compat/% python/ovs/dirs.py,$(PYFILES)) \
-	python/build/__init__.py \
-	python/build/extract_ofp_fields.py \
-	python/build/nroff.py \
-	python/build/soutil.py \
+	python/ovs_build_helpers/__init__.py \
+	python/ovs_build_helpers/extract_ofp_fields.py \
+	python/ovs_build_helpers/nroff.py \
+	python/ovs_build_helpers/soutil.py \
 	python/ovs/dirs.py.template \
 	python/setup.py
 
@@ -110,11 +112,14 @@ ovs-install-data-local:
 	$(INSTALL_DATA) python/ovs/dirs.py.tmp $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
 	rm python/ovs/dirs.py.tmp
 
+.PHONY: python-sdist
 python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON3) setup.py sdist)
+	cd python/ && $(PYTHON3) -m build --sdist
 
-pypi-upload: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
-	(cd python/ && $(PYTHON3) setup.py sdist upload)
+.PHONY: pypi-upload
+pypi-upload: python-sdist
+	twine upload python/dist/ovs-$(VERSION).tar.gz
+
 install-data-local: ovs-install-data-local
 
 UNINSTALL_LOCAL += ovs-uninstall-local

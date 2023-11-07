@@ -151,6 +151,7 @@ Q: Are all features available with all datapaths?
     Tunnel - ERSPAN                 4.18           2.10         2.10     NO
     Tunnel - ERSPAN-IPv6            4.18           2.10         2.10     NO
     Tunnel - GTP-U                  NO             NO           2.14     NO
+    Tunnel - SRv6                   NO             NO           3.2      NO
     Tunnel - Bareudp                5.7            NO           NO       NO
     QoS - Policing                  YES            1.1          2.6      NO
     QoS - Shaping                   YES            1.1          NO       NO
@@ -216,6 +217,8 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.16.x       20.11.6
     2.17.x       21.11.2
     3.0.x        21.11.2
+    3.1.x        22.11.1
+    3.2.x        22.11.1
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?

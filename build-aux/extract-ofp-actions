@@ -17,26 +17,29 @@ version_map = {"1.0": 0x01,
 version_reverse_map = dict((v, k) for (k, v) in version_map.items())
 
 # Map from vendor name to the length of the action header.
-vendor_map = {"OF": (0x00000000,  4),
+vendor_map = {"OF": (0x00000000, 4),
               "ONF": (0x4f4e4600, 10),
               "NX": (0x00002320, 10)}
 
 # Basic types used in action arguments.
-types = {}
-types['uint8_t'] =  {"size": 1, "align": 1, "ntoh": None,     "hton": None}
-types['ovs_be16'] = {"size": 2, "align": 2, "ntoh": "ntohs",  "hton": "htons"}
-types['ovs_be32'] = {"size": 4, "align": 4, "ntoh": "ntohl",  "hton": "htonl"}
-types['ovs_be64'] = {"size": 8, "align": 8, "ntoh": "ntohll", "hton": "htonll"}
-types['uint16_t'] = {"size": 2, "align": 2, "ntoh": None,     "hton": None}
-types['uint32_t'] = {"size": 4, "align": 4, "ntoh": None,     "hton": None}
-types['uint64_t'] = {"size": 8, "align": 8, "ntoh": None,     "hton": None}
+types = {
+    "uint8_t" : {"size": 1, "align": 1, "ntoh": None, "hton": None},
+    "ovs_be16": {"size": 2, "align": 2, "ntoh": "ntohs", "hton": "htons"},
+    "ovs_be32": {"size": 4, "align": 4, "ntoh": "ntohl", "hton": "htonl"},
+    "ovs_be64": {"size": 8, "align": 8, "ntoh": "ntohll", "hton": "htonll"},
+    "uint16_t": {"size": 2, "align": 2, "ntoh": None, "hton": None},
+    "uint32_t": {"size": 4, "align": 4, "ntoh": None, "hton": None},
+    "uint64_t": {"size": 8, "align": 8, "ntoh": None, "hton": None},
+}
 
 line = ""
-
+n_errors = 0
 arg_structs = set()
+
 
 def round_up(x, y):
     return int((x + (y - 1)) / y) * y
+
 
 def open_file(fn):
     global file_name
@@ -45,6 +48,7 @@ def open_file(fn):
     file_name = fn
     input_file = open(file_name)
     line_number = 0
+
 
 def get_line():
     global input_file
@@ -56,15 +60,17 @@ def get_line():
         fatal("unexpected end of input")
     return line
 
-n_errors = 0
+
 def error(msg):
     global n_errors
     sys.stderr.write("%s:%d: %s\n" % (file_name, line_number, msg))
     n_errors += 1
 
+
 def fatal(msg):
     error(msg)
     sys.exit(1)
+
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
@@ -84,10 +90,8 @@ Commands:
 ''' % {"argv0": argv0})
     sys.exit(0)
 
-def extract_ofp_actions(fn, definitions):
-    error_types = {}
 
-    comments = []
+def extract_ofp_actions(fn, definitions):
     names = []
     domain = {}
     for code, size in vendor_map.values():
@@ -100,14 +104,14 @@ def extract_ofp_actions(fn, definitions):
 
     while True:
         get_line()
-        if re.match('enum ofp_raw_action_type {', line):
+        if re.match(r'enum ofp_raw_action_type {', line):
             break
 
     while True:
         get_line()
         if line.startswith('/*') or not line or line.isspace():
             continue
-        elif re.match('}', line):
+        elif re.match(r'}', line):
             break
 
         if not line.lstrip().startswith('/*'):
@@ -119,10 +123,10 @@ def extract_ofp_actions(fn, definitions):
             if line.startswith('/*') or not line or line.isspace():
                 fatal("unexpected syntax within action")
             comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
-        comment = re.sub('\[[^]]*\]', '', comment)
+        comment = re.sub(r'\[[^]]*\]', '', comment)
         comment = comment[:-2].rstrip()
 
-        m = re.match('([^:]+):\s+(.*)$', comment)
+        m = re.match(r'([^:]+):\s+(.*)$', comment)
         if not m:
             fatal("unexpected syntax between actions")
 
@@ -147,7 +151,9 @@ def extract_ofp_actions(fn, definitions):
         names.append(enum)
 
         for dst in dsts.split(', '):
-            m = re.match(r'([A-Z]+)([0-9.]+)(\+|-[0-9.]+)?(?:\((\d+)\))(?: is deprecated \(([^)]+)\))?$', dst)
+            m = re.match(
+                r'([A-Z]+)([0-9.]+)(\+|-[0-9.]+)?(?:\((\d+)\))(?:'
+                r' is deprecated \(([^)]+)\))?$', dst)
             if not m:
                 fatal("%r: syntax error in destination" % dst)
             vendor_name = m.group(1)
@@ -220,18 +226,18 @@ def extract_ofp_actions(fn, definitions):
                     else:
                         max_length = min_length
 
-                    info = {"enum": enum,                     # 0
-                            "deprecation": deprecation,       # 1
-                            "file_name": file_name,           # 2
-                            "line_number": line_number,       # 3
-                            "min_length": min_length,         # 4
-                            "max_length": max_length,         # 5
-                            "arg_ofs": arg_ofs,               # 6
-                            "arg_len": arg_len,               # 7
-                            "base_argtype": base_argtype,     # 8
-                            "arg_vl_mff_map": arg_vl_mff_map, # 9
-                            "version": version,               # 10
-                            "type": type_}                    # 11
+                    info = {"enum": enum,                      # 0
+                            "deprecation": deprecation,        # 1
+                            "file_name": file_name,            # 2
+                            "line_number": line_number,        # 3
+                            "min_length": min_length,          # 4
+                            "max_length": max_length,          # 5
+                            "arg_ofs": arg_ofs,                # 6
+                            "arg_len": arg_len,                # 7
+                            "base_argtype": base_argtype,      # 8
+                            "arg_vl_mff_map": arg_vl_mff_map,  # 9
+                            "version": version,                # 10
+                            "type": type_}                     # 11
                     domain[vendor][type_][version] = info
 
                     enums.setdefault(enum, [])
@@ -247,9 +253,13 @@ def extract_ofp_actions(fn, definitions):
 """)
 
     if definitions:
-        print("/* Verify that structs used as actions are reasonable sizes. */")
+        print(
+            "/* Verify that structs used as actions are reasonable sizes. */"
+        )
         for s in sorted(arg_structs):
-            print("BUILD_ASSERT_DECL(sizeof(%s) %% OFP_ACTION_ALIGN == 0);" % s)
+            print(
+                "BUILD_ASSERT_DECL(sizeof(%s) %% OFP_ACTION_ALIGN == 0);" % s
+            )
 
         print("\nstatic struct ofpact_raw_instance all_raw_instances[] = {")
         for vendor in domain:
@@ -265,9 +275,11 @@ def extract_ofp_actions(fn, definitions):
                     print("      %s," % d["max_length"])
                     print("      %s," % d["arg_ofs"])
                     print("      %s," % d["arg_len"])
-                    print("      \"%s\"," % re.sub('_RAW[0-9]*', '', d["enum"], 1))
+                    print("      \"%s\","
+                          % re.sub(r'_RAW[0-9]*', '', d["enum"], 1))
                     if d["deprecation"]:
-                        print("      \"%s\"," % re.sub(r'(["\\])', r'\\\1', d["deprecation"]))
+                        print("      \"%s\","
+                              % re.sub(r'(["\\])', r'\\\1', d["deprecation"]))
                     else:
                         print("      NULL,")
                     print("    },")
@@ -286,10 +298,11 @@ def extract_ofp_actions(fn, definitions):
 
         decl = "static inline "
         if base_argtype.startswith('struct'):
-            decl += "%s *" %base_argtype
+            decl += "%s *" % base_argtype
         else:
             decl += "void"
-        decl += "\nput_%s(struct ofpbuf *openflow" % versions[0]["enum"].replace('_RAW', '', 1)
+        decl += "\nput_%s(struct ofpbuf *openflow" \
+                % versions[0]["enum"].replace('_RAW', '', 1)
         if need_ofp_version:
             decl += ", enum ofp_version version"
         if base_argtype != 'void' and not base_argtype.startswith('struct'):
@@ -348,9 +361,13 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                     else:
                         arg = "arg"
                 if arg_vl_mff_map:
-                    print("        return decode_%s(%s, version, vl_mff_map, tlv_bitmap, out);" % (enum, arg))
+                    print(
+                        "        return decode_%s(%s," % (enum, arg),
+                        "version, vl_mff_map, tlv_bitmap, out);"
+                    )
                 else:
-                    print("        return decode_%s(%s, version, out);" % (enum, arg))
+                    print("        return decode_%s(%s, version, out);"
+                          % (enum, arg))
             print("")
         print("""\
     default:
@@ -366,7 +383,8 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
             arg_vl_mff_map = versions[0]["arg_vl_mff_map"]
             if base_argtype != 'void':
                 if base_argtype.startswith('struct'):
-                    prototype += "const %s *, enum ofp_version, " % base_argtype
+                    prototype += "const %s *, " % base_argtype
+                    prototype += "enum ofp_version, "
                 else:
                     prototype += "%s, enum ofp_version, " % base_argtype
                 if arg_vl_mff_map:
@@ -378,13 +396,15 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
 static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  enum ofp_raw_action_type raw,
                                  enum ofp_version version,
-                                 uint64_t arg, const struct vl_mff_map *vl_mff_map,
+                                 uint64_t arg,
+                                 const struct vl_mff_map *vl_mff_map,
                                  uint64_t *tlv_bitmap, struct ofpbuf *out);
 """)
+
 
-## ------------ ##
-## Main Program ##
-## ------------ ##
+# ------------ #
+# Main Program #
+# ------------ #
 
 if __name__ == '__main__':
     argv0 = sys.argv[0]

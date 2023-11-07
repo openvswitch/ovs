@@ -87,6 +87,10 @@ struct netdev_stats {
     uint64_t rx_oversize_errors;
     uint64_t rx_fragmented_errors;
     uint64_t rx_jabber_errors;
+
+    /* Datapath upcall statistics. */
+    uint64_t upcall_packets; /* Rx packets forwarded to userspace. */
+    uint64_t upcall_errors;  /* Rx packets failed forwarding to userspace. */
 };
 
 /* Structure representation of custom statistics counter */
@@ -128,6 +132,7 @@ int netdev_get_features(const struct netdev *,
                         enum netdev_features *advertised,
                         enum netdev_features *supported,
                         enum netdev_features *peer);
+int netdev_get_speed(const struct netdev *, uint32_t *current, uint32_t *max);
 uint64_t netdev_features_to_bps(enum netdev_features features,
                                 uint64_t default_bps);
 bool netdev_features_is_full_duplex(enum netdev_features features);

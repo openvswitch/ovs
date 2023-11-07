@@ -484,9 +484,9 @@ static const struct tc_ops *const tcs[] = {
     NULL
 };
 
-static unsigned int tc_ticks_to_bytes(unsigned int rate, unsigned int ticks);
-static unsigned int tc_bytes_to_ticks(unsigned int rate, unsigned int size);
-static unsigned int tc_buffer_per_jiffy(unsigned int rate);
+static unsigned int tc_ticks_to_bytes(uint64_t rate, unsigned int ticks);
+static unsigned int tc_bytes_to_ticks(uint64_t rate, unsigned int size);
+static unsigned int tc_buffer_per_jiffy(uint64_t rate);
 static uint32_t tc_time_to_ticks(uint32_t time);
 
 static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
@@ -494,7 +494,7 @@ static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
                                                   unsigned int flags,
                                                   struct ofpbuf *);
 
-static int tc_add_policer(struct netdev *, uint32_t kbits_rate,
+static int tc_add_policer(struct netdev *, uint64_t kbits_rate,
                           uint32_t kbits_burst, uint32_t kpkts_rate,
                           uint32_t kpkts_burst);
 
@@ -510,12 +510,15 @@ static int tc_delete_class(const struct netdev *, unsigned int handle);
 
 static int tc_del_qdisc(struct netdev *netdev);
 static int tc_query_qdisc(const struct netdev *netdev);
+static void tc_policer_init(struct tc_police *tc_police, uint64_t kbits_rate,
+                            uint64_t kbits_burst);
 
 void
-tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate);
+tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate,
+            uint64_t rate64);
 static int tc_calc_cell_log(unsigned int mtu);
 static void tc_fill_rate(struct tc_ratespec *rate, uint64_t bps, int mtu);
-static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
+static int tc_calc_buffer(uint64_t Bps, int mtu, uint64_t burst_bytes);
 
 
 /* This is set pretty low because we probably won't learn anything from the
@@ -529,6 +532,11 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * Readers do not depend on this variable synchronizing with the related
  * changes in the device miimon status, so we can use atomic_count. */
 static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
+
+/* Very old kernels from the 2.6 era don't support vnet headers with the tun
+ * device. We can detect this while constructing a netdev, but need this for
+ * packet rx/tx. */
+static bool tap_supports_vnet_hdr = true;
 
 static int netdev_linux_parse_vnet_hdr(struct dp_packet *b);
 static void netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu);
@@ -938,14 +946,6 @@ netdev_linux_common_construct(struct netdev *netdev_)
     netnsid_unset(&netdev->netnsid);
     ovs_mutex_init(&netdev->mutex);
 
-    if (userspace_tso_enabled()) {
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
-    }
-
     return 0;
 }
 
@@ -957,6 +957,16 @@ netdev_linux_construct(struct netdev *netdev_)
     int error = netdev_linux_common_construct(netdev_);
     if (error) {
         return error;
+    }
+
+    /* The socket interface doesn't offer the option to enable only
+     * csum offloading without TSO. */
+    if (userspace_tso_enabled()) {
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
+        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
     }
 
     error = get_flags(&netdev->up, &netdev->ifi_flags);
@@ -984,9 +994,12 @@ netdev_linux_construct(struct netdev *netdev_)
 static int
 netdev_linux_construct_tap(struct netdev *netdev_)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static const char tap_dev[] = "/dev/net/tun";
     const char *name = netdev_->name;
+    unsigned long oflags;
+    unsigned int up;
     struct ifreq ifr;
 
     int error = netdev_linux_common_construct(netdev_);
@@ -1004,8 +1017,21 @@ netdev_linux_construct_tap(struct netdev *netdev_)
 
     /* Create tap device. */
     get_flags(&netdev->up, &netdev->ifi_flags);
+
+    if (ovsthread_once_start(&once)) {
+        if (ioctl(netdev->tap_fd, TUNGETFEATURES, &up) == -1) {
+            VLOG_WARN("%s: querying tap features failed: %s", name,
+                      ovs_strerror(errno));
+            tap_supports_vnet_hdr = false;
+        } else if (!(up & IFF_VNET_HDR)) {
+            VLOG_WARN("TAP interfaces do not support virtio-net headers");
+            tap_supports_vnet_hdr = false;
+        }
+        ovsthread_once_done(&once);
+    }
+
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    if (userspace_tso_enabled()) {
+    if (tap_supports_vnet_hdr) {
         ifr.ifr_flags |= IFF_VNET_HDR;
     }
 
@@ -1030,21 +1056,23 @@ netdev_linux_construct_tap(struct netdev *netdev_)
         goto error_close;
     }
 
+    oflags = TUN_F_CSUM;
     if (userspace_tso_enabled()) {
-        /* Old kernels don't support TUNSETOFFLOAD. If TUNSETOFFLOAD is
-         * available, it will return EINVAL when a flag is unknown.
-         * Therefore, try enabling offload with no flags to check
-         * if TUNSETOFFLOAD support is available or not. */
-        if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, 0) == 0 || errno != EINVAL) {
-            unsigned long oflags = TUN_F_CSUM | TUN_F_TSO4 | TUN_F_TSO6;
+        oflags |= (TUN_F_TSO4 | TUN_F_TSO6);
+    }
 
-            if (ioctl(netdev->tap_fd, TUNSETOFFLOAD, oflags) == -1) {
-                VLOG_WARN("%s: enabling tap offloading failed: %s", name,
-                          ovs_strerror(errno));
-                error = errno;
-                goto error_close;
-            }
+    if (tap_supports_vnet_hdr
+        && ioctl(netdev->tap_fd, TUNSETOFFLOAD, oflags) == 0) {
+        netdev_->ol_flags |= (NETDEV_TX_OFFLOAD_IPV4_CKSUM
+                              | NETDEV_TX_OFFLOAD_TCP_CKSUM
+                              | NETDEV_TX_OFFLOAD_UDP_CKSUM);
+
+        if (userspace_tso_enabled()) {
+            netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
         }
+    } else {
+       VLOG_INFO("%s: Disabling checksum and segment offloading due to "
+                 "missing kernel support", name);
     }
 
     netdev->present = true;
@@ -1344,18 +1372,23 @@ netdev_linux_batch_rxq_recv_sock(struct netdev_rxq_linux *rx, int mtu,
             pkt = buffers[i];
          }
 
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
-            struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
-            struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+        if (virtio_net_hdr_size) {
+            int ret = netdev_linux_parse_vnet_hdr(pkt);
+            if (OVS_UNLIKELY(ret)) {
+                struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
+                struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-            /* Unexpected error situation: the virtio header is not present
-             * or corrupted. Drop the packet but continue in case next ones
-             * are correct. */
-            dp_packet_delete(pkt);
-            netdev->rx_dropped += 1;
-            VLOG_WARN_RL(&rl, "%s: Dropped packet: Invalid virtio net header",
-                         netdev_get_name(netdev_));
-            continue;
+                /* Unexpected error situation: the virtio header is not
+                 * present or corrupted or contains unsupported features.
+                 * Drop the packet but continue in case next ones are
+                 * correct. */
+                dp_packet_delete(pkt);
+                netdev->rx_dropped += 1;
+                VLOG_WARN_RL(&rl, "%s: Dropped packet: vnet header is missing "
+                             "or corrupt: %s", netdev_get_name(netdev_),
+                             ovs_strerror(ret));
+                continue;
+            }
         }
 
         for (cmsg = CMSG_FIRSTHDR(&mmsgs[i].msg_hdr); cmsg;
@@ -1413,10 +1446,13 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
         /* Use the buffer from the allocated packet below to receive MTU
          * sized packets and an aux_buf for extra TSO data. */
         iovlen = IOV_TSO_SIZE;
-        virtio_net_hdr_size = sizeof(struct virtio_net_hdr);
     } else {
         /* Use only the buffer from the allocated packet. */
         iovlen = IOV_STD_SIZE;
+    }
+    if (OVS_LIKELY(tap_supports_vnet_hdr)) {
+        virtio_net_hdr_size = sizeof(struct virtio_net_hdr);
+    } else {
         virtio_net_hdr_size = 0;
     }
 
@@ -1462,7 +1498,8 @@ netdev_linux_batch_rxq_recv_tap(struct netdev_rxq_linux *rx, int mtu,
             pkt = buffer;
         }
 
-        if (virtio_net_hdr_size && netdev_linux_parse_vnet_hdr(pkt)) {
+        if (OVS_LIKELY(virtio_net_hdr_size) &&
+            netdev_linux_parse_vnet_hdr(pkt)) {
             struct netdev *netdev_ = netdev_rxq_get_netdev(&rx->up);
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
@@ -1611,7 +1648,7 @@ netdev_linux_sock_batch_send(int sock, int ifindex, bool tso, int mtu,
  * on other interface types because we attach a socket filter to the rx
  * socket. */
 static int
-netdev_linux_tap_batch_send(struct netdev *netdev_, bool tso, int mtu,
+netdev_linux_tap_batch_send(struct netdev *netdev_, int mtu,
                             struct dp_packet_batch *batch)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -1632,7 +1669,7 @@ netdev_linux_tap_batch_send(struct netdev *netdev_, bool tso, int mtu,
         ssize_t retval;
         int error;
 
-        if (tso) {
+        if (OVS_LIKELY(tap_supports_vnet_hdr)) {
             netdev_linux_prepend_vnet_hdr(packet, mtu);
         }
 
@@ -1765,7 +1802,7 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
         error = netdev_linux_sock_batch_send(sock, ifindex, tso, mtu, batch);
     } else {
-        error = netdev_linux_tap_batch_send(netdev_, tso, mtu, batch);
+        error = netdev_linux_tap_batch_send(netdev_, mtu, batch);
     }
     if (error) {
         if (error == ENOBUFS) {
@@ -2156,16 +2193,16 @@ swap_uint64(uint64_t *a, uint64_t *b)
  * 'src' is allowed to be misaligned. */
 static void
 netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
-                                  const struct ovs_vport_stats *src)
+                                  const struct dpif_netlink_vport *vport)
 {
-    dst->rx_packets = get_32aligned_u64(&src->rx_packets);
-    dst->tx_packets = get_32aligned_u64(&src->tx_packets);
-    dst->rx_bytes = get_32aligned_u64(&src->rx_bytes);
-    dst->tx_bytes = get_32aligned_u64(&src->tx_bytes);
-    dst->rx_errors = get_32aligned_u64(&src->rx_errors);
-    dst->tx_errors = get_32aligned_u64(&src->tx_errors);
-    dst->rx_dropped = get_32aligned_u64(&src->rx_dropped);
-    dst->tx_dropped = get_32aligned_u64(&src->tx_dropped);
+    dst->rx_packets = get_32aligned_u64(&vport->stats->rx_packets);
+    dst->tx_packets = get_32aligned_u64(&vport->stats->tx_packets);
+    dst->rx_bytes = get_32aligned_u64(&vport->stats->rx_bytes);
+    dst->tx_bytes = get_32aligned_u64(&vport->stats->tx_bytes);
+    dst->rx_errors = get_32aligned_u64(&vport->stats->rx_errors);
+    dst->tx_errors = get_32aligned_u64(&vport->stats->tx_errors);
+    dst->rx_dropped = get_32aligned_u64(&vport->stats->rx_dropped);
+    dst->tx_dropped = get_32aligned_u64(&vport->stats->tx_dropped);
     dst->multicast = 0;
     dst->collisions = 0;
     dst->rx_length_errors = 0;
@@ -2179,6 +2216,8 @@ netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
     dst->tx_fifo_errors = 0;
     dst->tx_heartbeat_errors = 0;
     dst->tx_window_errors = 0;
+    dst->upcall_packets = vport->upcall_success;
+    dst->upcall_errors = vport->upcall_fail;
 }
 
 static int
@@ -2196,7 +2235,7 @@ get_stats_via_vport__(const struct netdev *netdev, struct netdev_stats *stats)
         return EOPNOTSUPP;
     }
 
-    netdev_stats_from_ovs_vport_stats(stats, reply.stats);
+    netdev_stats_from_ovs_vport_stats(stats, &reply);
 
     ofpbuf_delete(buf);
 
@@ -2346,7 +2385,6 @@ static void
 netdev_linux_read_features(struct netdev_linux *netdev)
 {
     struct ethtool_cmd ecmd;
-    uint32_t speed;
     int error;
 
     if (netdev->cache_valid & VALID_FEATURES) {
@@ -2460,20 +2498,20 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     }
 
     /* Current settings. */
-    speed = ethtool_cmd_speed(&ecmd);
-    if (speed == SPEED_10) {
+    netdev->current_speed = ethtool_cmd_speed(&ecmd);
+    if (netdev->current_speed == SPEED_10) {
         netdev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
-    } else if (speed == SPEED_100) {
+    } else if (netdev->current_speed == SPEED_100) {
         netdev->current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
-    } else if (speed == SPEED_1000) {
+    } else if (netdev->current_speed == SPEED_1000) {
         netdev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
-    } else if (speed == SPEED_10000) {
+    } else if (netdev->current_speed == SPEED_10000) {
         netdev->current = NETDEV_F_10GB_FD;
-    } else if (speed == 40000) {
+    } else if (netdev->current_speed == 40000) {
         netdev->current = NETDEV_F_40GB_FD;
-    } else if (speed == 100000) {
+    } else if (netdev->current_speed == 100000) {
         netdev->current = NETDEV_F_100GB_FD;
-    } else if (speed == 1000000) {
+    } else if (netdev->current_speed == 1000000) {
         netdev->current = NETDEV_F_1TB_FD;
     } else {
         netdev->current = 0;
@@ -2519,6 +2557,33 @@ netdev_linux_get_features(const struct netdev *netdev_,
         *advertised = netdev->advertised;
         *supported = netdev->supported;
         *peer = 0;              /* XXX */
+    }
+    error = netdev->get_features_error;
+
+exit:
+    ovs_mutex_unlock(&netdev->mutex);
+    return error;
+}
+
+static int
+netdev_linux_get_speed(const struct netdev *netdev_, uint32_t *current,
+                       uint32_t *max)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
+
+    ovs_mutex_lock(&netdev->mutex);
+    if (netdev_linux_netnsid_is_remote(netdev)) {
+        error = EOPNOTSUPP;
+        goto exit;
+    }
+
+    netdev_linux_read_features(netdev);
+    if (!netdev->get_features_error) {
+        *current = netdev->current_speed == SPEED_UNKNOWN
+                   ? 0 : netdev->current_speed;
+        *max = MIN(UINT32_MAX,
+                   netdev_features_to_bps(netdev->supported, 0) / 1000000ULL);
     }
     error = netdev->get_features_error;
 
@@ -2598,29 +2663,6 @@ exit:
     return error;
 }
 
-static struct tc_police
-tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
-{
-    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8;
-    unsigned int bps = ((uint64_t) kbits_rate * 1000) / 8;
-    struct tc_police police;
-    struct tc_ratespec rate;
-    int mtu = 65535;
-
-    memset(&rate, 0, sizeof rate);
-    rate.rate = bps;
-    rate.cell_log = tc_calc_cell_log(mtu);
-    rate.mpu = ETH_TOTAL_MIN;
-
-    memset(&police, 0, sizeof police);
-    police.burst = tc_bytes_to_ticks(bps, bsize);
-    police.action = TC_POLICE_SHOT;
-    police.rate = rate;
-    police.mtu = mtu;
-
-    return police;
-}
-
 static void
 nl_msg_act_police_start_nest(struct ofpbuf *request, uint32_t prio,
                              size_t *offset, size_t *act_offset,
@@ -2647,22 +2689,33 @@ nl_msg_act_police_end_nest(struct ofpbuf *request, size_t offset,
 }
 
 static void
-nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
+nl_msg_put_act_police(struct ofpbuf *request, uint32_t index,
+                      uint64_t kbits_rate, uint64_t kbits_burst,
                       uint64_t pkts_rate, uint64_t pkts_burst,
                       uint32_t notexceed_act, bool single_action)
 {
+    uint64_t bytes_rate = kbits_rate / 8 * 1000;
     size_t offset, act_offset;
+    struct tc_police police;
     uint32_t prio = 0;
 
-    if (!police->rate.rate && !pkts_rate) {
+    if (!kbits_rate && !pkts_rate) {
         return;
     }
 
+    tc_policer_init(&police, kbits_rate, kbits_burst);
+    police.index = index;
+
     nl_msg_act_police_start_nest(request, ++prio, &offset, &act_offset,
                                  single_action);
-    if (police->rate.rate) {
-        tc_put_rtab(request, TCA_POLICE_RATE, &police->rate);
+    if (police.rate.rate) {
+        tc_put_rtab(request, TCA_POLICE_RATE, &police.rate, bytes_rate);
     }
+#ifdef HAVE_TCA_POLICE_PKTRATE64
+    if (bytes_rate > UINT32_MAX) {
+        nl_msg_put_u64(request, TCA_POLICE_RATE64, bytes_rate);
+    }
+#endif
     if (pkts_rate) {
         uint64_t pkt_burst_ticks;
         /* Here tc_bytes_to_ticks is used to convert packets rather than bytes
@@ -2671,12 +2724,12 @@ nl_msg_put_act_police(struct ofpbuf *request, struct tc_police *police,
         nl_msg_put_u64(request, TCA_POLICE_PKTRATE64, pkts_rate);
         nl_msg_put_u64(request, TCA_POLICE_PKTBURST64, pkt_burst_ticks);
     }
-    nl_msg_put_unspec(request, TCA_POLICE_TBF, police, sizeof *police);
+    nl_msg_put_unspec(request, TCA_POLICE_TBF, &police, sizeof police);
     nl_msg_act_police_end_nest(request, offset, act_offset, notexceed_act);
 }
 
 static int
-tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
+tc_add_matchall_policer(struct netdev *netdev, uint64_t kbits_rate,
                         uint32_t kbits_burst, uint32_t kpkts_rate,
                         uint32_t kpkts_burst)
 {
@@ -2684,7 +2737,6 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     size_t basic_offset, action_offset;
     uint16_t prio = TC_RESERVED_PRIORITY_POLICE;
     int ifindex, err = 0;
-    struct tc_police pol_act;
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct tcmsg *tcmsg;
@@ -2701,19 +2753,27 @@ tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 
-    pol_act = tc_matchall_fill_police(kbits_rate, kbits_burst);
     nl_msg_put_string(&request, TCA_KIND, "matchall");
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
-    nl_msg_put_act_police(&request, &pol_act, kpkts_rate * 1000,
-                          kpkts_burst * 1000, TC_ACT_UNSPEC, false);
+    nl_msg_put_act_police(&request, 0, kbits_rate, kbits_burst,
+                          kpkts_rate * 1000, kpkts_burst * 1000, TC_ACT_UNSPEC,
+                          false);
     nl_msg_end_nested(&request, action_offset);
     nl_msg_end_nested(&request, basic_offset);
 
     err = tc_transact(&request, &reply);
     if (!err) {
-        struct tcmsg *tc =
-            ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+        struct ofpbuf b = ofpbuf_const_initializer(reply->data, reply->size);
+        struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+        struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
+
+        if (!nlmsg || !tc) {
+            VLOG_ERR_RL(&rl,
+                        "Failed to add match all policer, malformed reply");
+            ofpbuf_delete(reply);
+            return EPROTO;
+        }
         ofpbuf_delete(reply);
     }
 
@@ -2735,7 +2795,7 @@ tc_del_matchall_policer(struct netdev *netdev)
     }
 
     id = tc_make_tcf_id(ifindex, block_id, prio, TC_INGRESS);
-    err = tc_del_filter(&id);
+    err = tc_del_filter(&id, "matchall");
     if (err) {
         return err;
     }
@@ -3653,6 +3713,7 @@ const struct netdev_class netdev_linux_class = {
     .destruct = netdev_linux_destruct,
     .get_stats = netdev_linux_get_stats,
     .get_features = netdev_linux_get_features,
+    .get_speed = netdev_linux_get_speed,
     .get_status = netdev_linux_get_status,
     .get_block_id = netdev_linux_get_block_id,
     .send = netdev_linux_send,
@@ -3669,6 +3730,7 @@ const struct netdev_class netdev_tap_class = {
     .destruct = netdev_linux_destruct,
     .get_stats = netdev_tap_get_stats,
     .get_features = netdev_linux_get_features,
+    .get_speed = netdev_linux_get_speed,
     .get_status = netdev_linux_get_status,
     .send = netdev_linux_send,
     .rxq_construct = netdev_linux_rxq_construct,
@@ -4345,6 +4407,7 @@ struct netem {
     uint32_t latency;
     uint32_t limit;
     uint32_t loss;
+    uint32_t jitter;
 };
 
 static struct netem *
@@ -4356,7 +4419,7 @@ netem_get__(const struct netdev *netdev_)
 
 static void
 netem_install__(struct netdev *netdev_, uint32_t latency,
-                uint32_t limit, uint32_t loss)
+                uint32_t limit, uint32_t loss, uint32_t jitter)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netem *netem;
@@ -4366,13 +4429,14 @@ netem_install__(struct netdev *netdev_, uint32_t latency,
     netem->latency = latency;
     netem->limit = limit;
     netem->loss = loss;
+    netem->jitter = jitter;
 
     netdev->tc = &netem->tc;
 }
 
 static int
 netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
-                    uint32_t limit, uint32_t loss)
+                    uint32_t limit, uint32_t loss, uint32_t jitter)
 {
     struct tc_netem_qopt opt;
     struct ofpbuf request;
@@ -4408,6 +4472,7 @@ netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
     }
 
     opt.latency = tc_time_to_ticks(latency);
+    opt.jitter = tc_time_to_ticks(jitter);
 
     nl_msg_put_string(&request, TCA_KIND, "netem");
     nl_msg_put_unspec(&request, TCA_OPTIONS, &opt, sizeof opt);
@@ -4415,9 +4480,10 @@ netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
     error = tc_transact(&request, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to replace %s qdisc, "
-                          "latency %u, limit %u, loss %u error %d(%s)",
+                          "latency %u, limit %u, loss %u, jitter %u "
+                          "error %d(%s)",
                      netdev_get_name(netdev),
-                     opt.latency, opt.limit, opt.loss,
+                     opt.latency, opt.limit, opt.loss, opt.jitter,
                      error, ovs_strerror(error));
     }
     return error;
@@ -4430,6 +4496,7 @@ netem_parse_qdisc_details__(struct netdev *netdev OVS_UNUSED,
     netem->latency = smap_get_ullong(details, "latency", 0);
     netem->limit = smap_get_ullong(details, "limit", 0);
     netem->loss = smap_get_ullong(details, "loss", 0);
+    netem->jitter = smap_get_ullong(details, "jitter", 0);
 
     if (!netem->limit) {
         netem->limit = 1000;
@@ -4444,9 +4511,10 @@ netem_tc_install(struct netdev *netdev, const struct smap *details)
 
     netem_parse_qdisc_details__(netdev, details, &netem);
     error = netem_setup_qdisc__(netdev, netem.latency,
-                                netem.limit, netem.loss);
+                                netem.limit, netem.loss, netem.jitter);
     if (!error) {
-        netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+        netem_install__(netdev, netem.latency,
+                        netem.limit, netem.loss, netem.jitter);
     }
     return error;
 }
@@ -4462,7 +4530,8 @@ netem_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg)
     error = tc_parse_qdisc(nlmsg, &kind, &nlattr);
     if (error == 0) {
         netem = nl_attr_get(nlattr);
-        netem_install__(netdev, netem->latency, netem->limit, netem->loss);
+        netem_install__(netdev, netem->latency,
+                        netem->limit, netem->loss, netem->jitter);
         return 0;
     }
 
@@ -4484,6 +4553,7 @@ netem_qdisc_get(const struct netdev *netdev, struct smap *details)
     smap_add_format(details, "latency", "%u", netem->latency);
     smap_add_format(details, "limit", "%u", netem->limit);
     smap_add_format(details, "loss", "%u", netem->loss);
+    smap_add_format(details, "jitter", "%u", netem->jitter);
     return 0;
 }
 
@@ -4493,10 +4563,12 @@ netem_qdisc_set(struct netdev *netdev, const struct smap *details)
     struct netem netem;
 
     netem_parse_qdisc_details__(netdev, details, &netem);
-    netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+    netem_install__(netdev, netem.latency,
+                    netem.limit, netem.loss, netem.jitter);
     netem_get__(netdev)->latency = netem.latency;
     netem_get__(netdev)->limit = netem.limit;
     netem_get__(netdev)->loss = netem.loss;
+    netem_get__(netdev)->jitter = netem.jitter;
     return 0;
 }
 
@@ -4518,13 +4590,13 @@ static const struct tc_ops tc_ops_netem = {
 
 struct htb {
     struct tc tc;
-    unsigned int max_rate;      /* In bytes/s. */
+    uint64_t max_rate;          /* In bytes/s. */
 };
 
 struct htb_class {
     struct tc_queue tc_queue;
-    unsigned int min_rate;      /* In bytes/s. */
-    unsigned int max_rate;      /* In bytes/s. */
+    uint64_t min_rate;          /* In bytes/s. */
+    uint64_t max_rate;          /* In bytes/s. */
     unsigned int burst;         /* In bytes. */
     unsigned int priority;      /* Lower values are higher priorities. */
 };
@@ -4612,8 +4684,8 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     if ((class->min_rate / HTB_RATE2QUANTUM) < mtu) {
         opt.quantum = mtu;
     }
-    opt.buffer = tc_calc_buffer(opt.rate.rate, mtu, class->burst);
-    opt.cbuffer = tc_calc_buffer(opt.ceil.rate, mtu, class->burst);
+    opt.buffer = tc_calc_buffer(class->min_rate, mtu, class->burst);
+    opt.cbuffer = tc_calc_buffer(class->max_rate, mtu, class->burst);
     opt.prio = class->priority;
 
     tcmsg = netdev_linux_tc_make_request(netdev, RTM_NEWTCLASS, NLM_F_CREATE,
@@ -4626,15 +4698,26 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
 
     nl_msg_put_string(&request, TCA_KIND, "htb");
     opt_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
+
+#ifdef HAVE_TCA_HTB_RATE64
+    if (class->min_rate > UINT32_MAX) {
+        nl_msg_put_u64(&request, TCA_HTB_RATE64, class->min_rate);
+    }
+    if (class->max_rate > UINT32_MAX) {
+        nl_msg_put_u64(&request, TCA_HTB_CEIL64, class->max_rate);
+    }
+#endif
     nl_msg_put_unspec(&request, TCA_HTB_PARMS, &opt, sizeof opt);
-    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate);
-    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil);
+
+    tc_put_rtab(&request, TCA_HTB_RTAB, &opt.rate, class->min_rate);
+    tc_put_rtab(&request, TCA_HTB_CTAB, &opt.ceil, class->max_rate);
     nl_msg_end_nested(&request, opt_offset);
 
     error = tc_transact(&request, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to replace %s class %u:%u, parent %u:%u, "
-                     "min_rate=%u max_rate=%u burst=%u prio=%u (%s)",
+                     "min_rate=%"PRIu64" max_rate=%"PRIu64" burst=%u prio=%u "
+                     "(%s)",
                      netdev_get_name(netdev),
                      tc_get_major(handle), tc_get_minor(handle),
                      tc_get_major(parent), tc_get_minor(parent),
@@ -4654,6 +4737,10 @@ htb_parse_tca_options__(struct nlattr *nl_options, struct htb_class *class)
     static const struct nl_policy tca_htb_policy[] = {
         [TCA_HTB_PARMS] = { .type = NL_A_UNSPEC, .optional = false,
                             .min_len = sizeof(struct tc_htb_opt) },
+#ifdef HAVE_TCA_HTB_RATE64
+        [TCA_HTB_RATE64] = { .type = NL_A_U64, .optional = true },
+        [TCA_HTB_CEIL64] = { .type = NL_A_U64, .optional = true },
+#endif
     };
 
     struct nlattr *attrs[ARRAY_SIZE(tca_htb_policy)];
@@ -4668,7 +4755,15 @@ htb_parse_tca_options__(struct nlattr *nl_options, struct htb_class *class)
     htb = nl_attr_get(attrs[TCA_HTB_PARMS]);
     class->min_rate = htb->rate.rate;
     class->max_rate = htb->ceil.rate;
-    class->burst = tc_ticks_to_bytes(htb->rate.rate, htb->buffer);
+#ifdef HAVE_TCA_HTB_RATE64
+    if (attrs[TCA_HTB_RATE64]) {
+        class->min_rate = nl_attr_get_u64(attrs[TCA_HTB_RATE64]);
+    }
+    if (attrs[TCA_HTB_CEIL64]) {
+        class->max_rate = nl_attr_get_u64(attrs[TCA_HTB_CEIL64]);
+    }
+#endif
+    class->burst = tc_ticks_to_bytes(class->min_rate, htb->buffer);
     class->priority = htb->prio;
     return 0;
 }
@@ -4699,18 +4794,16 @@ htb_parse_tcmsg__(struct ofpbuf *tcmsg, unsigned int *queue_id,
 }
 
 static void
-htb_parse_qdisc_details__(struct netdev *netdev_,
-                          const struct smap *details, struct htb_class *hc)
+htb_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
+                          struct htb_class *hc)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-
     hc->max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!hc->max_rate) {
-        enum netdev_features current;
+        uint32_t current_speed;
 
-        netdev_linux_read_features(netdev);
-        current = !netdev->get_features_error ? netdev->current : 0;
-        hc->max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
+        netdev_get_speed(netdev, &current_speed, NULL);
+        hc->max_rate = current_speed ? current_speed / 8 * 1000000ULL
+                                     : NETDEV_DEFAULT_BPS / 8;
     }
     hc->min_rate = hc->max_rate;
     hc->burst = 0;
@@ -5171,18 +5264,16 @@ hfsc_query_class__(const struct netdev *netdev, unsigned int handle,
 }
 
 static void
-hfsc_parse_qdisc_details__(struct netdev *netdev_, const struct smap *details,
+hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
                            struct hfsc_class *class)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-
     uint32_t max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!max_rate) {
-        enum netdev_features current;
+        uint32_t current_speed;
 
-        netdev_linux_read_features(netdev);
-        current = !netdev->get_features_error ? netdev->current : 0;
-        max_rate = netdev_features_to_bps(current, NETDEV_DEFAULT_BPS) / 8;
+        netdev_get_speed(netdev, &current_speed, NULL);
+        max_rate = current_speed ? current_speed / 8 * 1000000ULL
+                                 : NETDEV_DEFAULT_BPS / 8;
     }
 
     class->min_rate = max_rate;
@@ -5657,12 +5748,10 @@ tc_policer_init(struct tc_police *tc_police, uint64_t kbits_rate,
  * Returns 0 if successful, otherwise a positive errno value.
  */
 static int
-tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
-               uint32_t kbits_burst, uint32_t kpkts_rate,
-               uint32_t kpkts_burst)
+tc_add_policer(struct netdev *netdev, uint64_t kbits_rate,
+               uint32_t kbits_burst, uint32_t kpkts_rate, uint32_t kpkts_burst)
 {
     size_t basic_offset, police_offset;
-    struct tc_police tc_police;
     struct ofpbuf request;
     struct tcmsg *tcmsg;
     int error;
@@ -5679,9 +5768,9 @@ tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
 
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     police_offset = nl_msg_start_nested(&request, TCA_BASIC_ACT);
-    tc_policer_init(&tc_police, kbits_rate, kbits_burst);
-    nl_msg_put_act_police(&request, &tc_police, kpkts_rate * 1000ULL,
-                          kpkts_burst * 1000ULL, TC_ACT_UNSPEC, false);
+    nl_msg_put_act_police(&request, 0, kbits_rate, kbits_burst,
+                          kpkts_rate * 1000ULL, kpkts_burst * 1000ULL,
+                          TC_ACT_UNSPEC, false);
     nl_msg_end_nested(&request, police_offset);
     nl_msg_end_nested(&request, basic_offset);
 
@@ -5694,19 +5783,15 @@ tc_add_policer(struct netdev *netdev, uint32_t kbits_rate,
 }
 
 int
-tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
+tc_add_policer_action(uint32_t index, uint64_t kbits_rate,
                       uint32_t kbits_burst, uint32_t pkts_rate,
                       uint32_t pkts_burst, bool update)
 {
-    struct tc_police tc_police;
     struct ofpbuf request;
     struct tcamsg *tcamsg;
     size_t offset;
     int flags;
     int error;
-
-    tc_policer_init(&tc_police, kbits_rate, kbits_burst);
-    tc_police.index = index;
 
     flags = (update ? NLM_F_REPLACE : NLM_F_EXCL) | NLM_F_CREATE;
     tcamsg = tc_make_action_request(RTM_NEWACTION, flags, &request);
@@ -5715,8 +5800,8 @@ tc_add_policer_action(uint32_t index, uint32_t kbits_rate,
     }
 
     offset = nl_msg_start_nested(&request, TCA_ACT_TAB);
-    nl_msg_put_act_police(&request, &tc_police, pkts_rate, pkts_burst,
-                          TC_ACT_PIPE, true);
+    nl_msg_put_act_police(&request, index, kbits_rate, kbits_burst, pkts_rate,
+                          pkts_burst, TC_ACT_PIPE, true);
     nl_msg_end_nested(&request, offset);
 
     error = tc_transact(&request, NULL);
@@ -5732,26 +5817,27 @@ static int
 tc_update_policer_action_stats(struct ofpbuf *msg,
                                struct ofputil_meter_stats *stats)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(msg->data, msg->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcamsg *tca = ofpbuf_try_pull(&b, sizeof *tca);
     struct ovs_flow_stats stats_dropped;
     struct ovs_flow_stats stats_hw;
     struct ovs_flow_stats stats_sw;
     const struct nlattr *act;
     struct nlattr *prio;
-    struct tcamsg *tca;
     int error = 0;
 
     if (!stats) {
         goto exit;
     }
 
-    if (NLMSG_HDRLEN + sizeof *tca > msg->size) {
+    if (!nlmsg || !tca) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, size error");
         error = EPROTO;
         goto exit;
     }
 
-    tca = ofpbuf_at_assert(msg, NLMSG_HDRLEN, sizeof *tca);
-    act = nl_attr_find(msg, NLMSG_HDRLEN + sizeof *tca, TCA_ACT_TAB);
+    act = nl_attr_find(&b, 0, TCA_ACT_TAB);
     if (!act) {
         VLOG_ERR_RL(&rl, "Failed to get action stats, can't find attribute");
         error = EPROTO;
@@ -5931,7 +6017,7 @@ exit:
 /* Returns the number of bytes that can be transmitted in 'ticks' ticks at a
  * rate of 'rate' bytes per second. */
 static unsigned int
-tc_ticks_to_bytes(unsigned int rate, unsigned int ticks)
+tc_ticks_to_bytes(uint64_t rate, unsigned int ticks)
 {
     read_psched();
     return (rate * ticks) / ticks_per_s;
@@ -5940,7 +6026,7 @@ tc_ticks_to_bytes(unsigned int rate, unsigned int ticks)
 /* Returns the number of ticks that it would take to transmit 'size' bytes at a
  * rate of 'rate' bytes per second. */
 static unsigned int
-tc_bytes_to_ticks(unsigned int rate, unsigned int size)
+tc_bytes_to_ticks(uint64_t rate, unsigned int size)
 {
     read_psched();
     return rate ? ((unsigned long long int) ticks_per_s * size) / rate : 0;
@@ -5949,7 +6035,7 @@ tc_bytes_to_ticks(unsigned int rate, unsigned int size)
 /* Returns the number of bytes that need to be reserved for qdisc buffering at
  * a transmission rate of 'rate' bytes per second. */
 static unsigned int
-tc_buffer_per_jiffy(unsigned int rate)
+tc_buffer_per_jiffy(uint64_t rate)
 {
     read_psched();
     return rate / buffer_hz;
@@ -6016,20 +6102,26 @@ static int
 tc_parse_class(const struct ofpbuf *msg, unsigned int *handlep,
                struct nlattr **options, struct netdev_queue_stats *stats)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(msg->data, msg->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct tcmsg *tc = ofpbuf_try_pull(&b, sizeof *tc);
     static const struct nl_policy tca_policy[] = {
         [TCA_OPTIONS] = { .type = NL_A_NESTED, .optional = false },
         [TCA_STATS2] = { .type = NL_A_NESTED, .optional = false },
     };
     struct nlattr *ta[ARRAY_SIZE(tca_policy)];
 
-    if (!nl_policy_parse(msg, NLMSG_HDRLEN + sizeof(struct tcmsg),
-                         tca_policy, ta, ARRAY_SIZE(ta))) {
+    if (!nlmsg || !tc) {
+        VLOG_ERR_RL(&rl, "failed to parse class message, malformed reply");
+        goto error;
+    }
+
+    if (!nl_policy_parse(&b, 0, tca_policy, ta, ARRAY_SIZE(ta))) {
         VLOG_WARN_RL(&rl, "failed to parse class message");
         goto error;
     }
 
     if (handlep) {
-        struct tcmsg *tc = ofpbuf_at_assert(msg, NLMSG_HDRLEN, sizeof *tc);
         *handlep = tc->tcm_handle;
     }
 
@@ -6306,15 +6398,19 @@ tc_fill_rate(struct tc_ratespec *rate, uint64_t Bps, int mtu)
     /* rate->overhead = 0; */           /* New in 2.6.24, not yet in some */
     /* rate->cell_align = 0; */         /* distro headers. */
     rate->mpu = ETH_TOTAL_MIN;
-    rate->rate = Bps;
+    rate->rate = MIN(UINT32_MAX, Bps);
 }
 
 /* Appends to 'msg' an "rtab" table for the specified 'rate' as a Netlink
  * attribute of the specified "type".
  *
+ * A 64-bit rate can be provided via 'rate64' in bps.
+ * If zero, the rate in 'rate' will be used.
+ *
  * See tc_calc_cell_log() above for a description of "rtab"s. */
 void
-tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
+tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate,
+            uint64_t rate64)
 {
     uint32_t *rtab;
     unsigned int i;
@@ -6325,7 +6421,7 @@ tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
         if (packet_size < rate->mpu) {
             packet_size = rate->mpu;
         }
-        rtab[i] = tc_bytes_to_ticks(rate->rate, packet_size);
+        rtab[i] = tc_bytes_to_ticks(rate64 ? rate64 : rate->rate, packet_size);
     }
 }
 
@@ -6334,7 +6430,7 @@ tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
  * burst size of 'burst_bytes'.  (If no value was requested, a 'burst_bytes' of
  * 0 is fine.) */
 static int
-tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
+tc_calc_buffer(uint64_t Bps, int mtu, uint64_t burst_bytes)
 {
     unsigned int min_burst = tc_buffer_per_jiffy(Bps) + mtu;
     return tc_bytes_to_ticks(Bps, MAX(burst_bytes, min_burst));
@@ -6819,53 +6915,76 @@ netdev_linux_parse_l2(struct dp_packet *b, uint16_t *l4proto)
     return 0;
 }
 
+/* Initializes packet 'b' with features enabled in the prepended
+ * struct virtio_net_hdr.  Returns 0 if successful, otherwise a
+ * positive errno value. */
 static int
 netdev_linux_parse_vnet_hdr(struct dp_packet *b)
 {
     struct virtio_net_hdr *vnet = dp_packet_pull(b, sizeof *vnet);
-    uint16_t l4proto = 0;
 
     if (OVS_UNLIKELY(!vnet)) {
-        return -EINVAL;
+        return EINVAL;
     }
 
     if (vnet->flags == 0 && vnet->gso_type == VIRTIO_NET_HDR_GSO_NONE) {
         return 0;
     }
 
-    if (netdev_linux_parse_l2(b, &l4proto)) {
-        return -EINVAL;
-    }
-
     if (vnet->flags == VIRTIO_NET_HDR_F_NEEDS_CSUM) {
-        if (l4proto == IPPROTO_TCP) {
-            dp_packet_hwol_set_csum_tcp(b);
-        } else if (l4proto == IPPROTO_UDP) {
+        uint16_t l4proto = 0;
+
+        if (netdev_linux_parse_l2(b, &l4proto)) {
+            return EINVAL;
+        }
+
+        if (l4proto == IPPROTO_UDP) {
             dp_packet_hwol_set_csum_udp(b);
-        } else if (l4proto == IPPROTO_SCTP) {
-            dp_packet_hwol_set_csum_sctp(b);
         }
+        /* The packet has offloaded checksum. However, there is no
+         * additional information like the protocol used, so it would
+         * require to parse the packet here. The checksum starting point
+         * and offset are going to be verified when the packet headers
+         * are parsed during miniflow extraction. */
+        b->csum_start = (OVS_FORCE uint16_t) vnet->csum_start;
+        b->csum_offset = (OVS_FORCE uint16_t) vnet->csum_offset;
+    } else {
+        b->csum_start = 0;
+        b->csum_offset = 0;
     }
 
-    if (l4proto && vnet->gso_type != VIRTIO_NET_HDR_GSO_NONE) {
-        uint8_t allowed_mask = VIRTIO_NET_HDR_GSO_TCPV4
-                                | VIRTIO_NET_HDR_GSO_TCPV6
-                                | VIRTIO_NET_HDR_GSO_UDP;
-        uint8_t type = vnet->gso_type & allowed_mask;
+    int ret = 0;
+    switch (vnet->gso_type) {
+    case VIRTIO_NET_HDR_GSO_TCPV4:
+    case VIRTIO_NET_HDR_GSO_TCPV6:
+        /* FIXME: The packet has offloaded TCP segmentation. The gso_size
+         * is given and needs to be respected. */
+        dp_packet_hwol_set_tcp_seg(b);
+        break;
 
-        if (type == VIRTIO_NET_HDR_GSO_TCPV4
-            || type == VIRTIO_NET_HDR_GSO_TCPV6) {
-            dp_packet_hwol_set_tcp_seg(b);
-        }
+    case VIRTIO_NET_HDR_GSO_UDP:
+        /* UFO is not supported. */
+        VLOG_WARN_RL(&rl, "Received an unsupported packet with UFO enabled.");
+        ret = ENOTSUP;
+        break;
+
+    case VIRTIO_NET_HDR_GSO_NONE:
+        break;
+
+    default:
+        ret = ENOTSUP;
+        VLOG_WARN_RL(&rl, "Received an unsupported packet with GSO type: 0x%x",
+                     vnet->gso_type);
     }
 
-    return 0;
+    return ret;
 }
 
 static void
 netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
 {
-    struct virtio_net_hdr *vnet = dp_packet_push_zeros(b, sizeof *vnet);
+    struct virtio_net_hdr v;
+    struct virtio_net_hdr *vnet = &v;
 
     if (dp_packet_hwol_is_tso(b)) {
         uint16_t hdr_len = ((char *)dp_packet_l4(b) - (char *)dp_packet_eth(b))
@@ -6875,30 +6994,91 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
         vnet->gso_size = (OVS_FORCE __virtio16)(mtu - hdr_len);
         if (dp_packet_hwol_is_ipv4(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV4;
-        } else {
+        } else if (dp_packet_hwol_tx_ipv6(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
         }
 
     } else {
-        vnet->flags = VIRTIO_NET_HDR_GSO_NONE;
+        vnet->hdr_len = 0;
+        vnet->gso_size = 0;
+        vnet->gso_type = VIRTIO_NET_HDR_GSO_NONE;
     }
 
-    if (dp_packet_hwol_l4_mask(b)) {
-        vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
-        vnet->csum_start = (OVS_FORCE __virtio16)((char *)dp_packet_l4(b)
-                                                  - (char *)dp_packet_eth(b));
-
+    if (dp_packet_l4_checksum_good(b)) {
+        /* The packet has good L4 checksum. No need to validate again. */
+        vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+        vnet->flags = VIRTIO_NET_HDR_F_DATA_VALID;
+    } else if (dp_packet_hwol_tx_l4_checksum(b)) {
+        /* The csum calculation is offloaded. */
         if (dp_packet_hwol_l4_is_tcp(b)) {
+            /* Virtual I/O Device (VIRTIO) Version 1.1
+             * 5.1.6.2 Packet Transmission
+             * If the driver negotiated VIRTIO_NET_F_CSUM, it can skip
+             * checksumming the packet:
+             *  - flags has the VIRTIO_NET_HDR_F_NEEDS_CSUM set,
+             *  - csum_start is set to the offset within the packet
+             *    to begin checksumming, and
+             *  - csum_offset indicates how many bytes after the
+             *    csum_start the new (16 bit ones complement) checksum
+             *    is placed by the device.
+             * The TCP checksum field in the packet is set to the sum of
+             * the TCP pseudo header, so that replacing it by the ones
+             * complement checksum of the TCP header and body will give
+             * the correct result. */
+
+            struct tcp_header *tcp_hdr = dp_packet_l4(b);
+            ovs_be16 csum = 0;
+            if (dp_packet_hwol_is_ipv4(b)) {
+                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
+            } else if (dp_packet_hwol_tx_ipv6(b)) {
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
+            }
+
+            tcp_hdr->tcp_csum = csum;
+            vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
+            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct tcp_header, tcp_csum);
         } else if (dp_packet_hwol_l4_is_udp(b)) {
+            struct udp_header *udp_hdr = dp_packet_l4(b);
+            ovs_be16 csum = 0;
+
+            if (dp_packet_hwol_is_ipv4(b)) {
+                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
+            } else if (dp_packet_hwol_tx_ipv6(b)) {
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
+            }
+
+            udp_hdr->udp_csum = csum;
+            vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
+            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct udp_header, udp_csum);
         } else if (dp_packet_hwol_l4_is_sctp(b)) {
-            vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
-                                    struct sctp_header, sctp_csum);
+            /* The Linux kernel networking stack only supports csum_start
+             * and csum_offset when SCTP GSO is enabled.  See kernel's
+             * skb_csum_hwoffload_help(). Currently there is no SCTP
+             * segmentation offload support in OVS. */
+            vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+            vnet->flags = 0;
         } else {
-            VLOG_WARN_RL(&rl, "Unsupported L4 protocol");
+            /* This should only happen when DP_PACKET_OL_TX_L4_MASK includes
+             * a new flag that is not covered in above checks. */
+            VLOG_WARN_RL(&rl, "Unsupported L4 checksum offload. "
+                         "Flags: %"PRIu64,
+                         (uint64_t)*dp_packet_ol_flags_ptr(b));
+            vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+            vnet->flags = 0;
         }
+    } else {
+        /* Packet L4 csum is unknown. */
+        vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
+        vnet->flags = 0;
     }
+
+    dp_packet_push(b, vnet, sizeof *vnet);
 }

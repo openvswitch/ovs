@@ -433,7 +433,9 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
     len += rest_len;
     l3 = dp_packet_l3(pkt);
     ovs_be16 new_ip_frag_off = l3->ip_frag_off & ~htons(IP_MORE_FRAGMENTS);
-    if (!dp_packet_hwol_is_ipv4(pkt)) {
+    if (dp_packet_hwol_tx_ip_csum(pkt)) {
+        dp_packet_ol_reset_ip_csum_good(pkt);
+    } else {
         l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_frag_off,
                                     new_ip_frag_off);
         l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_tot_len, htons(len));
@@ -485,9 +487,9 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
     const void *data = l3 + 1;
     size_t datasize = pl;
 
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
-    if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr)
-        || !nw_frag || !frag_hdr) {
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
+    if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr,
+                             NULL) || !nw_frag || !frag_hdr) {
 
         ipf_print_reass_packet("Unparsed reassembled v6 packet; v6 hdr:", l3);
         dp_packet_delete(pkt);
@@ -608,8 +610,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
         goto invalid_pkt;
     }
 
-    if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(pkt)
-                     && !dp_packet_hwol_is_ipv4(pkt)
+    if (OVS_UNLIKELY(!dp_packet_ip_checksum_good(pkt)
                      && csum(l3, ip_hdr_len) != 0)) {
         COVERAGE_INC(ipf_l3csum_err);
         goto invalid_pkt;
@@ -678,9 +679,9 @@ ipf_is_valid_v6_frag(struct ipf *ipf, struct dp_packet *pkt)
     uint8_t nw_proto = l3->ip6_nxt;
     const void *data = l3 + 1;
     size_t datasize = l3_size - l3_hdr_size;
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
     if (!parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag,
-                             &frag_hdr) || !nw_frag || !frag_hdr) {
+                             &frag_hdr, NULL) || !nw_frag || !frag_hdr) {
         return false;
     }
 
@@ -721,9 +722,10 @@ ipf_v6_key_extract(struct dp_packet *pkt, ovs_be16 dl_type, uint16_t zone,
     uint8_t nw_proto = l3->ip6_nxt;
     const void *data = l3 + 1;
     size_t datasize = dp_packet_l3_size(pkt) - sizeof *l3;
-    const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
+    const struct ovs_16aligned_ip6_frag *frag_hdr;
 
-    parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr);
+    parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr,
+                        NULL);
     ovs_assert(nw_frag && frag_hdr);
     ovs_be16 ip6f_offlg = frag_hdr->ip6f_offlg;
     *start_data_byte = ntohs(ip6f_offlg & IP6F_OFF_MASK) +
@@ -1185,7 +1187,9 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                     } else {
                         struct ip_header *l3_frag = dp_packet_l3(frag_i->pkt);
                         struct ip_header *l3_reass = dp_packet_l3(pkt);
-                        if (!dp_packet_hwol_is_ipv4(frag_i->pkt)) {
+                        if (dp_packet_hwol_tx_ip_csum(frag_i->pkt)) {
+                            dp_packet_ol_reset_ip_csum_good(frag_i->pkt);
+                        } else {
                             ovs_be32 reass_ip =
                                 get_16aligned_be32(&l3_reass->ip_src);
                             ovs_be32 frag_ip =

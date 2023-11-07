@@ -32,7 +32,7 @@ dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK - EAL init])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
@@ -69,7 +69,7 @@ dnl Add vhost-user-client port
 AT_SETUP([OVS-DPDK - add vhost-user-client port])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -98,7 +98,7 @@ AT_SETUP([OVS-DPDK - ping vhost-user ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -154,6 +154,9 @@ AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
 
+dnl Wait for vhost-user handling the socket disconnect.
+OVS_WAIT_UNTIL([grep "vHost Device '$OVS_RUNDIR/dpdkvhostuser0' has been removed" ovs-vswitchd.log])
+
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
@@ -171,7 +174,7 @@ AT_SETUP([OVS-DPDK - ping vhost-user-client ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -200,9 +203,10 @@ ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 dnl Execute testpmd in background
 on_exit "pkill -f -x -9 'tail -f /dev/null'"
 tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+    --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,queues=2,server=1" \
+    --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+    --single-file-segments -- -a --nb-cores 2 --rxq 2 --txq 2 \
+    >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
@@ -220,8 +224,32 @@ AT_CHECK([ip netns exec ns1 ip addr add 172.31.110.11/24 dev tap0], [],
 
 AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
 AT_CHECK([ip netns exec ns2 ip link show], [], [stdout], [stderr])
-AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
+AT_CHECK([ip netns exec ns1 ping -i 0.1 -c 10 -I tap0 172.31.110.12], [], [stdout],
          [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link set tap0 down], [], [stdout], [stderr])
+
+# Wait for stats to be queried ("stats-update-interval")
+sleep 5
+AT_CHECK([ovs-vsctl get interface dpdkvhostuserclient0 statistics], [], [stdout], [stderr])
+
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_packets` -gt 0 -a dnl
+               `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_bytes` -gt 0])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_packets` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q0_good_packets` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q1_good_packets`))])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_bytes` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q0_good_bytes` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:rx_q1_good_bytes`))])
+
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_packets` -gt 0 -a dnl
+               `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes` -gt 0])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_packets` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_packets` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_packets`))])
+AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes` -eq dnl
+               $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_bytes` + dnl
+                  `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_bytes`))])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
@@ -281,7 +309,7 @@ AT_SETUP([OVS-DPDK - Ingress policing create delete vport port])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -324,7 +352,7 @@ AT_SETUP([OVS-DPDK - Ingress policing no policing rate])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -365,7 +393,7 @@ AT_SETUP([OVS-DPDK - Ingress policing no policing burst])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -437,7 +465,7 @@ AT_SETUP([OVS-DPDK - QoS create delete vport port])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -478,7 +506,7 @@ AT_SETUP([OVS-DPDK - QoS no cir])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -513,7 +541,7 @@ AT_SETUP([OVS-DPDK - QoS no cbs])
 AT_KEYWORDS([dpdk])
 
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -633,7 +661,7 @@ AT_KEYWORDS([dpdk])
 
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -689,7 +717,7 @@ AT_KEYWORDS([dpdk])
 
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -828,7 +856,7 @@ AT_KEYWORDS([dpdk])
 
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -880,7 +908,7 @@ AT_KEYWORDS([dpdk])
 
 AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 
 dnl Find number of sockets
 AT_CHECK([lscpu], [], [stdout])
@@ -935,7 +963,7 @@ dnl MFEX Autovalidator
 AT_SETUP([OVS-DPDK - MFEX Autovalidator])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
@@ -968,7 +996,7 @@ dnl MFEX Autovalidator Fuzzy
 AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
@@ -1004,7 +1032,7 @@ AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
 AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py test_traffic.pcap 1], [], [stdout])
-OVS_DPDK_START()
+OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
@@ -1125,7 +1153,7 @@ AT_SETUP([OVS-DPDK - user configured mempool])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START_OVSDB()
-OVS_DPDK_START_VSWITCHD()
+OVS_DPDK_START_VSWITCHD([--no-pci])
 
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:shared-mempool-config=8000,6000,1500])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
