@@ -3789,6 +3789,18 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Maximum number of VMDq pools.
           </column>
 
+          <column name="status" key="n_rxq">
+            Number of Rx queues.
+          </column>
+
+          <column name="status" key="n_txq">
+            Number of Tx queues.
+          </column>
+
+          <column name="status" key="rx_csum_offload">
+            Whether Rx Checksum offload is enabled or not.
+          </column>
+
           <column name="status" key="if_type">
             Interface type ID according to IANA ifTYPE MIB definitions.
           </column>
@@ -3807,7 +3819,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             VF representors.
           </column>
 
-          <column name="status" key="rx_steering">
+          <column name="status" key="rx-steering">
             Hardware Rx queue steering policy in use.
           </column>
 

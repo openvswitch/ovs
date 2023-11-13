@@ -198,7 +198,7 @@ Example::
    a dedicated queue, it will be explicit::
 
       $ ovs-vsctl get interface dpdk-p0 status
-      {..., rx_steering=unsupported}
+      {..., rx-steering=unsupported}
 
    More details can often be found in ``ovs-vswitchd.log``::
 
@@ -499,7 +499,7 @@ its options::
 
     $ ovs-appctl dpctl/show
     [...]
-      port 3: dpdk-rep0 (dpdk: configured_rx_queues=1, ..., dpdk-vf-mac=00:11:22:33:44:55, ...)
+      port 3: dpdk-rep0 (dpdk: ..., dpdk-vf-mac=00:11:22:33:44:55, ...)
 
     $ ovs-vsctl show
     [...]

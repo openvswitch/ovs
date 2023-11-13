@@ -1905,31 +1905,41 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
 
-    smap_add_format(args, "requested_rx_queues", "%d", dev->user_n_rxq);
-    smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
-    smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
-    smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
-    smap_add_format(args, "mtu", "%d", dev->mtu);
-
-    if (dev->type == DPDK_DEV_ETH) {
-        smap_add_format(args, "n_rxq_desc", "%d", dev->rxq_size);
-        smap_add_format(args, "n_txq_desc", "%d", dev->txq_size);
-        if (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) {
-            smap_add(args, "rx_csum_offload", "true");
-        } else {
-            smap_add(args, "rx_csum_offload", "false");
-        }
-        if (dev->rx_steer_flags == DPDK_RX_STEER_LACP) {
-            smap_add(args, "rx-steering", "rss+lacp");
-        }
-        smap_add(args, "lsc_interrupt_mode",
-                 dev->lsc_interrupt_mode ? "true" : "false");
-
-        if (dpdk_port_is_representor(dev)) {
-            smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
-                            ETH_ADDR_ARGS(dev->requested_hwaddr));
-        }
+    if (dev->devargs && dev->devargs[0]) {
+        smap_add_format(args, "dpdk-devargs", "%s", dev->devargs);
     }
+
+    smap_add_format(args, "n_rxq", "%d", dev->user_n_rxq);
+
+    if (dev->fc_conf.mode == RTE_ETH_FC_TX_PAUSE ||
+        dev->fc_conf.mode == RTE_ETH_FC_FULL) {
+        smap_add(args, "rx-flow-ctrl", "true");
+    }
+
+    if (dev->fc_conf.mode == RTE_ETH_FC_RX_PAUSE ||
+        dev->fc_conf.mode == RTE_ETH_FC_FULL) {
+        smap_add(args, "tx-flow-ctrl", "true");
+    }
+
+    if (dev->fc_conf.autoneg) {
+        smap_add(args, "flow-ctrl-autoneg", "true");
+    }
+
+    smap_add_format(args, "n_rxq_desc", "%d", dev->rxq_size);
+    smap_add_format(args, "n_txq_desc", "%d", dev->txq_size);
+
+    if (dev->rx_steer_flags == DPDK_RX_STEER_LACP) {
+        smap_add(args, "rx-steering", "rss+lacp");
+    }
+
+    smap_add(args, "dpdk-lsc-interrupt",
+             dev->lsc_interrupt_mode ? "true" : "false");
+
+    if (dpdk_port_is_representor(dev)) {
+        smap_add_format(args, "dpdk-vf-mac", ETH_ADDR_FMT,
+                        ETH_ADDR_ARGS(dev->requested_hwaddr));
+    }
+
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -2322,6 +2332,29 @@ out:
     ovs_mutex_unlock(&dpdk_mutex);
 
     return err;
+}
+
+static int
+netdev_dpdk_vhost_client_get_config(const struct netdev *netdev,
+                                    struct smap *args)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int tx_retries_max;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    if (dev->vhost_id) {
+        smap_add(args, "vhost-server-path", dev->vhost_id);
+    }
+
+    atomic_read_relaxed(&dev->vhost_tx_retries_max, &tx_retries_max);
+    if (tx_retries_max != VHOST_ENQ_RETRY_DEF) {
+        smap_add_format(args, "tx-retries-max", "%d", tx_retries_max);
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
 }
 
 static int
@@ -4091,6 +4124,9 @@ netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
         smap_add_format(args, "userspace-tso", "disabled");
     }
 
+    smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
+    smap_add_format(args, "n_txq", "%d", netdev->n_txq);
+
     ovs_mutex_unlock(&dev->mutex);
     return 0;
 }
@@ -4161,6 +4197,13 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
     smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
 
+    smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
+    smap_add_format(args, "n_txq", "%d", netdev->n_txq);
+
+    smap_add(args, "rx_csum_offload",
+             dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD
+             ? "true" : "false");
+
     /* Querying the DPDK library for iftype may be done in future, pending
      * support; cf. RFC 3635 Section 3.2.4. */
     enum { IF_TYPE_ETHERNETCSMACD = 6 };
@@ -4186,16 +4229,21 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
                         ETH_ADDR_ARGS(dev->hwaddr));
     }
 
-    if (rx_steer_flags) {
-        if (!rx_steer_flows_num) {
-            smap_add(args, "rx_steering", "unsupported");
+    if (rx_steer_flags && !rx_steer_flows_num) {
+        smap_add(args, "rx-steering", "unsupported");
+    } else if (rx_steer_flags == DPDK_RX_STEER_LACP) {
+        smap_add(args, "rx-steering", "rss+lacp");
+    } else {
+        ovs_assert(!rx_steer_flags);
+        smap_add(args, "rx-steering", "rss");
+    }
+
+    if (rx_steer_flags && rx_steer_flows_num) {
+        smap_add_format(args, "rx_steering_queue", "%d", n_rxq - 1);
+        if (n_rxq > 2) {
+            smap_add_format(args, "rss_queues", "0-%d", n_rxq - 2);
         } else {
-            smap_add_format(args, "rx_steering_queue", "%d", n_rxq - 1);
-            if (n_rxq > 2) {
-                smap_add_format(args, "rss_queues", "0-%d", n_rxq - 2);
-            } else {
-                smap_add(args, "rss_queues", "0");
-            }
+            smap_add(args, "rss_queues", "0");
         }
     }
 
@@ -6415,7 +6463,6 @@ parse_vhost_config(const struct smap *ovs_other_config)
     .is_pmd = true,                                         \
     .alloc = netdev_dpdk_alloc,                             \
     .dealloc = netdev_dpdk_dealloc,                         \
-    .get_config = netdev_dpdk_get_config,                   \
     .get_numa_id = netdev_dpdk_get_numa_id,                 \
     .set_etheraddr = netdev_dpdk_set_etheraddr,             \
     .get_etheraddr = netdev_dpdk_get_etheraddr,             \
@@ -6459,6 +6506,7 @@ static const struct netdev_class dpdk_class = {
     .type = "dpdk",
     NETDEV_DPDK_CLASS_BASE,
     .construct = netdev_dpdk_construct,
+    .get_config = netdev_dpdk_get_config,
     .set_config = netdev_dpdk_set_config,
     .send = netdev_dpdk_eth_send,
 };
@@ -6485,6 +6533,7 @@ static const struct netdev_class dpdk_vhost_client_class = {
     .init = netdev_dpdk_vhost_class_init,
     .construct = netdev_dpdk_vhost_client_construct,
     .destruct = netdev_dpdk_vhost_destruct,
+    .get_config = netdev_dpdk_vhost_client_get_config,
     .set_config = netdev_dpdk_vhost_client_set_config,
     .send = netdev_dpdk_vhost_send,
     .get_carrier = netdev_dpdk_vhost_get_carrier,

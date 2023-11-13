@@ -588,8 +588,9 @@ AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Check default MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=1500' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+1500
+])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
@@ -600,8 +601,9 @@ AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitch
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
 
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+9000
+])
 
 
 dnl Clean up
@@ -636,14 +638,16 @@ dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+9000
+])
 
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=2000])
 
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=2000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+2000
+])
 
 
 dnl Clean up
@@ -686,16 +690,19 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
 
 dnl Check default MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=1500' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+1500
+])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
 
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+9000
+])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
@@ -743,16 +750,19 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+9000
+])
 
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=2000])
 
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=2000' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+2000
+])
 
 dnl Clean up the testpmd now
 pkill -f -x -9 'tail -f /dev/null'
@@ -789,8 +799,9 @@ dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9702) setup error" ovs-vswitchd.log], [], [stdout])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9702' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+9702
+])
 
 dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9711])
@@ -830,8 +841,9 @@ dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (68) setup error" ovs-vswitchd.log], [], [stdout])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=68' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
+68
+])
 
 dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=67])
@@ -877,10 +889,12 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9702' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+9702
+])
 
 dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
@@ -934,10 +948,12 @@ tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
            --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
+OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
 
 dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=68' stdout], [], [stdout])
+AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
+68
+])
 
 dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
