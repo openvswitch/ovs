@@ -795,14 +795,25 @@ netdev_dummy_get_config(const struct netdev *dev, struct smap *args)
 
     dummy_packet_conn_get_config(&netdev->conn, args);
 
+    /* pcap, rxq_pcap and tx_pcap cannot be recovered because filenames have
+     * been discarded after opening file descriptors */
+
+    if (netdev->ol_ip_csum) {
+        smap_add_format(args, "ol_ip_csum", "%s", "true");
+    }
+
+    if (netdev->ol_ip_csum_set_good) {
+        smap_add_format(args, "ol_ip_csum_set_good", "%s", "true");
+    }
+
     /* 'dummy-pmd' specific config. */
     if (!netdev_is_pmd(dev)) {
         goto exit;
     }
-    smap_add_format(args, "requested_rx_queues", "%d", netdev->requested_n_rxq);
-    smap_add_format(args, "configured_rx_queues", "%d", dev->n_rxq);
-    smap_add_format(args, "requested_tx_queues", "%d", netdev->requested_n_txq);
-    smap_add_format(args, "configured_tx_queues", "%d", dev->n_txq);
+
+    smap_add_format(args, "n_rxq", "%d", netdev->requested_n_rxq);
+    smap_add_format(args, "n_txq", "%d", netdev->requested_n_txq);
+    smap_add_format(args, "numa_id", "%d", netdev->requested_numa_id);
 
 exit:
     ovs_mutex_unlock(&netdev->mutex);
