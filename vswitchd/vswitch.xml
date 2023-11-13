@@ -3854,6 +3854,17 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
             Whether userspace-tso is enabled or disabled.
           </column>
       </group>
+
+      <group title="afxdp">
+        <p>
+          AF_XDP specific interface status options.
+        </p>
+
+          <column name="status" key="xdp-mode">
+            XDP mode currently in use. See <ref column="options"
+            key="xdp-mode"/> for description of possible values.
+          </column>
+      </group>
     </group>
 
     <group title="Statistics">

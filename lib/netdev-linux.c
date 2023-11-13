@@ -3493,7 +3493,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
     return ENXIO;
 }
 
-static int
+int
 netdev_linux_get_status(const struct netdev *netdev_, struct smap *smap)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -3759,7 +3759,7 @@ const struct netdev_class netdev_internal_class = {
     .destruct = netdev_afxdp_destruct,                          \
     .get_stats = netdev_afxdp_get_stats,                        \
     .get_custom_stats = netdev_afxdp_get_custom_stats,          \
-    .get_status = netdev_linux_get_status,                      \
+    .get_status = netdev_afxdp_get_status,                      \
     .set_config = netdev_afxdp_set_config,                      \
     .get_config = netdev_afxdp_get_config,                      \
     .reconfigure = netdev_afxdp_reconfigure,                    \

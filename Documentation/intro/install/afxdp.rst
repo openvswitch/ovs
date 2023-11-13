@@ -219,14 +219,10 @@ Otherwise, enable debugging by::
   ovs-appctl vlog/set netdev_afxdp::dbg
 
 To check which XDP mode was chosen by ``best-effort``, you can look for
-``xdp-mode-in-use`` in the output of ``ovs-appctl dpctl/show``::
+``xdp-mode`` in the output of ``ovs-vsctl get interface INT status:xdp-mode``::
 
-  # ovs-appctl dpctl/show
-  netdev@ovs-netdev:
-    <...>
-    port 2: ens802f0 (afxdp: n_rxq=1, use-need-wakeup=true,
-                      xdp-mode=best-effort,
-                      xdp-mode-in-use=native-with-zerocopy)
+  # ovs-vsctl get interface ens802f0 status:xdp-mode
+  "native-with-zerocopy"
 
 References
 ----------

@@ -672,8 +672,6 @@ netdev_afxdp_get_config(const struct netdev *netdev, struct smap *args)
     ovs_mutex_lock(&dev->mutex);
     smap_add_format(args, "n_rxq", "%d", netdev->n_rxq);
     smap_add_format(args, "xdp-mode", "%s", xdp_modes[dev->xdp_mode].name);
-    smap_add_format(args, "xdp-mode-in-use", "%s",
-                    xdp_modes[dev->xdp_mode_in_use].name);
     smap_add_format(args, "use-need-wakeup", "%s",
                     dev->use_need_wakeup ? "true" : "false");
     ovs_mutex_unlock(&dev->mutex);
@@ -1363,6 +1361,25 @@ netdev_afxdp_get_stats(const struct netdev *netdev,
             }
         }
     }
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+int
+netdev_afxdp_get_status(const struct netdev *netdev, struct smap *args)
+{
+    int error = netdev_linux_get_status(netdev, args);
+
+    if (error) {
+        return error;
+    }
+
+    struct netdev_linux *dev = netdev_linux_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+    smap_add_format(args, "xdp-mode", "%s",
+                    xdp_modes[dev->xdp_mode_in_use].name);
     ovs_mutex_unlock(&dev->mutex);
 
     return error;

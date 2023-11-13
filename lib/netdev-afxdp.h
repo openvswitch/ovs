@@ -63,6 +63,7 @@ int netdev_afxdp_set_config(struct netdev *netdev, const struct smap *args,
 int netdev_afxdp_get_config(const struct netdev *netdev, struct smap *args);
 int netdev_afxdp_get_stats(const struct netdev *netdev_,
                            struct netdev_stats *stats);
+int netdev_afxdp_get_status(const struct netdev *netdev, struct smap *args);
 int netdev_afxdp_get_custom_stats(const struct netdev *netdev,
                                   struct netdev_custom_stats *custom_stats);
 
