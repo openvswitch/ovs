@@ -93,7 +93,7 @@ def open_spell_check_dict():
         global spell_check_dict
         spell_check_dict = enchant.Dict("en_US")
         for kw in extra_keywords:
-            spell_check_dict.add(kw)
+            spell_check_dict.add_to_session(kw)
 
         return True
     except:
