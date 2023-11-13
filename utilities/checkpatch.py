@@ -40,6 +40,15 @@ def open_spell_check_dict():
     import enchant
 
     try:
+        import codespell_lib
+        codespell_dir = os.path.dirname(codespell_lib.__file__)
+        codespell_file = os.path.join(codespell_dir, 'data', 'dictionary.txt')
+        if not os.path.exists(codespell_file):
+            codespell_file = ''
+    except:
+        codespell_file = ''
+
+    try:
         extra_keywords = ['ovs', 'vswitch', 'vswitchd', 'ovs-vswitchd',
                           'netdev', 'selinux', 'ovs-ctl', 'dpctl', 'ofctl',
                           'openvswitch', 'dpdk', 'hugepage', 'hugepages',
@@ -91,7 +100,16 @@ def open_spell_check_dict():
                           'syscall', 'lacp', 'ipf', 'skb', 'valgrind']
 
         global spell_check_dict
+
         spell_check_dict = enchant.Dict("en_US")
+
+        if codespell_file:
+            with open(codespell_file) as f:
+                for line in f.readlines():
+                    words = line.strip().split('>')[1].strip(', ').split(',')
+                    for word in words:
+                        spell_check_dict.add_to_session(word.strip())
+
         for kw in extra_keywords:
             spell_check_dict.add_to_session(kw)
 
