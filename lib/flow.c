@@ -3306,6 +3306,8 @@ packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
  * (This is useful only for testing, obviously, and the packet isn't really
  * valid.  Lots of fields are just zeroed.)
  *
+ * If 'bad_csum' is true, the final IP checksum is invalid.
+ *
  * For packets whose protocols can encapsulate arbitrary L7 payloads, 'l7' and
  * 'l7_len' determine that payload:
  *
@@ -3318,7 +3320,7 @@ packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
  *      from 'l7'. */
 void
 flow_compose(struct dp_packet *p, const struct flow *flow,
-             const void *l7, size_t l7_len)
+             const void *l7, size_t l7_len, bool bad_csum)
 {
     /* Add code to this function (or its callees) for emitting new fields or
      * protocols.  (This isn't essential, so it can be skipped for initial
@@ -3370,7 +3372,18 @@ flow_compose(struct dp_packet *p, const struct flow *flow,
         /* Checksum has already been zeroed by put_zeros call. */
         ip->ip_csum = csum(ip, sizeof *ip);
 
-        dp_packet_ol_set_ip_csum_good(p);
+        if (bad_csum) {
+            /*
+             * Internet checksum is a sum complement to zero, so any other
+             * value will result in an invalid checksum. Here, we flip one
+             * bit.
+             */
+            ip->ip_csum ^= (OVS_FORCE ovs_be16) 0x1;
+            dp_packet_ip_checksum_bad(p);
+        } else {
+            dp_packet_ol_set_ip_csum_good(p);
+        }
+
         pseudo_hdr_csum = packet_csum_pseudoheader(ip);
         flow_compose_l4_csum(p, flow, pseudo_hdr_csum);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {

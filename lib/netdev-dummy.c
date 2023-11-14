@@ -1769,7 +1769,7 @@ eth_from_flow_str(const char *s, size_t packet_size,
 
     packet = dp_packet_new(0);
     if (packet_size) {
-        flow_compose(packet, flow, NULL, 0);
+        flow_compose(packet, flow, NULL, 0, false);
         if (dp_packet_size(packet) < packet_size) {
             packet_expand(packet, flow, packet_size);
         } else if (dp_packet_size(packet) > packet_size){
@@ -1777,7 +1777,7 @@ eth_from_flow_str(const char *s, size_t packet_size,
             packet = NULL;
         }
     } else {
-        flow_compose(packet, flow, NULL, 64);
+        flow_compose(packet, flow, NULL, 64, false);
     }
 
     ofpbuf_uninit(&odp_key);
