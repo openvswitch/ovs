@@ -154,6 +154,9 @@ static int show_stats = 1;
 /* --pcap: Makes "compose-packet" print a pcap on stdout. */
 static int print_pcap = 0;
 
+/* --bare: Makes "compose-packet" print a bare hexified payload. */
+static int print_bare = 0;
+
 /* --raw: Makes "ofp-print" read binary data from stdin. */
 static int raw = 0;
 
@@ -243,6 +246,7 @@ parse_options(int argc, char *argv[])
         {"color", optional_argument, NULL, OPT_COLOR},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         {"pcap", no_argument, &print_pcap, 1},
+        {"bare", no_argument, &print_bare, 1},
         {"raw", no_argument, &raw, 1},
         {"read-only", no_argument, NULL, OPT_READ_ONLY},
         DAEMON_LONG_OPTIONS,
@@ -4948,20 +4952,31 @@ ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
     }
 }
 
-/* "compose-packet [--pcap] FLOW [L7]": Converts the OpenFlow flow
- * specification FLOW to a packet with flow_compose() and prints the hex bytes
- * in the packet on stdout.  Also verifies that the flow extracted from that
- * packet matches the original FLOW.
+/* "compose-packet [--pcap|--bare] FLOW [L7]": Converts the
+ * OpenFlow flow specification FLOW to a packet with flow_compose() and prints
+ * the hex bytes of the packet, with offsets, to stdout.
  *
- * With --pcap, prints the packet to stdout instead as a pcap file, so that you
- * can do something like "ovs-ofctl --pcap compose-packet udp | tcpdump -vvvv
- * -r-" to use another tool to dump the packet contents.
+ * With --pcap, prints the packet in pcap format, so that you can do something
+ * like "ovs-ofctl --pcap compose-packet udp | tcpdump -vvvv -r-" to use
+ * another tool to dump the packet contents.
+ *
+ * With --bare, prints the packet as a single bare hex string with no
+ * spaces or offsets, so that you can pass the result directly to e.g.
+ * "ovs-appctl netdev-dummy/receive vif $(ovs-ofctl compose-packet --bare
+ * FLOW)"
+ *
+ * Regardless of the mode, the command also verifies that the flow extracted
+ * from that packet matches the original FLOW.
  *
  * If L7 is specified, draws the L7 payload data from it, otherwise defaults to
  * 64 bytes of payload. */
 static void
 ofctl_compose_packet(struct ovs_cmdl_context *ctx)
 {
+    if (print_pcap && print_bare) {
+        ovs_fatal(1, "--bare and --pcap are mutually exclusive");
+    }
+
     if (print_pcap && isatty(STDOUT_FILENO)) {
         ovs_fatal(1, "not writing pcap data to stdout; redirect to a file "
                   "or pipe to tcpdump instead");
@@ -4997,6 +5012,16 @@ ofctl_compose_packet(struct ovs_cmdl_context *ctx)
         ovs_pcap_write_header(p_file);
         ovs_pcap_write(p_file, &p);
         ovs_pcap_close(p_file);
+    } else if (print_bare) {
+        /* Binary to a bare hex string. */
+        for (int i = 0; i < dp_packet_size(&p); i++) {
+            uint8_t val = ((uint8_t *) dp_packet_data(&p))[i];
+            /* Don't use ds_put_hex because it adds 0x prefix as well as
+             * it doesn't guarantee an even number of payload characters, which
+             * may be important elsewhere (e.g. in netdev-dummy/receive). */
+            printf("%02" PRIx8, val);
+        }
+
     } else {
         ovs_hex_dump(stdout, dp_packet_data(&p), dp_packet_size(&p), 0, false);
     }
