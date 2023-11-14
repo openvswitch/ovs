@@ -746,19 +746,25 @@ OVS_VSWITCHD_START(
 # Modify the ip_dst addr to force changing the IP csum.
 AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=mod_nw_dst:192.168.1.1,output:p2])
 
+flow_s="\
+  eth_src=8a:bf:7e:2f:05:84,eth_dst=0a:8f:39:4f:e0:73,dl_type=0x0800,\
+  nw_src=192.168.123.2,nw_dst=192.168.123.1,nw_proto=6,nw_ttl=64,nw_frag=no,\
+  tp_src=54392,tp_dst=5201,tcp_flags=ack"
+
+good_frame=$(ovs-ofctl compose-packet --bare "${flow_s}")
+
 # Check if no offload remains ok.
 AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
-0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
 
 # Checksum should change to 0x990 with ip_dst changed to 192.168.1.1
 # by the datapath while processing the packet.
+flow_expected=$(echo "${flow_s}" | sed 's/192.168.123.1/192.168.1.1/g')
+good_expected=$(ovs-ofctl compose-packet --bare "${flow_expected}")
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
-AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
-0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
 
 # Check if packets entering the datapath with csum offloading
@@ -766,12 +772,9 @@ AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
 # in the datapath and not by the netdev.
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
-0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}])
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
-AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
-0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
 
 # Check if packets entering the datapath with csum offloading
@@ -779,36 +782,30 @@ AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
 # by the datapath.
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
-0a8f394fe0738abf7e2f058408004500003433e0400040068f8fc0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${good_frame}
 ])
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
-AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
-0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
 
 # Push a packet with bad csum and offloading disabled to check
 # if the datapath updates the csum, but does not fix the issue.
+bad_frame=$(ovs-ofctl compose-packet --bare --bad-csum "${flow_s}")
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=false])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=false])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
-0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
-AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
-0a8f394fe0738abf7e2f058408004500003433e0400040060904c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+bad_expected=$(ovs-ofctl compose-packet --bare --bad-csum "${flow_expected}")
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${bad_expected}
 ])
 
 # Push a packet with bad csum and offloading enabled to check
 # if the driver updates and fixes the csum.
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum=true])
 AT_CHECK([ovs-vsctl set Interface p1 options:ol_ip_csum_set_good=true])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
-0a8f394fe0738abf7e2f058408004500003433e0400040068f03c0a87b02c0a87b01d4781451a962ad5417ed297b801000e547fd00000101080a2524d2345c7fe1c4
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 ${bad_frame}])
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
-AT_CHECK([tail -n 1 p2.pcap.txt], [0], [dnl
-0a8f394fe0738abf7e2f058408004500003433e0400040060990c0a87b02c0a80101d4781451a962ad5417ed297b801000e5c1fd00000101080a2524d2345c7fe1c4
+AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

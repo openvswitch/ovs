@@ -1255,7 +1255,7 @@ check_ct_eventmask(struct dpif_backer *backer)
 
     /* Compose a dummy UDP packet. */
     dp_packet_init(&packet, 0);
-    flow_compose(&packet, &flow, NULL, 64);
+    flow_compose(&packet, &flow, NULL, 64, false);
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
@@ -1348,7 +1348,7 @@ check_ct_timeout_policy(struct dpif_backer *backer)
 
     /* Compose a dummy UDP packet. */
     dp_packet_init(&packet, 0);
-    flow_compose(&packet, &flow, NULL, 64);
+    flow_compose(&packet, &flow, NULL, 64, false);
 
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */

@@ -441,7 +441,7 @@ parse_flow_and_packet(int argc, const char *argv[],
     if (generate_packet) {
         /* Generate a packet, as requested. */
         packet = dp_packet_new(0);
-        flow_compose(packet, flow, l7, l7_len);
+        flow_compose(packet, flow, l7, l7_len, false);
     } else if (packet) {
         /* Use the metadata from the flow and the packet argument to
          * reconstruct the flow. */
