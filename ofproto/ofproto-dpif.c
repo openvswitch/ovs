@@ -4383,15 +4383,20 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto)
  * a reference.
  *
  * 'flow' is non-const to allow for temporary modifications during the lookup.
- * Any changes are restored before returning. */
+ * Any changes are restored before returning.
+ *
+ * 'conj_flows' is an optional parameter.  If it is non-null, the matching
+ * conjunctive flows are inserted. */
 static struct rule_dpif *
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, ovs_version_t version,
                           uint8_t table_id, struct flow *flow,
-                          struct flow_wildcards *wc)
+                          struct flow_wildcards *wc,
+                          struct hmapx *conj_flows)
 {
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
     return rule_dpif_cast(rule_from_cls_rule(classifier_lookup(cls, version,
-                                                               flow, wc)));
+                                                               flow, wc,
+                                                               conj_flows)));
 }
 
 void
@@ -4433,7 +4438,10 @@ ofproto_dpif_credit_table_stats(struct ofproto_dpif *ofproto, uint8_t table_id,
  * 'in_port'.  This is needed for resubmit action support.
  *
  * 'flow' is non-const to allow for temporary modifications during the lookup.
- * Any changes are restored before returning. */
+ * Any changes are restored before returning.
+ *
+ * 'conj_flows' is an optional parameter.  If it is non-null, the matching
+ * conjunctive flows are inserted. */
 struct rule_dpif *
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             ovs_version_t version, struct flow *flow,
@@ -4441,7 +4449,8 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss,
-                            struct xlate_cache *xcache)
+                            struct xlate_cache *xcache,
+                            struct hmapx *conj_flows)
 {
     ovs_be16 old_tp_src = flow->tp_src, old_tp_dst = flow->tp_dst;
     ofp_port_t old_in_port = flow->in_port.ofp_port;
@@ -4497,7 +4506,8 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc);
+        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc,
+                                         conj_flows);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
             unsigned long orig;
@@ -6680,7 +6690,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
-                                     TBL_INTERNAL, &match->flow, &match->wc);
+                                     TBL_INTERNAL, &match->flow, &match->wc,
+                                     NULL);
     if (rule) {
         *rulep = &rule->up;
     } else {

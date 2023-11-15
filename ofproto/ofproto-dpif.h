@@ -103,7 +103,8 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               ofp_port_t in_port,
                                               bool may_packet_in,
                                               bool honor_table_miss,
-                                              struct xlate_cache *);
+                                              struct xlate_cache *,
+                                              struct hmapx *conj_flows);
 
 void rule_dpif_credit_stats(struct rule_dpif *,
                             const struct dpif_flow_stats *, bool);

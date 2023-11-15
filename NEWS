@@ -7,6 +7,8 @@ Post-v3.2.0
        during the process, and error logs complaining unrecognized fields may
        be observed on old nodes.
    - ovs-appctl:
+     * 'ofproto/trace' now reports OpenFlow rules that make up a conjunctive
+       flow match.
      * Output of 'dpctl/show' command no longer shows interface configuration
        status, only values of the actual configuration options, a.k.a.
        'requested' configuration.  The interface configuration status,

@@ -229,6 +229,9 @@ struct xlate_ctx {
      * wants actions. */
     struct ofpbuf *odp_actions;
 
+    /* Set of matching conjunctive flows, or NULL. */
+    struct hmapx *conj_flows;
+
     /* Statistics maintained by xlate_table_action().
      *
      * These statistics limit the amount of work that a single flow
@@ -866,6 +869,34 @@ xlate_report_action_set(const struct xlate_ctx *ctx, const char *verb)
     }
 }
 
+static void
+xlate_report_conj_matches(const struct xlate_ctx *ctx,
+                          const struct ofputil_port_map *map)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+    struct hmapx_node *node;
+    struct cls_rule *rule;
+
+    /* NOTE: The conj flows have meaning in order.  For each flow that is a
+     * component of conj flows, 'k' in 'conjunction(id, k/n)' represents the
+     * dimension.  When there are multiple flows with the same id, it may be
+     * implicitly expected that they would be output in ascending order of 'k'.
+     *
+     * However, because of the use of hmapx strucutre and the fact that the
+     * classifier returns them in arbitrary order, they are output in arbitrary
+     * order here. */
+    HMAPX_FOR_EACH (node, ctx->conj_flows) {
+        ds_clear(&s);
+
+        rule = node->data;
+
+        cls_rule_format(rule, ofproto_get_tun_tab(&ctx->xin->ofproto->up),
+                        map, &s);
+        xlate_report(ctx, OFT_DETAIL, "conj. %s", ds_cstr(&s));
+    }
+
+    ds_destroy(&s);
+}
 
 /* If tracing is enabled in 'ctx', appends a node representing 'rule' (in
  * OpenFlow table 'table_id') to the trace and makes this node the parent for
@@ -882,6 +913,8 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
         return;
     }
 
+    struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+
     struct ds s = DS_EMPTY_INITIALIZER;
     ds_put_format(&s, "%2d. ", table_id);
     if (rule == ctx->xin->ofproto->miss_rule) {
@@ -892,8 +925,6 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
         ds_put_cstr(&s, "Packets are IP fragments and "
                     "the fragment handling mode is \"drop\".");
     } else {
-        struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
-
         if (ctx->xin->names) {
             struct ofproto_dpif *ofprotop;
             ofprotop = ofproto_dpif_lookup_by_name(ctx->xbridge->name);
@@ -903,8 +934,6 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
         minimatch_format(&rule->up.cr.match,
                          ofproto_get_tun_tab(&ctx->xin->ofproto->up),
                          &map, &s, OFP_DEFAULT_PRIORITY);
-
-        ofputil_port_map_destroy(&map);
 
         if (ds_last(&s) != ' ') {
             ds_put_cstr(&s, ", ");
@@ -918,6 +947,9 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
     ctx->xin->trace = &oftrace_report(ctx->xin->trace, OFT_TABLE,
                                       ds_cstr(&s))->subs;
     ds_destroy(&s);
+
+    xlate_report_conj_matches(ctx, &map);
+    ofputil_port_map_destroy(&map);
 }
 
 /* If tracing is enabled in 'ctx', adds an OFT_DETAIL trace node to 'ctx'
@@ -4653,7 +4685,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
                                            may_packet_in, honor_table_miss,
-                                           ctx->xin->xcache);
+                                           ctx->xin->xcache, ctx->conj_flows);
         /* Swap back. */
         if (with_ct_orig) {
             tuple_swap(&ctx->xin->flow, ctx->wc);
@@ -4674,6 +4706,11 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
             struct ovs_list *old_trace = ctx->xin->trace;
             xlate_report_table(ctx, rule, table_id);
+
+            if (OVS_UNLIKELY(ctx->xin->trace)) {
+                hmapx_clear(ctx->conj_flows);
+            }
+
             xlate_recursively(ctx, rule, table_id <= old_table_id,
                               is_last_action, xlator);
             ctx->xin->trace = old_trace;
@@ -8044,6 +8081,13 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     COVERAGE_INC(xlate_actions);
 
+    ctx.conj_flows = NULL;
+
+    if (OVS_UNLIKELY(xin->trace)) {
+        ctx.conj_flows = xzalloc(sizeof *ctx.conj_flows);
+        hmapx_init(ctx.conj_flows);
+    }
+
     xin->trace = xlate_report(&ctx, OFT_BRIDGE, "bridge(\"%s\")",
                               xbridge->name);
     if (xin->frozen_state) {
@@ -8181,7 +8225,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.rule = rule_dpif_lookup_from_table(
             ctx.xbridge->ofproto, ctx.xin->tables_version, flow, ctx.wc,
             ctx.xin->resubmit_stats, &ctx.table_id,
-            flow->in_port.ofp_port, true, true, ctx.xin->xcache);
+            flow->in_port.ofp_port, true, true, ctx.xin->xcache,
+            ctx.conj_flows);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats, false);
         }
@@ -8194,6 +8239,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         xlate_report_table(&ctx, ctx.rule, ctx.table_id);
+
+        if (OVS_UNLIKELY(ctx.xin->trace)) {
+            hmapx_clear(ctx.conj_flows);
+        }
     }
 
     /* Tunnel stats only for not-thawed packets. */
@@ -8374,6 +8423,12 @@ exit:
     ofpbuf_uninit(&ctx.frozen_actions);
     ofpbuf_uninit(&scratch_actions);
     ofpbuf_delete(ctx.encap_data);
+
+    /* Clean up 'conj_flows' as it is no longer needed. */
+    if (OVS_UNLIKELY(xin->trace)) {
+        hmapx_destroy(ctx.conj_flows);
+        free(ctx.conj_flows);
+    }
 
     /* Make sure we return a "drop flow" in case of an error. */
     if (ctx.error) {

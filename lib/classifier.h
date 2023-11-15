@@ -299,6 +299,7 @@
  * parallel to the rule's removal. */
 
 #include "cmap.h"
+#include "hmapx.h"
 #include "openvswitch/match.h"
 #include "openvswitch/meta-flow.h"
 #include "pvector.h"
@@ -398,7 +399,8 @@ static inline void classifier_publish(struct classifier *);
  * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
                                          ovs_version_t, struct flow *,
-                                         struct flow_wildcards *);
+                                         struct flow_wildcards *,
+                                         struct hmapx *conj_flows);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *, ovs_version_t);
 const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
