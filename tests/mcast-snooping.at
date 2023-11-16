@@ -207,6 +207,26 @@ Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e
 Datapath actions: 1,2
 ])
 
+# Change p2 ofport to force a ofbundle change and check that the mdb contains
+# no stale port.
+AT_CHECK([ovs-vsctl set interface p2 ofport_request=4])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast group port
+     -> mcast flood port is input port, dropping
+     -> forwarding to mcast flood port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 1,2
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -377,6 +397,28 @@ bridge("br0")
 Final flow: unchanged
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
 Datapath actions: 3,2
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+# Change p2 ofport to force a ofbundle change and check that the mdb contains
+# no stale port.
+AT_CHECK([ovs-vsctl set interface p3 ofport_request=4])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(1)" '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'], [0], [dnl
+Flow: ip,in_port=1,vlan_tci=0x0000,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_src=172.16.34.30,nw_dst=224.1.1.1,nw_proto=2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=18,tp_dst=20
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding report to mcast flagged port
+     -> mcast port is input port, dropping the Report
+     -> forwarding report to mcast flagged port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
+Datapath actions: 2,3
 This flow is handled by the userspace slow path because it:
   - Uses action(s) not supported by datapath.
 ])
