@@ -105,6 +105,286 @@ AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+
+AT_SETUP([mcast - check multicast per port flooding])
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl set bridge br0 \
+    datapath_type=dummy \
+    mcast_snooping_enable=true \
+    other-config:mcast-snooping-disable-flood-unregistered=false
+], [0])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 \
+    -- set Interface p1 type=dummy other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
+    -- add-port br0 p2 \
+    -- set Interface p2 type=dummy other-config:hwaddr=aa:55:aa:55:00:02 ofport_request=2 \
+    -- add-port br0 p3 \
+    -- set Interface p3 type=dummy other-config:hwaddr=aa:55:aa:55:00:03 ofport_request=3 \
+], [0])
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [stdout])
+AT_CHECK([grep -v 'Datapath actions:' stdout], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> unregistered multicast, flooding
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+])
+AT_CHECK([sed -ne 's/^Datapath actions: \(.*\)$/\1/p' stdout | tr "," "\n" | sort -n], [0], [dnl
+1
+2
+100
+])
+
+# Send report packets.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1  \
+        '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
+], [0])
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  GROUP                Age
+    1     0  224.1.1.1           0
+])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast group port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 1
+])
+
+AT_CHECK([ovs-vsctl set port p2 other_config:mcast-snooping-flood=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast group port
+     -> forwarding to mcast flood port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 1,2
+])
+
+AT_CHECK([ovs-vsctl set port p3 other_config:mcast-snooping-flood=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast group port
+     -> forwarding to mcast flood port
+     -> mcast flood port is input port, dropping
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 1,2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([mcast - check multicast per port flooding (unregistered flood disabled)])
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl set bridge br0 \
+    datapath_type=dummy \
+    mcast_snooping_enable=true \
+    other-config:mcast-snooping-disable-flood-unregistered=true
+], [0])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 \
+    -- set Interface p1 type=dummy other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
+    -- add-port br0 p2 \
+    -- set Interface p2 type=dummy other-config:hwaddr=aa:55:aa:55:00:02 ofport_request=2 \
+    -- add-port br0 p3 \
+    -- set Interface p3 type=dummy other-config:hwaddr=aa:55:aa:55:00:03 ofport_request=3 \
+], [0])
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: drop
+])
+
+AT_CHECK([ovs-vsctl set port p2 other_config:mcast-snooping-flood=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast flood port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 2
+])
+
+AT_CHECK([ovs-vsctl set port p3 other_config:mcast-snooping-flood=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
+Flow: udp,in_port=3,vlan_tci=0x0000,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_src=10.0.0.1,nw_dst=224.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=0,tp_dst=8000
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding to mcast flood port
+     -> mcast flood port is input port, dropping
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,udp,in_port=3,dl_src=aa:55:aa:55:00:ff,dl_dst=01:00:5e:01:01:01,nw_dst=224.1.1.1,nw_frag=no
+Datapath actions: 2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([mcast - check reports per port flooding])
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl set bridge br0 \
+    datapath_type=dummy \
+    mcast_snooping_enable=true \
+    other-config:mcast-snooping-disable-flood-unregistered=false
+], [0])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 \
+    -- set Interface p1 type=dummy other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
+    -- add-port br0 p2 \
+    -- set Interface p2 type=dummy other-config:hwaddr=aa:55:aa:55:00:02 ofport_request=2 \
+    -- add-port br0 p3 \
+    -- set Interface p3 type=dummy other-config:hwaddr=aa:55:aa:55:00:03 ofport_request=3 \
+], [0])
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(1)" '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'], [0], [dnl
+Flow: ip,in_port=1,vlan_tci=0x0000,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_src=172.16.34.30,nw_dst=224.1.1.1,nw_proto=2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=18,tp_dst=20
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> learned that 00:0c:29:a0:27:a1 is on port p1 in VLAN 0
+     -> multicast snooping learned that 224.1.1.1 is on port p1 in VLAN 0
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
+Datapath actions: drop
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+AT_CHECK([ovs-vsctl set port p3 other_config:mcast-snooping-flood-reports=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(1)" '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'], [0], [dnl
+Flow: ip,in_port=1,vlan_tci=0x0000,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_src=172.16.34.30,nw_dst=224.1.1.1,nw_proto=2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=18,tp_dst=20
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding report to mcast flagged port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
+Datapath actions: 3
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+AT_CHECK([ovs-vsctl set port p2 other_config:mcast-snooping-flood-reports=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(1)" '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'], [0], [dnl
+Flow: ip,in_port=1,vlan_tci=0x0000,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_src=172.16.34.30,nw_dst=224.1.1.1,nw_proto=2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=18,tp_dst=20
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding report to mcast flagged port
+     -> forwarding report to mcast flagged port
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
+Datapath actions: 3,2
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+AT_CHECK([ovs-vsctl set port p1 other_config:mcast-snooping-flood-reports=true])
+
+AT_CHECK([ovs-appctl ofproto/trace "in_port(1)" '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'], [0], [dnl
+Flow: ip,in_port=1,vlan_tci=0x0000,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_src=172.16.34.30,nw_dst=224.1.1.1,nw_proto=2,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,tp_src=18,tp_dst=20
+
+bridge("br0")
+-------------
+ 0. priority 32768
+    NORMAL
+     -> forwarding report to mcast flagged port
+     -> forwarding report to mcast flagged port
+     -> mcast port is input port, dropping the Report
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_src=00:0c:29:a0:27:a1,dl_dst=01:00:5e:01:01:01,nw_proto=2,nw_frag=no
+Datapath actions: 3,2
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([mcast - delete the port mdb when vlan configuration changed])
 OVS_VSWITCHD_START([])
 
