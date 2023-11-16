@@ -31,13 +31,13 @@ dummy@ovs-dummy: hit:0 missed:0
 
 ovs-appctl time/stop
 
-# Send IGMPv3 query on p2 with vlan 1725
+# Send IGMPv3 query on p2 with vlan 1725.
 # 5c:8a:38:55:25:52 > 01:00:5e:00:00:01, ethertype 802.1Q (0x8100), length 64: vlan 1725, p 0, ethertype IPv4,
 # 172.17.25.1 > 224.0.0.1: igmp query v3
 AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
 '01005e0000015c8a38552552810006bd080046c000240000000001027f00ac111901e0000001940400001164ec1e00000000027d000000000000000000000000'])
 
-# Send IGMPv3 query on p2 with vlan 1728
+# Send IGMPv3 query on p2 with vlan 1728.
 # 5c:8a:38:55:25:52 > 01:00:5e:00:00:01, ethertype 802.1Q (0x8100), length 64: vlan 1728, p 0, ethertype IPv4,
 # 172.17.28.1 > 224.0.0.1: igmp query v3
 AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
@@ -51,13 +51,13 @@ AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
 
 AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
 
-# Send a multicast packet on p1
+# Send a multicast packet on p1.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1 \
     'in_port(1),eth(src=aa:55:aa:55:00:01,dst=01:00:5e:5e:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=239.94.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)'
 ])
 
-# Check this packet was forwarded exactly once to p2 and has vlan tag 1725
+# Check this packet was forwarded exactly once to p2 and has vlan tag 1725.
 # aa:55:aa:55:00:01 > 01:00:5e:5e:01:01, ethertype 802.1Q (0x8100), length 46: vlan 1725, p 0, ethertype IPv4,
 # 10.0.0.1.0 > 239.94.1.1.8000: UDP, length 0
 AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
@@ -450,7 +450,7 @@ AT_CHECK([
 
 ovs-appctl time/stop
 
-# send report packets
+# Send report packets.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1  \
         '01005E010101000C29A027A18100000108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
@@ -458,7 +458,7 @@ AT_CHECK([
         '01005E010101000C29A027A28100000208004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
 ], [0])
 
-# send query packets
+# Send query packets.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p3  \
        '01005E010101000C29A027D18100000108004500001C000100004002CBCBAC102201E00101011114EEEB00000000'
@@ -505,7 +505,7 @@ AT_CHECK([
 
 ovs-appctl time/stop
 
-# send report packets
+# Send report packets.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1  \
         '01005E010101000C29A027A18100000108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
@@ -513,7 +513,7 @@ AT_CHECK([
         '01005E010101000C29A027A28100000208004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
 ], [0])
 
-# send query packets
+# Send query packets.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p2  \
        '01005E010101000C29A027D18100000108004500001C000100004002CBCBAC102201E00101011114EEEB00000000'
