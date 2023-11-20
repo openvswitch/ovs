@@ -18,6 +18,29 @@ m4_define([CHECK_MEMPOOL_PARAM], [
                    | grep "User configured shared mempool set for: MTU $1, NUMA $2."])
 ])
 
+dnl ADD_VHOST_USER_CLIENT_PORT([bridge], [port], [socket])
+dnl Add a dpdk vhost-user client port to a bridge and check this port is ready
+dnl to be used by looking at the logs.
+m4_define([ADD_VHOST_USER_CLIENT_PORT], [
+    AT_CHECK([ovs-vsctl add-port $1 $2 -- \
+              set Interface $2 type=dpdkvhostuserclient options:vhost-server-path=$3],
+             [], [stdout], [stderr])
+    OVS_WAIT_UNTIL([grep "VHOST_CONFIG: ($3) vhost-user client: socket created" ovs-vswitchd.log])
+    OVS_WAIT_UNTIL([grep "vHost User device '$2' created in 'client' mode, using client socket" ovs-vswitchd.log])
+    OVS_WAIT_UNTIL([grep "VHOST_CONFIG: ($3) reconnecting..." ovs-vswitchd.log])
+])
+
+dnl ADD_VHOST_USER_PORT([bridge], [port], [socket])
+dnl Add a dpdk vhost-user port to a bridge and check this port is ready
+dnl to be used by looking at the logs.
+m4_define([ADD_VHOST_USER_PORT], [
+    AT_CHECK([ovs-vsctl add-port $1 $2 -- set Interface $2 type=dpdkvhostuser], [],
+             [stdout], [stderr])
+    OVS_WAIT_UNTIL([grep "VHOST_CONFIG: ($3) vhost-user server: socket created" ovs-vswitchd.log])
+    OVS_WAIT_UNTIL([grep "Socket $3 created for vhost-user port $2" ovs-vswitchd.log])
+    OVS_WAIT_UNTIL([grep "VHOST_CONFIG: ($3) binding succeeded" ovs-vswitchd.log])
+])
+
 dnl --------------------------------------------------------------------------
 dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK - EAL init])
@@ -64,14 +87,9 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -92,18 +110,8 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuser0 -- set Interface dpdkvhostuser0 \
-          type=dpdkvhostuser], [],
-         [stdout], [stderr])
+ADD_VHOST_USER_PORT([br10], [dpdkvhostuser0], [$OVS_RUNDIR/dpdkvhostuser0])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) vhost-user server: socket created" \
-          ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "Socket $OVS_RUNDIR/dpdkvhostuser0 created for vhost-user port dpdkvhostuser0" \
-          ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) binding succeeded" ovs-vswitchd.log], [],
-         [stdout])
 
 dnl Set up namespaces
 ADD_NAMESPACES(ns1, ns2)
@@ -158,17 +166,8 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface \
-          dpdkvhostuserclient0 \
-          type=dpdkvhostuserclient \
-          options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [],
-         [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Set up namespaces
 ADD_NAMESPACES(ns1, ns2)
@@ -281,7 +280,7 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=10000 ingress_policing_burst=1000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
@@ -298,11 +297,6 @@ AT_CHECK([grep -E 'ingress_policing_burst: 0' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -323,7 +317,7 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_burst=1000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
@@ -337,12 +331,6 @@ AT_CHECK([grep -E 'ingress_policing_burst: 1000' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
-
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -363,7 +351,7 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add ingress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set interface dpdkvhostuserclient0 ingress_policing_rate=10000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
@@ -377,11 +365,6 @@ AT_CHECK([grep -E 'ingress_policing_burst: 0' stdout], [], [stdout])
 
 AT_CHECK([ovs-vsctl list interface dpdkvhostuserclient0], [], [stdout])
 AT_CHECK([grep -E 'ingress_policing_rate: 10000' stdout], [], [stdout])
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -434,16 +417,11 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 OVS_WAIT_UNTIL([ovs-vsctl set port dpdkvhostuserclient0 qos=@newqos -- --id=@newqos create qos type=egress-policer other-config:cir=1250000 \
                   other-config:cbs=2048])
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if egress policer could not be created
 AT_FAIL_IF([grep "Could not create rte meter for egress policer" ovs-vswitchd.log], [], [stdout])
@@ -474,14 +452,9 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 OVS_WAIT_UNTIL([ovs-vsctl set port dpdkvhostuserclient0 qos=@newqos -- --id=@newqos create qos type=egress-policer other-config:cbs=2048])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
@@ -508,14 +481,9 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 OVS_WAIT_UNTIL([ovs-vsctl set port dpdkvhostuserclient0 qos=@newqos -- --id=@newqos create qos type=egress-policer other-config:cir=1250000])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Check egress policer was not created
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show dpdkvhostuserclient0], [], [stdout])
@@ -631,14 +599,9 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1"])
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
@@ -678,15 +641,10 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and modify MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1"])
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
@@ -808,14 +766,10 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9702])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
-
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1"])
 
@@ -855,15 +809,10 @@ OVS_DPDK_START([--no-pci])
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
+ADD_VHOST_USER_CLIENT_PORT([br10], [dpdkvhostuserclient0], [$OVS_RUNDIR/dpdkvhostclient0])
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=68])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
-
-dnl Parse log file
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1"])
 
