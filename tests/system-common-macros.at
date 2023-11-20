@@ -297,6 +297,12 @@ m4_define([OVS_START_L7],
 #
 m4_define([OFPROTO_CLEAR_DURATION_IDLE], [[sed -e 's/duration=.*s,/duration=<cleared>,/g' -e 's/idle_age=[0-9]*,/idle_age=<cleared>,/g']])
 
+# OVS_CHECK_TC_QDISC()
+#
+# Macro to skip tests when tc qdisc can't be applied on a OVS port.
+m4_define([OVS_CHECK_TC_QDISC],
+    [AT_SKIP_IF([test $HAVE_TC = no])])
+
 # OVS_CHECK_TUNNEL_TSO()
 #
 # Macro to be used in general tunneling tests that could be also
