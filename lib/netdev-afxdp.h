@@ -47,7 +47,6 @@ struct xsk_socket_info;
 
 int netdev_afxdp_rxq_construct(struct netdev_rxq *rxq_);
 void netdev_afxdp_rxq_destruct(struct netdev_rxq *rxq_);
-int netdev_afxdp_init(void);
 int netdev_afxdp_construct(struct netdev *netdev_);
 void netdev_afxdp_destruct(struct netdev *netdev_);
 int netdev_afxdp_verify_mtu_size(const struct netdev *netdev, int mtu);

@@ -3754,7 +3754,6 @@ const struct netdev_class netdev_internal_class = {
 
 #ifdef HAVE_AF_XDP
 #define NETDEV_AFXDP_CLASS_COMMON                               \
-    .init = netdev_afxdp_init,                                  \
     .construct = netdev_afxdp_construct,                        \
     .destruct = netdev_afxdp_destruct,                          \
     .get_stats = netdev_afxdp_get_stats,                        \

@@ -1193,17 +1193,17 @@ libbpf_print(enum libbpf_print_level level,
     return 0;
 }
 
-int netdev_afxdp_init(void)
-{
-    libbpf_set_print(libbpf_print);
-    return 0;
-}
-
 int
 netdev_afxdp_construct(struct netdev *netdev)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct netdev_linux *dev = netdev_linux_cast(netdev);
     int ret;
+
+    if (ovsthread_once_start(&once)) {
+        libbpf_set_print(libbpf_print);
+        ovsthread_once_done(&once);
+    }
 
     /* Configure common netdev-linux first. */
     ret = netdev_linux_construct(netdev);
