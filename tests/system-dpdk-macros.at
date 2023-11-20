@@ -36,11 +36,12 @@ m4_define([OVS_DPDK_PRE_PHY_SKIP],
 #
 m4_define([OVS_DPDK_START],
   [dnl start ovs dpdk
-   OVS_DPDK_START_OVSDB()
+   OVS_DPDK_START_OVSDB($3)
    dnl Enable DPDK functionality
    AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
-   OVS_DPDK_START_VSWITCHD($1)
+   OVS_DPDK_START_VSWITCHD([$1], [$2])
 ])
+
 
 # OVS_DPDK_START_OVSDB()
 #
@@ -60,8 +61,9 @@ m4_define([OVS_DPDK_START_OVSDB],
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Initialize database.
-   AT_CHECK([ovs-vsctl --no-wait init])
+   AT_CHECK([ovs-vsctl --no-wait init $1])
 ])
+
 
 # OVS_DPDK_START_VSWITCHD()
 #
@@ -72,9 +74,20 @@ m4_define([OVS_DPDK_START_VSWITCHD],
    AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-extra="--log-level=pmd.*:error $1"])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
+   AT_CHECK([ovs-vswitchd $2 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
+])
+
+
+m4_define([OVS_DPDK_STOP_VSWITCHD],
+  [OVS_VSWITCHD_STOP([dnl
+$1";/does not exist. The Open vSwitch kernel module is probably not loaded./d
+/does not support MTU configuration,/d
+/EAL: No \(available\|free\) .*hugepages reported/d
+/Failed to enable flow control/d
+/Rx checksum offload is not supported on/d
+/TELEMETRY: No legacy callbacks, legacy socket not created/d"])
 ])
 
 

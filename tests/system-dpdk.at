@@ -3,15 +3,6 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 
 AT_BANNER([OVS-DPDK unit tests])
 
-m4_define([SYSTEM_DPDK_ALLOWED_LOGS],[
-\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
-\@does not support MTU configuration,@d
-\@EAL: No \(available\|free\) .*hugepages reported@d
-\@Failed to enable flow control@d
-\@Rx checksum offload is not supported on@d
-\@TELEMETRY: No legacy callbacks, legacy socket not created@d
-])
-
 dnl CHECK_MEMPOOL_PARAM([mtu], [numa], [+line])
 dnl
 dnl Waits for logs to indicate that the user has configured a mempool
@@ -36,7 +27,7 @@ OVS_DPDK_START([--no-pci])
 AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -58,7 +49,7 @@ sleep 2
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -84,9 +75,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ov
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -150,12 +140,11 @@ OVS_WAIT_UNTIL([grep "vHost Device '$OVS_RUNDIR/dpdkvhostuser0' has been removed
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) recvmsg failed@d
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostuser0) failed to connect: No such file or directory@d
-\@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
-\@failed to enumerate system datapaths: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostuser0) recvmsg failed/d
+/VHOST_CONFIG: (.*dpdkvhostuser0) failed to connect: No such file or directory/d
+/dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports./d
+/failed to enumerate system datapaths: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -237,12 +226,10 @@ OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) recvmsg failed@d
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-\@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
-\@failed to enumerate system datapaths: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) recvmsg failed/d
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
+/failed to enumerate system datapaths: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -278,7 +265,7 @@ AT_CHECK([grep -E 'ingress_policing_rate: 0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -319,9 +306,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ov
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -360,9 +346,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ov
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -400,9 +385,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ov
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -434,7 +418,7 @@ AT_CHECK([grep -E 'QoS not configured on phy0' stdout], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -473,9 +457,8 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -506,11 +489,10 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-\@Could not create rte meter for egress policer@d
-\@Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
+/Could not create rte meter for egress policer/d
+/Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -541,11 +523,10 @@ AT_CHECK([grep -E 'QoS not configured on dpdkvhostuserclient0' stdout], [], [std
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-\@Could not create rte meter for egress policer@d
-\@Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
+/Could not create rte meter for egress policer/d
+/Failed to set QoS type egress-policer on port dpdkvhostuserclient0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -589,7 +570,7 @@ AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -633,7 +614,7 @@ AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -681,9 +662,8 @@ OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -732,9 +712,8 @@ OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -773,10 +752,9 @@ AT_CHECK([grep "phy0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@phy0: unsupported MTU 9711@d
-\@failed to set MTU for network device phy0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/phy0: unsupported MTU 9711/d
+/failed to set MTU for network device phy0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -815,10 +793,9 @@ AT_CHECK([grep "phy0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@phy0: unsupported MTU 67@d
-\@failed to set MTU for network device phy0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/phy0: unsupported MTU 67/d
+/failed to set MTU for network device phy0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -859,11 +836,10 @@ OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-\@dpdkvhostuserclient0: unsupported MTU 9711@d
-\@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
+/dpdkvhostuserclient0: unsupported MTU 9711/d
+/failed to set MTU for network device dpdkvhostuserclient0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -909,11 +885,10 @@ OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) failed to connect: No such file or directory@d
-\@dpdkvhostuserclient0: unsupported MTU 67@d
-\@failed to set MTU for network device dpdkvhostuserclient0: Invalid argument@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
+/dpdkvhostuserclient0: unsupported MTU 67/d
+/failed to set MTU for network device dpdkvhostuserclient0: Invalid argument/d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -948,7 +923,7 @@ OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packe
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("[SYSTEM_DPDK_ALLOWED_LOGS]")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -981,9 +956,8 @@ OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packe
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@upcall: datapath reached the dynamic limit of .* flows.@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/upcall: datapath reached the dynamic limit of .* flows./d"])
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -1094,17 +1068,16 @@ ovs-appctl: ovs-vswitchd: server returned an error
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br0 p1], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-\@Error: unknown argument 1.@d
-\@Error: invalid study_pkt_cnt value: xyz.@d
-\@Error: unknown argument abcd.@d
-\@Error: -pmd option requires a thread id argument.@d
-\@Error: invalid study_pkt_cnt value: abcd.@d
-\@Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID.@d
-\@Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list.@d
-\@Error: unknown miniflow extract implementation superstudy.@d
-\@Error: invalid study_pkt_cnt value: -pmd.@d
-])")
+OVS_DPDK_STOP_VSWITCHD(["dnl
+/Error: unknown argument 1./d
+/Error: invalid study_pkt_cnt value: xyz./d
+/Error: unknown argument abcd./d
+/Error: -pmd option requires a thread id argument./d
+/Error: invalid study_pkt_cnt value: abcd./d
+/Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID./d
+/Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list./d
+/Error: unknown miniflow extract implementation superstudy./d
+/Error: invalid study_pkt_cnt value: -pmd./d"])
 AT_CLEANUP dnl
 dnl --------------------------------------------------------------------------
 
@@ -1155,7 +1128,6 @@ OVS_WAIT_UNTIL([tail -n +$TMP ovs-vswitchd.log | grep "Port p1: Requesting a mem
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 p1], [], [stdout], [stderr])
-OVS_VSWITCHD_STOP("m4_join([], [SYSTEM_DPDK_ALLOWED_LOGS], [
-])")
+OVS_DPDK_STOP_VSWITCHD
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
