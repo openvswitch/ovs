@@ -79,3 +79,41 @@ m4_define([OVS_DPDK_START_VSWITCHD],
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
 ])
+
+
+# OVS_DPDK_CHECK_TESTPMD()
+#
+# Check dpdk-testpmd availability.
+#
+m4_define([OVS_DPDK_CHECK_TESTPMD],
+  [AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+])
+
+
+# OVS_DPDK_START_TESTPMD()
+#
+# Start dpdk-testpmd in background.
+#
+m4_define([OVS_DPDK_START_TESTPMD],
+  [AT_CHECK([lscpu], [], [stdout])
+   AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+   eal_options="--socket-mem="$(cat NUMA_NODE)" --file-prefix page0 --single-file-segments --no-pci"
+   options="$1"
+   test "$options" != "${options%% -- *}" || options="$options -- "
+   eal_options="$eal_options ${options%% -- *}"
+   testpmd_options="-a --stats-period 2 ${options#* -- }"
+   echo "dpdk-testpmd $eal_options -- $testpmd_options" >testpmd.cmd
+   dpdk-testpmd $eal_options -- $testpmd_options >testpmd.log 2>&1 & \
+   echo $! > testpmd.pid
+   on_exit "kill -9 `cat testpmd.pid`"
+])
+
+
+# OVS_DPDK_STOP_TESTPMD()
+#
+# Stop background dpdk-testpmd.
+#
+m4_define([OVS_DPDK_STOP_TESTPMD],
+  [AT_CHECK([kill `cat testpmd.pid`])
+   OVS_WAIT([kill -0 `cat testpmd.pid`], [kill -9 `cat testpmd.pid`])
+])

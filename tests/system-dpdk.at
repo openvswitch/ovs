@@ -97,12 +97,8 @@ dnl Ping vhost-user port
 AT_SETUP([OVS-DPDK - ping vhost-user ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -125,12 +121,8 @@ ADD_NAMESPACES(ns1, ns2)
 dnl Add veth device
 ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostuser0" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostuser0" \
+                        --vdev="net_tap0,iface=tap0"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
@@ -151,8 +143,7 @@ AT_CHECK([ip netns exec ns2 ip link show], [], [stdout], [stderr])
 AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
          [stderr])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Wait for vhost-user handling the socket disconnect.
 OVS_WAIT_UNTIL([grep "vHost Device '$OVS_RUNDIR/dpdkvhostuser0' has been removed" ovs-vswitchd.log])
@@ -173,12 +164,8 @@ dnl Ping vhost-user-client port
 AT_SETUP([OVS-DPDK - ping vhost-user-client ports])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -200,13 +187,8 @@ ADD_NAMESPACES(ns1, ns2)
 dnl Add veth device
 ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-    --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,queues=2,server=1" \
-    --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-    --single-file-segments -- -a --nb-cores 2 --rxq 2 --txq 2 \
-    >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,queues=2,server=1" \
+                        --vdev="net_tap0,iface=tap0" -- --nb-cores 2 --rxq 2 --txq 2])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ip link show dev tap0 | grep -qw LOWER_UP])
@@ -251,8 +233,7 @@ AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes
                $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_bytes` + dnl
                   `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_bytes`))])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -663,13 +644,9 @@ dnl MTU increase vport port
 AT_SETUP([OVS-DPDK - MTU increase vport port])
 AT_KEYWORDS([dpdk])
 
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -682,12 +659,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: 
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+                        --vdev="net_tap0,iface=tap0"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
@@ -704,8 +677,7 @@ AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
 9000
 ])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -722,13 +694,9 @@ dnl MTU decrease vport port
 AT_SETUP([OVS-DPDK - MTU decrease vport port])
 AT_KEYWORDS([dpdk])
 
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS and modify MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -742,12 +710,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: 
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+                        --vdev="net_tap0,iface=tap0"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
@@ -764,8 +728,7 @@ AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
 2000
 ])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -866,13 +829,9 @@ dnl MTU upper bound vport port
 AT_SETUP([OVS-DPDK - MTU upper bound vport port])
 AT_KEYWORDS([dpdk])
 
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -881,12 +840,8 @@ AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9702])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+                        --vdev="net_tap0,iface=tap0"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
@@ -900,8 +855,7 @@ dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
@@ -920,13 +874,9 @@ dnl MTU lower bound vport port
 AT_SETUP([OVS-DPDK - MTU lower bound vport port])
 AT_KEYWORDS([dpdk])
 
-AT_SKIP_IF([! which dpdk-testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_CHECK_TESTPMD()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
-
-dnl Find number of sockets
-AT_CHECK([lscpu], [], [stdout])
-AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
@@ -940,12 +890,8 @@ AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: 
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
 
-dnl Execute testpmd in background
-on_exit "pkill -f -x -9 'tail -f /dev/null'"
-tail -f /dev/null | dpdk-testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
-           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
-           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
-           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+                        --vdev="net_tap0,iface=tap0"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
 OVS_WAIT_UNTIL([ovs-vsctl get Interface dpdkvhostuserclient0 link_state | grep -w up])
@@ -959,8 +905,7 @@ dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
 
-dnl Clean up the testpmd now
-pkill -f -x -9 'tail -f /dev/null'
+OVS_DPDK_STOP_TESTPMD()
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
