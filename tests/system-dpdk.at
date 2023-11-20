@@ -813,6 +813,10 @@ AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9702])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: ($OVS_RUNDIR/dpdkvhostclient0) reconnecting..." ovs-vswitchd.log], [], [stdout])
+
 OVS_DPDK_START_TESTPMD([--vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1"])
 
 OVS_WAIT_UNTIL([grep "virtio is now ready for processing" ovs-vswitchd.log])
