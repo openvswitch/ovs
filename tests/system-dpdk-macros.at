@@ -7,9 +7,6 @@ m4_define([OVS_DPDK_PRE_CHECK],
   [dnl Check Hugepages
    AT_CHECK([cat /proc/meminfo], [], [stdout])
    AT_SKIP_IF([grep -E 'HugePages_Free: *0' stdout], [], [stdout])
-   AT_CHECK([mount], [], [stdout])
-   AT_CHECK([grep 'hugetlbfs' stdout], [], [stdout], [])
-
 ])
 
 
@@ -97,7 +94,7 @@ m4_define([OVS_DPDK_CHECK_TESTPMD],
 m4_define([OVS_DPDK_START_TESTPMD],
   [AT_CHECK([lscpu], [], [stdout])
    AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
-   eal_options="--socket-mem="$(cat NUMA_NODE)" --file-prefix page0 --single-file-segments --no-pci"
+   eal_options="--in-memory --socket-mem="$(cat NUMA_NODE)" --single-file-segments --no-pci"
    options="$1"
    test "$options" != "${options%% -- *}" || options="$options -- "
    eal_options="$eal_options ${options%% -- *}"
