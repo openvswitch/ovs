@@ -221,10 +221,9 @@ AT_CHECK([test `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_bytes
                $((`ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q0_good_bytes` + dnl
                   `ovs-vsctl get interface dpdkvhostuserclient0 statistics:tx_q1_good_bytes`))])
 
-OVS_DPDK_STOP_TESTPMD()
-
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_DPDK_STOP_TESTPMD()
 OVS_DPDK_STOP_VSWITCHD(["dnl
 /VHOST_CONFIG: (.*dpdkvhostclient0) recvmsg failed/d
 /VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
@@ -619,10 +618,9 @@ AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
 9000
 ])
 
-OVS_DPDK_STOP_TESTPMD()
-
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_DPDK_STOP_TESTPMD()
 OVS_DPDK_STOP_VSWITCHD(["dnl
 /VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
@@ -662,10 +660,9 @@ AT_CHECK([ovs-vsctl get Interface dpdkvhostuserclient0 mtu], [0], [dnl
 2000
 ])
 
-OVS_DPDK_STOP_TESTPMD()
-
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_DPDK_STOP_TESTPMD()
 OVS_DPDK_STOP_VSWITCHD(["dnl
 /VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d"])
 AT_CLEANUP
@@ -785,10 +782,9 @@ dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=9711])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 9711" ovs-vswitchd.log], [], [stdout])
 
-OVS_DPDK_STOP_TESTPMD()
-
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_DPDK_STOP_TESTPMD()
 OVS_DPDK_STOP_VSWITCHD(["dnl
 /VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
 /dpdkvhostuserclient0: unsupported MTU 9711/d
@@ -828,10 +824,9 @@ dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface dpdkvhostuserclient0 mtu_request=67])
 AT_CHECK([grep "dpdkvhostuserclient0: unsupported MTU 67" ovs-vswitchd.log], [], [stdout])
 
-OVS_DPDK_STOP_TESTPMD()
-
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_DPDK_STOP_TESTPMD()
 OVS_DPDK_STOP_VSWITCHD(["dnl
 /VHOST_CONFIG: (.*dpdkvhostclient0) failed to connect: No such file or directory/d
 /dpdkvhostuserclient0: unsupported MTU 67/d
