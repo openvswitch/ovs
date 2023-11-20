@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build-dpdk:
     env:
-      dependencies: gcc libnuma-dev ninja-build
+      dependencies: gcc libbpf-dev libnuma-dev ninja-build pkgconf
       CC: gcc
       DPDK_GIT: https://dpdk.org/git/dpdk-stable
       DPDK_VER: 22.11.1

@@ -20,6 +20,8 @@ m4_include([tests/ovs-macros.at])
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 m4_include([tests/system-common-macros.at])
+m4_include([tests/system-userspace-macros.at])
 m4_include([tests/system-dpdk-macros.at])
 
 m4_include([tests/system-dpdk.at])
+m4_include([tests/system-traffic.at])

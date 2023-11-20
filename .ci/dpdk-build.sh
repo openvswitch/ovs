@@ -38,7 +38,8 @@ function build_dpdk()
     # any DPDK driver.
     # check-dpdk unit tests requires testpmd and some net/ driver.
     DPDK_OPTS="$DPDK_OPTS -Denable_apps=test-pmd"
-    DPDK_OPTS="$DPDK_OPTS -Denable_drivers=net/null,net/tap,net/virtio"
+    enable_drivers="net/null,net/af_xdp,net/tap,net/virtio"
+    DPDK_OPTS="$DPDK_OPTS -Denable_drivers=$enable_drivers"
 
     # Install DPDK using prefix.
     DPDK_OPTS="$DPDK_OPTS --prefix=$(pwd)/build"

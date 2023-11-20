@@ -1,6 +1,3 @@
-m4_define([CONFIGURE_VETH_OFFLOADS],
-   [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])])
-
 AT_BANNER([OVS-DPDK unit tests])
 
 dnl CHECK_MEMPOOL_PARAM([mtu], [numa], [+line])

@@ -127,3 +127,80 @@ m4_define([OVS_DPDK_STOP_TESTPMD],
   [AT_CHECK([kill `cat testpmd.pid`])
    OVS_WAIT([kill -0 `cat testpmd.pid`], [kill -9 `cat testpmd.pid`])
 ])
+
+
+# OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [dbinit-aux-args])
+#
+# Creates a database and starts ovsdb-server, starts ovs-vswitchd
+# connected to that database, calls ovs-vsctl to create a bridge named
+# br0 with predictable settings, passing 'vsctl-args' as additional
+# commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
+# output (e.g. because it includes "create" commands) then 'vsctl-output'
+# specifies the expected output after filtering through uuidfilt.
+# 'dbinit-aux-args' are passed as additional commands to 'ovs-vsctl init'
+# before starting ovs-vswitchd.
+m4_define([OVS_TRAFFIC_VSWITCHD_START],
+  [
+   OVS_DPDK_PRE_CHECK()
+   OVS_WAIT_WHILE([ip link show ovs-netdev])
+   dnl For functional tests, no need for DPDK PCI probing.
+   OVS_DPDK_START([--no-pci], [--disable-system], [$3])
+   dnl Add bridges, ports, etc.
+   OVS_WAIT_WHILE([ip link show br0])
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
+])
+
+
+# OVS_TRAFFIC_VSWITCHD_STOP([ALLOWLIST], [extra_cmds])
+#
+# Gracefully stops ovs-vswitchd and ovsdb-server, checking their log files
+# for messages with severity WARN or higher and signaling an error if any
+# is present.  The optional ALLOWLIST may contain shell-quoted "sed"
+# commands to delete any warnings that are actually expected, e.g.:
+#
+#   OVS_TRAFFIC_VSWITCHD_STOP(["/expected error/d"])
+#
+# 'extra_cmds' are shell commands to be executed after OVS_VSWITCHD_STOP() is
+# invoked. They can be used to perform additional cleanups such as name space
+# removal.
+m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
+  [OVS_DPDK_STOP_VSWITCHD([$1])
+   AT_CHECK([:; $2])
+])
+
+
+# Plug a veth into OVS via DPDK net/af_xdp.
+m4_define([ADD_VETH],
+    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1 || return 77])
+      CONFIGURE_VETH_OFFLOADS([$1])
+      AT_CHECK([ip link set $1 netns $2])
+      AT_CHECK([ip link set dev ovs-$1 up])
+      AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
+                set interface ovs-$1 external-ids:iface-id="$1" -- \
+                set interface ovs-$1 type=dpdk -- \
+                set interface ovs-$1 options:dpdk-devargs=net_af_xdp$1,iface=ovs-$1])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
+      NS_CHECK_EXEC([$2], [ip link set dev $1 up])
+      if test -n "$5"; then
+        NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
+      fi
+      if test -n "$6"; then
+        NS_CHECK_EXEC([$2], [ip route add default via $6])
+      fi
+      on_exit 'ip link del ovs-$1'
+    ]
+)
+
+
+m4_define([OVS_CHECK_8021AD],
+    [AT_SKIP_IF([:])])
+
+
+m4_define([OVS_CHECK_TC_QDISC],
+    [AT_SKIP_IF([:])])
+
+
+m4_define([CONFIGURE_VETH_OFFLOADS],
+    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])
+     AT_CHECK([ethtool -K $1 txvlan off], [0], [ignore], [ignore])]
+)
