@@ -22,6 +22,9 @@ function install_dpdk()
     # Export the following path for pkg-config to find the .pc file.
     export PKG_CONFIG_PATH=$DPDK_LIB/pkgconfig/:$PKG_CONFIG_PATH
 
+    # Expose dpdk binaries.
+    export PATH=$(pwd)/dpdk-dir/build/bin:$PATH
+
     if [ ! -f "${VERSION_FILE}" ]; then
         echo "Could not find DPDK in $(pwd)/dpdk-dir"
         return 1
@@ -113,7 +116,7 @@ fi
 
 OPTS="${EXTRA_OPTS} ${OPTS} $*"
 
-if [ "$TESTSUITE" ]; then
+if [ "$TESTSUITE" = 'test' ]; then
     # 'distcheck' will reconfigure with required options.
     # Now we only need to prepare the Makefile without sparse-wrapped CC.
     configure_ovs
@@ -123,6 +126,16 @@ if [ "$TESTSUITE" ]; then
         TESTSUITEFLAGS=-j4 RECHECK=yes
 else
     build_ovs
+    for testsuite in $TESTSUITE; do
+        run_as_root=
+        if [ "${testsuite##*dpdk}" != "$testsuite" ]; then
+            sudo sh -c 'echo 1024 > /proc/sys/vm/nr_hugepages' || true
+            [ "$(cat /proc/sys/vm/nr_hugepages)" = '1024' ]
+            export DPDK_EAL_OPTIONS="--lcores 0@1,1@1,2@1"
+            run_as_root="sudo -E PATH=$PATH"
+        fi
+        $run_as_root make $testsuite TESTSUITEFLAGS=-j4 RECHECK=yes
+    done
 fi
 
 exit 0

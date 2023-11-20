@@ -35,9 +35,10 @@ function build_dpdk()
     DPDK_OPTS="$DPDK_OPTS -Ddeveloper_mode=disabled"
 
     # OVS compilation and "normal" unit tests (run in the CI) do not depend on
-    # any DPDK driver being present.
-    # We can disable all drivers to save compilation time.
-    DPDK_OPTS="$DPDK_OPTS -Ddisable_drivers=*/*"
+    # any DPDK driver.
+    # check-dpdk unit tests requires testpmd and some net/ driver.
+    DPDK_OPTS="$DPDK_OPTS -Denable_apps=test-pmd"
+    DPDK_OPTS="$DPDK_OPTS -Denable_drivers=net/null,net/tap,net/virtio"
 
     # Install DPDK using prefix.
     DPDK_OPTS="$DPDK_OPTS --prefix=$(pwd)/build"

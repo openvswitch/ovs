@@ -123,10 +123,10 @@ jobs:
             opts:         --enable-shared
 
           - compiler:     gcc
-            testsuite:    test
+            testsuite:    check check-dpdk
             dpdk:         dpdk
           - compiler:     clang
-            testsuite:    test
+            testsuite:    check check-dpdk
             dpdk:         dpdk
 
           - compiler:     gcc
@@ -213,7 +213,8 @@ jobs:
         mkdir logs
         cp config.log ./logs/
         cp -r ./*/_build/sub/tests/testsuite.* ./logs/ || true
-        tar -czvf logs.tgz logs/
+        sudo cp -r ./tests/*testsuite.* ./logs/ || true
+        sudo tar -czvf logs.tgz logs/
 
     - name: upload logs on failure
       if: failure() || cancelled()
