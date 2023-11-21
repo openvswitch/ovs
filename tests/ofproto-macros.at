@@ -260,6 +260,7 @@ check_logs () {
 /ovs_rcu.*blocked [[0-9]]* ms waiting for .* to quiesce/d
 /Dropped [[0-9]]* log messages/d
 /setting extended ack support failed/d
+/ETHTOOL_GSSET_INFO/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" ${logs}

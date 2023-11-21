@@ -558,6 +558,7 @@ static bool netdev_linux_miimon_enabled(void);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
 static int netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup);
+static void netdev_linux_set_ol(struct netdev *netdev);
 
 static bool
 is_tap_netdev(const struct netdev *netdev)
@@ -959,14 +960,12 @@ netdev_linux_construct(struct netdev *netdev_)
         return error;
     }
 
-    /* The socket interface doesn't offer the option to enable only
-     * csum offloading without TSO. */
     if (userspace_tso_enabled()) {
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_TSO;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_TCP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_UDP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_SCTP_CKSUM;
-        netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+        /* The AF_PACKET socket interface uses the same option to facilitate
+         * both csum and segmentation offloading. However, these features can
+         * be toggled off or on individually at the interface level. The netdev
+         * flags are set based on the features indicated by ethtool. */
+        netdev_linux_set_ol(netdev_);
     }
 
     error = get_flags(&netdev->up, &netdev->ifi_flags);
@@ -2379,6 +2378,143 @@ netdev_internal_get_stats(const struct netdev *netdev_,
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
+}
+
+static int
+netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
+{
+    union {
+        struct ethtool_sset_info hdr;
+        struct {
+            uint64_t pad[2];
+            uint32_t sset_len[1];
+        };
+    } sset_info;
+    int error;
+
+    sset_info.hdr.cmd = ETHTOOL_GSSET_INFO;
+    sset_info.hdr.reserved = 0;
+    sset_info.hdr.sset_mask = 1ULL << ETH_SS_FEATURES;
+
+    error = netdev_linux_do_ethtool(netdev_get_name(&netdev->up),
+                                    (struct ethtool_cmd *) &sset_info,
+                                    ETHTOOL_GSSET_INFO, "ETHTOOL_GSSET_INFO");
+    if (error) {
+        return error;
+    }
+    if (sset_info.hdr.sset_mask & (1ULL << ETH_SS_FEATURES)) {
+        *len = sset_info.sset_len[0];
+        return 0;
+    } else {
+        /* ETH_SS_FEATURES is not supported. */
+        return -EOPNOTSUPP;
+    }
+}
+
+
+static int
+netdev_linux_read_definitions(struct netdev_linux *netdev,
+                              struct ethtool_gstrings **pstrings)
+{
+    struct ethtool_gstrings *strings = NULL;
+    uint32_t len = 0;
+    int error = 0;
+
+    error = netdev_linux_read_stringset_info(netdev, &len);
+    if (error || !len) {
+        return error;
+    }
+    strings = xzalloc(sizeof *strings + len * ETH_GSTRING_LEN);
+
+    strings->cmd = ETHTOOL_GSTRINGS;
+    strings->string_set = ETH_SS_FEATURES;
+    strings->len = len;
+    error = netdev_linux_do_ethtool(netdev_get_name(&netdev->up),
+                                    (struct ethtool_cmd *) strings,
+                                    ETHTOOL_GSTRINGS, "ETHTOOL_GSTRINGS");
+    if (error) {
+        goto out;
+    }
+
+    for (int i = 0; i < len; i++) {
+        strings->data[(i + 1) * ETH_GSTRING_LEN - 1] = 0;
+    }
+
+    *pstrings = strings;
+
+    return 0;
+out:
+    *pstrings = NULL;
+    free(strings);
+    return error;
+}
+
+static void
+netdev_linux_set_ol(struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct ethtool_gfeatures *features = NULL;
+    struct ethtool_gstrings *names = NULL;
+    int error;
+
+    COVERAGE_INC(netdev_get_ethtool);
+
+    error = netdev_linux_read_definitions(netdev, &names);
+    if (error) {
+        return;
+    }
+
+    features = xzalloc(sizeof *features +
+                       DIV_ROUND_UP(names->len, 32) *
+                       sizeof features->features[0]);
+
+    features->cmd = ETHTOOL_GFEATURES;
+    features->size = DIV_ROUND_UP(names->len, 32);
+    error = netdev_linux_do_ethtool(netdev_get_name(netdev_),
+                                    (struct ethtool_cmd *) features,
+                                    ETHTOOL_GFEATURES, "ETHTOOL_GFEATURES");
+
+    if (error) {
+        goto out;
+    }
+
+#define FEATURE_WORD(blocks, index, field)  ((blocks)[(index) / 32U].field)
+#define FEATURE_FIELD_FLAG(index)       (1U << (index) % 32U)
+#define FEATURE_BIT_IS_SET(blocks, index, field)        \
+    (FEATURE_WORD(blocks, index, field) & FEATURE_FIELD_FLAG(index))
+
+    netdev->up.ol_flags = 0;
+    static const struct {
+        char *string;
+        uint32_t value;
+    } t_list[] = {
+        {"tx-checksum-ipv4", NETDEV_TX_OFFLOAD_IPV4_CKSUM |
+                             NETDEV_TX_OFFLOAD_TCP_CKSUM |
+                             NETDEV_TX_OFFLOAD_UDP_CKSUM},
+        {"tx-checksum-ipv6", NETDEV_TX_OFFLOAD_TCP_CKSUM |
+                             NETDEV_TX_OFFLOAD_UDP_CKSUM},
+        {"tx-checksum-ip-generic", NETDEV_TX_OFFLOAD_IPV4_CKSUM |
+                                   NETDEV_TX_OFFLOAD_TCP_CKSUM |
+                                   NETDEV_TX_OFFLOAD_UDP_CKSUM},
+        {"tx-checksum-sctp", NETDEV_TX_OFFLOAD_SCTP_CKSUM},
+        {"tx-tcp-segmentation", NETDEV_TX_OFFLOAD_TCP_TSO},
+    };
+
+    for (int j = 0; j < ARRAY_SIZE(t_list); j++) {
+        for (int i = 0; i < names->len; i++) {
+            char *name = (char *) names->data + i * ETH_GSTRING_LEN;
+            if (strcmp(t_list[j].string, name) == 0) {
+                if (FEATURE_BIT_IS_SET(features->features, i, active)) {
+                    netdev_->ol_flags |= t_list[j].value;
+                }
+                break;
+            }
+        }
+    }
+
+out:
+    free(names);
+    free(features);
 }
 
 static void
