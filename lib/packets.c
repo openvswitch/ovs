@@ -427,7 +427,7 @@ add_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse,
     }
 
     if (!l3_encap) {
-        struct mpls_hdr *header = dp_packet_push_uninit(packet, MPLS_HLEN);
+        struct mpls_hdr *header = dp_packet_resize_l2(packet, MPLS_HLEN);
 
         put_16aligned_be32(&header->mpls_lse, lse);
         packet->l2_5_ofs = 0;
@@ -513,7 +513,7 @@ push_nsh(struct dp_packet *packet, const struct nsh_hdr *nsh_hdr_src)
             OVS_NOT_REACHED();
     }
 
-    nsh = (struct nsh_hdr *) dp_packet_push_uninit(packet, length);
+    nsh = (struct nsh_hdr *) dp_packet_resize_l2(packet, length);
     memcpy(nsh, nsh_hdr_src, length);
     nsh->next_proto = next_proto;
     packet->packet_type = htonl(PT_NSH);

@@ -118,6 +118,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dpctl.h \
 	lib/dp-packet.h \
 	lib/dp-packet.c \
+	lib/dp-packet-gso.c \
+	lib/dp-packet-gso.h \
 	lib/dpdk.h \
 	lib/dpif-netdev-extract-study.c \
 	lib/dpif-netdev-lookup.h \

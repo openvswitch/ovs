@@ -1131,6 +1131,13 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
+/* Resets TCP Segmentation flag in packet 'p'. */
+static inline void
+dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_TCP_SEG;
+}
+
 /* Returns 'true' if the IP header has good integrity and the
  * checksum in it is complete. */
 static inline bool

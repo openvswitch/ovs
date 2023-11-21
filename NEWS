@@ -15,6 +15,10 @@ Post-v3.2.0
        a.k.a. 'configured' values, can be found in the 'status' column of
        the Interface table, i.e. with 'ovs-vsctl get interface <..> status'.
        Reported names adjusted accordingly.
+   - Userspace datapath:
+     * Added support for Generic Segmentation Offloading for the cases where
+       TSO is enabled but not supported by an egress interface (except for
+       tunnel interfaces).
 
 
 v3.2.0 - 17 Aug 2023

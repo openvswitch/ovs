@@ -2471,6 +2471,7 @@ static bool
 netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 {
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
+    struct tcp_header *th;
 
     if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_L4_MASK
                             | RTE_MBUF_F_TX_TCP_SEG))) {
@@ -2483,27 +2484,36 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     mbuf->l4_len = 0;
     mbuf->outer_l2_len = 0;
     mbuf->outer_l3_len = 0;
+    th = dp_packet_l4(pkt);
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
-        struct tcp_header *th = dp_packet_l4(pkt);
-        int hdr_len;
-
         if (!th) {
             VLOG_WARN_RL(&rl, "%s: TCP Segmentation without L4 header"
                          " pkt len: %"PRIu32"", dev->up.name, mbuf->pkt_len);
             return false;
         }
+    }
+
+    if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_CKSUM) {
+        if (!th) {
+            VLOG_WARN_RL(&rl, "%s: TCP offloading without L4 header"
+                         " pkt len: %"PRIu32"", dev->up.name, mbuf->pkt_len);
+            return false;
+        }
 
         mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
-        mbuf->ol_flags |= RTE_MBUF_F_TX_TCP_CKSUM;
-        hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
         mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
-        if (OVS_UNLIKELY((hdr_len + mbuf->tso_segsz) > dev->max_packet_len)) {
-            VLOG_WARN_RL(&rl, "%s: Oversized TSO packet. "
-                         "hdr: %"PRIu32", gso: %"PRIu32", max len: %"PRIu32"",
-                         dev->up.name, hdr_len, mbuf->tso_segsz,
-                         dev->max_packet_len);
-            return false;
+
+        if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
+            int hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
+            if (OVS_UNLIKELY((hdr_len +
+                              mbuf->tso_segsz) > dev->max_packet_len)) {
+                VLOG_WARN_RL(&rl, "%s: Oversized TSO packet. hdr: %"PRIu32", "
+                             "gso: %"PRIu32", max len: %"PRIu32"",
+                             dev->up.name, hdr_len, mbuf->tso_segsz,
+                             dev->max_packet_len);
+                return false;
+            }
         }
 
         if (mbuf->ol_flags & RTE_MBUF_F_TX_IPV4) {
@@ -2891,6 +2901,7 @@ dpdk_copy_dp_packet_to_mbuf(struct rte_mempool *mp, struct dp_packet *pkt_orig)
     mbuf_dest->packet_type = pkt_orig->mbuf.packet_type;
     mbuf_dest->ol_flags |= (pkt_orig->mbuf.ol_flags &
                             ~(RTE_MBUF_F_EXTERNAL | RTE_MBUF_F_INDIRECT));
+    mbuf_dest->tso_segsz = pkt_orig->mbuf.tso_segsz;
 
     memcpy(&pkt_dest->l2_pad_size, &pkt_orig->l2_pad_size,
            sizeof(struct dp_packet) - offsetof(struct dp_packet, l2_pad_size));
@@ -2949,11 +2960,20 @@ netdev_dpdk_common_send(struct netdev *netdev, struct dp_packet_batch *batch,
     struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     size_t cnt, pkt_cnt = dp_packet_batch_size(batch);
+    struct dp_packet *packet;
+    bool need_copy = false;
 
     memset(stats, 0, sizeof *stats);
 
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        if (packet->source != DPBUF_DPDK) {
+            need_copy = true;
+            break;
+        }
+    }
+
     /* Copy dp-packets to mbufs. */
-    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
+    if (OVS_UNLIKELY(need_copy)) {
         cnt = dpdk_copy_batch_to_mbuf(netdev, batch);
         stats->tx_failure_drops += pkt_cnt - cnt;
         pkt_cnt = cnt;

@@ -35,6 +35,7 @@
 #include "coverage.h"
 #include "dpif.h"
 #include "dp-packet.h"
+#include "dp-packet-gso.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -56,6 +57,7 @@
 #include "svec.h"
 #include "openvswitch/vlog.h"
 #include "flow.h"
+#include "userspace-tso.h"
 #include "util.h"
 #ifdef __linux__
 #include "tc.h"
@@ -67,8 +69,9 @@ COVERAGE_DEFINE(netdev_received);
 COVERAGE_DEFINE(netdev_sent);
 COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
-COVERAGE_DEFINE(netdev_send_prepare_drops);
 COVERAGE_DEFINE(netdev_push_header_drops);
+COVERAGE_DEFINE(netdev_soft_seg_good);
+COVERAGE_DEFINE(netdev_soft_seg_drops);
 
 struct netdev_saved_flags {
     struct netdev *netdev;
@@ -792,60 +795,84 @@ netdev_get_pt_mode(const struct netdev *netdev)
             : NETDEV_PT_LEGACY_L2);
 }
 
-/* Check if a 'packet' is compatible with 'netdev_flags'.
- * If a packet is incompatible, return 'false' with the 'errormsg'
- * pointing to a reason. */
-static bool
-netdev_send_prepare_packet(const uint64_t netdev_flags,
-                           struct dp_packet *packet, char **errormsg)
+/* Attempts to segment GSO flagged packets and send them as multiple bundles.
+ * This function is only used if at least one packet in the current batch is
+ * flagged for TSO and the netdev does not support this.
+ *
+ * The return value is 0 if all batches sent successfully, and an error code
+ * from netdev_class->send() if at least one batch failed to send. */
+static int
+netdev_send_tso(struct netdev *netdev, int qid,
+                struct dp_packet_batch *batch, bool concurrent_txq)
 {
-    if (dp_packet_hwol_is_tso(packet)
-        && !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
-            /* Fall back to GSO in software. */
-            VLOG_ERR_BUF(errormsg, "No TSO support");
-            return false;
-    }
-
-    /* Packet with IP csum offloading enabled was received with verified csum.
-     * Leave the IP csum offloading enabled even with good checksum to the
-     * netdev to decide what would be the best to do.
-     * Provide a software fallback in case the device doesn't support IP csum
-     * offloading. Note: Encapsulated packet must have the inner IP header
-     * csum already calculated.
-     * Packet with L4 csum offloading enabled was received with verified csum.
-     * Leave the L4 csum offloading enabled even with good checksum for the
-     * netdev to decide what would be the best to do.
-     * Netdev that requires pseudo header csum needs to calculate that.
-     * Provide a software fallback in case the netdev doesn't support L4 csum
-     * offloading. Note: Encapsulated packet must have the inner L4 header
-     * csum already calculated. */
-    dp_packet_ol_send_prepare(packet, netdev_flags);
-
-    return true;
-}
-
-/* Check if each packet in 'batch' is compatible with 'netdev' features,
- * otherwise either fall back to software implementation or drop it. */
-static void
-netdev_send_prepare_batch(const struct netdev *netdev,
-                          struct dp_packet_batch *batch)
-{
+    struct dp_packet_batch *batches;
     struct dp_packet *packet;
-    size_t i, size = dp_packet_batch_size(batch);
+    int retval = 0;
+    int n_packets;
+    int n_batches;
+    int error;
 
-    DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
-        char *errormsg = NULL;
-
-        if (netdev_send_prepare_packet(netdev->ol_flags, packet, &errormsg)) {
-            dp_packet_batch_refill(batch, packet, i);
+    /* Calculate the total number of packets in the batch after
+     * the segmentation. */
+    n_packets = 0;
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        if (dp_packet_hwol_is_tso(packet)) {
+            n_packets += dp_packet_gso_nr_segs(packet);
         } else {
-            dp_packet_delete(packet);
-            COVERAGE_INC(netdev_send_prepare_drops);
-            VLOG_WARN_RL(&rl, "%s: Packet dropped: %s",
-                         netdev_get_name(netdev), errormsg);
-            free(errormsg);
+            n_packets++;
         }
     }
+
+    if (!n_packets) {
+        return 0;
+    }
+
+    /* Allocate enough batches to store all the packets in order. */
+    n_batches = DIV_ROUND_UP(n_packets, NETDEV_MAX_BURST);
+    batches = xmalloc(n_batches * sizeof *batches);
+
+    struct dp_packet_batch *curr_batch = batches;
+    struct dp_packet_batch *last_batch = &batches[n_batches - 1];
+    for (curr_batch = batches; curr_batch <= last_batch; curr_batch++) {
+        dp_packet_batch_init(curr_batch);
+    }
+
+    /* Do the packet segmentation if TSO is flagged. */
+    size_t size = dp_packet_batch_size(batch);
+    size_t k;
+    curr_batch = batches;
+    DP_PACKET_BATCH_REFILL_FOR_EACH (k, size, packet, batch) {
+        if (dp_packet_hwol_is_tso(packet)) {
+            if (dp_packet_gso(packet, &curr_batch)) {
+                COVERAGE_INC(netdev_soft_seg_good);
+            } else {
+                COVERAGE_INC(netdev_soft_seg_drops);
+            }
+            dp_packet_delete(packet);
+        } else {
+            if (dp_packet_batch_is_full(curr_batch)) {
+                curr_batch++;
+            }
+
+            dp_packet_batch_add(curr_batch, packet);
+        }
+    }
+
+    for (curr_batch = batches; curr_batch <= last_batch; curr_batch++) {
+        DP_PACKET_BATCH_FOR_EACH (i, packet, curr_batch) {
+            dp_packet_ol_send_prepare(packet, netdev->ol_flags);
+        }
+
+        error = netdev->netdev_class->send(netdev, qid, curr_batch,
+                                           concurrent_txq);
+        if (!error) {
+            COVERAGE_INC(netdev_sent);
+        } else {
+            retval = error;
+        }
+    }
+    free(batches);
+    return retval;
 }
 
 /* Sends 'batch' on 'netdev'.  Returns 0 if successful (for every packet),
@@ -877,11 +904,21 @@ int
 netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
             bool concurrent_txq)
 {
+    const uint64_t netdev_flags = netdev->ol_flags;
+    struct dp_packet *packet;
     int error;
 
-    netdev_send_prepare_batch(netdev, batch);
-    if (OVS_UNLIKELY(dp_packet_batch_is_empty(batch))) {
-        return 0;
+    if (userspace_tso_enabled() &&
+        !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
+        DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+            if (dp_packet_hwol_is_tso(packet)) {
+                return netdev_send_tso(netdev, qid, batch, concurrent_txq);
+            }
+        }
+    }
+
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+        dp_packet_ol_send_prepare(packet, netdev_flags);
     }
 
     error = netdev->netdev_class->send(netdev, qid, batch, concurrent_txq);

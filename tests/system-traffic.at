@@ -2111,6 +2111,51 @@ recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:29, bytes
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - netdev offload software fallback])
+AT_SKIP_IF([test $HAVE_NC = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Test the case where only one side has all checksum and tso offload disabled.
+AT_CHECK([ethtool -K ovs-p1 tso off], [0], [ignore], [ignore])
+AT_CHECK([ethtool -K ovs-p1 sg off], [0], [ignore], [ignore])
+
+dnl Reinitialize.
+AT_CHECK([ovs-vsctl del-port ovs-p1])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p1])
+
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns1], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NETNS_DAEMONIZE([at_ns0], [nc -l 1234 > data_0], [nc1.pid])
+NETNS_DAEMONIZE([at_ns1], [nc -l 1234 > data_1], [nc2.pid])
+
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+on_exit 'rm -f payload.bin'
+
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT 10.1.1.2 1234 < payload.bin])
+NS_CHECK_EXEC([at_ns1], [nc $NC_EOF_OPT 10.1.1.1 1234 < payload.bin])
+
+dnl Wait until transfer completes.
+OVS_WAIT_WHILE([kill -0 $(cat nc1.pid) $(cat nc2.pid)])
+
+AT_CHECK([diff -q payload.bin data_0], [0])
+AT_CHECK([diff -q payload.bin data_1], [0])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([MPLS])
 
 AT_SETUP([mpls - encap header dp-support])
