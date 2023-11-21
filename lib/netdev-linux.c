@@ -539,7 +539,7 @@ static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
 static bool tap_supports_vnet_hdr = true;
 
 static int netdev_linux_parse_vnet_hdr(struct dp_packet *b);
-static void netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu);
+static int netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu);
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
@@ -1597,9 +1597,10 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_linux_sock_batch_send(int sock, int ifindex, bool tso, int mtu,
-                             struct dp_packet_batch *batch)
+netdev_linux_sock_batch_send(struct netdev *netdev_, int sock, int ifindex,
+                             bool tso, int mtu, struct dp_packet_batch *batch)
 {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     const size_t size = dp_packet_batch_size(batch);
     /* We don't bother setting most fields in sockaddr_ll because the
      * kernel ignores them for SOCK_RAW. */
@@ -1608,26 +1609,36 @@ netdev_linux_sock_batch_send(int sock, int ifindex, bool tso, int mtu,
 
     struct mmsghdr *mmsg = xmalloc(sizeof(*mmsg) * size);
     struct iovec *iov = xmalloc(sizeof(*iov) * size);
-
     struct dp_packet *packet;
+    int cnt = 0;
+
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
         if (tso) {
-            netdev_linux_prepend_vnet_hdr(packet, mtu);
-        }
+            int ret = netdev_linux_prepend_vnet_hdr(packet, mtu);
 
-        iov[i].iov_base = dp_packet_data(packet);
-        iov[i].iov_len = dp_packet_size(packet);
-        mmsg[i].msg_hdr = (struct msghdr) { .msg_name = &sll,
-                                            .msg_namelen = sizeof sll,
-                                            .msg_iov = &iov[i],
-                                            .msg_iovlen = 1 };
+            if (OVS_UNLIKELY(ret)) {
+                netdev->tx_dropped += 1;
+                VLOG_WARN_RL(&rl, "%s: Prepend vnet hdr failed, packet "
+                                  "dropped. %s", netdev_get_name(netdev_),
+                             ovs_strerror(ret));
+                continue;
+            }
+         }
+
+        iov[cnt].iov_base = dp_packet_data(packet);
+        iov[cnt].iov_len = dp_packet_size(packet);
+        mmsg[cnt].msg_hdr = (struct msghdr) { .msg_name = &sll,
+                                              .msg_namelen = sizeof sll,
+                                              .msg_iov = &iov[cnt],
+                                              .msg_iovlen = 1 };
+        cnt++;
     }
 
     int error = 0;
-    for (uint32_t ofs = 0; ofs < size; ) {
+    for (uint32_t ofs = 0; ofs < cnt;) {
         ssize_t retval;
         do {
-            retval = sendmmsg(sock, mmsg + ofs, size - ofs, 0);
+            retval = sendmmsg(sock, mmsg + ofs, cnt - ofs, 0);
             error = retval < 0 ? errno : 0;
         } while (error == EINTR);
         if (error) {
@@ -1669,7 +1680,14 @@ netdev_linux_tap_batch_send(struct netdev *netdev_, int mtu,
         int error;
 
         if (OVS_LIKELY(tap_supports_vnet_hdr)) {
-            netdev_linux_prepend_vnet_hdr(packet, mtu);
+            error = netdev_linux_prepend_vnet_hdr(packet, mtu);
+            if (OVS_UNLIKELY(error)) {
+                netdev->tx_dropped++;
+                VLOG_WARN_RL(&rl, "%s: Prepend vnet hdr failed, packet "
+                             "dropped. %s", netdev_get_name(netdev_),
+                             ovs_strerror(error));
+                continue;
+            }
         }
 
         size = dp_packet_size(packet);
@@ -1799,7 +1817,8 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
             goto free_batch;
         }
 
-        error = netdev_linux_sock_batch_send(sock, ifindex, tso, mtu, batch);
+        error = netdev_linux_sock_batch_send(netdev_, sock, ifindex, tso, mtu,
+                                             batch);
     } else {
         error = netdev_linux_tap_batch_send(netdev_, mtu, batch);
     }
@@ -7092,8 +7111,7 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
     switch (vnet->gso_type) {
     case VIRTIO_NET_HDR_GSO_TCPV4:
     case VIRTIO_NET_HDR_GSO_TCPV6:
-        /* FIXME: The packet has offloaded TCP segmentation. The gso_size
-         * is given and needs to be respected. */
+        dp_packet_set_tso_segsz(b, (OVS_FORCE uint16_t) vnet->gso_size);
         dp_packet_hwol_set_tcp_seg(b);
         break;
 
@@ -7115,18 +7133,32 @@ netdev_linux_parse_vnet_hdr(struct dp_packet *b)
     return ret;
 }
 
-static void
+/* Prepends struct virtio_net_hdr to packet 'b'.
+ * Returns 0 if successful, otherwise a positive errno value.
+ * Returns EMSGSIZE if the packet 'b' cannot be sent over MTU 'mtu'. */
+static int
 netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
 {
     struct virtio_net_hdr v;
     struct virtio_net_hdr *vnet = &v;
 
     if (dp_packet_hwol_is_tso(b)) {
-        uint16_t hdr_len = ((char *)dp_packet_l4(b) - (char *)dp_packet_eth(b))
-                            + TCP_HEADER_LEN;
+        uint16_t tso_segsz = dp_packet_get_tso_segsz(b);
+        struct tcp_header *tcp = dp_packet_l4(b);
+        int tcp_hdr_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
+        int hdr_len = ((char *) dp_packet_l4(b) - (char *) dp_packet_eth(b))
+                      + tcp_hdr_len;
+        int max_packet_len = mtu + ETH_HEADER_LEN + VLAN_HEADER_LEN;
+
+        if (OVS_UNLIKELY((hdr_len + tso_segsz) > max_packet_len)) {
+            VLOG_WARN_RL(&rl, "Oversized TSO packet. hdr_len: %"PRIu32", "
+                         "gso: %"PRIu16", max length: %"PRIu32".", hdr_len,
+                         tso_segsz, max_packet_len);
+            return EMSGSIZE;
+        }
 
         vnet->hdr_len = (OVS_FORCE __virtio16)hdr_len;
-        vnet->gso_size = (OVS_FORCE __virtio16)(mtu - hdr_len);
+        vnet->gso_size = (OVS_FORCE __virtio16)(tso_segsz);
         if (dp_packet_hwol_is_ipv4(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV4;
         } else if (dp_packet_hwol_tx_ipv6(b)) {
@@ -7216,4 +7248,5 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
     }
 
     dp_packet_push(b, vnet, sizeof *vnet);
+    return 0;
 }

@@ -34,6 +34,7 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     pkt_metadata_init(&b->md, 0);
     dp_packet_reset_cutlen(b);
     dp_packet_reset_offload(b);
+    dp_packet_set_tso_segsz(b, 0);
     /* Initialize implementation-specific fields of dp_packet. */
     dp_packet_init_specific(b);
     /* By default assume the packet type to be Ethernet. */
@@ -202,6 +203,8 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 
     *dp_packet_ol_flags_ptr(new_buffer) = *dp_packet_ol_flags_ptr(buffer);
     *dp_packet_ol_flags_ptr(new_buffer) &= DP_PACKET_OL_SUPPORTED_MASK;
+
+    dp_packet_set_tso_segsz(new_buffer, dp_packet_get_tso_segsz(buffer));
 
     if (dp_packet_rss_valid(buffer)) {
         dp_packet_set_rss_hash(new_buffer, dp_packet_get_rss_hash(buffer));

@@ -2486,6 +2486,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
         struct tcp_header *th = dp_packet_l4(pkt);
+        int hdr_len;
 
         if (!th) {
             VLOG_WARN_RL(&rl, "%s: TCP Segmentation without L4 header"
@@ -2495,7 +2496,15 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
 
         mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
         mbuf->ol_flags |= RTE_MBUF_F_TX_TCP_CKSUM;
+        hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;
         mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
+        if (OVS_UNLIKELY((hdr_len + mbuf->tso_segsz) > dev->max_packet_len)) {
+            VLOG_WARN_RL(&rl, "%s: Oversized TSO packet. "
+                         "hdr: %"PRIu32", gso: %"PRIu32", max len: %"PRIu32"",
+                         dev->up.name, hdr_len, mbuf->tso_segsz,
+                         dev->max_packet_len);
+            return false;
+        }
 
         if (mbuf->ol_flags & RTE_MBUF_F_TX_IPV4) {
             mbuf->ol_flags |= RTE_MBUF_F_TX_IP_CKSUM;
@@ -2770,7 +2779,8 @@ netdev_dpdk_filter_packet_len(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
     int cnt = 0;
     struct rte_mbuf *pkt;
 
-    /* Filter oversized packets, unless are marked for TSO. */
+    /* Filter oversized packets. The TSO packets are filtered out
+     * during the offloading preparation for performance reasons. */
     for (i = 0; i < pkt_cnt; i++) {
         pkt = pkts[i];
         if (OVS_UNLIKELY((pkt->pkt_len > dev->max_packet_len)
