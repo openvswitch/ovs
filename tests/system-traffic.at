@@ -1001,6 +1001,38 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - handling of geneve corrupted metadata])
+OVS_CHECK_GENEVE()
+
+OVS_TRAFFIC_VSWITCHD_START(
+    [_ADD_BR([br-underlay]) -- \
+     set bridge br0 other-config:hwaddr=f2:ff:00:00:00:01 -- \
+     set bridge br-underlay other-config:hwaddr=f2:ff:00:00:00:02])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24", f2:ff:00:00:00:03)
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([geneve], [br0], [at_gnv0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [vni 0], [address f2:ff:00:00:00:04])
+
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 03 08 00 45 00 00 52 00 01 00 00 40 11 1f f7 ac 1f 01 01 ac 1f 01 64 de c1 17 c1 00 3e 59 e9 01 00 65 58 00 00 00 00 00 03 00 02 f2 ff 00 00 00 01 f2 ff 00 00 00 04 08 00 45 00 00 1c 00 01 00 00 40 01 64 7a 0a 01 01 01 0a 01 01 64 08 00 f7 ff 00 00 00 00  > /dev/null])
+
+OVS_WAIT_UNTIL([grep -q 'Invalid Geneve tunnel metadata' ovs-vswitchd.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/Invalid Geneve tunnel metadata on bridge br0 while processing icmp,in_port=1,vlan_tci=0x0000,dl_src=f2:ff:00:00:00:04,dl_dst=f2:ff:00:00:00:01,nw_src=10.1.1.1,nw_dst=10.1.1.100,nw_tos=0,nw_ecn=0,nw_ttl=64,nw_frag=no,icmp_type=8,icmp_code=0/d
+/Unable to parse geneve options/d"])
+AT_CLEANUP
+
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
 OVS_CHECK_MIN_KERNEL(3, 10)
 
