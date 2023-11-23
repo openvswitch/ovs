@@ -1736,12 +1736,12 @@ test_key_and_mask(struct match *match)
     return 0;
 }
 
-static void
+static int
 flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
                         struct flow_tnl *tnl_mask)
 {
     struct geneve_opt *opt, *opt_mask;
-    int len, cnt = 0;
+    int tot_opt_len, len, cnt = 0;
 
     /* 'flower' always has an exact match on tunnel metadata length, so having
      * it in a wrong format is not acceptable unless it is empty. */
@@ -1757,7 +1757,7 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
             memset(&tnl_mask->metadata.present.map, 0,
                    sizeof tnl_mask->metadata.present.map);
         }
-        return;
+        return 0;
     }
 
     tnl_mask->flags &= ~FLOW_TNL_F_UDPIF;
@@ -1771,7 +1771,7 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
            sizeof tnl_mask->metadata.present.len);
 
     if (!tnl->metadata.present.len) {
-        return;
+        return 0;
     }
 
     memcpy(flower->key.tunnel.metadata.opts.gnv, tnl->metadata.opts.gnv,
@@ -1785,7 +1785,16 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
      * also not masks, but actual lengths in the 'flower' structure. */
     len = flower->key.tunnel.metadata.present.len;
     while (len) {
+        if (len < sizeof *opt) {
+            return EOPNOTSUPP;
+        }
+
         opt = &flower->key.tunnel.metadata.opts.gnv[cnt];
+        tot_opt_len = sizeof *opt + opt->length * 4;
+        if (len < tot_opt_len) {
+            return EOPNOTSUPP;
+        }
+
         opt_mask = &flower->mask.tunnel.metadata.opts.gnv[cnt];
 
         opt_mask->length = opt->length;
@@ -1793,6 +1802,8 @@ flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
         cnt += sizeof(struct geneve_opt) / 4 + opt->length;
         len -= sizeof(struct geneve_opt) + opt->length * 4;
     }
+
+    return 0;
 }
 
 static void
@@ -2230,7 +2241,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         tnl_mask->flags &= ~(FLOW_TNL_F_DONT_FRAGMENT | FLOW_TNL_F_CSUM);
 
         if (!strcmp(netdev_get_type(netdev), "geneve")) {
-            flower_match_to_tun_opt(&flower, tnl, tnl_mask);
+            err = flower_match_to_tun_opt(&flower, tnl, tnl_mask);
+            if (err) {
+                VLOG_WARN_RL(&warn_rl, "Unable to parse geneve options");
+                return err;
+            }
         }
         flower.tunnel = true;
     } else {
