@@ -5061,7 +5061,7 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 1, ofctl_dump_ipfix_flow, OVS_RO },
 
     { "ct-flush-zone", "switch zone",
-      2, 2, ofctl_ct_flush_zone, OVS_RO },
+      2, 2, ofctl_ct_flush_zone, OVS_RW },
 
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse, OVS_RW },
