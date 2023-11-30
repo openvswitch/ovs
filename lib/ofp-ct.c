@@ -31,6 +31,9 @@
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/packets.h"
+#include "openvswitch/vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ofp_ct);
 
 static void
 ofp_ct_tuple_format(struct ds *ds, const struct ofp_ct_tuple *tuple,
@@ -286,6 +289,10 @@ ofp_ct_tuple_decode_nested(struct ofpbuf *property, struct ofp_ct_tuple *tuple,
         case NXT_CT_TUPLE_ICMP_CODE:
             error = ofpprop_parse_u8(&inner, &tuple->icmp_code);
             break;
+
+        default:
+            error = OFPPROP_UNKNOWN(false, "NXT_CT_TUPLE", type);
+            break;
         }
 
         if (error) {
@@ -376,6 +383,10 @@ ofp_ct_match_decode(struct ofp_ct_match *match, bool *with_zone,
                 *with_zone = true;
             }
             error = ofpprop_parse_u16(&property, zone_id);
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(false, "NXT_CT_FLUSH", type);
             break;
         }
 
