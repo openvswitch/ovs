@@ -4180,4 +4180,22 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 01 00 20 00 00 00 00 \
 00 00 00 14 00 00 00 00 00 00 00 00 00 00 ff ff 0a 0a 00 02 00 00 00 00 \
 " | grep -q OFPBPC_BAD_VALUE], [0])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 20 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 80 00 08 00 00 00 00 \
+"| grep -q OFPBPC_BAD_TYPE], [0], [ignore], [stderr])
+AT_CHECK([grep -q "unknown NXT_CT_FLUSH property type 128" stderr], [0])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 28 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 00 00 10 00 00 00 00 \
+00 80 00 08 00 50 00 00 \
+"| grep -q OFPBPC_BAD_TYPE], [0], [ignore], [stderr])
+AT_CHECK([grep -q "unknown NXT_CT_TUPLE property type 128" stderr], [0])
+
 AT_CLEANUP
