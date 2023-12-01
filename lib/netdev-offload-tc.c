@@ -1627,7 +1627,9 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_TP_SRC: {
-            action->encap.tp_src = nl_attr_get_be16(tun_attr);
+            /* There is no corresponding attribute in TC. */
+            VLOG_DBG_RL(&rl, "unsupported tunnel key attribute TP_SRC");
+            return EOPNOTSUPP;
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_TP_DST: {
