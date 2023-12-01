@@ -333,6 +333,50 @@ set(tunnel(tun_id=0x5,dst=4.4.4.4,ttl=64,flags(df|key))),1
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel - set_tunnel VXLAN])
+OVS_VSWITCHD_START([dnl
+    add-port br0 p1 -- set Interface p1 type=vxlan options:key=flow \
+        options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=vxlan options:key=flow \
+        options:remote_ip=2.2.2.2 ofport_request=2 \
+    -- add-port br0 p3 -- set Interface p3 type=vxlan options:key=flow \
+        options:remote_ip=3.3.3.3 ofport_request=3 \
+    -- add-port br0 p4 -- set Interface p4 type=vxlan options:key=flow \
+        options:remote_ip=4.4.4.4 ofport_request=4])
+AT_DATA([flows.txt], [dnl
+actions=set_tunnel:1,output:1,set_tunnel:2,output:2,set_tunnel:3,output:3,set_tunnel:5,output:4
+])
+
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+    br0 65534/100: (dummy-internal)
+    p1 1/4789: (vxlan: key=flow, remote_ip=1.1.1.1)
+    p2 2/4789: (vxlan: key=flow, remote_ip=2.2.2.2)
+    p3 3/4789: (vxlan: key=flow, remote_ip=3.3.3.3)
+    p4 4/4789: (vxlan: key=flow, remote_ip=4.4.4.4)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x1,dst=1.1.1.1,ttl=64,tp_dst=4789,flags(df|key))),4789,dnl
+set(tunnel(tun_id=0x2,dst=2.2.2.2,ttl=64,tp_dst=4789,flags(df|key))),4789,dnl
+set(tunnel(tun_id=0x3,dst=3.3.3.3,ttl=64,tp_dst=4789,flags(df|key))),4789,dnl
+set(tunnel(tun_id=0x5,dst=4.4.4.4,ttl=64,tp_dst=4789,flags(df|key))),4789
+])
+
+dnl With pre-existing tunnel metadata.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x1,src=1.1.1.1,dst=5.5.5.5,tp_src=12345,tp_dst=4789,ttl=64,flags(key)),in_port(4789),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x2,dst=2.2.2.2,ttl=64,tp_dst=4789,flags(df|key))),4789,dnl
+set(tunnel(tun_id=0x3,dst=3.3.3.3,ttl=64,tp_dst=4789,flags(df|key))),4789,dnl
+set(tunnel(tun_id=0x5,dst=4.4.4.4,ttl=64,tp_dst=4789,flags(df|key))),4789
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - key])
 OVS_VSWITCHD_START([dnl
     add-port br0 p1 -- set Interface p1 type=gre options:key=1 \
