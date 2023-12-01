@@ -432,6 +432,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
             flow->tunnel.ipv6_dst = in6addr_any;
         }
     }
+    flow->tunnel.tp_src = 0; /* Do not carry from a previous tunnel. */
     flow->tunnel.tp_dst = cfg->dst_port;
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;
