@@ -225,7 +225,8 @@ struct tc_action {
         struct {
             bool id_present;
             ovs_be64 id;
-            ovs_be16 tp_src;
+            /* ovs_be16 tp_src;  Could have been here, but there is no
+             * TCA_TUNNEL_KEY_ENC_ attribute for it in the kernel. */
             ovs_be16 tp_dst;
             uint8_t tos;
             uint8_t ttl;
