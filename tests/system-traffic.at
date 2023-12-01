@@ -903,6 +903,83 @@ ovs-pcap p0.pcap
 AT_CHECK([ovs-pcap p0.pcap | grep -Eq "^[[[:xdigit:]]]{24}86dd60000000003a1140fc000000000000000000000000000100fc000000000000000000000000000001[[[:xdigit:]]]{4}17c1003a[[[:xdigit:]]]{4}0000655800000000fffffffffffffa163e949d8008060001080006040001[[[:xdigit:]]]{12}0a0000f40000000000000a0000fe$"])
 AT_CLEANUP
 
+AT_SETUP([datapath - bridging two geneve tunnels])
+OVS_CHECK_TUNNEL_TSO()
+OVS_CHECK_GENEVE()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay-0])
+ADD_BR([br-underlay-1])
+
+ADD_NAMESPACES(at_ns0)
+ADD_NAMESPACES(at_ns1)
+
+dnl Set up underlay link from host into the namespaces using veth pairs.
+ADD_VETH(p0, at_ns0, br-underlay-0, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay-0 "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay-0 up])
+
+ADD_VETH(p1, at_ns1, br-underlay-1, "172.31.2.1/24")
+AT_CHECK([ip addr add dev br-underlay-1 "172.31.2.100/24"])
+AT_CHECK([ip link set dev br-underlay-1 up])
+
+dnl Set up two OVS tunnel endpoints in a root namespace and two native
+dnl linux devices inside the test namespaces.
+dnl
+dnl  ns_gnv0                          |               ns_gnv1
+dnl  ip:        10.1.1.1/24           |               ip:        10.1.1.2/24
+dnl  remote_ip: 172.31.1.100          |               remote_ip: 172.31.2.100
+dnl          |                        |                  |
+dnl          |                        |                  |
+dnl  p0                               |               p1
+dnl  ip: 172.31.1.1/24                |               ip: 172.31.2.1/24
+dnl          |                  NS0   |   NS1            |
+dnl ---------|------------------------+------------------|--------------------
+dnl          |                                           |
+dnl       br-underlay-0:                           br-underlay-1:
+dnl       ip: 172.31.1.100/24                      ip: 172.31.2.100/24
+dnl         ovs-p0                                   ovs-p1
+dnl          |                                           |
+dnl          |            br0                            |
+dnl       encap/decap --- ip: 10.1.1.100/24 --------- encap/decap
+dnl                         at_gnv0
+dnl                           remote_ip: 172.31.1.1
+dnl                         at_gnv1
+dnl                           remote_ip: 172.31.2.1
+dnl
+ADD_OVS_TUNNEL([geneve], [br0], [at_gnv0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [vni 0])
+ADD_OVS_TUNNEL([geneve], [br0], [at_gnv1], [172.31.2.1], [10.1.1.101/24])
+ADD_NATIVE_TUNNEL([geneve], [ns_gnv1], [at_ns1], [172.31.2.100], [10.1.1.2/24],
+                  [vni 0])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay-0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay-1 "actions=normal"])
+
+dnl First, check both underlays.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 172.31.2.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Now, check the overlay with different packet sizes.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
 OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
