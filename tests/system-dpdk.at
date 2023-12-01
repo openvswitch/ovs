@@ -511,25 +511,19 @@ dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
 
 dnl Check default MTU value in the datapath
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-1500
-])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [1500])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [9000])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
-
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-9000
-])
 
 
 dnl Clean up
@@ -555,7 +549,9 @@ AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
+
+dnl Check MTU value in the datapath
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [9000])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
@@ -563,17 +559,9 @@ AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitch
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
 
-dnl Check MTU value in the datapath
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-9000
-])
-
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=2000])
-
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-2000
-])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [2000])
 
 
 dnl Clean up
@@ -680,18 +668,15 @@ AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9702])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
+
+dnl Check MTU value in the datapath
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [9702])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9702) setup error" ovs-vswitchd.log], [], [stdout])
-
-dnl Check MTU value in the datapath
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-9702
-])
 
 dnl Set MTU value above upper bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9711])
@@ -721,18 +706,15 @@ AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=68])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
+
+dnl Check MTU value in the datapath
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [68])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (68) setup error" ovs-vswitchd.log], [], [stdout])
-
-dnl Check MTU value in the datapath
-AT_CHECK([ovs-vsctl get Interface phy0 mtu], [0], [dnl
-68
-])
 
 dnl Set MTU value below lower bound and check for error
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=67])
