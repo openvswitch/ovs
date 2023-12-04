@@ -3360,7 +3360,6 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone,
 
 static int
 dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
-                           const uint32_t *default_limits,
                            const struct ovs_list *zone_limits)
 {
     if (ovs_ct_limit_family < 0) {
@@ -3378,13 +3377,6 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
 
     size_t opt_offset;
     opt_offset = nl_msg_start_nested(request, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
-    if (default_limits) {
-        struct ovs_zone_limit req_zone_limit = {
-            .zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE,
-            .limit   = *default_limits,
-        };
-        nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
-    }
 
     if (!ovs_list_is_empty(zone_limits)) {
         struct ct_dpif_zone_limit *zone_limit;
@@ -3406,7 +3398,6 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
 
 static int
 dpif_netlink_zone_limits_from_ofpbuf(const struct ofpbuf *buf,
-                                     uint32_t *default_limit,
                                      struct ovs_list *zone_limits)
 {
     static const struct nl_policy ovs_ct_limit_policy[] = {
@@ -3439,11 +3430,8 @@ dpif_netlink_zone_limits_from_ofpbuf(const struct ofpbuf *buf,
                 nl_attr_get(attr[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]);
 
     while (rem >= sizeof *zone_limit) {
-        if (zone_limit->zone_id == OVS_ZONE_LIMIT_DEFAULT_ZONE) {
-            *default_limit = zone_limit->limit;
-        } else if (zone_limit->zone_id < OVS_ZONE_LIMIT_DEFAULT_ZONE ||
-                   zone_limit->zone_id > UINT16_MAX) {
-        } else {
+        if (zone_limit->zone_id >= OVS_ZONE_LIMIT_DEFAULT_ZONE &&
+            zone_limit->zone_id <= UINT16_MAX) {
             ct_dpif_push_zone_limit(zone_limits, zone_limit->zone_id,
                                     zone_limit->limit, zone_limit->count);
         }
@@ -3456,7 +3444,6 @@ dpif_netlink_zone_limits_from_ofpbuf(const struct ofpbuf *buf,
 
 static int
 dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
-                           uint32_t *default_limit,
                            const struct ovs_list *zone_limits_request,
                            struct ovs_list *zone_limits_reply)
 {
@@ -3477,14 +3464,11 @@ dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
         size_t opt_offset = nl_msg_start_nested(request,
                                                 OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
 
-        struct ovs_zone_limit req_zone_limit = {
-            .zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE,
-        };
-        nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
-
         struct ct_dpif_zone_limit *zone_limit;
         LIST_FOR_EACH (zone_limit, node, zone_limits_request) {
-            req_zone_limit.zone_id = zone_limit->zone;
+            struct ovs_zone_limit req_zone_limit = {
+                .zone_id = zone_limit->zone,
+            };
             nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
         }
 
@@ -3497,8 +3481,7 @@ dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
         goto out;
     }
 
-    err = dpif_netlink_zone_limits_from_ofpbuf(reply, default_limit,
-                                               zone_limits_reply);
+    err = dpif_netlink_zone_limits_from_ofpbuf(reply, zone_limits_reply);
 
 out:
     ofpbuf_delete(request);

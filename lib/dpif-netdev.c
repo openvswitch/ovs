@@ -9450,17 +9450,10 @@ dpif_netdev_ct_get_sweep_interval(struct dpif *dpif, uint32_t *ms)
 
 static int
 dpif_netdev_ct_set_limits(struct dpif *dpif,
-                           const uint32_t *default_limits,
                            const struct ovs_list *zone_limits)
 {
     int err = 0;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    if (default_limits) {
-        err = zone_limit_update(dp->conntrack, DEFAULT_ZONE, *default_limits);
-        if (err != 0) {
-            return err;
-        }
-    }
 
     struct ct_dpif_zone_limit *zone_limit;
     LIST_FOR_EACH (zone_limit, node, zone_limits) {
@@ -9475,19 +9468,11 @@ dpif_netdev_ct_set_limits(struct dpif *dpif,
 
 static int
 dpif_netdev_ct_get_limits(struct dpif *dpif,
-                           uint32_t *default_limit,
                            const struct ovs_list *zone_limits_request,
                            struct ovs_list *zone_limits_reply)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct conntrack_zone_limit czl;
-
-    czl = zone_limit_get(dp->conntrack, DEFAULT_ZONE);
-    if (czl.zone == DEFAULT_ZONE) {
-        *default_limit = czl.limit;
-    } else {
-        return EINVAL;
-    }
 
     if (!ovs_list_is_empty(zone_limits_request)) {
         struct ct_dpif_zone_limit *zone_limit;
@@ -9502,6 +9487,12 @@ dpif_netdev_ct_get_limits(struct dpif *dpif,
             }
         }
     } else {
+        czl = zone_limit_get(dp->conntrack, DEFAULT_ZONE);
+        if (czl.zone == DEFAULT_ZONE) {
+            ct_dpif_push_zone_limit(zone_limits_reply, DEFAULT_ZONE,
+                                    czl.limit, 0);
+        }
+
         for (int z = MIN_ZONE; z <= MAX_ZONE; z++) {
             czl = zone_limit_get(dp->conntrack, z);
             if (czl.zone == z) {

@@ -398,7 +398,7 @@ zone_limit_clean(struct conntrack *ct, struct zone_limit *zl)
 }
 
 int
-zone_limit_delete(struct conntrack *ct, uint16_t zone)
+zone_limit_delete(struct conntrack *ct, int32_t zone)
 {
     ovs_mutex_lock(&ct->ct_lock);
     struct zone_limit *zl = zone_limit_lookup_protected(ct, zone);

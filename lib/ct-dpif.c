@@ -398,23 +398,19 @@ ct_dpif_get_tcp_seq_chk(struct dpif *dpif, bool *enabled)
 }
 
 int
-ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
-                   const struct ovs_list *zone_limits)
+ct_dpif_set_limits(struct dpif *dpif, const struct ovs_list *zone_limits)
 {
     return (dpif->dpif_class->ct_set_limits
-            ? dpif->dpif_class->ct_set_limits(dpif, default_limit,
-                                              zone_limits)
+            ? dpif->dpif_class->ct_set_limits(dpif, zone_limits)
             : EOPNOTSUPP);
 }
 
 int
-ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
-                   const struct ovs_list *zone_limits_in,
+ct_dpif_get_limits(struct dpif *dpif, const struct ovs_list *zone_limits_in,
                    struct ovs_list *zone_limits_out)
 {
     return (dpif->dpif_class->ct_get_limits
-            ? dpif->dpif_class->ct_get_limits(dpif, default_limit,
-                                              zone_limits_in,
+            ? dpif->dpif_class->ct_get_limits(dpif, zone_limits_in,
                                               zone_limits_out)
             : EOPNOTSUPP);
 }
@@ -854,7 +850,7 @@ ct_dpif_format_tcp_stat(struct ds * ds, int tcp_state, int conn_per_state)
 
 
 void
-ct_dpif_push_zone_limit(struct ovs_list *zone_limits, uint16_t zone,
+ct_dpif_push_zone_limit(struct ovs_list *zone_limits, int32_t zone,
                         uint32_t limit, uint32_t count)
 {
     struct ct_dpif_zone_limit *zone_limit = xmalloc(sizeof *zone_limit);
@@ -928,15 +924,21 @@ error:
 }
 
 void
-ct_dpif_format_zone_limits(uint32_t default_limit,
-                           const struct ovs_list *zone_limits, struct ds *ds)
+ct_dpif_format_zone_limits(const struct ovs_list *zone_limits, struct ds *ds)
 {
     struct ct_dpif_zone_limit *zone_limit;
 
-    ds_put_format(ds, "default limit=%"PRIu32, default_limit);
+    LIST_FOR_EACH (zone_limit, node, zone_limits) {
+        if (zone_limit->zone == OVS_ZONE_LIMIT_DEFAULT_ZONE) {
+            ds_put_format(ds, "default limit=%"PRIu32, zone_limit->limit);
+        }
+    }
 
     LIST_FOR_EACH (zone_limit, node, zone_limits) {
-        ds_put_format(ds, "\nzone=%"PRIu16, zone_limit->zone);
+        if (zone_limit->zone == OVS_ZONE_LIMIT_DEFAULT_ZONE) {
+            continue;
+        }
+        ds_put_format(ds, "\nzone=%"PRIu16, (uint16_t) zone_limit->zone);
         ds_put_format(ds, ",limit=%"PRIu32, zone_limit->limit);
         ds_put_format(ds, ",count=%"PRIu32, zone_limit->count);
     }

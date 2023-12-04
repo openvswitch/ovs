@@ -237,7 +237,7 @@ struct ct_dpif_dump_state {
 };
 
 struct ct_dpif_zone_limit {
-    uint16_t zone;
+    int32_t zone;
     uint32_t limit;       /* Limit on number of entries. */
     uint32_t count;       /* Current number of entries. */
     struct ovs_list node;
@@ -307,10 +307,9 @@ int ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns);
 int ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns);
 int ct_dpif_set_tcp_seq_chk(struct dpif *dpif, bool enabled);
 int ct_dpif_get_tcp_seq_chk(struct dpif *dpif, bool *enabled);
-int ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
-                       const struct ovs_list *);
-int ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
-                       const struct ovs_list *, struct ovs_list *);
+int ct_dpif_set_limits(struct dpif *dpif, const struct ovs_list *);
+int ct_dpif_get_limits(struct dpif *dpif, const struct ovs_list *,
+                       struct ovs_list *);
 int ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *);
 int ct_dpif_sweep(struct dpif *, uint32_t *ms);
 int ct_dpif_ipf_set_enabled(struct dpif *, bool v6, bool enable);
@@ -329,13 +328,12 @@ void ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto);
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
-void ct_dpif_push_zone_limit(struct ovs_list *, uint16_t zone, uint32_t limit,
+void ct_dpif_push_zone_limit(struct ovs_list *, int32_t zone, uint32_t limit,
                              uint32_t count);
 void ct_dpif_free_zone_limits(struct ovs_list *);
 bool ct_dpif_parse_zone_limit_tuple(const char *s, uint16_t *pzone,
                                     uint32_t *plimit, struct ds *);
-void ct_dpif_format_zone_limits(uint32_t default_limit,
-                                const struct ovs_list *, struct ds *);
+void ct_dpif_format_zone_limits(const struct ovs_list *, struct ds *);
 bool ct_dpif_set_timeout_policy_attr_by_name(struct ct_dpif_timeout_policy *tp,
                                              const char *key, uint32_t value);
 bool ct_dpif_timeout_policy_support_ipproto(uint8_t ipproto);

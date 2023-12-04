@@ -2202,7 +2202,7 @@ dpctl_ct_set_limits(int argc, const char *argv[],
     struct dpif *dpif;
     struct ds ds = DS_EMPTY_INITIALIZER;
     int i =  dp_arg_exists(argc, argv) ? 2 : 1;
-    uint32_t default_limit, *p_default_limit = NULL;
+    uint32_t default_limit;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
 
     int error = opt_dpif_open(argc, argv, dpctl_p, INT_MAX, &dpif);
@@ -2213,7 +2213,8 @@ dpctl_ct_set_limits(int argc, const char *argv[],
     /* Parse default limit */
     if (!strncmp(argv[i], "default=", 8)) {
         if (ovs_scan(argv[i], "default=%"SCNu32, &default_limit)) {
-            p_default_limit = &default_limit;
+            ct_dpif_push_zone_limit(&zone_limits, OVS_ZONE_LIMIT_DEFAULT_ZONE,
+                                    default_limit, 0);
             i++;
         } else {
             ds_put_cstr(&ds, "invalid default limit");
@@ -2233,7 +2234,7 @@ dpctl_ct_set_limits(int argc, const char *argv[],
         ct_dpif_push_zone_limit(&zone_limits, zone, limit, 0);
     }
 
-    error = ct_dpif_set_limits(dpif, p_default_limit, &zone_limits);
+    error = ct_dpif_set_limits(dpif, &zone_limits);
     if (!error) {
         ct_dpif_free_zone_limits(&zone_limits);
         dpif_close(dpif);
@@ -2322,7 +2323,6 @@ dpctl_ct_get_limits(int argc, const char *argv[],
 {
     struct dpif *dpif;
     struct ds ds = DS_EMPTY_INITIALIZER;
-    uint32_t default_limit;
     int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ovs_list list_query = OVS_LIST_INITIALIZER(&list_query);
     struct ovs_list list_reply = OVS_LIST_INITIALIZER(&list_reply);
@@ -2333,16 +2333,17 @@ dpctl_ct_get_limits(int argc, const char *argv[],
     }
 
     if (argc > i) {
+        ct_dpif_push_zone_limit(&list_query, OVS_ZONE_LIMIT_DEFAULT_ZONE,
+                                0, 0);
         error = parse_ct_limit_zones(argv[i], &list_query, &ds);
         if (error) {
             goto error;
         }
     }
 
-    error = ct_dpif_get_limits(dpif, &default_limit, &list_query,
-                               &list_reply);
+    error = ct_dpif_get_limits(dpif, &list_query, &list_reply);
     if (!error) {
-        ct_dpif_format_zone_limits(default_limit, &list_reply, &ds);
+        ct_dpif_format_zone_limits(&list_reply, &ds);
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
         goto out;
     } else {
