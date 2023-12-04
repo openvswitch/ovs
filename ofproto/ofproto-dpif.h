@@ -285,6 +285,11 @@ struct dpif_backer {
                                                 feature than 'bt_support'. */
 
     struct atomic_count tnl_count;
+
+    struct ovs_list ct_zone_limits_to_add;  /* CT zone limits queued for
+                                             * addition into datapath. */
+    struct ovs_list ct_zone_limits_to_del;  /* CT zone limits queued for
+                                             * deletion from datapath. */
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */

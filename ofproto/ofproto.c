@@ -1026,6 +1026,18 @@ ofproto_ct_del_zone_timeout_policy(const char *datapath_type, uint16_t zone_id)
 
 }
 
+void
+ofproto_ct_zone_limit_update(const char *datapath_type, int32_t zone_id,
+                             int64_t *limit)
+{
+    datapath_type = ofproto_normalize_type(datapath_type);
+    const struct ofproto_class *class = ofproto_class_find__(datapath_type);
+
+    if (class && class->ct_zone_limit_update) {
+        class->ct_zone_limit_update(datapath_type, zone_id, limit);
+    }
+}
+
 
 /* Spanning Tree Protocol (STP) configuration. */
 

@@ -1921,6 +1921,14 @@ struct ofproto_class {
     /* Deletes the timeout policy associated with 'zone' in datapath type
      * 'dp_type'. */
     void (*ct_del_zone_timeout_policy)(const char *dp_type, uint16_t zone);
+
+    /* Updates the CT zone limit for specified zone. Setting 'zone' to
+     * 'OVS_ZONE_LIMIT_DEFAULT_ZONE' represents the default zone.
+     * 'NULL' passed as 'limit' indicates that the limit should be removed for
+     * the specified zone. The caller must ensure that the 'limit' value is
+     * within proper range (0 - UINT32_MAX). */
+    void (*ct_zone_limit_update)(const char *dp_type, int32_t zone,
+                                 int64_t *limit);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

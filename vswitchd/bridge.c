@@ -157,6 +157,8 @@ struct aa_mapping {
 /* Internal representation of conntrack zone configuration table in OVSDB. */
 struct ct_zone {
     uint16_t zone_id;
+    int64_t limit;              /* Limit of allowed entries. '-1' if not
+                                 * specified. */
     struct simap tp;            /* A map from timeout policy attribute to
                                  * timeout value. */
     struct hmap_node node;      /* Node in 'struct datapath' 'ct_zones'
@@ -168,14 +170,15 @@ struct ct_zone {
 
 /* Internal representation of datapath configuration table in OVSDB. */
 struct datapath {
-    char *type;                 /* Datapath type. */
-    struct hmap ct_zones;       /* Map of 'struct ct_zone' elements, indexed
-                                 * by 'zone'. */
-    struct hmap_node node;      /* Node in 'all_datapaths' hmap. */
-    struct smap caps;           /* Capabilities. */
-    unsigned int last_used;     /* The last idl_seqno that this 'datapath'
-                                 * used in OVSDB. This number is used for
-                                 * garbage collection. */
+    char *type;                     /* Datapath type. */
+    struct hmap ct_zones;           /* Map of 'struct ct_zone' elements,
+                                     * indexed by 'zone'. */
+    struct hmap_node node;          /* Node in 'all_datapaths' hmap. */
+    struct smap caps;               /* Capabilities. */
+    unsigned int last_used;         /* The last idl_seqno that this 'datapath'
+                                     * used in OVSDB. This number is used for
+                                     * garbage collection. */
+    int64_t ct_zone_default_limit;  /* Default CT limit for all zones. */
 };
 
 /* All bridges, indexed by name. */
@@ -662,6 +665,7 @@ ct_zone_alloc(uint16_t zone_id, struct ovsrec_ct_timeout_policy *tp_cfg)
     struct ct_zone *ct_zone = xzalloc(sizeof *ct_zone);
 
     ct_zone->zone_id = zone_id;
+    ct_zone->limit = -1;
     simap_init(&ct_zone->tp);
     get_timeout_policy_from_ovsrec(&ct_zone->tp, tp_cfg);
     return ct_zone;
@@ -670,6 +674,14 @@ ct_zone_alloc(uint16_t zone_id, struct ovsrec_ct_timeout_policy *tp_cfg)
 static void
 ct_zone_remove_and_destroy(struct datapath *dp, struct ct_zone *ct_zone)
 {
+    if (!simap_is_empty(&ct_zone->tp)) {
+        ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+    }
+
+    if (ct_zone->limit > -1) {
+        ofproto_ct_zone_limit_update(dp->type, ct_zone->zone_id, NULL);
+    }
+
     hmap_remove(&dp->ct_zones, &ct_zone->node);
     simap_destroy(&ct_zone->tp);
     free(ct_zone);
@@ -706,6 +718,7 @@ datapath_create(const char *type)
 {
     struct datapath *dp = xzalloc(sizeof *dp);
     dp->type = xstrdup(type);
+    dp->ct_zone_default_limit = -1;
     hmap_init(&dp->ct_zones);
     hmap_insert(&all_datapaths, &dp->node, hash_string(type, 0));
     smap_init(&dp->caps);
@@ -720,6 +733,11 @@ datapath_destroy(struct datapath *dp)
         HMAP_FOR_EACH_SAFE (ct_zone, node, &dp->ct_zones) {
             ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
             ct_zone_remove_and_destroy(dp, ct_zone);
+        }
+
+        if (dp->ct_zone_default_limit > -1) {
+            ofproto_ct_zone_limit_update(dp->type, OVS_ZONE_LIMIT_DEFAULT_ZONE,
+                                         NULL);
         }
 
         hmap_remove(&all_datapaths, &dp->node);
@@ -743,29 +761,50 @@ ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
         struct ovsrec_ct_timeout_policy *tp_cfg = zone_cfg->timeout_policy;
 
         ct_zone = ct_zone_lookup(&dp->ct_zones, zone_id);
-        if (ct_zone) {
-            struct simap new_tp = SIMAP_INITIALIZER(&new_tp);
-            get_timeout_policy_from_ovsrec(&new_tp, tp_cfg);
-            if (update_timeout_policy(&ct_zone->tp, &new_tp)) {
-                ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
-                                                   &ct_zone->tp);
-            }
-        } else {
+        if (!ct_zone) {
             ct_zone = ct_zone_alloc(zone_id, tp_cfg);
             hmap_insert(&dp->ct_zones, &ct_zone->node, hash_int(zone_id, 0));
-            ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
-                                               &ct_zone->tp);
         }
+
+        struct simap new_tp = SIMAP_INITIALIZER(&new_tp);
+        get_timeout_policy_from_ovsrec(&new_tp, tp_cfg);
+
+        if (update_timeout_policy(&ct_zone->tp, &new_tp)) {
+            if (simap_count(&ct_zone->tp)) {
+                ofproto_ct_set_zone_timeout_policy(dp->type, ct_zone->zone_id,
+                                                   &ct_zone->tp);
+            } else {
+                ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
+            }
+        }
+
+        int64_t desired_limit = zone_cfg->limit ? *zone_cfg->limit : -1;
+        if (ct_zone->limit != desired_limit) {
+            ofproto_ct_zone_limit_update(dp->type, zone_id, zone_cfg->limit);
+            ct_zone->limit = desired_limit;
+        }
+
         ct_zone->last_used = idl_seqno;
     }
 
     /* Purge 'ct_zone's no longer found in the database. */
     HMAP_FOR_EACH_SAFE (ct_zone, node, &dp->ct_zones) {
         if (ct_zone->last_used != idl_seqno) {
-            ofproto_ct_del_zone_timeout_policy(dp->type, ct_zone->zone_id);
             ct_zone_remove_and_destroy(dp, ct_zone);
         }
     }
+
+    /* Reconfigure default CT zone limit if needed. */
+    int64_t default_limit = dp_cfg->ct_zone_default_limit
+                            ? *dp_cfg->ct_zone_default_limit
+                            : -1;
+
+    if (dp->ct_zone_default_limit != default_limit) {
+        ofproto_ct_zone_limit_update(dp->type, OVS_ZONE_LIMIT_DEFAULT_ZONE,
+                                     dp_cfg->ct_zone_default_limit);
+        dp->ct_zone_default_limit = default_limit;
+    }
+
 }
 
 static void
