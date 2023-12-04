@@ -5246,20 +5246,20 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=10,arp,action=normal
-priority=100,in_port=1,udp,action=ct(commit),2
+priority=100,in_port=1,udp,action=ct(zone=1,commit),2
 priority=100,in_port=2,udp,action=ct(zone=3,commit),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-AT_CHECK([ovs-appctl dpctl/ct-set-limits default=10 zone=0,limit=5 zone=1,limit=15 zone=2,limit=3 zone=3,limit=3])
-AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=1,2,4])
-AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,1,2,3], [],[dnl
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=10 zone=1,limit=5 zone=2,limit=3 zone=3,limit=3 zone=4,limit=15])
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=2,4,5])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=1,2,3,4], [],[dnl
 default limit=10
-zone=0,limit=5,count=0
-zone=1,limit=10,count=0
+zone=1,limit=5,count=0
 zone=2,limit=10,count=0
 zone=3,limit=3,count=0
+zone=4,limit=10,count=0
 ])
 
 dnl Test UDP from port 1
@@ -5273,10 +5273,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a5
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000900080000 actions=resubmit(,0)"])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000a00080000 actions=resubmit(,0)"])
 
-AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,1,2,3,4,5], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=1,2,3,4,5], [0], [dnl
 default limit=10
-zone=0,limit=5,count=5
-zone=1,limit=10,count=0
+zone=1,limit=5,count=5
 zone=2,limit=10,count=0
 zone=3,limit=3,count=0
 zone=4,limit=10,count=0
@@ -5286,16 +5285,16 @@ zone=5,limit=10,count=0
 dnl Test ct-get-limits for all zones
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=10
-zone=0,limit=5,count=5
+zone=1,limit=5,count=5
 zone=3,limit=3,count=0
 ])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.1," | sort ], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=3),reply=(src=10.1.1.2,dst=10.1.1.1,sport=3,dport=1)
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=4),reply=(src=10.1.1.2,dst=10.1.1.1,sport=4,dport=1)
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=5),reply=(src=10.1.1.2,dst=10.1.1.1,sport=5,dport=1)
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=6),reply=(src=10.1.1.2,dst=10.1.1.1,sport=6,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),zone=1
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=3),reply=(src=10.1.1.2,dst=10.1.1.1,sport=3,dport=1),zone=1
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=4),reply=(src=10.1.1.2,dst=10.1.1.1,sport=4,dport=1),zone=1
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=5),reply=(src=10.1.1.2,dst=10.1.1.1,sport=5,dport=1),zone=1
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=6),reply=(src=10.1.1.2,dst=10.1.1.1,sport=6,dport=1),zone=1
 ])
 
 dnl Test UDP from port 2
@@ -5305,9 +5304,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000500080000 actions=resubmit(,0)"])
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4c90a0101030a0101040001000600080000 actions=resubmit(,0)"])
 
-AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,3], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=1,3], [0], [dnl
 default limit=10
-zone=0,limit=5,count=5
+zone=1,limit=5,count=5
 zone=3,limit=3,count=3
 ])
 
@@ -5346,22 +5345,22 @@ zone=4,limit=0,count=0
 dnl Test limit set via database.
 VSCTL_ADD_DATAPATH_TABLE()
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=0])
+AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1])
 AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=3])
 
 AT_CHECK([ovs-appctl dpctl/ct-set-limits default=10])
 AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=3])
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=10
-zone=0,limit=5,count=0
+zone=1,limit=5,count=0
 ])
 
-AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE 0 3])
+AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE 1 3])
 AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE 3 3])
 
 OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/ct-get-limits], [dnl
 default limit=10
-zone=0,limit=3,count=0
+zone=1,limit=3,count=0
 zone=3,limit=3,count=0])
 
 for i in 2 3 4 5 6; do
@@ -5378,27 +5377,27 @@ udp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=1,dport=4),reply=(src=10.1.1.4,dst=10.
 
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=10
-zone=0,limit=3,count=0
+zone=1,limit=3,count=0
 zone=3,limit=3,count=3
 ])
 
 AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE 3])
 OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/ct-get-limits], [dnl
 default limit=10
-zone=0,limit=3,count=0])
+zone=1,limit=3,count=0])
 
 AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE default 5])
 OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/ct-get-limits], [dnl
 default limit=5
-zone=0,limit=3,count=0])
+zone=1,limit=3,count=0])
 
 AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE default])
 OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/ct-get-limits], [dnl
 default limit=0
-zone=0,limit=3,count=0])
+zone=1,limit=3,count=0])
 
 dnl Try to overwrite the zone limit via dpctl command.
-AT_CHECK([ovs-appctl dpctl/ct-set-limits default=15 zone=3,limit=5 zone=0,limit=5], [2], [ignore], [dnl
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=15 zone=3,limit=5 zone=1,limit=5], [2], [ignore], [dnl
 ovs-vswitchd: the zone limits are set via database, dnl
 use 'ovs-vsctl set-zone-limit <...>' instead. (Operation not permitted)
 ovs-appctl: ovs-vswitchd: server returned an error
@@ -5406,10 +5405,10 @@ ovs-appctl: ovs-vswitchd: server returned an error
 
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=0
-zone=0,limit=3,count=0
+zone=1,limit=3,count=0
 ])
 
-AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=0], [2], [ignore], [dnl
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=1], [2], [ignore], [dnl
 ovs-vswitchd: the zone limits are set via database, dnl
 use 'ovs-vsctl del-zone-limit <...>' instead. (Operation not permitted)
 ovs-appctl: ovs-vswitchd: server returned an error
@@ -5417,10 +5416,10 @@ ovs-appctl: ovs-vswitchd: server returned an error
 
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=0
-zone=0,limit=3,count=0
+zone=1,limit=3,count=0
 ])
 
-AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE 0])
+AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE 1])
 AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE default 10])
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
 default limit=10

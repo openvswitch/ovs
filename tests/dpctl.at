@@ -136,7 +136,7 @@ AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([dpctl - ct-get-limits ct-del-limits])
+AT_SETUP([dpctl - ct-set-limits ct-get-limits ct-del-limits])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [default limit=0
 ])
@@ -149,5 +149,11 @@ AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=x], [2], [],
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=])
+AT_CHECK([ovs-appctl dpctl/ct-set-limits zone=0,limit=0])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0], [0], [default limit=0
+zone=0,limit=0,count=0
+])
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=0])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
