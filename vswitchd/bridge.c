@@ -740,6 +740,7 @@ datapath_destroy(struct datapath *dp)
                                          NULL);
         }
 
+        ofproto_ct_zone_limit_protection_update(dp->type, false);
         hmap_remove(&all_datapaths, &dp->node);
         hmap_destroy(&dp->ct_zones);
         free(dp->type);
@@ -752,6 +753,7 @@ static void
 ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
 {
     struct ct_zone *ct_zone;
+    bool protected = false;
 
     /* Add new 'ct_zone's or update existing 'ct_zone's based on the database
      * state. */
@@ -785,6 +787,8 @@ ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
         }
 
         ct_zone->last_used = idl_seqno;
+
+        protected = protected || !!zone_cfg->limit;
     }
 
     /* Purge 'ct_zone's no longer found in the database. */
@@ -805,6 +809,9 @@ ct_zones_reconfigure(struct datapath *dp, struct ovsrec_datapath *dp_cfg)
         dp->ct_zone_default_limit = default_limit;
     }
 
+    protected = protected || !!dp_cfg->ct_zone_default_limit;
+
+    ofproto_ct_zone_limit_protection_update(dp->type, protected);
 }
 
 static void

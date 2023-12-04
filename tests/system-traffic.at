@@ -5397,6 +5397,55 @@ OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/ct-get-limits], [dnl
 default limit=0
 zone=0,limit=3,count=0])
 
+dnl Try to overwrite the zone limit via dpctl command.
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=15 zone=3,limit=5 zone=0,limit=5], [2], [ignore], [dnl
+ovs-vswitchd: the zone limits are set via database, dnl
+use 'ovs-vsctl set-zone-limit <...>' instead. (Operation not permitted)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=0
+zone=0,limit=3,count=0
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=0], [2], [ignore], [dnl
+ovs-vswitchd: the zone limits are set via database, dnl
+use 'ovs-vsctl del-zone-limit <...>' instead. (Operation not permitted)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=0
+zone=0,limit=3,count=0
+])
+
+AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE 0])
+AT_CHECK([ovs-vsctl set-zone-limit $DP_TYPE default 10])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=10
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=15 zone=1,limit=5], [2], [ignore], [dnl
+ovs-vswitchd: the zone limits are set via database, dnl
+use 'ovs-vsctl set-zone-limit <...>' instead. (Operation not permitted)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+dnl Delete all zones from DB, that should remove the protection.
+AT_CHECK([ovs-vsctl del-zone-limit $DP_TYPE default])
+
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=15 zone=1,limit=5])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=15
+zone=1,limit=5,count=0
+])
+
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=1])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=15
+])
+
 OVS_TRAFFIC_VSWITCHD_STOP(["dnl
 /could not create datapath/d
 /(Cannot allocate memory) on packet/d"])

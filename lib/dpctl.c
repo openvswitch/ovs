@@ -2234,6 +2234,13 @@ dpctl_ct_set_limits(int argc, const char *argv[],
         ct_dpif_push_zone_limit(&zone_limits, zone, limit, 0);
     }
 
+    if (ct_dpif_is_zone_limit_protected(dpif)) {
+        ds_put_cstr(&ds, "the zone limits are set via database, "
+                         "use 'ovs-vsctl set-zone-limit <...>' instead.");
+        error = EPERM;
+        goto error;
+    }
+
     error = ct_dpif_set_limits(dpif, &zone_limits);
     if (!error) {
         ct_dpif_free_zone_limits(&zone_limits);
@@ -2308,6 +2315,13 @@ dpctl_ct_del_limits(int argc, const char *argv[],
         if (error) {
             goto error;
         }
+    }
+
+    if (ct_dpif_is_zone_limit_protected(dpif)) {
+        ds_put_cstr(&ds, "the zone limits are set via database, "
+                         "use 'ovs-vsctl del-zone-limit <...>' instead.");
+        error = EPERM;
+        goto error;
     }
 
     error = ct_dpif_del_limits(dpif, &zone_limits);

@@ -350,5 +350,7 @@ int ct_dpif_get_timeout_policy_name(struct dpif *dpif, uint32_t tp_id,
                                     uint16_t dl_type, uint8_t nw_proto,
                                     char **tp_name, bool *is_generic);
 int ct_dpif_get_features(struct dpif *dpif, enum ct_features *features);
+void ct_dpif_set_zone_limit_protection(struct dpif *, bool protected);
+bool ct_dpif_is_zone_limit_protected(struct dpif *);
 
 #endif /* CT_DPIF_H */

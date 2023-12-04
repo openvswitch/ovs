@@ -5674,6 +5674,18 @@ ct_zone_limits_commit(struct dpif_backer *backer)
 }
 
 static void
+ct_zone_limit_protection_update(const char *datapath_type, bool protected)
+{
+    struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
+                                                 datapath_type);
+    if (!backer) {
+        return;
+    }
+
+    ct_dpif_set_zone_limit_protection(backer->dpif, protected);
+}
+
+static void
 get_datapath_cap(const char *datapath_type, struct smap *cap)
 {
     struct odp_support odp;
@@ -6964,4 +6976,5 @@ const struct ofproto_class ofproto_dpif_class = {
     ct_set_zone_timeout_policy,
     ct_del_zone_timeout_policy,
     ct_zone_limit_update,
+    ct_zone_limit_protection_update,
 };

@@ -23,6 +23,7 @@
 #include "openvswitch/ofp-ct.h"
 #include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
+#include "sset.h"
 
 VLOG_DEFINE_THIS_MODULE(ct_dpif);
 
@@ -31,6 +32,10 @@ struct flags {
     uint32_t flag;
     const char *name;
 };
+
+/* Protection for CT zone limit per datapath. */
+static struct sset ct_limit_protection =
+        SSET_INITIALIZER(&ct_limit_protection);
 
 static void ct_dpif_format_counters(struct ds *,
                                     const struct ct_dpif_counters *);
@@ -1063,4 +1068,24 @@ ct_dpif_get_features(struct dpif *dpif, enum ct_features *features)
     return (dpif->dpif_class->ct_get_features
             ? dpif->dpif_class->ct_get_features(dpif, features)
             : EOPNOTSUPP);
+}
+
+void
+ct_dpif_set_zone_limit_protection(struct dpif *dpif, bool protected)
+{
+    if (sset_contains(&ct_limit_protection, dpif->full_name) == protected) {
+        return;
+    }
+
+    if (protected) {
+        sset_add(&ct_limit_protection, dpif->full_name);
+    } else {
+        sset_find_and_delete(&ct_limit_protection, dpif->full_name);
+    }
+}
+
+bool
+ct_dpif_is_zone_limit_protected(struct dpif *dpif)
+{
+    return sset_contains(&ct_limit_protection, dpif->full_name);
 }

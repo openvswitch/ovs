@@ -1038,6 +1038,17 @@ ofproto_ct_zone_limit_update(const char *datapath_type, int32_t zone_id,
     }
 }
 
+void
+ofproto_ct_zone_limit_protection_update(const char *datapath_type,
+                                        bool protected)
+{
+    datapath_type = ofproto_normalize_type(datapath_type);
+    const struct ofproto_class *class = ofproto_class_find__(datapath_type);
+
+    if (class && class->ct_zone_limit_protection_update) {
+        class->ct_zone_limit_protection_update(datapath_type, protected);
+    }
+}
 
 /* Spanning Tree Protocol (STP) configuration. */
 
