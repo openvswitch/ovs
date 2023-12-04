@@ -442,6 +442,13 @@ Auto Attach commands:\n\
 Switch commands:\n\
   emer-reset                  reset switch to known good state\n\
 \n\
+Connection Tracking commands:\n\
+  set-zone-limit DATAPATH ZONE|default LIMIT\n\
+                              set CT LIMIT for ZONE|default on DATAPATH\n\
+  del-zone-limit DATAPATH ZONE|default\n\
+                              delete CT limit for ZONE|default on DATAPATH\n\
+  list-zone-limits DATAPATH   list all limits configured on DATAPATH\n\
+\n\
 %s\
 %s\
 \n\
@@ -1302,8 +1309,8 @@ cmd_add_zone_tp(struct ctl_context *ctx)
         ctl_fatal("No timeout policy");
     }
 
-    if (zone && !may_exist) {
-        ctl_fatal("zone id %"PRIu64" already exists", zone_id);
+    if (zone && zone->timeout_policy && !may_exist) {
+        ctl_fatal("zone id %"PRIu64" already has a policy", zone_id);
     }
 
     tp = create_timeout_policy(ctx, &ctx->argv[3], n_tps);
@@ -1332,11 +1339,20 @@ cmd_del_zone_tp(struct ctl_context *ctx)
     }
 
     struct ovsrec_ct_zone *zone = find_ct_zone(dp, zone_id);
-    if (must_exist && !zone) {
-        ctl_fatal("zone id %"PRIu64" does not exist", zone_id);
+    if (must_exist && !(zone && zone->timeout_policy)) {
+        ctl_fatal("zone id %"PRIu64" does not have a policy", zone_id);
     }
 
-    if (zone) {
+    if (!zone) {
+        return;
+    }
+
+    if (zone->limit) {
+        if (zone->timeout_policy) {
+            ovsrec_ct_timeout_policy_delete(zone->timeout_policy);
+        }
+        ovsrec_ct_zone_set_timeout_policy(zone, NULL);
+    } else {
         ovsrec_datapath_update_ct_zones_delkey(dp, zone_id);
     }
 }
@@ -1372,11 +1388,117 @@ cmd_list_zone_tp(struct ctl_context *ctx)
 }
 
 static void
+cmd_set_zone_limit(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    int64_t zone_id = -1;
+    int64_t limit = -1;
+
+    const char *dp_name = ctx->argv[1];
+
+    ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id);
+    ovs_scan(ctx->argv[3], "%"SCNi64, &limit);
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
+    if (!dp) {
+        ctl_fatal("datapath %s does not exist", dp_name);
+    }
+
+    if (limit < 0 || limit > UINT32_MAX) {
+        ctl_fatal("limit (%"PRIi64") out of range", limit);
+    }
+
+    if (!strcmp(ctx->argv[2], "default")) {
+        ovsrec_datapath_set_ct_zone_default_limit(dp, &limit, 1);
+        return;
+    }
+
+    if (zone_id < 0 || zone_id > UINT16_MAX) {
+        ctl_fatal("zone_id (%"PRIi64") out of range", zone_id);
+    }
+
+    struct ovsrec_ct_zone *zone = find_ct_zone(dp, zone_id);
+    if (!zone) {
+        zone = ovsrec_ct_zone_insert(ctx->txn);
+        ovsrec_datapath_update_ct_zones_setkey(dp, zone_id, zone);
+    }
+
+    ovsrec_ct_zone_set_limit(zone, &limit, 1);
+}
+
+static void
+cmd_del_zone_limit(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    int64_t zone_id;
+
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    const char *dp_name = ctx->argv[1];
+
+    ovs_scan(ctx->argv[2], "%"SCNi64, &zone_id);
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, dp_name);
+    if (!dp) {
+        ctl_fatal("datapath %s does not exist", dp_name);
+    }
+
+    if (!strcmp(ctx->argv[2], "default")) {
+        if (must_exist && !dp->ct_zone_default_limit) {
+            ctl_fatal("datapath %s does not have a limit", dp_name);
+        }
+
+        ovsrec_datapath_set_ct_zone_default_limit(dp, NULL, 0);
+        return;
+    }
+
+    struct ovsrec_ct_zone *zone = find_ct_zone(dp, zone_id);
+    if (must_exist && !(zone && zone->limit)) {
+        ctl_fatal("zone_id %"PRIi64" does not have a limit", zone_id);
+    }
+
+    if (!zone) {
+        return;
+    }
+
+    if (zone->timeout_policy) {
+        ovsrec_ct_zone_set_limit(zone, NULL, 0);
+    } else {
+        ovsrec_datapath_update_ct_zones_delkey(dp, zone_id);
+    }
+}
+
+static void
+cmd_list_zone_limits(struct ctl_context *ctx)
+{
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+
+    struct ovsrec_datapath *dp = find_datapath(vsctl_ctx, ctx->argv[1]);
+    if (!dp) {
+        ctl_fatal("datapath: %s record not found", ctx->argv[1]);
+    }
+
+    if (dp->ct_zone_default_limit) {
+        ds_put_format(&ctx->output, "Default, Limit: %"PRIu64"\n",
+                      *dp->ct_zone_default_limit);
+    }
+
+    for (int i = 0; i < dp->n_ct_zones; i++) {
+        struct ovsrec_ct_zone *zone = dp->value_ct_zones[i];
+        if (zone->limit) {
+            ds_put_format(&ctx->output, "Zone: %"PRIu64", Limit: %"PRIu64"\n",
+                          dp->key_ct_zones[i], *zone->limit);
+        }
+    }
+}
+
+static void
 pre_get_zone(struct ctl_context *ctx)
 {
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_datapaths);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_datapath_col_ct_zones);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_datapath_col_ct_zone_default_limit);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_ct_zone_col_timeout_policy);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_ct_zone_col_limit);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_ct_timeout_policy_col_timeouts);
 }
 
@@ -3158,6 +3280,14 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 
     /* Datapath capabilities. */
     {"list-dp-cap", 1, 1, "", pre_get_dp_cap, cmd_list_dp_cap, NULL, "", RO},
+
+    /* CT zone limit. */
+    {"set-zone-limit", 3, 3, "ARG ARG ARG", pre_get_zone, cmd_set_zone_limit,
+     NULL, "", RW},
+    {"del-zone-limit", 2, 2, "ARG ARG", pre_get_zone, cmd_del_zone_limit, NULL,
+     "--if-exists", RW},
+    {"list-zone-limits", 1, 1, "ARG", pre_get_zone, cmd_list_zone_limits, NULL,
+     "", RO},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };

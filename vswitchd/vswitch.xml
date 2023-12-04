@@ -6488,6 +6488,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       </column>
     </group>
 
+    <column name="ct_zone_default_limit">
+        Default connection tracking zone limit that is applied to all zones
+        that didn't specify the <ref table="CT_Zone" column="limit"/>
+        explicitly. If the limit is unspecified the default limit
+        configuration for the datapath is left intact. The value 0 means
+        unlimited.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
@@ -6502,6 +6510,12 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
     <column name="timeout_policy">
       Connection tracking timeout policy for this zone. If a timeout policy
       is not specified, it defaults to the timeout policy in the system.
+    </column>
+
+    <column name="limit">
+      Connection tracking limit for this zone. If the limit is unspecified
+      the <ref table="Datapath" column="ct_zone_default_limit"/> will be used.
+      The value 0 means unlimited.
     </column>
 
     <group title="Common Columns">

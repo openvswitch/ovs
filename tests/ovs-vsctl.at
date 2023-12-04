@@ -975,6 +975,67 @@ AT_CHECK(
   [0], [stdout])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:10, Timeout Policies: system default
 ])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-tp netdev zone=10])])
+
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 1 1])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Zone: 1, Limit: 1
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 1 5])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Zone: 1, Limit: 5
+])
+
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev 1])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 10 5])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Zone: 10, Limit: 5
+])
+
+AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=10 icmp_first=1 icmp_reply=2])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [dnl
+Zone:10, Timeout Policies: icmp_first=1 icmp_reply=2
+])
+
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev 10])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [dnl
+Zone:10, Timeout Policies: icmp_first=1 icmp_reply=2
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 10 5])])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=10])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Zone: 10, Limit: 5
+])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [dnl
+Zone:10, Timeout Policies: system default
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev default 5])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Default, Limit: 5
+Zone: 10, Limit: 5
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev default 10])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Default, Limit: 10
+Zone: 10, Limit: 5
+])
+
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev default])])
+AT_CHECK([RUN_OVS_VSCTL([list-zone-limits netdev])], [0], [dnl
+Zone: 10, Limit: 5
+])
+
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-zone-limit netdev default])])
+
 
 AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])
 AT_CHECK([RUN_OVS_VSCTL([list-dp-cap system])], [0], [recirc=true
@@ -1113,14 +1174,37 @@ AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdevxx zone=1 icmp_first=1 icmp_reply=2])
 ])
 AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])])
 AT_CHECK([RUN_OVS_VSCTL([add-zone-tp netdev zone=2 icmp_first=2 icmp_reply=3])],
-  [1], [], [ovs-vsctl: zone id 2 already exists
+  [1], [], [ovs-vsctl: zone id 2 already has a policy
 ])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
 ])
 AT_CHECK([RUN_OVS_VSCTL([del-zone-tp netdev zone=11])],
-  [1], [], [ovs-vsctl: zone id 11 does not exist
+  [1], [], [ovs-vsctl: zone id 11 does not have a policy
 ])
 AT_CHECK([RUN_OVS_VSCTL([list-zone-tp netdev])], [0], [Zone:2, Timeout Policies: icmp_first=2 icmp_reply=3
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdevxx 5 1])],
+  [1], [], [ovs-vsctl: datapath netdevxx does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 88888 1])],
+  [1], [], [ovs-vsctl: zone_id (88888) out of range
+])
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev 5 -1])],
+  [1], [], [ovs-vsctl: limit (-1) out of range
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev 10])],
+  [1], [], [ovs-vsctl: zone_id 10 does not have a limit
+])
+
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdevxx default 1])],
+  [1], [], [ovs-vsctl: datapath netdevxx does not exist
+])
+AT_CHECK([RUN_OVS_VSCTL([set-zone-limit netdev default -1])],
+  [1], [], [ovs-vsctl: limit (-1) out of range
+])
+AT_CHECK([RUN_OVS_VSCTL([del-zone-limit netdev default])],
+  [1], [], [ovs-vsctl: datapath netdev does not have a limit
 ])
 
 AT_CHECK([RUN_OVS_VSCTL([-- --id=@m create Datapath datapath_version=0 'capabilities={recirc=true}' -- set Open_vSwitch . datapaths:"system"=@m])], [0], [stdout])

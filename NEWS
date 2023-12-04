@@ -17,6 +17,11 @@ Post-v3.2.0
        Reported names adjusted accordingly.
      * Added support for removal of default CT zone limit, e.g.
        "ovs-appctl dpctl/ct-del-limits default".
+   - ovs-vsctl:
+     * New commands 'set-zone-limit', 'del-zone-limit' and 'list-zone-limits'
+       to manage the maximum number of connections in conntrack zones via
+       a new 'limit' column in the 'CT_Zone' database table and
+       'ct_zone_default_limit' column in the 'Datapath' table.
    - Userspace datapath:
      * Added support for Generic Segmentation Offloading for the cases where
        TSO is enabled but not supported by an egress interface (except for

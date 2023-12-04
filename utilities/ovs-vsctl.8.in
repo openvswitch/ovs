@@ -354,7 +354,7 @@ Prints the name of the bridge that contains \fIiface\fR on standard
 output.
 .
 .SS "Conntrack Zone Commands"
-These commands query and modify datapath CT zones and Timeout Policies.
+These commands query and modify datapath CT zones, Timeout Policies and Limits.
 .
 .IP "[\fB\-\-may\-exist\fR] \fBadd\-zone\-tp \fIdatapath \fBzone=\fIzone_id \fIpolicies\fR"
 Creates a conntrack zone timeout policy with \fIzone_id\fR in
@@ -365,19 +365,36 @@ packet and a 60-second policy for ICMP reply packets.  See the
 \fBCT_Timeout_Policy\fR table in \fBovs-vswitchd.conf.db\fR(5) for the
 supported keys.
 .IP
-Without \fB\-\-may\-exist\fR, attempting to add a \fIzone_id\fR that
-already exists is an error.  With \fB\-\-may\-exist\fR,
-this command does nothing if \fIzone_id\fR already exists.
+Without \fB\-\-may\-exist\fR, attempting to add a \fIpolicy\fR for
+\fIzone_id\fR that already has a policy is an error.
+ With \fB\-\-may\-exist\fR, this command does nothing if policy for
+ \fIzone_id\fR already exists.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-zone\-tp \fIdatapath \fBzone=\fIzone_id\fR"
 Delete the timeout policy associated with \fIzone_id\fR from \fIdatapath\fR.
 .IP
-Without \fB\-\-if\-exists\fR, attempting to delete a zone that
-does not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
-delete a zone that does not exist has no effect.
+Without \fB\-\-if\-exists\fR, attempting to delete a policy for zone that
+does not exist or doesn't have a policy is an error.  With
+\fB\-\-if\-exists\fR, attempting to delete a a policy that does not
+exist has no effect.
 .
 .IP "\fBlist\-zone\-tp \fIdatapath\fR"
 Prints the timeout policies of all zones in \fIdatapath\fR.
+.
+.IP "\fBset\-zone\-limit \fIdatapath \fIzone_id\fR|\fBdefault \fIzone_limit\fR"
+Sets a conntrack zone limit with \fIzone_id\fR|\fIdefault\fR in
+\fIdatapath\fR.  The \fIlimit\fR with value \fB0\fR means unlimited.
+.IP
+.
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-zone\-limit \fIdatapath \fIzone_id\fR|\fBdefault\fR"
+Delete the limit associated with \fIzone_id\fR from \fIdatapath\fR.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a limit for zone that
+does not exist or doesn't have a limit is an error.  With \fB\-\-if\-exists\fR,
+attempting to delete a limit that does not exist has no effect.
+.
+.IP "\fBlist\-zone\-limits \fIdatapath\fR"
+Prints the limits of all zones in \fIdatapath\fR.
 .
 .SS "Datapath Capabilities Command"
 The command query datapath capabilities.

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "8.4.0",
- "cksum": "2738838700 27127",
+ "version": "8.5.0",
+ "cksum": "4040946650 27557",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -670,6 +670,11 @@
        "capabilities": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
+       "ct_zone_default_limit": {
+          "type": { "key": {"type": "integer",
+                            "minInteger": 0,
+                            "maxInteger": 4294967295},
+                    "min": 0, "max": 1}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
@@ -679,6 +684,11 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "CT_Timeout_Policy"},
                   "min": 0, "max": 1}},
+       "limit": {
+          "type": { "key": {"type": "integer",
+                            "minInteger": 0,
+                            "maxInteger": 4294967295},
+                    "min": 0, "max": 1}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
