@@ -2291,14 +2291,23 @@ dpctl_ct_del_limits(int argc, const char *argv[],
     int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
     if (error) {
         return error;
     }
 
-    error = parse_ct_limit_zones(argv[i], &zone_limits, &ds);
-    if (error) {
-        goto error;
+    /* Parse default limit. */
+    if (!strcmp(argv[i], "default")) {
+        ct_dpif_push_zone_limit(&zone_limits, OVS_ZONE_LIMIT_DEFAULT_ZONE,
+                                0, 0);
+        i++;
+    }
+
+    if (argc > i) {
+        error = parse_ct_limit_zones(argv[i], &zone_limits, &ds);
+        if (error) {
+            goto error;
+        }
     }
 
     error = ct_dpif_del_limits(dpif, &zone_limits);
@@ -3031,8 +3040,8 @@ static const struct dpctl_command all_commands[] = {
     { "ct-get-tcp-seq-chk", "[dp]", 0, 1, dpctl_ct_get_tcp_seq_chk, DP_RO },
     { "ct-set-limits", "[dp] [default=L] [zone=N,limit=L]...", 1, INT_MAX,
         dpctl_ct_set_limits, DP_RO },
-    { "ct-del-limits", "[dp] zone=N1[,N2]...", 1, 2, dpctl_ct_del_limits,
-        DP_RO },
+    { "ct-del-limits", "[dp] [default] [zone=N1[,N2]...]", 1, 3,
+        dpctl_ct_del_limits, DP_RO },
     { "ct-get-limits", "[dp] [zone=N1[,N2]...]", 0, 2, dpctl_ct_get_limits,
         DP_RO },
     { "ct-get-sweep-interval", "[dp]", 0, 1, dpctl_ct_get_sweep, DP_RO },

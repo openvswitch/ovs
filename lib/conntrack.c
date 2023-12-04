@@ -404,13 +404,15 @@ zone_limit_delete(struct conntrack *ct, int32_t zone)
     struct zone_limit *zl = zone_limit_lookup_protected(ct, zone);
     if (zl) {
         zone_limit_clean(ct, zl);
-        ovs_mutex_unlock(&ct->ct_lock);
-        VLOG_INFO("Deleted zone limit for zone %d", zone);
-    } else {
-        ovs_mutex_unlock(&ct->ct_lock);
-        VLOG_INFO("Attempted delete of non-existent zone limit: zone %d",
+    }
+
+    if (zone != DEFAULT_ZONE) {
+        VLOG_INFO(zl ? "Deleted zone limit for zone %d"
+                     : "Attempted delete of non-existent zone limit: zone %d",
                   zone);
     }
+
+    ovs_mutex_unlock(&ct->ct_lock);
     return 0;
 }
 
