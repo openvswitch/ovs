@@ -3307,5 +3307,41 @@ AT_CHECK([ovs-ofctl ct-flush br0])
 OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 5])
 AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: <all>" ovs-vswitchd.log])
 
+AT_CHECK([ovs-ofctl ct-flush br0 mark=0])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 6])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 mark=0" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 mark=0/0x5])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 7])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 mark=0/0x5" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 mark=0xabc/0xdef])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 8])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 mark=0xabc/0xdef" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 labels=0])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 9])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 labels=0" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 labels=0/0x5])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 10])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 labels=0/0x5" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 labels=0xabc/0xdef])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 11])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=0 labels=0xabc/0xdef" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 zone=5 mark=25 labels=25])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 12])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=5 mark=0x19 labels=0x19" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 zone=5 mark=30/25 labels=30/25])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 13])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone=5 mark=0x1e/0x19 labels=0x1e/0x19" ovs-vswitchd.log])
+
+AT_CHECK([ovs-ofctl ct-flush br0 zone=6 mark=30/0 labels=30/0])
+OVS_WAIT_UNTIL([test $(grep -c "|ct_dpif|DBG|.*ct_flush" ovs-vswitchd.log) -eq 14])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone 6" ovs-vswitchd.log])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP

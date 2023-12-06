@@ -296,17 +296,19 @@ Flushes the connection tracking entries in \fIzone\fR on \fIswitch\fR.
 This command uses an Open vSwitch extension that is only in Open
 vSwitch 2.6 and later.
 .
-.IP "\fBct\-flush \fIswitch [zone=N] [ct-orig-tuple [ct-reply-tuple]]\fR
-Flushes the connection entries on \fIswitch\fR based on \fIzone\fR and
-connection tracking tuples \fIct-[orig|reply]-tuple\fR.
+.IP "\fBct\-flush \fIswitch [zone=N] [mark=X[/M]] [labels=Y[/N]] [ct-orig-tuple [ct-reply-tuple]]\fR
+Flushes the connection entries on \fIswitch\fR based on \fIzone\fR, \fImark\fR,
+\fIlabels\fR and connection tracking tuples \fIct-[orig|reply]-tuple\fR.
 .IP
 If \fIct-[orig|reply]-tuple\fR is not provided, flushes all the connection
 entries.  If \fIzone\fR is specified, only flushes the connections in
-\fIzone\fR.
+\fIzone\fR. if \fImark\fR or \fIlabels\fR is provided, it will flush
+only entries that are matching specific \fImark/labels\fR.
 .IP
 If \fIct-[orig|reply]-tuple\fR is provided, flushes the connection entry
 specified by \fIct-[orig|reply]-tuple\fR in \fIzone\fR.  The zone defaults
-to 0 if it is not provided.  The userspace connection tracker requires flushing
+to 0 if it is not provided.  The \fImark\fR and \fIlabels\fR defaults to "0/0"
+if it is not provided.  The userspace connection tracker requires flushing
 with the original pre-NATed tuple and a warning log will be otherwise
 generated.  The tuple can be partial and will remove all connections that are
 matching on the specified fields.  In order to specify only
@@ -325,7 +327,8 @@ An example of an IPv6 TCP \fIct-[orig|reply]-tuple\fR:
 "ct_ipv6_src=fc00::1,ct_ipv6_dst=fc00::2,ct_nw_proto=6,ct_tp_src=1,ct_tp_dst=2"
 .IP
 This command uses an Open vSwitch extension that is only in Open vSwitch 3.1
-and later.
+and later.  Support for matching on \fImark\fR and \fIlabels\fR is only in
+Open vSwitch 3.3 and later.
 .
 .SS "OpenFlow Switch Flow Table Commands"
 .

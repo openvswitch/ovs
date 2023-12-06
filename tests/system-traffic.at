@@ -2649,8 +2649,8 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=10,arp,action=normal
-priority=100,in_port=1,ip,action=ct(commit),2
-priority=100,in_port=2,ip,action=ct(zone=5,commit),1
+priority=100,in_port=1,ip,action=ct(commit,exec(set_field:0xaa->ct_mark)),2
+priority=100,in_port=2,ip,action=ct(zone=5,commit,exec(set_field:0xaa00000000->ct_label)),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -2665,7 +2665,7 @@ dnl Test UDP from port 1
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.1,"], [], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_src=10.1.1.2,ct_nw_dst=10.1.1.1,ct_nw_proto=17,ct_tp_src=2,ct_tp_dst=1'])
@@ -2677,7 +2677,7 @@ dnl Test UDP from port 2
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000 actions=resubmit(,0)"])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.2,"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD zone=5 'ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2'])
@@ -2691,7 +2691,7 @@ NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -W 2 10.1.1.1 | FORMAT_PING], [0], 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.2,"], [0], [stdout])
 AT_CHECK([cat stdout | FORMAT_CT(10.1.1.1)], [0],[dnl
-icmp,orig=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=8,code=0),reply=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=0,code=0),zone=5
+icmp,orig=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=8,code=0),reply=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=0,code=0),zone=5,labels=0xaa00000000
 ])
 
 ICMP_ID=`cat stdout | cut -d ',' -f4 | cut -d '=' -f2`
@@ -2707,14 +2707,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_proto=17,ct_tp_src=1'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_proto=17,ct_tp_src=2'])
@@ -2727,14 +2727,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_proto=17,ct_tp_dst=2'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_proto=17,ct_tp_dst=1'])
@@ -2747,14 +2747,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_src=10.1.1.1'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_src=10.1.1.2'])
@@ -2767,14 +2767,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_dst=10.1.1.2'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_dst=10.1.1.1'])
@@ -2787,14 +2787,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD '' 'ct_nw_src=10.1.1.2'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD zone=5 '' 'ct_nw_src=10.1.1.1'])
@@ -2807,8 +2807,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a5
 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
-udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD])
@@ -2820,46 +2820,80 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a5
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000950540000000a08004500003400010000408464410a0101020a010101000200010000000098f29e470100001470e18ccc00000000000a000a00000000 actions=resubmit(,0)"])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sed "s/,protoinfo=.*$//" | sort], [0], [dnl
-sctp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
-sctp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+sctp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+sctp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_src=10.1.1.1,ct_nw_proto=132,ct_tp_src=1,ct_tp_dst=2'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sed "s/,protoinfo=.*$//" | sort], [0], [dnl
-sctp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5
+sctp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
 AT_CHECK([FLUSH_CMD 'ct_nw_src=10.1.1.2,ct_nw_proto=132,ct_tp_src=2,ct_tp_dst=1'])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [1])
+
+dnl Test UDP from port 1 and 2, partial flush by mark and labels.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
 ])
 
-dnl Test flush with invalid arguments
+AT_CHECK([FLUSH_CMD mark=0xaa])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=invalid 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
+])
+
+AT_CHECK([FLUSH_CMD labels=0xaa00000000])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [1])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1" | sort], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),mark=170
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
+])
+
+AT_CHECK([FLUSH_CMD mark=2/2])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [0], [dnl
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),zone=5,labels=0xaa00000000
+])
+
+AT_CHECK([FLUSH_CMD labels=0x0200000000/0x0200000000])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "10\.1\.1\.1"], [1])
+
+dnl Test flush with invalid arguments.
+
+AT_CHECK([FLUSH_CMD zone=invalid 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1'], [ignore], [ignore], [stderr])
 AT_CHECK([grep -q "failed to parse zone" stderr])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=10.1.1.1,invalid=invalid' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([FLUSH_CMD zone=1 'ct_nw_src=10.1.1.1,invalid=invalid' 'ct_nw_dst=10.1.1.1'], [ignore], [ignore], [stderr])
 AT_CHECK([grep -q "invalid conntrack tuple field: invalid" stderr])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=invalid' 'ct_nw_dst=10.1.1.1'], [2], [ignore], [stderr])
+AT_CHECK([FLUSH_CMD zone=1 'ct_nw_src=invalid' 'ct_nw_dst=10.1.1.1'], [ignore], [ignore], [stderr])
 AT_CHECK([grep -q "failed to parse field ct_nw_src" stderr])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
+AT_CHECK([FLUSH_CMD zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [ignore], [ignore], [stderr])
 AT_CHECK([grep -q "invalid arguments" stderr])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack $dp zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
-AT_CHECK([grep -q "command takes at most 4 arguments" stderr])
+AT_CHECK([FLUSH_CMD zone=1 mark=1 labels=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid invalid], [ignore], [ignore], [stderr])
+AT_CHECK([grep -q "command takes at most 6 arguments" stderr])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack $dp 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [2], [ignore], [stderr])
-AT_CHECK([grep -q "invalid arguments" stderr])
+AT_CHECK([FLUSH_CMD mark=invalid], [ignore], [ignore], [stderr])
+AT_CHECK([grep -q "failed to parse mark" stderr])
 
-AT_CHECK([ovs-ofctl ct-flush br0 zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [1], [ignore], [stderr])
-AT_CHECK([grep -q "command takes at most 4 arguments" stderr])
-
-AT_CHECK([ovs-ofctl ct-flush br0 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [1], [ignore], [stderr])
-AT_CHECK([grep -q "invalid arguments" stderr])
+AT_CHECK([FLUSH_CMD labels=invalid], [ignore], [ignore], [stderr])
+AT_CHECK([grep -q "failed to parse labels" stderr])
+])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

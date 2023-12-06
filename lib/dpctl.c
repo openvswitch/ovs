@@ -3005,8 +3005,9 @@ static const struct dpctl_command all_commands[] = {
       0, 4, dpctl_dump_conntrack, DP_RO },
     { "dump-conntrack-exp", "[dp] [zone=N]",
       0, 2, dpctl_dump_conntrack_exp, DP_RO },
-    { "flush-conntrack", "[dp] [zone=N] [ct-orig-tuple] [ct-reply-tuple]",
-      0, 4, dpctl_flush_conntrack, DP_RW },
+    { "flush-conntrack", "[dp] [zone=N] [mark=X[/M]] [labels=Y[/N]] "
+                         "[ct-orig-tuple [ct-reply-tuple]]",
+      0, 6, dpctl_flush_conntrack, DP_RW },
     { "cache-get-size", "[dp]", 0, 1, dpctl_cache_get_size, DP_RO },
     { "cache-set-size", "dp cache <size>", 3, 3, dpctl_cache_set_size, DP_RW },
     { "ct-stats-show", "[dp] [zone=N]",

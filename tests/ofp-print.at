@@ -4094,6 +4094,84 @@ NXT_CT_FLUSH (xid=0x3): zone=13 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp
 ])
 
 AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 20 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 03 00 08 00 00 00 ab \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 mark=0xab 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 20 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 04 00 08 00 00 00 cd \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 mark=0/0xcd 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 28 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 03 00 08 00 00 00 ab \
+00 04 00 08 00 00 00 cd \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 mark=0xab/0xcd 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 30 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 05 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff ab 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 labels=0xffab00 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 30 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 06 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff cd 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 labels=0/0xffcd00 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 48 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 05 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff ab 00 00 00 00 00 \
+00 06 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff cd 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 labels=0xffab00/0xffcd00 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 38 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 03 00 08 00 00 00 ab \
+00 05 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff ab 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 mark=0xab labels=0xffab00 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 58 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 03 00 08 00 00 00 ab \
+00 04 00 08 00 00 00 cd \
+00 05 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff ab 00 00 00 00 00 \
+00 06 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00 ff cd 00 00 00 00 00 \
+"], [0], [dnl
+NXT_CT_FLUSH (xid=0x3): zone=0 mark=0xab/0xcd labels=0xffab00/0xffcd00 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0,ct_nw_proto=6' 'ct_ipv6_src=::,ct_ipv6_dst=::,ct_tp_src=0,ct_tp_dst=0'
+])
+
+AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 68 00 00 00 03 00 00 23 20 00 00 00 20 \
 06 \
 00 00 00 00 00 00 00 \
@@ -4198,4 +4276,10 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "| grep -q OFPBPC_BAD_TYPE], [0], [ignore], [stderr])
 AT_CHECK([grep -q "unknown NXT_CT_TUPLE property type 128" stderr], [0])
 
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 30 00 00 00 03 00 00 23 20 00 00 00 20 \
+06 \
+00 00 00 00 00 00 00 \
+00 06 00 15 00 00 00 00 00 00 00 00 00 00 00 00 00 ff cd 00 00 00 00 00 \
+" | grep -q OFPBPC_BAD_LEN], [0])
 AT_CLEANUP

@@ -274,6 +274,15 @@ ct_dpif_entry_cmp(const struct ct_dpif_entry *entry,
         return false;
     }
 
+    if ((match->mark & match->mark_mask) != (entry->mark & match->mark_mask)) {
+        return false;
+    }
+
+    if (!ovs_u128_equals(ovs_u128_and(match->labels, match->labels_mask),
+                         ovs_u128_and(entry->labels, match->labels_mask))) {
+        return false;
+    }
+
     return true;
 }
 
@@ -300,8 +309,7 @@ ct_dpif_flush_tuple(struct dpif *dpif, const uint16_t *zone,
 
     /* If we have full five tuple in original and empty reply tuple just
      * do the flush over original tuple directly. */
-    if (ofp_ct_tuple_is_five_tuple(&match->tuple_orig, match->ip_proto) &&
-        ofp_ct_tuple_is_zero(&match->tuple_reply, match->ip_proto)) {
+    if (ofp_ct_match_is_five_tuple(match)) {
         struct ct_dpif_tuple tuple;
 
         ct_dpif_tuple_from_ofp_ct_tuple(&match->tuple_orig, &tuple,

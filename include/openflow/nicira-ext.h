@@ -1075,6 +1075,10 @@ enum nx_ct_flush_tlv_type {
                                 * by 'enum nx_ct_flush_tuple_tlv_type'*/
     /* Primitive types. */
     NXT_CT_ZONE_ID = 2,        /* be16 zone id. */
+    NXT_CT_MARK = 3,           /* be32 mark. */
+    NXT_CT_MARK_MASK = 4,      /* be32 mark mask. */
+    NXT_CT_LABELS = 5,         /* be128 labels. */
+    NXT_CT_LABELS_MASK = 6,    /* be128 labels mask. */
 };
 
 /* CT flush nested TLVs. */

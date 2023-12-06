@@ -6,6 +6,10 @@ Post-v3.2.0
        from older version is supported but it may trigger more leader elections
        during the process, and error logs complaining unrecognized fields may
        be observed on old nodes.
+   - OpenFlow:
+     * NXT_CT_FLUSH extension is updated to support flushing connections
+       based on mark and labels.  'ct-flush' command of ovs-ofctl updated
+       to support these new arguments accordingly.
    - ovs-appctl:
      * 'ofproto/trace' now reports OpenFlow rules that make up a conjunctive
        flow match.
@@ -17,6 +21,8 @@ Post-v3.2.0
        Reported names adjusted accordingly.
      * Added support for removal of default CT zone limit, e.g.
        "ovs-appctl dpctl/ct-del-limits default".
+     * 'dpctl/flush-conntrack' is now capable of flushing connections based
+       on mark and labels.
    - ovs-vsctl:
      * New commands 'set-zone-limit', 'del-zone-limit' and 'list-zone-limits'
        to manage the maximum number of connections in conntrack zones via

@@ -51,11 +51,16 @@ struct ofp_ct_match {
 
     struct ofp_ct_tuple tuple_orig;
     struct ofp_ct_tuple tuple_reply;
+
+    uint32_t mark;
+    uint32_t mark_mask;
+
+    ovs_u128 labels;
+    ovs_u128 labels_mask;
 };
 
 bool ofp_ct_match_is_zero(const struct ofp_ct_match *);
-bool ofp_ct_tuple_is_zero(const struct ofp_ct_tuple *, uint8_t ip_proto);
-bool ofp_ct_tuple_is_five_tuple(const struct ofp_ct_tuple *, uint8_t ip_proto);
+bool ofp_ct_match_is_five_tuple(const struct ofp_ct_match *);
 
 void ofp_ct_match_format(struct ds *, const struct ofp_ct_match *);
 bool ofp_ct_match_parse(const char **, int argc, struct ds *,

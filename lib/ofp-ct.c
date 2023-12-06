@@ -53,7 +53,7 @@ ofp_ct_tuple_format(struct ds *ds, const struct ofp_ct_tuple *tuple,
     }
 }
 
-bool
+static bool
 ofp_ct_tuple_is_zero(const struct ofp_ct_tuple *tuple, uint8_t ip_proto)
 {
     bool is_zero = ipv6_is_zero(&tuple->src) && ipv6_is_zero(&tuple->dst);
@@ -65,7 +65,7 @@ ofp_ct_tuple_is_zero(const struct ofp_ct_tuple *tuple, uint8_t ip_proto)
     return is_zero;
 }
 
-bool
+static bool
 ofp_ct_tuple_is_five_tuple(const struct ofp_ct_tuple *tuple, uint8_t ip_proto)
 {
     /* First check if we have address. */
@@ -79,16 +79,47 @@ ofp_ct_tuple_is_five_tuple(const struct ofp_ct_tuple *tuple, uint8_t ip_proto)
 }
 
 bool
+ofp_ct_match_is_five_tuple(const struct ofp_ct_match *match)
+{
+    return ofp_ct_tuple_is_five_tuple(&match->tuple_orig, match->ip_proto) &&
+           ofp_ct_tuple_is_zero(&match->tuple_reply, match->ip_proto) &&
+           !match->mark_mask && ovs_u128_is_zero(match->labels_mask);
+}
+
+bool
 ofp_ct_match_is_zero(const struct ofp_ct_match *match)
 {
     return !match->ip_proto && !match->l3_type &&
            ofp_ct_tuple_is_zero(&match->tuple_orig, match->ip_proto) &&
-           ofp_ct_tuple_is_zero(&match->tuple_reply, match->ip_proto);
+           ofp_ct_tuple_is_zero(&match->tuple_reply, match->ip_proto) &&
+           !match->mark_mask && ovs_u128_is_zero(match->labels_mask);
 }
 
 void
 ofp_ct_match_format(struct ds *ds, const struct ofp_ct_match *match)
 {
+    if (match->mark_mask) {
+        ds_put_format(ds, "mark=%#"PRIx32, match->mark);
+        if (match->mark_mask != UINT32_MAX) {
+            ds_put_format(ds, "/%#"PRIx32, match->mark_mask);
+        }
+        ds_put_char(ds, ' ');
+    }
+
+    if (!ovs_u128_is_zero(match->labels_mask)) {
+        ovs_be128 be_value = hton128(match->labels);
+        ovs_be128 be_mask = hton128(match->labels_mask);
+
+        ds_put_cstr(ds, "labels=");
+        ds_put_hex(ds, &be_value, sizeof be_value);
+
+        if (!ovs_u128_is_ones(match->labels_mask)) {
+            ds_put_char(ds, '/');
+            ds_put_hex(ds, &be_mask, sizeof be_mask);
+        }
+        ds_put_char(ds, ' ');
+    }
+
     ds_put_cstr(ds, "'");
     ofp_ct_tuple_format(ds, &match->tuple_orig, match->ip_proto,
                         match->l3_type);
@@ -96,6 +127,23 @@ ofp_ct_match_format(struct ds *ds, const struct ofp_ct_match *match)
     ofp_ct_tuple_format(ds, &match->tuple_reply, match->ip_proto,
                         match->l3_type);
     ds_put_cstr(ds, "'");
+}
+
+static inline bool
+ofp_ct_masked_parse(const char *s, uint8_t *val, size_t val_len,
+                    uint8_t *mask, size_t mask_len)
+{
+    char *tail;
+    if (!parse_int_string(s, val, val_len, &tail)) {
+        if (*tail != '/' || parse_int_string(tail + 1, mask,
+                                             mask_len, &tail)) {
+            memset(mask, UINT8_MAX, mask_len);
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 /* Parses a specification of a conntrack 5-tuple from 's' into 'tuple'.
@@ -236,6 +284,40 @@ ofp_ct_match_parse(const char **argv, int argc, struct ds *ds,
             return false;
         }
         *with_zone = true;
+        args--;
+    }
+
+    /* Parse mark. */
+    if (args && !strncmp(argv[argc - args], "mark=", 5)) {
+        const char *s = argv[argc - args] + 5;
+        ovs_be32 mark_be;
+        ovs_be32 mask_be;
+
+        if (ofp_ct_masked_parse(s, (uint8_t *) &mark_be, sizeof mark_be,
+                                (uint8_t *) &mask_be, sizeof mask_be)) {
+            match->mark = ntohl(mark_be);
+            match->mark_mask = ntohl(mask_be);
+        } else {
+            ds_put_cstr(ds, "failed to parse mark");
+            return false;
+        }
+        args--;
+    }
+
+    /* Parse labels. */
+    if (args && !strncmp(argv[argc - args], "labels=", 7)) {
+        const char *s = argv[argc - args] + 7;
+        ovs_be128 labels_be;
+        ovs_be128 mask_be;
+
+        if (ofp_ct_masked_parse(s, (uint8_t *) &labels_be, sizeof labels_be,
+                                 (uint8_t *) &mask_be, sizeof mask_be)) {
+            match->labels = ntoh128(labels_be);
+            match->labels_mask = ntoh128(mask_be);
+        } else {
+            ds_put_cstr(ds, "failed to parse labels");
+            return false;
+        }
         args--;
     }
 
@@ -389,6 +471,7 @@ enum ofperr
 ofp_ct_match_decode(struct ofp_ct_match *match, bool *with_zone,
                     uint16_t *zone_id, const struct ofp_header *oh)
 {
+    uint32_t tlv_flags = 0;
     struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
@@ -430,6 +513,22 @@ ofp_ct_match_decode(struct ofp_ct_match *match, bool *with_zone,
             error = ofpprop_parse_u16(&property, zone_id);
             break;
 
+        case NXT_CT_MARK:
+            error = ofpprop_parse_u32(&property, &match->mark);
+            break;
+
+        case NXT_CT_MARK_MASK:
+            error = ofpprop_parse_u32(&property, &match->mark_mask);
+            break;
+
+        case NXT_CT_LABELS:
+            error = ofpprop_parse_u128(&property, &match->labels);
+            break;
+
+        case NXT_CT_LABELS_MASK:
+            error = ofpprop_parse_u128(&property, &match->labels_mask);
+            break;
+
         default:
             error = OFPPROP_UNKNOWN(false, "NXT_CT_FLUSH", type);
             break;
@@ -438,6 +537,22 @@ ofp_ct_match_decode(struct ofp_ct_match *match, bool *with_zone,
         if (error) {
             return error;
         }
+
+        if (type < (sizeof tlv_flags * CHAR_BIT)) {
+            tlv_flags |= (UINT32_C(1) << type);
+        }
+    }
+
+    /* Consider the mask being all ones if it's not present but the value
+     * is specified. */
+    if (tlv_flags & (UINT32_C(1) << NXT_CT_MARK) &&
+        !(tlv_flags & (UINT32_C(1) << NXT_CT_MARK_MASK))) {
+        match->mark_mask = UINT32_MAX;
+    }
+
+    if (tlv_flags & (UINT32_C(1) << NXT_CT_LABELS) &&
+        !(tlv_flags & (UINT32_C(1) << NXT_CT_LABELS_MASK))) {
+        match->labels_mask = OVS_U128_MAX;
     }
 
     return 0;
@@ -459,6 +574,20 @@ ofp_ct_match_encode(const struct ofp_ct_match *match, uint16_t *zone_id,
 
     if (zone_id) {
         ofpprop_put_u16(msg, NXT_CT_ZONE_ID, *zone_id);
+    }
+
+    if (match->mark_mask) {
+        ofpprop_put_u32(msg, NXT_CT_MARK, match->mark);
+        if (match->mark_mask != UINT32_MAX) {
+            ofpprop_put_u32(msg, NXT_CT_MARK_MASK, match->mark_mask);
+        }
+    }
+
+    if (!ovs_u128_is_zero(match->labels_mask)) {
+        ofpprop_put_u128(msg, NXT_CT_LABELS, match->labels);
+        if (!ovs_u128_is_ones(match->labels_mask)) {
+            ofpprop_put_u128(msg, NXT_CT_LABELS_MASK, match->labels_mask);
+        }
     }
 
     return msg;

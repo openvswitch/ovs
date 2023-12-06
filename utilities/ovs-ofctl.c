@@ -494,9 +494,11 @@ usage(void)
            "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
            "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
            "  ct-flush-zone SWITCH ZONE   flush conntrack entries in ZONE\n"
-           "  ct-flush SWITCH [ZONE] [CT_ORIG_TUPLE [CT_REPLY_TUPLE]]\n"
+           "  ct-flush SWITCH [ZONE] [mark=X[/M]] [labels=Y[/N]]\n"
+           "                  [CT_ORIG_TUPLE [CT_REPLY_TUPLE]]\n"
            "                              flush conntrack entries specified\n"
-           "                              by CT_ORIG/REPLY_TUPLE and ZONE\n"
+           "                              by CT_ORIG/REPLY_TUPLE, ZONE, mark\n"
+           "                              and labels\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -5122,8 +5124,9 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "ct-flush-zone", "switch zone",
       2, 2, ofctl_ct_flush_zone, OVS_RW },
 
-    { "ct-flush", "switch [zone=N] [ct-orig-tuple [ct-reply-tuple]]",
-      1, 4, ofctl_ct_flush, OVS_RW },
+    { "ct-flush", "switch [zone=N] [mark=X[/M]] [labels=Y[/N]] "
+                  "[ct-orig-tuple [ct-reply-tuple]]",
+      1, 6, ofctl_ct_flush, OVS_RW },
 
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse, OVS_RW },
