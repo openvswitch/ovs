@@ -101,7 +101,7 @@ ofp_ct_match_format(struct ds *ds, const struct ofp_ct_match *match)
 /* Parses a specification of a conntrack 5-tuple from 's' into 'tuple'.
  * Returns true on success.  Otherwise, returns false and puts the error
  * message in 'ds'. */
-bool
+static bool
 ofp_ct_tuple_parse(struct ofp_ct_tuple *tuple, const char *s,
                    struct ds *ds, uint8_t *ip_proto, uint16_t *l3_type)
 {
@@ -217,6 +217,51 @@ error_with_msg:
 error:
     free(copy);
     return false;
+}
+
+/* Parses a specification of a conntrack match from 'argv' into 'match'.
+ * Returns true on success. Otherwise, returns false and puts the error
+ * message in 'ds'. */
+bool
+ofp_ct_match_parse(const char **argv, int argc, struct ds *ds,
+                   struct ofp_ct_match *match, bool *with_zone,
+                   uint16_t *zone_id)
+{
+    int args = argc;
+
+    /* Parse zone. */
+    if (args && !strncmp(argv[argc - args], "zone=", 5)) {
+        if (!ovs_scan(argv[argc - args], "zone=%"SCNu16, zone_id)) {
+            ds_put_cstr(ds, "failed to parse zone");
+            return false;
+        }
+        *with_zone = true;
+        args--;
+    }
+
+    /* Parse ct tuples. */
+    for (int i = 0; i < 2; i++) {
+        if (!args) {
+            break;
+        }
+
+        struct ofp_ct_tuple *tuple =
+                i ? &match->tuple_reply : &match->tuple_orig;
+        const char *arg = argv[argc - args];
+
+        if (arg[0] && !ofp_ct_tuple_parse(tuple, arg, ds, &match->ip_proto,
+                                          &match->l3_type)) {
+            return false;
+        }
+        args--;
+    }
+
+    if (args > 0) {
+        ds_put_cstr(ds, "invalid arguments");
+        return false;
+    }
+
+    return true;
 }
 
 static enum ofperr

@@ -2859,7 +2859,7 @@ AT_CHECK([ovs-ofctl ct-flush br0 zone=1 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1
 AT_CHECK([grep -q "command takes at most 4 arguments" stderr])
 
 AT_CHECK([ovs-ofctl ct-flush br0 'ct_nw_src=10.1.1.1' 'ct_nw_dst=10.1.1.1' invalid], [1], [ignore], [stderr])
-AT_CHECK([grep -q "Invalid arguments" stderr])
+AT_CHECK([grep -q "invalid arguments" stderr])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

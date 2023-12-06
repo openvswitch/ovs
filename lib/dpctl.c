@@ -1773,48 +1773,17 @@ dpctl_flush_conntrack(int argc, const char *argv[],
     struct dpif *dpif = NULL;
     struct ofp_ct_match match = {0};
     struct ds ds = DS_EMPTY_INITIALIZER;
-    uint16_t zone, *pzone = NULL;
+    uint16_t zone;
     int error;
     int args = argc - 1;
-    int zone_pos = 1;
+    bool with_zone = false;
 
     if (dp_arg_exists(argc, argv)) {
         args--;
-        zone_pos = 2;
     }
 
-    /* Parse zone. */
-    if (args && !strncmp(argv[zone_pos], "zone=", 5)) {
-        if (!ovs_scan(argv[zone_pos], "zone=%"SCNu16, &zone)) {
-            ds_put_cstr(&ds, "failed to parse zone");
-            error = EINVAL;
-            goto error;
-        }
-        pzone = &zone;
-        args--;
-    }
-
-    /* Parse ct tuples. */
-    for (int i = 0; i < 2; i++) {
-        if (!args) {
-            break;
-        }
-
-        struct ofp_ct_tuple *tuple =
-            i ? &match.tuple_reply : &match.tuple_orig;
-        const char *arg = argv[argc - args];
-
-        if (arg[0] && !ofp_ct_tuple_parse(tuple, arg, &ds, &match.ip_proto,
-                                          &match.l3_type)) {
-            error = EINVAL;
-            goto error;
-        }
-        args--;
-    }
-
-    /* Report error if there is more than one unparsed argument. */
-    if (args > 0) {
-        ds_put_cstr(&ds, "invalid arguments");
+    if (args && !ofp_ct_match_parse(&argv[argc - args], args, &ds, &match,
+                                    &with_zone, &zone)) {
         error = EINVAL;
         goto error;
     }
@@ -1825,7 +1794,7 @@ dpctl_flush_conntrack(int argc, const char *argv[],
         return error;
     }
 
-    error = ct_dpif_flush(dpif, pzone, &match);
+    error = ct_dpif_flush(dpif, with_zone ? &zone : NULL, &match);
     if (!error) {
         dpif_close(dpif);
         return 0;

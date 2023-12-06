@@ -3068,43 +3068,19 @@ ofctl_ct_flush(struct ovs_cmdl_context *ctx)
     struct vconn *vconn;
     struct ofp_ct_match match = {0};
     struct ds ds = DS_EMPTY_INITIALIZER;
-    uint16_t zone, *pzone = NULL;
+    uint16_t zone;
     int args = ctx->argc - 2;
+    bool with_zone = false;
 
-    /* Parse zone. */
-    if (args && !strncmp(ctx->argv[2], "zone=", 5)) {
-        if (!ovs_scan(ctx->argv[2], "zone=%"SCNu16, &zone)) {
-            ovs_fatal(0, "Failed to parse zone");
-        }
-        pzone = &zone;
-        args--;
-    }
-
-    /* Parse ct tuples. */
-    for (int i = 0; i < 2; i++) {
-        if (!args) {
-            break;
-        }
-
-        struct ofp_ct_tuple *tuple =
-            i ? &match.tuple_reply : &match.tuple_orig;
-        const char *arg = ctx->argv[ctx->argc - args];
-
-        if (arg[0] && !ofp_ct_tuple_parse(tuple, arg, &ds, &match.ip_proto,
-                                          &match.l3_type)) {
-            ovs_fatal(0, "Failed to parse ct-tuple: %s", ds_cstr(&ds));
-        }
-        args--;
-    }
-
-    if (args > 0) {
-        ovs_fatal(0, "Invalid arguments");
+    if (args && !ofp_ct_match_parse((const char **) &ctx->argv[2],
+                                    args, &ds, &match, &with_zone, &zone)) {
+        ovs_fatal(0, "Failed to parse CT match: %s", ds_cstr(&ds));
     }
 
     open_vconn(ctx->argv[1], &vconn);
     enum ofp_version version = vconn_get_version(vconn);
-    struct ofpbuf *msg = ofp_ct_match_encode(&match, pzone, version);
-
+    struct ofpbuf *msg = ofp_ct_match_encode(&match, with_zone ? &zone : NULL,
+                                             version);
     ds_destroy(&ds);
     transact_noreply(vconn, msg);
     vconn_close(vconn);
