@@ -585,24 +585,19 @@ dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
 
 dnl Check default MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=1500' stdout], [], [stdout])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [1500])
 
 dnl Increase MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [9000])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
 
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
-
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
-
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
@@ -627,7 +622,9 @@ AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
 AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
-sleep 2
+
+dnl Check MTU value in the datapath
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [9000])
 
 dnl Fail if MTU is not supported
 AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitchd.log], [], [stdout])
@@ -635,15 +632,9 @@ AT_FAIL_IF([grep "Interface phy0 does not support MTU configuration" ovs-vswitch
 dnl Fail if error is encountered during MTU setup
 AT_FAIL_IF([grep "Interface phy0 MTU (9000) setup error" ovs-vswitchd.log], [], [stdout])
 
-dnl Check MTU value in the datapath
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=9000' stdout], [], [stdout])
-
 dnl Decrease MTU value and check in the datapath
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=2000])
-
-AT_CHECK([ovs-appctl dpctl/show], [], [stdout])
-AT_CHECK([grep -E 'mtu=2000' stdout], [], [stdout])
+OVS_WAIT_UNTIL_EQUAL([ovs-vsctl get Interface phy0 mtu], [2000])
 
 
 dnl Clean up
