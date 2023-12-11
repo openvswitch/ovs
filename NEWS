@@ -36,6 +36,9 @@ Post-v3.2.0
        The existing behaviour is maintained and a non key:value pair value
        will be applied to all other PMD thread cores.'pmd-sleep-show' is
        updated to show the maximum sleep for each PMD thread core.
+     * The userspace conntrack module no longer requires the user to specify
+       connection helpers in all flow rules. Instead, the helper specified
+       during connection commit will be used by default.
 
 
 v3.2.0 - 17 Aug 2023

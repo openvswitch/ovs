@@ -1247,6 +1247,10 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
         conn = NULL;
     }
 
+    if (conn && helper == NULL) {
+        helper = conn->alg;
+    }
+
     enum ct_alg_ctl_type ct_alg_ctl = get_alg_ctl_type(pkt, helper);
 
     if (OVS_LIKELY(conn)) {
@@ -1336,6 +1340,11 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
         struct conn *conn = packet->md.conn;
+
+        if (helper == NULL && conn != NULL) {
+            helper = conn->alg;
+        }
+
         if (OVS_UNLIKELY(packet->md.ct_state == CS_INVALID)) {
             write_ct_md(packet, zone, NULL, NULL, NULL);
         } else if (conn &&
