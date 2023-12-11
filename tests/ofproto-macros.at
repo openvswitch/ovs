@@ -141,6 +141,21 @@ strip_stats () {
     s/bytes:[[0-9]]*/bytes:0/'
 }
 
+# Strips key32 field from output.
+strip_key32 () {
+    sed 's/key32([[0-9 \/]]*),//'
+}
+
+# Strips packet-type from output.
+strip_ptype () {
+    sed 's/packet_type(ns=[[0-9]]*,id=[[0-9]]*),//'
+}
+
+# Strips bare eth from output.
+strip_eth () {
+    sed 's/eth(),//'
+}
+
 # Changes all 'recirc(...)' and 'recirc=...' to say 'recirc(<recirc_id>)' and
 # 'recirc=<recirc_id>' respectively.  This should make output easier to
 # compare.
