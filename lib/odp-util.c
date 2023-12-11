@@ -6402,12 +6402,10 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
             icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
 
             if (is_nd(flow, NULL)
-                /* Even though 'tp_src' and 'tp_dst' are 16 bits wide, ICMP
-                 * type and code are 8 bits wide.  Therefore, an exact match
-                 * looks like htons(0xff), not htons(0xffff).  See
-                 * xlate_wc_finish() for details. */
-                && (!export_mask || (data->tp_src == htons(0xff)
-                                     && data->tp_dst == htons(0xff)))) {
+                /* Even though 'tp_src' is 16 bits wide, ICMP type is 8 bits
+                 * wide.  Therefore, an exact match looks like htons(0xff),
+                 * not htons(0xffff).  See xlate_wc_finish() for details. */
+                && (!export_mask || data->tp_src == htons(0xff))) {
                 struct ovs_key_nd *nd_key;
                 nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
                                                     sizeof *nd_key);
@@ -7122,20 +7120,17 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                     flow->arp_sha = nd_key->nd_sll;
                     flow->arp_tha = nd_key->nd_tll;
                     if (is_mask) {
-                        /* Even though 'tp_src' and 'tp_dst' are 16 bits wide,
-                         * ICMP type and code are 8 bits wide.  Therefore, an
-                         * exact match looks like htons(0xff), not
-                         * htons(0xffff).  See xlate_wc_finish() for details.
-                         * */
+                        /* Even though 'tp_src' is 16 bits wide, ICMP type
+                         * is 8 bits wide.  Therefore, an exact match looks
+                         * like htons(0xff), not htons(0xffff).  See
+                         * xlate_wc_finish() for details. */
                         if (!is_all_zeros(nd_key, sizeof *nd_key) &&
-                            (flow->tp_src != htons(0xff) ||
-                             flow->tp_dst != htons(0xff))) {
+                            flow->tp_src != htons(0xff)) {
                             odp_parse_error(&rl, errorp,
-                                            "ICMP (src,dst) masks should be "
-                                            "(0xff,0xff) but are actually "
-                                            "(%#"PRIx16",%#"PRIx16")",
-                                            ntohs(flow->tp_src),
-                                            ntohs(flow->tp_dst));
+                                            "ICMP src mask should be "
+                                            "(0xff) but is actually "
+                                            "(%#"PRIx16")",
+                                            ntohs(flow->tp_src));
                             return ODP_FIT_ERROR;
                         } else {
                             *expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ND;
