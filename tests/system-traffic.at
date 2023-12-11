@@ -5621,6 +5621,112 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - FTP non-standard port])
+AT_SKIP_IF([test $HAVE_FTP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows1.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(alg=ftp,commit),2
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk+rel,action=1
+])
+
+dnl Similar policy but without allowing all traffic from ns0->ns1.
+AT_DATA([flows2.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+
+dnl Allow outgoing TCP connections, and treat them as FTP
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=1,in_port=1,tcp,ct_state=+trk+new,action=ct(commit,alg=ftp),2
+table=1,in_port=1,tcp,ct_state=+trk+est,action=2
+
+dnl Allow incoming FTP data connections and responses to existing connections
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+new+rel,action=ct(commit),1
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk-new+rel,action=1
+])
+
+dnl flows3 is same as flows1, except no ALG is specified.
+AT_DATA([flows3.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(commit),2
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk+rel,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
+
+OVS_START_L7([at_ns0], [ftp], [11111])
+OVS_START_L7([at_ns1], [ftp], [11111])
+
+dnl FTP requests from p1->p0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1:11111 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+])
+
+dnl Try the second set of flows.
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows2.txt])
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl FTP requests from p1->p0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1:11111 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl Active FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-1.log])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Passive FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+])
+
+dnl Try the third set of flows, without alg specifier.
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows3.txt])
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl FTP control requests from p0->p1 should work fine, but helper will not be assigned.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2:11111 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-3.log], [4])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - FTP with expectation dump])
 AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()

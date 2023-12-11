@@ -276,18 +276,23 @@ m4_define([NETNS_DAEMONIZE],
 m4_define([OVS_CHECK_FIREWALL],
     [AT_SKIP_IF([systemctl status firewalld 2>&1 | grep running > /dev/null])])
 
-# OVS_START_L7([namespace], [protocol])
+# OVS_START_L7([namespace], [protocol], [port])
 #
-# Start a server serving 'protocol' within 'namespace'. The server will exit
-# when the test finishes.
+# Start a server serving 'protocol' on port 'port' within 'namespace'.
+# If 'port' is not specified, the standard one for 'protocol' will be used.
+# The server will exit when the test finishes.
 #
 m4_define([OVS_START_L7],
    [PIDFILE=$(mktemp $2XXX.pid)
-    NETNS_DAEMONIZE([$1], [[$PYTHON3 $srcdir/test-l7.py $2]], [$PIDFILE])
+    NETNS_DAEMONIZE([$1], [[$PYTHON3 $srcdir/test-l7.py $2 $3]], [$PIDFILE])
 
     dnl netstat doesn't print http over IPv6 as "http6"; drop the number.
     PROTO=$(echo $2 | sed -e 's/\([[a-zA-Z]]*\).*/\1/')
-    OVS_WAIT_UNTIL([NS_EXEC([$1], [netstat -l | grep $PROTO])])
+    if test -z "$3"; then
+        OVS_WAIT_UNTIL([NS_EXEC([$1], [netstat -l | grep $PROTO])])
+    else
+        OVS_WAIT_UNTIL([NS_EXEC([$1], [netstat -ln | grep :$3])])
+    fi
    ]
 )
 

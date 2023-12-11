@@ -86,6 +86,8 @@ def main():
         description='Run basic application servers.')
     parser.add_argument('proto', default='http', nargs='?',
                         help='protocol to serve (%s)' % protocols)
+    parser.add_argument('port', default=0, nargs='?',
+                        help='server port number')
     args = parser.parse_args()
 
     if args.proto not in protocols:
@@ -95,6 +97,8 @@ def main():
     constructor = SERVERS[args.proto][0]
     handler = SERVERS[args.proto][1]
     port = SERVERS[args.proto][2]
+    if args.port != 0:
+        port = args.port
     srv = constructor(('', port), handler)
     srv.serve_forever()
 
