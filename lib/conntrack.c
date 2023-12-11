@@ -657,8 +657,7 @@ is_ftp_ctl(const enum ct_alg_ctl_type ct_alg_ctl)
 }
 
 static enum ct_alg_ctl_type
-get_alg_ctl_type(const struct dp_packet *pkt, ovs_be16 tp_src, ovs_be16 tp_dst,
-                 const char *helper)
+get_alg_ctl_type(const struct dp_packet *pkt, const char *helper)
 {
     /* CT_IPPORT_FTP/TFTP is used because IPPORT_FTP/TFTP in not defined
      * in OSX, at least in in.h. Since these values will never change, remove
@@ -668,26 +667,24 @@ get_alg_ctl_type(const struct dp_packet *pkt, ovs_be16 tp_src, ovs_be16 tp_dst,
     uint8_t ip_proto = get_ip_proto(pkt);
     struct udp_header *uh = dp_packet_l4(pkt);
     struct tcp_header *th = dp_packet_l4(pkt);
-    ovs_be16 ftp_src_port = htons(CT_IPPORT_FTP);
-    ovs_be16 ftp_dst_port = htons(CT_IPPORT_FTP);
-    ovs_be16 tftp_dst_port = htons(CT_IPPORT_TFTP);
+    ovs_be16 ftp_port = htons(CT_IPPORT_FTP);
+    ovs_be16 tftp_port = htons(CT_IPPORT_TFTP);
 
-    if (OVS_UNLIKELY(tp_dst)) {
-        if (helper && !strncmp(helper, "ftp", strlen("ftp"))) {
-            ftp_dst_port = tp_dst;
-        } else if (helper && !strncmp(helper, "tftp", strlen("tftp"))) {
-            tftp_dst_port = tp_dst;
+    if (helper) {
+        if ((ip_proto == IPPROTO_TCP) &&
+             !strncmp(helper, "ftp", strlen("ftp"))) {
+            return CT_ALG_CTL_FTP;
         }
-    } else if (OVS_UNLIKELY(tp_src)) {
-        if (helper && !strncmp(helper, "ftp", strlen("ftp"))) {
-            ftp_src_port = tp_src;
+        if ((ip_proto == IPPROTO_UDP) &&
+             !strncmp(helper, "tftp", strlen("tftp"))) {
+            return CT_ALG_CTL_TFTP;
         }
     }
 
-    if (ip_proto == IPPROTO_UDP && uh->udp_dst == tftp_dst_port) {
+    if (ip_proto == IPPROTO_UDP && uh->udp_dst == tftp_port) {
         return CT_ALG_CTL_TFTP;
     } else if (ip_proto == IPPROTO_TCP &&
-               (th->tcp_src == ftp_src_port || th->tcp_dst == ftp_dst_port)) {
+               (th->tcp_src == ftp_port || th->tcp_dst == ftp_port)) {
         return CT_ALG_CTL_FTP;
     }
     return CT_ALG_CTL_NONE;
@@ -1229,8 +1226,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             bool force, bool commit, long long now, const uint32_t *setmark,
             const struct ovs_key_ct_labels *setlabel,
             const struct nat_action_info_t *nat_action_info,
-            ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
-            uint32_t tp_id)
+            const char *helper, uint32_t tp_id)
 {
     /* Reset ct_state whenever entering a new zone. */
     if (pkt->md.ct_state && pkt->md.ct_zone != zone) {
@@ -1251,8 +1247,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
         conn = NULL;
     }
 
-    enum ct_alg_ctl_type ct_alg_ctl = get_alg_ctl_type(pkt, tp_src, tp_dst,
-                                                       helper);
+    enum ct_alg_ctl_type ct_alg_ctl = get_alg_ctl_type(pkt, helper);
 
     if (OVS_LIKELY(conn)) {
         if (OVS_LIKELY(!conn_update_state_alg(ct, pkt, ctx, conn,
@@ -1329,7 +1324,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   ovs_be16 dl_type, bool force, bool commit, uint16_t zone,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
-                  ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
+                  const char *helper,
                   const struct nat_action_info_t *nat_action_info,
                   long long now, uint32_t tp_id)
 {
@@ -1345,7 +1340,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
             write_ct_md(packet, zone, NULL, NULL, NULL);
         } else if (conn &&
                    conn->key_node[CT_DIR_FWD].key.zone == zone && !force &&
-                   !get_alg_ctl_type(packet, tp_src, tp_dst, helper)) {
+                   !get_alg_ctl_type(packet, helper)) {
             process_one_fast(zone, setmark, setlabel, nat_action_info,
                              conn, packet);
         } else if (OVS_UNLIKELY(!conn_key_extract(ct, packet, dl_type, &ctx,
@@ -1354,8 +1349,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
             write_ct_md(packet, zone, NULL, NULL, NULL);
         } else {
             process_one(ct, packet, &ctx, zone, force, commit, now, setmark,
-                        setlabel, nat_action_info, tp_src, tp_dst, helper,
-                        tp_id);
+                        setlabel, nat_action_info, helper, tp_id);
         }
     }
 

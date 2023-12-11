@@ -9446,9 +9446,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         }
 
         conntrack_execute(dp->conntrack, packets_, aux->flow->dl_type, force,
-                          commit, zone, setmark, setlabel, aux->flow->tp_src,
-                          aux->flow->tp_dst, helper, nat_action_info_ref,
-                          pmd->ctx.now / 1000, tp_id);
+                          commit, zone, setmark, setlabel, helper,
+                          nat_action_info_ref, pmd->ctx.now / 1000, tp_id);
         break;
     }
 
