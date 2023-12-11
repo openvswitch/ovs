@@ -2064,6 +2064,57 @@ recirc_id(<recirc>),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:29, bytes
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - Neighbor Discovery with loose match])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "2001::1:0:392/64", 36:b1:ee:7c:01:03)
+ADD_VETH(p1, at_ns1, br0, "2001::1:0:9/64", 36:b1:ee:7c:01:02)
+
+dnl Set up flows for moving icmp ND Solicit around.  This should be the
+dnl same for the other ND types.
+AT_DATA([flows.txt], [dnl
+table=0 priority=95 icmp6,icmp_type=136,nd_target=2001::1:0:9 actions=resubmit(,10)
+table=0 priority=95 icmp6,icmp_type=136,nd_target=2001::1:0:392 actions=resubmit(,10)
+table=0 priority=65 actions=resubmit(,20)
+table=10 actions=NORMAL
+table=20 actions=drop
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Send a mismatching neighbor discovery.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 f1 f2 20 00 00 00 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02 01 36 b1 ee 7c 01 03 > /dev/null])
+
+dnl Send a matching neighbor discovery.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 fe 5f 20 00 00 00 20 01 00 00 00 00 00 00 00 00 00 01 00 00 03 92 02 01 36 b1 ee 7c 01 03 > /dev/null])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
+          strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
+          grep ",nd" | sort], [0], [dnl
+recirc_id(<recirc>),in_port(2),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:1,3
+recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
+])
+
+OVS_WAIT_UNTIL([ovs-appctl dpctl/dump-flows | grep ",nd" | wc -l | grep -E ^0])
+
+dnl Send a matching neighbor discovery.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 fe 5f 20 00 00 00 20 01 00 00 00 00 00 00 00 00 00 01 00 00 03 92 02 01 36 b1 ee 7c 01 03 > /dev/null])
+
+dnl Send a mismatching neighbor discovery.
+NS_CHECK_EXEC([at_ns0], [$PYTHON3 $srcdir/sendpkt.py p0 36 b1 ee 7c 01 02 36 b1 ee 7c 01 03 86 dd 60 00 00 00 00 20 3a ff fe 80 00 00 00 00 00 00 f8 16 3e ff fe 04 66 04 fe 80 00 00 00 00 00 00 f8 16 3e ff fe a7 dd 0e 88 00 f1 f2 20 00 00 00 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02 01 36 b1 ee 7c 01 03 > /dev/null])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_stats | strip_used | dnl
+          strip_key32 | strip_ptype | strip_eth | strip_recirc | dnl
+          grep ",nd" | sort], [0], [dnl
+recirc_id(<recirc>),in_port(2),eth(src=36:b1:ee:7c:01:03,dst=36:b1:ee:7c:01:02),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=2001::1:0:392), packets:0, bytes:0, used:never, actions:1,3
+recirc_id(<recirc>),in_port(2),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=136),nd(target=3000::1), packets:0, bytes:0, used:never, actions:drop
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([MPLS])
 
 AT_SETUP([mpls - encap header dp-support])
