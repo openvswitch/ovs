@@ -1451,6 +1451,56 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, references, singl
 006: done
 ]])
 
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, weak references, insert+delete batch],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row0_s"},
+       "uuid-name": "uuid_row0_s"},
+      {"op": "insert",
+       "table": "simple6",
+       "row": {"name": "row0_s6",
+               "weak_ref": ["set",
+                             [["named-uuid", "uuid_row0_s"]]
+                           ]}}]']],
+  [['condition simple [true];simple6 [true]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row1_s"},
+       "uuid-name": "uuid_row1_s"},
+      {"op": "mutate",
+       "table": "simple6",
+       "where": [["name", "==", "row0_s6"]],
+       "mutations": [["weak_ref", "insert", ["set", [["named-uuid", "uuid_row1_s"]]]]]}]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["s", "==", "row1_s"]]}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "row2_s"}}]']],
+  [[000: simple6: conditions unchanged
+000: simple: conditions unchanged
+001: table simple6: inserted row: name=row0_s6 weak_ref=[<0>] uuid=<1>
+001: table simple6: updated columns: name weak_ref
+001: table simple: inserted row: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
+001: table simple: updated columns: s
+002: {"error":null,"result":[{"uuid":["uuid","<3>"]},{"count":1}]}
+003: {"error":null,"result":[{"count":1}]}
+004: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
+004: table simple6: updated columns: weak_ref
+004: table simple: inserted/deleted row: i=0 r=0 b=false s=row1_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+004: table simple: updated columns: s
+005: {"error":null,"result":[{"uuid":["uuid","<4>"]}]}
+006: table simple6: name=row0_s6 weak_ref=[<0>] uuid=<1>
+006: table simple: i=0 r=0 b=false s=row0_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<0>
+006: table simple: inserted row: i=0 r=0 b=false s=row2_s u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<4>
+006: table simple: updated columns: s
+007: done
+]])
+
 dnl This test checks that deleting both the destination and source of the
 dnl reference doesn't remove the reference in the source tracked record.
 OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated, weak references, multiple deletes],
