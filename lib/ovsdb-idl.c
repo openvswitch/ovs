@@ -177,6 +177,7 @@ static void ovsdb_idl_row_mark_backrefs_for_reparsing(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_track_change(struct ovsdb_idl_row *,
                                        enum ovsdb_idl_change);
 static void ovsdb_idl_row_untrack_change(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_clear_changeseqno(struct ovsdb_idl_row *);
 
 static void ovsdb_idl_txn_abort_all(struct ovsdb_idl *);
 static bool ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *,
@@ -1353,6 +1354,7 @@ ovsdb_idl_track_clear__(struct ovsdb_idl *idl, bool flush_all)
                     row->updated = NULL;
                 }
                 ovsdb_idl_row_untrack_change(row);
+                ovsdb_idl_row_clear_changeseqno(row);
 
                 if (ovsdb_idl_row_is_orphan(row)) {
                     ovsdb_idl_row_unparse(row);
@@ -1572,6 +1574,7 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
                                  ru->columns);
         } else if (ovsdb_idl_row_is_orphan(row)) {
             ovsdb_idl_row_untrack_change(row);
+            ovsdb_idl_row_clear_changeseqno(row);
             ovsdb_idl_insert_row(row, ru->columns);
         } else {
             VLOG_ERR_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
@@ -2223,11 +2226,15 @@ ovsdb_idl_row_untrack_change(struct ovsdb_idl_row *row)
         return;
     }
 
+    ovs_list_remove(&row->track_node);
+    ovs_list_init(&row->track_node);
+}
+
+static void ovsdb_idl_row_clear_changeseqno(struct ovsdb_idl_row *row)
+{
     row->change_seqno[OVSDB_IDL_CHANGE_INSERT] =
         row->change_seqno[OVSDB_IDL_CHANGE_MODIFY] =
         row->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
-    ovs_list_remove(&row->track_node);
-    ovs_list_init(&row->track_node);
 }
 
 static struct ovsdb_idl_row *
