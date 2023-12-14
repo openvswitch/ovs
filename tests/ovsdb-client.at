@@ -270,8 +270,8 @@ AT_CHECK([ovsdb-client --replay=./replay_dir                      dnl
 dnl Waiting for client to exit the same way as it exited during recording.
 OVS_WAIT_WHILE([test -e ovsdb-client.pid])
 
-AT_CHECK([diff monitor.stdout monitor-replay.stdout])
-AT_CHECK([diff monitor.stderr monitor-replay.stderr])
+AT_CHECK([diff -u monitor.stdout monitor-replay.stdout])
+AT_CHECK([diff -u monitor.stderr monitor-replay.stderr])
 
 dnl Stripping out timestamps, PIDs and poll_loop warnings from the log.
 dnl Also stripping socket_util errors as sockets are not used in replay.
@@ -284,6 +284,6 @@ m4_define([CLEAN_LOG_FILE],
 CLEAN_LOG_FILE([monitor.log], [monitor.log.clear])
 CLEAN_LOG_FILE([monitor-replay.log], [monitor-replay.log.clear])
 
-AT_CHECK([diff monitor.log.clear monitor-replay.log.clear])
+AT_CHECK([diff -u monitor.log.clear monitor-replay.log.clear])
 
 AT_CLEANUP
