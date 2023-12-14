@@ -252,6 +252,14 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
                 return false;
             }
 
+            if (t->read_only) {
+                trigger_convert_error(
+                    t, ovsdb_error("not allowed", "conversion is not allowed "
+                                                  "for read-only database %s",
+                                                  t->db->schema->name));
+                return false;
+            }
+
             /* Validate parameters. */
             const struct json *params = t->request->params;
             if (params->type != JSON_ARRAY || params->array.n != 2) {
