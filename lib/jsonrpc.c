@@ -221,19 +221,19 @@ jsonrpc_log_msg(const struct jsonrpc *rpc, const char *title,
         }
         if (msg->params) {
             ds_put_cstr(&s, ", params=");
-            json_to_ds(msg->params, 0, &s);
+            json_to_ds(msg->params, JSSF_SORT, &s);
         }
         if (msg->result) {
             ds_put_cstr(&s, ", result=");
-            json_to_ds(msg->result, 0, &s);
+            json_to_ds(msg->result, JSSF_SORT, &s);
         }
         if (msg->error) {
             ds_put_cstr(&s, ", error=");
-            json_to_ds(msg->error, 0, &s);
+            json_to_ds(msg->error, JSSF_SORT, &s);
         }
         if (msg->id) {
             ds_put_cstr(&s, ", id=");
-            json_to_ds(msg->id, 0, &s);
+            json_to_ds(msg->id, JSSF_SORT, &s);
         }
         VLOG_DBG("%s: %s %s%s", rpc->name, title,
                  jsonrpc_msg_type_to_string(msg->type), ds_cstr(&s));
