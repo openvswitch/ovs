@@ -2373,6 +2373,6 @@ CLEAN_LOG_FILE([2.log], [2.log.clear])
 
 dnl Checking that databases and logs are equal.
 AT_CHECK([diff db.clear ./replay_dir/db.copy.clear])
-AT_CHECK([diff 1.log.clear 2.log.clear])
+AT_CHECK([diff -u 1.log.clear 2.log.clear])
 
 AT_CLEANUP
