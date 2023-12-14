@@ -1771,9 +1771,14 @@ replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vfile --detach --no-chdir \
+            --log-file=ovsdb-server1.log --pidfile --remote=punix:db.sock db1],
+         [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile=2.pid --remote=punix:db2.sock --unixctl=unixctl2 db2], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vfile --detach --no-chdir \
+            --log-file=ovsdb-server2.log --pidfile=2.pid \
+            --remote=punix:db2.sock --unixctl=unixctl2 db2],
+         [0], [ignore], [ignore])
 
 dnl Try to connect without specifying the active server.
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-active-ovsdb-server], [0],
@@ -2092,9 +2097,16 @@ AT_CHECK([ovsdb-tool transact db2 \
 
 dnl Start both 'db1' and 'db2'.
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1 --active ], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vfile --detach --no-chdir \
+            --log-file=ovsdb-server1.log --pidfile \
+            --remote=punix:db.sock \
+            --unixctl="$(pwd)"/unixctl db1 --active ],
+         [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile=2.pid --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 db2], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server -vfile --detach --no-chdir \
+            --log-file=ovsdb-server2.log --pidfile=2.pid \
+            --remote=punix:db2.sock --unixctl="$(pwd)"/unixctl2 db2],
+         [0], [ignore], [ignore])
 
 OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/sync-status |grep active])
 OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/sync-status |grep active])
