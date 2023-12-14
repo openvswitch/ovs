@@ -353,10 +353,6 @@ and can differ significantly depending on system configuration. The actual
 time not processing packets will be determined by the sleep and processor
 wake-up times and should be tested with each system configuration.
 
-The current configuration of the PMD load based sleeping can be shown with::
-
-    $ ovs-appctl dpif-netdev/pmd-sleep-show
-
 Sleep time statistics for 10 secs can be seen with::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear \
@@ -378,6 +374,36 @@ system configuration (e.g. enabling processor C-states) and workloads.
     the processor is in a low-power state it may result in some lost packets or
     extra latency before the PMD thread returns to processing packets at full
     rate.
+
+Maximum sleep values can also be set for individual PMD threads using
+key:value pairs in the form of core:max_sleep. Any PMD thread that has been
+assigned a specified value will use that. Any PMD thread that does not have
+a specified value will use the current global value.
+
+Specified values for individual PMD threads can be added or removed at
+any time.
+
+For example, to set PMD threads on cores 8 and 9 to never request a load based
+sleep and all others PMD threads to be able to request a max sleep of
+50 microseconds (us)::
+
+    $ ovs-vsctl set open_vswitch . other_config:pmd-sleep-max=50,8:0,9:0
+
+The max sleep value for each PMD thread can be checked in the logs or with::
+
+    $ ovs-appctl dpif-netdev/pmd-sleep-show
+    pmd thread numa_id 0 core_id 8:
+      max sleep:    0 us
+    pmd thread numa_id 1 core_id 9:
+      max sleep:    0 us
+    pmd thread numa_id 0 core_id 10:
+      max sleep:   50 us
+    pmd thread numa_id 1 core_id 11:
+      max sleep:   50 us
+    pmd thread numa_id 0 core_id 12:
+      max sleep:   50 us
+    pmd thread numa_id 1 core_id 13:
+      max sleep:   50 us
 
 .. _ovs-vswitchd(8):
     http://openvswitch.org/support/dist-docs/ovs-vswitchd.8.html

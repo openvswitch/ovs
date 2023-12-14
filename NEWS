@@ -32,6 +32,10 @@ Post-v3.2.0
      * Added support for Generic Segmentation Offloading for the cases where
        TSO is enabled but not supported by an egress interface (except for
        tunnel interfaces).
+     * 'pmd-sleep-max' is updated to also accept pmd-thread-core:sleep-max.
+       The existing behaviour is maintained and a non key:value pair value
+       will be applied to all other PMD thread cores.'pmd-sleep-show' is
+       updated to show the maximum sleep for each PMD thread core.
 
 
 v3.2.0 - 17 Aug 2023

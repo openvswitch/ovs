@@ -180,6 +180,9 @@ struct dp_netdev_pmd_thread {
     int numa_id;                    /* numa node id of this pmd thread. */
     bool isolated;
 
+    /* Max sleep request in microseconds. */
+    atomic_uint64_t max_sleep;
+
     /* Queue id used by this pmd thread to send packets on all netdevs if
      * XPS disabled for this netdev. All static_tx_qid's are unique and less
      * than 'cmap_count(dp->poll_threads)'. */

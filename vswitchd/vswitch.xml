@@ -802,9 +802,7 @@
          The default value is <code>25%</code>.
         </p>
       </column>
-      <column name="other_config" key="pmd-sleep-max"
-              type='{"type": "integer",
-                     "minInteger": 0, "maxInteger": 10000}'>
+      <column name="other_config" key="pmd-sleep-max">
         <p>
           Specifies the maximum sleep time that will be requested in
           microseconds per iteration for a PMD thread which has received zero
@@ -822,6 +820,33 @@
         </p>
         <p>
           The maximum value is <code>10000 microseconds</code>.
+        </p>
+        <p>
+         <code>other_config:pmd-sleep-max=&lt;pmd-sleep-list&gt;</code>
+        </p>
+        <p>where</p>
+        <p>
+         <ul>
+           <li>
+             &lt;pmd-sleep-list&gt; ::= NULL | &lt;non-empty-list&gt;
+           </li>
+           <li>
+             &lt;non-empty-list&gt; ::= &lt;pmd-sleep-value&gt; |
+                                        &lt;pmd-sleep-value&gt; ,
+                                        &lt;non-empty-list&gt;
+           </li>
+           <li>
+             &lt;pmd-sleep-value&gt; ::= &lt;global-default-sleep-value&gt; |
+                                         &lt;pmd-core-sleep-pair&gt;
+           </li>
+           <li>
+             &lt;global-default-sleep-value&gt; ::= &lt;max-sleep-time&gt;
+           </li>
+           <li>
+             &lt;pmd-core-sleep-pair&gt; ::= &lt;core&gt; :
+                                             &lt;max-sleep-time&gt;
+           </li>
+         </ul>
         </p>
       </column>
       <column name="other_config" key="userspace-tso-enable"
