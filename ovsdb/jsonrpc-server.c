@@ -215,6 +215,7 @@ ovsdb_jsonrpc_default_options(const char *target)
     options->probe_interval = (stream_or_pstream_needs_probes(target)
                                ? RECONNECT_DEFAULT_PROBE_INTERVAL
                                : 0);
+    options->dscp = DSCP_DEFAULT;
     return options;
 }
 
