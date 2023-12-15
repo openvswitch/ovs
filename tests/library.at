@@ -226,8 +226,14 @@ else
   # SIGABRT + 128
   exit_status=134
 fi
+
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-file assert],
   [$exit_status], [], [stderr])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
+
 
 AT_CHECK([sed 's/\(opened log file\) .*/\1/
 s/|[[^|]]*: /|/' test-util.log], [0], [dnl

@@ -105,7 +105,11 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new child process to get spawned.
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV $child], [0], [], [ignore])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 $child])
 OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test $(cat ovsdb-server.pid) != $child])
 
@@ -173,7 +177,11 @@ check_ancestors $child $monitor 1
 
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV $child], [0])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 $child])
 OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != $child])
 child2=$(cat ovsdb-server.pid)

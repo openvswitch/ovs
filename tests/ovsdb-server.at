@@ -326,7 +326,11 @@ ordinals
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
 cp ovsdb-server.pid old.pid
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
@@ -367,7 +371,11 @@ CHECK_DBS([ordinals
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
 cp ovsdb-server.pid old.pid
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
@@ -529,7 +537,11 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
 # start listening on 'socket1'.
 cp ovsdb-server.pid old.pid
 rm socket1
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
@@ -575,7 +587,11 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes])
 # and wait for a new daemon process to get spawned and make sure that it
 # does not listen on 'socket1'.
 cp ovsdb-server.pid old.pid
+AT_CHECK([ulimit -c > rlimit.core])
+AT_CHECK([ulimit -c 0])
 AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+AT_CHECK([ulimit -c `cat rlimit.core`])
+AT_CHECK([rm rlimit.core])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
