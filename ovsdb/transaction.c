@@ -731,8 +731,10 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         ovsdb_datum_sort_unique(&deleted_refs, &column->type);
 
         /* Removing elements that references deleted rows. */
-        ovsdb_datum_subtract(datum, &column->type,
-                             &deleted_refs, &column->type);
+        if (deleted_refs.n) {
+            ovsdb_datum_subtract(datum, &column->type,
+                                 &deleted_refs, &column->type);
+        }
         ovsdb_datum_destroy(&deleted_refs, &column->type);
 
         /* Generating the difference between old and new data. */
