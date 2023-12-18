@@ -322,7 +322,8 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
         const struct ovsdb_column *column = node->data;
         struct ovsdb_error *error;
 
-        if (bitmap_is_set(r->changed, column->index)) {
+        if (bitmap_is_set(r->changed, column->index)
+            && ovsdb_type_has_strong_refs(&column->type)) {
             if (r->old && !r->new) {
                 error = ovsdb_txn_adjust_row_refs(
                             txn, r->old, column,
@@ -717,6 +718,10 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         struct ovsdb_datum added, removed, deleted_refs;
         unsigned int orig_n;
         bool zero = false;
+
+        if (!ovsdb_type_has_weak_refs(&column->type)) {
+            continue;
+        }
 
         orig_n = datum->n;
 
