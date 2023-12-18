@@ -741,13 +741,17 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         ovsdb_datum_destroy(&deleted_refs, &column->type);
 
         /* Generating the difference between old and new data. */
-        if (txn_row->old) {
-            ovsdb_datum_added_removed(&added, &removed,
-                                      &txn_row->old->fields[column->index],
-                                      datum, &column->type);
-        } else {
-            ovsdb_datum_init_empty(&removed);
-            ovsdb_datum_clone(&added, datum);
+        ovsdb_datum_init_empty(&added);
+        ovsdb_datum_init_empty(&removed);
+        if (datum->n != orig_n
+            || bitmap_is_set(txn_row->changed, column->index)) {
+            if (txn_row->old) {
+                ovsdb_datum_added_removed(&added, &removed,
+                                          &txn_row->old->fields[column->index],
+                                          datum, &column->type);
+            } else {
+                ovsdb_datum_clone(&added, datum);
+            }
         }
 
         /* Checking added data and creating new references. */
