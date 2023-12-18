@@ -299,6 +299,7 @@ class Idl(object):
         self._server_schema_request_id = None
         self._server_monitor_request_id = None
         self._db_change_aware_request_id = None
+        self._monitor_cancel_request_id = None
         self._server_db_name = '_Server'
         self._server_db_table = 'Database'
         self.server_tables = None
@@ -481,6 +482,10 @@ class Idl(object):
                         break
                 else:
                     self.__parse_update(msg.params[1], OVSDB_UPDATE)
+            elif self.handle_monitor_canceled(msg):
+                break
+            elif self.handle_monitor_cancel_reply(msg):
+                break
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
                   and self._monitor_request_id is not None
                   and self._monitor_request_id == msg.id):
@@ -615,6 +620,33 @@ class Idl(object):
                              ovs.jsonrpc.Message.type_to_string(msg.type)))
 
         return initial_change_seqno != self.change_seqno
+
+    def handle_monitor_canceled(self, msg):
+        if msg.type != msg.T_NOTIFY:
+            return False
+        if msg.method != "monitor_canceled":
+            return False
+
+        if msg.params[0] == str(self.uuid):
+            params = [str(self.server_monitor_uuid)]
+        elif msg.params[0] == str(self.server_monitor_uuid):
+            params = [str(self.uuid)]
+        else:
+            return False
+
+        mc_msg = ovs.jsonrpc.Message.create_request("monitor_cancel", params)
+        self._monitor_cancel_request_id = mc_msg.id
+        self.send_request(mc_msg)
+        self.restart_fsm()
+        return True
+
+    def handle_monitor_cancel_reply(self, msg):
+        if msg.type != msg.T_REPLY:
+            return False
+        if msg.id != self._monitor_cancel_request_id:
+            return False
+        self._monitor_cancel_request_id = None
+        return True
 
     def compose_cond_change(self):
         if not self.cond_changed:
