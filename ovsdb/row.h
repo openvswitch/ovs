@@ -130,6 +130,7 @@ ovsdb_row_get_uuid(const struct ovsdb_row *row)
 static inline struct uuid *
 ovsdb_row_get_uuid_rw(struct ovsdb_row *row)
 {
+    ovsdb_datum_unshare(&row->fields[OVSDB_COL_UUID], &ovsdb_type_uuid);
     return &row->fields[OVSDB_COL_UUID].keys[0].uuid;
 }
 
@@ -142,6 +143,7 @@ ovsdb_row_get_version(const struct ovsdb_row *row)
 static inline struct uuid *
 ovsdb_row_get_version_rw(struct ovsdb_row *row)
 {
+    ovsdb_datum_unshare(&row->fields[OVSDB_COL_VERSION], &ovsdb_type_uuid);
     return &row->fields[OVSDB_COL_VERSION].keys[0].uuid;
 }
 
