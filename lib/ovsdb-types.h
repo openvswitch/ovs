@@ -238,6 +238,18 @@ static inline bool ovsdb_type_is_map(const struct ovsdb_type *type)
     return type->value.type != OVSDB_TYPE_VOID;
 }
 
+static inline bool ovsdb_type_has_strong_refs(const struct ovsdb_type *type)
+{
+    return ovsdb_base_type_is_strong_ref(&type->key)
+           || ovsdb_base_type_is_strong_ref(&type->value);
+}
+
+static inline bool ovsdb_type_has_weak_refs(const struct ovsdb_type *type)
+{
+    return ovsdb_base_type_is_weak_ref(&type->key)
+           || ovsdb_base_type_is_weak_ref(&type->value);
+}
+
 #ifdef __cplusplus
 }
 #endif
