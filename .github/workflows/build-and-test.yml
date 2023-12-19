@@ -76,7 +76,8 @@ jobs:
     env:
       dependencies: |
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
-        llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libbpf-dev
+        llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libbpf-dev \
+        lftp libreswan
       ASAN:        ${{ matrix.asan }}
       UBSAN:       ${{ matrix.ubsan }}
       CC:          ${{ matrix.compiler }}
@@ -87,6 +88,7 @@ jobs:
       OPTS:        ${{ matrix.opts }}
       STD:         ${{ matrix.std }}
       TESTSUITE:   ${{ matrix.testsuite }}
+      TEST_RANGE:  ${{ matrix.test_range }}
 
     name: linux ${{ join(matrix.*, ' ') }}
     runs-on: ubuntu-22.04
@@ -166,6 +168,13 @@ jobs:
 
           - compiler:     gcc
             testsuite:    check-ovsdb-cluster
+
+          - compiler:     gcc
+            testsuite:    check-kernel
+            test_range:   "-100"
+          - compiler:     gcc
+            testsuite:    check-kernel
+            test_range:   "100-"
 
     steps:
     - name: checkout

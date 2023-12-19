@@ -138,7 +138,8 @@ else
             [ "$(cat /proc/sys/vm/nr_hugepages)" = '1024' ]
             export DPDK_EAL_OPTIONS="--lcores 0@1,1@1,2@1"
         fi
-        $run_as_root make $testsuite TESTSUITEFLAGS=${JOBS} RECHECK=yes
+        $run_as_root make $testsuite TESTSUITEFLAGS="${JOBS} ${TEST_RANGE}" \
+                                     RECHECK=yes
     done
 fi
 

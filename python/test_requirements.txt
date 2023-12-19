@@ -1,3 +1,5 @@
-pytest
 netaddr
+pyftpdlib
 pyparsing
+pytest
+tftpy
