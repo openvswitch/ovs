@@ -365,3 +365,7 @@ m4_define([OVS_CHECK_IPROUTE_ENCAP],
 # OVS_CHECK_CT_CLEAR()
 m4_define([OVS_CHECK_CT_CLEAR],
     [AT_SKIP_IF([! grep -q "Datapath supports ct_clear action" ovs-vswitchd.log])])
+
+# OVS_CHECK_GITHUB_ACTION
+m4_define([OVS_CHECK_GITHUB_ACTION],
+    [AT_SKIP_IF([test "$GITHUB_ACTIONS" = "true"])])

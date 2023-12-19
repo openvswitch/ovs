@@ -3311,6 +3311,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - zones from other field, more tests])
 CHECK_CONNTRACK()
+OVS_CHECK_GITHUB_ACTION()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -5270,6 +5271,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - limit by zone])
 CHECK_CONNTRACK()
+OVS_CHECK_GITHUB_ACTION()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -8099,6 +8101,7 @@ AT_CLEANUP
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
+OVS_CHECK_GITHUB_ACTION()
 OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
 OVS_CHECK_8021AD()
 
