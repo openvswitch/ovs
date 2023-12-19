@@ -26,7 +26,7 @@ jobs:
       TESTSUITE:   ${{ matrix.testsuite }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     strategy:
@@ -45,10 +45,10 @@ jobs:
 
           - compiler:     gcc
             testsuite:    test
-            kernel:       3.16
+            kernel:       4.14
           - compiler:     clang
             testsuite:    test
-            kernel:       3.16
+            kernel:       4.14
             asan:         asan
 
           - compiler:     gcc
@@ -78,16 +78,16 @@ jobs:
             kernel_list:  5.8 5.5 5.4 4.19
 
           - compiler:     gcc
-            kernel_list:  4.14 4.9 4.4 3.16
+            kernel_list:  4.14 4.9 4.4
           - compiler:     clang
-            kernel_list:  4.14 4.9 4.4 3.16
+            kernel_list:  4.14 4.9 4.4
 
           - compiler:     gcc
             afxdp:        afxdp
-            kernel:       5.3
+            kernel:       5.4
           - compiler:     clang
             afxdp:        afxdp
-            kernel:       5.3
+            kernel:       5.4
 
           - compiler:     gcc
             dpdk:         dpdk
