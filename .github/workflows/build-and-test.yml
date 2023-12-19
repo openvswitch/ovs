@@ -23,7 +23,7 @@ jobs:
       TESTSUITE:   ${{ matrix.testsuite }}
 
     name: linux ${{ join(matrix.*, ' ') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     strategy:
@@ -72,10 +72,10 @@ jobs:
 
           - compiler:     gcc
             afxdp:        afxdp
-            kernel:       5.3
+            kernel:       5.4
           - compiler:     clang
             afxdp:        afxdp
-            kernel:       5.3
+            kernel:       5.4
 
           - compiler:     gcc
             dpdk:         dpdk
