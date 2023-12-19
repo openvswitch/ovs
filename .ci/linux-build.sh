@@ -6,6 +6,7 @@ set -x
 CFLAGS_FOR_OVS="-g -O2"
 SPARSE_FLAGS=""
 EXTRA_OPTS="--enable-Werror"
+JOBS=${JOBS:-"-j4"}
 
 function install_dpdk()
 {
@@ -46,7 +47,7 @@ function build_ovs()
     configure_ovs $OPTS
     make selinux-policy
 
-    make -j4
+    make ${JOBS}
 }
 
 if [ "$DEB_PACKAGE" ]; then
@@ -122,8 +123,8 @@ if [ "$TESTSUITE" = 'test' ]; then
     configure_ovs
 
     export DISTCHECK_CONFIGURE_FLAGS="$OPTS"
-    make distcheck -j4 CFLAGS="${CFLAGS_FOR_OVS}" \
-        TESTSUITEFLAGS=-j4 RECHECK=yes
+    make distcheck ${JOBS} CFLAGS="${CFLAGS_FOR_OVS}" \
+        TESTSUITEFLAGS=${JOBS} RECHECK=yes
 else
     build_ovs
     for testsuite in $TESTSUITE; do
@@ -134,7 +135,7 @@ else
             export DPDK_EAL_OPTIONS="--lcores 0@1,1@1,2@1"
             run_as_root="sudo -E PATH=$PATH"
         fi
-        $run_as_root make $testsuite TESTSUITEFLAGS=-j4 RECHECK=yes
+        $run_as_root make $testsuite TESTSUITEFLAGS=${JOBS} RECHECK=yes
     done
 fi
 
