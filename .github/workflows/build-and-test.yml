@@ -187,6 +187,10 @@ jobs:
             dpdk:         dpdk
             testsuite:    check-system-userspace
 
+          - compiler:     gcc
+            dpdk:         dpdk
+            testsuite:    check-system-tso
+
     steps:
     - name: checkout
       uses: actions/checkout@v3
