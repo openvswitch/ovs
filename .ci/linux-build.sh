@@ -129,11 +129,14 @@ else
     build_ovs
     for testsuite in $TESTSUITE; do
         run_as_root=
+        if [ "$testsuite" != "check" ] && \
+           [ "$testsuite" != "check-ovsdb-cluster" ] ; then
+            run_as_root="sudo -E PATH=$PATH"
+        fi
         if [ "${testsuite##*dpdk}" != "$testsuite" ]; then
             sudo sh -c 'echo 1024 > /proc/sys/vm/nr_hugepages' || true
             [ "$(cat /proc/sys/vm/nr_hugepages)" = '1024' ]
             export DPDK_EAL_OPTIONS="--lcores 0@1,1@1,2@1"
-            run_as_root="sudo -E PATH=$PATH"
         fi
         $run_as_root make $testsuite TESTSUITEFLAGS=${JOBS} RECHECK=yes
     done

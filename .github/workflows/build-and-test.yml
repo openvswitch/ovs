@@ -164,6 +164,9 @@ jobs:
             m32:          m32
             opts:         --disable-ssl
 
+          - compiler:     gcc
+            testsuite:    check-ovsdb-cluster
+
     steps:
     - name: checkout
       uses: actions/checkout@v3
