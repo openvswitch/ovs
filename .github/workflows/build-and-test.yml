@@ -30,7 +30,7 @@ jobs:
       # This also allows us to use cache from any branch as long as version
       # and a way we're building DPDK stays the same.
       run:  |
-        grep -irE 'RTE_|DPDK|meson|ninja' .ci/dpdk-* > dpdk-ci-signature
+        cat .ci/dpdk-* > dpdk-ci-signature
         grep -rwE 'DPDK_GIT|DPDK_VER' .github/ >> dpdk-ci-signature
         if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
             git ls-remote --heads $DPDK_GIT $DPDK_VER >> dpdk-ci-signature
