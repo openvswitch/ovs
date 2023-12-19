@@ -819,6 +819,7 @@ dnl --------------------------------------------------------------------------
 dnl MFEX Autovalidator
 AT_SETUP([OVS-DPDK - MFEX Autovalidator])
 AT_KEYWORDS([dpdk])
+OVS_CHECK_GITHUB_ACTION()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
@@ -852,6 +853,7 @@ dnl --------------------------------------------------------------------------
 dnl MFEX Autovalidator Fuzzy
 AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
 AT_KEYWORDS([dpdk])
+OVS_CHECK_GITHUB_ACTION()
 OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
@@ -886,13 +888,11 @@ dnl --------------------------------------------------------------------------
 AT_SETUP([OVS-DPDK - MFEX Configuration])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
-AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py test_traffic.pcap 1], [], [stdout])
 OVS_DPDK_START([--no-pci])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=test_traffic.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_null0,no-rx=1], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar 1], [2],
