@@ -183,6 +183,10 @@ jobs:
             testsuite:    check-offloads
             test_range:   "100-"
 
+          - compiler:     gcc
+            dpdk:         dpdk
+            testsuite:    check-system-userspace
+
     steps:
     - name: checkout
       uses: actions/checkout@v3
