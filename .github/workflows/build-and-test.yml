@@ -191,6 +191,10 @@ jobs:
             dpdk:         dpdk
             testsuite:    check-system-tso
 
+          - compiler:     gcc
+            dpdk:         dpdk
+            testsuite:    check-afxdp
+
     steps:
     - name: checkout
       uses: actions/checkout@v3
