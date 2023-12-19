@@ -131,7 +131,7 @@ else
         run_as_root=
         if [ "$testsuite" != "check" ] && \
            [ "$testsuite" != "check-ovsdb-cluster" ] ; then
-            run_as_root="sudo -E PATH=$PATH"
+            run_as_root="sudo -E PATH=$PATH GITHUB_ACTIONS=$GITHUB_ACTIONS"
         fi
         if [ "${testsuite##*dpdk}" != "$testsuite" ]; then
             sudo sh -c 'echo 1024 > /proc/sys/vm/nr_hugepages' || true

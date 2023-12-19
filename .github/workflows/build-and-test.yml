@@ -176,6 +176,13 @@ jobs:
             testsuite:    check-kernel
             test_range:   "100-"
 
+          - compiler:     gcc
+            testsuite:    check-offloads
+            test_range:   "-100"
+          - compiler:     gcc
+            testsuite:    check-offloads
+            test_range:   "100-"
+
     steps:
     - name: checkout
       uses: actions/checkout@v3
