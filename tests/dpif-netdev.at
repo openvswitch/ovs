@@ -852,3 +852,168 @@ OVS_VSWITCHD_STOP(["dnl
   /.*failed to put.*$/d
   /.*failed to flow_del.*$/d"])
 AT_CLEANUP
+
+AT_SETUP([dpif-netdev - MFEX Autovalidator])
+AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
+AT_SKIP_IF([! $PYTHON3 $srcdir/genpkts.py 2000 > packets])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set Interface p1 type=dummy-pmd], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])
+
+AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator.
+])
+
+cat packets | while read line; do
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 $line], [0], [ignore])
+done
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 16000])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([dpif-netdev - MFEX Autovalidator Fuzzy])
+AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
+AT_SKIP_IF([! $PYTHON3 $srcdir/genpkts.py 2000 fuzzy > packets])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 \
+   -- set Interface p1 type=dummy-pmd], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])
+
+AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
+DPIF implementation set to dpif_avx512.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator.
+])
+
+cat packets | while read line; do
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 $line], [0], [ignore])
+done
+
+OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 16000])
+
+OVS_VSWITCHD_STOP(["dnl
+/upcall: datapath reached the dynamic limit of .* flows./d"])
+AT_CLEANUP
+
+AT_SETUP([dpif-netdev - MFEX Configuration])
+OVS_VSWITCHD_START(
+  [set Open_vSwitch . other_config:pmd-cpu-mask=0x1 \
+   -- add-port br0 p1 \
+   -- set Interface p1 type=dummy-pmd], [], [], [--dummy-numa="0,0,0,0,1,1,1,1"])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar 1], [2],
+[], [dnl
+Error: unknown argument 1.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 6 study 300 xyz], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: xyz.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 0 scalar abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd], [2],
+[], [dnl
+Error: -pmd option requires a thread id argument.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set tudy abcd], [2],
+[], [dnl
+Error: unknown argument abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 7 study abcd], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: abcd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 0 study], [0], [dnl
+Miniflow extract implementation set to study, on pmd thread 0, studying 128 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 0 study 512], [0], [dnl
+Miniflow extract implementation set to study, on pmd thread 0, studying 512 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set study 512], [0], [dnl
+Miniflow extract implementation set to study, studying 512 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set study], [0], [dnl
+Miniflow extract implementation set to study, studying 128 packets.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 0 autovalidator], [0], [dnl
+Miniflow extract implementation set to autovalidator, on pmd thread 0.
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd zero study], [2],
+[], [dnl
+Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1], [2],
+[], [dnl
+Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1 superstudy], [2],
+[], [dnl
+Error: unknown miniflow extract implementation superstudy.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set superstudy], [2],
+[], [dnl
+Error: unknown miniflow extract implementation superstudy.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set -pmd 1 study -pmd], [2],
+[], [dnl
+Error: invalid study_pkt_cnt value: -pmd.
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+OVS_VSWITCHD_STOP(["dnl
+/Error: unknown argument 1./d
+/Error: invalid study_pkt_cnt value: xyz./d
+/Error: unknown argument abcd./d
+/Error: -pmd option requires a thread id argument./d
+/Error: invalid study_pkt_cnt value: abcd./d
+/Error: miniflow extract parser not changed, PMD thread passed is not valid: 'zero'. Pass a valid pmd thread ID./d
+/Error: no miniflow extract name provided. Output of miniflow-parser-get shows implementation list./d
+/Error: unknown miniflow extract implementation superstudy./d
+/Error: invalid study_pkt_cnt value: -pmd./d"])
+AT_CLEANUP
