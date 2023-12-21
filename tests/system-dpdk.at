@@ -821,16 +821,16 @@ AT_SETUP([OVS-DPDK - MFEX Autovalidator])
 AT_KEYWORDS([dpdk])
 OVS_CHECK_GITHUB_ACTION()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START([--no-pci], [--enable-dummy])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
 
 AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
-AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py test_traffic.pcap 2000], [], [stdout])
+AT_SKIP_IF([! $PYTHON3 $srcdir/genpkts.py 2000 > packets])
 
 dnl Add userspace bridge and attach it to OVS
-AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=test_traffic.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
@@ -840,6 +840,10 @@ DPIF implementation set to dpif_avx512.
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
 Miniflow extract implementation set to autovalidator.
 ])
+
+cat packets | while read line; do
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 $line], [0], [ignore])
+done
 
 OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 16000])
 
@@ -855,16 +859,16 @@ AT_SETUP([OVS-DPDK - MFEX Autovalidator Fuzzy])
 AT_KEYWORDS([dpdk])
 OVS_CHECK_GITHUB_ACTION()
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START([--no-pci], [--enable-dummy])
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
 AT_SKIP_IF([! ovs-appctl dpif-netdev/miniflow-parser-get | sed 1,4d | grep "True"], [], [dnl
 ])
 
 AT_SKIP_IF([! $PYTHON3 -c "import scapy"], [], [])
-AT_CHECK([$PYTHON3 $srcdir/mfex_fuzzy.py fuzzy.pcap 2000 fuzzy], [], [stdout])
+AT_SKIP_IF([! $PYTHON3 $srcdir/genpkts.py 2000 fuzzy > packets])
 
 dnl Add userspace bridge and attach it to OVS
-AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_pcap1,rx_pcap=fuzzy.pcap,infinite_rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 AT_CHECK([ovs-appctl dpif-netdev/dpif-impl-set dpif_avx512], [0], [dnl
@@ -874,6 +878,10 @@ DPIF implementation set to dpif_avx512.
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set autovalidator], [0], [dnl
 Miniflow extract implementation set to autovalidator.
 ])
+
+cat packets | while read line; do
+  AT_CHECK([ovs-appctl netdev-dummy/receive p1 $line], [0], [ignore])
+done
 
 OVS_WAIT_UNTIL([test `ovs-vsctl get interface p1 statistics | grep -oP 'rx_packets=\s*\K\d+'` -ge 16000])
 
@@ -888,11 +896,11 @@ dnl --------------------------------------------------------------------------
 AT_SETUP([OVS-DPDK - MFEX Configuration])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
-OVS_DPDK_START([--no-pci])
+OVS_DPDK_START([--no-pci], [--enable-dummy])
 AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dpdk options:dpdk-devargs=net_null0,no-rx=1], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 AT_CHECK([ovs-appctl dpif-netdev/miniflow-parser-set scalar 1], [2],
