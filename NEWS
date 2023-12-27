@@ -45,6 +45,8 @@ Post-v3.2.0
        during connection commit will be used by default.
    - DPDK:
      * Add support for DPDK 23.11.
+   - Support for multicast snooping to show the protocol responsible for
+     adding/updating the entry.
 
 Known issues:
    - DPDK: v23.11 has a change in behavior in handling i40e VF devices. This

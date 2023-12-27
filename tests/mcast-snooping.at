@@ -44,9 +44,9 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
 '01005e0000015c8a38552552810006c0080046c000240000000001027c00ac111c01e0000001940400001164ec1e00000000027d000000000000000000000000'])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    2  1725  querier               0
-    2  1728  querier               0
+ port  VLAN  protocol  GROUP                Age
+    2  1725  UNKNOWN   querier               0
+    2  1728  UNKNOWN   querier               0
 ])
 
 AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
@@ -75,7 +75,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
 '01005e0000015c8a38552552810006bd080046c000240000000001027f00ac111901e0000001940400001164ec1000000000027d000000000000000000000000'])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
+ port  VLAN  protocol  GROUP                Age
 ])
 
 
@@ -87,8 +87,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
 '3333ff0e4c67000c290e4c6786dd600000000020000100000000000000000000000000000000ff0200000000000000000001ff0e4c673a000502000001008300e7b800000000ff0200000000000000000001ff0e4c67'])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    2     0  ff02::1:ff0e:4c67           0
+ port  VLAN  protocol  GROUP                Age
+    2     0  MLDv1     ff02::1:ff0e:4c67           0
 ])
 
 AT_CHECK([ovs-appctl mdb/flush br0], [0], [dnl
@@ -99,7 +99,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
 '3333ff0e4c67000c290e4c6786dd600000000020000100000000000000000000000000000000ff0200000000000000000001ff0e4c673a000502000001008300e7b000000000ff0200000000000000000001ff0e4c67'])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
+ port  VLAN  protocol  GROUP                Age
 ])
 
 OVS_VSWITCHD_STOP
@@ -154,8 +154,8 @@ AT_CHECK([
         '01005E010101000C29A027A108004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
 ], [0])
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    1     0  224.1.1.1           0
+ port  VLAN  protocol  GROUP                Age
+    1     0  IGMPv1    224.1.1.1           0
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace "in_port(3),eth(src=aa:55:aa:55:00:ff,dst=01:00:5e:01:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=224.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)"], [0], [dnl
@@ -467,19 +467,19 @@ AT_CHECK([
 ], [0])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    1     1  224.1.1.1           0
-    1     2  224.1.1.1           0
-    3     1  querier               0
-    3     2  querier               0
+ port  VLAN  protocol  GROUP                Age
+    1     1  IGMPv1    224.1.1.1           0
+    1     2  IGMPv1    224.1.1.1           0
+    3     1  UNKNOWN   querier               0
+    3     2  UNKNOWN   querier               0
 ])
 
 AT_CHECK([ovs-vsctl set port p3 tag=2], [0])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    1     1  224.1.1.1           0
-    1     2  224.1.1.1           0
+ port  VLAN  protocol  GROUP                Age
+    1     1  IGMPv1    224.1.1.1           0
+    1     2  IGMPv1    224.1.1.1           0
 ])
 
 AT_CLEANUP
@@ -522,19 +522,19 @@ AT_CHECK([
 ], [0])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    1     1  224.1.1.1           0
-    1     2  224.1.1.1           0
-    2     1  querier               0
-    2     2  querier               0
+ port  VLAN  protocol  GROUP                Age
+    1     1  IGMPv1    224.1.1.1           0
+    1     2  IGMPv1    224.1.1.1           0
+    2     1  UNKNOWN   querier               0
+    2     2  UNKNOWN   querier               0
 ])
 
 AT_CHECK([ovs-vsctl del-port br0 p2], [0])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
-    1     1  224.1.1.1           0
-    1     2  224.1.1.1           0
+ port  VLAN  protocol  GROUP                Age
+    1     1  IGMPv1    224.1.1.1           0
+    1     2  IGMPv1    224.1.1.1           0
 ])
 
 AT_CLEANUP
@@ -604,4 +604,84 @@ recirc_id(<recirc>),in_port(1),ct_state(+new-inv+trk),eth_type(0x0800),ipv4(prot
 recirc_id(<recirc>),in_port(1),ct_state(+new-inv+trk),eth_type(0x0800),ipv4(proto=2,frag=no), packets:0, bytes:0, used:never, actions:userspace(controller(reason=1,dont_send=0,continuation=0,recirc_id=<recirc>,rule_cookie=0,controller_id=0,max_len=65535))
 ])
 
+AT_CLEANUP
+
+AT_SETUP([mcast - mcast_group protocol updated in mdb])
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl set bridge br0 \
+    datapath_type=dummy \
+    mcast_snooping_enable=true \
+], [0])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy \
+    other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
+], [0])
+
+# Send IGMPv1 report packet.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1  \
+        '01005E010101000C29A027A18100000008004500001C000100004002CBAEAC10221EE001010112140CE9E0010101'
+], [0])
+
+# Send IGMPv2 report packet.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1  \
+        '01005e010102505400000103080046c00020000040000102f8110a000103e001010294040000160008fce0010102'
+], [0])
+
+# Send IGMPv3 report packet.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1  \
+        '01005e000016505400000003080046c00028000040000102f9f60a000003e0000016940400002200e3e10000000104000000e9360ce6'
+], [0])
+
+# Check that all the ipv4 mcast groups were updated in
+# the mdb with the appropriate protocol.
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  protocol  GROUP                Age
+    1     0  IGMPv1    224.1.1.1           0
+    1     0  IGMPv2    224.1.1.2           0
+    1     0  IGMPv3    233.54.12.230           0
+])
+
+# Send IGMPv1 report packet to address 224.1.1.2
+# and make sure that the protocol will be updated to
+# IGMPV1.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1  \
+        '01005e010102505400000103080046c00020000040000102f8110a000103e00101029404000012000cfce0010102'
+], [0])
+
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  protocol  GROUP                Age
+    1     0  IGMPv1    224.1.1.1           0
+    1     0  IGMPv3    233.54.12.230           0
+    1     0  IGMPv1    224.1.1.2           0
+])
+
+# Flush the mdb.
+AT_CHECK([ovs-appctl mdb/flush br0], [0], [dnl
+table successfully flushed
+])
+
+# Send MLDV2 packet.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+'333300000016d0509956ddf986dd60000000001c3a01fe80000000000000712065589886fa88ff0200000000000000000000000000168f00134d0000000104000000ff0200000000000000000001ff52f3e1'])
+
+# Send MLDV1 packet.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+'3333ff0e4c67000c290e4c6786dd600000000020000100000000000000000000000000000000ff0200000000000000000001ff0e4c673a000502000001008300e7b800000000ff0200000000000000000001ff0e4c67'])
+
+# Check that all the ipv6 mcast groups were updated in
+# the mdb with the appropriate protocol.
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  protocol  GROUP                Age
+    1     0  MLDv2     ff02::1:ff52:f3e1           0
+    1     0  MLDv1     ff02::1:ff0e:4c67           0
+])
 AT_CLEANUP

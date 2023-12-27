@@ -583,13 +583,13 @@ AT_CHECK([ovs-appctl fdb/show br2], [0], [dnl
 ])
 
 AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
- port  VLAN  GROUP                Age
+ port  VLAN  protocol  GROUP                Age
 ])
 AT_CHECK([ovs-appctl mdb/show br1], [0], [dnl
- port  VLAN  GROUP                Age
+ port  VLAN  protocol  GROUP                Age
 ])
 AT_CHECK([ovs-appctl mdb/show br2], [0], [dnl
- port  VLAN  GROUP                Age
+ port  VLAN  protocol  GROUP                Age
 ])
 
 AT_CLEANUP

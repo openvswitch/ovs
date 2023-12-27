@@ -224,6 +224,7 @@ bool mcast_snooping_add_mrouter(struct mcast_snooping *ms, uint16_t vlan,
     OVS_REQ_WRLOCK(ms->rwlock);
 bool mcast_snooping_is_query(ovs_be16 igmp_type);
 bool mcast_snooping_is_membership(ovs_be16 igmp_type);
+char *mcast_snooping_group_protocol_str(mcast_group_proto grp_proto);
 
 /* Flush. */
 void mcast_snooping_mdb_flush(struct mcast_snooping *ms);

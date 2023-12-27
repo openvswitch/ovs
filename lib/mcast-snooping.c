@@ -57,6 +57,30 @@ mcast_snooping_flood_unreg(const struct mcast_snooping *ms)
     return ms->flood_unreg;
 }
 
+char *
+mcast_snooping_group_protocol_str(mcast_group_proto grp_proto)
+{
+    switch (grp_proto) {
+    case MCAST_GROUP_IGMPV1:
+        return "IGMPv1";
+        break;
+    case MCAST_GROUP_IGMPV2:
+        return "IGMPv2";
+        break;
+    case MCAST_GROUP_IGMPV3:
+        return "IGMPv3";
+        break;
+    case MCAST_GROUP_MLDV1:
+        return "MLDv1";
+        break;
+    case MCAST_GROUP_MLDV2:
+        return "MLDv2";
+        break;
+    default:
+        return "UNKNOWN";
+    }
+}
+
 bool
 mcast_snooping_is_query(ovs_be16 igmp_type)
 {
