@@ -2796,6 +2796,7 @@ update_mcast_snooping_table4__(const struct xlate_ctx *ctx,
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     const struct igmp_header *igmp;
+    mcast_group_proto grp_proto;
     int count;
     size_t offset;
     ovs_be32 ip4 = flow->igmp_group_ip4;
@@ -2813,7 +2814,11 @@ update_mcast_snooping_table4__(const struct xlate_ctx *ctx,
     switch (ntohs(flow->tp_src)) {
     case IGMP_HOST_MEMBERSHIP_REPORT:
     case IGMPV2_HOST_MEMBERSHIP_REPORT:
-        if (mcast_snooping_add_group4(ms, ip4, vlan, in_xbundle->ofbundle)) {
+        grp_proto = ntohs(flow->tp_src) == IGMP_HOST_MEMBERSHIP_REPORT
+                    ? MCAST_GROUP_IGMPV1
+                    : MCAST_GROUP_IGMPV2;
+        if (mcast_snooping_add_group4(ms, ip4, vlan, in_xbundle->ofbundle,
+                                      grp_proto)) {
             xlate_report_debug(ctx, OFT_DETAIL,
                                "multicast snooping learned that "
                                IP_FMT" is on port %s in VLAN %d",

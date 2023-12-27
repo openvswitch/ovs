@@ -389,7 +389,8 @@ mcast_snooping_prune_expired(struct mcast_snooping *ms,
 bool
 mcast_snooping_add_group(struct mcast_snooping *ms,
                          const struct in6_addr *addr,
-                         uint16_t vlan, void *port)
+                         uint16_t vlan, void *port,
+                         mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     bool learned;
@@ -424,6 +425,9 @@ mcast_snooping_add_group(struct mcast_snooping *ms,
     }
     mcast_group_insert_bundle(ms, grp, port, ms->idle_time);
 
+    /* update the protocol version. */
+    grp->protocol_version = grp_proto;
+
     /* Mark 'grp' as recently used. */
     ovs_list_push_back(&ms->group_lru, &grp->group_node);
     return learned;
@@ -431,11 +435,12 @@ mcast_snooping_add_group(struct mcast_snooping *ms,
 
 bool
 mcast_snooping_add_group4(struct mcast_snooping *ms, ovs_be32 ip4,
-                         uint16_t vlan, void *port)
+                         uint16_t vlan, void *port,
+                         mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     struct in6_addr addr = in6_addr_mapped_ipv4(ip4);
-    return mcast_snooping_add_group(ms, &addr, vlan, port);
+    return mcast_snooping_add_group(ms, &addr, vlan, port, grp_proto);
 }
 
 int
@@ -478,7 +483,8 @@ mcast_snooping_add_report(struct mcast_snooping *ms,
                 || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
             ret = mcast_snooping_leave_group4(ms, ip4, vlan, port);
         } else {
-            ret = mcast_snooping_add_group4(ms, ip4, vlan, port);
+            ret = mcast_snooping_add_group4(ms, ip4, vlan, port,
+                                            MCAST_GROUP_IGMPV3);
         }
         if (ret) {
             count++;
@@ -513,7 +519,8 @@ mcast_snooping_add_mld(struct mcast_snooping *ms,
 
     switch (mld->type) {
     case MLD_REPORT:
-        ret = mcast_snooping_add_group(ms, addr, vlan, port);
+        ret = mcast_snooping_add_group(ms, addr, vlan, port,
+                                       MCAST_GROUP_MLDV1);
         if (ret) {
             count++;
         }
@@ -545,7 +552,8 @@ mcast_snooping_add_mld(struct mcast_snooping *ms,
                         || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
                     ret = mcast_snooping_leave_group(ms, addr, vlan, port);
                 } else {
-                    ret = mcast_snooping_add_group(ms, addr, vlan, port);
+                    ret = mcast_snooping_add_group(ms, addr, vlan, port,
+                                                   MCAST_GROUP_MLDV2);
                 }
                 if (ret) {
                     count++;

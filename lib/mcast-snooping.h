@@ -39,6 +39,15 @@ struct mcast_snooping;
 /* Time, in seconds, before expiring a mrouter_port due to inactivity. */
 #define MCAST_MROUTER_PORT_IDLE_TIME 180
 
+/* Multicast group protocol. */
+typedef enum {
+    MCAST_GROUP_IGMPV1 = 0,
+    MCAST_GROUP_IGMPV2,
+    MCAST_GROUP_IGMPV3,
+    MCAST_GROUP_MLDV1,
+    MCAST_GROUP_MLDV2,
+} mcast_group_proto;
+
 /* Multicast group entry.
  * Guarded by owning 'mcast_snooping''s rwlock. */
 struct mcast_group {
@@ -50,6 +59,9 @@ struct mcast_group {
 
     /* VLAN tag. */
     uint16_t vlan;
+
+    /* Multicast group IPv6/IPv4 Protocol version IGMPv1,2,3 or MLDv1,2 */
+    mcast_group_proto protocol_version;
 
     /* Node in parent struct mcast_snooping group_lru. */
     struct ovs_list group_node OVS_GUARDED;
@@ -185,10 +197,12 @@ mcast_snooping_lookup4(const struct mcast_snooping *ms, ovs_be32 ip4,
 /* Learning. */
 bool mcast_snooping_add_group(struct mcast_snooping *ms,
                               const struct in6_addr *addr,
-                              uint16_t vlan, void *port)
+                              uint16_t vlan, void *port,
+                              mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock);
 bool mcast_snooping_add_group4(struct mcast_snooping *ms, ovs_be32 ip4,
-                               uint16_t vlan, void *port)
+                               uint16_t vlan, void *port,
+                               mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock);
 int mcast_snooping_add_report(struct mcast_snooping *ms,
                               const struct dp_packet *p,
