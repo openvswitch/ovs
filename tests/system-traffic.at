@@ -6473,6 +6473,95 @@ AT_CHECK([tcpdump -n -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - ICMP related with SNAT])
+AT_SKIP_IF([test $HAVE_NC = no])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+OVS_CHECK_MIN_KERNEL(6, 7)
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow IP traffic from ns0->ns1, rewrite source IP with SNAT to 10.1.1.254.
+dnl Only allow related ICMP responses back and undo NAT to restore original IP.
+AT_DATA([flows.txt], [dnl
+ct_state=-trk,ip actions=ct(table=0)
+ct_state=+trk,ip,in_port=1 actions=ct(commit,nat(src=10.1.1.254)),2
+ct_state=+rel+trk,icmp,in_port=2,nw_dst=10.1.1.254 actions=ct(commit,table=1,nat)
+dnl
+dnl Handle ICMP related packets.
+dnl These should match first rule with original IPs before SNAT.
+dnl The second rule, which matches on the SNAT IP, shouldn't match any packets.
+table=1,in_port=2,ct_state=+rel+trk,icmp,nw_src=10.1.1.2,nw_dst=10.1.1.1 action=1
+table=1,in_port=2,ct_state=+rel+trk,icmp,nw_dst=10.1.1.254 action=goto_table:2
+table=1,priority=0,action=drop
+dnl
+dnl Drop any ICMP related packets that incorrectly reach this table.
+table=2,priority=0,action=drop
+dnl
+dnl ARP
+priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+priority=10 arp action=normal
+priority=0,action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a0101f0/0xfffffff0,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=100 arp xreg0=0 action=normal
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+rm p0.pcap
+OVS_DAEMONIZE([tcpdump -n -U -i ovs-p0 -w p0.pcap], [tcpdump.pid])
+sleep 1
+
+dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
+NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+
+dnl Flush conntrack state.
+dnl To verify related packets are handled exactly the same as before flushing.
+AT_CHECK([ovs-appctl dpctl/flush-conntrack], [0])
+
+dnl Solicit another "destination unreachable" response.
+dnl To verify that after flushing, the same openflow rules are matched.
+NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | ofctl_strip_bytes | sort | grep -v drop], [0], [dnl
+ n_packets=1, priority=10,arp actions=NORMAL
+ n_packets=2, ct_state=+rel+trk,icmp,in_port=2,nw_dst=10.1.1.254 actions=ct(commit,table=1,nat)
+ n_packets=2, ct_state=+trk,ip,in_port=1 actions=ct(commit,nat(src=10.1.1.254)),output:2
+ n_packets=2, priority=100,arp,arp_op=1 actions=move:NXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+ n_packets=4, ct_state=-trk,ip actions=ct(table=0)
+ table=1, ct_state=+rel+trk,icmp,in_port=2,nw_dst=10.1.1.254 actions=goto_table:2
+ table=1, n_packets=2, ct_state=+rel+trk,icmp,in_port=2,nw_src=10.1.1.2,nw_dst=10.1.1.1 actions=output:1
+ table=10, n_packets=1, priority=10,arp,arp_op=1 actions=set_field:2->arp_op,move:NXM_NX_ARP_SHA[[]]->NXM_NX_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_NX_ARP_SHA[[]],move:NXM_OF_ARP_SPA[[]]->NXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->NXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],set_field:0->in_port,output:NXM_NX_REG3[[0..15]]
+ table=10, n_packets=1, priority=100,arp,reg0=0,reg1=0 actions=NORMAL
+ table=8, n_packets=1, priority=0 actions=set_field:0->xreg0
+ table=8, n_packets=1, reg2=0xa0101f0/0xfffffff0 actions=set_field:0x808888888888->xreg0
+OFPST_FLOW reply (OF1.5):
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>)
+])
+
+AT_CHECK([tcpdump -n -v "icmp" -r p0.pcap 2>/dev/null | grep -E 'wrong|bad'], [1], [ignore-nolog])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl CHECK_FTP_NAT(TITLE, IP_ADDR, FLOWS, CT_DUMP)
 dnl
 dnl Checks the implementation of conntrack with FTP ALGs in combination with

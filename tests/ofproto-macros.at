@@ -19,6 +19,11 @@ s/dir\/[0-9]*\/br0.mgmt/dir\/XXXX\/br0.mgmt/
 '
 }
 
+# Strips out byte counters from ovs-ofctl output
+ofctl_strip_bytes () {
+    sed 's/ n_bytes=[0-9]*,//'
+}
+
 # Filter (multiline) vconn debug messages from ovs-vswitchd.log.
 # Use with vconn_sub() and ofctl_strip()
 print_vconn_debug () { awk -F\| < ovs-vswitchd.log '
