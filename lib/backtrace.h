@@ -26,7 +26,7 @@
 #endif
 
 /* log_backtrace() will save the backtrace of a running program
- * into the log at the DEBUG level.
+ * into the log at the ERROR level.
  *
  * To use it, insert the following code to where backtrace is
  * desired:
