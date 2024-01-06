@@ -682,7 +682,6 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
 
     ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
-        COVERAGE_INC(vconn_sent);
         retval = (vconn->vclass->send)(vconn, msg);
     } else {
         char *s = ofp_to_string(msg->data, msg->size, NULL, NULL, 1);
@@ -692,6 +691,9 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
                         vconn->name, ovs_strerror(retval), s);
         }
         free(s);
+    }
+    if (!retval) {
+        COVERAGE_INC(vconn_sent);
     }
     return retval;
 }
