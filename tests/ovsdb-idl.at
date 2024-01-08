@@ -52,9 +52,9 @@ m4_define([OVSDB_CLUSTER_START_IDLTEST],
    done
    on_exit 'kill $(cat s*.pid)'
    for i in $(seq $n); do
-     AT_CHECK([ovsdb-server -vraft -vconsole:warn --detach --no-chdir \
-                   --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i \
-                   --remote=punix:s$i.ovsdb                           \
+     AT_CHECK([ovsdb-server -vraft -vconsole:warn -vfile:dbg --detach \
+                   --no-chdir --log-file=s$i.log --pidfile=s$i.pid    \
+                   --unixctl=s$i --remote=punix:s$i.ovsdb             \
                    m4_if([$2], [], [], [--remote=$2]) s$i.db])
    done
 
@@ -2669,3 +2669,93 @@ OVSDB_CHECK_IDL_TRACK([track, insert and delete, refs to link2],
 005: table link2: i=1 l1= uuid=<1>
 006: done
 ]])
+
+
+m4_define([OVSDB_CHECK_IDL_CHANGE_AWARE],
+  [AT_SETUP([simple idl, database change aware, online conversion - $1])
+   AT_KEYWORDS([ovsdb server idl db_change_aware conversion $1])
+
+   m4_if([$1], [clustered],
+         [OVSDB_CLUSTER_START_IDLTEST([1], [punix:socket])],
+         [OVSDB_START_IDLTEST])
+
+   dnl Add some data.
+   AT_CHECK([[ovsdb-client transact unix:socket '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "first row",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {"b": false, "s": "second row"}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {"b": true, "s": "third row"}}
+       ]']], [0], [stdout])
+
+   dnl Create a new schema by adding 'extra_column' to the 'simple' table.
+   AT_CHECK([sed 's/"ua": {/"extra_column":{"type": "string"},"ua": {/
+                  s/1.2.3/1.2.4/' \
+                 $abs_srcdir/idltest.ovsschema > new-idltest.ovsschema])
+   dnl Try "needs-conversion".
+   AT_CHECK([ovsdb-client needs-conversion unix:socket $abs_srcdir/idltest.ovsschema], [0], [no
+])
+   AT_CHECK([ovsdb-client needs-conversion unix:socket new-idltest.ovsschema], [0], [yes
+])
+
+   dnl Conditionally exclude the second row from monitoring.
+   m4_define([COND], [['condition simple [["b","==",true]]']])
+
+   dnl Start monitoring.
+   OVS_DAEMONIZE([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t30 \
+                   idl unix:socket COND monitor \
+                   >idl-c.out 2>idl-c.err], [idl-c.pid])
+   AT_CAPTURE_FILE([idl-c.out])
+   AT_CAPTURE_FILE([idl-c.err])
+
+   OVS_DAEMONIZE([$PYTHON3 $srcdir/test-ovsdb.py -t30 \
+                   idl $srcdir/idltest.ovsschema unix:socket COND monitor \
+                   >idl-python.out 2>idl-python.err], [idl-python.pid])
+   AT_CAPTURE_FILE([idl-python.out])
+   AT_CAPTURE_FILE([idl-python.err])
+
+   dnl Wait for monitors to receive the data.
+   OVS_WAIT_UNTIL([grep -q 'third row' idl-c.err])
+   OVS_WAIT_UNTIL([grep -q 'third row' idl-python.err])
+
+   dnl Convert the database.
+   AT_CHECK([ovsdb-client convert unix:socket new-idltest.ovsschema])
+
+   dnl Check for the monitor cancellation and the data being requested again.
+   m4_foreach([FILE], [[idl-c], [idl-python]],
+     [OVS_WAIT_UNTIL([grep -q 'monitor_canceled' FILE.err])
+      OVS_WAIT_UNTIL([test 2 -eq $(grep -c 'send request, method="monitor_cond_since", params=."idltest"' FILE.err)])
+
+      dnl XXX: Checking for the new schema bits conditionally because standalone
+      dnl databases are not updating the schema in the _Server database properly.
+      m4_if([$1], [clustered], [OVS_WAIT_UNTIL([grep -q 'extra_column' FILE.err])])
+
+      dnl Check that there were no unexpected messages.
+      AT_CHECK([! grep 'unexpected' FILE.err])
+
+      dnl Check that the data is received twice and the condition is working.
+      AT_CHECK([sort FILE.out | uuidfilt], [0],
+[[000: simple: change conditions
+001: table simple: i=0 r=0 b=true s=third row u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: table simple: i=1 r=2 b=true s=first row u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<5>
+002: table simple: i=0 r=0 b=true s=third row u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: table simple: i=1 r=2 b=true s=first row u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<5>
+]])])
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_CHANGE_AWARE([standalone])
+OVSDB_CHECK_IDL_CHANGE_AWARE([clustered])
