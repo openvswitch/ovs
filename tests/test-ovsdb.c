@@ -2800,6 +2800,13 @@ do_idl(struct ovs_cmdl_context *ctx)
             } else {
                 print_idl(idl, step++, terse);
             }
+
+            /* Just run IDL forever for a simple monitoring. */
+            if (!strcmp(arg, "monitor")) {
+                seqno = ovsdb_idl_get_seqno(idl);
+                i--;
+                continue;
+            }
         }
         seqno = ovsdb_idl_get_seqno(idl);
 
