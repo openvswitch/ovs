@@ -757,16 +757,23 @@ def do_idl(schema_file, remote, *commands):
                 poller.block()
         else:
             # Wait for update.
-            while idl.change_seqno == seqno and not idl.run():
-                rpc.run()
+            while True:
+                while idl.change_seqno == seqno and not idl.run():
+                    rpc.run()
 
-                poller = ovs.poller.Poller()
-                idl.wait(poller)
-                rpc.wait(poller)
-                poller.block()
+                    poller = ovs.poller.Poller()
+                    idl.wait(poller)
+                    rpc.wait(poller)
+                    poller.block()
 
-            print_idl(idl, step, terse)
-            step += 1
+                print_idl(idl, step, terse)
+                step += 1
+
+                # Run IDL forever in case of a simple monitor, otherwise
+                # break and execute the command.
+                seqno = idl.change_seqno
+                if command != "monitor":
+                    break
 
         seqno = idl.change_seqno
 
