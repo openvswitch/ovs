@@ -316,6 +316,34 @@ main_loop(struct server_config *config,
     free(remotes_error);
 }
 
+/* Parsing the relay in format 'relay:DB_NAME:<list of remotes>'.
+ * On success, returns 'true', 'name' is set to DB_NAME, 'remotes' to
+ * '<list of remotes>'.  Caller is responsible of freeing 'name' and
+ * 'remotes'.  On failure, returns 'false'.  */
+static bool
+parse_relay_args(const char *arg, char **name, char **remote)
+{
+    const char *relay_prefix = "relay:";
+    const int relay_prefix_len = strlen(relay_prefix);
+    bool is_relay;
+
+    is_relay = !strncmp(arg, relay_prefix, relay_prefix_len);
+    if (!is_relay) {
+        return false;
+    }
+
+    *remote = strchr(arg + relay_prefix_len, ':');
+
+    if (!*remote || (*remote)[0] == '\0') {
+        *remote = NULL;
+        return false;
+    }
+    arg += relay_prefix_len;
+    *name = xmemdup0(arg, *remote - arg);
+    *remote = xstrdup(*remote + 1);
+    return true;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -733,15 +761,13 @@ add_db(struct server_config *config, struct db *db)
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 open_db(struct server_config *config, const char *filename)
 {
-    const char *relay_prefix = "relay:";
-    const char *relay_remotes = NULL;
-    const int relay_prefix_len = strlen(relay_prefix);
     struct ovsdb_storage *storage;
+    char *relay_remotes = NULL;
     struct ovsdb_error *error;
     bool is_relay;
     char *name;
 
-    is_relay = !strncmp(filename, relay_prefix, relay_prefix_len);
+    is_relay = parse_relay_args(filename, &name, &relay_remotes);
     if (!is_relay) {
         /* If we know that the file is already open, return a good error
          * message.  Otherwise, if the file is open, we'll fail later on with
@@ -756,15 +782,7 @@ open_db(struct server_config *config, const char *filename)
         }
         name = xstrdup(filename);
     } else {
-        /* Parsing the relay in format 'relay:DB_NAME:<list of remotes>'*/
-        relay_remotes = strchr(filename + relay_prefix_len, ':');
-
-        if (!relay_remotes || relay_remotes[0] == '\0') {
-            return ovsdb_error(NULL, "%s: invalid syntax", filename);
-        }
-        name = xmemdup0(filename, relay_remotes - filename);
-        storage = ovsdb_storage_create_unbacked(name + relay_prefix_len);
-        relay_remotes++; /* Skip the ':'. */
+        storage = ovsdb_storage_create_unbacked(name);
     }
 
     struct ovsdb_schema *schema;
@@ -814,6 +832,7 @@ open_db(struct server_config *config, const char *filename)
     if (is_relay) {
         ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config,
                            *config->relay_source_probe_interval);
+        free(relay_remotes);
     }
     return NULL;
 }
