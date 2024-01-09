@@ -1593,12 +1593,30 @@ m4_define([OVSDB_CHECK_EXECUTION_RELAY],
             ], [0], [ignore], [ignore])
 
    for i in $(seq 2 ${n_servers}); do
-     AT_CHECK([ovsdb-server --detach --no-chdir                           dnl
-                            --log-file=ovsdb-server$i.log                 dnl
-                            --pidfile=${i}.pid --remote=punix:db${i}.sock dnl
-                            --unixctl=unixctl${i} -vjsonrpc:file:dbg      dnl
-                            relay:${schema_name}:unix:db$((i-1)).sock
-            ], [0], [ignore], [ignore])
+     dnl Run every second relay with a config file.
+     if test $(expr $i % 2) -eq 0; then
+       echo "{
+             \"remotes\": { \"punix:db${i}.sock\": {} },
+             \"databases\": {
+                 \"${schema_name}\": {
+                     \"service-model\": \"relay\",
+                     \"source\": { \"unix:db$((i-1)).sock\": {} }
+                 }
+             }
+       }" > config${i}.json
+       AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=${i}.pid     \
+                           --log-file=ovsdb-server$i.log                 \
+                           --unixctl=unixctl${i} -vjsonrpc:file:dbg      \
+                           --config-file=config${i}.json
+                ], [0], [ignore], [ignore])
+     else
+       AT_CHECK([ovsdb-server --detach --no-chdir                        \
+                           --log-file=ovsdb-server$i.log                 \
+                           --pidfile=${i}.pid --remote=punix:db${i}.sock \
+                           --unixctl=unixctl${i} -vjsonrpc:file:dbg      \
+                           relay:${schema_name}:unix:db$((i-1)).sock
+                ], [0], [ignore], [ignore])
+     fi
    done
 
    m4_foreach([txn], [$4],
@@ -1645,13 +1663,14 @@ AT_BANNER([OVSDB -- ovsdb-server replication])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
-# Creates two databases with the given SCHEMA, and starts an ovsdb-server on
+# Creates three databases with the given SCHEMA, and starts an ovsdb-server on
 # each database.
 # Runs each of the TRANSACTIONS (which should be a quoted list of
 # quoted strings) against one of the servers with ovsdb-client one at a
-# time. The server replicates its database to the other ovsdb-server.
+# time. The server replicates its database to the other two ovsdb-servers,
+# one of which is configured via command line and the other via --config-file.
 #
-# Checks that the dump of both databases are the same.
+# Checks that the dump of all databases are the same.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION],
@@ -1660,22 +1679,43 @@ m4_define([OVSDB_CHECK_EXECUTION],
    $2 > schema
    AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db3 schema], [0], [stdout], [ignore])
 
-   on_exit 'kill `cat *.pid`'
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
-   i
+   on_exit 'kill $(cat *.pid)'
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server1.log \
+                --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile=2.pid --remote=punix:db2.sock --unixctl=unixctl2 --sync-from=unix:db.sock db2], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server2.log \
+                --pidfile=2.pid --remote=punix:db2.sock --unixctl=unixctl2 \
+                --sync-from=unix:db.sock db2], [0], [ignore], [ignore])
+
+   AT_DATA([config3.json], [
+     {
+       "remotes": { "punix:db3.sock": {} },
+       "databases": {
+         "db3": {
+           "service-model": "active-backup",
+           "backup": true,
+           "source": { "unix:db.sock": {} }
+         }
+       }
+     }
+])
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server3.log \
+                --pidfile=3.pid --unixctl=unixctl3 --config-file=config3.json],
+            [0], [ignore], [ignore])
 
    m4_foreach([txn], [$3],
      [AT_CHECK([ovsdb-client transact 'txn'], [0], [stdout], [ignore])
    ])
 
    AT_CHECK([ovsdb-client dump], [0], [stdout], [ignore])
-   OVS_WAIT_UNTIL([ ovsdb-client dump unix:db2.sock > dump2; diff stdout dump2])
+   OVS_WAIT_UNTIL([ ovsdb-client dump unix:db2.sock > dump2; diff -u stdout dump2])
+   OVS_WAIT_UNTIL([ ovsdb-client dump unix:db3.sock > dump3; diff -u stdout dump3])
 
    OVSDB_SERVER_SHUTDOWN
    OVSDB_SERVER_SHUTDOWN2
+   OVSDB_SERVER_SHUTDOWN_N([3])
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
@@ -1684,18 +1724,21 @@ AT_BANNER([OVSDB -- ovsdb-server replication table-exclusion])
 
 # OVSDB_CHECK_REPLICATION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
-# Creates two databases with the given SCHEMA, and starts an
+# Creates three databases with the given SCHEMA, and starts an
 # ovsdb-server on each database.
 # Runs each of the TRANSACTIONS (which should be a quoted list of
 # quoted strings) against one of the servers with ovsdb-client one at a
-# time. The server replicates its database to the other ovsdb-server.
+# time. The server replicates its database to the other two ovsdb-servers,
+# one of which is configured via command line and the other via --config-file.
 #
-# Checks that the difference between the dump of the databases is
-# OUTPUT, but UUIDs in the output are replaced by markers of the form
-# <N> where N is a number.  The first unique UUID is replaced by <0>,
+# Checks that the difference between the dump of the first and the other two
+# databases is OUTPUT, but UUIDs in the output are replaced by markers of the
+# form <N> where N is a number.  The first unique UUID is replaced by <0>,
 # the next by <1>, and so on.
 # If a given UUID appears more than once it is always replaced by the
 # same marker.
+#
+# Also checks that the dumps of the second and third databases are the same.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_REPLICATION],
@@ -1705,11 +1748,33 @@ m4_define([OVSDB_CHECK_REPLICATION],
    $2 > schema
    AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db3 schema], [0], [stdout], [ignore])
 
-   on_exit 'kill `cat *.pid`'
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
+   on_exit 'kill $(cat *.pid)'
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server1.log \
+                --pidfile --remote=punix:db.sock db1], [0], [ignore], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile=2.pid --remote=punix:db2.sock --unixctl=unixctl2 --sync-from=unix:db.sock --sync-exclude-tables=mydb:b db2], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server2.log \
+                --pidfile=2.pid --remote=punix:db2.sock --unixctl=unixctl2 \
+                --sync-from=unix:db.sock --sync-exclude-tables=mydb:b db2],
+            [0], [ignore], [ignore])
+
+   AT_DATA([config3.json], [
+     {
+       "remotes": { "punix:db3.sock": {} },
+       "databases": {
+         "db3": {
+           "service-model": "active-backup",
+           "backup": true,
+           "source": { "unix:db.sock": {} },
+           "exclude-tables": [["b"]]
+         }
+       }
+     }
+])
+   AT_CHECK([ovsdb-server -vfile --detach --no-chdir --log-file=ovsdb-server3.log \
+                --pidfile=3.pid --unixctl=unixctl3 --config-file=config3.json],
+            [0], [ignore], [ignore])
 
    m4_foreach([txn], [$3],
      [AT_CHECK([ ovsdb-client transact 'txn' ], [0], [stdout], [ignore])
@@ -1722,6 +1787,11 @@ m4_define([OVSDB_CHECK_REPLICATION],
    AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore])
    cat stdout > dump2
 
+   OVS_WAIT_UNTIL([ ovsdb-client dump unix:db3.sock | grep one ])
+   AT_CHECK([ovsdb-client dump unix:db3.sock], [0], [stdout], [ignore])
+   cat stdout > dump3
+   AT_CHECK([diff -u dump2 dump3])
+
    AT_CHECK([diff dump1 dump2], [1], [stdout], [ignore])
    cat stdout > output
 
@@ -1729,6 +1799,7 @@ m4_define([OVSDB_CHECK_REPLICATION],
 
    OVSDB_SERVER_SHUTDOWN
    OVSDB_SERVER_SHUTDOWN2
+   OVSDB_SERVER_SHUTDOWN_N([3])
    AT_CLEANUP])
 
 REPLICATION_EXAMPLES
