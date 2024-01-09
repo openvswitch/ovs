@@ -1798,7 +1798,7 @@ do_transact_modify(struct ovs_cmdl_context *ctx)
     struct ovsdb_row *row_rw;
 
     row_ro = do_transact_find_row(ctx->argv[1]);
-    row_rw = ovsdb_txn_row_modify(do_transact_txn, row_ro);
+    ovsdb_txn_row_modify(do_transact_txn, row_ro, &row_rw, NULL);
     do_transact_set_i_j(row_rw, ctx->argv[2], ctx->argv[3]);
 }
 

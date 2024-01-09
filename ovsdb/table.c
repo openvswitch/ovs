@@ -415,8 +415,10 @@ ovsdb_table_execute_update(struct ovsdb_txn *txn, const struct uuid *row_uuid,
                                                     NULL, &columns, xor);
 
     if (!error && (xor || !ovsdb_row_equal_columns(row, update, &columns))) {
-        error = ovsdb_row_update_columns(ovsdb_txn_row_modify(txn, row),
-                                         update, &columns, xor);
+        struct ovsdb_row *rw_row;
+
+        ovsdb_txn_row_modify(txn, row, &rw_row, NULL);
+        error = ovsdb_row_update_columns(rw_row, update, &columns, xor);
     }
 
     ovsdb_column_set_destroy(&columns);

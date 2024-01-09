@@ -72,6 +72,8 @@ struct ovsdb_txn_table {
  *        'new'.
  *
  *      - A row modified by a transaction will have non-null 'old' and 'new'.
+ *        It may have non-null 'diff' as well in this case, but it is not
+ *        necessary.
  *
  *      - 'old' and 'new' both null indicates that a row was added then deleted
  *        within a single transaction.  Most of the time we instead delete the
@@ -83,6 +85,7 @@ struct ovsdb_txn_row {
     struct hmap_node hmap_node; /* In ovsdb_txn_table's txn_rows hmap. */
     struct ovsdb_row *old;      /* The old row. */
     struct ovsdb_row *new;      /* The new row. */
+    struct ovsdb_row *diff;     /* The difference between old and new. */
     size_t n_refs;              /* Number of remaining references. */
 
     /* These members are the same as the corresponding members of 'old' or
@@ -155,6 +158,7 @@ ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
 {
     struct ovsdb_row *old = txn_row->old;
     struct ovsdb_row *new = txn_row->new;
+    struct ovsdb_row *diff = txn_row->diff;
 
     ovsdb_txn_row_prefree(txn_row);
     if (!old) {
@@ -184,6 +188,7 @@ ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
     }
 
     ovsdb_row_destroy(new);
+    ovsdb_row_destroy(diff);
     free(txn_row);
 
     return NULL;
@@ -250,7 +255,10 @@ find_or_make_txn_row(struct ovsdb_txn *txn, const struct ovsdb_table *table,
     if (!txn_row) {
         const struct ovsdb_row *row = ovsdb_table_get_row(table, uuid);
         if (row) {
-            txn_row = ovsdb_txn_row_modify(txn, row)->txn_row;
+            struct ovsdb_row *rw_row;
+
+            ovsdb_txn_row_modify(txn, row, &rw_row, NULL);
+            txn_row = rw_row->txn_row;
         }
     }
     return txn_row;
@@ -433,6 +441,9 @@ delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         return NULL;
     }
 
+    ovsdb_row_destroy(txn_row->diff);
+    txn_row->diff = NULL;
+
     row = txn_row->new;
     txn_row->new = NULL;
     hmap_remove(&txn_row->table->rows, &row->hmap_node);
@@ -544,6 +555,7 @@ ovsdb_txn_row_commit(struct ovsdb_txn *txn OVS_UNUSED,
         txn_row->new->n_refs = txn_row->n_refs;
     }
     ovsdb_row_destroy(txn_row->old);
+    ovsdb_row_destroy(txn_row->diff);
     free(txn_row);
 
     return NULL;
@@ -1178,6 +1190,7 @@ ovsdb_txn_destroy_cloned(struct ovsdb_txn *txn)
             if (r->new) {
                 ovsdb_row_destroy(r->new);
             }
+            ovs_assert(!r->diff);
             hmap_remove(&t->txn_rows, &r->hmap_node);
             free(r);
         }
@@ -1439,7 +1452,8 @@ ovsdb_txn_create_txn_table(struct ovsdb_txn *txn, struct ovsdb_table *table)
 
 static struct ovsdb_txn_row *
 ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
-                     const struct ovsdb_row *old_, struct ovsdb_row *new)
+                     const struct ovsdb_row *old_, struct ovsdb_row *new,
+                     struct ovsdb_row *diff)
 {
     const struct ovsdb_row *row = old_ ? old_ : new;
     struct ovsdb_row *old = CONST_CAST(struct ovsdb_row *, old_);
@@ -1453,6 +1467,7 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
     txn_row->table = row->table;
     txn_row->old = old;
     txn_row->new = new;
+    txn_row->diff = diff;
     txn_row->n_refs = old ? old->n_refs : 0;
     txn_row->serial = serial - 1;
 
@@ -1465,6 +1480,9 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
     if (new) {
         new->txn_row = txn_row;
     }
+    if (diff) {
+        diff->txn_row = txn_row;
+    }
 
     txn_table = ovsdb_txn_create_txn_table(txn, table);
     hmap_insert(&txn_table->txn_rows, &txn_row->hmap_node,
@@ -1473,24 +1491,38 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
     return txn_row;
 }
 
-struct ovsdb_row *
-ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
+void
+ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_,
+                     struct ovsdb_row **rw_row, struct ovsdb_row **diff)
 {
     struct ovsdb_row *ro_row = CONST_CAST(struct ovsdb_row *, ro_row_);
 
+    ovs_assert(ro_row);
+    ovs_assert(rw_row);
+
     if (ro_row->txn_row) {
         ovs_assert(ro_row == ro_row->txn_row->new);
-        return ro_row;
+        *rw_row = ro_row;
+        if (diff) {
+            *diff = ro_row->txn_row->diff;
+        } else {
+            /* Caller will modify the row without updating the diff.
+             * Destroy the existing diff, if any, so it will not be
+             * used for this row anymore.  Modification will always
+             * return NULL from this point on. */
+            ovsdb_row_destroy(ro_row->txn_row->diff);
+            ro_row->txn_row->diff = NULL;
+        }
     } else {
         struct ovsdb_table *table = ro_row->table;
-        struct ovsdb_row *rw_row;
 
-        rw_row = ovsdb_row_clone(ro_row);
-        rw_row->n_refs = ro_row->n_refs;
-        ovsdb_txn_row_create(txn, table, ro_row, rw_row);
-        hmap_replace(&table->rows, &ro_row->hmap_node, &rw_row->hmap_node);
-
-        return rw_row;
+        *rw_row = ovsdb_row_clone(ro_row);
+        (*rw_row)->n_refs = ro_row->n_refs;
+        if (diff) {
+            *diff = ovsdb_row_create(table);
+        }
+        ovsdb_txn_row_create(txn, table, ro_row, *rw_row, diff ? *diff : NULL);
+        hmap_replace(&table->rows, &ro_row->hmap_node, &(*rw_row)->hmap_node);
     }
 }
 
@@ -1502,7 +1534,7 @@ ovsdb_txn_row_insert(struct ovsdb_txn *txn, struct ovsdb_row *row)
 
     uuid_generate(ovsdb_row_get_version_rw(row));
 
-    ovsdb_txn_row_create(txn, table, NULL, row);
+    ovsdb_txn_row_create(txn, table, NULL, row, NULL);
     hmap_insert(&table->rows, &row->hmap_node, hash);
 }
 
@@ -1518,9 +1550,11 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
     hmap_remove(&table->rows, &row->hmap_node);
 
     if (!txn_row) {
-        ovsdb_txn_row_create(txn, table, row, NULL);
+        ovsdb_txn_row_create(txn, table, row, NULL, NULL);
     } else {
         ovs_assert(txn_row->new == row);
+        ovsdb_row_destroy(txn_row->diff);
+        txn_row->diff = NULL;
         if (txn_row->old) {
             txn_row->new = NULL;
         } else {

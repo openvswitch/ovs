@@ -21,6 +21,7 @@
 
 struct json;
 struct ovsdb;
+struct ovsdb_row;
 struct ovsdb_schema;
 struct ovsdb_table;
 struct uuid;
@@ -50,8 +51,9 @@ const struct ovsdb_error *ovsdb_txn_progress_get_error(
     const struct ovsdb_txn_progress *);
 void ovsdb_txn_progress_destroy(struct ovsdb_txn_progress *);
 
-struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
-                                       const struct ovsdb_row *);
+void ovsdb_txn_row_modify(struct ovsdb_txn *, const struct ovsdb_row *,
+                          struct ovsdb_row **row_new,
+                          struct ovsdb_row **row_diff);
 void ovsdb_txn_row_insert(struct ovsdb_txn *, struct ovsdb_row *);
 void ovsdb_txn_row_delete(struct ovsdb_txn *, const struct ovsdb_row *);
 

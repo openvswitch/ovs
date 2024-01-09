@@ -490,9 +490,11 @@ update_row_cb(const struct ovsdb_row *row, void *ur_)
 
     ur->n_matches++;
     if (!ovsdb_row_equal_columns(row, ur->row, ur->columns)) {
+        struct ovsdb_row *rw_row;
+
+        ovsdb_txn_row_modify(ur->txn, row, &rw_row, NULL);
         ovsdb_error_assert(ovsdb_row_update_columns(
-                               ovsdb_txn_row_modify(ur->txn, row),
-                               ur->row, ur->columns, false));
+                               rw_row, ur->row, ur->columns, false));
     }
 
     return true;
@@ -572,10 +574,14 @@ static bool
 mutate_row_cb(const struct ovsdb_row *row, void *mr_)
 {
     struct mutate_row_cbdata *mr = mr_;
+    struct ovsdb_row *rw_row;
+
+    /* Not trying to track the row diff here, because user transactions
+     * may attempt to add duplicates or remove elements that do not exist. */
+    ovsdb_txn_row_modify(mr->txn, row, &rw_row, NULL);
 
     mr->n_matches++;
-    *mr->error = ovsdb_mutation_set_execute(ovsdb_txn_row_modify(mr->txn, row),
-                                            mr->mutations);
+    *mr->error = ovsdb_mutation_set_execute(rw_row, mr->mutations);
     return *mr->error == NULL;
 }
 

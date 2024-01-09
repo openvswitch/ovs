@@ -1111,7 +1111,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
         /* Bad remote spec or incorrect schema. */
         return;
     }
-    rw_row = ovsdb_txn_row_modify(txn, row);
+    ovsdb_txn_row_modify(txn, row, &rw_row, NULL);
     ovsdb_jsonrpc_server_get_remote_status(jsonrpc, target, &status);
 
     /* Update status information columns. */
@@ -1301,7 +1301,10 @@ update_server_status(struct shash *all_dbs)
         if (!db || !db->db) {
             ovsdb_txn_row_delete(txn, row);
         } else {
-            update_database_status(ovsdb_txn_row_modify(txn, row), db);
+            struct ovsdb_row *rw_row;
+
+            ovsdb_txn_row_modify(txn, row, &rw_row, NULL);
+            update_database_status(rw_row, db);
         }
     }
 
