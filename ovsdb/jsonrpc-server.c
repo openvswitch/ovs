@@ -219,6 +219,73 @@ ovsdb_jsonrpc_default_options(const char *target)
     return options;
 }
 
+struct json *
+ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options)
+{
+    struct json *json = json_object_create();
+
+    json_object_put(json, "max-backoff",
+                    json_integer_create(options->max_backoff));
+    json_object_put(json, "inactivity-probe",
+                    json_integer_create(options->probe_interval));
+    json_object_put(json, "read-only",
+                    json_boolean_create(options->read_only));
+    json_object_put(json, "dscp", json_integer_create(options->dscp));
+    if (options->role) {
+        json_object_put(json, "role", json_string_create(options->role));
+    }
+
+    return json;
+}
+
+void
+ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *options,
+                                       const struct json *json)
+{
+    const struct json *max_backoff, *probe_interval, *read_only, *dscp, *role;
+    struct ovsdb_parser parser;
+    struct ovsdb_error *error;
+
+    ovsdb_parser_init(&parser, json, "JSON-RPC options");
+
+    max_backoff = ovsdb_parser_member(&parser, "max-backoff",
+                                      OP_INTEGER | OP_OPTIONAL);
+    if (max_backoff) {
+        options->max_backoff = json_integer(max_backoff);
+    }
+
+    probe_interval = ovsdb_parser_member(&parser, "inactivity-probe",
+                                         OP_INTEGER | OP_OPTIONAL);
+    if (probe_interval) {
+        options->probe_interval = json_integer(probe_interval);
+    }
+
+    read_only = ovsdb_parser_member(&parser, "read-only",
+                                    OP_BOOLEAN | OP_OPTIONAL);
+    if (read_only) {
+        options->read_only = json_boolean(read_only);
+    }
+
+    dscp = ovsdb_parser_member(&parser, "dscp", OP_INTEGER | OP_OPTIONAL);
+    if (dscp) {
+        options->dscp = json_integer(dscp);
+    }
+
+    role = ovsdb_parser_member(&parser, "role", OP_STRING | OP_OPTIONAL);
+    if (role) {
+        free(options->role);
+        options->role = nullable_xstrdup(json_string(role));
+    }
+
+    error = ovsdb_parser_finish(&parser);
+    if (error) {
+        char *s = ovsdb_error_to_string_free(error);
+
+        VLOG_WARN("%s", s);
+        free(s);
+    }
+}
+
 /* Sets 'svr''s current set of remotes to the names in 'new_remotes', with
  * options in the struct ovsdb_jsonrpc_options supplied as the data values.
  *
