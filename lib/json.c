@@ -257,6 +257,21 @@ json_array_create_3(struct json *elem0, struct json *elem1, struct json *elem2)
     return json_array_create(elems, 3);
 }
 
+bool
+json_array_contains_string(const struct json *json, const char *str)
+{
+    ovs_assert(json->type == JSON_ARRAY);
+
+    for (size_t i = 0; i < json->array.n; i++) {
+        const struct json *elem = json->array.elems[i];
+
+        if (elem->type == JSON_STRING && !strcmp(json_string(elem), str)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct json *
 json_object_create(void)
 {

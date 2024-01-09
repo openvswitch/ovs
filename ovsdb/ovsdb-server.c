@@ -166,12 +166,12 @@ ovsdb_replication_init(const char *sync_from, const char *exclude,
                        struct shash *all_dbs, const struct uuid *server_uuid,
                        int probe_interval)
 {
-    replication_init(sync_from, exclude, server_uuid, probe_interval);
     struct shash_node *node;
     SHASH_FOR_EACH (node, all_dbs) {
         struct db *db = node->data;
         if (node->name[0] != '_' && db->db) {
-            replication_add_local_db(node->name, db->db);
+            replication_set_db(db->db, sync_from, exclude,
+                               server_uuid, probe_interval);
         }
     }
 }
@@ -228,11 +228,20 @@ main_loop(struct server_config *config,
         report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
         ovsdb_jsonrpc_server_run(jsonrpc);
 
+        replication_run();
         if (*is_backup) {
-            replication_run();
-            if (!replication_is_alive()) {
-                disconnect_active_server();
-                *is_backup = false;
+            SHASH_FOR_EACH (node, all_dbs) {
+                struct db *db = node->data;
+                if (db->db->name[0] != '_' && !replication_is_alive(db->db)) {
+                    *is_backup = false;
+                    break;
+                }
+            }
+            if (!*is_backup) {
+                SHASH_FOR_EACH (node, all_dbs) {
+                    struct db *db = node->data;
+                    replication_remove_db(db->db);
+                }
             }
         }
 
@@ -283,10 +292,8 @@ main_loop(struct server_config *config,
         update_server_status(all_dbs);
 
         memory_wait();
-        if (*is_backup) {
-            replication_wait();
-        }
 
+        replication_wait();
         ovsdb_relay_wait();
 
         ovsdb_jsonrpc_server_wait(jsonrpc);
@@ -518,7 +525,7 @@ main(int argc, char *argv[])
                              &server_config);
     unixctl_command_register("ovsdb-server/get-sync-exclude-tables", "",
                              0, 0, ovsdb_server_get_sync_exclude_tables,
-                             NULL);
+                             &server_config);
     unixctl_command_register("ovsdb-server/sync-status", "",
                              0, 0, ovsdb_server_get_sync_status,
                              &server_config);
@@ -606,6 +613,9 @@ close_db(struct server_config *config, struct db *db, char *comment)
         ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db, comment);
         if (db->db->is_relay) {
             ovsdb_relay_del_db(db->db);
+        }
+        if (*config->is_backup) {
+            replication_remove_db(db->db);
         }
         ovsdb_destroy(db->db);
         free(db->filename);
@@ -1504,8 +1514,12 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
                                             void *config_)
 {
     struct server_config *config = config_;
+    struct shash_node *node;
 
-    disconnect_active_server();
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+        replication_remove_db(db->db);
+    }
     *config->is_backup = false;
     save_config(config);
     unixctl_command_reply(conn, NULL);
@@ -1524,7 +1538,11 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
         *config->replication_probe_interval = probe_interval;
         save_config(config);
         if (*config->is_backup) {
-            replication_set_probe_interval(probe_interval);
+            const struct uuid *server_uuid;
+            server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
+            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
+                                   config->all_dbs, server_uuid,
+                                   *config->replication_probe_interval);
         }
         unixctl_command_reply(conn, NULL);
     } else {
@@ -1561,7 +1579,7 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
 {
     struct server_config *config = config_;
 
-    char *err = set_excluded_tables(argv[1], true);
+    char *err = parse_excluded_tables(argv[1]);
     if (!err) {
         free(*config->sync_exclude);
         *config->sync_exclude = xstrdup(argv[1]);
@@ -1573,7 +1591,6 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
                                    config->all_dbs, server_uuid,
                                    *config->replication_probe_interval);
         }
-        err = set_excluded_tables(argv[1], false);
     }
     unixctl_command_reply(conn, err);
     free(err);
@@ -1583,11 +1600,11 @@ static void
 ovsdb_server_get_sync_exclude_tables(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED,
                                      const char *argv[] OVS_UNUSED,
-                                     void *arg_ OVS_UNUSED)
+                                     void *config_)
 {
-    char *reply = get_excluded_tables();
-    unixctl_command_reply(conn, reply);
-    free(reply);
+    struct server_config *config = config_;
+
+    unixctl_command_reply(conn, *config->sync_exclude);
 }
 
 static void
@@ -1846,13 +1863,6 @@ remove_db(struct server_config *config, struct shash_node *node, char *comment)
     shash_delete(config->all_dbs, node);
 
     save_config(config);
-    if (*config->is_backup) {
-        const struct uuid *server_uuid;
-        server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
-        ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                               config->all_dbs, server_uuid,
-                               *config->replication_probe_interval);
-    }
 }
 
 static void
@@ -1994,7 +2004,17 @@ ovsdb_server_get_sync_status(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_put_format(&ds, "state: %s\n", is_backup ? "backup" : "active");
 
     if (is_backup) {
-        ds_put_and_free_cstr(&ds, replication_status());
+        const struct shash_node **db_nodes = shash_sort(config->all_dbs);
+
+        for (size_t i = 0; i < shash_count(config->all_dbs); i++) {
+            const struct db *db = db_nodes[i]->data;
+
+            if (db->db && db->db->name[0] != '_') {
+                ds_put_and_free_cstr(&ds, replication_status(db->db));
+                ds_put_char(&ds, '\n');
+            }
+        }
+        free(db_nodes);
     }
 
     unixctl_command_reply(conn, ds_cstr(&ds));
@@ -2158,7 +2178,7 @@ parse_options(int argc, char *argv[],
             break;
 
         case OPT_SYNC_EXCLUDE: {
-            char *err = set_excluded_tables(optarg, false);
+            char *err = parse_excluded_tables(optarg);
             if (err) {
                 ovs_fatal(0, "%s", err);
             }

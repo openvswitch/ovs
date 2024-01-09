@@ -26,41 +26,40 @@ struct ovsdb;
  * API Usage
  *===========
  *
- * - replication_init() needs to be called whenever OVSDB server switches into
+ * - replication_set_db() needs to be called whenever database switches into
  *   the backup mode.
  *
- * - replication_add_local_db() should be called immediately after to add all
- *   known database that OVSDB server owns, one at a time.
+ * - replication_remove_db() needs to be called whenever backup database
+ *   switches into an active mode.
  *
  * - replication_destroy() should be called when OVSDB server shutdown to
  *   reclaim resources.
  *
  * - replication_run(), replication_wait(), replication_is_alive() and
  *   replication_get_last_error() should be call within the main loop
- *   whenever OVSDB server runs in the backup mode.
+ *   whenever OVSDB has backup databases.
  *
- * - set_excluded_tables(), get_excluded_tables(), disconnect_active_server()
- *   and replication_usage() are support functions used mainly by unixctl
- *   commands.
+ * - parse_excluded_tables(), get_excluded_tables() and replication_usage()
+ *   are support functions used mainly by unixctl commands.
  */
 
 #define REPLICATION_DEFAULT_PROBE_INTERVAL 60000
 
-void replication_init(const char *sync_from, const char *exclude_tables,
-                      const struct uuid *server, int probe_interval);
+void replication_set_db(struct ovsdb *, const char *sync_from,
+                        const char *exclude_tables, const struct uuid *server,
+                        int probe_interval);
+void replication_remove_db(const struct ovsdb *);
+
 void replication_run(void);
 void replication_wait(void);
 void replication_destroy(void);
 void replication_usage(void);
-void replication_add_local_db(const char *databse, struct ovsdb *db);
-bool replication_is_alive(void);
-int replication_get_last_error(void);
-char *replication_status(void);
-void replication_set_probe_interval(int);
+bool replication_is_alive(const struct ovsdb *);
+int replication_get_last_error(const struct ovsdb *);
+char *replication_status(const struct ovsdb *);
+void replication_set_probe_interval(const struct ovsdb *, int probe_interval);
 
-char *set_excluded_tables(const char *excluded, bool dryrun)
-    OVS_WARN_UNUSED_RESULT;
-char *get_excluded_tables(void) OVS_WARN_UNUSED_RESULT;
-void disconnect_active_server(void);
+char *parse_excluded_tables(const char *excluded) OVS_WARN_UNUSED_RESULT;
+char *get_excluded_tables(const struct ovsdb *) OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/replication.h */

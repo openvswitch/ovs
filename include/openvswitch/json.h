@@ -91,6 +91,7 @@ struct json *json_array_create(struct json **, size_t n);
 struct json *json_array_create_1(struct json *);
 struct json *json_array_create_2(struct json *, struct json *);
 struct json *json_array_create_3(struct json *, struct json *, struct json *);
+bool json_array_contains_string(const struct json *, const char *);
 
 struct json *json_object_create(void);
 void json_object_put(struct json *, const char *name, struct json *value);
