@@ -20,6 +20,7 @@
 
 #include <stdbool.h>
 struct ovsdb;
+struct jsonrpc_session_options;
 
 /* Replication module runs when OVSDB server runs in the backup mode.
  *
@@ -47,7 +48,7 @@ struct ovsdb;
 
 void replication_set_db(struct ovsdb *, const char *sync_from,
                         const char *exclude_tables, const struct uuid *server,
-                        int probe_interval);
+                        const struct jsonrpc_session_options *);
 void replication_remove_db(const struct ovsdb *);
 
 void replication_run(void);

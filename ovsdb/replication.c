@@ -108,7 +108,7 @@ static bool request_id_compare_and_free(struct replication_db *,
 void
 replication_set_db(struct ovsdb *db, const char *sync_from,
                    const char *exclude_tables, const struct uuid *server,
-                   int probe_interval)
+                   const struct jsonrpc_session_options *options)
 {
     struct replication_db *rdb = find_db(db->name);
 
@@ -124,7 +124,7 @@ replication_set_db(struct ovsdb *db, const char *sync_from,
     if (rdb
         && nullable_string_is_equal(rdb->excluded_tables_str, exclude_tables)
         && nullable_string_is_equal(rdb->sync_from, sync_from)) {
-        jsonrpc_session_set_probe_interval(rdb->session, probe_interval);
+        jsonrpc_session_set_options(rdb->session, options);
         return;
     }
 
@@ -147,7 +147,7 @@ replication_set_db(struct ovsdb *db, const char *sync_from,
     rdb->session = jsonrpc_session_open(rdb->sync_from, true);
     rdb->session_seqno = UINT_MAX;
 
-    jsonrpc_session_set_probe_interval(rdb->session, probe_interval);
+    jsonrpc_session_set_options(rdb->session, options);
 
     rdb->state = RPL_S_INIT;
     rdb->db->read_only = true;

@@ -1023,7 +1023,7 @@ open_db(struct server_config *server_config,
 
         server_uuid = ovsdb_jsonrpc_server_get_uuid(server_config->jsonrpc);
         replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                           server_uuid, conf->options->rpc.probe_interval);
+                           server_uuid, &conf->options->rpc);
     }
     return NULL;
 }
@@ -1734,8 +1734,7 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
 
             if (conf->model == SM_ACTIVE_BACKUP && !conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid,
-                                   conf->options->rpc.probe_interval);
+                                   server_uuid, &conf->options->rpc);
                 conf->ab.backup = true;
             }
         }
@@ -1804,8 +1803,7 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
             conf->options->rpc.probe_interval = probe_interval;
             if (conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid,
-                                   conf->options->rpc.probe_interval);
+                                   server_uuid, &conf->options->rpc);
             }
         }
     }
@@ -1884,8 +1882,7 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
             conf->ab.sync_exclude = xstrdup(argv[1]);
             if (conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid,
-                                   conf->options->rpc.probe_interval);
+                                   server_uuid, &conf->options->rpc);
             }
         }
     }
