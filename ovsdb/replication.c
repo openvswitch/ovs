@@ -150,6 +150,7 @@ replication_set_db(struct ovsdb *db, const char *sync_from,
     jsonrpc_session_set_probe_interval(rdb->session, probe_interval);
 
     rdb->state = RPL_S_INIT;
+    rdb->db->read_only = true;
 }
 
 void
@@ -727,6 +728,7 @@ replication_db_destroy(struct replication_db *rdb)
     }
 
     rdb->schema_version_higher = false;
+    rdb->db->read_only = false;
 }
 
 /* Return true if replication just started or is ongoing.
