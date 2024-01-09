@@ -1016,7 +1016,7 @@ open_db(struct server_config *server_config,
 
     if (model == SM_RELAY) {
         ovsdb_relay_add_db(db->db, conf->source, update_schema, server_config,
-                           conf->options->rpc.probe_interval);
+                           &conf->options->rpc);
     }
     if (model == SM_ACTIVE_BACKUP && conf->ab.backup) {
         const struct uuid *server_uuid;
