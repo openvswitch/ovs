@@ -195,6 +195,13 @@ static void add_server_db(struct server_config *);
 static void remove_db(struct server_config *, struct shash_node *db, char *);
 static void close_db(struct server_config *, struct db *, char *);
 
+static struct ovsdb_error *update_schema(struct ovsdb *,
+                                         const struct ovsdb_schema *,
+                                         const struct uuid *txnid,
+                                         bool conversion_with_no_data,
+                                         void *aux)
+    OVS_WARN_UNUSED_RESULT;
+
 static void parse_options(int argc, char *argvp[],
                           struct shash *db_conf, struct shash *remotes,
                           char **unixctl_pathp, char **run_command,
@@ -223,7 +230,7 @@ static void save_config__(FILE *config_file, const struct shash *remotes,
                           const char *sync_from, const char *sync_exclude,
                           bool is_backup);
 static void save_config(struct server_config *);
-static void load_config(FILE *config_file, struct shash *remotes,
+static bool load_config(FILE *config_file, struct shash *remotes,
                         struct shash *db_conf, char **sync_from,
                         char **sync_exclude, bool *is_backup);
 
@@ -263,8 +270,9 @@ ovsdb_server_replication_run(struct server_config *config)
     }
 
     /* If one connection is broken, switch all databases to active,
-     * since they are configured via the same command line / appctl. */
-    if (!all_alive && *config->is_backup) {
+     * if they are configured via the command line / appctl and so have
+     * shared configuration. */
+    if (!config_file_path && !all_alive && *config->is_backup) {
         *config->is_backup = false;
 
         SHASH_FOR_EACH (node, config->all_dbs) {
@@ -510,6 +518,196 @@ free_database_configs(struct shash *db_conf)
     shash_clear(db_conf);
 }
 
+static bool
+service_model_can_convert(enum service_model a, enum service_model b)
+{
+    ovs_assert(a != SM_UNDEFINED);
+
+    if (a == b) {
+        return true;
+    }
+
+    if (b == SM_UNDEFINED) {
+        return a == SM_STANDALONE || a == SM_CLUSTERED;
+    }
+
+    /* Conversion can happen only between standalone and active-backup. */
+    return (a == SM_STANDALONE && b == SM_ACTIVE_BACKUP)
+            || (a == SM_ACTIVE_BACKUP && b == SM_STANDALONE);
+}
+
+static void
+database_update_config(struct server_config *server_config,
+                       struct db *db, const struct db_config *new_conf)
+{
+    struct db_config *conf = db->config;
+    enum service_model model = conf->model;
+
+    /* Stop replicating when transitioning to active or standalone. */
+    if (conf->model == SM_ACTIVE_BACKUP && conf->ab.backup
+        && (new_conf->model == SM_STANDALONE || !new_conf->ab.backup)) {
+        ovsdb_server_replication_remove_db(db);
+    }
+
+    db_config_destroy(conf);
+    conf = db->config = db_config_clone(new_conf);
+
+    if (conf->model == SM_UNDEFINED) {
+        /* We're operating on the same file, the model is the same. */
+        conf->model = model;
+    }
+
+    if (conf->model == SM_RELAY) {
+        ovsdb_relay_add_db(db->db, conf->source, update_schema, server_config,
+                           &conf->options->rpc);
+    }
+    if (conf->model == SM_ACTIVE_BACKUP && conf->ab.backup) {
+        const struct uuid *server_uuid;
+
+        server_uuid = ovsdb_jsonrpc_server_get_uuid(server_config->jsonrpc);
+        replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
+                           server_uuid, &conf->options->rpc);
+    }
+}
+
+static bool
+reconfigure_databases(struct server_config *server_config,
+                      struct shash *db_conf)
+{
+    struct db_config *cur_conf, *new_conf;
+    struct shash_node *node, *conf_node;
+    bool res = true;
+    struct db *db;
+
+    /* Remove databases that are no longer in the configuration or have
+     * incompatible configuration.  Update compatible ones. */
+    SHASH_FOR_EACH_SAFE (node, server_config->all_dbs) {
+        db = node->data;
+
+        if (node->name[0] == '_') {
+            /* Skip internal databases. */
+            continue;
+        }
+
+        cur_conf = db->config;
+        conf_node = shash_find(db_conf, db->filename);
+        new_conf = conf_node ? conf_node->data : NULL;
+
+        if (!new_conf) {
+            remove_db(server_config, node,
+                      xasprintf("database %s removed from configuration",
+                                node->name));
+            continue;
+        }
+        if (!service_model_can_convert(cur_conf->model, new_conf->model)) {
+            remove_db(server_config, node,
+                      xasprintf("service model changed for database %s",
+                                node->name));
+            continue;
+        }
+        database_update_config(server_config, db, new_conf);
+
+        db_config_destroy(new_conf);
+        shash_delete(db_conf, conf_node);
+    }
+
+    /* Create new databases. */
+    SHASH_FOR_EACH (node, db_conf) {
+        struct ovsdb_error *error = open_db(server_config,
+                                            node->name, node->data);
+        if (error) {
+            char *s = ovsdb_error_to_string_free(error);
+
+            VLOG_WARN("failed to open database '%s': %s", node->name, s);
+            free(s);
+            res = false;
+        }
+        db_config_destroy(node->data);
+    }
+    shash_clear(db_conf);
+
+    return res;
+}
+
+static bool
+reconfigure_ovsdb_server(struct server_config *server_config)
+{
+    char *sync_from = NULL, *sync_exclude = NULL;
+    bool is_backup = false;
+    struct shash remotes;
+    struct shash db_conf;
+    bool res = true;
+
+    FILE *file = NULL;
+
+    if (config_file_path) {
+        file = fopen(config_file_path, "r+b");
+        if (!file) {
+            VLOG_ERR("failed to open configuration file '%s': %s",
+                     config_file_path, ovs_strerror(errno));
+            return false;
+        } else {
+            VLOG_INFO("loading configuration from '%s'", config_file_path);
+        }
+    } else {
+        file = server_config->config_tmpfile;
+    }
+    ovs_assert(file);
+
+    shash_init(&remotes);
+    shash_init(&db_conf);
+
+    if (!load_config(file, &remotes, &db_conf,
+                     &sync_from, &sync_exclude, &is_backup)) {
+        if (config_file_path) {
+            VLOG_WARN("failed to load configuration from %s",
+                      config_file_path);
+        } else {
+            VLOG_FATAL("failed to load configuration from a temporary file");
+        }
+        res = false;
+        goto exit_close;
+    }
+
+    /* Parsing was successful.  Update the server configuration. */
+    shash_swap(server_config->remotes, &remotes);
+    free(*server_config->sync_from);
+    *server_config->sync_from = sync_from;
+    free(*server_config->sync_exclude);
+    *server_config->sync_exclude = sync_exclude;
+    *server_config->is_backup = is_backup;
+
+    if (!reconfigure_databases(server_config, &db_conf)) {
+        VLOG_WARN("failed to configure databases");
+        res = false;
+    }
+
+    char *error = reconfigure_remotes(server_config->jsonrpc,
+                                      server_config->all_dbs,
+                                      server_config->remotes);
+    if (error) {
+        VLOG_WARN("failed to configure remotes: %s", error);
+        res = false;
+    } else {
+        error = reconfigure_ssl(server_config->all_dbs);
+        if (error) {
+            VLOG_WARN("failed to configure SSL: %s", error);
+            res = false;
+        }
+    }
+    free(error);
+
+exit_close:
+    if (config_file_path) {
+        fclose(file);
+    }
+    free_remotes(&remotes);
+    free_database_configs(&db_conf);
+    shash_destroy(&remotes);
+    shash_destroy(&db_conf);
+    return res;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -520,8 +718,7 @@ main(int argc, char *argv[])
     struct process *run_process;
     bool exiting;
     int retval;
-    FILE *config_tmpfile;
-    struct server_config server_config;
+    FILE *config_tmpfile = NULL;
     struct shash all_dbs;
     struct shash_node *node;
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
@@ -531,6 +728,16 @@ main(int argc, char *argv[])
     struct shash remotes = SHASH_INITIALIZER(&remotes);
     char *sync_from = NULL, *sync_exclude = NULL;
     bool is_backup;
+
+    struct server_config server_config = {
+        .remotes = &remotes,
+        .all_dbs = &all_dbs,
+        .sync_from = &sync_from,
+        .sync_exclude = &sync_exclude,
+        .is_backup = &is_backup,
+        .replication_probe_interval = &replication_probe_interval,
+        .relay_source_probe_interval = &relay_source_probe_interval,
+    };
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -546,64 +753,39 @@ main(int argc, char *argv[])
 
     daemon_become_new_user(false, false);
 
-    /* Create and initialize 'config_tmpfile' as a temporary file to hold
-     * ovsdb-server's most basic configuration, and then save our initial
-     * configuration to it.  When --monitor is used, this preserves the effects
-     * of ovs-appctl commands such as ovsdb-server/add-remote (which saves the
-     * new configuration) across crashes. */
-    config_tmpfile = tmpfile();
-    if (!config_tmpfile) {
-        ovs_fatal(errno, "failed to create temporary file");
+    if (!config_file_path) {
+         /* Create and initialize 'config_tmpfile' as a temporary file to hold
+         * ovsdb-server's most basic configuration, and then save our initial
+         * configuration to it.  When --monitor is used, this preserves the
+         * effects of ovs-appctl commands such as ovsdb-server/add-remote
+         * (which saves the new configuration) across crashes. */
+        config_tmpfile = tmpfile();
+        if (!config_tmpfile) {
+            ovs_fatal(errno, "failed to create temporary file");
+        }
+        server_config.config_tmpfile = config_tmpfile;
+        save_config__(config_tmpfile, &remotes, &db_conf, sync_from,
+                      sync_exclude, is_backup);
     }
 
-    server_config.remotes = &remotes;
-    server_config.config_tmpfile = config_tmpfile;
-
-    save_config__(config_tmpfile, &remotes, &db_conf, sync_from,
-                  sync_exclude, is_backup);
     free_remotes(&remotes);
     free_database_configs(&db_conf);
 
     daemonize_start(false, false);
 
-    /* Load the saved config. */
-    load_config(config_tmpfile, &remotes, &db_conf, &sync_from,
-                &sync_exclude, &is_backup);
-
-    /* Start ovsdb jsonrpc server. When running as a backup server,
-     * jsonrpc connections are read only. Otherwise, both read
-     * and write transactions are allowed.  */
-    jsonrpc = ovsdb_jsonrpc_server_create(is_backup);
-
-    shash_init(&all_dbs);
-    server_config.all_dbs = &all_dbs;
-    server_config.jsonrpc = jsonrpc;
-    server_config.sync_from = &sync_from;
-    server_config.sync_exclude = &sync_exclude;
-    server_config.is_backup = &is_backup;
-    server_config.replication_probe_interval = &replication_probe_interval;
-    server_config.relay_source_probe_interval = &relay_source_probe_interval;
-
     perf_counters_init();
 
-    SHASH_FOR_EACH (node, &db_conf) {
-        struct ovsdb_error *error = open_db(&server_config,
-                                            node->name, node->data);
-        if (error) {
-            char *s = ovsdb_error_to_string_free(error);
-            ovs_fatal(0, "%s", s);
-        }
-        db_config_destroy(node->data);
-    }
-    shash_clear(&db_conf);
+    /* Start ovsdb jsonrpc server.  Both read and write transactions are
+     * allowed by default, individual remotes and databases will be configured
+     * as read-only, if necessary. */
+    jsonrpc = ovsdb_jsonrpc_server_create(false);
+    server_config.jsonrpc = jsonrpc;
+
+    shash_init(&all_dbs);
     add_server_db(&server_config);
 
-    char *error = reconfigure_remotes(jsonrpc, &all_dbs, &remotes);
-    if (!error) {
-        error = reconfigure_ssl(&all_dbs);
-    }
-    if (error) {
-        ovs_fatal(0, "%s", error);
+    if (!reconfigure_ovsdb_server(&server_config)) {
+        ovs_fatal(0, "server configuration failed");
     }
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
@@ -2060,14 +2242,21 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
  * 'config_file_path', read it and sync the runtime configuration with it. */
 static void
 ovsdb_server_reload(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                    const char *argv[] OVS_UNUSED, void *config_ OVS_UNUSED)
+                    const char *argv[] OVS_UNUSED, void *config_)
 {
+    struct server_config *config = config_;
+
     if (!config_file_path) {
         unixctl_command_reply_error(conn,
             "Configuration file was not specified on command line");
-    } else {
+        return;
+    }
+
+    if (!reconfigure_ovsdb_server(config)) {
         unixctl_command_reply_error(conn,
-            "Configuration file support is not implemented yet");
+            "Configuration failed.  See the log file for details.");
+    } else {
+        unixctl_command_reply(conn, NULL);
     }
 }
 
@@ -2741,6 +2930,10 @@ save_config(struct server_config *config)
     struct shash_node *node;
     struct shash db_conf;
 
+    if (config_file_path) {
+        return;
+    }
+
     shash_init(&db_conf);
     SHASH_FOR_EACH (node, config->all_dbs) {
         struct db *db = node->data;
@@ -2757,7 +2950,7 @@ save_config(struct server_config *config)
     shash_destroy(&db_conf);
 }
 
-static void
+static bool
 remotes_from_json(struct shash *remotes, const struct json *json)
 {
     struct ovsdb_jsonrpc_options *options;
@@ -2767,14 +2960,31 @@ remotes_from_json(struct shash *remotes, const struct json *json)
     free_remotes(remotes);
 
     ovs_assert(json);
-    ovs_assert(json->type == JSON_OBJECT);
+    if (json->type == JSON_NULL) {
+        return true;
+    }
+    if (json->type != JSON_OBJECT) {
+        VLOG_WARN("config: 'remotes' is not a JSON object");
+        return false;
+    }
 
     object = json_object(json);
     SHASH_FOR_EACH (node, object) {
         options = ovsdb_jsonrpc_default_options(node->name);
-        ovsdb_jsonrpc_options_update_from_json(options, node->data, false);
         shash_add(remotes, node->name, options);
+
+        json = node->data;
+        if (json->type == JSON_OBJECT) {
+            ovsdb_jsonrpc_options_update_from_json(options, node->data, false);
+        } else if (json->type != JSON_NULL) {
+            VLOG_WARN("%s: JSON-RPC options are not a JSON object or null",
+                      node->name);
+            free_remotes(remotes);
+            return false;
+        }
     }
+
+    return true;
 }
 
 static struct db_config *
@@ -2785,12 +2995,24 @@ db_config_from_json(const char *name, const struct json *json)
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
 
+    conf->model = SM_UNDEFINED;
+
+    ovs_assert(json);
+    if (json->type == JSON_NULL) {
+        return conf;
+    }
+
     ovsdb_parser_init(&parser, json, "database %s", name);
 
     model = ovsdb_parser_member(&parser, "service-model",
                                 OP_STRING | OP_OPTIONAL);
-    conf->model = model ? service_model_from_string(json_string(model))
-                        : SM_UNDEFINED;
+    if (model) {
+        conf->model = service_model_from_string(json_string(model));
+        if (conf->model == SM_UNDEFINED) {
+            ovsdb_parser_raise_error(&parser,
+                "'%s' is not a valid service model", json_string(model));
+        }
+    }
 
     if (conf->model == SM_ACTIVE_BACKUP) {
         backup = ovsdb_parser_member(&parser, "backup", OP_BOOLEAN);
@@ -2861,7 +3083,7 @@ db_config_from_json(const char *name, const struct json *json)
 }
 
 
-static void
+static bool
 databases_from_json(struct shash *db_conf, const struct json *json)
 {
     const struct shash_node *node;
@@ -2870,7 +3092,12 @@ databases_from_json(struct shash *db_conf, const struct json *json)
     free_database_configs(db_conf);
 
     ovs_assert(json);
-    ovs_assert(json->type == JSON_OBJECT);
+    if (json->type == JSON_NULL) {
+        return true;
+    }
+    if (json->type != JSON_OBJECT) {
+        VLOG_WARN("config: 'databases' is not a JSON object or null");
+    }
 
     object = json_object(json);
     SHASH_FOR_EACH (node, object) {
@@ -2878,13 +3105,19 @@ databases_from_json(struct shash *db_conf, const struct json *json)
 
         if (conf) {
             shash_add(db_conf, node->name, conf);
+        } else {
+            free_database_configs(db_conf);
+            return false;
         }
     }
+    return true;
 }
 
-/* Clears and replaces 'remotes' and 'dbnames' by a configuration read from
- * 'config_file', which must have been previously written by save_config(). */
-static void
+/* Clears and replaces 'remotes' and 'db_conf' by a configuration read from
+ * 'config_file', which must have been previously written by save_config()
+ * or provided by the user with --config-file.
+ * Returns 'true', if parsing was successful, 'false' otherwise. */
+static bool
 load_config(FILE *config_file, struct shash *remotes,
             struct shash *db_conf, char **sync_from,
             char **sync_exclude, bool *is_backup)
@@ -2892,17 +3125,34 @@ load_config(FILE *config_file, struct shash *remotes,
     struct json *json;
 
     if (fseek(config_file, 0, SEEK_SET) != 0) {
-        VLOG_FATAL("seek failed in temporary file (%s)", ovs_strerror(errno));
+        VLOG_WARN("config: file seek failed (%s)", ovs_strerror(errno));
+        return false;
     }
     json = json_from_stream(config_file);
     if (json->type == JSON_STRING) {
-        VLOG_FATAL("reading json failed (%s)", json_string(json));
+        VLOG_WARN("config: reading JSON failed (%s)", json_string(json));
+        json_destroy(json);
+        return false;
     }
-    ovs_assert(json->type == JSON_OBJECT);
+    if (json->type != JSON_OBJECT) {
+        VLOG_WARN("configuration in a file must be a JSON object");
+        json_destroy(json);
+        return false;
+    }
 
-    remotes_from_json(remotes, shash_find_data(json_object(json), "remotes"));
-    databases_from_json(db_conf,
-                        shash_find_data(json_object(json), "databases"));
+    if (!remotes_from_json(remotes,
+                           shash_find_data(json_object(json), "remotes"))) {
+        VLOG_WARN("config: failed to parse 'remotes'");
+        json_destroy(json);
+        return false;
+    }
+    if (!databases_from_json(db_conf, shash_find_data(json_object(json),
+                                                      "databases"))) {
+        VLOG_WARN("config: failed to parse 'databases'");
+        free_remotes(remotes);
+        json_destroy(json);
+        return false;
+    }
 
     struct json *string;
     string = shash_find_data(json_object(json), "sync_from");
@@ -2913,7 +3163,9 @@ load_config(FILE *config_file, struct shash *remotes,
     free(*sync_exclude);
     *sync_exclude = string ? xstrdup(json_string(string)) : NULL;
 
-    *is_backup = json_boolean(shash_find_data(json_object(json), "is_backup"));
+    struct json *boolean = shash_find_data(json_object(json), "is_backup");
+    *is_backup = boolean ? json_boolean(boolean) : false;
 
     json_destroy(json);
+    return true;
 }

@@ -12,6 +12,7 @@ ovsdb\-server \- Open vSwitch database server
 [\fIdatabase\fR]\&...
 [\fIrelay:schema_name:remote\fR]\&...
 [\fB\-\-remote=\fIremote\fR]\&...
+[\fB\-\-config\-file=\fIfile\fR]
 [\fB\-\-run=\fIcommand\fR]
 .so lib/daemon-syn.man
 .so lib/service-syn.man
@@ -43,6 +44,11 @@ If none of database files or relay databases is specified, the default is
 \fB@DBDIR@/conf.db\fR.  The database files must already have been created and
 initialized using, for example, \fBovsdb\-tool\fR's \fBcreate\fR,
 \fBcreate\-cluster\fR, or \fBjoin\-cluster\fR command.
+.PP
+All types of databases can alternatively be added using a configuration
+file provided via \fB\-\-config\-file\fR option.  This option is mutually
+exclusive with specifying \fIdatabase\fR on the command line.  For a detailed
+description of the configuration file format see \fBovsdb\fR(7).
 .PP
 This OVSDB implementation supports standalone, active-backup, relay and
 clustered database service models, as well as database replication.
@@ -105,6 +111,74 @@ It is an error for \fIcolumn\fR to have another type.
 .IP
 To connect or listen on multiple connection methods, use multiple
 \fB\-\-remote\fR options.
+.IP
+Alternatively, remotes can be specified in a "remotes" section of the
+configuration file, if provided using \fB\-\-config\-file\fR option.
+\fB\-\-config\-file\fR and \fB\-\-remote\fR options are mutually
+exclusive.
+.
+.IP "\fB\-\-config-file=\fIfile\fR"
+Specifies a configuration file for \fBovsdb\-server\fR.  This \fIfile\fR
+can contain connection methods and databases used by the server.
+The \fIfile\fR contains a JSON object with two main elements:
+.RS
+.IP "\fBremotes\fR"
+JSON object that contains a set of connection methods in the following format:
+"\fItarget\fR": { "\fIoption\fR": \fIvalue\fR, ... }.  Where \fItarget\fR
+is in the same format as \fIremote\fR in \fB\-\-remote\fR option.
+\fIoption\fR can be \fBmax-backoff\fR (integer), \fBinactivity-probe\fR
+(integer), \fBread-only\fR (boolean), \fBrole\fR (string) or \fBdscp\fR
+(integer) with their allowed \fIvalue\fRs respectively.  The meaning of these
+\fIoption\fRs is the same as in configuration of \fIremote\fR via a database
+row with \fB\-\-remote\fR option.
+.IP "\fBdatabases\fR"
+JSON object that describes databases that should be added to the
+\fBovsdb\-server\fR in the following format: "\fIname\fR":{ "\fIoption\fR":
+\fIvalue\fR, ... }.  Where \fIname\fR is either a file name of a previously
+created and initialized database or a schema name in case of relay
+databases.  Available \fIoption\fRs are:
+.RS
+.IP "\fBservice-model\fR (string)"
+Describes the service model of this database.  One of: \fBstandalone\fR,
+\fBclustered\fR, \fBactive-backup\fR or \fBrelay\fR.  This option is
+required for all types, except for standalone and clustered.  For these
+databases the service model will be inferred from the file, if not
+specified explicitly.  \fBovsdb-server\fR will refuse to add a database
+if the specified \fBservice-model\fR doesn't match with the provided file.
+.IP "\fBsource\fR (JSON object; active-backup or relay)"
+Describes the connection method to the active database or to the relay
+source.  It is a JSON object with exactly one element in the same format
+as elements of "\fBremotes\fR", except that \fBread-only\fR and \fBrole\fR
+options are not applicable.  E.g. \fB"source": { "unix:db.sock": {
+"inactivity-probe": 10000, "max-backoff": 8000 } }\fR
+.IP "\fBbackup\fR (boolean; active-backup only)"
+If set to \fBtrue\fR, \fBovsdb-server\fR will use this database as a
+backup for the specified \fBsource\fR.  Will be served as an active
+database otherwise.
+.IP "\fBexclude-tables\fR (JSON array of strings; active-backup only)"
+List of table names that should be excluded from replication in backup mode,
+e.g. \fB"exclude-tables": [ "Table_One", "Table_Two" ]\fR.
+.RE
+.RE
+.IP
+Content of the most basic configuration file may look like this:
+\fB{ "remotes": { "pssl:6640": {} }, "databases": { "conf.db": {} } }\fR
+.IP
+Examples of configuration files for different service models can be
+found in in \fBovsdb\fR(7).
+.IP
+\fB\-\-config-file\fR option is mutually exclusive with the \fB\-\-remote\fR
+as well as with specifying \fIdatabase\fR on a command line.  It is also
+mutually exclusive with all the \fBActive-Backup Options\fR and all the
+\fBRUNTIME MANAGEMENT COMMANDS\fR that can change the configuration of
+the server in conflict with the content of the file, i.e. all the commands
+that manipulate with remotes and databases.  Read-only commands can still
+be used.
+.IP
+In case of changes in the \fIfile\fR, users should run the
+\fBovsdb-server/reload\fR command with \fBovs-appctl\fR(8) in order for
+changes to take effect.
+.RE
 .
 .IP "\fB\-\-run=\fIcommand\fR]"
 Ordinarily \fBovsdb\-server\fR runs forever, or until it is told to
@@ -178,6 +252,8 @@ allow the syncing options to be specified using command line options,
 yet start the server, as the default, active server.  To switch the
 running server to backup mode, use \fBovs-appctl(1)\fR to execute the
 \fBovsdb\-server/connect\-active\-ovsdb\-server\fR command.
+.PP
+These options are mutually exclusive with the \fB\-\-config\-file\fR.
 .SS "Public Key Infrastructure Options"
 The options described below for configuring the SSL public key
 infrastructure accept a special syntax for obtaining their
@@ -230,6 +306,8 @@ clients.
 Adds a remote, as if \fB\-\-remote=\fIremote\fR had been specified on
 the \fBovsdb\-server\fR command line.  (If \fIremote\fR is already a
 remote, this command succeeds without changing the configuration.)
+.IP
+Mutually exclusive with the \fB\-\-config\-file\fR option.
 .
 .IP "\fBovsdb\-server/remove\-remote \fIremote\fR"
 Removes the specified \fIremote\fR from the configuration, failing
@@ -241,6 +319,8 @@ configuring a \fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR remote.
 (You can remove a database source with \fBovsdb\-server/remove\-remote
 \fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR, but not individual
 remotes found indirectly through the database.)
+.IP
+Mutually exclusive with the \fB\-\-config\-file\fR option.
 .
 .IP "\fBovsdb\-server/list\-remotes"
 Outputs a list of the currently configured remotes named on
@@ -254,6 +334,8 @@ Adds the \fIdatabase\fR to the running \fBovsdb\-server\fR.  \fIdatabase\fR
 could be a database file or a relay description in the following format:
 \fIrelay:schema_name:remote\fR.  The database file must already have been
 created and initialized using, for example, \fBovsdb\-tool create\fR.
+.IP
+Mutually exclusive with the \fB\-\-config\-file\fR option.
 .
 .IP "\fBovsdb\-server/remove\-db \fIdatabase\fR"
 Removes \fIdatabase\fR from the running \fBovsdb\-server\fR.  \fIdatabase\fR
@@ -268,6 +350,8 @@ Any public key infrastructure options specified through this database
 (e.g. \fB\-\-private\-key=db:\fIdatabase,\fR... on the command line)
 will be disabled until another database with the same name is added
 again (with \fBovsdb\-server/add\-db\fR).
+.IP
+Mutually exclusive with the \fB\-\-config\-file\fR option.
 .
 .IP "\fBovsdb\-server/list\-dbs"
 Outputs a list of the currently configured databases added either through
@@ -286,6 +370,9 @@ These commands query and update the role of \fBovsdb\-server\fR within
 an active-backup pair of servers.  See \fBActive-Backup Options\fR,
 above, and \fBActive-Backup Database Service Model\fR in
 \fBovsdb\fR(7) for more information.
+.PP
+All \fBActive-Backup Commands\fR that change the state of \fBovsdb\-server\fR
+are mutually exclusive with the \fB\-\-config\-file\fR option.
 .
 .IP "\fBovsdb\-server/set\-active\-ovsdb\-server \fIserver"
 Sets  the active \fIserver\fR from which \fBovsdb\-server\fR connects through
@@ -324,11 +411,10 @@ Gets  the  tables  that are currently excluded from synchronization.
 Prints a summary of replication run time information. The \fBstate\fR
 information is always provided, indicating whether the server is running
 in the \fIactive\fR or the \fIbackup\fR mode.
-When running in backup mode, replication connection status, which
-can be either \fIconnecting\fR, \fIreplicating\fR or \fIerror\fR, are shown.
-When the connection is in \fIreplicating\fR state, further output shows
-the list of databases currently replicating, and the tables that are
-excluded.
+For all databases with active-backup service model, replication connection
+status, which can be either \fIconnecting\fR, \fIreplicating\fR or
+\fIerror\fR, are shown.  When the connection is in \fIreplicating\fR state,
+further output shows the tables that are currently excluded from replication.
 .
 .SS "Cluster Commands"
 These commands support the \fBovsdb\-server\fR clustered service model.

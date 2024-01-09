@@ -105,6 +105,25 @@ started like this::
   $ ...
   $ ovsdb-server --remote=ptcp:6642:172.16.0.K relay:OVN_Southbound:$REMOTES
 
+Open vSwitch 3.3 introduced support for configuration files via
+``--config-file`` command line option.  The configuration file for relay
+database servers in this case may look like this::
+
+  {
+      "remotes": { "ptcp:6642:172.16.0.X": {} },
+      "databases": {
+          "OVN_Southbound": {
+              "service-model": "relay",
+              "source": {
+                  "$REMOTES": {}
+              }
+          }
+      }
+  }
+
+See ``ovsdb-server(1)`` and  ``Relay Service Model`` in ``ovsdb(7)`` for more
+configuration options.
+
 Every relay server could connect to any of the cluster members of their choice,
 fairness of load distribution is achieved by shuffling remotes.
 

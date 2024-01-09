@@ -6,6 +6,10 @@ Post-v3.2.0
        from older version is supported but it may trigger more leader elections
        during the process, and error logs complaining unrecognized fields may
        be observed on old nodes.
+     * New command line option --config-file that allows a fine control over
+       remotes and database configuration, including setting options for
+       connection methods for relays and active-backup replication.
+       For more details see ovsdb-server(1) and ovsdb(7).
    - OpenFlow:
      * NXT_CT_FLUSH extension is updated to support flushing connections
        based on mark and labels.  'ct-flush' command of ovs-ofctl updated
