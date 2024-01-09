@@ -1337,6 +1337,15 @@ jsonrpc_session_set_dscp(struct jsonrpc_session *s, uint8_t dscp)
     }
 }
 
+void
+jsonrpc_session_set_options(struct jsonrpc_session *s,
+                            const struct jsonrpc_session_options *options)
+{
+    jsonrpc_session_set_max_backoff(s, options->max_backoff);
+    jsonrpc_session_set_probe_interval(s, options->probe_interval);
+    jsonrpc_session_set_dscp(s, options->dscp);
+}
+
 /* Sets thresholds for send backlog.  If send backlog contains more than
  * 'max_n_msgs' messages or is larger than 'max_backlog_bytes' bytes,
  * connection will be closed (then reconnected, if that feature is enabled). */

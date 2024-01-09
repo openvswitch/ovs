@@ -139,6 +139,14 @@ void jsonrpc_session_enable_reconnect(struct jsonrpc_session *);
 void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
 void jsonrpc_session_reset_backoff(struct jsonrpc_session *);
 
+struct jsonrpc_session_options {
+    int max_backoff;            /* Maximum reconnection backoff, in msec. */
+    int probe_interval;         /* Max idle time before probing, in msec. */
+    uint8_t dscp;               /* Dscp value for passive connections. */
+};
+
+void jsonrpc_session_set_options(struct jsonrpc_session *,
+                                 const struct jsonrpc_session_options *);
 void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
                                      int max_backoff);
 void jsonrpc_session_set_probe_interval(struct jsonrpc_session *,
