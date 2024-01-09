@@ -347,12 +347,13 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
                     return error;
                 }
             } else if (r->old && r->new) {
-                struct ovsdb_datum added, removed;
+                struct ovsdb_datum added, removed, *diff;
 
+                diff = r->diff ? &r->diff->fields[column->index] : NULL;
                 ovsdb_datum_added_removed(&added, &removed,
                                           &r->old->fields[column->index],
                                           &r->new->fields[column->index],
-                                          &column->type);
+                                          diff, &column->type);
 
                 error = ovsdb_txn_adjust_row_refs(
                             txn, r->old, column, &removed, -1);
@@ -762,9 +763,13 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         if (datum->n != orig_n
             || bitmap_is_set(txn_row->changed, column->index)) {
             if (txn_row->old) {
+                struct ovsdb_datum *diff;
+
+                diff = txn_row->diff && datum->n == orig_n
+                       ? &txn_row->diff->fields[column->index] : NULL;
                 ovsdb_datum_added_removed(&added, &removed,
                                           &txn_row->old->fields[column->index],
-                                          datum, &column->type);
+                                          datum, diff, &column->type);
             } else {
                 ovsdb_datum_clone(&added, datum);
             }
@@ -792,6 +797,10 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 
         if (datum->n != orig_n) {
             bitmap_set1(txn_row->changed, column->index);
+            /* Can no longer rely on the previous diff. */
+            ovsdb_row_destroy(txn_row->diff);
+            txn_row->diff = NULL;
+
             if (datum->n < column->type.n_min) {
                 const struct uuid *row_uuid = ovsdb_row_get_uuid(txn_row->new);
                 if (zero && !txn_row->old) {

@@ -2238,6 +2238,8 @@ ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
 /* APIs for Generating and apply diffs.  */
 
 /* Find what needs to be added to and removed from 'old' to construct 'new'.
+ * If the optional 'diff' is provided, it can be used to speed up processing,
+ * in case it is smaller than the original 'old' and 'new'.
  *
  * The 'added' and 'removed' datums are always safe; the orders of keys are
  * maintained since they are added in order.   */
@@ -2246,6 +2248,7 @@ ovsdb_datum_added_removed(struct ovsdb_datum *added,
                           struct ovsdb_datum *removed,
                           const struct ovsdb_datum *old,
                           const struct ovsdb_datum *new,
+                          const struct ovsdb_datum *diff,
                           const struct ovsdb_type *type)
 {
     size_t oi, ni;
@@ -2255,6 +2258,31 @@ ovsdb_datum_added_removed(struct ovsdb_datum *added,
     if (!ovsdb_type_is_composite(type)) {
         ovsdb_datum_clone(removed, old);
         ovsdb_datum_clone(added, new);
+        return;
+    }
+
+    /* Use diff, if provided, unless it's comparable in size.  With a large
+     * diff, the O(n log n) binary search of each element may be slower than
+     * a simple O(n) comparison between old and new. */
+    if (diff && diff->n * 2 < old->n + new->n) {
+        unsigned int idx;
+
+        for (size_t di = 0; di < diff->n; di++) {
+            bool found = ovsdb_datum_find_key(old, &diff->keys[di],
+                                              type->key.type, &idx);
+
+            if (!found) {
+                ovsdb_datum_add_from_index_unsafe(added, diff, di, type);
+            } else {
+                if (type->value.type != OVSDB_TYPE_VOID
+                    && !ovsdb_atom_equals(&diff->values[di],
+                                          &old->values[idx],
+                                          type->value.type)) {
+                    ovsdb_datum_add_from_index_unsafe(added, diff, di, type);
+                }
+                ovsdb_datum_add_from_index_unsafe(removed, old, idx, type);
+            }
+        }
         return;
     }
 

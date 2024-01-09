@@ -256,6 +256,7 @@ void ovsdb_datum_added_removed(struct ovsdb_datum *added,
                                struct ovsdb_datum *removed,
                                const struct ovsdb_datum *old,
                                const struct ovsdb_datum *new,
+                               const struct ovsdb_datum *diff,
                                const struct ovsdb_type *type);
 
 void ovsdb_datum_diff(struct ovsdb_datum *diff,
