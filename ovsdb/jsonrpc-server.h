@@ -43,12 +43,14 @@ struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_default_options(
     const char *target);
 struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_options_clone(
     const struct ovsdb_jsonrpc_options *);
+void ovsdb_jsonrpc_options_free(struct ovsdb_jsonrpc_options *);
 
 struct json *ovsdb_jsonrpc_options_to_json(
-                                const struct ovsdb_jsonrpc_options *)
+    const struct ovsdb_jsonrpc_options *, bool jsonrpc_session_only)
     OVS_WARN_UNUSED_RESULT;
 void ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *,
-                                            const struct json *);
+                                            const struct json *,
+                                            bool jsonrpc_session_only);
 
 void ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *,
                                       const struct shash *);

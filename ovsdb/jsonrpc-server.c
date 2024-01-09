@@ -230,8 +230,18 @@ ovsdb_jsonrpc_options_clone(const struct ovsdb_jsonrpc_options *options)
     return clone;
 }
 
+void
+ovsdb_jsonrpc_options_free(struct ovsdb_jsonrpc_options *options)
+{
+    if (options) {
+        free(options->role);
+        free(options);
+    }
+}
+
 struct json *
-ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options)
+ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options,
+                              bool jsonrpc_session_only)
 {
     struct json *json = json_object_create();
 
@@ -239,9 +249,15 @@ ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options)
                     json_integer_create(options->max_backoff));
     json_object_put(json, "inactivity-probe",
                     json_integer_create(options->probe_interval));
+    json_object_put(json, "dscp", json_integer_create(options->dscp));
+
+    if (jsonrpc_session_only) {
+        /* Caller is not interested in OVSDB-specific options. */
+        return json;
+    }
+
     json_object_put(json, "read-only",
                     json_boolean_create(options->read_only));
-    json_object_put(json, "dscp", json_integer_create(options->dscp));
     if (options->role) {
         json_object_put(json, "role", json_string_create(options->role));
     }
@@ -251,7 +267,8 @@ ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options)
 
 void
 ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *options,
-                                       const struct json *json)
+                                       const struct json *json,
+                                       bool jsonrpc_session_only)
 {
     const struct json *max_backoff, *probe_interval, *read_only, *dscp, *role;
     struct ovsdb_parser parser;
@@ -271,15 +288,20 @@ ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *options,
         options->probe_interval = json_integer(probe_interval);
     }
 
+    dscp = ovsdb_parser_member(&parser, "dscp", OP_INTEGER | OP_OPTIONAL);
+    if (dscp) {
+        options->dscp = json_integer(dscp);
+    }
+
+    if (jsonrpc_session_only) {
+        /* Caller is not interested in OVSDB-specific options. */
+        goto exit;
+    }
+
     read_only = ovsdb_parser_member(&parser, "read-only",
                                     OP_BOOLEAN | OP_OPTIONAL);
     if (read_only) {
         options->read_only = json_boolean(read_only);
-    }
-
-    dscp = ovsdb_parser_member(&parser, "dscp", OP_INTEGER | OP_OPTIONAL);
-    if (dscp) {
-        options->dscp = json_integer(dscp);
     }
 
     role = ovsdb_parser_member(&parser, "role", OP_STRING | OP_OPTIONAL);
@@ -288,6 +310,7 @@ ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *options,
         options->role = nullable_xstrdup(json_string(role));
     }
 
+exit:
     error = ovsdb_parser_finish(&parser);
     if (error) {
         char *s = ovsdb_error_to_string_free(error);

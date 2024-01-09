@@ -779,7 +779,6 @@ replication_status(const struct ovsdb *db)
     bool alive = rdb->session && jsonrpc_session_is_alive(rdb->session);
     struct ds ds = DS_EMPTY_INITIALIZER;
 
-    ds_put_format(&ds, "database: %s\n", db->name);
     if (alive) {
         switch (rdb->state) {
         case RPL_S_INIT:

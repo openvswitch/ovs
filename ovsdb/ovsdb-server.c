@@ -42,6 +42,7 @@
 #include "ovsdb-data.h"
 #include "ovsdb-types.h"
 #include "ovsdb-error.h"
+#include "ovsdb-parser.h"
 #include "openvswitch/poll-loop.h"
 #include "process.h"
 #include "replication.h"
@@ -64,12 +65,6 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
-
-struct db {
-    char *filename;
-    struct ovsdb *db;
-    struct uuid row_uuid;
-};
 
 /* SSL configuration. */
 static char *private_key_file;
@@ -100,16 +95,79 @@ static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_status;
 static unixctl_cb_func ovsdb_server_get_db_storage_status;
 
+#define SERVICE_MODELS \
+    SERVICE_MODEL(UNDEFINED,      undefined)         \
+    SERVICE_MODEL(STANDALONE,     standalone)        \
+    SERVICE_MODEL(CLUSTERED,      clustered)         \
+    SERVICE_MODEL(ACTIVE_BACKUP,  active-backup)     \
+    SERVICE_MODEL(RELAY,          relay)
+
+enum service_model {
+#define SERVICE_MODEL(ENUM, NAME) SM_##ENUM,
+    SERVICE_MODELS
+#undef SERVICE_MODEL
+};
+
+static const char *
+service_model_to_string(enum service_model model)
+{
+    switch (model) {
+#define SERVICE_MODEL(ENUM, NAME) \
+    case SM_##ENUM: return #NAME;
+    SERVICE_MODELS
+#undef SERVICE_MODEL
+    default: OVS_NOT_REACHED();
+    }
+}
+
+static enum service_model
+service_model_from_string(const char *model)
+{
+#define SERVICE_MODEL(ENUM, NAME) \
+    if (!strcmp(model, #NAME)) {  \
+        return SM_##ENUM;         \
+    }
+    SERVICE_MODELS
+#undef SERVICE_MODEL
+
+    VLOG_WARN("Unrecognized database service model: '%s'", model);
+
+    return SM_UNDEFINED;
+}
+
+struct db_config {
+    enum service_model model;
+    char *source;  /* sync-from for backup or relay source. */
+    struct ovsdb_jsonrpc_options *options;  /* For 'source' connection. */
+
+    /* Configuration specific to SM_ACTIVE_BACKUP. */
+    struct {
+        char *sync_exclude;  /* Tables to exclude. */
+        bool backup;  /* If true, the database is read-only and receives
+                       * updates from the 'source'. */
+    } ab;
+};
+
+struct db {
+    struct ovsdb *db;
+    char *filename;
+    struct db_config *config;
+    struct uuid row_uuid;
+};
+
 struct server_config {
     struct shash *remotes;
-    struct shash *all_dbs;
-    FILE *config_tmpfile;
+    struct shash *all_dbs;     /* All the currently serviced databases.
+                                * 'struct db' by a schema name. */
+    struct ovsdb_jsonrpc_server *jsonrpc;
+
+    /* Command line + appctl configuration. */
     char **sync_from;
     char **sync_exclude;
     bool *is_backup;
     int *replication_probe_interval;
     int *relay_source_probe_interval;
-    struct ovsdb_jsonrpc_server *jsonrpc;
+    FILE *config_tmpfile;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
 static unixctl_cb_func ovsdb_server_remove_remote;
@@ -123,14 +181,15 @@ static unixctl_cb_func ovsdb_server_tlog_list;
 
 static void read_db(struct server_config *, struct db *);
 static struct ovsdb_error *open_db(struct server_config *,
-                                   const char *filename)
+                                   const char *filename,
+                                   const struct db_config *)
     OVS_WARN_UNUSED_RESULT;
 static void add_server_db(struct server_config *);
 static void remove_db(struct server_config *, struct shash_node *db, char *);
 static void close_db(struct server_config *, struct db *, char *);
 
 static void parse_options(int argc, char *argvp[],
-                          struct sset *db_filenames, struct shash *remotes,
+                          struct shash *db_conf, struct shash *remotes,
                           char **unixctl_pathp, char **run_command,
                           char **sync_from, char **sync_exclude,
                           bool *is_backup);
@@ -153,28 +212,13 @@ static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
 static void update_server_status(struct shash *all_dbs);
 
 static void save_config__(FILE *config_file, const struct shash *remotes,
-                          const struct sset *db_filenames,
+                          const struct shash *db_conf,
                           const char *sync_from, const char *sync_exclude,
                           bool is_backup);
 static void save_config(struct server_config *);
 static void load_config(FILE *config_file, struct shash *remotes,
-                        struct sset *db_filenames, char **sync_from,
+                        struct shash *db_conf, char **sync_from,
                         char **sync_exclude, bool *is_backup);
-
-static void
-ovsdb_replication_init(const char *sync_from, const char *exclude,
-                       struct shash *all_dbs, const struct uuid *server_uuid,
-                       int probe_interval)
-{
-    struct shash_node *node;
-    SHASH_FOR_EACH (node, all_dbs) {
-        struct db *db = node->data;
-        if (node->name[0] != '_' && db->db) {
-            replication_set_db(db->db, sync_from, exclude,
-                               server_uuid, probe_interval);
-        }
-    }
-}
 
 static void
 log_and_free_error(struct ovsdb_error *error)
@@ -187,10 +231,51 @@ log_and_free_error(struct ovsdb_error *error)
 }
 
 static void
+ovsdb_server_replication_remove_db(struct db *db)
+{
+    replication_remove_db(db->db);
+    db->config->ab.backup = false;
+}
+
+static void
+ovsdb_server_replication_run(struct server_config *config)
+{
+    struct shash_node *node;
+    bool all_alive = true;
+
+    replication_run();
+
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+
+        if (db->config->model == SM_ACTIVE_BACKUP && db->config->ab.backup
+            && !replication_is_alive(db->db)) {
+            ovsdb_server_replication_remove_db(db);
+            all_alive = false;
+        }
+    }
+
+    /* If one connection is broken, switch all databases to active,
+     * since they are configured via the same command line / appctl. */
+    if (!all_alive && *config->is_backup) {
+        *config->is_backup = false;
+
+        SHASH_FOR_EACH (node, config->all_dbs) {
+            struct db *db = node->data;
+
+            if (db->config->model == SM_ACTIVE_BACKUP
+                && db->config->ab.backup) {
+                ovsdb_server_replication_remove_db(db);
+            }
+        }
+    }
+}
+
+static void
 main_loop(struct server_config *config,
           struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
           struct unixctl_server *unixctl, struct shash *remotes,
-          struct process *run_process, bool *exiting, bool *is_backup)
+          struct process *run_process, bool *exiting)
 {
     char *remotes_error, *ssl_error;
     struct shash_node *node;
@@ -220,7 +305,7 @@ main_loop(struct server_config *config,
          * the set of remotes that reconfigure_remotes() uses. */
         unixctl_server_run(unixctl);
 
-        ovsdb_jsonrpc_server_set_read_only(jsonrpc, *is_backup);
+        ovsdb_jsonrpc_server_set_read_only(jsonrpc, false);
 
         report_error_if_changed(
             reconfigure_remotes(jsonrpc, all_dbs, remotes),
@@ -228,23 +313,7 @@ main_loop(struct server_config *config,
         report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
         ovsdb_jsonrpc_server_run(jsonrpc);
 
-        replication_run();
-        if (*is_backup) {
-            SHASH_FOR_EACH (node, all_dbs) {
-                struct db *db = node->data;
-                if (db->db->name[0] != '_' && !replication_is_alive(db->db)) {
-                    *is_backup = false;
-                    break;
-                }
-            }
-            if (!*is_backup) {
-                SHASH_FOR_EACH (node, all_dbs) {
-                    struct db *db = node->data;
-                    replication_remove_db(db->db);
-                }
-            }
-        }
-
+        ovsdb_server_replication_run(config);
         ovsdb_relay_run();
 
         SHASH_FOR_EACH_SAFE (node, all_dbs) {
@@ -351,6 +420,89 @@ parse_relay_args(const char *arg, char **name, char **remote)
     return true;
 }
 
+static void
+db_config_destroy(struct db_config *conf)
+{
+    if (!conf) {
+        return;
+    }
+
+    free(conf->source);
+    ovsdb_jsonrpc_options_free(conf->options);
+    free(conf->ab.sync_exclude);
+    free(conf);
+}
+
+static struct db_config *
+db_config_clone(const struct db_config *c)
+{
+    struct db_config *conf = xmemdup(c, sizeof *c);
+
+    conf->source = nullable_xstrdup(c->source);
+    if (c->options) {
+        conf->options = ovsdb_jsonrpc_options_clone(c->options);
+    }
+    conf->ab.sync_exclude = nullable_xstrdup(c->ab.sync_exclude);
+
+    return conf;
+}
+
+static struct ovsdb_jsonrpc_options *
+get_jsonrpc_options(const char *target, enum service_model model)
+{
+    struct ovsdb_jsonrpc_options *options;
+
+    options = ovsdb_jsonrpc_default_options(target);
+    if (model == SM_ACTIVE_BACKUP) {
+        options->probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
+    } else if (model == SM_RELAY) {
+        options->probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
+    }
+
+    return options;
+}
+
+static void
+add_database_config(struct shash *db_conf, const char *opt,
+                    const char *sync_from, const char *sync_exclude,
+                    bool active)
+{
+    struct db_config *conf = xzalloc(sizeof *conf);
+    char *filename = NULL;
+
+    if (parse_relay_args(opt, &filename, &conf->source)) {
+        conf->model = SM_RELAY;
+        conf->options = get_jsonrpc_options(conf->source, conf->model);
+    } else if (sync_from) {
+        conf->model = SM_ACTIVE_BACKUP;
+        conf->source = xstrdup(sync_from);
+        conf->options = get_jsonrpc_options(conf->source, conf->model);
+        conf->ab.sync_exclude = nullable_xstrdup(sync_exclude);
+        conf->ab.backup = !active;
+        filename = xstrdup(opt);
+    } else {
+        conf->model = SM_UNDEFINED; /* We'll update once the file is open. */
+        filename = xstrdup(opt);
+    }
+
+    conf = shash_replace_nocopy(db_conf, filename, conf);
+    if (conf) {
+        VLOG_WARN("Duplicate database configuration: %s", filename);
+        db_config_destroy(conf);
+    }
+}
+
+static void
+free_database_configs(struct shash *db_conf)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, db_conf) {
+        db_config_destroy(node->data);
+    }
+    shash_clear(db_conf);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -358,7 +510,6 @@ main(int argc, char *argv[])
     char *run_command = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
-    const char *db_filename;
     struct process *run_process;
     bool exiting;
     int retval;
@@ -369,6 +520,7 @@ main(int argc, char *argv[])
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
     int relay_source_probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
     struct sset db_filenames = SSET_INITIALIZER(&db_filenames);
+    struct shash db_conf = SHASH_INITIALIZER(&db_conf);
     struct shash remotes = SHASH_INITIALIZER(&remotes);
     char *sync_from = NULL, *sync_exclude = NULL;
     bool is_backup;
@@ -381,7 +533,7 @@ main(int argc, char *argv[])
     dns_resolve_init(true);
 
     bool active = false;
-    parse_options(argc, argv, &db_filenames, &remotes, &unixctl_path,
+    parse_options(argc, argv, &db_conf, &remotes, &unixctl_path,
                   &run_command, &sync_from, &sync_exclude, &active);
     is_backup = sync_from && !active;
 
@@ -400,13 +552,15 @@ main(int argc, char *argv[])
     server_config.remotes = &remotes;
     server_config.config_tmpfile = config_tmpfile;
 
-    save_config__(config_tmpfile, &remotes, &db_filenames, sync_from,
+    save_config__(config_tmpfile, &remotes, &db_conf, sync_from,
                   sync_exclude, is_backup);
+    free_remotes(&remotes);
+    free_database_configs(&db_conf);
 
     daemonize_start(false, false);
 
     /* Load the saved config. */
-    load_config(config_tmpfile, &remotes, &db_filenames, &sync_from,
+    load_config(config_tmpfile, &remotes, &db_conf, &sync_from,
                 &sync_exclude, &is_backup);
 
     /* Start ovsdb jsonrpc server. When running as a backup server,
@@ -425,13 +579,16 @@ main(int argc, char *argv[])
 
     perf_counters_init();
 
-    SSET_FOR_EACH (db_filename, &db_filenames) {
-        struct ovsdb_error *error = open_db(&server_config, db_filename);
+    SHASH_FOR_EACH (node, &db_conf) {
+        struct ovsdb_error *error = open_db(&server_config,
+                                            node->name, node->data);
         if (error) {
             char *s = ovsdb_error_to_string_free(error);
             ovs_fatal(0, "%s", s);
         }
+        db_config_destroy(node->data);
     }
+    shash_clear(&db_conf);
     add_server_db(&server_config);
 
     char *error = reconfigure_remotes(jsonrpc, &all_dbs, &remotes);
@@ -538,15 +695,8 @@ main(int argc, char *argv[])
     unixctl_command_register("ovsdb-server/disable-monitor-cond", "", 0, 0,
                              ovsdb_server_disable_monitor_cond, jsonrpc);
 
-    if (is_backup) {
-        const struct uuid *server_uuid;
-        server_uuid = ovsdb_jsonrpc_server_get_uuid(jsonrpc);
-        ovsdb_replication_init(sync_from, sync_exclude, &all_dbs, server_uuid,
-                               replication_probe_interval);
-    }
-
     main_loop(&server_config, jsonrpc, &all_dbs, unixctl, &remotes,
-              run_process, &exiting, &is_backup);
+              run_process, &exiting);
 
     SHASH_FOR_EACH_SAFE (node, &all_dbs) {
         struct db *db = node->data;
@@ -557,7 +707,8 @@ main(int argc, char *argv[])
     shash_destroy(&all_dbs);
     free_remotes(&remotes);
     shash_destroy(&remotes);
-    sset_destroy(&db_filenames);
+    free_database_configs(&db_conf);
+    shash_destroy(&db_conf);
     free(sync_from);
     free(sync_exclude);
     unixctl_server_destroy(unixctl);
@@ -581,7 +732,7 @@ main(int argc, char *argv[])
  *
  * "False negatives" are possible. */
 static bool
-is_already_open(struct server_config *config OVS_UNUSED,
+is_already_open(struct server_config *server_config OVS_UNUSED,
                 const char *filename OVS_UNUSED)
 {
 #ifndef _WIN32
@@ -590,11 +741,12 @@ is_already_open(struct server_config *config OVS_UNUSED,
     if (!stat(filename, &s)) {
         struct shash_node *node;
 
-        SHASH_FOR_EACH (node, config->all_dbs) {
+        SHASH_FOR_EACH (node, server_config->all_dbs) {
             struct db *db = node->data;
             struct stat s2;
 
-            if (!stat(db->filename, &s2)
+            if (db->config->model != SM_RELAY
+                && !stat(db->filename, &s2)
                 && s.st_dev == s2.st_dev
                 && s.st_ino == s2.st_ino) {
                 return true;
@@ -607,16 +759,19 @@ is_already_open(struct server_config *config OVS_UNUSED,
 }
 
 static void
-close_db(struct server_config *config, struct db *db, char *comment)
+close_db(struct server_config *server_config, struct db *db, char *comment)
 {
     if (db) {
-        ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db, comment);
-        if (db->db->is_relay) {
+        ovsdb_jsonrpc_server_remove_db(server_config->jsonrpc,
+                                       db->db, comment);
+        if (db->config->model == SM_RELAY) {
             ovsdb_relay_del_db(db->db);
         }
-        if (*config->is_backup) {
-            replication_remove_db(db->db);
+        if (db->config->model == SM_ACTIVE_BACKUP
+            && db->config->ab.backup) {
+            ovsdb_server_replication_remove_db(db);
         }
+        db_config_destroy(db->config);
         ovsdb_destroy(db->db);
         free(db->filename);
         free(db);
@@ -769,20 +924,17 @@ add_db(struct server_config *config, struct db *db)
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-open_db(struct server_config *config, const char *filename)
+open_db(struct server_config *server_config,
+        const char *filename, const struct db_config *conf)
 {
     struct ovsdb_storage *storage;
-    char *relay_remotes = NULL;
     struct ovsdb_error *error;
-    bool is_relay;
-    char *name;
 
-    is_relay = parse_relay_args(filename, &name, &relay_remotes);
-    if (!is_relay) {
+    if (conf->model != SM_RELAY) {
         /* If we know that the file is already open, return a good error
          * message.  Otherwise, if the file is open, we'll fail later on with
          * a harder to interpret file locking error. */
-        if (is_already_open(config, filename)) {
+        if (is_already_open(server_config, filename)) {
             return ovsdb_error(NULL, "%s: already open", filename);
         }
 
@@ -790,59 +942,78 @@ open_db(struct server_config *config, const char *filename)
         if (error) {
             return error;
         }
-        name = xstrdup(filename);
     } else {
-        storage = ovsdb_storage_create_unbacked(name);
+        storage = ovsdb_storage_create_unbacked(filename);
+    }
+
+    enum service_model model = conf->model;
+    if (model == SM_UNDEFINED || model == SM_STANDALONE
+        || model == SM_CLUSTERED) {
+        /* Check the actual service model from the storage. */
+        model = ovsdb_storage_is_clustered(storage)
+                ? SM_CLUSTERED : SM_STANDALONE;
+    }
+    if (conf->model != SM_UNDEFINED && conf->model != model) {
+        ovsdb_storage_close(storage);
+        return ovsdb_error(NULL, "%s: database is %s and not %s",
+                           filename, service_model_to_string(model),
+                           service_model_to_string(conf->model));
     }
 
     struct ovsdb_schema *schema;
-    if (is_relay || ovsdb_storage_is_clustered(storage)) {
+    if (model == SM_RELAY || model == SM_CLUSTERED) {
         schema = NULL;
     } else {
         struct json *txn_json;
         error = ovsdb_storage_read(storage, &schema, &txn_json, NULL);
         if (error) {
             ovsdb_storage_close(storage);
-            free(name);
             return error;
         }
         ovs_assert(schema && !txn_json);
     }
 
     struct db *db = xzalloc(sizeof *db);
-    db->filename = name;
+    db->filename = xstrdup(filename);
+    db->config = db_config_clone(conf);
+    db->config->model = model;
     db->db = ovsdb_create(schema, storage);
-    ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db);
+    ovsdb_jsonrpc_server_add_db(server_config->jsonrpc, db->db);
 
     /* Enable txn history for clustered and relay modes.  It is not enabled for
      * other modes for now, since txn id is available for clustered and relay
      * modes only. */
-    ovsdb_txn_history_init(db->db,
-                           is_relay || ovsdb_storage_is_clustered(storage));
+    ovsdb_txn_history_init(db->db, model == SM_RELAY || model == SM_CLUSTERED);
 
-    read_db(config, db);
+    read_db(server_config, db);
 
     error = (db->db->name[0] == '_'
              ? ovsdb_error(NULL, "%s: names beginning with \"_\" are reserved",
                            db->db->name)
-             : shash_find(config->all_dbs, db->db->name)
+             : shash_find(server_config->all_dbs, db->db->name)
              ? ovsdb_error(NULL, "%s: duplicate database name", db->db->name)
              : NULL);
     if (error) {
         char *error_s = ovsdb_error_to_string(error);
-        close_db(config, db,
+        close_db(server_config, db,
                  xasprintf("cannot complete opening %s database (%s)",
                            db->db->name, error_s));
         free(error_s);
         return error;
     }
 
-    add_db(config, db);
+    add_db(server_config, db);
 
-    if (is_relay) {
-        ovsdb_relay_add_db(db->db, relay_remotes, update_schema, config,
-                           *config->relay_source_probe_interval);
-        free(relay_remotes);
+    if (model == SM_RELAY) {
+        ovsdb_relay_add_db(db->db, conf->source, update_schema, server_config,
+                           conf->options->probe_interval);
+    }
+    if (model == SM_ACTIVE_BACKUP && conf->ab.backup) {
+        const struct uuid *server_uuid;
+
+        server_uuid = ovsdb_jsonrpc_server_get_uuid(server_config->jsonrpc);
+        replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
+                           server_uuid, conf->options->probe_interval);
     }
     return NULL;
 }
@@ -866,6 +1037,8 @@ add_server_db(struct server_config *config)
     /* We don't need txn_history for server_db. */
 
     db->filename = xstrdup("<internal>");
+    db->config = xzalloc(sizeof *db->config);
+    db->config->model = SM_UNDEFINED;
     db->db = ovsdb_create(schema, ovsdb_storage_create_unbacked(NULL));
     db->db->read_only = true;
 
@@ -1031,9 +1204,10 @@ free_remotes(struct shash *remotes)
 
         SHASH_FOR_EACH (node, remotes) {
             struct ovsdb_jsonrpc_options *options = node->data;
-            free(options->role);
+
+            ovsdb_jsonrpc_options_free(options);
         }
-        shash_clear_free_data(remotes);
+        shash_clear(remotes);
     }
 }
 
@@ -1461,11 +1635,20 @@ ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
                                      void *config_)
 {
     struct server_config *config = config_;
+    struct shash_node *node;
 
-    if (*config->sync_from) {
-        free(*config->sync_from);
-    }
+    free(*config->sync_from);
     *config->sync_from = xstrdup(argv[1]);
+
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+
+        if (db->config->model == SM_ACTIVE_BACKUP) {
+            free(db->config->source);
+            db->config->source = xstrdup(argv[1]);
+        }
+    }
+
     save_config(config);
 
     unixctl_command_reply(conn, NULL);
@@ -1489,20 +1672,39 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
                                          void *config_)
 {
     struct server_config *config = config_;
+    struct shash_node *node;
     char *msg = NULL;
 
-    if ( !*config->sync_from) {
+    if (!*config->sync_from) {
         msg = "Unable to connect: active server is not specified.\n";
     } else {
         const struct uuid *server_uuid;
         server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
-        ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                               config->all_dbs, server_uuid,
-                               *config->replication_probe_interval);
-        if (!*config->is_backup) {
-            *config->is_backup = true;
-            save_config(config);
+
+        SHASH_FOR_EACH (node, config->all_dbs) {
+            struct db *db = node->data;
+            struct db_config *conf = db->config;
+
+            /* This command also converts standalone databases to AB. */
+            if (conf->model == SM_STANDALONE) {
+                conf->model = SM_ACTIVE_BACKUP;
+                conf->source = xstrdup(*config->sync_from);
+                conf->options = ovsdb_jsonrpc_default_options(conf->source);
+                conf->options->probe_interval =
+                    *config->replication_probe_interval;
+                conf->ab.sync_exclude =
+                    nullable_xstrdup(*config->sync_exclude);
+                conf->ab.backup = false;
+            }
+
+            if (conf->model == SM_ACTIVE_BACKUP && !conf->ab.backup) {
+                replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
+                                   server_uuid, conf->options->probe_interval);
+                conf->ab.backup = true;
+            }
         }
+        *config->is_backup = true;
+        save_config(config);
     }
     unixctl_command_reply(conn, msg);
 }
@@ -1518,7 +1720,11 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
 
     SHASH_FOR_EACH (node, config->all_dbs) {
         struct db *db = node->data;
-        replication_remove_db(db->db);
+        struct db_config *conf = db->config;
+
+        if (conf->model == SM_ACTIVE_BACKUP && conf->ab.backup) {
+            ovsdb_server_replication_remove_db(db);
+        }
     }
     *config->is_backup = false;
     save_config(config);
@@ -1532,23 +1738,35 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
                                                    void *config_)
 {
     struct server_config *config = config_;
-
+    struct shash_node *node;
     int probe_interval;
-    if (str_to_int(argv[1], 10, &probe_interval)) {
-        *config->replication_probe_interval = probe_interval;
-        save_config(config);
-        if (*config->is_backup) {
-            const struct uuid *server_uuid;
-            server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
-            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                                   config->all_dbs, server_uuid,
-                                   *config->replication_probe_interval);
-        }
-        unixctl_command_reply(conn, NULL);
-    } else {
-        unixctl_command_reply(
+
+    if (!str_to_int(argv[1], 10, &probe_interval)) {
+        unixctl_command_reply_error(
             conn, "Invalid probe interval, integer value expected");
+        return;
     }
+
+    const struct uuid *server_uuid;
+    server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
+
+    *config->replication_probe_interval = probe_interval;
+
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+        struct db_config *conf = db->config;
+
+        if (conf->model == SM_ACTIVE_BACKUP) {
+            conf->options->probe_interval = probe_interval;
+            if (conf->ab.backup) {
+                replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
+                                   server_uuid, conf->options->probe_interval);
+            }
+        }
+    }
+
+    save_config(config);
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -1558,17 +1776,30 @@ ovsdb_server_set_relay_source_interval(struct unixctl_conn *conn,
                                        void *config_)
 {
     struct server_config *config = config_;
+    struct shash_node *node;
     int probe_interval;
 
-    if (str_to_int(argv[1], 10, &probe_interval)) {
-        *config->relay_source_probe_interval = probe_interval;
-        save_config(config);
-        ovsdb_relay_set_probe_interval(probe_interval);
-        unixctl_command_reply(conn, NULL);
-    } else {
+    if (!str_to_int(argv[1], 10, &probe_interval)) {
         unixctl_command_reply_error(
             conn, "Invalid probe interval, integer value expected");
+        return;
     }
+
+    *config->relay_source_probe_interval = probe_interval;
+
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+        struct db_config *conf = db->config;
+
+        if (conf->model == SM_RELAY) {
+            conf->options->probe_interval = probe_interval;
+        }
+    }
+
+    ovsdb_relay_set_probe_interval(probe_interval);
+    save_config(config);
+
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -1578,20 +1809,36 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
                                      void *config_)
 {
     struct server_config *config = config_;
+    struct shash_node *node;
 
     char *err = parse_excluded_tables(argv[1]);
-    if (!err) {
-        free(*config->sync_exclude);
-        *config->sync_exclude = xstrdup(argv[1]);
-        save_config(config);
-        if (*config->is_backup) {
-            const struct uuid *server_uuid;
-            server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
-            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                                   config->all_dbs, server_uuid,
-                                   *config->replication_probe_interval);
+    if (err) {
+        goto exit;
+    }
+
+    const struct uuid *server_uuid;
+    server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
+
+    free(*config->sync_exclude);
+    *config->sync_exclude = xstrdup(argv[1]);
+
+    SHASH_FOR_EACH (node, config->all_dbs) {
+        struct db *db = node->data;
+        struct db_config *conf = db->config;
+
+        if (conf->model == SM_ACTIVE_BACKUP) {
+            free(conf->ab.sync_exclude);
+            conf->ab.sync_exclude = xstrdup(argv[1]);
+            if (conf->ab.backup) {
+                replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
+                                   server_uuid, conf->options->probe_interval);
+            }
         }
     }
+
+    save_config(config);
+
+exit:
     unixctl_command_reply(conn, err);
     free(err);
 }
@@ -1798,8 +2045,7 @@ ovsdb_server_remove_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     options = shash_find_and_delete(config->remotes, argv[1]);
     if (options) {
-        free(options->role);
-        free(options);
+        ovsdb_jsonrpc_options_free(options);
         save_config(config);
         unixctl_command_reply(conn, NULL);
     } else {
@@ -1836,22 +2082,26 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct server_config *config = config_;
     const char *filename = argv[1];
+    const struct shash_node *node;
+    struct shash db_conf;
 
-    char *error = ovsdb_error_to_string_free(open_db(config, filename));
+    shash_init(&db_conf);
+    add_database_config(&db_conf, filename, *config->sync_from,
+                        *config->sync_exclude, !config->is_backup);
+    ovs_assert(shash_count(&db_conf) == 1);
+    node = shash_first(&db_conf);
+
+    char *error = ovsdb_error_to_string_free(open_db(config,
+                                                     node->name, node->data));
     if (!error) {
         save_config(config);
-        if (*config->is_backup) {
-            const struct uuid *server_uuid;
-            server_uuid = ovsdb_jsonrpc_server_get_uuid(config->jsonrpc);
-            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
-                                   config->all_dbs, server_uuid,
-                                   *config->replication_probe_interval);
-        }
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply_error(conn, error);
         free(error);
     }
+    db_config_destroy(node->data);
+    shash_destroy(&db_conf);
 }
 
 static void
@@ -1998,23 +2248,34 @@ ovsdb_server_get_sync_status(struct unixctl_conn *conn, int argc OVS_UNUSED,
                              const char *argv[] OVS_UNUSED, void *config_)
 {
     struct server_config *config = config_;
-    bool is_backup = *config->is_backup;
     struct ds ds = DS_EMPTY_INITIALIZER;
+    bool any_backup = false;
 
-    ds_put_format(&ds, "state: %s\n", is_backup ? "backup" : "active");
+    const struct shash_node **db_nodes = shash_sort(config->all_dbs);
 
-    if (is_backup) {
-        const struct shash_node **db_nodes = shash_sort(config->all_dbs);
+    for (size_t i = 0; i < shash_count(config->all_dbs); i++) {
+        const struct db *db = db_nodes[i]->data;
 
-        for (size_t i = 0; i < shash_count(config->all_dbs); i++) {
-            const struct db *db = db_nodes[i]->data;
-
-            if (db->db && db->db->name[0] != '_') {
-                ds_put_and_free_cstr(&ds, replication_status(db->db));
-                ds_put_char(&ds, '\n');
-            }
+        if (db->config->model != SM_ACTIVE_BACKUP) {
+            continue;
         }
-        free(db_nodes);
+
+        any_backup = true;
+
+        ds_put_format(&ds, "database: %s\n", db->db->name);
+        ds_put_format(&ds, "state: %s\n",
+                      db->config->ab.backup ? "backup" : "active");
+        if (db->config->ab.backup) {
+            ds_put_and_free_cstr(&ds, replication_status(db->db));
+        }
+        if (i + 1 < shash_count(config->all_dbs)) {
+            ds_put_char(&ds, '\n');
+        }
+    }
+    free(db_nodes);
+
+    if (!any_backup) {
+        ds_put_cstr(&ds, "state: active\n");
     }
 
     unixctl_command_reply(conn, ds_cstr(&ds));
@@ -2058,7 +2319,7 @@ ovsdb_server_get_db_storage_status(struct unixctl_conn *conn,
 
 static void
 parse_options(int argc, char *argv[],
-              struct sset *db_filenames, struct shash *remotes,
+              struct shash *db_conf, struct shash *remotes,
               char **unixctl_pathp, char **run_command,
               char **sync_from, char **sync_exclude, bool *active)
 {
@@ -2108,7 +2369,7 @@ parse_options(int argc, char *argv[],
 
     *sync_from = NULL;
     *sync_exclude = NULL;
-    sset_init(db_filenames);
+    shash_init(db_conf);
     shash_init(remotes);
     for (;;) {
         int c;
@@ -2214,10 +2475,15 @@ parse_options(int argc, char *argv[],
     argv += optind;
     if (argc > 0) {
         for (int i = 0; i < argc; i++) {
-            sset_add(db_filenames, argv[i]);
+            add_database_config(db_conf, argv[i], *sync_from, *sync_exclude,
+                                *active);
         }
     } else if (add_default_db) {
-        sset_add_and_free(db_filenames, xasprintf("%s/conf.db", ovs_dbdir()));
+        char *filename = xasprintf("%s/conf.db", ovs_dbdir());
+
+        add_database_config(db_conf, filename, *sync_from, *sync_exclude,
+                            *active);
+        free(filename);
     }
 }
 
@@ -2268,16 +2534,63 @@ remotes_to_json(const struct shash *remotes)
     json = json_object_create();
     SHASH_FOR_EACH (node, remotes) {
         json_object_put(json, node->name,
-                        ovsdb_jsonrpc_options_to_json(node->data));
+                        ovsdb_jsonrpc_options_to_json(node->data, false));
+    }
+    return json;
+}
+
+static struct json *
+db_config_to_json(const struct db_config *conf)
+{
+    struct json *json;
+
+    json = json_object_create();
+
+    if (conf->model != SM_UNDEFINED) {
+        json_object_put(json, "service-model",
+                        json_string_create(
+                            service_model_to_string(conf->model)));
+    }
+
+    if (conf->source) {
+        struct json *source = json_object_create();
+
+        json_object_put(source, conf->source,
+                        ovsdb_jsonrpc_options_to_json(conf->options, true));
+        json_object_put(json, "source", source);
+    }
+
+    if (conf->model == SM_ACTIVE_BACKUP) {
+        if (conf->ab.sync_exclude) {
+            struct sset set = SSET_INITIALIZER(&set);
+
+            sset_from_delimited_string(&set, conf->ab.sync_exclude, " ,");
+            json_object_put(json, "exclude-tables", sset_to_json(&set));
+            sset_destroy(&set);
+        }
+        json_object_put(json, "backup", json_boolean_create(conf->ab.backup));
+    }
+    return json;
+}
+
+static struct json *
+databases_to_json(const struct shash *db_conf)
+{
+    const struct shash_node *node;
+    struct json *json;
+
+    json = json_object_create();
+    SHASH_FOR_EACH (node, db_conf) {
+        json_object_put(json, node->name, db_config_to_json(node->data));
     }
     return json;
 }
 
 /* Truncates and replaces the contents of 'config_file' by a representation of
- * 'remotes' and 'db_filenames'. */
+ * 'remotes', 'db_conf' and a few global replication paramaters. */
 static void
 save_config__(FILE *config_file, const struct shash *remotes,
-              const struct sset *db_filenames, const char *sync_from,
+              const struct shash *db_conf, const char *sync_from,
               const char *sync_exclude, bool is_backup)
 {
     struct json *obj;
@@ -2290,7 +2603,8 @@ save_config__(FILE *config_file, const struct shash *remotes,
 
     obj = json_object_create();
     json_object_put(obj, "remotes", remotes_to_json(remotes));
-    json_object_put(obj, "db_filenames", sset_to_json(db_filenames));
+    json_object_put(obj, "databases", databases_to_json(db_conf));
+
     if (sync_from) {
         json_object_put(obj, "sync_from", json_string_create(sync_from));
     }
@@ -2316,37 +2630,23 @@ save_config__(FILE *config_file, const struct shash *remotes,
 static void
 save_config(struct server_config *config)
 {
-    struct sset db_filenames;
     struct shash_node *node;
+    struct shash db_conf;
 
-    sset_init(&db_filenames);
+    shash_init(&db_conf);
     SHASH_FOR_EACH (node, config->all_dbs) {
         struct db *db = node->data;
+
         if (node->name[0] != '_') {
-            sset_add(&db_filenames, db->filename);
+            shash_add(&db_conf, db->filename, db->config);
         }
     }
 
-    save_config__(config->config_tmpfile, config->remotes, &db_filenames,
+    save_config__(config->config_tmpfile, config->remotes, &db_conf,
                   *config->sync_from, *config->sync_exclude,
                   *config->is_backup);
 
-    sset_destroy(&db_filenames);
-}
-
-static void
-sset_from_json(struct sset *sset, const struct json *array)
-{
-    size_t i;
-
-    sset_clear(sset);
-
-    ovs_assert(array);
-    ovs_assert(array->type == JSON_ARRAY);
-    for (i = 0; i < array->array.n; i++) {
-        const struct json *elem = array->array.elems[i];
-        sset_add(sset, json_string(elem));
-    }
+    shash_destroy(&db_conf);
 }
 
 static void
@@ -2364,8 +2664,113 @@ remotes_from_json(struct shash *remotes, const struct json *json)
     object = json_object(json);
     SHASH_FOR_EACH (node, object) {
         options = ovsdb_jsonrpc_default_options(node->name);
-        ovsdb_jsonrpc_options_update_from_json(options, node->data);
+        ovsdb_jsonrpc_options_update_from_json(options, node->data, false);
         shash_add(remotes, node->name, options);
+    }
+}
+
+static struct db_config *
+db_config_from_json(const char *name, const struct json *json)
+{
+    const struct json *model, *source, *sync_exclude, *backup;
+    struct db_config *conf = xzalloc(sizeof *conf);
+    struct ovsdb_parser parser;
+    struct ovsdb_error *error;
+
+    ovsdb_parser_init(&parser, json, "database %s", name);
+
+    model = ovsdb_parser_member(&parser, "service-model",
+                                OP_STRING | OP_OPTIONAL);
+    conf->model = model ? service_model_from_string(json_string(model))
+                        : SM_UNDEFINED;
+
+    if (conf->model == SM_ACTIVE_BACKUP) {
+        backup = ovsdb_parser_member(&parser, "backup", OP_BOOLEAN);
+        conf->ab.backup = backup ? json_boolean(backup) : false;
+
+        sync_exclude = ovsdb_parser_member(&parser, "exclude-tables",
+                                           OP_ARRAY | OP_OPTIONAL);
+        if (sync_exclude) {
+            const struct json_array *exclude = json_array(sync_exclude);
+            struct sset set = SSET_INITIALIZER(&set);
+
+            for (size_t i = 0; i < exclude->n; i++) {
+                if (exclude->elems[i]->type != JSON_STRING) {
+                    ovsdb_parser_raise_error(&parser,
+                        "'exclude-tables' must contain strings");
+                    break;
+                }
+                sset_add(&set, json_string(exclude->elems[i]));
+            }
+            conf->ab.sync_exclude = sset_join(&set, ",", "");
+            sset_destroy(&set);
+        }
+    }
+
+    if (conf->model == SM_ACTIVE_BACKUP || conf->model == SM_RELAY) {
+        enum ovsdb_parser_types type = OP_OBJECT;
+
+        if (conf->model == SM_ACTIVE_BACKUP && !conf->ab.backup) {
+            /* Active database doesn't have to have a source. */
+            type |= OP_OPTIONAL;
+        }
+        source = ovsdb_parser_member(&parser, "source", type);
+
+        if (source && shash_count(json_object(source)) != 1) {
+            ovsdb_parser_raise_error(&parser,
+                "'source' should be an object with exactly one element");
+        } else if (source) {
+            const struct shash_node *node = shash_first(json_object(source));
+            const struct json *options;
+
+            ovs_assert(node);
+            conf->source = xstrdup(node->name);
+            options = node->data;
+
+            conf->options = get_jsonrpc_options(conf->source, conf->model);
+
+            if (options->type == JSON_OBJECT) {
+                ovsdb_jsonrpc_options_update_from_json(conf->options,
+                                                       options, true);
+            } else if (options->type != JSON_NULL) {
+                ovsdb_parser_raise_error(&parser,
+                    "JSON-RPC options is not a JSON object or null");
+            }
+        }
+    }
+
+    error = ovsdb_parser_finish(&parser);
+    if (error) {
+        char *s = ovsdb_error_to_string_free(error);
+
+        VLOG_WARN("%s", s);
+        free(s);
+        db_config_destroy(conf);
+        return NULL;
+    }
+
+    return conf;
+}
+
+
+static void
+databases_from_json(struct shash *db_conf, const struct json *json)
+{
+    const struct shash_node *node;
+    const struct shash *object;
+
+    free_database_configs(db_conf);
+
+    ovs_assert(json);
+    ovs_assert(json->type == JSON_OBJECT);
+
+    object = json_object(json);
+    SHASH_FOR_EACH (node, object) {
+        struct db_config *conf = db_config_from_json(node->name, node->data);
+
+        if (conf) {
+            shash_add(db_conf, node->name, conf);
+        }
     }
 }
 
@@ -2373,7 +2778,7 @@ remotes_from_json(struct shash *remotes, const struct json *json)
  * 'config_file', which must have been previously written by save_config(). */
 static void
 load_config(FILE *config_file, struct shash *remotes,
-            struct sset *db_filenames, char **sync_from,
+            struct shash *db_conf, char **sync_from,
             char **sync_exclude, bool *is_backup)
 {
     struct json *json;
@@ -2388,8 +2793,8 @@ load_config(FILE *config_file, struct shash *remotes,
     ovs_assert(json->type == JSON_OBJECT);
 
     remotes_from_json(remotes, shash_find_data(json_object(json), "remotes"));
-    sset_from_json(db_filenames,
-                   shash_find_data(json_object(json), "db_filenames"));
+    databases_from_json(db_conf,
+                        shash_find_data(json_object(json), "databases"));
 
     struct json *string;
     string = shash_find_data(json_object(json), "sync_from");

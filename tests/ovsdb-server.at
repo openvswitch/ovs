@@ -1988,7 +1988,9 @@ OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/sync-status |grep re
 
 dnl Switch the 'db1' to active
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/disconnect-active-ovsdb-server])
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/sync-status], [0], [state: active
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/sync-status], [0], [dnl
+database: mydb
+state: active
 ])
 
 dnl Issue a transaction to 'db1'
@@ -2007,7 +2009,9 @@ AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/connect-active-ovsdb-server
 
 dnl Verify the change happend
 OVS_WAIT_UNTIL([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/sync-status |grep replicating])
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/sync-status], [0], [state: active
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/sync-status], [0], [dnl
+database: mydb
+state: active
 ])
 
 dnl Issue an transaction to 'db2' which is now active.
