@@ -95,6 +95,13 @@ static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
 static unixctl_cb_func ovsdb_server_get_sync_status;
 static unixctl_cb_func ovsdb_server_get_db_storage_status;
 
+/* Holds the name of the configuration file passed via --config-file.
+ * Mutually exclusive with command-line and unixctl configuration
+ * that can otherwise be done via configuration file. */
+static char *config_file_path;
+/* UnixCtl command to reload configuration from a configuration file. */
+static unixctl_cb_func ovsdb_server_reload;
+
 #define SERVICE_MODELS \
     SERVICE_MODEL(UNDEFINED,      undefined)         \
     SERVICE_MODEL(STANDALONE,     standalone)        \
@@ -637,6 +644,8 @@ main(int argc, char *argv[])
                              ovsdb_server_memory_trim_on_compaction, NULL);
     unixctl_command_register("ovsdb-server/reconnect", "", 0, 0,
                              ovsdb_server_reconnect, jsonrpc);
+    unixctl_command_register("ovsdb-server/reload", "", 0, 0,
+                             ovsdb_server_reload, &server_config);
 
     unixctl_command_register("ovsdb-server/add-remote", "REMOTE", 1, 1,
                              ovsdb_server_add_remote, &server_config);
@@ -713,6 +722,7 @@ main(int argc, char *argv[])
     free(sync_exclude);
     unixctl_server_destroy(unixctl);
     replication_destroy();
+    free(config_file_path);
 
     if (run_process && process_exited(run_process)) {
         int status = process_status(run_process);
@@ -1629,6 +1639,23 @@ report_error_if_changed(char *error, char **last_errorp)
     }
 }
 
+static bool
+check_config_file_on_unixctl(struct unixctl_conn *conn)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    if (!config_file_path) {
+        return false;
+    }
+
+    ds_put_format(&ds, "Update the %s and use ovsdb-server/reload instead",
+                  config_file_path);
+    unixctl_command_reply_error(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+
+    return true;
+}
+
 static void
 ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED, const char *argv[],
@@ -1636,6 +1663,10 @@ ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
 {
     struct server_config *config = config_;
     struct shash_node *node;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     free(*config->sync_from);
     *config->sync_from = xstrdup(argv[1]);
@@ -1674,6 +1705,10 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
     struct server_config *config = config_;
     struct shash_node *node;
     char *msg = NULL;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     if (!*config->sync_from) {
         msg = "Unable to connect: active server is not specified.\n";
@@ -1718,6 +1753,10 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
     struct server_config *config = config_;
     struct shash_node *node;
 
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
+
     SHASH_FOR_EACH (node, config->all_dbs) {
         struct db *db = node->data;
         struct db_config *conf = db->config;
@@ -1740,6 +1779,10 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
     struct server_config *config = config_;
     struct shash_node *node;
     int probe_interval;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     if (!str_to_int(argv[1], 10, &probe_interval)) {
         unixctl_command_reply_error(
@@ -1779,6 +1822,10 @@ ovsdb_server_set_relay_source_interval(struct unixctl_conn *conn,
     struct shash_node *node;
     int probe_interval;
 
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
+
     if (!str_to_int(argv[1], 10, &probe_interval)) {
         unixctl_command_reply_error(
             conn, "Invalid probe interval, integer value expected");
@@ -1810,6 +1857,10 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
 {
     struct server_config *config = config_;
     struct shash_node *node;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     char *err = parse_excluded_tables(argv[1]);
     if (err) {
@@ -2005,6 +2056,21 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, NULL);
 }
 
+/* "ovsdb-server/reload": makes ovsdb-server open a configuration file on
+ * 'config_file_path', read it and sync the runtime configuration with it. */
+static void
+ovsdb_server_reload(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[] OVS_UNUSED, void *config_ OVS_UNUSED)
+{
+    if (!config_file_path) {
+        unixctl_command_reply_error(conn,
+            "Configuration file was not specified on command line");
+    } else {
+        unixctl_command_reply_error(conn,
+            "Configuration file support is not implemented yet");
+    }
+}
+
 /* "ovsdb-server/add-remote REMOTE": adds REMOTE to the set of remotes that
  * ovsdb-server services. */
 static void
@@ -2018,6 +2084,10 @@ ovsdb_server_add_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
     const struct ovsdb_table *table;
     const struct db *db;
     char *retval;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     retval = (strncmp("db:", remote, 3)
               ? NULL
@@ -2042,6 +2112,10 @@ ovsdb_server_remove_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct server_config *config = config_;
     struct ovsdb_jsonrpc_options *options;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     options = shash_find_and_delete(config->remotes, argv[1]);
     if (options) {
@@ -2085,6 +2159,10 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     const struct shash_node *node;
     struct shash db_conf;
 
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
+
     shash_init(&db_conf);
     add_database_config(&db_conf, filename, *config->sync_from,
                         *config->sync_exclude, !config->is_backup);
@@ -2121,6 +2199,10 @@ ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct server_config *config = config_;
     struct shash_node *node;
+
+    if (check_config_file_on_unixctl(conn)) {
+        return;
+    }
 
     node = shash_find(config->all_dbs, argv[1]);
     if (!node) {
@@ -2335,6 +2417,7 @@ parse_options(int argc, char *argv[],
         OPT_NO_DBS,
         OPT_FILE_COLUMN_DIFF,
         OPT_FILE_NO_DATA_CONVERSION,
+        OPT_CONFIG_FILE,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
@@ -2362,6 +2445,7 @@ parse_options(int argc, char *argv[],
         {"disable-file-column-diff", no_argument, NULL, OPT_FILE_COLUMN_DIFF},
         {"disable-file-no-data-conversion", no_argument, NULL,
          OPT_FILE_NO_DATA_CONVERSION},
+        {"config-file", required_argument, NULL, OPT_CONFIG_FILE},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -2462,6 +2546,11 @@ parse_options(int argc, char *argv[],
             ovsdb_no_data_conversion_disable();
             break;
 
+        case OPT_CONFIG_FILE:
+            config_file_path = abs_file_name(ovs_dbdir(), optarg);
+            add_default_db = false;
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -2473,7 +2562,19 @@ parse_options(int argc, char *argv[],
 
     argc -= optind;
     argv += optind;
-    if (argc > 0) {
+
+    if (config_file_path) {
+        if (*sync_from || *sync_exclude || *active) {
+            ovs_fatal(0, "--config-file is mutually exclusive with "
+                         "--sync-from, --sync-exclude and --active");
+        }
+        if (shash_count(remotes)) {
+            ovs_fatal(0, "--config-file is mutually exclusive with --remote");
+        }
+        if (argc > 0) {
+            ovs_fatal(0, "Databases should be specified in a config file");
+        }
+    } else if (argc > 0) {
         for (int i = 0; i < argc; i++) {
             add_database_config(db_conf, argv[i], *sync_from, *sync_exclude,
                                 *active);
@@ -2498,6 +2599,12 @@ usage(void)
     printf("\nJSON-RPC options (may be specified any number of times):\n"
            "  --remote=REMOTE         connect or listen to REMOTE\n");
     stream_usage("JSON-RPC", true, true, true);
+    printf("\nConfiguration file:\n"
+           "  --config-file PATH      Use configuration file as a source of\n"
+           "                          database and JSON-RPC configuration.\n"
+           "                          Mutually exclusive with the DATABASE,\n"
+           "                          JSON-RPC and Syncing options.\n"
+           "                          Assumes --no-dbs.\n");
     daemon_usage();
     vlog_usage();
     replication_usage();
@@ -2505,6 +2612,7 @@ usage(void)
     printf("\nOther options:\n"
            "  --run COMMAND           run COMMAND as subprocess then exit\n"
            "  --unixctl=SOCKET        override default control socket name\n"
+           "  --no-dbs                do not add default database\n"
            "  --disable-file-column-diff\n"
            "                          don't use column diff in database file\n"
            "  -h, --help              display this help message\n"
