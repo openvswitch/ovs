@@ -32,6 +32,7 @@
 #include "openvswitch/uuid.h"
 
 struct json;
+struct jsonrpc_session_options;
 struct ovsdb_cs;
 
 struct ovsdb_cs_ops {
@@ -131,6 +132,8 @@ bool ovsdb_cs_is_alive(const struct ovsdb_cs *);
 bool ovsdb_cs_is_connected(const struct ovsdb_cs *);
 int ovsdb_cs_get_last_error(const struct ovsdb_cs *);
 
+void ovsdb_cs_set_jsonrpc_options(const struct ovsdb_cs *,
+                                  const struct jsonrpc_session_options *);
 void ovsdb_cs_set_probe_interval(const struct ovsdb_cs *, int probe_interval);
 
 /* Conditional monitoring (specifying that only rows matching particular

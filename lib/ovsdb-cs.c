@@ -791,6 +791,16 @@ ovsdb_cs_get_last_error(const struct ovsdb_cs *cs)
     }
 }
 
+/* Sets all the JSON-RPC session 'options' for 'cs''s current session. */
+void
+ovsdb_cs_set_jsonrpc_options(const struct ovsdb_cs *cs,
+                             const struct jsonrpc_session_options *options)
+{
+    if (cs->session) {
+        jsonrpc_session_set_options(cs->session, options);
+    }
+}
+
 /* Sets the "probe interval" for 'cs''s current session to 'probe_interval', in
  * milliseconds. */
 void
