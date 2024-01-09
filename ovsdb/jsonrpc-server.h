@@ -39,8 +39,10 @@ struct ovsdb_jsonrpc_options {
     int dscp;                   /* Dscp value for manager connections */
     char *role;                 /* Role, for role-based access controls */
 };
-struct ovsdb_jsonrpc_options *
-ovsdb_jsonrpc_default_options(const char *target);
+struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_default_options(
+    const char *target);
+struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_options_clone(
+    const struct ovsdb_jsonrpc_options *);
 
 struct json *ovsdb_jsonrpc_options_to_json(
                                 const struct ovsdb_jsonrpc_options *)

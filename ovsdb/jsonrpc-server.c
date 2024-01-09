@@ -219,6 +219,17 @@ ovsdb_jsonrpc_default_options(const char *target)
     return options;
 }
 
+struct ovsdb_jsonrpc_options *
+ovsdb_jsonrpc_options_clone(const struct ovsdb_jsonrpc_options *options)
+{
+    struct ovsdb_jsonrpc_options *clone;
+
+    clone = xmemdup(options, sizeof *options);
+    clone->role = nullable_xstrdup(options->role);
+
+    return clone;
+}
+
 struct json *
 ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options)
 {

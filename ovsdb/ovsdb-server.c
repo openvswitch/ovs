@@ -101,7 +101,7 @@ static unixctl_cb_func ovsdb_server_get_sync_status;
 static unixctl_cb_func ovsdb_server_get_db_storage_status;
 
 struct server_config {
-    struct sset *remotes;
+    struct shash *remotes;
     struct shash *all_dbs;
     FILE *config_tmpfile;
     char **sync_from;
@@ -130,29 +130,34 @@ static void remove_db(struct server_config *, struct shash_node *db, char *);
 static void close_db(struct server_config *, struct db *, char *);
 
 static void parse_options(int argc, char *argvp[],
-                          struct sset *db_filenames, struct sset *remotes,
+                          struct sset *db_filenames, struct shash *remotes,
                           char **unixctl_pathp, char **run_command,
                           char **sync_from, char **sync_exclude,
                           bool *is_backup);
 OVS_NO_RETURN static void usage(void);
 
+static struct ovsdb_jsonrpc_options *add_remote(
+                            struct shash *remotes, const char *target,
+                            const struct ovsdb_jsonrpc_options *);
+static void free_remotes(struct shash *remotes);
+
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
                                  const struct shash *all_dbs,
-                                 struct sset *remotes);
+                                 struct shash *remotes);
 static char *reconfigure_ssl(const struct shash *all_dbs);
 static void report_error_if_changed(char *error, char **last_errorp);
 
 static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
-                                 const struct sset *remotes,
+                                 const struct shash *remotes,
                                  struct shash *all_dbs);
 static void update_server_status(struct shash *all_dbs);
 
-static void save_config__(FILE *config_file, const struct sset *remotes,
+static void save_config__(FILE *config_file, const struct shash *remotes,
                           const struct sset *db_filenames,
                           const char *sync_from, const char *sync_exclude,
                           bool is_backup);
 static void save_config(struct server_config *);
-static void load_config(FILE *config_file, struct sset *remotes,
+static void load_config(FILE *config_file, struct shash *remotes,
                         struct sset *db_filenames, char **sync_from,
                         char **sync_exclude, bool *is_backup);
 
@@ -184,7 +189,7 @@ log_and_free_error(struct ovsdb_error *error)
 static void
 main_loop(struct server_config *config,
           struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
-          struct unixctl_server *unixctl, struct sset *remotes,
+          struct unixctl_server *unixctl, struct shash *remotes,
           struct process *run_process, bool *exiting, bool *is_backup)
 {
     char *remotes_error, *ssl_error;
@@ -318,9 +323,6 @@ main(int argc, char *argv[])
     char *run_command = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
-    struct sset remotes, db_filenames;
-    char *sync_from, *sync_exclude;
-    bool is_backup;
     const char *db_filename;
     struct process *run_process;
     bool exiting;
@@ -331,6 +333,10 @@ main(int argc, char *argv[])
     struct shash_node *node;
     int replication_probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
     int relay_source_probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
+    struct sset db_filenames = SSET_INITIALIZER(&db_filenames);
+    struct shash remotes = SHASH_INITIALIZER(&remotes);
+    char *sync_from = NULL, *sync_exclude = NULL;
+    bool is_backup;
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -514,7 +520,8 @@ main(int argc, char *argv[])
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     shash_destroy(&all_dbs);
-    sset_destroy(&remotes);
+    free_remotes(&remotes);
+    shash_destroy(&remotes);
     sset_destroy(&db_filenames);
     free(sync_from);
     free(sync_exclude);
@@ -971,13 +978,16 @@ query_db_string(const struct shash *all_dbs, const char *name,
 }
 
 static struct ovsdb_jsonrpc_options *
-add_remote(struct shash *remotes, const char *target)
+add_remote(struct shash *remotes, const char *target,
+           const struct ovsdb_jsonrpc_options *options_)
 {
     struct ovsdb_jsonrpc_options *options;
 
     options = shash_find_data(remotes, target);
     if (!options) {
-        options = ovsdb_jsonrpc_default_options(target);
+        options = options_
+                  ? ovsdb_jsonrpc_options_clone(options_)
+                  : ovsdb_jsonrpc_default_options(target);
         shash_add(remotes, target, options);
     }
 
@@ -994,7 +1004,7 @@ free_remotes(struct shash *remotes)
             struct ovsdb_jsonrpc_options *options = node->data;
             free(options->role);
         }
-        shash_destroy_free_data(remotes);
+        shash_clear_free_data(remotes);
     }
 }
 
@@ -1015,7 +1025,7 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
         return;
     }
 
-    options = add_remote(remotes, target);
+    options = add_remote(remotes, target, NULL);
     if (ovsdb_util_read_integer_column(row, "max_backoff", &max_backoff)) {
         options->max_backoff = max_backoff;
     }
@@ -1075,7 +1085,7 @@ query_db_remotes(const char *name, const struct shash *all_dbs,
 
             datum = &row->fields[column->index];
             for (i = 0; i < datum->n; i++) {
-                add_remote(remotes, json_string(datum->keys[i].s));
+                add_remote(remotes, json_string(datum->keys[i].s), NULL);
             }
         }
     } else if (column->type.key.type == OVSDB_TYPE_UUID
@@ -1223,19 +1233,24 @@ commit_txn(struct ovsdb_txn *txn, const char *name)
 
 static void
 update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
-                     const struct sset *remotes,
+                     const struct shash *remotes,
                      struct shash *all_dbs)
 {
-    struct shash_node *node;
-    SHASH_FOR_EACH (node, all_dbs) {
-        struct db *db = node->data;
+    struct shash_node *db_node;
+
+    SHASH_FOR_EACH (db_node, all_dbs) {
+        struct db *db = db_node->data;
+
         if (!db->db || ovsdb_storage_is_clustered(db->db->storage)) {
             continue;
         }
 
         struct ovsdb_txn *txn = ovsdb_txn_create(db->db);
-        const char *remote;
-        SSET_FOR_EACH (remote, remotes) {
+        const struct shash_node *remote_node;
+
+        SHASH_FOR_EACH (remote_node, remotes) {
+            const char *remote = remote_node->name;
+
             update_remote_rows(all_dbs, db, remote, jsonrpc, txn);
         }
         commit_txn(txn, "remote status");
@@ -1345,23 +1360,27 @@ update_server_status(struct shash *all_dbs)
 /* Reconfigures ovsdb-server's remotes based on information in the database. */
 static char *
 reconfigure_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
-                    const struct shash *all_dbs, struct sset *remotes)
+                    const struct shash *all_dbs, struct shash *remotes)
 {
     struct ds errors = DS_EMPTY_INITIALIZER;
     struct shash resolved_remotes;
-    const char *name;
+    struct shash_node *node;
 
     /* Configure remotes. */
     shash_init(&resolved_remotes);
-    SSET_FOR_EACH (name, remotes) {
+    SHASH_FOR_EACH (node, remotes) {
+        const struct ovsdb_jsonrpc_options *options = node->data;
+        const char *name = node->name;
+
         if (!strncmp(name, "db:", 3)) {
             query_db_remotes(name, all_dbs, &resolved_remotes, &errors);
         } else {
-            add_remote(&resolved_remotes, name);
+            add_remote(&resolved_remotes, name, options);
         }
     }
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
     free_remotes(&resolved_remotes);
+    shash_destroy(&resolved_remotes);
 
     return errors.string;
 }
@@ -1722,7 +1741,7 @@ ovsdb_server_add_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
               : parse_db_column(config->all_dbs, remote,
                                 &db, &table, &column));
     if (!retval) {
-        if (sset_add(config->remotes, remote)) {
+        if (add_remote(config->remotes, remote, NULL)) {
             save_config(config);
         }
         unixctl_command_reply(conn, NULL);
@@ -1739,11 +1758,12 @@ ovsdb_server_remove_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
                            const char *argv[], void *config_)
 {
     struct server_config *config = config_;
-    struct sset_node *node;
+    struct ovsdb_jsonrpc_options *options;
 
-    node = sset_find(config->remotes, argv[1]);
-    if (node) {
-        sset_delete(config->remotes, node);
+    options = shash_find_and_delete(config->remotes, argv[1]);
+    if (options) {
+        free(options->role);
+        free(options);
         save_config(config);
         unixctl_command_reply(conn, NULL);
     } else {
@@ -1756,15 +1776,15 @@ static void
 ovsdb_server_list_remotes(struct unixctl_conn *conn, int argc OVS_UNUSED,
                           const char *argv[] OVS_UNUSED, void *remotes_)
 {
-    struct sset *remotes = remotes_;
-    const char **list, **p;
+    const struct shash *remotes = remotes_;
+    const struct shash_node **list;
     struct ds s;
 
     ds_init(&s);
 
-    list = sset_sort(remotes);
-    for (p = list; *p; p++) {
-        ds_put_format(&s, "%s\n", *p);
+    list = shash_sort(remotes);
+    for (size_t i = 0; i < shash_count(remotes); i++) {
+        ds_put_format(&s, "%s\n", list[i]->name);
     }
     free(list);
 
@@ -1999,7 +2019,7 @@ ovsdb_server_get_db_storage_status(struct unixctl_conn *conn,
 
 static void
 parse_options(int argc, char *argv[],
-              struct sset *db_filenames, struct sset *remotes,
+              struct sset *db_filenames, struct shash *remotes,
               char **unixctl_pathp, char **run_command,
               char **sync_from, char **sync_exclude, bool *active)
 {
@@ -2050,7 +2070,7 @@ parse_options(int argc, char *argv[],
     *sync_from = NULL;
     *sync_exclude = NULL;
     sset_init(db_filenames);
-    sset_init(remotes);
+    shash_init(remotes);
     for (;;) {
         int c;
 
@@ -2061,7 +2081,7 @@ parse_options(int argc, char *argv[],
 
         switch (c) {
         case OPT_REMOTE:
-            sset_add(remotes, optarg);
+            add_remote(remotes, optarg, NULL);
             break;
 
         case OPT_UNIXCTL:
@@ -2200,10 +2220,24 @@ sset_to_json(const struct sset *sset)
     return array;
 }
 
+static struct json *
+remotes_to_json(const struct shash *remotes)
+{
+    const struct shash_node *node;
+    struct json *json;
+
+    json = json_object_create();
+    SHASH_FOR_EACH (node, remotes) {
+        json_object_put(json, node->name,
+                        ovsdb_jsonrpc_options_to_json(node->data));
+    }
+    return json;
+}
+
 /* Truncates and replaces the contents of 'config_file' by a representation of
  * 'remotes' and 'db_filenames'. */
 static void
-save_config__(FILE *config_file, const struct sset *remotes,
+save_config__(FILE *config_file, const struct shash *remotes,
               const struct sset *db_filenames, const char *sync_from,
               const char *sync_exclude, bool is_backup)
 {
@@ -2216,7 +2250,7 @@ save_config__(FILE *config_file, const struct sset *remotes,
     }
 
     obj = json_object_create();
-    json_object_put(obj, "remotes", sset_to_json(remotes));
+    json_object_put(obj, "remotes", remotes_to_json(remotes));
     json_object_put(obj, "db_filenames", sset_to_json(db_filenames));
     if (sync_from) {
         json_object_put(obj, "sync_from", json_string_create(sync_from));
@@ -2276,11 +2310,32 @@ sset_from_json(struct sset *sset, const struct json *array)
     }
 }
 
+static void
+remotes_from_json(struct shash *remotes, const struct json *json)
+{
+    struct ovsdb_jsonrpc_options *options;
+    const struct shash_node *node;
+    const struct shash *object;
+
+    free_remotes(remotes);
+
+    ovs_assert(json);
+    ovs_assert(json->type == JSON_OBJECT);
+
+    object = json_object(json);
+    SHASH_FOR_EACH (node, object) {
+        options = ovsdb_jsonrpc_default_options(node->name);
+        ovsdb_jsonrpc_options_update_from_json(options, node->data);
+        shash_add(remotes, node->name, options);
+    }
+}
+
 /* Clears and replaces 'remotes' and 'dbnames' by a configuration read from
  * 'config_file', which must have been previously written by save_config(). */
 static void
-load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames,
-            char **sync_from, char **sync_exclude, bool *is_backup)
+load_config(FILE *config_file, struct shash *remotes,
+            struct sset *db_filenames, char **sync_from,
+            char **sync_exclude, bool *is_backup)
 {
     struct json *json;
 
@@ -2293,7 +2348,7 @@ load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames,
     }
     ovs_assert(json->type == JSON_OBJECT);
 
-    sset_from_json(remotes, shash_find_data(json_object(json), "remotes"));
+    remotes_from_json(remotes, shash_find_data(json_object(json), "remotes"));
     sset_from_json(db_filenames,
                    shash_find_data(json_object(json), "db_filenames"));
 
