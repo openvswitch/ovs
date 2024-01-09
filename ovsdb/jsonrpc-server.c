@@ -211,11 +211,12 @@ struct ovsdb_jsonrpc_options *
 ovsdb_jsonrpc_default_options(const char *target)
 {
     struct ovsdb_jsonrpc_options *options = xzalloc(sizeof *options);
-    options->max_backoff = RECONNECT_DEFAULT_MAX_BACKOFF;
-    options->probe_interval = (stream_or_pstream_needs_probes(target)
-                               ? RECONNECT_DEFAULT_PROBE_INTERVAL
-                               : 0);
-    options->dscp = DSCP_DEFAULT;
+    struct jsonrpc_session_options *rpc_opt = &options->rpc;
+
+    rpc_opt->max_backoff = RECONNECT_DEFAULT_MAX_BACKOFF;
+    rpc_opt->probe_interval = (stream_or_pstream_needs_probes(target)
+                               ? RECONNECT_DEFAULT_PROBE_INTERVAL : 0);
+    rpc_opt->dscp = DSCP_DEFAULT;
     return options;
 }
 
@@ -246,10 +247,10 @@ ovsdb_jsonrpc_options_to_json(const struct ovsdb_jsonrpc_options *options,
     struct json *json = json_object_create();
 
     json_object_put(json, "max-backoff",
-                    json_integer_create(options->max_backoff));
+                    json_integer_create(options->rpc.max_backoff));
     json_object_put(json, "inactivity-probe",
-                    json_integer_create(options->probe_interval));
-    json_object_put(json, "dscp", json_integer_create(options->dscp));
+                    json_integer_create(options->rpc.probe_interval));
+    json_object_put(json, "dscp", json_integer_create(options->rpc.dscp));
 
     if (jsonrpc_session_only) {
         /* Caller is not interested in OVSDB-specific options. */
@@ -279,18 +280,18 @@ ovsdb_jsonrpc_options_update_from_json(struct ovsdb_jsonrpc_options *options,
     max_backoff = ovsdb_parser_member(&parser, "max-backoff",
                                       OP_INTEGER | OP_OPTIONAL);
     if (max_backoff) {
-        options->max_backoff = json_integer(max_backoff);
+        options->rpc.max_backoff = json_integer(max_backoff);
     }
 
     probe_interval = ovsdb_parser_member(&parser, "inactivity-probe",
                                          OP_INTEGER | OP_OPTIONAL);
     if (probe_interval) {
-        options->probe_interval = json_integer(probe_interval);
+        options->rpc.probe_interval = json_integer(probe_interval);
     }
 
     dscp = ovsdb_parser_member(&parser, "dscp", OP_INTEGER | OP_OPTIONAL);
     if (dscp) {
-        options->dscp = json_integer(dscp);
+        options->rpc.dscp = json_integer(dscp);
     }
 
     if (jsonrpc_session_only) {
@@ -339,7 +340,7 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
         if (!options) {
             VLOG_INFO("%s: remote deconfigured", node->name);
             ovsdb_jsonrpc_server_del_remote(node);
-        } else if (options->dscp != remote->dscp
+        } else if (options->rpc.dscp != remote->dscp
                    || !nullable_string_is_equal(options->role, remote->role)) {
             ovsdb_jsonrpc_server_del_remote(node);
          }
@@ -369,7 +370,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     struct pstream *listener;
     int error;
 
-    error = jsonrpc_pstream_open(name, &listener, options->dscp);
+    error = jsonrpc_pstream_open(name, &listener, options->rpc.dscp);
     switch (error) {
     case 0:
     case EAFNOSUPPORT:
@@ -377,7 +378,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
         remote->server = svr;
         remote->listener = listener;
         ovs_list_init(&remote->sessions);
-        remote->dscp = options->dscp;
+        remote->dscp = options->rpc.dscp;
         remote->read_only = options->read_only;
         remote->role = nullable_xstrdup(options->role);
         shash_add(&svr->remotes, name, remote);
@@ -688,15 +689,6 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
 }
 
 static void
-ovsdb_jsonrpc_session_set_options(struct ovsdb_jsonrpc_session *session,
-                                  const struct ovsdb_jsonrpc_options *options)
-{
-    jsonrpc_session_set_max_backoff(session->js, options->max_backoff);
-    jsonrpc_session_set_probe_interval(session->js, options->probe_interval);
-    jsonrpc_session_set_dscp(session->js, options->dscp);
-}
-
-static void
 ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *remote)
 {
     struct ovsdb_jsonrpc_session *s;
@@ -814,7 +806,7 @@ ovsdb_jsonrpc_session_set_all_options(
     struct ovsdb_jsonrpc_session *s;
 
     LIST_FOR_EACH (s, node, &remote->sessions) {
-        ovsdb_jsonrpc_session_set_options(s, options);
+        jsonrpc_session_set_options(s->js, &options->rpc);
     }
 }
 

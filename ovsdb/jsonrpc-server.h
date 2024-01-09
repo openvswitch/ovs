@@ -18,6 +18,7 @@
 
 #include <stdbool.h>
 #include "openvswitch/types.h"
+#include "jsonrpc.h"
 
 struct ovsdb;
 struct shash;
@@ -33,10 +34,8 @@ void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
 
 /* Options for a remote. */
 struct ovsdb_jsonrpc_options {
-    int max_backoff;            /* Maximum reconnection backoff, in msec. */
-    int probe_interval;         /* Max idle time before probing, in msec. */
+    struct jsonrpc_session_options rpc; /* JSON-RPC options. */
     bool read_only;             /* Only read-only transactions are allowed. */
-    int dscp;                   /* Dscp value for manager connections */
     char *role;                 /* Role, for role-based access controls */
 };
 struct ovsdb_jsonrpc_options *ovsdb_jsonrpc_default_options(

@@ -461,9 +461,9 @@ get_jsonrpc_options(const char *target, enum service_model model)
 
     options = ovsdb_jsonrpc_default_options(target);
     if (model == SM_ACTIVE_BACKUP) {
-        options->probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
+        options->rpc.probe_interval = REPLICATION_DEFAULT_PROBE_INTERVAL;
     } else if (model == SM_RELAY) {
-        options->probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
+        options->rpc.probe_interval = RELAY_SOURCE_DEFAULT_PROBE_INTERVAL;
     }
 
     return options;
@@ -1016,14 +1016,14 @@ open_db(struct server_config *server_config,
 
     if (model == SM_RELAY) {
         ovsdb_relay_add_db(db->db, conf->source, update_schema, server_config,
-                           conf->options->probe_interval);
+                           conf->options->rpc.probe_interval);
     }
     if (model == SM_ACTIVE_BACKUP && conf->ab.backup) {
         const struct uuid *server_uuid;
 
         server_uuid = ovsdb_jsonrpc_server_get_uuid(server_config->jsonrpc);
         replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                           server_uuid, conf->options->probe_interval);
+                           server_uuid, conf->options->rpc.probe_interval);
     }
     return NULL;
 }
@@ -1240,11 +1240,11 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
 
     options = add_remote(remotes, target, NULL);
     if (ovsdb_util_read_integer_column(row, "max_backoff", &max_backoff)) {
-        options->max_backoff = max_backoff;
+        options->rpc.max_backoff = max_backoff;
     }
     if (ovsdb_util_read_integer_column(row, "inactivity_probe",
                                        &probe_interval)) {
-        options->probe_interval = probe_interval;
+        options->rpc.probe_interval = probe_interval;
     }
     if (ovsdb_util_read_bool_column(row, "read_only", &read_only)) {
         options->read_only = read_only;
@@ -1256,13 +1256,13 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
         options->role = xstrdup(role);
     }
 
-    options->dscp = DSCP_DEFAULT;
+    options->rpc.dscp = DSCP_DEFAULT;
     dscp_string = ovsdb_util_read_map_string_column(row, "other_config",
                                                     "dscp");
     if (dscp_string) {
         int dscp = atoi(dscp_string);
         if (dscp >= 0 && dscp <= 63) {
-            options->dscp = dscp;
+            options->rpc.dscp = dscp;
         }
     }
 }
@@ -1725,7 +1725,7 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
                 conf->model = SM_ACTIVE_BACKUP;
                 conf->source = xstrdup(*config->sync_from);
                 conf->options = ovsdb_jsonrpc_default_options(conf->source);
-                conf->options->probe_interval =
+                conf->options->rpc.probe_interval =
                     *config->replication_probe_interval;
                 conf->ab.sync_exclude =
                     nullable_xstrdup(*config->sync_exclude);
@@ -1734,7 +1734,8 @@ ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
 
             if (conf->model == SM_ACTIVE_BACKUP && !conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid, conf->options->probe_interval);
+                                   server_uuid,
+                                   conf->options->rpc.probe_interval);
                 conf->ab.backup = true;
             }
         }
@@ -1800,10 +1801,11 @@ ovsdb_server_set_active_ovsdb_server_probe_interval(struct unixctl_conn *conn,
         struct db_config *conf = db->config;
 
         if (conf->model == SM_ACTIVE_BACKUP) {
-            conf->options->probe_interval = probe_interval;
+            conf->options->rpc.probe_interval = probe_interval;
             if (conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid, conf->options->probe_interval);
+                                   server_uuid,
+                                   conf->options->rpc.probe_interval);
             }
         }
     }
@@ -1839,7 +1841,7 @@ ovsdb_server_set_relay_source_interval(struct unixctl_conn *conn,
         struct db_config *conf = db->config;
 
         if (conf->model == SM_RELAY) {
-            conf->options->probe_interval = probe_interval;
+            conf->options->rpc.probe_interval = probe_interval;
         }
     }
 
@@ -1882,7 +1884,8 @@ ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
             conf->ab.sync_exclude = xstrdup(argv[1]);
             if (conf->ab.backup) {
                 replication_set_db(db->db, conf->source, conf->ab.sync_exclude,
-                                   server_uuid, conf->options->probe_interval);
+                                   server_uuid,
+                                   conf->options->rpc.probe_interval);
             }
         }
     }
