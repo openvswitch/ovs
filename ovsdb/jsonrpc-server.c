@@ -339,7 +339,8 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
         if (!options) {
             VLOG_INFO("%s: remote deconfigured", node->name);
             ovsdb_jsonrpc_server_del_remote(node);
-        } else if (options->dscp != remote->dscp) {
+        } else if (options->dscp != remote->dscp
+                   || !nullable_string_is_equal(options->role, remote->role)) {
             ovsdb_jsonrpc_server_del_remote(node);
          }
     }
