@@ -1148,7 +1148,8 @@ ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     /* Insert into trigger table. */
     t = xmalloc(sizeof *t);
     bool disconnect_all = ovsdb_trigger_init(
-        &s->up, db, &t->trigger, request, time_msec(), s->read_only,
+        &s->up, db, &t->trigger, request, time_msec(),
+        s->read_only || db->read_only,
         s->remote->role, jsonrpc_session_get_id(s->js));
     t->id = json_clone(request->id);
     hmap_insert(&s->triggers, &t->hmap_node, hash);

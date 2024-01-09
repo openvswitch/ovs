@@ -464,6 +464,8 @@ ovsdb_create(struct ovsdb_schema *schema, struct ovsdb_storage *storage)
 
     db->n_atoms = 0;
 
+    db->read_only = false;
+
     db->is_relay = false;
     ovs_list_init(&db->txn_forward_new);
     hmap_init(&db->txn_forward_sent);

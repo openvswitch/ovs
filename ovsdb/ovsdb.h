@@ -114,6 +114,9 @@ struct ovsdb {
 
     size_t n_atoms;  /* Total number of ovsdb atoms in the database. */
 
+    bool read_only;  /* If 'true', JSON-RPC clients are not allowed to change
+                      * the data. */
+
     /* Relay mode. */
     bool is_relay;  /* True, if database is in relay mode. */
     /* List that holds transactions waiting to be forwarded to the server. */

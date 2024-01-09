@@ -831,8 +831,11 @@ add_server_db(struct server_config *config)
 
     db->filename = xstrdup("<internal>");
     db->db = ovsdb_create(schema, ovsdb_storage_create_unbacked(NULL));
+    db->db->read_only = true;
+
     bool ok OVS_UNUSED = ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db);
     ovs_assert(ok);
+
     add_db(config, db);
 }
 
