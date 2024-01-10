@@ -194,16 +194,6 @@ else
     DIFF_SUPPORTS_NORMAL_FORMAT=no
 fi
 
-# Check whether UB Sanitizer is being used.
-case "$CFLAGS" in
-*fsanitize=undefined*)
-    TESTS_WITH_UBSAN=yes
-    ;;
-*)
-    TESTS_WITH_UBSAN=no
-    ;;
-esac
-
 # Turn off proxies.
 unset http_proxy
 unset https_proxy

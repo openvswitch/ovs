@@ -78,12 +78,9 @@ AT_CLEANUP
 AT_SETUP([daemon --monitor])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 # Start the daemon and wait for the pidfile to get created.
 on_exit 'kill $(cat *.pid)'
@@ -150,12 +147,9 @@ AT_CLEANUP
 AT_SETUP([daemon --detach --monitor])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 on_exit 'kill $(cat *.pid)'
 
@@ -239,12 +233,9 @@ AT_SETUP([backtrace without monitor])
 AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --no-db \
                        --log-file --verbose=DBG], [0], [ignore], [ignore])
@@ -263,12 +254,9 @@ AT_SETUP([backtrace with monitor])
 AT_SKIP_IF([test "$HAVE_BACKTRACE" = "no" && test "$HAVE_UNWIND" = "no"])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 on_exit 'kill $(cat *.pid)'
 

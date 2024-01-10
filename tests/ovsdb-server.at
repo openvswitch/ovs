@@ -476,12 +476,9 @@ AT_SETUP([ovsdb-server/add-db with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 # Start ovsdb-server, initially with one db.
 ordinal_schema > schema
@@ -518,12 +515,9 @@ AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 # Start ovsdb-server, initially with one db.
 ordinal_schema > schema
@@ -752,12 +746,9 @@ AT_SETUP([ovsdb-server/add-remote with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
@@ -794,12 +785,9 @@ AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
 AT_KEYWORDS([ovsdb server positive])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
-# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+# This test intentionally causes SIGSEGV, so make sanitizers ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
-
-# Skip it if UB Sanitizer is being used.  There's no way to disable the
-# SEGV check at runtime.
-AT_SKIP_IF([test $TESTS_WITH_UBSAN = yes])
+UBSAN_OPTIONS=$UBSAN_OPTIONS:handle_segv=0; export UBSAN_OPTIONS
 
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
