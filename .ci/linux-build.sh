@@ -51,6 +51,31 @@ function build_ovs()
     make ${JOBS}
 }
 
+function clang_analyze()
+{
+    [ -d "./base-clang-analyzer-results" ] && cache_build=false \
+                                           || cache_build=true
+    if [ "$cache_build" = true ]; then
+        # If this is a cache build, proceed to the base branch's directory.
+        pushd base_ovs_main
+    fi;
+
+    configure_ovs $OPTS
+
+    make clean
+    scan-build -o ./clang-analyzer-results -sarif --use-cc=${CC} make ${JOBS}
+
+    if [ "$cache_build" = true ]; then
+        # Move results, so it will be picked up by the cache.
+        mv ./clang-analyzer-results ../base-clang-analyzer-results
+        popd
+    else
+        # Only do the compare on the none cache builds.
+        sarif --check note diff ./base-clang-analyzer-results \
+                                ./clang-analyzer-results
+    fi;
+}
+
 if [ "$DEB_PACKAGE" ]; then
     ./boot.sh && ./configure --with-dpdk=$DPDK && make debian
     mk-build-deps --install --root-cmd sudo --remove debian/control
@@ -117,6 +142,11 @@ if [ "$UBSAN" ]; then
 fi
 
 OPTS="${EXTRA_OPTS} ${OPTS} $*"
+
+if [ "$CLANG_ANALYZE" ]; then
+    clang_analyze
+    exit 0
+fi
 
 if [ "$TESTSUITE" = 'test' ]; then
     # 'distcheck' will reconfigure with required options.

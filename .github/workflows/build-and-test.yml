@@ -254,6 +254,119 @@ jobs:
         name: logs-linux-${{ join(matrix.*, '-') }}
         path: logs.tgz
 
+  build-clang-analyze:
+    needs: build-dpdk
+    env:
+      dependencies: |
+        automake bc clang-tools libbpf-dev libnuma-dev libpcap-dev \
+        libunbound-dev libunwind-dev libssl-dev libtool llvm-dev
+      CC:   clang
+      DPDK: dpdk
+      CLANG_ANALYZE: true
+    name: clang-analyze
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: get base branch sha
+      id: base_branch
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        EVENT_BEFORE: ${{ github.event.before }}
+        FORCED_PUSH: ${{ github.event.forced }}
+      run: |
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
+        else
+          if [ "$EVENT_BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || [ "$FORCED_PUSH" = true ]; then
+            BASE_SHA=HEAD~1
+            MIN_DISTANCE=1000
+            git remote add upstream https://github.com/openvswitch/ovs.git
+            git fetch upstream
+            for upstream_head in $(git ls-remote --heads upstream main master dpdk-latest branch-2.17 branch-[3456789]* | cut -f 1); do
+              CURR_BASE=$(git merge-base ${upstream_head} HEAD 2>/dev/null)
+              if [ ${CURR_BASE} ]; then
+                DISTANCE=$(git log --oneline ${CURR_BASE}..HEAD | wc -l);
+                if test ${MIN_DISTANCE} -gt ${DISTANCE}; then
+                  BASE_SHA=${CURR_BASE}
+                  MIN_DISTANCE=${DISTANCE}
+                fi
+              fi
+            done
+            echo "sha=$BASE_SHA" >> $GITHUB_OUTPUT
+          else
+            echo "sha=$EVENT_BEFORE" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: checkout base branch
+      env:
+        BASE_SHA: ${{ steps.base_branch.outputs.sha }}
+      run: |
+        cp -r $(pwd)/. /tmp/base_ovs_main && mv /tmp/base_ovs_main ./
+        cd $(pwd)/base_ovs_main
+        git checkout ${BASE_SHA}
+
+    - name: update PATH
+      run: |
+        echo "$HOME/bin"        >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: generate cache key
+      id: cache_key
+      run: |
+        ver=$(${CC} -v 2>&1 | grep ' version ' | \
+              sed 's/.*version \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/g')
+        echo "key=${CC}-${ver}-analyze-$(git -C base_ovs_main rev-parse HEAD)" \
+          >> $GITHUB_OUTPUT
+
+    - name: check for analyzer result cache
+      id: clang_cache
+      uses: actions/cache@v3
+      with:
+        path: base-clang-analyzer-results
+        key:  ${{ steps.cache_key.outputs.key }}
+
+    - name: set up python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: get cached dpdk-dir
+      uses: actions/cache/restore@v3
+      with:
+        path: dpdk-dir
+        key:  ${{ needs.build-dpdk.outputs.dpdk_key }}
+
+    - name: update APT cache
+      run:  sudo apt update || true
+
+    - name: install common dependencies
+      run:  sudo apt install -y ${{ env.dependencies }}
+
+    - name: prepare
+      run:  ./.ci/linux-prepare.sh
+
+    - name: build base reference
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      run:  ./.ci/linux-build.sh
+
+    - name: save cache
+      uses: actions/cache/save@v3
+      if: steps.clang_cache.outputs.cache-hit != 'true'
+      with:
+        path: base-clang-analyzer-results
+        key:  ${{ steps.cache_key.outputs.key }}
+
+    - name: build
+      run:  ./.ci/linux-build.sh
+
   build-osx:
     env:
       CC:    clang
