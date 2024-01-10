@@ -343,15 +343,20 @@ To see a list of all the available tests, run::
 
 These tests support a `DPDK supported NIC`_. The tests operate on a wider set of
 environments, for instance, when a virtual port is used.
-They do require proper DPDK variables (``DPDK_DIR`` and ``DPDK_BUILD``).
 Moreover you need to have root privileges to load the required modules and to bind
-the NIC to the DPDK-compatible driver.
+a PCI device to the DPDK-compatible driver.
 
 .. _DPDK supported NIC: https://core.dpdk.org/supported/#nics
 
+The phy test will skip if no suitable PCI device is found.
+It is possible to select which PCI device is used for this test by setting the
+DPDK_PCI_ADDR environment variable, which is especially useful when testing
+with a mlx5 device::
+
+    # DPDK_PCI_ADDR=0000:82:00.0 make check-dpdk
+
 All tests are skipped if no hugepages are configured. User must look into the DPDK
 manual to figure out how to `Configure hugepages`_.
-The phy test will skip if no compatible physical device is available.
 
 .. _Configure hugepages: https://doc.dpdk.org/guides-22.11/linux_gsg/sys_reqs.html
 

@@ -63,7 +63,7 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
@@ -240,7 +240,7 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set interface phy0 ingress_policing_rate=10000 ingress_policing_burst=1000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
@@ -380,7 +380,7 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and add egress policer
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 OVS_WAIT_UNTIL([ovs-vsctl set port phy0 qos=@newqos -- --id=@newqos create qos type=egress-policer other-config:cir=1250000 other-config:cbs=2048])
 AT_CHECK([ovs-appctl -t ovs-vswitchd qos/show phy0], [], [stdout])
 sleep 2
@@ -509,7 +509,7 @@ dnl First set MTU to its default value and confirm that value, then increase the
 
 dnl Add userspace bridge and attach it to OVS with default MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
 dnl Check default MTU value in the datapath
@@ -546,7 +546,7 @@ dnl First set an increased MTU value and confirm that value, then decrease the M
 
 dnl Add userspace bridge and attach it to OVS and modify MTU value
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9000])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
@@ -665,7 +665,7 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to max upper bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=9702])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 
@@ -703,7 +703,7 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS and set MTU value to min lower bound
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat DPDK_PCI_ADDR)], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl set Interface phy0 mtu_request=68])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 

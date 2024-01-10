@@ -520,6 +520,7 @@ CHECK_PYFILES = \
 	tests/flowgen.py \
 	tests/genpkts.py \
 	tests/ovsdb-monitor-sort.py \
+	tests/system-dpdk-find-device.py \
 	tests/test-daemon.py \
 	tests/test-dpparse.py \
 	tests/test-json.py \
