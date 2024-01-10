@@ -172,6 +172,15 @@ jobs:
             testsuite:    check-kernel
             test_range:   "100-"
 
+          - compiler:     clang
+            sanitizers:   address,undefined
+            testsuite:    check-kernel
+            test_range:   "-100"
+          - compiler:     clang
+            sanitizers:   address,undefined
+            testsuite:    check-kernel
+            test_range:   "100-"
+
           - compiler:     gcc
             testsuite:    check-offloads
             test_range:   "-100"
@@ -180,6 +189,11 @@ jobs:
             test_range:   "100-"
 
           - compiler:     gcc
+            dpdk:         dpdk
+            testsuite:    check-system-userspace
+
+          - compiler:     clang
+            sanitizers:   address,undefined
             dpdk:         dpdk
             testsuite:    check-system-userspace
 
