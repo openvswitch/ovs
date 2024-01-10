@@ -78,14 +78,13 @@ jobs:
         automake libtool gcc bc libjemalloc2 libjemalloc-dev libssl-dev \
         llvm-dev libnuma-dev libpcap-dev selinux-policy-dev libbpf-dev \
         lftp libreswan
-      ASAN:        ${{ matrix.asan }}
-      UBSAN:       ${{ matrix.ubsan }}
       CC:          ${{ matrix.compiler }}
       DPDK:        ${{ matrix.dpdk }}
       DPDK_SHARED: ${{ matrix.dpdk_shared }}
       LIBS:        ${{ matrix.libs }}
       M32:         ${{ matrix.m32 }}
       OPTS:        ${{ matrix.opts }}
+      SANITIZERS:  ${{ matrix.sanitizers }}
       STD:         ${{ matrix.std }}
       TESTSUITE:   ${{ matrix.testsuite }}
       TEST_RANGE:  ${{ matrix.test_range }}
@@ -111,11 +110,8 @@ jobs:
           - compiler:     gcc
             testsuite:    test
           - compiler:     clang
+            sanitizers:   address,undefined
             testsuite:    test
-            asan:         asan
-          - compiler:     clang
-            testsuite:    test
-            ubsan:        ubsan
 
           - compiler:     gcc
             testsuite:    test

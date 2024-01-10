@@ -211,14 +211,9 @@ m4_divert_pop([PREPARE_TESTS])
 
 OVS_START_SHELL_HELPERS
 ovs_cleanup() {
-    if test "$(echo asan.*)" != 'asan.*'; then
-        echo "Address Sanitizer reported errors in:" asan.*
-        cat asan.*
-        AT_FAIL_IF([:])
-    fi
-    if test "$(echo ubsan.*)" != 'ubsan.*'; then
-        echo "Undefined Behavior Sanitizer reported errors in:" ubsan.*
-        cat ubsan.*
+    if test "$(echo sanitizers.*)" != 'sanitizers.*'; then
+        echo "Undefined Behavior Sanitizer or Address Sanitizer reported errors in:" sanitizers.*
+        cat sanitizers.*
         AT_FAIL_IF([:])
     fi
 }

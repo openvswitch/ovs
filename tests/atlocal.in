@@ -217,12 +217,12 @@ export OVS_CTL_TIMEOUT
 #
 # We disable leak detection because otherwise minor leaks that don't
 # matter break everything.
-ASAN_OPTIONS=detect_leaks=0:abort_on_error=true:log_path=asan:$ASAN_OPTIONS
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=true:log_path=sanitizers:$ASAN_OPTIONS
 export ASAN_OPTIONS
 
 # Add some default flags for UndefinedBehaviorSanitizer, if it was used
 # for the build.
-UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=true:log_path=ubsan:$UBSAN_OPTIONS
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=true:log_path=sanitizers:$UBSAN_OPTIONS
 export UBSAN_OPTIONS
 
 # Check whether Python test requirements are available.
