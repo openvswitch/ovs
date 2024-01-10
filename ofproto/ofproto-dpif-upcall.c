@@ -59,8 +59,11 @@ COVERAGE_DEFINE(handler_duplicate_upcall);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
 COVERAGE_DEFINE(ukey_dp_change);
 COVERAGE_DEFINE(ukey_invalid_stat_reset);
+COVERAGE_DEFINE(upcall_flow_limit_grew);
 COVERAGE_DEFINE(upcall_flow_limit_hit);
 COVERAGE_DEFINE(upcall_flow_limit_kill);
+COVERAGE_DEFINE(upcall_flow_limit_reduced);
+COVERAGE_DEFINE(upcall_flow_limit_scaled);
 COVERAGE_DEFINE(upcall_ukey_contention);
 COVERAGE_DEFINE(upcall_ukey_replace);
 
@@ -1039,11 +1042,14 @@ udpif_revalidator(void *arg)
             udpif->dump_duration = duration;
             if (duration > 2000) {
                 flow_limit /= duration / 1000;
+                COVERAGE_INC(upcall_flow_limit_scaled);
             } else if (duration > 1300) {
                 flow_limit = flow_limit * 3 / 4;
+                COVERAGE_INC(upcall_flow_limit_reduced);
             } else if (duration < 1000 &&
                        flow_limit < n_flows * 1000 / duration) {
                 flow_limit += 1000;
+                COVERAGE_INC(upcall_flow_limit_grew);
             }
             flow_limit = MIN(ofproto_flow_limit, MAX(flow_limit, 1000));
             atomic_store_relaxed(&udpif->flow_limit, flow_limit);
