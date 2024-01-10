@@ -1049,7 +1049,7 @@ udpif_revalidator(void *arg)
             atomic_store_relaxed(&udpif->flow_limit, flow_limit);
 
             if (duration > 2000) {
-                VLOG_INFO("Spent an unreasonably long %lldms dumping flows",
+                VLOG_WARN("Spent an unreasonably long %lldms dumping flows",
                           duration);
             }
 
