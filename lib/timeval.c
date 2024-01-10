@@ -41,6 +41,8 @@
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
+COVERAGE_DEFINE(long_poll_interval);
+
 #if !defined(HAVE_CLOCK_GETTIME)
 typedef unsigned int clockid_t;
 static int clock_gettime(clock_t id, struct timespec *ts);
@@ -643,6 +645,8 @@ log_poll_interval(long long int last_wakeup)
     if (interval >= 1000 && !is_warped(&monotonic_clock)) {
         const struct rusage *last_rusage = get_recent_rusage();
         struct rusage rusage;
+
+        COVERAGE_INC(long_poll_interval);
 
         if (!getrusage_thread(&rusage)) {
             VLOG_WARN("Unreasonably long %lldms poll interval"
