@@ -5,25 +5,27 @@ set -x
 
 function build_dpdk()
 {
-    local VERSION_FILE="dpdk-dir/cached-version"
     local DPDK_VER=$1
     local DPDK_OPTS=""
+    local DPDK_INSTALL_DIR="$(pwd)/dpdk-dir"
+    local VERSION_FILE="$DPDK_INSTALL_DIR/cached-version"
 
-    rm -rf dpdk-dir
+    rm -rf dpdk-src
+    rm -rf $DPDK_INSTALL_DIR
 
     if [ "${DPDK_VER##refs/*/}" != "${DPDK_VER}" ]; then
-        git clone --single-branch $DPDK_GIT dpdk-dir -b "${DPDK_VER##refs/*/}"
-        pushd dpdk-dir
+        git clone --single-branch $DPDK_GIT dpdk-src -b "${DPDK_VER##refs/*/}"
+        pushd dpdk-src
         git log -1 --oneline
     else
         wget https://fast.dpdk.org/rel/dpdk-$1.tar.xz
         tar xvf dpdk-$1.tar.xz > /dev/null
         DIR_NAME=$(tar -tf dpdk-$1.tar.xz | head -1 | cut -f1 -d"/")
-        mv ${DIR_NAME} dpdk-dir
-        pushd dpdk-dir
+        mv ${DIR_NAME} dpdk-src
+        pushd dpdk-src
     fi
 
-    # Switching to 'default' machine to make dpdk-dir cache usable on
+    # Switching to 'default' machine to make the dpdk cache usable on
     # different CPUs. We can't be sure that all CI machines are exactly same.
     DPDK_OPTS="$DPDK_OPTS -Dmachine=default"
 
@@ -40,16 +42,22 @@ function build_dpdk()
     DPDK_OPTS="$DPDK_OPTS -Denable_apps=test-pmd"
     enable_drivers="net/null,net/af_xdp,net/tap,net/virtio,net/pcap"
     DPDK_OPTS="$DPDK_OPTS -Denable_drivers=$enable_drivers"
+    # OVS depends on the vhost library (and its dependencies).
+    # net/tap depends on the gso library.
+    DPDK_OPTS="$DPDK_OPTS -Denable_libs=cryptodev,dmadev,gso,vhost"
 
     # Install DPDK using prefix.
-    DPDK_OPTS="$DPDK_OPTS --prefix=$(pwd)/build"
+    DPDK_OPTS="$DPDK_OPTS --prefix=$DPDK_INSTALL_DIR"
 
     meson $DPDK_OPTS build
     ninja -C build
     ninja -C build install
-
-    echo "Installed DPDK in $(pwd)"
     popd
+
+    # Remove examples sources.
+    rm -rf $DPDK_INSTALL_DIR/share/dpdk/examples
+
+    echo "Installed DPDK in $DPDK_INSTALL_DIR"
     echo "${DPDK_VER}" > ${VERSION_FILE}
 }
 

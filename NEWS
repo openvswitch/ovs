@@ -43,6 +43,15 @@ Post-v3.2.0
      * The userspace conntrack module no longer requires the user to specify
        connection helpers in all flow rules. Instead, the helper specified
        during connection commit will be used by default.
+   - DPDK:
+     * Add support for DPDK 23.11.
+
+Known issues:
+   - DPDK: v23.11 has a change in behavior in handling i40e VF devices. This
+     may block and prevent OVS from adding such devices as ports in a netdev
+     datapath bridge.
+     For the details, see https://bugs.dpdk.org/show_bug.cgi?id=1337 which
+     describes the issue first detected in the 21.11 LTS branch.
 
 
 v3.2.0 - 17 Aug 2023

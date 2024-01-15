@@ -10,8 +10,9 @@ JOBS=${JOBS:-"-j4"}
 
 function install_dpdk()
 {
-    local VERSION_FILE="dpdk-dir/cached-version"
-    local DPDK_LIB=$(pwd)/dpdk-dir/build/lib/x86_64-linux-gnu
+    local DPDK_INSTALL_DIR="$(pwd)/dpdk-dir"
+    local VERSION_FILE="${DPDK_INSTALL_DIR}/cached-version"
+    local DPDK_LIB=${DPDK_INSTALL_DIR}/lib/x86_64-linux-gnu
 
     if [ "$DPDK_SHARED" ]; then
         EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=shared"
@@ -27,13 +28,13 @@ function install_dpdk()
     export PATH=$(pwd)/dpdk-dir/build/bin:$PATH
 
     if [ ! -f "${VERSION_FILE}" ]; then
-        echo "Could not find DPDK in $(pwd)/dpdk-dir"
+        echo "Could not find DPDK in $DPDK_INSTALL_DIR"
         return 1
     fi
 
     # Update the library paths.
     sudo ldconfig
-    echo "Found cached DPDK $(cat ${VERSION_FILE}) build in $(pwd)/dpdk-dir"
+    echo "Found cached DPDK $(cat ${VERSION_FILE}) build in $DPDK_INSTALL_DIR"
 }
 
 function configure_ovs()

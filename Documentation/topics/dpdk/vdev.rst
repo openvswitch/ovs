@@ -63,4 +63,4 @@ run::
 More information on the different types of virtual DPDK PMDs can be found in
 the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-22.11/nics/overview.html
+__ https://doc.dpdk.org/guides-23.11/nics/overview.html

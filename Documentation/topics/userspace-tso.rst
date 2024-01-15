@@ -46,7 +46,7 @@ datasheet for compatibility. Secondly, the NIC must have an associated DPDK
 Poll Mode Driver (PMD) which supports `TSO`. For a list of features per PMD,
 refer to the `DPDK documentation`__.
 
-__ https://doc.dpdk.org/guides-22.11/nics/overview.html
+__ https://doc.dpdk.org/guides-23.11/nics/overview.html
 
 Enabling TSO
 ~~~~~~~~~~~~

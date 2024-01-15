@@ -4,6 +4,7 @@ noinst_HEADERS += \
         include/sparse/arpa/inet.h \
         include/sparse/bits/floatn.h \
         include/sparse/assert.h \
+        include/sparse/ia32intrin.h \
         include/sparse/math.h \
         include/sparse/numa.h \
         include/sparse/netinet/in.h \

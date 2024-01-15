@@ -80,6 +80,7 @@ $1";/does not exist. The Open vSwitch kernel module is probably not loaded./d
 /does not support MTU configuration,/d
 /EAL: No \(available\|free\) .*hugepages reported/d
 /Failed to enable flow control/d
+/ice_vsi_config_outer_vlan_stripping(): Single VLAN mode (SVM) does not support qinq/d
 /Rx checksum offload is not supported on/d
 /TELEMETRY: No legacy callbacks, legacy socket not created/d"])
 ])
