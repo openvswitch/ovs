@@ -735,14 +735,15 @@ dump_flow_action(struct ds *s, struct ds *s_extra,
         ds_put_cstr(s, "rss / ");
     } else if (actions->type == RTE_FLOW_ACTION_TYPE_COUNT) {
         ds_put_cstr(s, "count / ");
-    } else if (actions->type == RTE_FLOW_ACTION_TYPE_PORT_ID) {
-        const struct rte_flow_action_port_id *port_id = actions->conf;
+    } else if (actions->type == RTE_FLOW_ACTION_TYPE_REPRESENTED_PORT) {
+        const struct rte_flow_action_ethdev *ethdev = actions->conf;
 
-        ds_put_cstr(s, "port_id ");
-        if (port_id) {
-            ds_put_format(s, "original %d id %d ",
-                          port_id->original, port_id->id);
+        ds_put_cstr(s, "represented_port ");
+
+        if (ethdev) {
+            ds_put_format(s, "ethdev_port_id %d ", ethdev->port_id);
         }
+
         ds_put_cstr(s, "/ ");
     } else if (actions->type == RTE_FLOW_ACTION_TYPE_DROP) {
         ds_put_cstr(s, "drop / ");
@@ -1776,19 +1777,22 @@ add_count_action(struct flow_actions *actions)
 }
 
 static int
-add_port_id_action(struct flow_actions *actions,
-                   struct netdev *outdev)
+add_represented_port_action(struct flow_actions *actions,
+                            struct netdev *outdev)
 {
-    struct rte_flow_action_port_id *port_id;
+    struct rte_flow_action_ethdev *ethdev;
     int outdev_id;
 
     outdev_id = netdev_dpdk_get_port_id(outdev);
     if (outdev_id < 0) {
         return -1;
     }
-    port_id = xzalloc(sizeof *port_id);
-    port_id->id = outdev_id;
-    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_PORT_ID, port_id);
+
+    ethdev = xzalloc(sizeof *ethdev);
+    ethdev->port_id = outdev_id;
+
+    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_REPRESENTED_PORT, ethdev);
+
     return 0;
 }
 
@@ -1808,7 +1812,7 @@ add_output_action(struct netdev *netdev,
         return -1;
     }
     if (!netdev_flow_api_equals(netdev, outdev) ||
-        add_port_id_action(actions, outdev)) {
+        add_represented_port_action(actions, outdev)) {
         VLOG_DBG_RL(&rl, "%s: Output to port \'%s\' cannot be offloaded.",
                     netdev_get_name(netdev), netdev_get_name(outdev));
         ret = -1;
