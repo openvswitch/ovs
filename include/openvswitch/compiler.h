@@ -37,6 +37,12 @@
 #define OVS_NO_RETURN
 #endif
 
+#if __GNUC__ && !__CHECKER__
+#define OVS_RETURNS_NONNULL __attribute__((returns_nonnull))
+#else
+#define OVS_RETURNS_NONNULL
+#endif
+
 #ifndef typeof
 #define typeof __typeof__
 #endif
