@@ -254,6 +254,9 @@ check_logs () {
     # we ignore the messages that were rate-limited, we can end up failing just
     # because of the announcement that rate-limiting happened (and in a racy,
     # timing-dependent way, too).
+    #
+    # We also ignore the "Spent an unreasonably long XXms dumping flows" as
+    # they can appear when large time/warps are used during tests.
     sed -n "$1
 /reset by peer/d
 /Broken pipe/d
@@ -266,6 +269,7 @@ check_logs () {
 /Dropped [[0-9]]* log messages/d
 /setting extended ack support failed/d
 /ETHTOOL_GSSET_INFO/d
+/Spent an unreasonably long .*ms dumping flows/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" ${logs}
