@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include "cooperative-multitasking.h"
 #include "hash.h"
 #include "jsonrpc.h"
 #include "lockfile.h"
@@ -993,10 +994,13 @@ raft_reset_election_timer(struct raft *raft)
     raft->election_timeout = raft->election_base + duration;
 }
 
+#define RAFT_TIMER_THRESHOLD(t) (t / 3)
+
 static void
 raft_reset_ping_timer(struct raft *raft)
 {
-    raft->ping_timeout = time_msec() + raft->election_timer / 3;
+    raft->ping_timeout =
+        time_msec() + RAFT_TIMER_THRESHOLD(raft->election_timer);
 }
 
 static void
@@ -1371,6 +1375,8 @@ raft_take_leadership(struct raft *raft)
     }
 }
 
+static void raft_run_cb(void *arg);
+
 /* Closes everything owned by 'raft' that might be visible outside the process:
  * network connections, commands, etc.  This is part of closing 'raft'; it is
  * also used if 'raft' has failed in an unrecoverable way. */
@@ -1397,6 +1403,8 @@ raft_close__(struct raft *raft)
     LIST_FOR_EACH_SAFE (conn, list_node, &raft->conns) {
         raft_conn_close(conn);
     }
+
+    cooperative_multitasking_remove(&raft_run_cb, raft);
 }
 
 /* Closes and frees 'raft'.
@@ -2114,12 +2122,25 @@ raft_run(struct raft *raft)
         raft_reset_ping_timer(raft);
     }
 
+    cooperative_multitasking_set(
+        &raft_run_cb, (void *) raft, time_msec(),
+        RAFT_TIMER_THRESHOLD(raft->election_timer)
+        + RAFT_TIMER_THRESHOLD(raft->election_timer) / 10, "raft_run");
+
     /* Do this only at the end; if we did it as soon as we set raft->left or
      * raft->failed in handling the RemoveServerReply, then it could easily
      * cause references to freed memory in RPC sessions, etc. */
     if (raft->left || raft->failed) {
         raft_close__(raft);
     }
+}
+
+static void
+raft_run_cb(void *arg)
+{
+    struct raft *raft = (struct raft *) arg;
+
+    raft_run(raft);
 }
 
 static void
