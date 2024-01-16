@@ -767,17 +767,22 @@ get_cpu_usage(void)
 
 /* "time/stop" stops the monotonic time returned by e.g. time_msec() from
  * advancing, except due to later calls to "time/warp". */
-static void
-timeval_stop_cb(struct unixctl_conn *conn,
-                 int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
-                 void *aux OVS_UNUSED)
+void
+timeval_stop(void)
 {
     ovs_mutex_lock(&monotonic_clock.mutex);
     atomic_store_relaxed(&monotonic_clock.slow_path, true);
     monotonic_clock.stopped = true;
     xclock_gettime(monotonic_clock.id, &monotonic_clock.cache);
     ovs_mutex_unlock(&monotonic_clock.mutex);
+}
 
+static void
+timeval_stop_cb(struct unixctl_conn *conn,
+                int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+                void *aux OVS_UNUSED)
+{
+    timeval_stop();
     unixctl_command_reply(conn, NULL);
 }
 
@@ -816,6 +821,21 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ovs_mutex_unlock(&monotonic_clock.mutex);
 
     timewarp_work();
+}
+
+/* Direct monotonic clock into slow path and advance the current monotonic
+ * time by 'msecs' milliseconds directly.  This is for use in unit tests. */
+void
+timeval_warp(long long int msecs)
+{
+    struct clock *c = &monotonic_clock;
+    struct timespec warp;
+
+    ovs_mutex_lock(&monotonic_clock.mutex);
+    atomic_store_relaxed(&monotonic_clock.slow_path, true);
+    msec_to_timespec(msecs, &warp);
+    timespec_add(&c->warp, &c->warp, &warp);
+    ovs_mutex_unlock(&monotonic_clock.mutex);
 }
 
 void
