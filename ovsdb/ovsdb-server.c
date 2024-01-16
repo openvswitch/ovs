@@ -24,6 +24,7 @@
 
 #include "column.h"
 #include "command-line.h"
+#include "cooperative-multitasking.h"
 #include "daemon.h"
 #include "dirs.h"
 #include "dns-resolve.h"
@@ -915,6 +916,7 @@ main(int argc, char *argv[])
     }
     dns_resolve_destroy();
     perf_counters_destroy();
+    cooperative_multitasking_destroy();
     service_stop();
     return 0;
 }

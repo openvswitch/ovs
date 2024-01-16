@@ -20,8 +20,10 @@
 
 #include "bitmap.h"
 #include "column.h"
+#include "cooperative-multitasking.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -262,7 +264,7 @@ ovsdb_monitor_json_cache_flush(struct ovsdb_monitor *dbmon)
     struct ovsdb_monitor_json_cache_node *node;
 
     HMAP_FOR_EACH_POP(node, hmap_node, &dbmon->json_cache) {
-        json_destroy(node->json);
+        json_destroy_with_yield(node->json);
         free(node);
     }
 }
@@ -278,7 +280,7 @@ ovsdb_monitor_json_cache_destroy(struct ovsdb_monitor *dbmon,
             = ovsdb_monitor_json_cache_search(dbmon, v, change_set);
         if (node) {
             hmap_remove(&dbmon->json_cache, &node->hmap_node);
-            json_destroy(node->json);
+            json_destroy_with_yield(node->json);
             free(node);
         }
     }
@@ -1172,6 +1174,8 @@ ovsdb_monitor_compose_update(
         struct ovsdb_monitor_table *mt = mcst->mt;
 
         HMAP_FOR_EACH_SAFE (row, hmap_node, &mcst->rows) {
+            cooperative_multitasking_yield();
+
             struct json *row_json;
             row_json = (*row_update)(mt, condition, OVSDB_MONITOR_ROW, row,
                                      initial, changed, mcst->n_columns);
@@ -1216,6 +1220,8 @@ ovsdb_monitor_compose_cond_change_update(
         /* Iterate over all rows in table */
         HMAP_FOR_EACH (row, hmap_node, &mt->table->rows) {
             struct json *row_json;
+
+            cooperative_multitasking_yield();
 
             row_json = ovsdb_monitor_compose_row_update2(mt, condition,
                                                          OVSDB_ROW, row,
@@ -1286,8 +1292,9 @@ ovsdb_monitor_get_update(
 
                         /* Pre-serializing the object to avoid doing this
                          * for every client. */
-                        json_serialized = json_serialized_object_create(json);
-                        json_destroy(json);
+                        json_serialized =
+                            json_serialized_object_create_with_yield(json);
+                        json_destroy_with_yield(json);
                         json = json_serialized;
                     }
                     ovsdb_monitor_json_cache_insert(dbmon, version, mcs,

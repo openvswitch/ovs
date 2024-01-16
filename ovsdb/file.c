@@ -23,6 +23,7 @@
 
 #include "bitmap.h"
 #include "column.h"
+#include "cooperative-multitasking.h"
 #include "log.h"
 #include "openvswitch/json.h"
 #include "lockfile.h"
@@ -320,6 +321,8 @@ ovsdb_convert_table(struct ovsdb_txn *txn,
     HMAP_FOR_EACH (src_row, hmap_node, &src_table->rows) {
         struct ovsdb_row *dst_row = ovsdb_row_create(dst_table);
         *ovsdb_row_get_uuid_rw(dst_row) = *ovsdb_row_get_uuid(src_row);
+
+        cooperative_multitasking_yield();
 
         SHASH_FOR_EACH (node, &src_table->schema->columns) {
             const struct ovsdb_column *src_column = node->data;

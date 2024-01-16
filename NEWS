@@ -10,6 +10,8 @@ Post-v3.2.0
        remotes and database configuration, including setting options for
        connection methods for relays and active-backup replication.
        For more details see ovsdb-server(1) and ovsdb(7).
+     * Make use of cooperative multitasking to improve maintenance of RAFT
+       cluster during long running processing such as online schema conversion.
    - OpenFlow:
      * NXT_CT_FLUSH extension is updated to support flushing connections
        based on mark and labels.  'ct-flush' command of ovs-ofctl updated
