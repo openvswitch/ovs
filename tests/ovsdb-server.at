@@ -2833,6 +2833,7 @@ m4_define([CLEAN_LOG_FILE],
   [sed 's/[[0-9\-]]*T[[0-9:\.]]*Z|[[0-9]]*\(|.*$\)/\1/g' $1 | dnl
    sed '/|poll_loop|/d' |   dnl
    sed '/|socket_util|/d' | dnl
+   sed '/|cooperative_multitasking|DBG|/d' | dnl
    sed 's/[[0-9]]*\.ctl/<cleared>\.ctl/g'> $2])
 
 CLEAN_LOG_FILE([1.log], [1.log.clear])
