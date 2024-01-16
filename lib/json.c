@@ -24,12 +24,20 @@
 #include <limits.h>
 #include <string.h>
 
+#include "cooperative-multitasking.h"
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
+#include "json.h"
 #include "openvswitch/shash.h"
 #include "unicode.h"
 #include "util.h"
 #include "uuid.h"
+
+/* Non-public JSSF_* flags.  Must not overlap with public ones defined
+ * in include/openvswitch/json.h. */
+enum {
+    JSSF_YIELD = 1 << 7,
+};
 
 /* The type of a JSON token. */
 enum json_token_type {
@@ -186,6 +194,14 @@ json_serialized_object_create(const struct json *src)
 {
     struct json *json = json_create(JSON_SERIALIZED_OBJECT);
     json->string = json_to_string(src, JSSF_SORT);
+    return json;
+}
+
+struct json *
+json_serialized_object_create_with_yield(const struct json *src)
+{
+    struct json *json = json_create(JSON_SERIALIZED_OBJECT);
+    json->string = json_to_string(src, JSSF_SORT | JSSF_YIELD);
     return json;
 }
 
@@ -375,20 +391,20 @@ json_integer(const struct json *json)
     return json->integer;
 }
 
-static void json_destroy_object(struct shash *object);
-static void json_destroy_array(struct json_array *array);
+static void json_destroy_object(struct shash *object, bool yield);
+static void json_destroy_array(struct json_array *array, bool yield);
 
 /* Frees 'json' and everything it points to, recursively. */
 void
-json_destroy__(struct json *json)
+json_destroy__(struct json *json, bool yield)
 {
     switch (json->type) {
     case JSON_OBJECT:
-        json_destroy_object(json->object);
+        json_destroy_object(json->object, yield);
         break;
 
     case JSON_ARRAY:
-        json_destroy_array(&json->array);
+        json_destroy_array(&json->array, yield);
         break;
 
     case JSON_STRING:
@@ -410,14 +426,22 @@ json_destroy__(struct json *json)
 }
 
 static void
-json_destroy_object(struct shash *object)
+json_destroy_object(struct shash *object, bool yield)
 {
     struct shash_node *node;
+
+    if (yield) {
+        cooperative_multitasking_yield();
+    }
 
     SHASH_FOR_EACH_SAFE (node, object) {
         struct json *value = node->data;
 
-        json_destroy(value);
+        if (yield) {
+            json_destroy_with_yield(value);
+        } else {
+            json_destroy(value);
+        }
         shash_delete(object, node);
     }
     shash_destroy(object);
@@ -425,12 +449,20 @@ json_destroy_object(struct shash *object)
 }
 
 static void
-json_destroy_array(struct json_array *array)
+json_destroy_array(struct json_array *array, bool yield)
 {
     size_t i;
 
+    if (yield) {
+        cooperative_multitasking_yield();
+    }
+
     for (i = 0; i < array->n; i++) {
-        json_destroy(array->elems[i]);
+        if (yield) {
+            json_destroy_with_yield(array->elems[i]);
+        } else {
+            json_destroy(array->elems[i]);
+        }
     }
     free(array->elems);
 }
@@ -1664,6 +1696,10 @@ json_serialize_object(const struct shash *object, struct json_serializer *s)
     s->depth++;
     indent_line(s);
 
+    if (s->flags & JSSF_YIELD) {
+        cooperative_multitasking_yield();
+    }
+
     if (s->flags & JSSF_SORT) {
         const struct shash_node **nodes;
         size_t n, i;
@@ -1696,6 +1732,10 @@ json_serialize_array(const struct json_array *array, struct json_serializer *s)
 
     ds_put_char(ds, '[');
     s->depth++;
+
+    if (s->flags & JSSF_YIELD) {
+        cooperative_multitasking_yield();
+    }
 
     if (array->n > 0) {
         indent_line(s);
