@@ -519,24 +519,24 @@ def test_odp_fields(input_string, expected):
                     "check_pkt_len",
                     {
                         "size": 200,
-                        "gt": {"output": {"port": 4}},
-                        "le": {"output": {"port": 5}},
+                        "gt": [{"output": {"port": 4}}],
+                        "le": [{"output": {"port": 5}}],
                     },
                 ),
                 KeyValue(
                     "check_pkt_len",
                     {
                         "size": 200,
-                        "gt": {"drop": True},
-                        "le": {"output": {"port": 5}},
+                        "gt": [{"drop": True}],
+                        "le": [{"output": {"port": 5}}],
                     },
                 ),
                 KeyValue(
                     "check_pkt_len",
                     {
                         "size": 200,
-                        "gt": {"ct": {"nat": True}},
-                        "le": {"drop": True},
+                        "gt": [{"ct": {"nat": True}}],
+                        "le": [{"drop": True}],
                     },
                 ),
             ],
