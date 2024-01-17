@@ -13,6 +13,32 @@ from ovs.flow.decoders import (
 )
 
 
+def do_test_section(input_string, section, expected):
+    flow = ODPFlow(input_string)
+    kv_list = flow.section(section).data
+
+    assert len(expected) == len(kv_list)
+
+    for i in range(len(expected)):
+        assert expected[i].key == kv_list[i].key
+        assert expected[i].value == kv_list[i].value
+
+        # Assert positions relative to action string are OK.
+        pos = flow.section(section).pos
+        string = flow.section(section).string
+
+        kpos = kv_list[i].meta.kpos
+        kstr = kv_list[i].meta.kstring
+        vpos = kv_list[i].meta.vpos
+        vstr = kv_list[i].meta.vstring
+        assert string[kpos : kpos + len(kstr)] == kstr
+        if vpos != -1:
+            assert string[vpos : vpos + len(vstr)] == vstr
+
+        # Assert string meta is correct.
+        assert input_string[pos : pos + len(string)] == string
+
+
 @pytest.mark.parametrize(
     "input_string,expected",
     [
@@ -109,26 +135,7 @@ from ovs.flow.decoders import (
     ],
 )
 def test_odp_fields(input_string, expected):
-    odp = ODPFlow(input_string)
-    match = odp.match_kv
-    for i in range(len(expected)):
-        assert expected[i].key == match[i].key
-        assert expected[i].value == match[i].value
-
-        # Assert positions relative to action string are OK.
-        mpos = odp.section("match").pos
-        mstring = odp.section("match").string
-
-        kpos = match[i].meta.kpos
-        kstr = match[i].meta.kstring
-        vpos = match[i].meta.vpos
-        vstr = match[i].meta.vstring
-        assert mstring[kpos : kpos + len(kstr)] == kstr
-        if vpos != -1:
-            assert mstring[vpos : vpos + len(vstr)] == vstr
-
-        # Assert mstring meta is correct.
-        assert input_string[mpos : mpos + len(mstring)] == mstring
+    do_test_section(input_string, "match", expected)
 
 
 @pytest.mark.parametrize(
@@ -533,23 +540,4 @@ def test_odp_fields(input_string, expected):
     ],
 )
 def test_odp_actions(input_string, expected):
-    odp = ODPFlow(input_string)
-    actions = odp.actions_kv
-    for i in range(len(expected)):
-        assert expected[i].key == actions[i].key
-        assert expected[i].value == actions[i].value
-
-        # Assert positions relative to action string are OK.
-        apos = odp.section("actions").pos
-        astring = odp.section("actions").string
-
-        kpos = actions[i].meta.kpos
-        kstr = actions[i].meta.kstring
-        vpos = actions[i].meta.vpos
-        vstr = actions[i].meta.vstring
-        assert astring[kpos : kpos + len(kstr)] == kstr
-        if vpos != -1:
-            assert astring[vpos : vpos + len(vstr)] == vstr
-
-        # Assert astring meta is correct.
-        assert input_string[apos : apos + len(astring)] == astring
+    do_test_section(input_string, "actions", expected)
