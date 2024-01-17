@@ -375,13 +375,15 @@ class ODPFlow(Flow):
                             KVDecoders(
                                 decoders=_decoders,
                                 default_free=decode_free_output,
-                            )
+                            ),
+                            is_list=True,
                         ),
                         "le": nested_kv_decoder(
                             KVDecoders(
                                 decoders=_decoders,
                                 default_free=decode_free_output,
-                            )
+                            ),
+                            is_list=True,
                         ),
                     }
                 )
