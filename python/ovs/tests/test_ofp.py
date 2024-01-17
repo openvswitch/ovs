@@ -53,6 +53,21 @@ def do_test_section(input_string, section, expected):
             ],
         ),
         (
+            "actions=controller(max_len=123,reason=no_match,id=456,userdata=00.00.00.12.00.00.00.00,meter_id=12)",   # noqa: E501
+            [
+                KeyValue(
+                    "controller",
+                    {
+                        "max_len": 123,
+                        "reason": "no_match",
+                        "id": 456,
+                        "userdata": "00.00.00.12.00.00.00.00",
+                        "meter_id": 12,
+                    }
+                ),
+            ],
+        ),
+        (
             "actions=enqueue(foo,42),enqueue:foo:42,enqueue(bar,4242)",
             [
                 KeyValue("enqueue", {"port": "foo", "queue": 42}),
