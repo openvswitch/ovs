@@ -140,7 +140,7 @@ Q: Are all features available with all datapaths?
     Conntrack Zone Limit            4.18           2.10         2.13     YES
     Conntrack NAT                   4.6            2.6          2.8      YES
     Conntrack NAT6                  4.6            2.6          2.8      3.0
-    Conntrack Helper Persist.       YES            YES          3.2      NO
+    Conntrack Helper Persist.       YES            YES          3.3      NO
     Tunnel - LISP                   NO             2.11         NO       NO
     Tunnel - STT                    NO             2.4          NO       YES
     Tunnel - GRE                    3.11           1.0          2.4      YES
@@ -220,6 +220,7 @@ Q: What DPDK version does each Open vSwitch release work with?
     3.0.x        21.11.5
     3.1.x        22.11.3
     3.2.x        22.11.3
+    3.3.x        23.11
     ============ ========
 
 Q: Are all the DPDK releases that OVS versions work with maintained?
