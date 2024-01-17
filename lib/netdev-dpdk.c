@@ -416,6 +416,10 @@ enum dpdk_hw_ol_features {
     NETDEV_TX_UDP_CKSUM_OFFLOAD = 1 << 5,
     NETDEV_TX_SCTP_CKSUM_OFFLOAD = 1 << 6,
     NETDEV_TX_TSO_OFFLOAD = 1 << 7,
+    NETDEV_TX_VXLAN_TNL_TSO_OFFLOAD = 1 << 8,
+    NETDEV_TX_GENEVE_TNL_TSO_OFFLOAD = 1 << 9,
+    NETDEV_TX_OUTER_IP_CKSUM_OFFLOAD = 1 << 10,
+    NETDEV_TX_OUTER_UDP_CKSUM_OFFLOAD = 1 << 11,
 };
 
 enum dpdk_rx_steer_flags {
@@ -1075,6 +1079,14 @@ netdev_dpdk_update_netdev_flags(struct netdev_dpdk *dev)
                                    NETDEV_TX_OFFLOAD_SCTP_CKSUM);
     netdev_dpdk_update_netdev_flag(dev, NETDEV_TX_TSO_OFFLOAD,
                                    NETDEV_TX_OFFLOAD_TCP_TSO);
+    netdev_dpdk_update_netdev_flag(dev, NETDEV_TX_VXLAN_TNL_TSO_OFFLOAD,
+                                   NETDEV_TX_VXLAN_TNL_TSO);
+    netdev_dpdk_update_netdev_flag(dev, NETDEV_TX_GENEVE_TNL_TSO_OFFLOAD,
+                                   NETDEV_TX_GENEVE_TNL_TSO);
+    netdev_dpdk_update_netdev_flag(dev, NETDEV_TX_OUTER_IP_CKSUM_OFFLOAD,
+                                   NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM);
+    netdev_dpdk_update_netdev_flag(dev, NETDEV_TX_OUTER_UDP_CKSUM_OFFLOAD,
+                                   NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM);
 }
 
 static int
@@ -1127,6 +1139,22 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
 
     if (dev->hw_ol_features & NETDEV_TX_TSO_OFFLOAD) {
         conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_TCP_TSO;
+    }
+
+    if (dev->hw_ol_features & NETDEV_TX_VXLAN_TNL_TSO_OFFLOAD) {
+        conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_VXLAN_TNL_TSO;
+    }
+
+    if (dev->hw_ol_features & NETDEV_TX_GENEVE_TNL_TSO_OFFLOAD) {
+        conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_GENEVE_TNL_TSO;
+    }
+
+    if (dev->hw_ol_features & NETDEV_TX_OUTER_IP_CKSUM_OFFLOAD) {
+        conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_OUTER_IPV4_CKSUM;
+    }
+
+    if (dev->hw_ol_features & NETDEV_TX_OUTER_UDP_CKSUM_OFFLOAD) {
+        conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_OUTER_UDP_CKSUM;
     }
 
     /* Limit configured rss hash functions to only those supported
@@ -1346,12 +1374,38 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dev->hw_ol_features &= ~NETDEV_TX_SCTP_CKSUM_OFFLOAD;
     }
 
+    if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_OUTER_IPV4_CKSUM) {
+        dev->hw_ol_features |= NETDEV_TX_OUTER_IP_CKSUM_OFFLOAD;
+    } else {
+        dev->hw_ol_features &= ~NETDEV_TX_OUTER_IP_CKSUM_OFFLOAD;
+    }
+
+    if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_OUTER_UDP_CKSUM) {
+        dev->hw_ol_features |= NETDEV_TX_OUTER_UDP_CKSUM_OFFLOAD;
+    } else {
+        dev->hw_ol_features &= ~NETDEV_TX_OUTER_UDP_CKSUM_OFFLOAD;
+    }
+
     dev->hw_ol_features &= ~NETDEV_TX_TSO_OFFLOAD;
     if (userspace_tso_enabled()) {
         if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_TSO) {
             dev->hw_ol_features |= NETDEV_TX_TSO_OFFLOAD;
         } else {
             VLOG_WARN("%s: Tx TSO offload is not supported.",
+                      netdev_get_name(&dev->up));
+        }
+
+        if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_VXLAN_TNL_TSO) {
+            dev->hw_ol_features |= NETDEV_TX_VXLAN_TNL_TSO_OFFLOAD;
+        } else {
+            VLOG_WARN("%s: Tx Vxlan tunnel TSO offload is not supported.",
+                      netdev_get_name(&dev->up));
+        }
+
+        if (info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_GENEVE_TNL_TSO) {
+            dev->hw_ol_features |= NETDEV_TX_GENEVE_TNL_TSO_OFFLOAD;
+        } else {
+            VLOG_WARN("%s: Tx Geneve tunnel TSO offload is not supported.",
                       netdev_get_name(&dev->up));
         }
     }
@@ -2479,11 +2533,23 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
         return true;
     }
 
-    mbuf->l2_len = (char *) dp_packet_l3(pkt) - (char *) dp_packet_eth(pkt);
-    mbuf->l3_len = (char *) dp_packet_l4(pkt) - (char *) dp_packet_l3(pkt);
-    mbuf->l4_len = 0;
-    mbuf->outer_l2_len = 0;
-    mbuf->outer_l3_len = 0;
+    /* If packet is vxlan or geneve tunnel packet, calculate outer
+     * l2 len and outer l3 len. Inner l2/l3/l4 len are calculated
+     * before. */
+    if (mbuf->ol_flags &
+        (RTE_MBUF_F_TX_TUNNEL_GENEVE | RTE_MBUF_F_TX_TUNNEL_VXLAN)) {
+        mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
+                 (char *) dp_packet_eth(pkt);
+        mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
+                 (char *) dp_packet_l3(pkt);
+    } else {
+        mbuf->l2_len = (char *) dp_packet_l3(pkt) -
+               (char *) dp_packet_eth(pkt);
+        mbuf->l3_len = (char *) dp_packet_l4(pkt) -
+               (char *) dp_packet_l3(pkt);
+        mbuf->outer_l2_len = 0;
+        mbuf->outer_l3_len = 0;
+    }
     th = dp_packet_l4(pkt);
 
     if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
@@ -2501,8 +2567,14 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             return false;
         }
 
-        mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
-        mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
+        if (mbuf->ol_flags & (RTE_MBUF_F_TX_TUNNEL_GENEVE |
+            RTE_MBUF_F_TX_TUNNEL_VXLAN)) {
+            mbuf->tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
+                              mbuf->l4_len - mbuf->outer_l3_len;
+        } else {
+            mbuf->l4_len = TCP_OFFSET(th->tcp_ctl) * 4;
+            mbuf->tso_segsz = dev->mtu - mbuf->l3_len - mbuf->l4_len;
+        }
 
         if (mbuf->ol_flags & RTE_MBUF_F_TX_TCP_SEG) {
             int hdr_len = mbuf->l2_len + mbuf->l3_len + mbuf->l4_len;

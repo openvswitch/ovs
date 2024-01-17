@@ -1997,9 +1997,9 @@ IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
 /* Set TCP checksum field in packet 'p' with complete checksum.
  * The packet must have the L3 and L4 offsets. */
 void
-packet_tcp_complete_csum(struct dp_packet *p)
+packet_tcp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct tcp_header *tcp = dp_packet_l4(p);
+    struct tcp_header *tcp = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
 
     tcp->tcp_csum = 0;
     if (dp_packet_hwol_is_ipv4(p)) {
@@ -2020,9 +2020,9 @@ packet_tcp_complete_csum(struct dp_packet *p)
 /* Set UDP checksum field in packet 'p' with complete checksum.
  * The packet must have the L3 and L4 offsets. */
 void
-packet_udp_complete_csum(struct dp_packet *p)
+packet_udp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct udp_header *udp = dp_packet_l4(p);
+    struct udp_header *udp = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
 
     /* Skip csum calculation if the udp_csum is zero. */
     if (!udp->udp_csum) {
@@ -2052,9 +2052,9 @@ packet_udp_complete_csum(struct dp_packet *p)
 /* Set SCTP checksum field in packet 'p' with complete checksum.
  * The packet must have the L3 and L4 offsets. */
 void
-packet_sctp_complete_csum(struct dp_packet *p)
+packet_sctp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct sctp_header *sh = dp_packet_l4(p);
+    struct sctp_header *sh = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
     uint16_t tp_len = dp_packet_l4_size(p);
     ovs_be32 csum;
 

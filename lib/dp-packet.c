@@ -546,16 +546,47 @@ dp_packet_compare_offsets(struct dp_packet *b1, struct dp_packet *b2,
     return true;
 }
 
+void
+dp_packet_tnl_outer_ol_send_prepare(struct dp_packet *p,
+                                    uint64_t flags)
+{
+    if (dp_packet_hwol_is_outer_ipv4_cksum(p)) {
+        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM)) {
+            dp_packet_ip_set_header_csum(p, false);
+            dp_packet_ol_set_ip_csum_good(p);
+            dp_packet_hwol_reset_outer_ipv4_csum(p);
+        }
+    }
+
+    if (!dp_packet_hwol_is_outer_udp_cksum(p)) {
+        return;
+    }
+
+    if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM)) {
+        packet_udp_complete_csum(p, false);
+        dp_packet_ol_set_l4_csum_good(p);
+        dp_packet_hwol_reset_outer_udp_csum(p);
+    }
+}
+
 /* Checks if the packet 'p' is compatible with netdev_ol_flags 'flags'
  * and if not, updates the packet with the software fall back. */
 void
 dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 {
+    bool tnl_inner = false;
+
+    if (dp_packet_hwol_is_tunnel_geneve(p) ||
+        dp_packet_hwol_is_tunnel_vxlan(p)) {
+        dp_packet_tnl_outer_ol_send_prepare(p, flags);
+        tnl_inner = true;
+    }
+
     if (dp_packet_hwol_tx_ip_csum(p)) {
         if (dp_packet_ip_checksum_good(p)) {
             dp_packet_hwol_reset_tx_ip_csum(p);
         } else if (!(flags & NETDEV_TX_OFFLOAD_IPV4_CKSUM)) {
-            dp_packet_ip_set_header_csum(p);
+            dp_packet_ip_set_header_csum(p, tnl_inner);
             dp_packet_ol_set_ip_csum_good(p);
             dp_packet_hwol_reset_tx_ip_csum(p);
         }
@@ -565,24 +596,24 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         return;
     }
 
-    if (dp_packet_l4_checksum_good(p)) {
+    if (dp_packet_l4_checksum_good(p) && !tnl_inner) {
         dp_packet_hwol_reset_tx_l4_csum(p);
         return;
     }
 
     if (dp_packet_hwol_l4_is_tcp(p)
         && !(flags & NETDEV_TX_OFFLOAD_TCP_CKSUM)) {
-        packet_tcp_complete_csum(p);
+        packet_tcp_complete_csum(p, tnl_inner);
         dp_packet_ol_set_l4_csum_good(p);
         dp_packet_hwol_reset_tx_l4_csum(p);
     } else if (dp_packet_hwol_l4_is_udp(p)
                && !(flags & NETDEV_TX_OFFLOAD_UDP_CKSUM)) {
-        packet_udp_complete_csum(p);
+        packet_udp_complete_csum(p, tnl_inner);
         dp_packet_ol_set_l4_csum_good(p);
         dp_packet_hwol_reset_tx_l4_csum(p);
     } else if (!(flags & NETDEV_TX_OFFLOAD_SCTP_CKSUM)
                && dp_packet_hwol_l4_is_sctp(p)) {
-        packet_sctp_complete_csum(p);
+        packet_sctp_complete_csum(p, tnl_inner);
         dp_packet_ol_set_l4_csum_good(p);
         dp_packet_hwol_reset_tx_l4_csum(p);
     }

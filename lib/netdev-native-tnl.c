@@ -173,15 +173,29 @@ netdev_tnl_push_ip_header(struct dp_packet *packet, const void *header,
         ip6->ip6_plen = htons(*ip_tot_size);
         packet_set_ipv6_flow_label(&ip6->ip6_flow, ipv6_label);
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
-        dp_packet_hwol_set_tx_ipv6(packet);
+
+        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
+            dp_packet_hwol_is_tunnel_vxlan(packet)) {
+            dp_packet_hwol_set_tx_outer_ipv6(packet);
+        } else {
+            dp_packet_hwol_set_tx_ipv6(packet);
+        }
+
         dp_packet_ol_reset_ip_csum_good(packet);
         return ip6 + 1;
     } else {
         ip = netdev_tnl_ip_hdr(eth);
         ip->ip_tot_len = htons(*ip_tot_size);
         /* Postpone checksum to when the packet is pushed to the port. */
-        dp_packet_hwol_set_tx_ipv4(packet);
-        dp_packet_hwol_set_tx_ip_csum(packet);
+        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
+            dp_packet_hwol_is_tunnel_vxlan(packet)) {
+            dp_packet_hwol_set_tx_outer_ipv4(packet);
+            dp_packet_hwol_set_tx_outer_ipv4_csum(packet);
+        } else {
+            dp_packet_hwol_set_tx_ipv4(packet);
+            dp_packet_hwol_set_tx_ip_csum(packet);
+        }
+
         dp_packet_ol_reset_ip_csum_good(packet);
         *ip_tot_size -= IP_HEADER_LEN;
         packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
@@ -226,6 +240,74 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     return udp + 1;
 }
 
+/* Calculate inner l2 l3 l4 len as tunnel outer header is not
+ * encapsulated now. */
+static void
+dp_packet_tnl_ol_process(struct dp_packet *packet,
+                         const struct ovs_action_push_tnl *data)
+{
+    struct udp_header *udp = NULL;
+    uint8_t opt_len = 0;
+    struct eth_header *eth = NULL;
+    struct ip_header *ip = NULL;
+    struct genevehdr *gnh = NULL;
+
+    /* l2 l3 l4 len refer to inner len, tunnel outer
+     * header is not encapsulated here. */
+    if (dp_packet_hwol_l4_mask(packet)) {
+        ip = dp_packet_l3(packet);
+
+        if (ip->ip_proto == IPPROTO_TCP) {
+            struct tcp_header *th = dp_packet_l4(packet);
+            dp_packet_set_l4_len(packet, TCP_OFFSET(th->tcp_ctl) * 4);
+        } else if (ip->ip_proto == IPPROTO_UDP) {
+            dp_packet_set_l4_len(packet, UDP_HEADER_LEN);
+        } else if (ip->ip_proto == IPPROTO_SCTP) {
+            dp_packet_set_l4_len(packet, SCTP_HEADER_LEN);
+        }
+
+        dp_packet_set_l3_len(packet, (char *) dp_packet_l4(packet) -
+                                     (char *) dp_packet_l3(packet));
+
+        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE ||
+            data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+
+            if (IP_VER(ip->ip_ihl_ver) == 4) {
+                dp_packet_hwol_set_tx_ipv4(packet);
+                dp_packet_hwol_tx_ip_csum(packet);
+            } else if (IP_VER(ip->ip_ihl_ver) == 6) {
+                dp_packet_hwol_set_tx_ipv6(packet);
+            }
+        }
+
+        /* Attention please, tunnel inner l2 len is consist of udp header
+         * len and tunnel header len and inner l2 len. */
+        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
+            eth = (struct eth_header *)(data->header);
+            ip = (struct ip_header *)(eth + 1);
+            udp = (struct udp_header *)(ip + 1);
+            gnh = (struct genevehdr *)(udp + 1);
+            opt_len = gnh->opt_len * 4;
+            dp_packet_hwol_set_tunnel_geneve(packet);
+            dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
+                                         (char *) dp_packet_eth(packet) +
+                                         GENEVE_BASE_HLEN + opt_len);
+
+            packet->inner_l3_ofs = packet->l3_ofs + GENEVE_BASE_HLEN + opt_len;
+            packet->inner_l4_ofs = packet->l4_ofs + GENEVE_BASE_HLEN + opt_len;
+
+        } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+            dp_packet_hwol_set_tunnel_vxlan(packet);
+            dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
+                                         (char *) dp_packet_eth(packet) +
+                                         VXLAN_HLEN);
+
+            packet->inner_l3_ofs = packet->l3_ofs + VXLAN_HLEN;
+            packet->inner_l4_ofs = packet->l4_ofs + VXLAN_HLEN;
+        }
+    }
+}
+
 void
 netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
                            struct dp_packet *packet,
@@ -234,6 +316,7 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     struct udp_header *udp;
     int ip_tot_size;
 
+    dp_packet_tnl_ol_process(packet, data);
     udp = netdev_tnl_push_ip_header(packet, data->header, data->header_len,
                                     &ip_tot_size, 0);
 
@@ -241,13 +324,21 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
     udp->udp_src = netdev_tnl_get_src_port(packet);
     udp->udp_len = htons(ip_tot_size);
 
-    /* Postpone checksum to the egress netdev. */
-    dp_packet_hwol_set_csum_udp(packet);
     if (udp->udp_csum) {
         dp_packet_ol_reset_l4_csum_good(packet);
+        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
+            dp_packet_hwol_is_tunnel_vxlan(packet)) {
+            dp_packet_hwol_set_outer_udp_csum(packet);
+        } else {
+            dp_packet_hwol_set_csum_udp(packet);
+        }
     } else {
         dp_packet_ol_set_l4_csum_good(packet);
     }
+
+    packet->inner_l3_ofs += packet->l4_ofs;
+    packet->inner_l4_ofs += packet->l4_ofs;
+
 }
 
 static void *

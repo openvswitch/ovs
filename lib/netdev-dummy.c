@@ -1230,7 +1230,7 @@ netdev_dummy_send(struct netdev *netdev, int qid,
 
         if (dp_packet_hwol_tx_ip_csum(packet) &&
             !dp_packet_ip_checksum_good(packet)) {
-            dp_packet_ip_set_header_csum(packet);
+            dp_packet_ip_set_header_csum(packet, false);
             dp_packet_ol_set_ip_csum_good(packet);
         }
 

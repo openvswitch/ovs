@@ -3278,7 +3278,7 @@ packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
             if (dp_packet_hwol_tx_ip_csum(p)) {
                 dp_packet_ol_reset_ip_csum_good(p);
             } else {
-                dp_packet_ip_set_header_csum(p);
+                dp_packet_ip_set_header_csum(p, false);
                 dp_packet_ol_set_ip_csum_good(p);
             }
             pseudo_hdr_csum = packet_csum_pseudoheader(ip);

@@ -658,11 +658,11 @@ OVS_VSWITCHD_START(
                      other-config:datapath-id=1234 fail-mode=secure])
 
 AT_CHECK([ovs-vsctl get interface p1 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
-tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+tx_geneve_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
 ], [])
 
 AT_CHECK([ovs-vsctl get interface br0 status | sed -n 's/^{\(.*\).*}$/\1/p'], [0], [dnl
-tx_ip_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false"
+tx_geneve_tso_offload="false", tx_ip_csum_offload="false", tx_out_ip_csum_offload="false", tx_out_udp_csum_offload="false", tx_sctp_csum_offload="false", tx_tcp_csum_offload="false", tx_tcp_seg_offload="false", tx_udp_csum_offload="false", tx_vxlan_tso_offload="false"
 ], [])
 
 OVS_VSWITCHD_STOP

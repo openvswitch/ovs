@@ -69,6 +69,8 @@ COVERAGE_DEFINE(netdev_received);
 COVERAGE_DEFINE(netdev_sent);
 COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
+COVERAGE_DEFINE(netdev_vxlan_tso_drops);
+COVERAGE_DEFINE(netdev_geneve_tso_drops);
 COVERAGE_DEFINE(netdev_push_header_drops);
 COVERAGE_DEFINE(netdev_soft_seg_good);
 COVERAGE_DEFINE(netdev_soft_seg_drops);
@@ -912,6 +914,23 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
         !(netdev_flags & NETDEV_TX_OFFLOAD_TCP_TSO)) {
         DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
             if (dp_packet_hwol_is_tso(packet)) {
+                if (dp_packet_hwol_is_tunnel_vxlan(packet)
+                    && !(netdev_flags & NETDEV_TX_VXLAN_TNL_TSO)) {
+                        VLOG_WARN_RL(&rl, "%s: No VXLAN TSO support",
+                                     netdev_get_name(netdev));
+                        COVERAGE_INC(netdev_vxlan_tso_drops);
+                        dp_packet_delete_batch(batch, true);
+                        return false;
+                }
+
+                if (dp_packet_hwol_is_tunnel_geneve(packet)
+                    && !(netdev_flags & NETDEV_TX_GENEVE_TNL_TSO)) {
+                        VLOG_WARN_RL(&rl, "%s: No GENEVE TSO support",
+                                     netdev_get_name(netdev));
+                        COVERAGE_INC(netdev_geneve_tso_drops);
+                        dp_packet_delete_batch(batch, true);
+                        return false;
+                }
                 return netdev_send_tso(netdev, qid, batch, concurrent_txq);
             }
         }
@@ -990,17 +1009,31 @@ netdev_push_header(const struct netdev *netdev,
     size_t i, size = dp_packet_batch_size(batch);
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, batch) {
-        if (OVS_UNLIKELY(dp_packet_hwol_is_tso(packet))) {
+        if (OVS_UNLIKELY(data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
+                         data->tnl_type != OVS_VPORT_TYPE_VXLAN &&
+                         dp_packet_hwol_is_tso(packet))) {
             COVERAGE_INC(netdev_push_header_drops);
             dp_packet_delete(packet);
-            VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is "
-                         "not supported: packet dropped",
-                         netdev_get_name(netdev));
+            VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
+                              "supported for %s tunnels: packet dropped",
+                         netdev_get_name(netdev), netdev_get_type(netdev));
         } else {
-            /* The packet is going to be encapsulated and there is
-             * no support yet for inner network header csum offloading. */
-            dp_packet_ol_send_prepare(packet, 0);
-
+            if (data->tnl_type != OVS_VPORT_TYPE_GENEVE &&
+                data->tnl_type != OVS_VPORT_TYPE_VXLAN) {
+                dp_packet_ol_send_prepare(packet, 0);
+            } else if (dp_packet_hwol_is_tunnel_geneve(packet) ||
+                       dp_packet_hwol_is_tunnel_vxlan(packet)) {
+                if (dp_packet_hwol_is_tso(packet)) {
+                    COVERAGE_INC(netdev_push_header_drops);
+                    dp_packet_delete(packet);
+                    VLOG_WARN_RL(&rl, "%s: Tunneling packets with TSO is not "
+                                      "supported with multiple levels of "
+                                      "VXLAN or GENEVE encapsulation.",
+                                 netdev_get_name(netdev));
+                    continue;
+                }
+                dp_packet_ol_send_prepare(packet, 0);
+            }
             netdev->netdev_class->push_header(netdev, packet, data);
 
             pkt_metadata_init(&packet->md, data->out_port);
@@ -1446,6 +1479,10 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
         OL_ADD_STAT("udp_csum", NETDEV_TX_OFFLOAD_UDP_CKSUM);
         OL_ADD_STAT("sctp_csum", NETDEV_TX_OFFLOAD_SCTP_CKSUM);
         OL_ADD_STAT("tcp_seg", NETDEV_TX_OFFLOAD_TCP_TSO);
+        OL_ADD_STAT("vxlan_tso", NETDEV_TX_VXLAN_TNL_TSO);
+        OL_ADD_STAT("geneve_tso", NETDEV_TX_GENEVE_TNL_TSO);
+        OL_ADD_STAT("out_ip_csum", NETDEV_TX_OFFLOAD_OUTER_IP_CKSUM);
+        OL_ADD_STAT("out_udp_csum", NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM);
 #undef OL_ADD_STAT
 
         err = 0;

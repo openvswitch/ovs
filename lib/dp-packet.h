@@ -86,22 +86,47 @@ enum dp_packet_offload_mask {
     DEF_OL_FLAG(DP_PACKET_OL_TX_SCTP_CKSUM, RTE_MBUF_F_TX_SCTP_CKSUM, 0x800),
     /* Offload IP checksum. */
     DEF_OL_FLAG(DP_PACKET_OL_TX_IP_CKSUM, RTE_MBUF_F_TX_IP_CKSUM, 0x1000),
+    /* Offload packet is tunnel GENEVE. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_TUNNEL_GENEVE,
+                RTE_MBUF_F_TX_TUNNEL_GENEVE, 0x2000),
+    /* Offload packet is tunnel VXLAN. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_TUNNEL_VXLAN,
+                RTE_MBUF_F_TX_TUNNEL_VXLAN, 0x4000),
+    /* Offload tunnel packet, outer header is IPv4. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IPV4,
+                RTE_MBUF_F_TX_OUTER_IPV4, 0x8000),
+    /* Offload tunnel outer IPv4 checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IP_CKSUM,
+                RTE_MBUF_F_TX_OUTER_IP_CKSUM, 0x10000),
+    /* Offload tunnel outer UDP checksum. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_UDP_CKSUM,
+                RTE_MBUF_F_TX_OUTER_UDP_CKSUM, 0x20000),
+    /* Offload tunnel packet, outer header is IPv6. */
+    DEF_OL_FLAG(DP_PACKET_OL_TX_OUTER_IPV6,
+                RTE_MBUF_F_TX_OUTER_IPV6, 0x40000),
+
     /* Adding new field requires adding to DP_PACKET_OL_SUPPORTED_MASK. */
 };
 
-#define DP_PACKET_OL_SUPPORTED_MASK (DP_PACKET_OL_RSS_HASH         | \
-                                     DP_PACKET_OL_FLOW_MARK        | \
-                                     DP_PACKET_OL_RX_L4_CKSUM_BAD  | \
-                                     DP_PACKET_OL_RX_IP_CKSUM_BAD  | \
-                                     DP_PACKET_OL_RX_L4_CKSUM_GOOD | \
-                                     DP_PACKET_OL_RX_IP_CKSUM_GOOD | \
-                                     DP_PACKET_OL_TX_TCP_SEG       | \
-                                     DP_PACKET_OL_TX_IPV4          | \
-                                     DP_PACKET_OL_TX_IPV6          | \
-                                     DP_PACKET_OL_TX_TCP_CKSUM     | \
-                                     DP_PACKET_OL_TX_UDP_CKSUM     | \
-                                     DP_PACKET_OL_TX_SCTP_CKSUM    | \
-                                     DP_PACKET_OL_TX_IP_CKSUM)
+#define DP_PACKET_OL_SUPPORTED_MASK (DP_PACKET_OL_RSS_HASH           | \
+                                     DP_PACKET_OL_FLOW_MARK          | \
+                                     DP_PACKET_OL_RX_L4_CKSUM_BAD    | \
+                                     DP_PACKET_OL_RX_IP_CKSUM_BAD    | \
+                                     DP_PACKET_OL_RX_L4_CKSUM_GOOD   | \
+                                     DP_PACKET_OL_RX_IP_CKSUM_GOOD   | \
+                                     DP_PACKET_OL_TX_TCP_SEG         | \
+                                     DP_PACKET_OL_TX_IPV4            | \
+                                     DP_PACKET_OL_TX_IPV6            | \
+                                     DP_PACKET_OL_TX_TCP_CKSUM       | \
+                                     DP_PACKET_OL_TX_UDP_CKSUM       | \
+                                     DP_PACKET_OL_TX_SCTP_CKSUM      | \
+                                     DP_PACKET_OL_TX_IP_CKSUM        | \
+                                     DP_PACKET_OL_TX_TUNNEL_GENEVE   | \
+                                     DP_PACKET_OL_TX_TUNNEL_VXLAN    | \
+                                     DP_PACKET_OL_TX_OUTER_IPV4      | \
+                                     DP_PACKET_OL_TX_OUTER_IP_CKSUM  | \
+                                     DP_PACKET_OL_TX_OUTER_UDP_CKSUM | \
+                                     DP_PACKET_OL_TX_OUTER_IPV6)
 
 #define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
                                  DP_PACKET_OL_TX_UDP_CKSUM | \
@@ -138,6 +163,10 @@ struct dp_packet {
     uint16_t l3_ofs;               /* Network-level header offset,
                                     * or UINT16_MAX. */
     uint16_t l4_ofs;               /* Transport-level header offset,
+                                      or UINT16_MAX. */
+    uint16_t inner_l3_ofs;         /* Inner Network-level header offset,
+                                    * or UINT16_MAX. */
+    uint16_t inner_l4_ofs;         /* Inner Transport-level header offset,
                                       or UINT16_MAX. */
     uint32_t cutlen;               /* length in bytes to cut from the end. */
     ovs_be32 packet_type;          /* Packet type as defined in OpenFlow */
@@ -250,6 +279,7 @@ bool dp_packet_compare_offsets(struct dp_packet *good,
                                struct dp_packet *test,
                                struct ds *err_str);
 void dp_packet_ol_send_prepare(struct dp_packet *, uint64_t);
+void dp_packet_tnl_outer_ol_send_prepare(struct dp_packet *, uint64_t);
 
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
@@ -482,6 +512,22 @@ dp_packet_l4_size(const struct dp_packet *b)
         : 0;
 }
 
+static inline void *
+dp_packet_inner_l3(const struct dp_packet *b)
+{
+    return b->inner_l3_ofs != UINT16_MAX
+           ? (char *) dp_packet_data(b) + b->inner_l3_ofs
+           : NULL;
+}
+
+static inline void *
+dp_packet_inner_l4(const struct dp_packet *b)
+{
+    return b->inner_l4_ofs != UINT16_MAX
+           ? (char *) dp_packet_data(b) + b->inner_l4_ofs
+           : NULL;
+}
+
 static inline const void *
 dp_packet_get_tcp_payload(const struct dp_packet *b)
 {
@@ -539,6 +585,25 @@ dp_packet_get_nd_payload(const struct dp_packet *b)
 }
 
 #ifdef DPDK_NETDEV
+static inline void
+dp_packet_set_l2_len(struct dp_packet *b, size_t l2_len)
+{
+    b->mbuf.l2_len = l2_len;
+}
+
+static inline void
+dp_packet_set_l3_len(struct dp_packet *b, size_t l3_len)
+{
+    b->mbuf.l3_len = l3_len;
+}
+
+static inline void
+dp_packet_set_l4_len(struct dp_packet *b, size_t l4_len)
+{
+    b->mbuf.l4_len = l4_len;
+}
+
+
 static inline uint64_t *
 dp_packet_ol_flags_ptr(const struct dp_packet *b)
 {
@@ -558,6 +623,24 @@ dp_packet_flow_mark_ptr(const struct dp_packet *b)
 }
 
 #else
+static inline void
+dp_packet_set_l2_len(struct dp_packet *b OVS_UNUSED, size_t l2_len OVS_UNUSED)
+{
+    /* There is no implementation. */
+}
+
+static inline void
+dp_packet_set_l3_len(struct dp_packet *b OVS_UNUSED, size_t l3_len OVS_UNUSED)
+{
+    /* There is no implementation. */
+}
+
+static inline void
+dp_packet_set_l4_len(struct dp_packet *b OVS_UNUSED, size_t l4_len OVS_UNUSED)
+{
+    /* There is no implementation. */
+}
+
 static inline uint32_t *
 dp_packet_ol_flags_ptr(const struct dp_packet *b)
 {
@@ -619,6 +702,8 @@ dp_packet_set_size(struct dp_packet *b, uint32_t v)
      * (and thus 'v') will always be <= UINT16_MAX; this means that there is no
      * loss of accuracy in assigning 'v' to 'data_len'.
      */
+
+    ovs_assert(v <= UINT16_MAX);
     b->mbuf.data_len = (uint16_t)v;  /* Current seg length. */
     b->mbuf.pkt_len = v;             /* Total length of all segments linked to
                                       * this segment. */
@@ -1056,6 +1141,36 @@ dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
             DP_PACKET_OL_TX_SCTP_CKSUM;
 }
 
+/* Returns 'true' if packet 'b' is marked for tunnel GENEVE
+ * checksum offloading. */
+static inline bool
+dp_packet_hwol_is_tunnel_geneve(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TUNNEL_GENEVE);
+}
+
+/* Returns 'true' if packet 'b' is marked for tunnel VXLAN
+ * checksum offloading. */
+static inline bool
+dp_packet_hwol_is_tunnel_vxlan(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_TUNNEL_VXLAN);
+}
+
+/* Returns 'true' if packet 'b' is marked for outer IPv4 checksum offload. */
+static inline bool
+dp_packet_hwol_is_outer_ipv4_cksum(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IP_CKSUM);
+}
+
+/* Returns 'true' if packet 'b' is marked for outer UDP checksum offload. */
+static inline bool
+dp_packet_hwol_is_outer_udp_cksum(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_UDP_CKSUM);
+}
+
 static inline void
 dp_packet_hwol_reset_tx_l4_csum(struct dp_packet *p)
 {
@@ -1076,6 +1191,14 @@ dp_packet_hwol_set_tx_ipv6(struct dp_packet *a)
 {
     *dp_packet_ol_flags_ptr(a) &= ~DP_PACKET_OL_TX_IPV4;
     *dp_packet_ol_flags_ptr(a) |= DP_PACKET_OL_TX_IPV6;
+}
+
+/* Mark packet 'a' as a tunnel packet with outer IPv6 header. */
+static inline void
+dp_packet_hwol_set_tx_outer_ipv6(struct dp_packet *a)
+{
+    *dp_packet_ol_flags_ptr(a) &= ~DP_PACKET_OL_TX_OUTER_IPV4;
+    *dp_packet_ol_flags_ptr(a) |= DP_PACKET_OL_TX_OUTER_IPV6;
 }
 
 /* Returns 'true' if packet 'p' is marked for IPv4 checksum offloading. */
@@ -1131,6 +1254,53 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
+/* Mark packet 'b' for tunnel GENEVE offloading. */
+static inline void
+dp_packet_hwol_set_tunnel_geneve(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_GENEVE;
+}
+
+/* Mark packet 'b' for tunnel VXLAN offloading. */
+static inline void
+dp_packet_hwol_set_tunnel_vxlan(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_VXLAN;
+}
+
+/* Mark packet 'b' as a tunnel packet with outer IPv4 header. */
+static inline void
+dp_packet_hwol_set_tx_outer_ipv4(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_OUTER_IPV4;
+}
+
+/* Mark packet 'b' for csum offloading in outer IPv4 header. */
+static inline void
+dp_packet_hwol_set_tx_outer_ipv4_csum(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_OUTER_IP_CKSUM;
+}
+
+static inline void
+dp_packet_hwol_reset_outer_ipv4_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_OUTER_IP_CKSUM;
+}
+
+static inline void
+dp_packet_hwol_reset_outer_udp_csum(struct dp_packet *p)
+{
+    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
+}
+
+/* Mark packet 'b' for csum offloading in outer UDP header. */
+static inline void
+dp_packet_hwol_set_outer_udp_csum(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_OUTER_UDP_CKSUM;
+}
+
 /* Resets TCP Segmentation in packet 'p' and adjust flags to indicate
  * L3 and L4 checksumming is now required. */
 static inline void
@@ -1184,9 +1354,9 @@ dp_packet_ip_checksum_bad(const struct dp_packet *p)
 
 /* Calculate and set the IPv4 header checksum in packet 'p'. */
 static inline void
-dp_packet_ip_set_header_csum(struct dp_packet *p)
+dp_packet_ip_set_header_csum(struct dp_packet *p, bool inner)
 {
-    struct ip_header *ip = dp_packet_l3(p);
+    struct ip_header *ip = (inner) ? dp_packet_inner_l3(p) : dp_packet_l3(p);
 
     ovs_assert(ip);
     ip->ip_csum = 0;
