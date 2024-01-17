@@ -204,6 +204,7 @@ class ODPFlow(Flow):
         """Generate the arguments for the action KVDecoders."""
         _decoders = {
             "drop": decode_flag,
+            "meter": decode_int,
             "lb_output": decode_int,
             "trunc": decode_int,
             "recirc": decode_int,
@@ -334,6 +335,14 @@ class ODPFlow(Flow):
                 )
             ),
             **ODPFlow._tnl_action_decoder_args(),
+            "hash": nested_kv_decoder(
+                KVDecoders(
+                    {
+                        "l4": decode_int,
+                        "sym_l4": decode_int,
+                    }
+                )
+            ),
         }
 
         _decoders["sample"] = nested_kv_decoder(

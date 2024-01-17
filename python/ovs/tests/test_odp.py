@@ -534,6 +534,18 @@ def test_odp_fields(input_string, expected):
                 ),
             ],
         ),
+        (
+            "actions:meter(1),hash(l4(0))",
+            [
+                KeyValue("meter", 1),
+                KeyValue(
+                    "hash",
+                    {
+                        "l4": 0,
+                    }
+                ),
+            ],
+        ),
     ],
 )
 def test_odp_actions(input_string, expected):
