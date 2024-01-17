@@ -142,7 +142,7 @@ dp_packet_gso(struct dp_packet *p, struct dp_packet_batch **batches)
             struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(seg);
 
             ip6_hdr->ip6_ctlun.ip6_un1.ip6_un1_plen
-                = htons(sizeof *ip_hdr + dp_packet_l4_size(seg));
+                = htons(dp_packet_l3_size(seg) - sizeof *ip6_hdr);
         }
 
         /* Update L4 header. */
