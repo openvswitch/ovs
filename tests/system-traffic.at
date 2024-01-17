@@ -292,7 +292,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over vxlan tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_VXLAN()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -329,6 +328,15 @@ NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PI
 NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
+
+dnl Check large bidirectional TCP.
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+OVS_DAEMONIZE([nc -l 10.1.1.100 1234 > data], [nc.pid])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT 10.1.1.100 1234 < payload.bin])
+
+dnl Wait until transfer completes before checking.
+OVS_WAIT_WHILE([kill -0 $(cat nc.pid)])
+AT_CHECK([diff -q payload.bin data], [0])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -381,7 +389,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over vxlan6 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_VXLAN_UDP6ZEROCSUM()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -421,11 +428,18 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PI
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+dnl Check large bidirectional TCP.
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+OVS_DAEMONIZE([nc -l 10.1.1.100 1234 > data], [nc.pid])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT 10.1.1.100 1234 < payload.bin])
+
+dnl Wait until transfer completes before checking.
+OVS_WAIT_WHILE([kill -0 $(cat nc.pid)])
+AT_CHECK([diff -q payload.bin data], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over gre tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 
@@ -467,7 +481,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6gre L2 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 OVS_CHECK_ERSPAN()
@@ -508,7 +521,6 @@ AT_CLEANUP
 
 
 AT_SETUP([datapath - ping over erspan v1 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 OVS_CHECK_ERSPAN()
@@ -545,7 +557,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v2 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 OVS_CHECK_ERSPAN()
@@ -582,7 +593,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v1 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 OVS_CHECK_ERSPAN()
@@ -622,7 +632,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v2 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_KERNEL_EXCL(3, 10, 4, 15)
 OVS_CHECK_GRE()
 OVS_CHECK_ERSPAN()
@@ -663,7 +672,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over geneve tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -701,11 +709,19 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PI
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+dnl Check large bidirectional TCP.
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+OVS_DAEMONIZE([nc -l 10.1.1.100 1234 > data], [nc.pid])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT 10.1.1.100 1234 < payload.bin])
+
+dnl Wait until transfer completes before checking.
+OVS_WAIT_WHILE([kill -0 $(cat nc.pid)])
+AT_CHECK([diff -q payload.bin data], [0])
+
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over geneve tunnel, delete flow regression])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -760,7 +776,6 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/|ERR|/d
 AT_CLEANUP
 
 AT_SETUP([datapath - flow resume with geneve tun_metadata])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -812,7 +827,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over geneve6 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE_UDP6ZEROCSUM()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -852,12 +866,19 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -W 2 10.1.1.100 | FORMAT_PI
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+dnl Check large bidirectional TCP.
+AT_CHECK([dd if=/dev/urandom of=payload.bin bs=60000 count=1 2> /dev/null])
+OVS_DAEMONIZE([nc -l 10.1.1.100 1234 > data], [nc.pid])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT 10.1.1.100 1234 < payload.bin])
+
+dnl Wait until transfer completes before checking.
+OVS_WAIT_WHILE([kill -0 $(cat nc.pid)])
+AT_CHECK([diff -q payload.bin data], [0])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - slow_action on geneve6 tunnel])
 AT_SKIP_IF([test $HAVE_TCPDUMP = no])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE_UDP6ZEROCSUM()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -981,7 +1002,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1028,7 +1048,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v1 tunnel by simulated packets])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1077,7 +1096,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v2 tunnel by simulated packets])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1131,7 +1149,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v1 tunnel by simulated packets])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1187,7 +1204,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v2 tunnel by simulated packets])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_MIN_KERNEL(3, 10)
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1242,7 +1258,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over srv6 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_SRV6()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1304,7 +1319,6 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping6 over srv6 tunnel])
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_SRV6()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -8062,7 +8076,6 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - can match and clear ct_state from outside OVS])
 CHECK_CONNTRACK_LOCAL_STACK()
-OVS_CHECK_TUNNEL_TSO()
 OVS_CHECK_GENEVE()
 
 OVS_TRAFFIC_VSWITCHD_START()

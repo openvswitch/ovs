@@ -1999,21 +1999,44 @@ IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
 void
 packet_tcp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct tcp_header *tcp = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
+    struct tcp_header *tcp;
+    size_t tcp_sz;
+    void *ip_hdr;
+    bool is_v4;
 
-    tcp->tcp_csum = 0;
-    if (dp_packet_hwol_is_ipv4(p)) {
-        struct ip_header *ip = dp_packet_l3(p);
+    if (inner) {
+        tcp = dp_packet_inner_l4(p);
+        ip_hdr = dp_packet_inner_l3(p);
+        tcp_sz = dp_packet_inner_l4_size(p);
+    } else {
+        tcp = dp_packet_l4(p);
+        ip_hdr = dp_packet_l3(p);
+        tcp_sz = dp_packet_l4_size(p);
+    }
 
-        tcp->tcp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),
-                                                  tcp, dp_packet_l4_size(p)));
+    if (!inner && dp_packet_hwol_is_outer_ipv6(p)) {
+        is_v4 = false;
+    } else if (!inner && dp_packet_hwol_is_outer_ipv4(p)) {
+        is_v4 = true;
+    } else if (dp_packet_hwol_is_ipv4(p)) {
+        is_v4 = true;
     } else if (dp_packet_hwol_tx_ipv6(p)) {
-        struct ovs_16aligned_ip6_hdr *ip6 = dp_packet_l3(p);
-
-        tcp->tcp_csum = packet_csum_upperlayer6(ip6, tcp, ip6->ip6_nxt,
-                                                dp_packet_l4_size(p));
+        is_v4 = false;
     } else {
         OVS_NOT_REACHED();
+    }
+
+    tcp->tcp_csum = 0;
+    if (is_v4) {
+        struct ip_header *ip = ip_hdr;
+
+        tcp->tcp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),
+                                                  tcp, tcp_sz));
+    } else {
+        struct ovs_16aligned_ip6_hdr *ip6 = ip_hdr;
+
+        tcp->tcp_csum = packet_csum_upperlayer6(ip6, tcp, ip6->ip6_nxt,
+                                                tcp_sz);
     }
 }
 
@@ -2022,26 +2045,49 @@ packet_tcp_complete_csum(struct dp_packet *p, bool inner)
 void
 packet_udp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct udp_header *udp = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
+    struct udp_header *udp;
+    size_t udp_sz;
+    void *ip_hdr;
+    bool is_v4;
+
+    if (inner) {
+        udp = dp_packet_inner_l4(p);
+        ip_hdr = dp_packet_inner_l3(p);
+        udp_sz = dp_packet_inner_l4_size(p);
+    } else {
+        udp = dp_packet_l4(p);
+        ip_hdr = dp_packet_l3(p);
+        udp_sz = dp_packet_l4_size(p);
+    }
 
     /* Skip csum calculation if the udp_csum is zero. */
     if (!udp->udp_csum) {
         return;
     }
 
-    udp->udp_csum = 0;
-    if (dp_packet_hwol_is_ipv4(p)) {
-        struct ip_header *ip = dp_packet_l3(p);
-
-        udp->udp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),
-                                                  udp, dp_packet_l4_size(p)));
+    if (!inner && dp_packet_hwol_is_outer_ipv6(p)) {
+        is_v4 = false;
+    } else if (!inner && dp_packet_hwol_is_outer_ipv4(p)) {
+        is_v4 = true;
+    } else if (dp_packet_hwol_is_ipv4(p)) {
+        is_v4 = true;
     } else if (dp_packet_hwol_tx_ipv6(p)) {
-        struct ovs_16aligned_ip6_hdr *ip6 = dp_packet_l3(p);
-
-        udp->udp_csum = packet_csum_upperlayer6(ip6, udp, ip6->ip6_nxt,
-                                                dp_packet_l4_size(p));
+        is_v4 = false;
     } else {
         OVS_NOT_REACHED();
+    }
+
+    udp->udp_csum = 0;
+    if (is_v4) {
+        struct ip_header *ip = ip_hdr;
+
+        udp->udp_csum = csum_finish(csum_continue(packet_csum_pseudoheader(ip),
+                                                  udp, udp_sz));
+    } else {
+        struct ovs_16aligned_ip6_hdr *ip6 = ip_hdr;
+
+        udp->udp_csum = packet_csum_upperlayer6(ip6, udp, ip6->ip6_nxt,
+                                                udp_sz);
     }
 
     if (!udp->udp_csum) {
@@ -2054,9 +2100,17 @@ packet_udp_complete_csum(struct dp_packet *p, bool inner)
 void
 packet_sctp_complete_csum(struct dp_packet *p, bool inner)
 {
-    struct sctp_header *sh = (inner) ? dp_packet_inner_l4(p) : dp_packet_l4(p);
-    uint16_t tp_len = dp_packet_l4_size(p);
+    struct sctp_header *sh;
+    uint16_t tp_len;
     ovs_be32 csum;
+
+    if (inner) {
+        sh = dp_packet_inner_l4(p);
+        tp_len = dp_packet_inner_l4_size(p);
+    } else {
+        sh = dp_packet_l4(p);
+        tp_len = dp_packet_l4_size(p);
+    }
 
     put_16aligned_be32(&sh->sctp_csum, 0);
     csum = crc32c((void *) sh, tp_len);

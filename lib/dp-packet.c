@@ -578,7 +578,6 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 
     if (dp_packet_hwol_is_tunnel_geneve(p) ||
         dp_packet_hwol_is_tunnel_vxlan(p)) {
-        dp_packet_tnl_outer_ol_send_prepare(p, flags);
         tnl_inner = true;
     }
 
@@ -593,6 +592,9 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
     }
 
     if (!dp_packet_hwol_tx_l4_checksum(p)) {
+        if (tnl_inner) {
+            dp_packet_tnl_outer_ol_send_prepare(p, flags);
+        }
         return;
     }
 
@@ -616,5 +618,9 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
         packet_sctp_complete_csum(p, tnl_inner);
         dp_packet_ol_set_l4_csum_good(p);
         dp_packet_hwol_reset_tx_l4_csum(p);
+    }
+
+    if (tnl_inner) {
+        dp_packet_tnl_outer_ol_send_prepare(p, flags);
     }
 }

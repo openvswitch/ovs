@@ -7145,8 +7145,12 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
     if (dp_packet_hwol_is_tso(b)) {
         uint16_t tso_segsz = dp_packet_get_tso_segsz(b);
         struct tcp_header *tcp = dp_packet_l4(b);
+        struct tcp_header *inner_tcp = dp_packet_inner_l4(b);
+        if (inner_tcp) {
+            tcp = inner_tcp;
+        }
         int tcp_hdr_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
-        int hdr_len = ((char *) dp_packet_l4(b) - (char *) dp_packet_eth(b))
+        int hdr_len = ((char *) tcp - (char *) dp_packet_eth(b))
                       + tcp_hdr_len;
         int max_packet_len = mtu + ETH_HEADER_LEN + VLAN_HEADER_LEN;
 
@@ -7164,17 +7168,35 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
         } else if (dp_packet_hwol_tx_ipv6(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
         }
-
     } else {
         vnet->hdr_len = 0;
         vnet->gso_size = 0;
         vnet->gso_type = VIRTIO_NET_HDR_GSO_NONE;
     }
 
-    if (dp_packet_l4_checksum_good(b)) {
+    bool l4_is_good = dp_packet_l4_checksum_good(b);
+
+    if ((dp_packet_hwol_is_tunnel_vxlan(b) ||
+         dp_packet_hwol_is_tunnel_geneve(b)) &&
+        dp_packet_hwol_tx_l4_checksum(b)) {
+        /* This condition is needed because dp-packet doesn't currently track
+         * outer and inner checksum statuses seperately. In the case of these
+         * two tunnel types we can end up setting outer l4 as good but still
+         * need to complete the inner l4. */
+        l4_is_good = !(dp_packet_hwol_l4_is_tcp(b) ||
+                       dp_packet_hwol_l4_is_udp(b));
+    }
+
+    if (l4_is_good) {
         /* The packet has good L4 checksum. No need to validate again. */
         vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
         vnet->flags = VIRTIO_NET_HDR_F_DATA_VALID;
+        if (!dp_packet_ip_checksum_good(b)) {
+            /* It is possible that L4 is good but the IP checksum isn't
+             * complete. For example in the case of UDP encapsulation of an ARP
+             * packet where the UDP checksum is 0. */
+            dp_packet_ip_set_header_csum(b, false);
+        }
     } else if (dp_packet_hwol_tx_l4_checksum(b)) {
         /* The csum calculation is offloaded. */
         if (dp_packet_hwol_l4_is_tcp(b)) {
@@ -7192,20 +7214,28 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
              * the TCP pseudo header, so that replacing it by the ones
              * complement checksum of the TCP header and body will give
              * the correct result. */
+            void *l3_off = dp_packet_inner_l3(b);
+            void *l4_off = dp_packet_inner_l4(b);
 
-            struct tcp_header *tcp_hdr = dp_packet_l4(b);
+            if (!l3_off || !l4_off) {
+                l3_off = dp_packet_l3(b);
+                l4_off = dp_packet_l4(b);
+            }
+
+            struct tcp_header *tcp_hdr = l4_off;
             ovs_be16 csum = 0;
             if (dp_packet_hwol_is_ipv4(b)) {
-                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                const struct ip_header *ip_hdr = l3_off;
                 csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
             } else if (dp_packet_hwol_tx_ipv6(b)) {
-                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = l3_off;
                 csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
             }
 
             tcp_hdr->tcp_csum = csum;
             vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
-            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
+            vnet->csum_start = (OVS_FORCE __virtio16) ((char *) l4_off -
+                                    (char *) dp_packet_data(b));
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct tcp_header, tcp_csum);
         } else if (dp_packet_hwol_l4_is_udp(b)) {
@@ -7222,7 +7252,8 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
 
             udp_hdr->udp_csum = csum;
             vnet->flags = VIRTIO_NET_HDR_F_NEEDS_CSUM;
-            vnet->csum_start = (OVS_FORCE __virtio16) b->l4_ofs;
+            vnet->csum_start = (OVS_FORCE __virtio16) ((char *) udp_hdr -
+                                    (char *) dp_packet_data(b));;
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct udp_header, udp_csum);
         } else if (dp_packet_hwol_l4_is_sctp(b)) {

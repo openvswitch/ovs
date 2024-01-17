@@ -431,6 +431,8 @@ dp_packet_reset_offsets(struct dp_packet *b)
     b->l2_5_ofs = UINT16_MAX;
     b->l3_ofs = UINT16_MAX;
     b->l4_ofs = UINT16_MAX;
+    b->inner_l3_ofs = UINT16_MAX;
+    b->inner_l4_ofs = UINT16_MAX;
 }
 
 static inline uint16_t
@@ -526,6 +528,16 @@ dp_packet_inner_l4(const struct dp_packet *b)
     return b->inner_l4_ofs != UINT16_MAX
            ? (char *) dp_packet_data(b) + b->inner_l4_ofs
            : NULL;
+}
+
+static inline size_t
+dp_packet_inner_l4_size(const struct dp_packet *b)
+{
+    return OVS_LIKELY(b->l4_ofs != UINT16_MAX)
+           ? (const char *) dp_packet_tail(b)
+           - (const char *) dp_packet_inner_l4(b)
+           - dp_packet_l2_pad_size(b)
+           : 0;
 }
 
 static inline const void *
@@ -864,14 +876,6 @@ dp_packet_set_data(struct dp_packet *b, void *data)
     }
 }
 
-static inline void
-dp_packet_reset_packet(struct dp_packet *b, int off)
-{
-    dp_packet_set_size(b, dp_packet_size(b) - off);
-    dp_packet_set_data(b, ((unsigned char *) dp_packet_data(b) + off));
-    dp_packet_reset_offsets(b);
-}
-
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 
 struct dp_packet_batch {
@@ -1139,6 +1143,20 @@ dp_packet_hwol_l4_is_sctp(struct dp_packet *b)
 {
     return (*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_L4_MASK) ==
             DP_PACKET_OL_TX_SCTP_CKSUM;
+}
+
+/* Returns 'true' if packet 'b' is marked as having an outer IPv6 header. */
+static inline bool
+dp_packet_hwol_is_outer_ipv6(const struct dp_packet *b)
+{
+    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IPV6;
+}
+
+/* Returns 'true' if packet 'b' is marked as having an outer IPv4 header. */
+static inline bool
+dp_packet_hwol_is_outer_ipv4(const struct dp_packet *b)
+{
+    return *dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IPV4;
 }
 
 /* Returns 'true' if packet 'b' is marked for tunnel GENEVE
@@ -1413,18 +1431,33 @@ dp_packet_ol_reset_l4_csum_good(struct dp_packet *p)
     }
 }
 
-/* Marks packet 'p' with good integrity if the 'start' and 'offset'
- * matches with the 'csum_start' and 'csum_offset' in packet 'p'.
- * The 'start' is the offset from the begin of the packet headers.
- * The 'offset' is the offset from start to place the checksum.
+/* Marks packet 'p' with good integrity if checksum offload locations
+ * were provided. In the case of encapsulated packets, these values may
+ * be deeper into the packet than OVS might expect. But the packet
+ * should still be considered to have good integrity.
+ * The 'csum_start' is the offset from the begin of the packet headers.
+ * The 'csum_offset' is the offset from start to place the checksum.
  * The csum_start and csum_offset fields are set from the virtio_net_hdr
  * struct that may be provided by a netdev on packet ingress. */
 static inline void
-dp_packet_ol_l4_csum_check_partial(struct dp_packet *p, uint16_t start,
-                             uint16_t offset)
+dp_packet_ol_l4_csum_check_partial(struct dp_packet *p)
 {
-    if (p->csum_start == start && p->csum_offset == offset) {
+    if (p->csum_start && p->csum_offset) {
         dp_packet_ol_set_l4_csum_partial(p);
+    }
+}
+
+static inline void
+dp_packet_reset_packet(struct dp_packet *b, int off)
+{
+    dp_packet_set_size(b, dp_packet_size(b) - off);
+    dp_packet_set_data(b, ((unsigned char *) dp_packet_data(b) + off));
+    dp_packet_reset_offsets(b);
+
+    if (b->csum_start >= off && b->csum_offset) {
+        /* Adjust values for decapsulation. */
+        b->csum_start -= off;
+        dp_packet_ol_set_l4_csum_partial(b);
     }
 }
 

@@ -215,7 +215,8 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     }
 
     if (udp->udp_csum) {
-        if (OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
+        if (OVS_LIKELY(!dp_packet_ol_l4_csum_partial(packet)) &&
+            OVS_UNLIKELY(!dp_packet_l4_checksum_good(packet))) {
             uint32_t csum;
             if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
                 csum = packet_csum_pseudoheader6(dp_packet_l3(packet));
@@ -292,18 +293,11 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
             dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
                                          (char *) dp_packet_eth(packet) +
                                          GENEVE_BASE_HLEN + opt_len);
-
-            packet->inner_l3_ofs = packet->l3_ofs + GENEVE_BASE_HLEN + opt_len;
-            packet->inner_l4_ofs = packet->l4_ofs + GENEVE_BASE_HLEN + opt_len;
-
         } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
             dp_packet_hwol_set_tunnel_vxlan(packet);
             dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
                                          (char *) dp_packet_eth(packet) +
                                          VXLAN_HLEN);
-
-            packet->inner_l3_ofs = packet->l3_ofs + VXLAN_HLEN;
-            packet->inner_l4_ofs = packet->l4_ofs + VXLAN_HLEN;
         }
     }
 }
@@ -313,6 +307,8 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
                            struct dp_packet *packet,
                            const struct ovs_action_push_tnl *data)
 {
+    uint16_t l3_ofs = packet->l3_ofs;
+    uint16_t l4_ofs = packet->l4_ofs;
     struct udp_header *udp;
     int ip_tot_size;
 
@@ -332,13 +328,20 @@ netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
         } else {
             dp_packet_hwol_set_csum_udp(packet);
         }
-    } else {
+    }
+
+    if (packet->csum_start && packet->csum_offset) {
+        dp_packet_ol_set_l4_csum_partial(packet);
+    } else if (!udp->udp_csum) {
         dp_packet_ol_set_l4_csum_good(packet);
     }
 
-    packet->inner_l3_ofs += packet->l4_ofs;
-    packet->inner_l4_ofs += packet->l4_ofs;
-
+    if (l3_ofs != UINT16_MAX) {
+        packet->inner_l3_ofs = l3_ofs + data->header_len;
+    }
+    if (l4_ofs != UINT16_MAX) {
+        packet->inner_l4_ofs = l4_ofs + data->header_len;
+    }
 }
 
 static void *

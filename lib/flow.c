@@ -1054,9 +1054,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
                         dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
                     }
-                    dp_packet_ol_l4_csum_check_partial(packet, packet->l4_ofs,
-                                                 offsetof(struct tcp_header,
-                                                          tcp_csum));
+                    dp_packet_ol_l4_csum_check_partial(packet);
                     if (dp_packet_l4_checksum_good(packet)
                         || dp_packet_ol_l4_csum_partial(packet)) {
                         dp_packet_hwol_set_csum_tcp(packet);
@@ -1076,9 +1074,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 } else if (dl_type == htons(ETH_TYPE_IPV6)) {
                     dp_packet_update_rss_hash_ipv6_tcp_udp(packet);
                 }
-                dp_packet_ol_l4_csum_check_partial(packet, packet->l4_ofs,
-                                             offsetof(struct udp_header,
-                                                      udp_csum));
+                dp_packet_ol_l4_csum_check_partial(packet);
                 if (dp_packet_l4_checksum_good(packet)
                     || dp_packet_ol_l4_csum_partial(packet)) {
                     dp_packet_hwol_set_csum_udp(packet);
@@ -1092,9 +1088,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_push_be16(mf, tp_dst, sctp->sctp_dst);
                 miniflow_push_be16(mf, ct_tp_src, ct_tp_src);
                 miniflow_push_be16(mf, ct_tp_dst, ct_tp_dst);
-                dp_packet_ol_l4_csum_check_partial(packet, packet->l4_ofs,
-                                             offsetof(struct sctp_header,
-                                                      sctp_csum));
+                dp_packet_ol_l4_csum_check_partial(packet);
                 if (dp_packet_l4_checksum_good(packet)
                     || dp_packet_ol_l4_csum_partial(packet)) {
                     dp_packet_hwol_set_csum_sctp(packet);
