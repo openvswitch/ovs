@@ -1131,11 +1131,23 @@ dp_packet_hwol_set_tcp_seg(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TCP_SEG;
 }
 
-/* Resets TCP Segmentation flag in packet 'p'. */
+/* Resets TCP Segmentation in packet 'p' and adjust flags to indicate
+ * L3 and L4 checksumming is now required. */
 static inline void
 dp_packet_hwol_reset_tcp_seg(struct dp_packet *p)
 {
-    *dp_packet_ol_flags_ptr(p) &= ~DP_PACKET_OL_TX_TCP_SEG;
+    uint64_t ol_flags = *dp_packet_ol_flags_ptr(p)
+                        | DP_PACKET_OL_TX_TCP_CKSUM;
+
+    ol_flags = ol_flags & ~(DP_PACKET_OL_TX_TCP_SEG
+                            | DP_PACKET_OL_RX_L4_CKSUM_GOOD
+                            | DP_PACKET_OL_RX_IP_CKSUM_GOOD);
+
+    if (ol_flags & DP_PACKET_OL_TX_IPV4) {
+        ol_flags |= DP_PACKET_OL_TX_IP_CKSUM;
+    }
+
+    *dp_packet_ol_flags_ptr(p) = ol_flags;
 }
 
 /* Returns 'true' if the IP header has good integrity and the
