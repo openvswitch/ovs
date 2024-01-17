@@ -54,6 +54,7 @@ def decode_controller(value):
                     "id": decode_int,
                     "userdata": decode_default,
                     "pause": decode_flag,
+                    "meter_id": decode_int,
                 }
             )
         )(value)
