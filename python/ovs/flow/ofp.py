@@ -179,6 +179,7 @@ class OFPFlow(Flow):
             "idle_timeout": decode_time,
             "hard_timeout": decode_time,
             "hard_age": decode_time,
+            "idle_age": decode_time,
         }
         return KVDecoders(args)
 

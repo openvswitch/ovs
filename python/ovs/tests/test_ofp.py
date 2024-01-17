@@ -599,7 +599,7 @@ def test_act(input_string, expected):
     "input_string,expected",
     [
         (
-            "cookie=0x35f946ead8d8f9e4, duration=97746.271s, table=0, n_packets=12, n_bytes=254, priority=4,in_port=1",   # noqa: E501
+            "cookie=0x35f946ead8d8f9e4, duration=97746.271s, table=0, n_packets=12, n_bytes=254, idle_age=117, priority=4,in_port=1",   # noqa: E501
             (
                 [
                     KeyValue("cookie", 0x35f946ead8d8f9e4),
@@ -607,6 +607,7 @@ def test_act(input_string, expected):
                     KeyValue("table", 0),
                     KeyValue("n_packets", 12),
                     KeyValue("n_bytes", 254),
+                    KeyValue("idle_age", 117),
                 ],
                 [
                     KeyValue("priority", 4),
