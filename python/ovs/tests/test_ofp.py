@@ -6,6 +6,32 @@ from ovs.flow.kv import KeyValue, ParseError
 from ovs.flow.decoders import EthMask, IPMask, decode_mask
 
 
+def do_test_section(input_string, section, expected):
+    flow = OFPFlow(input_string)
+    kv_list = flow.section(section).data
+
+    assert len(expected) == len(kv_list)
+
+    for i in range(len(expected)):
+        assert expected[i].key == kv_list[i].key
+        assert expected[i].value == kv_list[i].value
+
+        # Assert positions relative to action string are OK.
+        pos = flow.section(section).pos
+        string = flow.section(section).string
+
+        kpos = kv_list[i].meta.kpos
+        kstr = kv_list[i].meta.kstring
+        vpos = kv_list[i].meta.vpos
+        vstr = kv_list[i].meta.vstring
+        assert string[kpos : kpos + len(kstr)] == kstr
+        if vpos != -1:
+            assert string[vpos : vpos + len(vstr)] == vstr
+
+        # Assert string meta is correct.
+        assert input_string[pos : pos + len(string)] == string
+
+
 @pytest.mark.parametrize(
     "input_string,expected",
     [
@@ -570,27 +596,40 @@ from ovs.flow.decoders import EthMask, IPMask, decode_mask
 def test_act(input_string, expected):
     if isinstance(expected, type):
         with pytest.raises(expected):
-            ofp = OFPFlow(input_string)
+            OFPFlow(input_string)
         return
 
-    ofp = OFPFlow(input_string)
-    actions = ofp.actions_kv
+    do_test_section(input_string, "actions", expected)
 
-    for i in range(len(expected)):
-        assert expected[i].key == actions[i].key
-        assert expected[i].value == actions[i].value
 
-        # Assert positions relative to action string are OK.
-        apos = ofp.section("actions").pos
-        astring = ofp.section("actions").string
+@pytest.mark.parametrize(
+    "input_string,expected",
+    [
+        (
+            "cookie=0x35f946ead8d8f9e4, duration=97746.271s, table=0, n_packets=12, n_bytes=254, priority=4,in_port=1",   # noqa: E501
+            (
+                [
+                    KeyValue("cookie", 0x35f946ead8d8f9e4),
+                    KeyValue("duration", 97746.271),
+                    KeyValue("table", 0),
+                    KeyValue("n_packets", 12),
+                    KeyValue("n_bytes", 254),
+                ],
+                [
+                    KeyValue("priority", 4),
+                    KeyValue("in_port", 1)
+                ],
+            ),
+        ),
+    ],
+)
+def test_key(input_string, expected):
+    if isinstance(expected, type):
+        with pytest.raises(expected):
+            OFPFlow(input_string)
+        return
 
-        kpos = actions[i].meta.kpos
-        kstr = actions[i].meta.kstring
-        vpos = actions[i].meta.vpos
-        vstr = actions[i].meta.vstring
-        assert astring[kpos : kpos + len(kstr)] == kstr
-        if vpos != -1:
-            assert astring[vpos : vpos + len(vstr)] == vstr
+    input_string += " actions=drop"
 
-        # Assert astring meta is correct.
-        assert input_string[apos : apos + len(astring)] == astring
+    do_test_section(input_string, "info", expected[0])
+    do_test_section(input_string, "match", expected[1])
