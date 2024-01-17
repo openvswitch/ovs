@@ -44,6 +44,7 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
+#include "userspace-tso.h"
 #include "reconnect.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
@@ -152,6 +153,8 @@ struct netdev_dummy {
     bool ol_ip_csum OVS_GUARDED;
     /* Flag RX packet with good csum. */
     bool ol_ip_csum_set_good OVS_GUARDED;
+    /* Set the segment size for netdev TSO support. */
+    int ol_tso_segsz OVS_GUARDED;
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -806,6 +809,10 @@ netdev_dummy_get_config(const struct netdev *dev, struct smap *args)
         smap_add_format(args, "ol_ip_csum_set_good", "%s", "true");
     }
 
+    if (netdev->ol_tso_segsz && userspace_tso_enabled()) {
+        smap_add_format(args, "ol_tso_segsz", "%d", netdev->ol_tso_segsz);
+    }
+
     /* 'dummy-pmd' specific config. */
     if (!netdev_is_pmd(dev)) {
         goto exit;
@@ -935,6 +942,14 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
     netdev->ol_ip_csum = smap_get_bool(args, "ol_ip_csum", false);
     if (netdev->ol_ip_csum) {
         netdev_->ol_flags |= NETDEV_TX_OFFLOAD_IPV4_CKSUM;
+    }
+
+    if (userspace_tso_enabled()) {
+        netdev->ol_tso_segsz = smap_get_int(args, "ol_tso_segsz", 0);
+        if (netdev->ol_tso_segsz) {
+            netdev_->ol_flags |= (NETDEV_TX_OFFLOAD_TCP_TSO
+                                  | NETDEV_TX_OFFLOAD_TCP_CKSUM);
+        }
     }
 
     netdev_change_seq_changed(netdev_);
@@ -1119,6 +1134,13 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
         /* The netdev hardware sets the flag when the packet has good csum. */
         dp_packet_ol_set_ip_csum_good(packet);
     }
+
+    if (userspace_tso_enabled() && netdev->ol_tso_segsz) {
+        dp_packet_set_tso_segsz(packet, netdev->ol_tso_segsz);
+        dp_packet_hwol_set_tcp_seg(packet);
+        dp_packet_hwol_set_csum_tcp(packet);
+    }
+
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_batch_init_packet(batch, packet);
@@ -1174,6 +1196,12 @@ netdev_dummy_send(struct netdev *netdev, int qid,
     DP_PACKET_BATCH_FOR_EACH(i, packet, batch) {
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
+        bool is_tso;
+
+        ovs_mutex_lock(&dev->mutex);
+        is_tso = userspace_tso_enabled() && dev->ol_tso_segsz &&
+                 dp_packet_hwol_is_tso(packet);
+        ovs_mutex_unlock(&dev->mutex);
 
         if (!dp_packet_is_eth(packet)) {
             error = EPFNOSUPPORT;
@@ -1194,7 +1222,7 @@ netdev_dummy_send(struct netdev *netdev, int qid,
             if (eth->eth_type == htons(ETH_TYPE_VLAN)) {
                 max_size += VLAN_HEADER_LEN;
             }
-            if (size > max_size) {
+            if (size > max_size && !is_tso) {
                 error = EMSGSIZE;
                 break;
             }

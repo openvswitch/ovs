@@ -810,6 +810,80 @@ AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([userspace offload - tso])
+OVS_VSWITCHD_START(
+  [set Open_vSwitch . other_config:userspace-tso-enable=true -- \
+   add-br br1 -- set bridge br1 datapath-type=dummy -- \
+   add-port br1 p1 -- \
+       set Interface p1 type=dummy -- \
+   add-port br1 p2 -- \
+       set Interface p2 type=dummy])
+
+dnl Simple passthrough rule.
+AT_CHECK([ovs-ofctl add-flow br1 in_port=p1,actions=output:p2])
+
+flow_s="in_port(1),eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x0800), \
+        ipv4(src=192.168.123.2,dst=192.168.123.1,proto=6,tos=1,ttl=64,frag=no), \
+        tcp(src=54392,dst=5201),tcp_flags(ack)"
+
+flow_s_v6="in_port(1),eth(src=8a:bf:7e:2f:05:84,dst=0a:8f:39:4f:e0:73),eth_type(0x86dd), \
+           ipv6(src=2001:cafe::88,dst=2001:cafe::92,proto=6), \
+           tcp(src=54392,dst=5201),tcp_flags(ack)"
+
+dnl Send from tso to no-tso.
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap -- \
+                    set Interface p1 options:ol_ip_csum=true -- \
+                    set Interface p1 options:ol_ip_csum_set_good=false -- \
+                    set Interface p1 options:ol_tso_segsz=500])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 2054])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s_v6}" --len 2074])
+
+dnl Send from tso to tso.
+AT_CHECK([ovs-vsctl set Interface p2 options:ol_ip_csum=true -- \
+                    set Interface p2 options:ol_ip_csum_set_good=false -- \
+                    set Interface p2 options:ol_tso_segsz=500])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s}" --len 2054])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "${flow_s_v6}" --len 2074])
+
+dnl Check that first we have:
+dnl  - 4x IPv4 500 byte payloads
+dnl  - 4x IPv6 500 byte payloads
+dnl  - one IPv4 2000 byte payload, and
+dnl  - one IPv6 2000 byte payload
+zero500=$(printf '0%.0s' $(seq 1000))
+AT_CHECK_UNQUOTED([ovs-pcap p2.pcap], [0], [dnl
+[0a8f394fe0738abf7e2f058408004501021c0000000040060187c0a87b02c0a87b01]dnl
+[d47814510000000000000000501000004dc20000${zero500}]
+[0a8f394fe0738abf7e2f058408004501021c0001000040060186c0a87b02c0a87b01]dnl
+[d4781451000001f400000000501000004bce0000${zero500}]
+[0a8f394fe0738abf7e2f058408004501021c0002000040060185c0a87b02c0a87b01]dnl
+[d4781451000003e8000000005010000049da0000${zero500}]
+[0a8f394fe0738abf7e2f058408004501021c0003000040060184c0a87b02c0a87b01]dnl
+[d4781451000005dc000000005010000047e60000${zero500}]
+[0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000]dnl
+[882001cafe000000000000000000000092d4781451000000000000000050100000edfd0000]dnl
+[${zero500}]
+[0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000]dnl
+[882001cafe000000000000000000000092d4781451000001f40000000050100000ec090000]dnl
+[${zero500}]
+[0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000]dnl
+[882001cafe000000000000000000000092d4781451000003e80000000050100000ea150000]dnl
+[${zero500}]
+[0a8f394fe0738abf7e2f058486dd60000000020806002001cafe0000000000000000000000]dnl
+[882001cafe000000000000000000000092d4781451000005dc0000000050100000e8210000]dnl
+[${zero500}]
+[0a8f394fe0738abf7e2f05840800450107f8000000004006fbaac0a87b02c0a87b01]dnl
+[d478145100000000000000005010000047e60000${zero500}${zero500}${zero500}${zero500}]
+[0a8f394fe0738abf7e2f058486dd6000000007e406002001cafe0000000000000000000000]dnl
+[882001cafe000000000000000000000092d4781451000000000000000050100000e8210000]dnl
+[${zero500}${zero500}${zero500}${zero500}]
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([dpif-netdev - revalidators handle dp modification fail correctly])
 OVS_VSWITCHD_START(
   [add-port br0 p1 \
