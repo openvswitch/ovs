@@ -551,6 +551,20 @@ def do_test_section(input_string, section, expected):
             ],
         ),
         (
+            "actions=LOCAL,clone(sample(probability=123))",
+            [
+                KeyValue("output", {"port": "LOCAL"}),
+                KeyValue(
+                    "clone",
+                    [
+                        {"sample": {
+                            "probability": 123,
+                        }},
+                    ]
+                ),
+            ],
+        ),
+        (
             "actions=doesnotexist(1234)",
             ParseError,
         ),
