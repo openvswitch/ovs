@@ -622,6 +622,8 @@ AT_CHECK([
     other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
 ], [0])
 
+AT_CHECK([ovs-appctl time/stop])
+
 # Send IGMPv1 report packet.
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1  \
