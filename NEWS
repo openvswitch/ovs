@@ -54,13 +54,6 @@ v3.3.0 - xx xxx xxxx
    - Support for multicast snooping to show the protocol responsible for
      adding/updating the entry.
 
-Known issues:
-   - DPDK: v23.11 has a change in behavior in handling i40e VF devices. This
-     may block and prevent OVS from adding such devices as ports in a netdev
-     datapath bridge.
-     For the details, see https://bugs.dpdk.org/show_bug.cgi?id=1337 which
-     describes the issue first detected in the 21.11 LTS branch.
-
 
 v3.2.0 - 17 Aug 2023
 --------------------
