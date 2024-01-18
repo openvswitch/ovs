@@ -328,7 +328,7 @@
     #if __CHECKER__
         /* sparse doesn't understand some GCC extensions we use. */
         #include "ovs-atomic-pthreads.h"
-    #elif __has_extension(c_atomic)
+    #elif __clang__ &&  __has_extension(c_atomic)
         #include "ovs-atomic-clang.h"
     #elif HAVE_ATOMIC && __cplusplus >= 201103L
         #include "ovs-atomic-c++.h"
