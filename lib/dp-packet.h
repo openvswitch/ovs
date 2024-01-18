@@ -131,6 +131,10 @@ enum dp_packet_offload_mask {
 #define DP_PACKET_OL_TX_L4_MASK (DP_PACKET_OL_TX_TCP_CKSUM | \
                                  DP_PACKET_OL_TX_UDP_CKSUM | \
                                  DP_PACKET_OL_TX_SCTP_CKSUM)
+#define DP_PACKET_OL_TX_ANY_CKSUM (DP_PACKET_OL_TX_L4_MASK | \
+                                   DP_PACKET_OL_TX_IP_CKSUM | \
+                                   DP_PACKET_OL_TX_OUTER_IP_CKSUM | \
+                                   DP_PACKET_OL_TX_OUTER_UDP_CKSUM)
 #define DP_PACKET_OL_RX_IP_CKSUM_MASK (DP_PACKET_OL_RX_IP_CKSUM_GOOD | \
                                        DP_PACKET_OL_RX_IP_CKSUM_BAD)
 #define DP_PACKET_OL_RX_L4_CKSUM_MASK (DP_PACKET_OL_RX_L4_CKSUM_GOOD | \
@@ -1187,6 +1191,13 @@ static inline bool
 dp_packet_hwol_is_outer_udp_cksum(struct dp_packet *b)
 {
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_UDP_CKSUM);
+}
+
+/* Returns 'true' if packet 'b' is marked for any checksum offload. */
+static inline bool
+dp_packet_hwol_tx_is_any_csum(struct dp_packet *b)
+{
+    return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_ANY_CKSUM);
 }
 
 static inline void

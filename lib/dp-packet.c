@@ -576,6 +576,11 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
 {
     bool tnl_inner = false;
 
+    if (!dp_packet_hwol_tx_is_any_csum(p)) {
+        /* Only checksumming needs actions. */
+        return;
+    }
+
     if (dp_packet_hwol_is_tunnel_geneve(p) ||
         dp_packet_hwol_is_tunnel_vxlan(p)) {
         tnl_inner = true;
