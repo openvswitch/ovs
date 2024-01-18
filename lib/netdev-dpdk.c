@@ -58,6 +58,7 @@
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-print.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "openvswitch/vlog.h"
 #include "ovs-numa.h"
@@ -2101,32 +2102,73 @@ netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
     return new_port_id;
 }
 
+static struct seq *netdev_dpdk_reset_seq;
+static uint64_t netdev_dpdk_last_reset_seq;
+static atomic_bool netdev_dpdk_pending_reset[RTE_MAX_ETHPORTS];
+
+static void
+netdev_dpdk_wait(const struct netdev_class *netdev_class OVS_UNUSED)
+{
+    uint64_t last_reset_seq = seq_read(netdev_dpdk_reset_seq);
+
+    if (netdev_dpdk_last_reset_seq == last_reset_seq) {
+        seq_wait(netdev_dpdk_reset_seq, netdev_dpdk_last_reset_seq);
+    } else {
+        poll_immediate_wake();
+    }
+}
+
+static void
+netdev_dpdk_run(const struct netdev_class *netdev_class OVS_UNUSED)
+{
+    uint64_t reset_seq = seq_read(netdev_dpdk_reset_seq);
+
+    if (reset_seq != netdev_dpdk_last_reset_seq) {
+        dpdk_port_t port_id;
+
+        netdev_dpdk_last_reset_seq = reset_seq;
+
+        for (port_id = 0; port_id < RTE_MAX_ETHPORTS; port_id++) {
+            struct netdev_dpdk *dev;
+            bool pending_reset;
+
+            atomic_read_relaxed(&netdev_dpdk_pending_reset[port_id],
+                                &pending_reset);
+            if (!pending_reset) {
+                continue;
+            }
+            atomic_store_relaxed(&netdev_dpdk_pending_reset[port_id], false);
+
+            ovs_mutex_lock(&dpdk_mutex);
+            dev = netdev_dpdk_lookup_by_port_id(port_id);
+            if (dev) {
+                ovs_mutex_lock(&dev->mutex);
+                dev->reset_needed = true;
+                netdev_request_reconfigure(&dev->up);
+                VLOG_DBG_RL(&rl, "%s: Device reset requested.",
+                            netdev_get_name(&dev->up));
+                ovs_mutex_unlock(&dev->mutex);
+            }
+            ovs_mutex_unlock(&dpdk_mutex);
+        }
+    }
+}
+
 static int
 dpdk_eth_event_callback(dpdk_port_t port_id, enum rte_eth_event_type type,
                         void *param OVS_UNUSED, void *ret_param OVS_UNUSED)
 {
-    struct netdev_dpdk *dev;
-
     switch ((int) type) {
     case RTE_ETH_EVENT_INTR_RESET:
-        ovs_mutex_lock(&dpdk_mutex);
-        dev = netdev_dpdk_lookup_by_port_id(port_id);
-        if (dev) {
-            ovs_mutex_lock(&dev->mutex);
-            dev->reset_needed = true;
-            netdev_request_reconfigure(&dev->up);
-            VLOG_DBG_RL(&rl, "%s: Device reset requested.",
-                        netdev_get_name(&dev->up));
-            ovs_mutex_unlock(&dev->mutex);
-        }
-        ovs_mutex_unlock(&dpdk_mutex);
+        atomic_store_relaxed(&netdev_dpdk_pending_reset[port_id], true);
+        seq_change(netdev_dpdk_reset_seq);
         break;
 
     default:
         /* Ignore all other types. */
         break;
-   }
-   return 0;
+    }
+    return 0;
 }
 
 static void
@@ -5001,6 +5043,8 @@ netdev_dpdk_class_init(void)
                                  "[netdev]", 0, 1,
                                  netdev_dpdk_get_mempool_info, NULL);
 
+        netdev_dpdk_reset_seq = seq_create();
+        netdev_dpdk_last_reset_seq = seq_read(netdev_dpdk_reset_seq);
         ret = rte_eth_dev_callback_register(RTE_ETH_ALL,
                                             RTE_ETH_EVENT_INTR_RESET,
                                             dpdk_eth_event_callback, NULL);
@@ -6593,6 +6637,8 @@ parse_vhost_config(const struct smap *ovs_other_config)
 #define NETDEV_DPDK_CLASS_BASE                          \
     NETDEV_DPDK_CLASS_COMMON,                           \
     .init = netdev_dpdk_class_init,                     \
+    .run = netdev_dpdk_run,                             \
+    .wait = netdev_dpdk_wait,                           \
     .destruct = netdev_dpdk_destruct,                   \
     .set_tx_multiq = netdev_dpdk_set_tx_multiq,         \
     .get_carrier = netdev_dpdk_get_carrier,             \
