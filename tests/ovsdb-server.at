@@ -2870,7 +2870,9 @@ m4_define([TEST_CONFIG_FILE],
                 --config-file=config.json], [$3], [ignore], [stderr])
   m4_if([$4], [], [], [
     AT_CHECK([cat stderr | grep -v -E 'INFO|DBG' \
-        | grep -v 'failed to load configuration from' > warnings])
+        | grep -v 'failed to load configuration from' \
+        | sed -e "/duplicate database name/ s/'db'/'db2'/" \
+        > warnings])
     AT_CHECK([cat warnings], [0], [m4_if([$3], [0], [$4], [$4
 ovsdb-server: server configuration failed
 ])])])
