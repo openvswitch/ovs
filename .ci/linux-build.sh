@@ -157,6 +157,10 @@ else
         if [ "$testsuite" != "check" ] && \
            [ "$testsuite" != "check-ovsdb-cluster" ] ; then
             run_as_root="sudo -E PATH=$PATH GITHUB_ACTIONS=$GITHUB_ACTIONS"
+            sudo ip netns add ovs-system-test-ns
+            # Some system tests may rely on traffic loopback.
+            sudo ip -netns ovs-system-test-ns link set dev lo up
+            run_as_root="${run_as_root} ip netns exec ovs-system-test-ns"
         fi
         if [ "${testsuite##*dpdk}" != "$testsuite" ]; then
             sudo sh -c 'echo 1024 > /proc/sys/vm/nr_hugepages' || true
