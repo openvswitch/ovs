@@ -224,7 +224,6 @@ compose_rarp(struct dp_packet *b, const struct eth_addr eth_src)
     arp->ar_tha = eth_src;
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
 
-    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
     b->packet_type = htonl(PT_ETH);
 }
@@ -1114,7 +1113,6 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
     eth->eth_type = htons(eth_type);
 
     b->packet_type = htonl(PT_ETH);
-    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, data);
 
     return data;
@@ -1747,7 +1745,6 @@ compose_arp__(struct dp_packet *b)
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
 
-    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 
     b->packet_type = htonl(PT_ETH);
