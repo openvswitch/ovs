@@ -102,7 +102,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: update PATH
       run:  |
@@ -110,7 +110,7 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
@@ -126,7 +126,7 @@ jobs:
 
     - name: cache
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       env:
         matrix_key: ${{ matrix.dpdk }}${{ matrix.dpdk_shared }}
         ci_key:     ${{ hashFiles('dpdk-ci-signature') }}
@@ -151,9 +151,9 @@ jobs:
     - name: copy logs on failure
       if: failure() || cancelled()
       run: |
-        # upload-artifact@v2 throws exceptions if it tries to upload socket
+        # upload-artifact throws exceptions if it tries to upload socket
         # files and we could have some socket files in testsuite.dir.
-        # Also, upload-artifact@v2 doesn't work well enough with wildcards.
+        # Also, upload-artifact doesn't work well enough with wildcards.
         # So, we're just archiving everything here to avoid any issues.
         mkdir logs
         cp config.log ./logs/
@@ -162,7 +162,7 @@ jobs:
 
     - name: upload logs on failure
       if: failure() || cancelled()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: logs-linux-${{ join(matrix.*, '-') }}
         path: logs.tgz
@@ -181,13 +181,13 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: update PATH
       run:  |
         echo "$HOME/bin"        >> $GITHUB_PATH
         echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
     - name: install dependencies
@@ -198,7 +198,7 @@ jobs:
       run:  ./.ci/osx-build.sh
     - name: upload logs on failure
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: logs-osx-clang---disable-ssl
         path: config.log
@@ -223,7 +223,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: update PATH
       run:  |
@@ -245,7 +245,7 @@ jobs:
       run:  ./.ci/linux-build.sh
 
     - name: upload deb packages
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deb-packages-${{ matrix.dpdk }}-dpdk
         path: '/home/runner/work/ovs/*.deb'
