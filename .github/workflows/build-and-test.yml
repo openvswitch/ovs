@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: update PATH
       run:  |
@@ -45,14 +45,14 @@ jobs:
 
     - name: cache
       id: dpdk_cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: dpdk-dir
         key:  ${{ steps.gen_dpdk_key.outputs.key }}
 
     - name: set up python
       if: steps.dpdk_cache.outputs.cache-hit != 'true'
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
@@ -207,7 +207,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: update PATH
       run:  |
@@ -215,13 +215,13 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
     - name: cache
       if:   matrix.dpdk != '' || matrix.dpdk_shared != ''
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: dpdk-dir
         key:  ${{ needs.build-dpdk.outputs.dpdk_key }}
@@ -247,9 +247,9 @@ jobs:
     - name: copy logs on failure
       if: failure() || cancelled()
       run: |
-        # upload-artifact@v2 throws exceptions if it tries to upload socket
+        # upload-artifact throws exceptions if it tries to upload socket
         # files and we could have some socket files in testsuite.dir.
-        # Also, upload-artifact@v2 doesn't work well enough with wildcards.
+        # Also, upload-artifact doesn't work well enough with wildcards.
         # So, we're just archiving everything here to avoid any issues.
         mkdir logs
         cp config.log ./logs/
@@ -259,7 +259,7 @@ jobs:
 
     - name: upload logs on failure
       if: failure() || cancelled()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: logs-linux-${{ join(matrix.*, '-') }}
         path: logs.tgz
@@ -279,7 +279,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -338,18 +338,18 @@ jobs:
 
     - name: check for analyzer result cache
       id: clang_cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: base-clang-analyzer-results
         key:  ${{ steps.cache_key.outputs.key }}
 
     - name: set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
     - name: get cached dpdk-dir
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: dpdk-dir
         key:  ${{ needs.build-dpdk.outputs.dpdk_key }}
@@ -368,7 +368,7 @@ jobs:
       run:  ./.ci/linux-build.sh
 
     - name: save cache
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       if: steps.clang_cache.outputs.cache-hit != 'true'
       with:
         path: base-clang-analyzer-results
@@ -391,13 +391,13 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: update PATH
       run:  |
         echo "$HOME/bin"        >> $GITHUB_PATH
         echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
     - name: install dependencies
@@ -408,7 +408,7 @@ jobs:
       run:  ./.ci/osx-build.sh
     - name: upload logs on failure
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: logs-osx-clang---disable-ssl
         path: config.log
@@ -432,7 +432,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: update PATH
       run:  |
@@ -454,7 +454,7 @@ jobs:
       run:  ./.ci/linux-build.sh
 
     - name: upload deb packages
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deb-packages-${{ matrix.dpdk }}-dpdk
         path: '/home/runner/work/ovs/*.deb'
@@ -470,7 +470,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: install dependencies
       run: |
         dnf install -y rpm-build dnf-plugins-core
@@ -489,7 +489,7 @@ jobs:
       run:  dnf install -y rpm/rpmbuild/RPMS/*/*.rpm
 
     - name: upload rpm packages
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rpm-packages
         path: |
