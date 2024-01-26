@@ -58,7 +58,7 @@ mcast_snooping_flood_unreg(const struct mcast_snooping *ms)
 }
 
 char *
-mcast_snooping_group_protocol_str(mcast_group_proto grp_proto)
+mcast_snooping_group_protocol_str(enum mcast_group_proto grp_proto)
 {
     switch (grp_proto) {
     case MCAST_GROUP_IGMPV1:
@@ -414,7 +414,7 @@ bool
 mcast_snooping_add_group(struct mcast_snooping *ms,
                          const struct in6_addr *addr,
                          uint16_t vlan, void *port,
-                         mcast_group_proto grp_proto)
+                         enum mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     bool learned;
@@ -460,7 +460,7 @@ mcast_snooping_add_group(struct mcast_snooping *ms,
 bool
 mcast_snooping_add_group4(struct mcast_snooping *ms, ovs_be32 ip4,
                          uint16_t vlan, void *port,
-                         mcast_group_proto grp_proto)
+                         enum mcast_group_proto grp_proto)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     struct in6_addr addr = in6_addr_mapped_ipv4(ip4);
