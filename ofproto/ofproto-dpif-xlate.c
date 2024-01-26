@@ -2796,7 +2796,7 @@ update_mcast_snooping_table4__(const struct xlate_ctx *ctx,
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     const struct igmp_header *igmp;
-    mcast_group_proto grp_proto;
+    enum mcast_group_proto grp_proto;
     int count;
     size_t offset;
     ovs_be32 ip4 = flow->igmp_group_ip4;
