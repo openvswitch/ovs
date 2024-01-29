@@ -81,7 +81,6 @@ struct event_t {
 
     u32 syscall;
     u64 entry_ts;
-
 };
 
 BPF_RINGBUF_OUTPUT(events, <BUFFER_PAGE_CNT>);
@@ -220,7 +219,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
         u64 delta = bpf_ktime_get_ns() - *start_ns;
         val->count++;
         val->total_ns += delta;
-        if (val->worst_ns == 0 || delta > val->worst_ns)
+        if (delta > val->worst_ns)
             val->worst_ns = delta;
 
         if (<SYSCALL_TRACE_EVENTS>) {
@@ -243,6 +242,47 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
 
 
 /*
+ * For measuring the thread stopped time, we need the following.
+ */
+struct stop_time_data_t {
+    u64 count;
+    u64 total_ns;
+    u64 worst_ns;
+};
+
+struct pid_tid_key_t {
+    u32  pid;
+    u32  tid;
+};
+
+BPF_HASH(stop_start, u64, u64);
+BPF_HASH(stop_data, struct pid_tid_key_t, struct stop_time_data_t);
+
+static inline void thread_handle_stopped_run(u32 pid, u32 tgid, u64 ktime)
+{
+    u64 pid_tgid = (u64) tgid << 32 | pid;
+    u64 *start_ns = stop_start.lookup(&pid_tgid);
+
+    if (!start_ns || *start_ns == 0)
+        return;
+
+    struct stop_time_data_t *val, zero = {};
+    struct pid_tid_key_t key = { .pid = tgid,
+                                 .tid = pid };
+
+    val = stop_data.lookup_or_try_init(&key, &zero);
+    if (val) {
+        u64 delta = ktime - *start_ns;
+        val->count++;
+        val->total_ns += delta;
+        if (delta > val->worst_ns)
+            val->worst_ns = delta;
+    }
+    *start_ns = 0;
+}
+
+
+/*
  * For measuring the thread run time, we need the following.
  */
 struct run_time_data_t {
@@ -250,11 +290,6 @@ struct run_time_data_t {
     u64 total_ns;
     u64 max_ns;
     u64 min_ns;
-};
-
-struct pid_tid_key_t {
-    u32  pid;
-    u32  tid;
 };
 
 BPF_HASH(run_start, u64, u64);
@@ -282,7 +317,7 @@ static inline void thread_stop_run(u32 pid, u32 tgid, u64 ktime)
         u64 delta = ktime - *start_ns;
         val->count++;
         val->total_ns += delta;
-        if (val->max_ns == 0 || delta > val->max_ns)
+        if (delta > val->max_ns)
             val->max_ns = delta;
         if (val->min_ns == 0 || delta < val->min_ns)
             val->min_ns = delta;
@@ -312,6 +347,8 @@ static inline int sched_wakeup__(u32 pid, u32 tgid)
 
     u64 t = bpf_ktime_get_ns();
     ready_start.update(&pid_tgid, &t);
+
+    thread_handle_stopped_run(pid, tgid, t);
     return 0;
 }
 
@@ -336,15 +373,18 @@ RAW_TRACEPOINT_PROBE(sched_switch)
     if (!capture_enabled__())
         return 0;
 
-    if (prev-><STATE_FIELD> == TASK_RUNNING && prev->tgid == MONITOR_PID)
-        sched_wakeup__(prev->pid, prev->tgid);
-
     if (prev->tgid == MONITOR_PID) {
+        u64 prev_pid_tgid = (u64)next->tgid << 32 | next->pid;
         ktime = bpf_ktime_get_ns();
+
+        if (prev-><STATE_FIELD> == TASK_RUNNING)
+            ready_start.update(&prev_pid_tgid, &ktime);
+
+        if (prev-><STATE_FIELD> & __TASK_STOPPED)
+            stop_start.update(&prev_pid_tgid, &ktime);
+
         thread_stop_run(prev->pid, prev->tgid, ktime);
     }
-
-    u64 pid_tgid = (u64)next->tgid << 32 | next->pid;
 
     if (next->tgid != MONITOR_PID)
         return 0;
@@ -352,6 +392,7 @@ RAW_TRACEPOINT_PROBE(sched_switch)
     if (ktime == 0)
         ktime = bpf_ktime_get_ns();
 
+    u64 pid_tgid = (u64)next->tgid << 32 | next->pid;
     u64 *start_ns = ready_start.lookup(&pid_tgid);
 
     if (start_ns && *start_ns != 0) {
@@ -365,7 +406,7 @@ RAW_TRACEPOINT_PROBE(sched_switch)
             u64 delta = ktime - *start_ns;
             val->count++;
             val->total_ns += delta;
-            if (val->worst_ns == 0 || delta > val->worst_ns)
+            if (delta > val->worst_ns)
                 val->worst_ns = delta;
         }
         *start_ns = 0;
@@ -438,7 +479,7 @@ TRACEPOINT_PROBE(irq, irq_handler_exit)
             u64 delta = bpf_ktime_get_ns() - data->start_ns;
             val->count++;
             val->total_ns += delta;
-            if (val->worst_ns == 0 || delta > val->worst_ns)
+            if (delta > val->worst_ns)
                 val->worst_ns = delta;
         }
     }
@@ -508,7 +549,7 @@ TRACEPOINT_PROBE(irq, softirq_exit)
         u64 delta = bpf_ktime_get_ns() - data->start_ns;
         val->count++;
         val->total_ns += delta;
-        if (val->worst_ns == 0 || delta > val->worst_ns)
+        if (delta > val->worst_ns)
             val->worst_ns = delta;
     }
 
@@ -844,6 +885,8 @@ def reset_capture():
     bpf["softirq_start"].clear()
     bpf["softirq_data"].clear()
     bpf["stack_traces"].clear()
+    bpf["stop_start"].clear()
+    bpf["stop_data"].clear()
 
 
 #
@@ -879,6 +922,9 @@ def process_results(syscall_events=None, trigger_delta=None):
     threads_ready = {k.tid for k, _ in bpf["ready_data"].items()
                      if k.pid != 0xffffffff}
 
+    threads_stopped = {k.tid for k, _ in bpf["stop_data"].items()
+                       if k.pid != 0xffffffff}
+
     threads_hardirq = {k.tid for k, _ in bpf["hardirq_data"].items()
                        if k.pid != 0xffffffff}
 
@@ -886,7 +932,7 @@ def process_results(syscall_events=None, trigger_delta=None):
                        if k.pid != 0xffffffff}
 
     threads = sorted(threads_syscall | threads_run | threads_ready |
-                     threads_hardirq | threads_softirq,
+                     threads_stopped | threads_hardirq | threads_softirq,
                      key=lambda x: get_thread_name(options.pid, x))
 
     #
@@ -933,28 +979,44 @@ def process_results(syscall_events=None, trigger_delta=None):
         #
         # THREAD RUN STATISTICS
         #
-        print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}  {:>16}".format(
-            "", "", "[THREAD RUN STATISTICS]", indent,
-            "SCHED_CNT", "TOTAL ns", "MIN ns", "MAX ns"))
-
         for k, v in filter(lambda t: t[0].tid == thread,
                            bpf["run_data"].items()):
 
+            print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}  {:>16}".format(
+                "", "", "[THREAD RUN STATISTICS]", indent,
+                "SCHED_CNT", "TOTAL ns", "MIN ns", "MAX ns"))
+
             print("{}{:10}  {:16,}  {:16,}  {:16,}".format(
                 indent, v.count, v.total_ns, v.min_ns, v.max_ns))
+            break
 
         #
         # THREAD READY STATISTICS
         #
-        print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}".format(
-            "", "", "[THREAD READY STATISTICS]", indent,
-            "SCHED_CNT", "TOTAL ns", "MAX ns"))
-
         for k, v in filter(lambda t: t[0].tid == thread,
                            bpf["ready_data"].items()):
 
+            print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}".format(
+                "", "", "[THREAD READY STATISTICS]", indent,
+                "SCHED_CNT", "TOTAL ns", "MAX ns"))
+
             print("{}{:10}  {:16,}  {:16,}".format(
                 indent, v.count, v.total_ns, v.worst_ns))
+            break
+
+        #
+        # THREAD STOPPED STATISTICS
+        #
+        for k, v in filter(lambda t: t[0].tid == thread,
+                           bpf["stop_data"].items()):
+
+            print("\n{:10} {:16} {}\n{}{:10}  {:>16}  {:>16}".format(
+                "", "", "[THREAD STOPPED STATISTICS]", indent,
+                "STOP_CNT", "TOTAL ns", "MAX ns"))
+
+            print("{}{:10}  {:16,}  {:16,}".format(
+                indent, v.count, v.total_ns, v.worst_ns))
+            break
 
         #
         # HARD IRQ STATISTICS

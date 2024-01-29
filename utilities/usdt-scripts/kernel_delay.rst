@@ -75,6 +75,10 @@ with the ``--pid`` option.
                   SCHED_CNT           TOTAL ns            MAX ns
                        7            11,334             6,636
 
+                  [THREAD STOPPED STATISTICS]
+                  STOP_CNT            TOTAL ns            MAX ns
+                       3         3,045,728,323     1,015,739,474
+
                   [HARD IRQ STATISTICS]
                   NAME                       COUNT          TOTAL ns            MAX ns
                   eno8303-rx-1                   1             3,586             3,586
@@ -102,6 +106,7 @@ followed by resource-specific data. Which are:
 - ``SYSCALL STATISTICS``
 - ``THREAD RUN STATISTICS``
 - ``THREAD READY STATISTICS``
+- ``THREAD STOPPED STATISTICS``
 - ``HARD IRQ STATISTICS``
 - ``SOFT IRQ STATISTICS``
 
@@ -141,6 +146,25 @@ to run and it actually running on the CPU.
 
 Note that these statistics only count events where the thread was getting
 ready to run and started running during the measurement interval.
+
+
+``THREAD STOPPED STATISTICS``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``THREAD STOPPED STATISTICS`` reveal the number of instances where the thread
+has been scheduled out while in the running state due to its transition to
+the TASK_STOPPED state.
+
+This behavior can be replicated by manually placing the thread in the stopped
+state and subsequently resuming it. For instance:
+
+.. code-block:: console
+
+  # kill -STOP $(pidof ovs-vswitchd); \
+    sleep 1; \
+    kill -CONT $(pidof ovs-vswitchd);
+
+Note that these statistics only count events where the thread was running at
+the time it was put to stopped state.
 
 
 ``HARD IRQ STATISTICS``
