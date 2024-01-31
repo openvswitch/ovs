@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 22.11.3
+- DPDK 22.11.4
 
 - A `DPDK supported NIC`_
 
@@ -73,9 +73,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget https://fast.dpdk.org/rel/dpdk-22.11.3.tar.xz
-       $ tar xf dpdk-22.11.3.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-22.11.3
+       $ wget https://fast.dpdk.org/rel/dpdk-22.11.4.tar.xz
+       $ tar xf dpdk-22.11.4.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-stable-22.11.4
        $ cd $DPDK_DIR
 
 #. Configure and install DPDK using Meson
