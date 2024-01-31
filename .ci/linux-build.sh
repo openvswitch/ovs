@@ -228,7 +228,7 @@ fi
 
 if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="21.11.5"
+        DPDK_VER="21.11.6"
     fi
     install_dpdk $DPDK_VER
 fi
