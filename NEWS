@@ -1,5 +1,8 @@
-v3.1.4 - xx xxx xxxx
+v3.1.4 - 08 Feb 2024
 --------------------
+   - Bug fixes
+   - Security:
+     * Fixed vulnerabilities CVE-2023-3966 and CVE-2023-5366.
    - DPDK:
      * OVS validated with DPDK 22.11.4.
 
