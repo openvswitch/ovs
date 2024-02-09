@@ -385,6 +385,7 @@ Rob Adams                          readams@readams.net
 Rob Hoes                           rob.hoes@citrix.com
 Robert Wojciechowicz               robertx.wojciechowicz@intel.com
 Robert Åkerblom-Andersson          Robert.nr1@gmail.com
+Roberto Bartzen Acosta             roberto.acosta@luizalabs.com
 Robin Jarry                        rjarry@redhat.com
 Rohith Basavaraja                  rohith.basavaraja@gmail.com
 Roi Dayan                          roid@nvidia.com
