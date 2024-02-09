@@ -1,5 +1,5 @@
 version: 1.0.{build}
-image: Previous Visual Studio 2019
+image: Visual Studio 2019
 branches:
   only:
   - master
@@ -7,54 +7,41 @@ configuration:
   - Debug
   - Release
 clone_folder: C:\openvswitch_compile
+shallow_clone: true
 init:
-- ps: $env:PATH ="C:\Python37;"+$env:PATH
-- ps: New-Item -Type HardLink -Path "C:\Python37\python3.exe" -Value "C:\Python37\python.exe"
-- ps: >-
+- ps: $env:PATH ="C:\Python312-x64;"+$env:PATH
+- ps: New-Item -Type HardLink -Path  "C:\Python312-x64\python3.exe"
+                              -Value "C:\Python312-x64\python.exe"
+- ps: |
     mkdir C:\ovs-build-downloads
 
-    mkdir C:\openvswitch\driver
-
     $source = "https://slproweb.com/download/Win64OpenSSL-1_0_2u.exe"
-
     $destination = "C:\ovs-build-downloads\Win64OpenSSL-1_0_2u.exe"
-
     Invoke-WebRequest $source -OutFile $destination
 
     cd C:\ovs-build-downloads
-
     .\Win64OpenSSL-1_0_2u.exe /silent /verysilent /sp- /suppressmsgboxes
-
     Start-Sleep -s 30
-
-    cd C:\openvswitch
-
-    git clone -q https://git.code.sf.net/p/pthreads4w/code c:\pthreads4w-code
-
-    python3 -m pip install pypiwin32 --disable-pip-version-check
-
     cd C:\openvswitch_compile
+- ps: git clone -q https://git.code.sf.net/p/pthreads4w/code c:\pthreads4w-code
+- ps: python3 -m pip install pypiwin32 --disable-pip-version-check
 
 build_script:
 - '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
-- C:\MinGW\msys\1.0\bin\bash -lc "echo \"C:/MinGW /mingw\" > /etc/fstab"
-- C:\MinGW\msys\1.0\bin\bash -lc "mv /bin/link.exe /bin/link_copy.exe"
-# Build pthreads
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/pthreads4w-code && nmake all install"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && ./boot.sh"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32\" --prefix=C:/openvswitch/usr --localstatedir=C:/openvswitch/var --sysconfdir=C:/openvswitch/etc --with-pthread=c:/PTHREADS-BUILT/ --enable-ssl --with-openssl=C:/OpenSSL-Win64 --with-vstudiotarget=\"%CONFIGURATION%\""
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && make -j 4"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && make datapath_windows_analyze"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && make install"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch_compile && make windows_installer"
-- cp C:\PTHREADS-BUILT\bin\pthreadVC3.dll C:\openvswitch\usr\bin
-- cp C:\PTHREADS-BUILT\bin\pthreadVC3.dll C:\openvswitch\usr\sbin
-- ps: cp C:\openvswitch_compile\datapath-windows\x64\Win10$env:CONFIGURATION\package\* C:\openvswitch\driver
-- ps: cp C:\openvswitch_compile\datapath-windows\x64\Win10$env:CONFIGURATION\package.cer C:\openvswitch\driver
-- ps: cp C:\openvswitch_compile\datapath-windows\misc\* C:\openvswitch\driver
-- cp c:\openvswitch_compile\windows\ovs-windows-installer\bin\x64\Release\OpenvSwitch.msi c:\OpenvSwitch-%CONFIGURATION%.msi
+- ps: C:\msys64\msys2_shell.cmd -here -defterm -no-start -use-full-path -c
+        ".ci/windows-prepare.sh 2>&1"
+- ps: C:\msys64\msys2_shell.cmd -here -defterm -no-start -use-full-path -c
+        ".ci/windows-build.sh $env:CONFIGURATION 2>&1"
+- ps: cp C:\PTHREADS-BUILT\bin\pthreadVC3.dll C:\openvswitch\usr\bin
+- ps: cp C:\PTHREADS-BUILT\bin\pthreadVC3.dll C:\openvswitch\usr\sbin
+- ps: mkdir C:\openvswitch\driver
+- ps: cp datapath-windows\x64\Win10$env:CONFIGURATION\package\* C:\openvswitch\driver
+- ps: cp datapath-windows\x64\Win10$env:CONFIGURATION\package.cer C:\openvswitch\driver
+- ps: cp datapath-windows\misc\* C:\openvswitch\driver
+- ps: cp windows\ovs-windows-installer\bin\x64\Release\OpenvSwitch.msi
+         c:\OpenvSwitch-$env:CONFIGURATION.msi
 
 after_build:
-  - ps: 7z a C:\ovs-master-$env:CONFIGURATION.zip C:\openvswitch
-  - ps: Push-AppveyorArtifact C:\ovs-master-$env:CONFIGURATION.zip
-  - ps: Push-AppveyorArtifact C:\OpenvSwitch-$env:CONFIGURATION.msi
+- ps: 7z a C:\ovs-master-$env:CONFIGURATION.zip C:\openvswitch
+- ps: Push-AppveyorArtifact C:\ovs-master-$env:CONFIGURATION.zip
+- ps: Push-AppveyorArtifact C:\OpenvSwitch-$env:CONFIGURATION.msi
