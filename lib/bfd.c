@@ -586,7 +586,6 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
 {
     long long int min_tx, min_rx;
     struct udp_header *udp;
-    struct eth_header *eth;
     struct ip_header *ip;
     struct msg *msg;
 
@@ -605,15 +604,13 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
      * set. */
     ovs_assert(!(bfd->flags & FLAG_POLL) || !(bfd->flags & FLAG_FINAL));
 
-    dp_packet_reserve(p, 2); /* Properly align after the ethernet header. */
-    eth = dp_packet_put_uninit(p, sizeof *eth);
-    eth->eth_src = eth_addr_is_zero(bfd->local_eth_src)
-        ? eth_src : bfd->local_eth_src;
-    eth->eth_dst = eth_addr_is_zero(bfd->local_eth_dst)
-        ? eth_addr_bfd : bfd->local_eth_dst;
-    eth->eth_type = htons(ETH_TYPE_IP);
+    ip = eth_compose(p,
+                     eth_addr_is_zero(bfd->local_eth_dst)
+                     ? eth_addr_bfd : bfd->local_eth_dst,
+                     eth_addr_is_zero(bfd->local_eth_src)
+                     ? eth_src : bfd->local_eth_src,
+                     ETH_TYPE_IP, sizeof *ip + sizeof *udp + sizeof *msg);
 
-    ip = dp_packet_put_zeros(p, sizeof *ip);
     ip->ip_ihl_ver = IP_IHL_VER(5, 4);
     ip->ip_tot_len = htons(sizeof *ip + sizeof *udp + sizeof *msg);
     ip->ip_ttl = MAXTTL;
@@ -621,15 +618,17 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     ip->ip_proto = IPPROTO_UDP;
     put_16aligned_be32(&ip->ip_src, bfd->ip_src);
     put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
-    /* Checksum has already been zeroed by put_zeros call. */
+    /* Checksum has already been zeroed by eth_compose call. */
     ip->ip_csum = csum(ip, sizeof *ip);
+    dp_packet_set_l4(p, ip + 1);
 
-    udp = dp_packet_put_zeros(p, sizeof *udp);
+    udp = dp_packet_l4(p);
     udp->udp_src = htons(bfd->udp_src);
     udp->udp_dst = htons(BFD_DEST_PORT);
     udp->udp_len = htons(sizeof *udp + sizeof *msg);
+    /* Checksum already zero from eth_compose. */
 
-    msg = dp_packet_put_uninit(p, sizeof *msg);
+    msg = (struct msg *)(udp + 1);
     msg->vers_diag = (BFD_VERSION << 5) | bfd->diag;
     msg->flags = (bfd->state & STATE_MASK) | bfd->flags;
 
