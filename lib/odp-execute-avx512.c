@@ -35,10 +35,10 @@
 
 VLOG_DEFINE_THIS_MODULE(odp_execute_avx512);
 
-/* The below three build asserts make sure that l2_5_ofs, l3_ofs, and l4_ofs
- * fields remain in the same order and offset to l2_padd_size. This is needed
- * as the avx512_dp_packet_resize_l2() function will manipulate those fields at
- * a fixed memory index based on the l2_padd_size offset. */
+/* The below build asserts make sure that the below fields remain in the same
+ * order and offset to l2_pad_size. This is needed as the
+ * avx512_dp_packet_resize_l2() function will manipulate those fields at a
+ * fixed memory index based on the l2_pad_size offset. */
 BUILD_ASSERT_DECL(offsetof(struct dp_packet, l2_pad_size) +
                   MEMBER_SIZEOF(struct dp_packet, l2_pad_size) ==
                   offsetof(struct dp_packet, l2_5_ofs));
@@ -50,6 +50,14 @@ BUILD_ASSERT_DECL(offsetof(struct dp_packet, l2_5_ofs) +
 BUILD_ASSERT_DECL(offsetof(struct dp_packet, l3_ofs) +
                            MEMBER_SIZEOF(struct dp_packet, l3_ofs) ==
                            offsetof(struct dp_packet, l4_ofs));
+
+BUILD_ASSERT_DECL(offsetof(struct dp_packet, l4_ofs) +
+                           MEMBER_SIZEOF(struct dp_packet, l4_ofs) ==
+                           offsetof(struct dp_packet, inner_l3_ofs));
+
+BUILD_ASSERT_DECL(offsetof(struct dp_packet, inner_l3_ofs) +
+                           MEMBER_SIZEOF(struct dp_packet, inner_l3_ofs) ==
+                           offsetof(struct dp_packet, inner_l4_ofs));
 
 /* The below build assert makes sure it's safe to read/write 128-bits starting
  * at the l2_pad_size location. */
@@ -112,7 +120,7 @@ avx512_dp_packet_resize_l2(struct dp_packet *b, int resize_by_bytes)
         dp_packet_pull(b, -resize_by_bytes);
     }
 
-    /* The next step is to update the l2_5_ofs, l3_ofs and l4_ofs fields which
+    /* The next step is to update the l2_5_ofs to inner_l4_ofs fields which
      * the scalar implementation does with the  dp_packet_adjust_layer_offset()
      * function. */
 
@@ -122,13 +130,14 @@ avx512_dp_packet_resize_l2(struct dp_packet *b, int resize_by_bytes)
     /* Set the v_u16_max register to all one's. */
     const __m128i v_u16_max = _mm_cmpeq_epi16(v_zeros, v_zeros);
 
-    /* Each lane represents 16 bits in a 12-bit register. In this case the
-     * first three 16-bit values, which will map to the l2_5_ofs, l3_ofs and
-     * l4_ofs fields. */
-    const uint8_t k_lanes = 0b1110;
+    /* Each lane represents 16 bits in a 128-bit register. Here the bitmask
+     * starts at l2_5_ofs with a value of 0 indicating it is not modified. Then
+     * five 1's to indicate modificaiton of all fields from l2_5_ofs to
+     * inner_l4_ofs. */
+    const uint8_t k_lanes = 0b111110;
 
     /* Set all 16-bit words in the 128-bits v_offset register to the value we
-     * need to add/substract from the l2_5_ofs, l3_ofs, and l4_ofs fields. */
+     * need to add/substract from the l2_5_ofs to inner_l4_ofs fields. */
     __m128i v_offset = _mm_set1_epi16(abs(resize_by_bytes));
 
     /* Load 128 bits from the dp_packet structure starting at the l2_pad_size
@@ -147,7 +156,7 @@ avx512_dp_packet_resize_l2(struct dp_packet *b, int resize_by_bytes)
     /* Based on the bytes adjust (positive, or negative) it will do the actual
      * add or subtraction. These functions will only operate on the lanes
      * (fields) requested based on k_cmp, i.e:
-     *   k_cmp = [l2_5_ofs, l3_ofs, l4_ofs]
+     *   k_cmp = [l2_5_ofs, ..., inner_l4_ofs]
      *   for field in kcmp
      *       v_adjust_src[field] = v_adjust_src[field] + v_offset
      */
