@@ -2483,34 +2483,53 @@ AT_BANNER([QoS])
 
 AT_SETUP([QoS - basic configuration])
 AT_SKIP_IF([test $HAVE_TC = no])
+AT_SKIP_IF([test $HAVE_ETHTOOL = "no"])
 OVS_TRAFFIC_VSWITCHD_START()
 
-ADD_NAMESPACES(at_ns0, at_ns1)
+AT_CHECK([ip tuntap add ovs-tap0 mode tap])
+on_exit 'ip link del ovs-tap0'
+AT_CHECK([ip tuntap add ovs-tap1 mode tap])
+on_exit 'ip link del ovs-tap1'
 
-ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
-ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+dnl Set maximum link speed to 5Gb.
+AT_CHECK([ethtool -s ovs-tap0 speed 5000 duplex full])
+AT_CHECK([ip link set dev ovs-tap0 up])
+AT_CHECK([ethtool -s ovs-tap1 speed 5000 duplex full])
+AT_CHECK([ip link set dev ovs-tap1 up])
 
-dnl Adding a custom qdisc to ovs-p1, ovs-p0 will have the default qdisc.
-AT_CHECK([tc qdisc add dev ovs-p1 root noqueue])
-AT_CHECK([tc qdisc show dev ovs-p1 | grep -q noqueue])
+AT_CHECK([ovs-vsctl add-port br0 ovs-tap0 -- set int ovs-tap0 type=tap])
+AT_CHECK([ovs-vsctl add-port br0 ovs-tap1 -- set int ovs-tap1 type=tap])
 
-dnl Configure the same QoS for both ports.
-AT_CHECK([ovs-vsctl set port ovs-p0 qos=@qos -- set port ovs-p1 qos=@qos dnl
-            -- --id=@qos create qos dnl
-               type=linux-htb other-config:max-rate=3000000 queues:0=@queue dnl
-            -- --id=@queue create queue dnl
+dnl Adding a custom qdisc to ovs-tap1, ovs-tap0 will have the default qdisc.
+AT_CHECK([tc qdisc add dev ovs-tap1 root noqueue])
+AT_CHECK([tc qdisc show dev ovs-tap1 | grep -q noqueue])
+
+dnl Configure the same QoS for both ports:
+dnl queue0 uses fixed max-rate.
+dnl queue1 relies on underlying link speed.
+AT_CHECK([ovs-vsctl dnl
+            -- --id=@queue0 create queue dnl
                other_config:min-rate=2000000 other_config:max-rate=3000000 dnl
-               other_config:burst=3000000],
+               other_config:burst=3000000 dnl
+            -- --id=@queue1 create queue dnl
+               other_config:min-rate=4000000 other_config:burst=4000000 dnl
+            -- --id=@qos create qos dnl
+               type=linux-htb queues:0=@queue0 dnl
+               queues:1=@queue1 -- dnl
+            -- set port ovs-tap0 qos=@qos -- set port ovs-tap1 qos=@qos],
          [ignore], [ignore])
 
 dnl Wait for qdiscs to be applied.
-OVS_WAIT_UNTIL([tc qdisc show dev ovs-p0 | grep -q htb])
-OVS_WAIT_UNTIL([tc qdisc show dev ovs-p1 | grep -q htb])
+OVS_WAIT_UNTIL([tc qdisc show dev ovs-tap0 | grep -q htb])
+OVS_WAIT_UNTIL([tc qdisc show dev ovs-tap1 | grep -q htb])
 
 dnl Check the configuration.
-m4_define([HTB_CONF], [rate 2Mbit ceil 3Mbit burst 375000b cburst 375000b])
-AT_CHECK([tc class show dev ovs-p0 | grep -q 'class htb .* HTB_CONF'])
-AT_CHECK([tc class show dev ovs-p1 | grep -q 'class htb .* HTB_CONF'])
+m4_define([HTB_CONF0], [rate 2Mbit ceil 3Mbit burst 375000b cburst 375000b])
+m4_define([HTB_CONF1], [rate 4Mbit ceil 5Gbit burst 500000b cburst 500000b])
+AT_CHECK([tc class show dev ovs-tap0 | grep -q 'class htb .* HTB_CONF0'])
+AT_CHECK([tc class show dev ovs-tap0 | grep -q 'class htb .* HTB_CONF1'])
+AT_CHECK([tc class show dev ovs-tap1 | grep -q 'class htb .* HTB_CONF0'])
+AT_CHECK([tc class show dev ovs-tap1 | grep -q 'class htb .* HTB_CONF1'])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
