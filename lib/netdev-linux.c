@@ -2721,16 +2721,11 @@ exit:
 }
 
 static int
-netdev_linux_get_speed(const struct netdev *netdev_, uint32_t *current,
-                       uint32_t *max)
+netdev_linux_get_speed_locked(struct netdev_linux *netdev,
+                              uint32_t *current, uint32_t *max)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
-
-    ovs_mutex_lock(&netdev->mutex);
     if (netdev_linux_netnsid_is_remote(netdev)) {
-        error = EOPNOTSUPP;
-        goto exit;
+        return EOPNOTSUPP;
     }
 
     netdev_linux_read_features(netdev);
@@ -2740,9 +2735,18 @@ netdev_linux_get_speed(const struct netdev *netdev_, uint32_t *current,
         *max = MIN(UINT32_MAX,
                    netdev_features_to_bps(netdev->supported, 0) / 1000000ULL);
     }
-    error = netdev->get_features_error;
+    return netdev->get_features_error;
+}
 
-exit:
+static int
+netdev_linux_get_speed(const struct netdev *netdev_, uint32_t *current,
+                       uint32_t *max)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
+
+    ovs_mutex_lock(&netdev->mutex);
+    error = netdev_linux_get_speed_locked(netdev, current, max);
     ovs_mutex_unlock(&netdev->mutex);
     return error;
 }
@@ -4954,8 +4958,10 @@ htb_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
     hc->max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!hc->max_rate) {
         uint32_t current_speed;
+        uint32_t max_speed OVS_UNUSED;
 
-        netdev_get_speed(netdev, &current_speed, NULL);
+        netdev_linux_get_speed_locked(netdev_linux_cast(netdev),
+                                      &current_speed, &max_speed);
         hc->max_rate = current_speed ? current_speed / 8 * 1000000ULL
                                      : NETDEV_DEFAULT_BPS / 8;
     }
@@ -5424,8 +5430,10 @@ hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
     uint32_t max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!max_rate) {
         uint32_t current_speed;
+        uint32_t max_speed OVS_UNUSED;
 
-        netdev_get_speed(netdev, &current_speed, NULL);
+        netdev_linux_get_speed_locked(netdev_linux_cast(netdev),
+                                      &current_speed, &max_speed);
         max_rate = current_speed ? current_speed / 8 * 1000000ULL
                                  : NETDEV_DEFAULT_BPS / 8;
     }
