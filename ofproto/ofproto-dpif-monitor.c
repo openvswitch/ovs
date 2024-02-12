@@ -275,19 +275,16 @@ monitor_mport_run(struct mport *mport, struct dp_packet *packet)
     long long int lldp_wake_time = LLONG_MAX;
 
     if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
-        dp_packet_clear(packet);
         cfm_compose_ccm(mport->cfm, packet, mport->hw_addr);
         ofproto_dpif_send_packet(mport->ofport, false, packet);
     }
     if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
         bool oam;
 
-        dp_packet_clear(packet);
         bfd_put_packet(mport->bfd, packet, mport->hw_addr, &oam);
         ofproto_dpif_send_packet(mport->ofport, oam, packet);
     }
     if (mport->lldp && lldp_should_send_packet(mport->lldp)) {
-        dp_packet_clear(packet);
         lldp_put_packet(mport->lldp, packet, mport->hw_addr);
         ofproto_dpif_send_packet(mport->ofport, false, packet);
     }
