@@ -545,16 +545,9 @@ elif test "$command" = self-sign; then
     cat > "$TMP/v3.ext" <<EOF
 subjectAltName = DNS:$arg1
 EOF
-
-    # Create both the private key and certificate with restricted permissions.
-    (umask 077 && \
-     openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem.tmp" \
-                  -signkey "$arg1-privkey.pem" -req -days 3650 -text \
-                  -extfile $TMP/v3.ext) 2>&3 || exit $?
-
-    # Reset the permissions on the certificate to the user's default.
-    cat "$arg1-cert.pem.tmp" > "$arg1-cert.pem"
-    rm -f "$arg1-cert.pem.tmp"
+    openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem" \
+                 -signkey "$arg1-privkey.pem" -req -days 3650 -text \
+                 -extfile $TMP/v3.ext 2>&3 || exit $?
 else
     echo "$0: $command command unknown; use --help for help" >&2
     exit 1
