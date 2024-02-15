@@ -7247,14 +7247,23 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             vnet->csum_offset = (OVS_FORCE __virtio16) __builtin_offsetof(
                                     struct tcp_header, tcp_csum);
         } else if (dp_packet_hwol_l4_is_udp(b)) {
-            struct udp_header *udp_hdr = dp_packet_l4(b);
+            /* Favour the inner packet when indicating checksum offsets. */
+            void *l3_off = dp_packet_inner_l3(b);
+            void *l4_off = dp_packet_inner_l4(b);
+
+            if (!l3_off || !l4_off) {
+                l3_off = dp_packet_l3(b);
+                l4_off = dp_packet_l4(b);
+            }
+            struct udp_header *udp_hdr = l4_off;
+
             ovs_be16 csum = 0;
 
             if (dp_packet_hwol_is_ipv4(b)) {
-                const struct ip_header *ip_hdr = dp_packet_l3(b);
+                const struct ip_header *ip_hdr = l3_off;
                 csum = ~csum_finish(packet_csum_pseudoheader(ip_hdr));
             } else if (dp_packet_hwol_tx_ipv6(b)) {
-                const struct ovs_16aligned_ip6_hdr *ip6_hdr = dp_packet_l3(b);
+                const struct ovs_16aligned_ip6_hdr *ip6_hdr = l4_off;
                 csum = ~csum_finish(packet_csum_pseudoheader6(ip6_hdr));
             }
 
