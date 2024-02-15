@@ -464,6 +464,65 @@ Datapath actions: 2
 
 AT_CLEANUP
 
+AT_SETUP([STP - patch ports])
+# Create br0 with interfaces p1 and p7
+#    and br1 with interfaces p2 and p8
+# with p1 and p2 being connected patch ports.
+OVS_VSWITCHD_START(
+   [set port br0 other_config:stp-enable=false -- \
+    set bridge br0 stp-enable=true
+])
+
+AT_CHECK([add_of_br 1 \
+           set port br1 other_config:stp-enable=false -- \
+           set bridge br1 stp-enable=true])
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-vsctl \
+    add-port br0 p1 -- \
+        set interface p1 type=patch options:peer=p2 ofport_request=1 -- \
+        set port p1 other_config:stp-enable=true -- \
+    add-port br1 p2 -- \
+        set interface p2 type=patch options:peer=p1 ofport_request=2 -- \
+        set port p2 other_config:stp-enable=true -- \
+])
+
+AT_CHECK([ovs-vsctl \
+    add-port br0 p7 -- \
+        set interface p7 ofport_request=7 type=dummy -- \
+        set port p7 other_config:stp-enable=false -- \
+    add-port br1 p8 -- \
+        set interface p8 ofport_request=8 type=dummy -- \
+        set port p8 other_config:stp-enable=false -- \
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=7 icmp actions=1"])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=1 icmp actions=7"])
+AT_CHECK([ovs-ofctl add-flow br1 "in_port=8 icmp actions=2"])
+AT_CHECK([ovs-ofctl add-flow br1 "in_port=2 icmp actions=8"])
+
+# Give time for STP to synchronize.
+ovs-appctl time/warp 30000 3000
+
+OVS_WAIT_UNTIL_EQUAL([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [dnl
+port <>: STP state changed from disabled to listening
+port <>: STP state changed from disabled to listening
+port <>: STP state changed from listening to learning
+port <>: STP state changed from listening to learning
+port <>: STP state changed from learning to forwarding
+port <>: STP state changed from learning to forwarding])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' | grep Datapath], [0], [dnl
+Datapath actions: 8
+])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' | grep Datapath], [0], [dnl
+Datapath actions: 7
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([STP - flush the fdb and mdb when topology changed])
 OVS_VSWITCHD_START([])
 
