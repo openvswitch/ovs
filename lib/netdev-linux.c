@@ -7199,10 +7199,11 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
         /* The packet has good L4 checksum. No need to validate again. */
         vnet->csum_start = vnet->csum_offset = (OVS_FORCE __virtio16) 0;
         vnet->flags = VIRTIO_NET_HDR_F_DATA_VALID;
-        if (!dp_packet_ip_checksum_good(b)) {
-            /* It is possible that L4 is good but the IP checksum isn't
-             * complete. For example in the case of UDP encapsulation of an ARP
-             * packet where the UDP checksum is 0. */
+
+        /* It is possible that L4 is good but the IPv4 checksum isn't
+         * complete. For example in the case of UDP encapsulation of an ARP
+         * packet where the UDP checksum is 0. */
+        if (dp_packet_hwol_l3_csum_ipv4_ol(b)) {
             dp_packet_ip_set_header_csum(b, false);
         }
     } else if (dp_packet_hwol_tx_l4_checksum(b)) {
