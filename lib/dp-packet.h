@@ -1184,7 +1184,7 @@ dp_packet_hwol_is_tunnel_vxlan(struct dp_packet *b)
 
 /* Returns 'true' if packet 'b' is marked for outer IPv4 checksum offload. */
 static inline bool
-dp_packet_hwol_is_outer_ipv4_cksum(struct dp_packet *b)
+dp_packet_hwol_is_outer_ipv4_cksum(const struct dp_packet *b)
 {
     return !!(*dp_packet_ol_flags_ptr(b) & DP_PACKET_OL_TX_OUTER_IP_CKSUM);
 }
@@ -1382,6 +1382,22 @@ dp_packet_ip_checksum_bad(const struct dp_packet *p)
 {
     return (*dp_packet_ol_flags_ptr(p) & DP_PACKET_OL_RX_IP_CKSUM_MASK) ==
             DP_PACKET_OL_RX_IP_CKSUM_BAD;
+}
+
+/* Return 'true' is packet 'b' is not encapsulated and is marked for IPv4
+ * checksum offload, or if 'b' is encapsulated and the outer layer is marked
+ * for IPv4 checksum offload. IPv6 packets and non offloaded packets return
+ * 'false'. */
+static inline bool
+dp_packet_hwol_l3_csum_ipv4_ol(const struct dp_packet *b)
+{
+    if (dp_packet_hwol_is_outer_ipv4(b)) {
+        return dp_packet_hwol_is_outer_ipv4_cksum(b);
+    } else if (!dp_packet_hwol_is_outer_ipv6(b)) {
+        return dp_packet_hwol_tx_ip_csum(b) &&
+               !dp_packet_ip_checksum_good(b);
+    }
+    return false;
 }
 
 /* Calculate and set the IPv4 header checksum in packet 'p'. */
