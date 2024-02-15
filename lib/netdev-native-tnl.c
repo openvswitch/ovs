@@ -91,8 +91,7 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
         /* A packet coming from a network device might have the
          * csum already checked. In this case, skip the check. */
-        if (OVS_UNLIKELY(!dp_packet_ip_checksum_good(packet))
-            && !dp_packet_hwol_tx_ip_csum(packet)) {
+        if (OVS_UNLIKELY(!dp_packet_hwol_l3_csum_ipv4_ol(packet))) {
             if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
                 VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
                 return NULL;
@@ -298,6 +297,13 @@ dp_packet_tnl_ol_process(struct dp_packet *packet,
             dp_packet_set_l2_len(packet, (char *) dp_packet_l3(packet) -
                                          (char *) dp_packet_eth(packet) +
                                          VXLAN_HLEN);
+        }
+    } else {
+        /* Mark non-l4 packets as tunneled. */
+        if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
+            dp_packet_hwol_set_tunnel_geneve(packet);
+        } else if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+            dp_packet_hwol_set_tunnel_vxlan(packet);
         }
     }
 }
