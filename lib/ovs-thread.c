@@ -63,13 +63,14 @@ static bool multithreaded;
  \
         /* Verify that 'l' was initialized. */ \
         if (OVS_UNLIKELY(!l->where)) { \
-            ovs_abort(0, "%s: %s() passed uninitialized ovs_"#TYPE, \
-                      where, __func__); \
+            VLOG_ABORT("%s: %s() passed uninitialized ovs_"#TYPE, \
+                       where, __func__); \
         } \
  \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error)) { \
-            ovs_abort(error, "%s: pthread_%s_%s failed", where, #TYPE, #FUN); \
+            VLOG_ABORT("%s: pthread_%s_%s failed: %s", where, #TYPE, #FUN, \
+                       ovs_strerror(error)); \
         } \
         l->where = where; \
  }
@@ -91,13 +92,14 @@ LOCK_FUNCTION(spin, lock);
  \
         /* Verify that 'l' was initialized. */ \
         if (OVS_UNLIKELY(!l->where)) { \
-            ovs_abort(0, "%s: %s() passed uninitialized ovs_"#TYPE, \
-                      where, __func__); \
+            VLOG_ABORT("%s: %s() passed uninitialized ovs_"#TYPE, \
+                       where, __func__); \
         } \
  \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error) && error != EBUSY) { \
-            ovs_abort(error, "%s: pthread_%s_%s failed", where, #TYPE, #FUN); \
+            VLOG_ABORT("%s: pthread_%s_%s failed: %s", where, #TYPE, #FUN, \
+                       ovs_strerror(error)); \
         } \
         if (!error) { \
             l->where = where; \
@@ -125,7 +127,8 @@ TRY_LOCK_FUNCTION(spin, trylock);
         l->where = WHERE; \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error)) { \
-            ovs_abort(error, "pthread_%s_%s failed", #TYPE, #FUN); \
+            VLOG_ABORT("%s: pthread_%s_%s failed: %s", l->where, #TYPE, #FUN, \
+                       ovs_strerror(error)); \
         } \
     }
 UNLOCK_FUNCTION(mutex, unlock, "<unlocked>");
@@ -143,7 +146,8 @@ UNLOCK_FUNCTION(spin, destroy, NULL);
     {                                                   \
         int error = FUNCTION(arg1);                     \
         if (OVS_UNLIKELY(error)) {                      \
-            ovs_abort(error, "%s failed", #FUNCTION);   \
+            VLOG_ABORT("%s failed: %s", #FUNCTION,      \
+                       ovs_strerror(error));            \
         }                                               \
     }
 #define XPTHREAD_FUNC2(FUNCTION, PARAM1, PARAM2)        \
@@ -152,7 +156,8 @@ UNLOCK_FUNCTION(spin, destroy, NULL);
     {                                                   \
         int error = FUNCTION(arg1, arg2);               \
         if (OVS_UNLIKELY(error)) {                      \
-            ovs_abort(error, "%s failed", #FUNCTION);   \
+            VLOG_ABORT("%s failed: %s", #FUNCTION,      \
+                       ovs_strerror(error));            \
         }                                               \
     }
 #define XPTHREAD_FUNC3(FUNCTION, PARAM1, PARAM2, PARAM3)\
@@ -161,7 +166,8 @@ UNLOCK_FUNCTION(spin, destroy, NULL);
     {                                                   \
         int error = FUNCTION(arg1, arg2, arg3);         \
         if (OVS_UNLIKELY(error)) {                      \
-            ovs_abort(error, "%s failed", #FUNCTION);   \
+            VLOG_ABORT("%s failed: %s", #FUNCTION,      \
+                       ovs_strerror(error));            \
         }                                               \
     }
 
@@ -204,7 +210,7 @@ ovs_mutex_init__(const struct ovs_mutex *l_, int type)
     xpthread_mutexattr_settype(&attr, type);
     error = pthread_mutex_init(&l->lock, &attr);
     if (OVS_UNLIKELY(error)) {
-        ovs_abort(error, "pthread_mutex_init failed");
+        VLOG_ABORT("pthread_mutex_init failed: %s", ovs_strerror(error));
     }
     xpthread_mutexattr_destroy(&attr);
 }
@@ -257,7 +263,7 @@ ovs_rwlock_init(const struct ovs_rwlock *l_)
 #endif
 
     if (OVS_UNLIKELY(error)) {
-        ovs_abort(error, "pthread_rwlock_init failed");
+        VLOG_ABORT("pthread_rwlock_init failed: %s", ovs_strerror(error));
     }
 }
 
@@ -275,7 +281,7 @@ ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
     error = pthread_cond_wait(cond, &mutex->lock);
 
     if (OVS_UNLIKELY(error)) {
-        ovs_abort(error, "pthread_cond_wait failed");
+        VLOG_ABORT("pthread_cond_wait failed: %s", ovs_strerror(error));
     }
 }
 
@@ -289,7 +295,7 @@ ovs_spin_init__(const struct ovs_spin *l_, int pshared)
     l->where = "<unlocked>";
     error = pthread_spin_init(&l->lock, pshared);
     if (OVS_UNLIKELY(error)) {
-        ovs_abort(error, "pthread_spin_init failed");
+        VLOG_ABORT("pthread_spin_init failed: %s", ovs_strerror(error));
     }
 }
 
@@ -431,13 +437,15 @@ set_min_stack_size(pthread_attr_t *attr, size_t min_stacksize)
 
     error = pthread_attr_getstacksize(attr, &stacksize);
     if (error) {
-        ovs_abort(error, "pthread_attr_getstacksize failed");
+        VLOG_ABORT("pthread_attr_getstacksize failed: %s",
+                   ovs_strerror(error));
     }
 
     if (stacksize < min_stacksize) {
         error = pthread_attr_setstacksize(attr, min_stacksize);
         if (error) {
-            ovs_abort(error, "pthread_attr_setstacksize failed");
+            VLOG_ABORT("pthread_attr_setstacksize failed: %s",
+                       ovs_strerror(error));
         }
     }
 }
@@ -486,7 +494,7 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
 
     error = pthread_create(&thread, &attr, ovsthread_wrapper, aux);
     if (error) {
-        ovs_abort(error, "pthread_create failed");
+        VLOG_ABORT("pthread_create failed: %s", ovs_strerror(error));
     }
     pthread_attr_destroy(&attr);
     return thread;
