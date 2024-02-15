@@ -1149,7 +1149,7 @@ packet_set_ipv4_addr(struct dp_packet *packet,
         }
     }
 
-    if (dp_packet_hwol_tx_ip_csum(packet)) {
+    if (dp_packet_hwol_l3_ipv4(packet)) {
         dp_packet_ol_reset_ip_csum_good(packet);
     } else {
         nh->ip_csum = recalc_csum32(nh->ip_csum, old_addr, new_addr);
@@ -1328,7 +1328,7 @@ packet_set_ipv4(struct dp_packet *packet, ovs_be32 src, ovs_be32 dst,
     if (nh->ip_tos != tos) {
         uint8_t *field = &nh->ip_tos;
 
-        if (dp_packet_hwol_tx_ip_csum(packet)) {
+        if (dp_packet_hwol_l3_ipv4(packet)) {
             dp_packet_ol_reset_ip_csum_good(packet);
         } else {
             nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t) *field),
@@ -1341,7 +1341,7 @@ packet_set_ipv4(struct dp_packet *packet, ovs_be32 src, ovs_be32 dst,
     if (nh->ip_ttl != ttl) {
         uint8_t *field = &nh->ip_ttl;
 
-        if (dp_packet_hwol_tx_ip_csum(packet)) {
+        if (dp_packet_hwol_l3_ipv4(packet)) {
             dp_packet_ol_reset_ip_csum_good(packet);
         } else {
             nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
@@ -1979,7 +1979,7 @@ IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
 
         tos |= IP_ECN_CE;
         if (nh->ip_tos != tos) {
-            if (dp_packet_hwol_tx_ip_csum(pkt)) {
+            if (dp_packet_hwol_l3_ipv4(pkt)) {
                 dp_packet_ol_reset_ip_csum_good(pkt);
             } else {
                 nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
