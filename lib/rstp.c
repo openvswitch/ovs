@@ -50,7 +50,7 @@
 
 VLOG_DEFINE_THIS_MODULE(rstp);
 
-struct ovs_mutex rstp_mutex = OVS_MUTEX_INITIALIZER;
+struct ovs_mutex rstp_mutex;
 
 static struct ovs_list all_rstps__ = OVS_LIST_INITIALIZER(&all_rstps__);
 static struct ovs_list *const all_rstps OVS_GUARDED_BY(rstp_mutex) = &all_rstps__;
@@ -248,6 +248,10 @@ void
 rstp_init(void)
     OVS_EXCLUDED(rstp_mutex)
 {
+    /* We need a recursive mutex because rstp_send_bpdu() could loop back
+     * into the rstp module through a patch port. */
+    ovs_mutex_init_recursive(&rstp_mutex);
+
     unixctl_command_register("rstp/tcn", "[bridge]", 0, 1, rstp_unixctl_tcn,
                              NULL);
     unixctl_command_register("rstp/show", "[bridge]", 0, 1, rstp_unixctl_show,
