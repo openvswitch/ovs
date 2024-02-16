@@ -1,4 +1,4 @@
-v3.3.0 - xx xxx xxxx
+v3.3.0 - 16 Feb 2024
 --------------------
    - OVSDB:
      * Support pre-vote mechanism in RAFT that protects the cluster against
@@ -29,6 +29,8 @@ v3.3.0 - xx xxx xxxx
        "ovs-appctl dpctl/ct-del-limits default".
      * 'dpctl/flush-conntrack' is now capable of flushing connections based
        on mark and labels.
+     * 'mdb/show': support for multicast snooping to show the protocol
+       responsible for adding/updating the entry.
    - ovs-vsctl:
      * New commands 'set-zone-limit', 'del-zone-limit' and 'list-zone-limits'
        to manage the maximum number of connections in conntrack zones via
@@ -47,8 +49,6 @@ v3.3.0 - xx xxx xxxx
        during connection commit will be used by default.
    - DPDK:
      * Add support for DPDK 23.11.
-   - Support for multicast snooping to show the protocol responsible for
-     adding/updating the entry.
 
 
 v3.2.0 - 17 Aug 2023
