@@ -2202,17 +2202,21 @@ nat_range_hash(const struct conn_key *key, uint32_t basis,
 {
     uint32_t hash = basis;
 
+    if (!basis) {
+        hash = ct_addr_hash_add(hash, &key->src.addr);
+    } else {
+        hash = ct_endpoint_hash_add(hash, &key->src);
+        hash = ct_endpoint_hash_add(hash, &key->dst);
+    }
+
     hash = ct_addr_hash_add(hash, &nat_info->min_addr);
     hash = ct_addr_hash_add(hash, &nat_info->max_addr);
     hash = hash_add(hash,
                     ((uint32_t) nat_info->max_port << 16)
                     | nat_info->min_port);
-    hash = ct_endpoint_hash_add(hash, &key->src);
-    hash = ct_endpoint_hash_add(hash, &key->dst);
     hash = hash_add(hash, (OVS_FORCE uint32_t) key->dl_type);
     hash = hash_add(hash, key->nw_proto);
     hash = hash_add(hash, key->zone);
-
     /* The purpose of the second parameter is to distinguish hashes of data of
      * different length; our data always has the same length so there is no
      * value in counting. */
@@ -2388,10 +2392,19 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
                      fwd_key->nw_proto == IPPROTO_SCTP;
     uint16_t min_dport, max_dport, curr_dport;
     uint16_t min_sport, max_sport, curr_sport;
-    uint32_t hash, port_off;
+    uint32_t hash, port_off, basis;
 
-    hash = nat_range_hash(fwd_key, ct->hash_basis, nat_info);
-    port_off = nat_info->nat_flags & NAT_RANGE_RANDOM ? random_uint32() : hash;
+    basis = (nat_info->nat_flags & NAT_PERSISTENT) ? 0 : ct->hash_basis;
+    hash = nat_range_hash(fwd_key, basis, nat_info);
+
+    if (nat_info->nat_flags & NAT_RANGE_RANDOM) {
+        port_off = random_uint32();
+    } else if (basis) {
+        port_off = hash;
+    } else {
+        port_off = nat_range_hash(fwd_key, ct->hash_basis, nat_info);
+    }
+
     min_addr = nat_info->min_addr;
     max_addr = nat_info->max_addr;
 

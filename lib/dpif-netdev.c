@@ -9413,6 +9413,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                         nat_action_info.nat_flags |= NAT_RANGE_RANDOM;
                         break;
                     case OVS_NAT_ATTR_PERSISTENT:
+                        nat_action_info.nat_flags |= NAT_PERSISTENT;
+                        break;
                     case OVS_NAT_ATTR_PROTO_HASH:
                         break;
                     case OVS_NAT_ATTR_UNSPEC:

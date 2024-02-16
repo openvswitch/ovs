@@ -79,6 +79,7 @@ enum nat_action_e {
 
 enum nat_flags_e {
     NAT_RANGE_RANDOM = 1 << 0,
+    NAT_PERSISTENT = 1 << 1,
 };
 
 struct nat_action_info_t {
