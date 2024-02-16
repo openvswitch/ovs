@@ -1551,8 +1551,7 @@ following arguments:
         should be selected. When a port range is specified, fallback to
         ephemeral ports does not happen, else, it will.  The port number
         selection can be informed by the optional ``random`` and ``hash`` flags
-        described below.  The userspace datapath only supports the ``hash``
-        behavior.
+        described below.
 
     The optional *flags* are:
 

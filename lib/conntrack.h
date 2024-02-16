@@ -77,12 +77,17 @@ enum nat_action_e {
     NAT_ACTION_DST_PORT = 1 << 3,
 };
 
+enum nat_flags_e {
+    NAT_RANGE_RANDOM = 1 << 0,
+};
+
 struct nat_action_info_t {
     union ct_addr min_addr;
     union ct_addr max_addr;
     uint16_t min_port;
     uint16_t max_port;
     uint16_t nat_action;
+    uint16_t nat_flags;
 };
 
 struct conntrack *conntrack_init(void);

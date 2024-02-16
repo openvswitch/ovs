@@ -9409,9 +9409,11 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                             nl_attr_get_u16(b_nest);
                         proto_num_max_specified = true;
                         break;
+                    case OVS_NAT_ATTR_PROTO_RANDOM:
+                        nat_action_info.nat_flags |= NAT_RANGE_RANDOM;
+                        break;
                     case OVS_NAT_ATTR_PERSISTENT:
                     case OVS_NAT_ATTR_PROTO_HASH:
-                    case OVS_NAT_ATTR_PROTO_RANDOM:
                         break;
                     case OVS_NAT_ATTR_UNSPEC:
                     case __OVS_NAT_ATTR_MAX:

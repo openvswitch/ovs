@@ -1,5 +1,8 @@
 Post-v3.3.0
 --------------------
+   - Userspace datapath:
+     * Conntrack now supports 'random' flag for selecting ports in a range
+       while natting.
 
 
 v3.3.0 - 16 Feb 2024

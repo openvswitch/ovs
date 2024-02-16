@@ -2222,7 +2222,7 @@ nat_range_hash(const struct conn_key *key, uint32_t basis,
 /* Ports are stored in host byte order for convenience. */
 static void
 set_sport_range(const struct nat_action_info_t *ni, const struct conn_key *k,
-                uint32_t hash, uint16_t *curr, uint16_t *min,
+                uint32_t off, uint16_t *curr, uint16_t *min,
                 uint16_t *max)
 {
     if (((ni->nat_action & NAT_ACTION_SNAT_ALL) == NAT_ACTION_SRC) ||
@@ -2241,19 +2241,19 @@ set_sport_range(const struct nat_action_info_t *ni, const struct conn_key *k,
     } else {
         *min = ni->min_port;
         *max = ni->max_port;
-        *curr = *min + (hash % ((*max - *min) + 1));
+        *curr =  *min + (off % ((*max - *min) + 1));
     }
 }
 
 static void
 set_dport_range(const struct nat_action_info_t *ni, const struct conn_key *k,
-                uint32_t hash, uint16_t *curr, uint16_t *min,
+                uint32_t off, uint16_t *curr, uint16_t *min,
                 uint16_t *max)
 {
     if (ni->nat_action & NAT_ACTION_DST_PORT) {
         *min = ni->min_port;
         *max = ni->max_port;
-        *curr = *min + (hash % ((*max - *min) + 1));
+        *curr = *min + (off % ((*max - *min) + 1));
     } else {
         *curr = ntohs(k->dst.port);
         *min = *max = *curr;
@@ -2388,18 +2388,19 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
                      fwd_key->nw_proto == IPPROTO_SCTP;
     uint16_t min_dport, max_dport, curr_dport;
     uint16_t min_sport, max_sport, curr_sport;
-    uint32_t hash;
+    uint32_t hash, port_off;
 
     hash = nat_range_hash(fwd_key, ct->hash_basis, nat_info);
+    port_off = nat_info->nat_flags & NAT_RANGE_RANDOM ? random_uint32() : hash;
     min_addr = nat_info->min_addr;
     max_addr = nat_info->max_addr;
 
     find_addr(fwd_key, &min_addr, &max_addr, &addr, hash,
               (fwd_key->dl_type == htons(ETH_TYPE_IP)), nat_info);
 
-    set_sport_range(nat_info, fwd_key, hash, &curr_sport,
+    set_sport_range(nat_info, fwd_key, port_off, &curr_sport,
                     &min_sport, &max_sport);
-    set_dport_range(nat_info, fwd_key, hash, &curr_dport,
+    set_dport_range(nat_info, fwd_key, port_off, &curr_dport,
                     &min_dport, &max_dport);
 
     if (pat_proto) {
