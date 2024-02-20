@@ -3815,6 +3815,8 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
 
     if (flow->tunnel.ip_src) {
         in6_addr_set_mapped_ipv4(&s_ip6, flow->tunnel.ip_src);
+    } else if (ipv6_addr_is_set(&flow->tunnel.ipv6_src)) {
+        s_ip6 = flow->tunnel.ipv6_src;
     }
 
     err = tnl_route_lookup_flow(ctx, flow, &d_ip6, &s_ip6, &out_dev);

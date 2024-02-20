@@ -589,6 +589,7 @@ David Evans                     davidjoshuaevans@gmail.com
 David Palma                     palma@onesource.pt
 David van Moolenbroek           dvmoolenbroek@aimvalley.nl
 Derek Cormier                   derek.cormier@lab.ntt.co.jp
+Derrick Lim                     derrick.lim@rakuten.com
 Dhaval Badiani                  dbadiani@vmware.com
 DK Moon
 Ding Zhi                        zhi.ding@6wind.com
