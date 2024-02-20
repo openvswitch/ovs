@@ -524,11 +524,12 @@ dummy@ovs-dummy: hit:0 missed:0
     v2 3/3: (dummy-internal)
 ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP address.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 172.31.1.1/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 172.31.1.0/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 172.31.1.0/24 dev br0 SRC 172.31.1.1 local
 ])
 
 dnl change the flow table to bump the internal table version
@@ -1276,15 +1277,12 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy \
                     ofport_request=2])
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP address.
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 fc00::1/64], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add fc00::0/64 br0], [0], [OK
-])
-AT_CHECK([ovs-appctl ovs/route/show], [0], [dnl
-Route Table:
-User: fc00::/64 dev br0 SRC fc00::1
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: fc00::/64 dev br0 SRC fc00::1 local
 ])
 
 AT_DATA([flows.txt], [dnl
