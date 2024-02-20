@@ -5250,6 +5250,14 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     return 0;
 }
 
+static bool
+dpif_netdev_number_handlers_required(struct dpif *dpif_ OVS_UNUSED,
+                                     uint32_t *n_handlers)
+{
+    *n_handlers = 0;
+    return true;
+}
+
 /* Parses affinity list and returns result in 'core_ids'. */
 static int
 parse_affinity_list(const char *affinity_list, unsigned *core_ids, int n_rxq)
@@ -9989,7 +9997,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_offload_stats_get,
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
-    NULL,                       /* number_handlers_required */
+    dpif_netdev_number_handlers_required,
     dpif_netdev_set_config,
     dpif_netdev_queue_to_priority,
     NULL,                       /* recv */

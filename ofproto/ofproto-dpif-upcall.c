@@ -584,7 +584,7 @@ static void
 udpif_start_threads(struct udpif *udpif, uint32_t n_handlers_,
                     uint32_t n_revalidators_)
 {
-    if (udpif && n_handlers_ && n_revalidators_) {
+    if (udpif && n_revalidators_) {
         /* Creating a thread can take a significant amount of time on some
          * systems, even hundred of milliseconds, so quiesce around it. */
         ovsrcu_quiesce_start();
@@ -592,14 +592,19 @@ udpif_start_threads(struct udpif *udpif, uint32_t n_handlers_,
         udpif->n_handlers = n_handlers_;
         udpif->n_revalidators = n_revalidators_;
 
-        udpif->handlers = xzalloc(udpif->n_handlers * sizeof *udpif->handlers);
-        for (size_t i = 0; i < udpif->n_handlers; i++) {
-            struct handler *handler = &udpif->handlers[i];
+        if (udpif->n_handlers) {
+            udpif->handlers = xzalloc(udpif->n_handlers
+                                      * sizeof *udpif->handlers);
+            for (size_t i = 0; i < udpif->n_handlers; i++) {
+                struct handler *handler = &udpif->handlers[i];
 
-            handler->udpif = udpif;
-            handler->handler_id = i;
-            handler->thread = ovs_thread_create(
-                "handler", udpif_upcall_handler, handler);
+                handler->udpif = udpif;
+                handler->handler_id = i;
+                handler->thread = ovs_thread_create(
+                    "handler", udpif_upcall_handler, handler);
+            }
+        } else {
+            udpif->handlers = NULL;
         }
 
         atomic_init(&udpif->enable_ufid, udpif->backer->rt_support.ufid);
@@ -662,7 +667,9 @@ udpif_set_threads(struct udpif *udpif, uint32_t n_handlers_,
     if (dpif_number_handlers_required(udpif->dpif, &n_handlers_requested)) {
         forced = true;
         if (!n_revalidators_) {
-            n_revalidators_requested = n_handlers_requested / 4 + 1;
+            n_revalidators_requested = (n_handlers_requested
+                                        ? n_handlers_requested
+                                        : MAX(count_cpu_cores(), 2)) / 4 + 1;
         } else {
             n_revalidators_requested = n_revalidators_;
         }
