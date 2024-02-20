@@ -142,30 +142,27 @@ AT_CHECK([
 ### Setup GRE tunnels
 AT_CHECK([
     ovs-appctl netdev-dummy/ip4addr br-p1 10.0.0.1/24 &&
-    ovs-appctl ovs/route/add 10.0.0.0/24 br-p1 &&
     ovs-appctl tnl/arp/set br-p1 10.0.0.1 $HWADDR_BRP1 &&
     ovs-appctl tnl/arp/set br-p1 10.0.0.2 $HWADDR_BRP2 &&
     ovs-appctl tnl/arp/set br-p1 10.0.0.3 $HWADDR_BRP3 &&
 
     ovs-appctl netdev-dummy/ip4addr br-p2 20.0.0.2/24 &&
-    ovs-appctl ovs/route/add 20.0.0.0/24 br-p2 &&
     ovs-appctl tnl/arp/set br-p2 20.0.0.1 $HWADDR_BRP1 &&
     ovs-appctl tnl/arp/set br-p2 20.0.0.2 $HWADDR_BRP2 &&
     ovs-appctl tnl/arp/set br-p2 20.0.0.3 $HWADDR_BRP3 &&
 
     ovs-appctl netdev-dummy/ip4addr br-p3 30.0.0.3/24 &&
-    ovs-appctl ovs/route/add 30.0.0.0/24 br-p3 &&
     ovs-appctl tnl/arp/set br-p3 30.0.0.1 $HWADDR_BRP1 &&
     ovs-appctl tnl/arp/set br-p3 30.0.0.2 $HWADDR_BRP2 &&
     ovs-appctl tnl/arp/set br-p3 30.0.0.3 $HWADDR_BRP3
 ], [0], [ignore])
 
 AT_CHECK([
-    ovs-appctl ovs/route/show | grep User:
+    ovs-appctl ovs/route/show | grep Cached: | sort
 ], [0], [dnl
-User: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1
-User: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2
-User: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3
+Cached: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1 local
+Cached: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2 local
+Cached: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3 local
 ])
 
 AT_CHECK([
@@ -681,14 +678,13 @@ AT_CHECK([
 
 AT_CHECK([
     ovs-appctl netdev-dummy/ip4addr br2 10.0.0.1/24 &&
-    ovs-appctl ovs/route/add 10.0.0.0/24 br2 &&
     ovs-appctl tnl/arp/set br2 10.0.0.2 de:af:be:ef:ba:be
 ], [0], [ignore])
 
 AT_CHECK([
-    ovs-appctl ovs/route/show | grep User:
+    ovs-appctl ovs/route/show | grep Cached:
 ], [0], [dnl
-User: 10.0.0.0/24 dev br2 SRC 10.0.0.1
+Cached: 10.0.0.0/24 dev br2 SRC 10.0.0.1 local
 ])
 
 
@@ -955,7 +951,6 @@ AT_CHECK([
 
 AT_CHECK([
     ovs-appctl netdev-dummy/ip4addr br0 20.0.0.1/24 &&
-    ovs-appctl ovs/route/add 20.0.0.2/24 br0 &&
     ovs-appctl tnl/neigh/set br0 20.0.0.1 aa:bb:cc:00:00:01 &&
     ovs-appctl tnl/neigh/set br0 20.0.0.2 aa:bb:cc:00:00:02
 ], [0], [ignore])
@@ -963,9 +958,9 @@ AT_CHECK([
 ovs-appctl time/warp 1000
 
 AT_CHECK([
-    ovs-appctl ovs/route/show | grep User
+    ovs-appctl ovs/route/show | grep Cached:
 ],[0], [dnl
-User: 20.0.0.0/24 dev br0 SRC 20.0.0.1
+Cached: 20.0.0.0/24 dev br0 SRC 20.0.0.1 local
 ])
 
 AT_CHECK([
