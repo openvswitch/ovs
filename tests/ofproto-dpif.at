@@ -7641,12 +7641,14 @@ dummy@ovs-dummy: hit:0 missed:0
     vm1 5/3: (dummy: ifindex=2011)
 ])
 
-dnl set up route to 1.1.2.92 via br0 and action=normal
+dnl Add 1.1.2.92 to br0 and action=normal
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
-])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+])
 
 dnl Prime ARP Cache for 1.1.2.92
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
@@ -7657,10 +7659,13 @@ ovs-vsctl \
    --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" agent=127.0.0.1 \
      header=128 sampling=1 polling=0
 
-dnl set up route to 192.168.1.2 via br0
+dnl Add 192.168.1.2 to br0,
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.168.1.1/16], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 192.168.0.0/16 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 192.168.0.0/16 dev br0 SRC 192.168.1.1 local
 ])
 
 dnl add rule for int-br to force packet onto tunnel. There is no ifindex

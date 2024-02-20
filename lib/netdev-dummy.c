@@ -39,6 +39,7 @@
 #include "pcap-file.h"
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
+#include "ovs-router.h"
 #include "sset.h"
 #include "stream.h"
 #include "unaligned.h"
@@ -2023,11 +2024,20 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     if (netdev && is_dummy_class(netdev->netdev_class)) {
         struct in_addr ip, mask;
+        struct in6_addr ip6;
+        uint32_t plen;
         char *error;
 
-        error = ip_parse_masked(argv[2], &ip.s_addr, &mask.s_addr);
+        error = ip_parse_cidr(argv[2], &ip.s_addr, &plen);
         if (!error) {
+            mask.s_addr = be32_prefix_mask(plen);
             netdev_dummy_add_in4(netdev, ip, mask);
+
+            /* Insert local route entry for the new address. */
+            in6_addr_set_mapped_ipv4(&ip6, ip.s_addr);
+            ovs_router_force_insert(0, &ip6, plen + 96, true, argv[1],
+                                    &in6addr_any);
+
             unixctl_command_reply(conn, "OK");
         } else {
             unixctl_command_reply_error(conn, error);
@@ -2057,6 +2067,11 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
             mask = ipv6_create_mask(plen);
             netdev_dummy_add_in6(netdev, &ip6, &mask);
+
+            /* Insert local route entry for the new address. */
+            ovs_router_force_insert(0, &ip6, plen, true, argv[1],
+                                    &in6addr_any);
+
             unixctl_command_reply(conn, "OK");
         } else {
             unixctl_command_reply_error(conn, error);
