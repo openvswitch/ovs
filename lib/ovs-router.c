@@ -278,6 +278,19 @@ ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst, uint8_t plen,
     }
 }
 
+/* The same as 'ovs_router_insert', but it adds the route even if updates
+ * from the system routing table are disabled.  Used for unit tests. */
+void
+ovs_router_force_insert(uint32_t mark, const struct in6_addr *ip_dst,
+                        uint8_t plen, bool local, const char output_bridge[],
+                        const struct in6_addr *gw)
+{
+    uint8_t priority = local ? plen + 64 : plen;
+
+    ovs_router_insert__(mark, priority, local, ip_dst, plen,
+                        output_bridge, gw);
+}
+
 static void
 rt_entry_delete__(const struct cls_rule *cr)
 {

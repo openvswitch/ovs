@@ -19,13 +19,15 @@ dummy@ovs-dummy: hit:0 missed:0
     t2 2/6: (ip6gre: remote_ip=2001:cafe::92)
 ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP addresses.
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 2001:cafe::92/24 br0], [0], [OK
+dnl Checking that a local routes for added IPs were successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 2001:ca00::/24 dev br0 SRC 2001:cafe::88 local
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -93,13 +95,15 @@ dummy@ovs-dummy: hit:0 missed:0
     t3 3/6: (ip6erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=567, remote_ip=2001:cafe::93)
 ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP addresses.
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 2001:cafe::92/24 br0], [0], [OK
+dnl Checking that a local routes for added IPs were successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 2001:ca00::/24 dev br0 SRC 2001:cafe::88 local
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -225,14 +229,15 @@ gre_sys (3) ref_cnt=2
 vxlan_sys_4789 (4789) ref_cnt=2
 ])
 
-
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP addresses.
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 2001:cafe::92/24 br0], [0], [OK
+dnl Checking that a local routes for added IPs were successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 2001:ca00::/24 dev br0 SRC 2001:cafe::88 local
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])

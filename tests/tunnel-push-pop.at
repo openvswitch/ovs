@@ -30,17 +30,15 @@ dummy@ovs-dummy: hit:0 missed:0
     t4 5/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=56, remote_ip=flow)
 ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP addresses.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
 ])
-
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
-])
-
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0 pkt_mark=1234], [0], [OK
+dnl Checking that a local routes for added IPs were successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 2001:ca00::/24 dev br0 SRC 2001:cafe::88 local
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -237,17 +235,20 @@ dummy@ovs-dummy: hit:0 missed:0
     t8 9/2152: (gtpu: key=123, remote_ip=1.1.2.92)
 ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP addresses.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:cafe::88/24], [0], [OK
 ])
-
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
-])
-
+dnl Add a static route with a mark.
 AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0 pkt_mark=1234], [0], [OK
+])
+dnl Checking that local routes for added IPs and the static route with a mark
+dnl were successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep br0 | sort], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
+Cached: 2001:ca00::/24 dev br0 SRC 2001:cafe::88 local
+User: 1.1.2.0/24 MARK 1234 dev br0 SRC 1.1.2.88
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -690,12 +691,12 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=geneve \
                        options:remote_ip=1.1.2.92 options:key=123 ofport_request=2 \
                        ])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP address.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -731,11 +732,12 @@ AT_CHECK([ovs-vsctl add-port int-br t2 dnl
           -- set Interface t2 type=geneve options:remote_ip=1.1.2.92 dnl
                               options:key=123 ofport_request=2])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP address.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
 ])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
@@ -796,8 +798,11 @@ dummy@ovs-dummy: hit:0 missed:0
 
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
 ])
+
 AT_CHECK([ovs-ofctl add-flow br0 'arp,priority=1,action=normal'])
 
 dnl Use arp reply to achieve tunnel next hop mac binding
@@ -840,11 +845,12 @@ AT_CHECK([ovs-vsctl add-port int-br t2 dnl
           -- set Interface t2 type=geneve options:remote_ip=1.1.2.92 dnl
                               options:key=123 ofport_request=2])
 
-dnl First setup dummy interface IP address, then add the route
-dnl so that tnl-port table can get valid IP address for the device.
+dnl Setup dummy interface IP address.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev br0 SRC 1.1.2.88 local
 ])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
@@ -908,10 +914,12 @@ AT_CHECK([ovs-vsctl set port p8  tag=42 dnl
                  -- set port br0 tag=42 dnl
                  -- set port p7  tag=200])
 
-dnl Set IP address and route for br0.
+dnl Set an IP address for br0.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 10.0.0.2/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 10.0.0.11/24 br0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 10.0.0.0/24 dev br0 SRC 10.0.0.2 local
 ])
 
 dnl Send an ARP reply to port b8 on br0, so that packets will be forwarded
@@ -968,8 +976,11 @@ dummy@ovs-dummy: hit:0 missed:0
 
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr vtep0 1.1.2.88/24], [0], [OK
 ])
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 vtep0], [0], [OK
+dnl Checking that a local route for added IP was successfully installed.
+AT_CHECK([ovs-appctl ovs/route/show | grep Cached], [0], [dnl
+Cached: 1.1.2.0/24 dev vtep0 SRC 1.1.2.88 local
 ])
+
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow int-br action=normal])
 
@@ -984,10 +995,6 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),dnl
 
 AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
 1.1.2.92                                      f8:bc:12:44:34:b6   br0
-])
-
-AT_CHECK([ovs-appctl ovs/route/show | tail -n+2 | sort], [0], [dnl
-User: 1.1.2.0/24 dev vtep0 SRC 1.1.2.88
 ])
 
 dnl Check GRE tunnel pop.
