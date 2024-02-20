@@ -935,3 +935,82 @@ out_port(100)),8)
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - use non-local port as tunnel endpoint])
+
+OVS_VSWITCHD_START([add-port br0 p0 \
+                    -- set Interface p0 type=dummy ofport_request=1])
+
+dnl Adding another port separately to ensure that it gets an
+dnl aa:55:aa:55:00:03 MAC address (dummy port number 3).
+AT_CHECK([ovs-vsctl add-port br0 vtep0 \
+            -- set interface vtep0 type=dummy ofport_request=2])
+AT_CHECK([ovs-vsctl \
+          -- add-br int-br \
+          -- set bridge int-br datapath_type=dummy \
+          -- set Interface int-br ofport_request=3])
+AT_CHECK([ovs-vsctl \
+          -- add-port int-br t1 \
+          -- set Interface t1 type=gre ofport_request=4 \
+                              options:remote_ip=1.1.2.92
+])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+    vtep0 2/2: (dummy)
+  int-br:
+    int-br 65534/3: (dummy-internal)
+    t1 4/4: (gre: remote_ip=1.1.2.92)
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr vtep0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 vtep0], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow int-br action=normal])
+
+dnl Use arp request and reply to achieve tunnel next hop mac binding.
+dnl By default, vtep0's MAC address is aa:55:aa:55:00:03.
+AT_CHECK([ovs-appctl netdev-dummy/receive vtep0 'recirc_id(0),in_port(2),dnl
+  eth(dst=ff:ff:ff:ff:ff:ff,src=aa:55:aa:55:00:03),eth_type(0x0806),dnl
+  arp(tip=1.1.2.92,sip=1.1.2.88,op=1,sha=aa:55:aa:55:00:03,tha=00:00:00:00:00:00)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),dnl
+  eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:03),eth_type(0x0806),dnl
+  arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=aa:55:aa:55:00:03)'])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+])
+
+AT_CHECK([ovs-appctl ovs/route/show | tail -n+2 | sort], [0], [dnl
+User: 1.1.2.0/24 dev vtep0 SRC 1.1.2.88
+])
+
+dnl Check GRE tunnel pop.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),dnl
+  eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:03),eth_type(0x0800),dnl
+  ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'],
+[0], [stdout])
+
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: tnl_pop(4)
+])
+
+dnl Check GRE tunnel push.
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),dnl
+  eth(dst=f9:bc:12:44:34:b6,src=af:55:aa:55:00:03),eth_type(0x0800),dnl
+  ipv4(src=1.1.3.88,dst=1.1.3.92,proto=1,tos=0,ttl=64,frag=no)'],
+[0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: clone(tnl_push(tnl_port(4),header(size=38,type=3,dnl
+eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:03,dl_type=0x0800),dnl
+ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x4000),dnl
+gre((flags=0x0,proto=0x6558))),out_port(2)),1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
