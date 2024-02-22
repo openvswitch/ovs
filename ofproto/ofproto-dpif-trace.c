@@ -845,15 +845,33 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               bool names)
 {
     struct ovs_list recirc_queue = OVS_LIST_INITIALIZER(&recirc_queue);
+    int recirculations = 0;
+
     ofproto_trace__(ofproto, flow, packet, &recirc_queue,
                     ofpacts, ofpacts_len, output, names);
 
     struct oftrace_recirc_node *recirc_node;
     LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
+        if (recirculations++ > 4096) {
+            ds_put_cstr(output, "\n\n");
+            ds_put_char_multiple(output, '=', 79);
+            ds_put_cstr(output, "\nTrace reached the recirculation limit."
+                                "  Sopping the trace here.");
+            ds_put_format(output,
+                          "\nQueued but not processed: %"PRIuSIZE
+                          " recirculations.",
+                          ovs_list_size(&recirc_queue) + 1);
+            oftrace_recirc_node_destroy(recirc_node);
+            break;
+        }
         ofproto_trace_recirc_node(recirc_node, next_ct_states, output);
         ofproto_trace__(ofproto, &recirc_node->flow, recirc_node->packet,
                         &recirc_queue, ofpacts, ofpacts_len, output,
                         names);
+        oftrace_recirc_node_destroy(recirc_node);
+    }
+    /* Destroy remaining recirculation nodes, if any. */
+    LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
         oftrace_recirc_node_destroy(recirc_node);
     }
 }
