@@ -184,7 +184,7 @@ static struct bond_member *choose_output_member(const struct bond *,
                                                 struct flow_wildcards *,
                                                 uint16_t vlan)
     OVS_REQ_RDLOCK(rwlock);
-static void update_recirc_rules__(struct bond *);
+static void update_recirc_rules(struct bond *) OVS_REQ_WRLOCK(rwlock);
 static bool bond_may_recirc(const struct bond *);
 static void bond_update_post_recirc_rules__(struct bond *, bool force)
     OVS_REQ_WRLOCK(rwlock);
@@ -297,7 +297,10 @@ bond_unref(struct bond *bond)
     }
     free(bond->hash);
     bond->hash = NULL;
-    update_recirc_rules__(bond);
+
+    ovs_rwlock_wrlock(&rwlock);
+    update_recirc_rules(bond);
+    ovs_rwlock_unlock(&rwlock);
 
     hmap_destroy(&bond->pr_rule_ops);
     free(bond->primary);
@@ -329,17 +332,8 @@ add_pr_rule(struct bond *bond, const struct match *match,
     hmap_insert(&bond->pr_rule_ops, &pr_op->hmap_node, hash);
 }
 
-/* This function should almost never be called directly.
- * 'update_recirc_rules()' should be called instead.  Since
- * this function modifies 'bond->pr_rule_ops', it is only
- * safe when 'rwlock' is held.
- *
- * However, when the 'bond' is the only reference in the system,
- * calling this function avoid acquiring lock only to satisfy
- * lock annotation. Currently, only 'bond_unref()' calls
- * this function directly.  */
 static void
-update_recirc_rules__(struct bond *bond)
+update_recirc_rules(struct bond *bond) OVS_REQ_WRLOCK(rwlock)
 {
     struct match match;
     struct bond_pr_rule_op *pr_op;
@@ -405,6 +399,15 @@ update_recirc_rules__(struct bond *bond)
 
                 VLOG_ERR("failed to remove post recirculation flow %s", err_s);
                 free(err_s);
+            } else if (bond->hash) {
+                /* If the flow deletion failed, a subsequent call to
+                 * ofproto_dpif_add_internal_flow() would just modify the
+                 * flow preserving its statistics.  Therefore, only reset
+                 * the entry's byte counter if it succeeds. */
+                uint32_t hash = pr_op->match.flow.dp_hash & BOND_MASK;
+                struct bond_entry *entry = &bond->hash[hash];
+
+                entry->pr_tx_bytes = 0;
             }
 
             hmap_remove(&bond->pr_rule_ops, &pr_op->hmap_node);
@@ -419,12 +422,6 @@ update_recirc_rules__(struct bond *bond)
     ofpbuf_uninit(&ofpacts);
 }
 
-static void
-update_recirc_rules(struct bond *bond)
-    OVS_REQ_RDLOCK(rwlock)
-{
-    update_recirc_rules__(bond);
-}
 
 /* Updates 'bond''s overall configuration to 's'.
  *
