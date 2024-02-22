@@ -547,6 +547,23 @@ ovs-appctl time/warp 1000 100
 ovs-appctl bond/show > bond3.txt
 AT_CHECK([sed -n '/member p2/,/^$/p' bond3.txt | grep 'hash'], [0], [ignore])
 
+# Check that both ports doing down and back up doesn't break statistics.
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p1 down], 0, [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 down], 0, [OK
+])
+ovs-appctl time/warp 1000 100
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p1 up], 0, [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state p2 up], 0, [OK
+])
+ovs-appctl time/warp 1000 100
+
+AT_CHECK([SEND_TCP_BOND_PKTS([p5], [5], [65500])])
+# We sent 49125 KB of data total in 3 batches.  No hash should have more
+# than that amount of load. Just checking that it is within 5 digits.
+AT_CHECK([ovs-appctl bond/show | grep -E '[[0-9]]{6}'], [1])
+
 OVS_VSWITCHD_STOP()
 AT_CLEANUP
 
