@@ -16,6 +16,7 @@ import atexit
 import os
 import signal
 import sys
+import threading
 
 import ovs.vlog
 
@@ -112,28 +113,28 @@ def _unlink(file_):
 def _signal_handler(signr, _):
     _call_hooks(signr)
 
-    # Re-raise the signal with the default handling so that the program
-    # termination status reflects that we were killed by this signal.
-    signal.signal(signr, signal.SIG_DFL)
-    os.kill(os.getpid(), signr)
-
 
 def _atexit_handler():
     _call_hooks(0)
 
 
-recurse = False
+mutex = threading.Lock()
 
 
 def _call_hooks(signr):
-    global recurse
-    if recurse:
+    global mutex
+    if not mutex.acquire(blocking=False):
         return
-    recurse = True
 
     for hook, cancel, run_at_exit in _hooks:
         if signr != 0 or run_at_exit:
             hook()
+
+    if signr != 0:
+        # Re-raise the signal with the default handling so that the program
+        # termination status reflects that we were killed by this signal.
+        signal.signal(signr, signal.SIG_DFL)
+        os.kill(os.getpid(), signr)
 
 
 _inited = False
@@ -150,7 +151,9 @@ def _init():
                        signal.SIGALRM]
 
         for signr in signals:
-            if signal.getsignal(signr) == signal.SIG_DFL:
+            handler = signal.getsignal(signr)
+            if (handler == signal.SIG_DFL or
+                handler == signal.default_int_handler):
                 signal.signal(signr, _signal_handler)
         atexit.register(_atexit_handler)
 
@@ -165,7 +168,6 @@ def signal_alarm(timeout):
 
     if sys.platform == "win32":
         import time
-        import threading
 
         class Alarm (threading.Thread):
             def __init__(self, timeout):
