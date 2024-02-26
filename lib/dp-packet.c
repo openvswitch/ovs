@@ -592,6 +592,18 @@ dp_packet_ol_send_prepare(struct dp_packet *p, uint64_t flags)
     if (dp_packet_hwol_is_tunnel_geneve(p) ||
         dp_packet_hwol_is_tunnel_vxlan(p)) {
         tnl_inner = true;
+
+        /* If the TX interface doesn't support UDP tunnel offload but does
+         * support inner checksum offload and an outer UDP checksum is
+         * required, then we can't offload inner checksum either. As that would
+         * invalidate the outer checksum. */
+        if (!(flags & NETDEV_TX_OFFLOAD_OUTER_UDP_CKSUM) &&
+                dp_packet_hwol_is_outer_udp_cksum(p)) {
+            flags &= ~(NETDEV_TX_OFFLOAD_TCP_CKSUM |
+                       NETDEV_TX_OFFLOAD_UDP_CKSUM |
+                       NETDEV_TX_OFFLOAD_SCTP_CKSUM |
+                       NETDEV_TX_OFFLOAD_IPV4_CKSUM);
+        }
     }
 
     if (dp_packet_hwol_tx_ip_csum(p)) {
