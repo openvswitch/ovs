@@ -58,7 +58,7 @@ features which have been applied upstream, or bugfixes to the Open vSwitch
 datapath code. For bugfixes, the patches subsequently follow the regular Open
 vSwitch process as described above to reach older branches.
 
-__ http://vger.kernel.org/vger-lists.html#netdev
+__ https://lore.kernel.org/netdev/
 
 Changes to userspace components
 -------------------------------
@@ -93,8 +93,8 @@ Changes to Linux kernel components
 The Linux kernel components in Open vSwitch go through initial review in the
 upstream Linux netdev community before they go into the Open vSwitch tree. As
 such, backports from upstream to the Open vSwitch tree may include bugfixes or
-new features. The `netdev-FAQ`_ describes the general process for merging
-patches to the upstream Linux tree.
+new features. The `Netdev Maintainer Handbook`_ describes the general
+process for merging patches to the upstream Linux tree.
 
 To keep track of the changes which are made upstream against the changes which
 have been backported to the Open vSwitch tree, backports should be done in the
@@ -113,8 +113,8 @@ interests of keeping the Open vSwitch tree in sync with upstream `net-next`,
 contributors may send Open vSwitch kernel module changes independently of
 userspace changes.
 
-.. _netdev-faq: https://www.kernel.org/doc/Documentation/networking/netdev-FAQ.txt
-.. _net-next: http://git.kernel.org/cgit/linux/kernel/git/davem/net-next.git
+.. _Netdev Maintainer Handbook: https://docs.kernel.org/process/maintainer-netdev.html
+.. _net-next: https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git
 
 How to backport kernel patches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

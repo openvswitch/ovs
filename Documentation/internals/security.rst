@@ -90,11 +90,11 @@ Reporters may ask for a GPG key while initiating contact with the security team
 to deliver more sensitive reports.
 
 The Linux kernel has `its own vulnerability management process
-<https://static.lwn.net/kerneldoc/admin-guide/security-bugs.html>`__.  Handling
-of vulnerabilities that affect both the Open vSwitch tree and the upstream
-Linux kernel should be reported through both processes.  Send your report as a
-single email to both the kernel and OVS security teams to allow those teams to
-most easily coordinate among themselves.
+<https://docs.kernel.org/process/security-bugs.html?highlight=security>`__.
+Handling of vulnerabilities that affect both the Open vSwitch tree and the
+upstream Linux kernel should be reported through both processes.  Send your
+report as a single email to both the kernel and OVS security teams to allow
+those teams to most easily coordinate among themselves.
 
 Step 2: Assessment
 ------------------
