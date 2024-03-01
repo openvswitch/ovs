@@ -479,14 +479,15 @@ You should invoke scan-view to view analysis results. The last line of output
 from ``clang-analyze`` will list the command (containing results directory)
 that you should invoke to view the results on a browser.
 
-vsperf
-------
+ViNePerf
+--------
 
-The vsperf project aims to develop a vSwitch test framework that can be used to
-validate the suitability of different vSwitch implementations in a telco
-deployment environment. More information can be found on the `OPNFV wiki`_.
+The ViNePerf project, formerly known as VswitchPerf or vsperf, aims to
+develop a vSwitch test framework that can be used to validate the
+suitability of different vSwitch implementations in a telco deployment
+environment. More information can be found on the `Anuket project wiki`_.
 
-.. _OPNFV wiki: https://wiki.opnfv.org/display/vsperf/VSperf+Home
+.. _Anuket project wiki: https://wiki.anuket.io/display/HOME/ViNePERF
 
 Proof of Concepts
 ~~~~~~~~~~~~~~~~~

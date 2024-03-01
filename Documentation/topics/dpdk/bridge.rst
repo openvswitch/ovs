@@ -52,7 +52,7 @@ DPDK physical ports and contain all "dropped", "error" and "management"
 counters from ``XSTATS``.  A list of all ``XSTATS`` counters can be found
 `here`__.
 
-__ https://wiki.opnfv.org/display/fastpath/Collectd+Metrics+and+Events
+__ https://wiki.anuket.io/display/HOME/Collectd+Metrics+and+Events
 
 .. note::
 
