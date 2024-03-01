@@ -48,7 +48,7 @@ master_doc = 'contents'
 
 # General information about the project.
 project = u'Open vSwitch'
-copyright = u'2016-2021, The Open vSwitch Development Community'
+copyright = u'2016-2024, The Open vSwitch Development Community'
 author = u'The Open vSwitch Development Community'
 
 # The version info for the project you're documenting, acts as replacement for
