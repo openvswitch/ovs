@@ -495,7 +495,7 @@ Start ovsdb-server using below command::
     $ docker run -itd --net=host --name=ovsdb-server \
       <docker_repo>:<tag> ovsdb-server
 
-Start ovs-vswitchd with priviledged mode as it needs to load kernel module in
+Start ovs-vswitchd with privileged mode as it needs to load kernel module in
 host using below command::
 
     $ docker run -itd --net=host --name=ovs-vswitchd \

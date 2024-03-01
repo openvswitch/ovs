@@ -409,7 +409,7 @@ options are used::
     checking whether actions Autovalidator is default implementation... yes
 
 Compile OVS in debug mode to have `ovs_assert` statements error out if
-there is a mis-match in the datapath classifier lookup or packet parser
+there is a mismatch in the datapath classifier lookup or packet parser
 implementations.
 
 Since the AVX512 implementation of the datapath interface is disabled by
@@ -492,7 +492,7 @@ Proof of Concepts
 ~~~~~~~~~~~~~~~~~
 
 Proof of Concepts are documentation materialized into Ansible recipes
-executed in VirtualBox or Libvirt environments orchastrated by Vagrant.
+executed in VirtualBox or Libvirt environments orchestrated by Vagrant.
 Proof of Concepts allow developers to create small virtualized setups that
 demonstrate how certain Open vSwitch features are intended to work avoiding
 user introduced errors by overlooking instructions.  Proof of Concepts

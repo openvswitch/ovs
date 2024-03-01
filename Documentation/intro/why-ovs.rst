@@ -125,7 +125,7 @@ previous hypervisor networking stacks, focusing on the need for automated and
 dynamic network control in large-scale Linux-based virtualization environments.
 
 The goal with Open vSwitch is to keep the in-kernel code as small as possible
-(as is necessary for performance) and to re-use existing subsystems when
+(as is necessary for performance) and to reuse existing subsystems when
 applicable (for example Open vSwitch uses the existing QoS stack). As of Linux
 3.3, Open vSwitch is included as a part of the kernel and packaging for the
 userspace utilities are available on most popular distributions.

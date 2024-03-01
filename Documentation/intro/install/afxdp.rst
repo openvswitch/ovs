@@ -150,7 +150,7 @@ To kick start end-to-end autotesting::
   make check-afxdp TESTSUITEFLAGS='1'
 
 .. note::
-   Not all test cases pass at this time. Currenly all cvlan tests are skipped
+   Not all test cases pass at this time. Currently all cvlan tests are skipped
    due to kernel issues.
 
 If a test case fails, check the log at::

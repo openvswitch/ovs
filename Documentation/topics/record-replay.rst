@@ -44,7 +44,7 @@ measure performance with ``perf``, and so on.
  .. note::
 
     The current version of record/replay engine does not work correctly with
-    internal time-based events that leats to communications with other
+    internal time-based events that lead to communications with other
     processes.  For this reason it can not be used with clustered databases
     (RAFT implementation is heavily time dependent).
     In addition, recording automatically disables inactivity probes on

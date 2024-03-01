@@ -153,7 +153,7 @@ __ https://doc.dpdk.org/guides-23.11/prog_guide/rte_flow.html
 .. warning::
 
    This feature is not compatible with all NICs. Refer to the DPDK
-   `compatibilty matrix`__ and vendor documentation for more details.
+   `compatibility matrix`__ and vendor documentation for more details.
 
    __ https://doc.dpdk.org/guides-23.11/nics/overview.html
 

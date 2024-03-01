@@ -68,7 +68,7 @@ cookbook entry, we use `sFlowTrend
 <http://www.inmon.com/products/sFlowTrend.php>`__, a free sFlow collector that
 is a simple cross-platform Java download. Other sFlow collectors should work
 equally well. `hostMon` has a single NIC, `eth0`, that is connected to the
-Management Network. `eth0` has an IP adress that can reach `eth1` on `host1`.
+Management Network. `eth0` has an IP address that can reach `eth1` on `host1`.
 
 Two Virtual Machines
 ~~~~~~~~~~~~~~~~~~~~

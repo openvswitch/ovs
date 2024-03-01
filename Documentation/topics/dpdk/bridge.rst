@@ -98,7 +98,7 @@ datapath flows with very simple match criteria.
 In theory, for very simple forwarding, OVS doesn't need to parse packets at all
 in order to follow these rules.  In practice, due to various implementation
 constraints, userspace datapath has to match at least on a small set of packet
-fileds.  Some matching criteria (for example, ingress port) are not related to
+fields.  Some matching criteria (for example, ingress port) are not related to
 the packet itself and others (for example, VLAN tag or Ethernet type) can be
 extracted without fully parsing the packet.  This allows OVS to significantly
 speed up packet forwarding for these flows with simple match criteria.
@@ -202,7 +202,7 @@ get command, note the updated priority of the ``avx512_gather`` function::
             avx512_gather (Use count: 0, Priority: 3)
 
 If two lookup functions have the same priority, the first one in the list is
-chosen, and the 2nd occurance of that priority is not used. Put in logical
+chosen, and the 2nd occurrence of that priority is not used. Put in logical
 terms, a subtable is chosen if its priority is greater than the previous
 best candidate.
 
@@ -280,7 +280,7 @@ composed of bits and blocks where the bits signify which blocks are set or have
 values where as the blocks hold the metadata, ip, udp, vlan, etc.  These values
 are used by the datapath for switching decisions later.
 
-Most modern CPUs have some SIMD (single instruction, mutiple data)
+Most modern CPUs have some SIMD (single instruction, multiple data)
 capabilities.  These SIMD instructions are able to process a vector rather than
 act on one variable.  OVS provides multiple implementations of packet parsing
 functions.  This allows the user to take advantage of SIMD instructions like

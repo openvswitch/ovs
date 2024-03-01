@@ -210,7 +210,7 @@ vSwitch architecture:
 ::
 
 
-    Architecure
+    Architecture
 
                _
               |   +-------------------+

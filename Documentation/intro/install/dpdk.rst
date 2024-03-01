@@ -232,7 +232,7 @@ Mount the hugepages, if not already mounted by default::
 Setup DPDK devices using VFIO
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-VFIO is prefered to the UIO driver when using recent versions of DPDK. VFIO
+VFIO is preferred to the UIO driver when using recent versions of DPDK. VFIO
 support required support from both the kernel and BIOS. For the former, kernel
 version > 3.6 must be used. For the latter, you must enable VT-d in the BIOS
 and ensure this is configured via grub. To ensure VT-d is enabled via the BIOS,
@@ -506,17 +506,17 @@ options.
 Affinity
 ~~~~~~~~
 
-For superior performance, DPDK pmd threads and Qemu vCPU threads needs to be
-affinitized accordingly.
+For superior performance, DPDK pmd threads and Qemu vCPU threads need to
+have affinity set accordingly.
 
 - PMD thread Affinity
 
   A poll mode driver (pmd) thread handles the I/O of all DPDK interfaces
   assigned to it. A pmd thread shall poll the ports for incoming packets,
   switch the packets and send to tx port.  A pmd thread is CPU bound, and needs
-  to be affinitized to isolated cores for optimum performance.  Even though a
-  PMD thread may exist, the thread only starts consuming CPU cycles if there is
-  at least one receive queue assigned to the pmd.
+  to be have affinity set to isolated cores for optimum performance.  Even
+  though a PMD thread may exist, the thread only starts consuming CPU cycles if
+  there is at least one receive queue assigned to the pmd.
 
   .. note::
     On NUMA systems, PCI devices are also local to a NUMA node.  Unbound rx
