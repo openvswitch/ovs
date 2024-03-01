@@ -8,28 +8,60 @@ configuration:
   - Release
 clone_folder: C:\openvswitch_compile
 shallow_clone: true
+
 init:
 - ps: $env:PATH ="C:\Python312-x64;"+$env:PATH
 - ps: New-Item -Type HardLink -Path  "C:\Python312-x64\python3.exe"
                               -Value "C:\Python312-x64\python.exe"
+
+cache:
+- C:\ovs-build-downloads -> appveyor.yml
+
+install:
 - ps: |
-    mkdir C:\ovs-build-downloads
+    Remove-Item -Recurse -Force -Path C:/OpenSSL-Win64
+    New-Item -ItemType Directory -Force -Path C:\ovs-build-downloads
 
-    $source = "https://slproweb.com/download/Win64OpenSSL-1_0_2u.exe"
-    $destination = "C:\ovs-build-downloads\Win64OpenSSL-1_0_2u.exe"
-    Invoke-WebRequest $source -OutFile $destination
+    # Find and download the latest stable OpenSSl 3.0.
+    $URL = "https://raw.githubusercontent.com/slproweb/opensslhashes/master/win32_openssl_hashes.json"
+    $webData = (Invoke-WebRequest -Uri $URL).content | ConvertFrom-Json
+    $source = ($webData.files.PSObject.Properties | Where-Object {
+        $_.Value.basever   -match "3.0.*" -and
+        $_.Value.bits      -eq    "64"    -and
+        $_.Value.arch      -eq    "INTEL" -and
+        $_.Value.installer -eq    "exe"   -and
+        -not $_.Value.light
+    } | Select-Object Value).PSObject.Properties.Value
 
-    cd C:\ovs-build-downloads
-    .\Win64OpenSSL-1_0_2u.exe /silent /verysilent /sp- /suppressmsgboxes
-    Start-Sleep -s 30
-    cd C:\openvswitch_compile
+    Write-Host "Latest OpenSSL 3.0:" ($source | Format-List | Out-String)
+
+    $destination = "C:\ovs-build-downloads\Win64OpenSSL.exe"
+    if (Test-Path $destination) {
+        $fileHash = (Get-FileHash $destination -Algorithm SHA256).Hash.ToLower()
+        if ($fileHash -ne $source.sha256) {
+            Write-Host "Cache miss:" $fileHash "!=" $source.sha256
+            Remove-Item -Path $destination
+        }
+    }
+
+    if (Test-Path $destination) {
+        Write-Host "Using cached:" $destination
+    } else {
+        Write-Host "Downloading:" $source.url
+        Invoke-WebRequest $source.url -OutFile $destination
+    }
+
+    Write-Host "Installing:" $destination
+    Start-Process -FilePath $destination `
+        -ArgumentList "/silent /verysilent /sp- /suppressmsgboxes" -Wait
+
 - ps: git clone -q https://git.code.sf.net/p/pthreads4w/code c:\pthreads4w-code
 - ps: python3 -m pip install pypiwin32 --disable-pip-version-check
-
-build_script:
 - '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
 - ps: C:\msys64\msys2_shell.cmd -here -defterm -no-start -use-full-path -c
         ".ci/windows-prepare.sh 2>&1"
+
+build_script:
 - ps: C:\msys64\msys2_shell.cmd -here -defterm -no-start -use-full-path -c
         ".ci/windows-build.sh $env:CONFIGURATION 2>&1"
 - ps: cp C:\PTHREADS-BUILT\bin\pthreadVC3.dll C:\openvswitch\usr\bin
