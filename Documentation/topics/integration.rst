@@ -195,7 +195,7 @@ stalled.
 manager which can manage a defined set of resource across a set of clustered
 nodes. Pacemaker manages the resource with the help of the resource agents.
 One among the resource agent is `OCF
-<http://www.linux-ha.org/wiki/OCF_Resource_Agents>`__
+<https://clusterlabs.org/pacemaker/doc/2.1/Pacemaker_Administration/html/agents.html>`__
 
 OCF is nothing but a shell script which accepts a set of actions and returns an
 appropriate status code.
