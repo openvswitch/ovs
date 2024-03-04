@@ -100,7 +100,7 @@ void conntrack_clear(struct dp_packet *packet);
 struct conntrack_dump {
     struct conntrack *ct;
     unsigned bucket;
-    struct cmap_position cm_pos;
+    struct cmap_cursor cursor;
     bool filter_zone;
     uint16_t zone;
 };
