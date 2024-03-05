@@ -28,6 +28,8 @@
 %bcond_with dpdk
 # To disable AF_XDP support, specify '--without afxdp' when building
 %bcond_without afxdp
+# To control the USDT support
+%bcond_without usdt
 
 # If there is a need to automatically enable the package after installation,
 # specify the "--with autoenable"
@@ -76,6 +78,9 @@ Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 %if %{with afxdp}
 BuildRequires: libxdp-devel libbpf-devel numactl-devel
+%endif
+%if %{with usdt}
+BuildRequires: libbpf-devel systemtap-sdt-devel
 %endif
 BuildRequires: unbound unbound-devel
 
@@ -173,6 +178,9 @@ This package provides IPsec tunneling support for OVS tunnels.
         --enable-afxdp \
 %else
         --disable-afxdp \
+%endif
+%if %{with usdt}
+        --enable-usdt-probes \
 %endif
         --enable-ssl \
         --disable-static \
