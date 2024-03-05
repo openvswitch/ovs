@@ -2974,6 +2974,10 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
         struct umap *umap = &udpif->ukeys[i];
         size_t n_ops = 0;
 
+        if (ovs_mutex_trylock(&umap->mutex)) {
+            continue;
+        }
+
         CMAP_FOR_EACH(ukey, cmap_node, &umap->cmap) {
             enum ukey_state ukey_state;
 
@@ -3013,9 +3017,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
             if (ukey_state == UKEY_EVICTED) {
                 /* The common flow deletion case involves deletion of the flow
                  * during the dump phase and ukey deletion here. */
-                ovs_mutex_lock(&umap->mutex);
                 ukey_delete(umap, ukey);
-                ovs_mutex_unlock(&umap->mutex);
             }
 
             if (n_ops == REVALIDATE_MAX_BATCH) {
@@ -3025,6 +3027,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 n_ops = 0;
             }
         }
+        ovs_mutex_unlock(&umap->mutex);
 
         if (n_ops) {
             push_ukey_ops(udpif, umap, ops, n_ops);
