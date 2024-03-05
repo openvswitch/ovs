@@ -1130,10 +1130,11 @@ bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
         if (!VLOG_DROP_INFO(&rl)) {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
-            ds_put_format(&ds, "%s: BFD state change: %s->%s"
-                          " \"%s\"->\"%s\".\n",
+            ds_put_format(&ds, "%s: BFD state change: (bfd.SessionState: %s,"
+                          " bfd.LocalDiag: \"%s\") -> (bfd.SessionState: %s,"
+                          " bfd.LocalDiag: \"%s\")\n",
                           bfd->name, bfd_state_str(bfd->state),
-                          bfd_state_str(state), bfd_diag_str(bfd->diag),
+                          bfd_diag_str(bfd->diag), bfd_state_str(state),
                           bfd_diag_str(diag));
             bfd_put_details(&ds, bfd);
             VLOG_INFO("%s", ds_cstr(&ds));
