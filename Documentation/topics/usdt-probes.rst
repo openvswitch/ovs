@@ -214,8 +214,10 @@ Available probes in ``ovs_vswitchd``:
 - dpif_recv:recv_upcall
 - main:poll_block
 - main:run_start
+- revalidate:flow_result
 - revalidate_ukey\_\_:entry
 - revalidate_ukey\_\_:exit
+- revalidator_sweep\_\_:flow_result
 - udpif_revalidator:start_dump
 - udpif_revalidator:sweep_done
 
@@ -441,6 +443,47 @@ sweep phase was completed.
 **Script references**:
 
 - ``utilities/usdt-scripts/reval_monitor.py``
+
+
+probe revalidate:flow_result
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+This probe is triggered when the revalidator has executed on a particular
+flow key to make a determination whether to evict a flow, and the cause
+for eviction.  The revalidator runs periodically, and this probe will only
+be triggered when a flow is flagged for revalidation.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(struct udpif_key *) ukey``
+- *arg2*: ``(enum reval_result) result``
+- *arg3*: ``(enum flow_del_reason) del_reason``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/flow_reval_monitor.py``
+
+
+probe revalidator_sweep\_\_:flow_result
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Description**:
+This probe is placed in the path of the revalidator sweep, and is executed
+under the condition that a flow entry is in an unexpected state, or the
+flows were asked to be purged due to a user action.
+
+**Arguments**:
+
+- *arg0*: ``(struct udpif *) udpif``
+- *arg1*: ``(struct udpif_key *) ukey``
+- *arg2*: ``(enum reval_result) result``
+- *arg3*: ``(enum flow_del_reason) del_reason``
+
+**Script references**:
+
+- ``utilities/usdt-scripts/flow_reval_monitor.py``
 
 
 Adding your own probes
