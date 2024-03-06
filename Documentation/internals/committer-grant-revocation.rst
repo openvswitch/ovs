@@ -26,7 +26,7 @@ OVS Committer Grant/Revocation Policy
 =====================================
 
 An OVS committer is a participant in the project with the ability to commit
-code directly to the master repository. Commit access grants a broad ability to
+code directly to the main repository. Commit access grants a broad ability to
 affect the progress of the project as presented by its most important artifact,
 the code and related resources that produce working binaries of Open vSwitch.
 As such it represents a significant level of trust in an individual's

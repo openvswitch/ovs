@@ -33,7 +33,7 @@ userspace.
 
     The :doc:`releases FAQ </faq/releases>` lists support for the required
     versions of DPDK for each version of Open vSwitch. If building OVS and
-    DPDK outside of the master build tree users should consult this list
+    DPDK outside of the main build tree users should consult this list
     first.
 
 Build requirements
