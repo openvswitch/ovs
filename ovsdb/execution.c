@@ -585,6 +585,16 @@ mutate_row_cb(const struct ovsdb_row *row, void *mr_)
     return *mr->error == NULL;
 }
 
+static bool
+count_row_cb(const struct ovsdb_row *row OVS_UNUSED, void *rc)
+{
+    size_t *row_count = rc;
+
+    (*row_count)++;
+
+    return true;
+}
+
 static struct ovsdb_error *
 ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                      struct json *result)
@@ -609,7 +619,18 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         error = ovsdb_condition_from_json(table->schema, where, x->symtab,
                                           &condition);
     }
-    if (!error) {
+    if (!error && ovsdb_mutation_set_empty(&mutations)) {
+        /* Special case with no mutations, just return the row count. */
+        if (ovsdb_condition_empty(&condition)) {
+            json_object_put(result, "count",
+                            json_integer_create(hmap_count(&table->rows)));
+        } else {
+            size_t row_count = 0;
+            ovsdb_query(table, &condition, count_row_cb, &row_count);
+            json_object_put(result, "count",
+                            json_integer_create(row_count));
+        }
+    } else if (!error) {
         mr.n_matches = 0;
         mr.txn = x->txn;
         mr.mutations = &mutations;

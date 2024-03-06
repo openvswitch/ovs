@@ -355,6 +355,29 @@ AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2
 ], [ignore])
 
 # Test 14:
+# Count the rows in other_colors. This should pass even though the RBAC
+# authorization would fail because "client-2" does not match the
+# "creator" column for this row. Because the RBAC check is bypassed when
+# mutation is empty.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "mutate",
+          "table": "other_colors",
+          "where": [],
+          "mutations": []},
+         {"op": "mutate",
+          "table": "other_colors",
+          "where": [["name", "==", "seafoam"]],
+          "mutations": []}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1},{"count":1}]]
+], [ignore])
+
+# Test 15:
 # Attempt to delete a row from the "other_colors" table. This should pass
 # the RBAC authorization test because "client-1" does matches the
 # "creator" column for this row.
