@@ -686,26 +686,26 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
         lag = shash_find_data(&lag_shash, change->ifname);
 
         if (!lag) {
-            struct netdev *master_netdev;
-            char master_name[IFNAMSIZ];
+            struct netdev *primary_netdev;
+            char primary_name[IFNAMSIZ];
             uint32_t block_id;
             int error = 0;
 
-            if (!if_indextoname(change->master_ifindex, master_name)) {
+            if (!if_indextoname(change->master_ifindex, primary_name)) {
                 return;
             }
-            master_netdev = netdev_from_name(master_name);
-            if (!master_netdev) {
+            primary_netdev = netdev_from_name(primary_name);
+            if (!primary_netdev) {
                 return;
             }
 
-            /* If LAG master is not attached to ovs, ingress block on LAG
-             * members shoud not be updated. */
-            if (!master_netdev->auto_classified &&
-                is_netdev_linux_class(master_netdev->netdev_class)) {
-                block_id = netdev_get_block_id(master_netdev);
+            /* If LAG primary member is not attached to ovs,
+             * ingress block on LAG members should not be updated. */
+            if (!primary_netdev->auto_classified &&
+                is_netdev_linux_class(primary_netdev->netdev_class)) {
+                block_id = netdev_get_block_id(primary_netdev);
                 if (!block_id) {
-                    netdev_close(master_netdev);
+                    netdev_close(primary_netdev);
                     return;
                 }
 
@@ -715,7 +715,7 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
 
                 /* delete ingress block in case it exists */
                 tc_add_del_qdisc(change->if_index, false, 0, TC_INGRESS);
-                /* LAG master is linux netdev so add member to same block. */
+                /* LAG primary is linux netdev so add member to same block. */
                 error = tc_add_del_qdisc(change->if_index, true, block_id,
                                          TC_INGRESS);
                 if (error) {
@@ -726,7 +726,7 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
                 }
             }
 
-            netdev_close(master_netdev);
+            netdev_close(primary_netdev);
         }
     } else if (change->master_ifindex == 0) {
         /* Check if this was a lag member that has been removed. */
