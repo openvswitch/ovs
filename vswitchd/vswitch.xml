@@ -2159,7 +2159,7 @@
 
       <column name="other_config" key="bond-primary"
               type='{"type": "string"}'>
-        If a slave interface with this name exists in the bond and
+        If a member interface with this name exists in the bond and
         is up, it will be made active.  Relevant only when <ref
         column="other_config" key="bond_mode"/> is
         <code>active-backup</code> or if <code>balance-tcp</code> falls back
@@ -6291,7 +6291,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         and avoids recirculation of packet in datapath. It is supported
         only for balance-tcp bond mode in netdev datapath. The new action
         gives higher performance by using bond buckets instead of post
-        recirculation flows for selection of slave port from bond. By default
+        recirculation flows for selection of member port from bond. By default
         this new action is disabled, however it can be enabled by setting
         <ref column="other-config" key="lb-output-action"/> in
         <ref table="Port"/> table.
