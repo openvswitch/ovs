@@ -553,7 +553,7 @@ First the containers need to be started:
 
 .. code-block:: console
 
-  [core@sno-master ~]$ sudo podman run -it --rm \
+  [core@localhost ~]$ sudo podman run -it --rm \
      -e PS1='[(DEBUG)\u@\h \W]\$ ' \
      --privileged --network=host --pid=host \
      -v /lib/modules:/lib/modules:ro \
@@ -562,14 +562,14 @@ First the containers need to be started:
      -v /:/mnt/rootdir \
      quay.io/fedora/fedora:38-x86_64
 
-  [(DEBUG)root@sno-master /]#
+  [(DEBUG)root@localhost /]#
 
 
 Next add the ``linux_delay.py`` dependencies:
 
 .. code-block:: console
 
-  [(DEBUG)root@sno-master /]# dnf install -y bcc-tools perl-interpreter \
+  [(DEBUG)root@localhost /]# dnf install -y bcc-tools perl-interpreter \
        python3-pytz  python3-psutil
 
 
@@ -578,7 +578,7 @@ version:
 
 .. code-block:: console
 
-  [(DEBUG)root@sno-master home]# rpm -i \
+  [(DEBUG)root@localhost home]# rpm -i \
       openvswitch2.17-debuginfo-2.17.0-67.el8fdp.x86_64.rpm \
       openvswitch2.17-debugsource-2.17.0-67.el8fdp.x86_64.rpm \
       kernel-devel-4.18.0-372.41.1.el8_6.x86_64.rpm
@@ -588,7 +588,7 @@ Now the tool can be started. Here the above ``bridge_run()`` example is used:
 
 .. code-block:: console
 
-  [(DEBUG)root@sno-master home]# ./kernel_delay.py --start-trigger up:bridge_run --stop-trigger ur:bridge_run
+  [(DEBUG)root@localhost home]# ./kernel_delay.py --start-trigger up:bridge_run --stop-trigger ur:bridge_run
   # Start sampling (trigger@75279117343513) @2023-06-15T11:44:07.628372 (11:44:07 UTC)
   # Stop sampling (trigger@75279117443980) @2023-06-15T11:44:07.628529 (11:44:07 UTC)
   # Triggered sample dump, stop-start delta 100,467 ns @2023-06-15T11:44:07.628569 (11:44:07 UTC)
