@@ -885,7 +885,7 @@ netdev_linux_update__(struct netdev_linux *dev,
             }
 
             if (change->primary && netdev_linux_kind_is_lag(change->primary)) {
-                dev->is_lag_master = true;
+                dev->is_lag_primary = true;
             }
 
             dev->ifindex = change->if_index;
@@ -3703,8 +3703,9 @@ netdev_linux_get_block_id(struct netdev *netdev_)
         netdev_linux_update_via_netlink(netdev);
     }
 
-    /* Only assigning block ids to linux netdevs that are LAG masters. */
-    if (netdev->is_lag_master) {
+    /* Only assigning block ids to linux netdevs that are
+     * LAG primary members. */
+    if (netdev->is_lag_primary) {
         block_id = netdev->ifindex;
     }
     ovs_mutex_unlock(&netdev->mutex);
@@ -6903,7 +6904,7 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
             changed = true;
         }
         if (change->primary && netdev_linux_kind_is_lag(change->primary)) {
-            netdev->is_lag_master = true;
+            netdev->is_lag_primary = true;
         }
         if (changed) {
             netdev_change_seq_changed(&netdev->up);

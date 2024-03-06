@@ -105,7 +105,7 @@ struct netdev_linux {
     uint64_t rx_dropped;        /* Packets dropped while recv from kernel. */
 
     /* LAG information. */
-    bool is_lag_master;         /* True if the netdev is a LAG master. */
+    bool is_lag_primary;        /* True if the netdev is a LAG primary. */
 
     int numa_id;                /* NUMA node id. */
 
