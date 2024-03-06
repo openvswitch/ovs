@@ -2530,25 +2530,19 @@ conntrack_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
 
     dump->ct = ct;
     *ptot_bkts = 1; /* Need to clean up the callers. */
+    dump->cursor = cmap_cursor_start(&ct->conns);
     return 0;
 }
 
 int
 conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
 {
-    struct conntrack *ct = dump->ct;
     long long now = time_msec();
 
-    for (;;) {
-        struct cmap_node *cm_node = cmap_next_position(&ct->conns,
-                                                       &dump->cm_pos);
-        if (!cm_node) {
-            break;
-        }
-        struct conn_key_node *keyn;
-        struct conn *conn;
+    struct conn_key_node *keyn;
+    struct conn *conn;
 
-        INIT_CONTAINER(keyn, cm_node, cm_node);
+    CMAP_CURSOR_FOR_EACH_CONTINUE (keyn, cm_node, &dump->cursor) {
         if (keyn->dir != CT_DIR_FWD) {
             continue;
         }
