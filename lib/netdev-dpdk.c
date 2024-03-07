@@ -2664,6 +2664,35 @@ netdev_dpdk_prep_hwol_batch(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
     return cnt;
 }
 
+static void
+netdev_dpdk_mbuf_dump(const char *prefix, const char *message,
+                      const struct rte_mbuf *mbuf)
+{
+    static struct vlog_rate_limit dump_rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    char *response = NULL;
+    FILE *stream;
+    size_t size;
+
+    if (VLOG_DROP_DBG(&dump_rl)) {
+        return;
+    }
+
+    stream = open_memstream(&response, &size);
+    if (!stream) {
+        VLOG_ERR("Unable to open memstream for mbuf dump: %s.",
+                 ovs_strerror(errno));
+        return;
+    }
+
+    rte_pktmbuf_dump(stream, mbuf, rte_pktmbuf_pkt_len(mbuf));
+
+    fclose(stream);
+
+    VLOG_DBG(prefix ? "%s: %s:\n%s" : "%s%s:\n%s",
+             prefix ? prefix : "", message, response);
+    free(response);
+}
+
 /* Tries to transmit 'pkts' to txq 'qid' of device 'dev'.  Takes ownership of
  * 'pkts', even in case of failure.
  *
@@ -2680,6 +2709,8 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
         VLOG_WARN_RL(&rl, "%s: Output batch contains invalid packets. "
                      "Only %u/%u are valid: %s", netdev_get_name(&dev->up),
                      nb_tx_prep, cnt, rte_strerror(rte_errno));
+        netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
+                              "First invalid packet", pkts[nb_tx_prep]);
     }
 
     while (nb_tx != nb_tx_prep) {
