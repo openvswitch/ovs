@@ -179,12 +179,12 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *b, size_t headroom)
     struct ofpbuf *new_buffer;
 
     new_buffer = ofpbuf_clone_data_with_headroom(b->data, b->size, headroom);
-    if (b->header) {
+    if (new_buffer->data && b->header) {
         ptrdiff_t header_offset = (char *) b->header - (char *) b->data;
 
         new_buffer->header = (char *) new_buffer->data + header_offset;
     }
-    if (b->msg) {
+    if (new_buffer->data && b->msg) {
         ptrdiff_t msg_offset = (char *) b->msg - (char *) b->data;
 
         new_buffer->msg = (char *) new_buffer->data + msg_offset;
