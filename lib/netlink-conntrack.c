@@ -141,6 +141,9 @@ nl_ct_dump_start(struct nl_ct_dump_state **statep, const uint16_t *zone,
 
     nl_msg_put_nfgenmsg(&state->buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK,
                         IPCTNL_MSG_CT_GET, NLM_F_REQUEST);
+    if (zone) {
+        nl_msg_put_be16(&state->buf, CTA_ZONE, htons(*zone));
+    }
     nl_dump_start(&state->dump, NETLINK_NETFILTER, &state->buf);
     ofpbuf_clear(&state->buf);
 
@@ -263,11 +266,9 @@ out:
     return err;
 }
 
-#ifdef _WIN32
-int
-nl_ct_flush_zone(uint16_t flush_zone)
+static int
+nl_ct_flush_zone_with_cta_zone(uint16_t flush_zone)
 {
-    /* Windows can flush a specific zone */
     struct ofpbuf buf;
     int err;
 
@@ -282,24 +283,63 @@ nl_ct_flush_zone(uint16_t flush_zone)
 
     return err;
 }
-#else
+
+#ifdef _WIN32
 int
 nl_ct_flush_zone(uint16_t flush_zone)
 {
-    /* Apparently, there's no netlink interface to flush a specific zone.
+    return nl_ct_flush_zone_with_cta_zone(flush_zone);
+}
+#else
+
+static bool
+netlink_flush_supports_zone(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static bool supported = false;
+
+    if (ovsthread_once_start(&once)) {
+        if (ovs_kernel_is_version_or_newer(6, 8)) {
+            supported = true;
+        } else {
+            VLOG_INFO("Disabling conntrack flush by zone. "
+                      "Not supported in Linux kernel.");
+        }
+        ovsthread_once_done(&once);
+    }
+    return supported;
+}
+
+int
+nl_ct_flush_zone(uint16_t flush_zone)
+{
+    /* In older kernels, there was no netlink interface to flush a specific
+     * conntrack zone.
      * This code dumps every connection, checks the zone and eventually
      * delete the entry.
+     * In newer kernels there is the option to specify a zone for filtering
+     * during dumps.  Older kernels ignore this option. We set it here in the
+     * hope we only get relevant entries back, but fall back to filtering here
+     * to keep compatibility.
      *
-     * This is race-prone, but it is better than using shell scripts. */
+     * This is race-prone, but it is better than using shell scripts.
+     *
+     * Additionally newer kernels also support flushing a zone without listing
+     * it first. */
 
     struct nl_dump dump;
     struct ofpbuf buf, reply, delete;
+
+    if (netlink_flush_supports_zone()) {
+        return nl_ct_flush_zone_with_cta_zone(flush_zone);
+    }
 
     ofpbuf_init(&buf, NL_DUMP_BUFSIZE);
     ofpbuf_init(&delete, NL_DUMP_BUFSIZE);
 
     nl_msg_put_nfgenmsg(&buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK,
                         IPCTNL_MSG_CT_GET, NLM_F_REQUEST);
+    nl_msg_put_be16(&buf, CTA_ZONE, htons(flush_zone));
     nl_dump_start(&dump, NETLINK_NETFILTER, &buf);
     ofpbuf_clear(&buf);
 
