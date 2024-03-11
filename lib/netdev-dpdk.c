@@ -607,6 +607,9 @@ int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 struct ingress_policer *
 netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
 
+static void netdev_dpdk_mbuf_dump(const char *prefix, const char *message,
+                                  const struct rte_mbuf *);
+
 static bool
 is_dpdk_class(const struct netdev_class *class)
 {
@@ -2569,9 +2572,29 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     struct dp_packet *pkt = CONTAINER_OF(mbuf, struct dp_packet, mbuf);
     struct tcp_header *th;
 
-    if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_L4_MASK
-                            | RTE_MBUF_F_TX_TCP_SEG))) {
-        mbuf->ol_flags &= ~(RTE_MBUF_F_TX_IPV4 | RTE_MBUF_F_TX_IPV6);
+    const uint64_t all_requests = (RTE_MBUF_F_TX_IP_CKSUM |
+                                   RTE_MBUF_F_TX_L4_MASK  |
+                                   RTE_MBUF_F_TX_OUTER_IP_CKSUM  |
+                                   RTE_MBUF_F_TX_OUTER_UDP_CKSUM |
+                                   RTE_MBUF_F_TX_TCP_SEG);
+    const uint64_t all_marks = (RTE_MBUF_F_TX_IPV4 |
+                                RTE_MBUF_F_TX_IPV6 |
+                                RTE_MBUF_F_TX_OUTER_IPV4 |
+                                RTE_MBUF_F_TX_OUTER_IPV6 |
+                                RTE_MBUF_F_TX_TUNNEL_MASK);
+
+    if (!(mbuf->ol_flags & all_requests)) {
+        /* No offloads requested, no marks should be set. */
+        mbuf->ol_flags &= ~all_marks;
+
+        uint64_t unexpected = mbuf->ol_flags & RTE_MBUF_F_TX_OFFLOAD_MASK;
+        if (OVS_UNLIKELY(unexpected)) {
+            VLOG_WARN_RL(&rl, "%s: Unexpected Tx offload flags: %#"PRIx64,
+                         netdev_get_name(&dev->up), unexpected);
+            netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
+                                  "Packet with unexpected ol_flags", mbuf);
+            return false;
+        }
         return true;
     }
 
