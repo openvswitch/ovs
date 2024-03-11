@@ -27,6 +27,7 @@
 #include <string.h>
 #ifdef __linux__
 #include <sys/prctl.h>
+#include <sys/utsname.h>
 #endif
 #include <sys/stat.h>
 #include <unistd.h>
@@ -2498,5 +2499,31 @@ OVS_CONSTRUCTOR(winsock_start) {
     if (error != 0) {
         VLOG_FATAL("WSAStartup failed: %s", sock_strerror(sock_errno()));
    }
+}
+#endif
+
+#ifdef __linux__
+bool
+ovs_kernel_is_version_or_newer(int target_major, int target_minor)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int current_major, current_minor = -1;
+
+    if (ovsthread_once_start(&once)) {
+        struct utsname utsname;
+
+        if (uname(&utsname) == -1) {
+            VLOG_WARN("uname failed (%s)", ovs_strerror(errno));
+        } else if (!ovs_scan(utsname.release, "%d.%d",
+                    &current_major, &current_minor)) {
+            VLOG_WARN("uname reported bad OS release (%s)", utsname.release);
+        }
+        ovsthread_once_done(&once);
+    }
+    if (current_major == -1 || current_minor == -1) {
+        return false;
+    }
+    return current_major > target_major || (
+            current_major == target_major && current_minor >= target_minor);
 }
 #endif

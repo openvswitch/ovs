@@ -611,4 +611,8 @@ int ftruncate(int fd, off_t length);
 }
 #endif
 
+#ifdef __linux__
+bool ovs_kernel_is_version_or_newer(int target_major, int target_minor);
+#endif
+
 #endif /* util.h */
