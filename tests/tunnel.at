@@ -1268,3 +1268,15 @@ AT_CHECK([ovs-vsctl add-port br0 p1 -- set int p1 type=dummy])
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])]
 AT_CLEANUP
+
+AT_SETUP([tunnel - re-create port with different name])
+OVS_VSWITCHD_START(
+  [add-port br0 p0 -- set int p0 type=vxlan options:remote_ip=10.10.10.1])
+
+AT_CHECK([ovs-vsctl --if-exists del-port p0 -- \
+          add-port br0 p1 -- \
+          set int p1 type=vxlan options:remote_ip=10.10.10.1])
+
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])]
+AT_CLEANUP
