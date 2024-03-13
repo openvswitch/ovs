@@ -2607,6 +2607,15 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
                  (char *) dp_packet_eth(pkt);
         mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
                  (char *) dp_packet_l3(pkt);
+
+        /* If neither inner checksums nor TSO is requested, inner marks
+         * should not be set. */
+        if (!(mbuf->ol_flags & (RTE_MBUF_F_TX_IP_CKSUM |
+                                RTE_MBUF_F_TX_L4_MASK  |
+                                RTE_MBUF_F_TX_TCP_SEG))) {
+            mbuf->ol_flags &= ~(RTE_MBUF_F_TX_IPV4 |
+                                RTE_MBUF_F_TX_IPV6);
+        }
     } else {
         mbuf->l2_len = (char *) dp_packet_l3(pkt) -
                (char *) dp_packet_eth(pkt);
