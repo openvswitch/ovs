@@ -2601,8 +2601,9 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
     /* If packet is vxlan or geneve tunnel packet, calculate outer
      * l2 len and outer l3 len. Inner l2/l3/l4 len are calculated
      * before. */
-    if (mbuf->ol_flags &
-        (RTE_MBUF_F_TX_TUNNEL_GENEVE | RTE_MBUF_F_TX_TUNNEL_VXLAN)) {
+    const uint64_t tunnel_type = mbuf->ol_flags & RTE_MBUF_F_TX_TUNNEL_MASK;
+    if (tunnel_type == RTE_MBUF_F_TX_TUNNEL_GENEVE ||
+        tunnel_type == RTE_MBUF_F_TX_TUNNEL_VXLAN) {
         mbuf->outer_l2_len = (char *) dp_packet_l3(pkt) -
                  (char *) dp_packet_eth(pkt);
         mbuf->outer_l3_len = (char *) dp_packet_l4(pkt) -
@@ -2616,6 +2617,12 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             mbuf->ol_flags &= ~(RTE_MBUF_F_TX_IPV4 |
                                 RTE_MBUF_F_TX_IPV6);
         }
+    } else if (OVS_UNLIKELY(tunnel_type)) {
+        VLOG_WARN_RL(&rl, "%s: Unexpected tunnel type: %#"PRIx64,
+                     netdev_get_name(&dev->up), tunnel_type);
+        netdev_dpdk_mbuf_dump(netdev_get_name(&dev->up),
+                              "Packet with unexpected tunnel type", mbuf);
+        return false;
     } else {
         mbuf->l2_len = (char *) dp_packet_l3(pkt) -
                (char *) dp_packet_eth(pkt);
@@ -2641,8 +2648,7 @@ netdev_dpdk_prep_hwol_packet(struct netdev_dpdk *dev, struct rte_mbuf *mbuf)
             return false;
         }
 
-        if (mbuf->ol_flags & (RTE_MBUF_F_TX_TUNNEL_GENEVE |
-            RTE_MBUF_F_TX_TUNNEL_VXLAN)) {
+        if (tunnel_type) {
             mbuf->tso_segsz = dev->mtu - mbuf->l2_len - mbuf->l3_len -
                               mbuf->l4_len - mbuf->outer_l3_len;
         } else {
