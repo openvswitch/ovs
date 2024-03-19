@@ -256,6 +256,7 @@ Kenneth Duda                       kduda@arista.com
 Kentaro Ebisawa                    ebiken.g@gmail.com
 Keshav Gupta                       keshav.gupta@ericsson.com
 Kevin Lo                           kevlo@FreeBSD.org
+Kevin Sprague                      ksprague0711@gmail.com
 Kevin Traynor                      kevin.traynor@intel.com
 Khem Raj                           raj.khem@gmail.com
 Kmindg G                           kmindg@gmail.com
