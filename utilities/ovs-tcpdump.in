@@ -534,29 +534,19 @@ def main():
     ovsdb.close_idl()
 
     pipes = _doexec(*([dump_cmd, '-i', mirror_interface] + tcpdargs))
+    while pipes.poll() is None:
+        data = pipes.stdout.readline().strip(b'\n')
+        if len(data) == 0:
+            break
+        print(data.decode('utf-8'))
+
     try:
-        while pipes.poll() is None:
-            data = pipes.stdout.readline().strip(b'\n')
-            if len(data) == 0:
-                raise KeyboardInterrupt
-            print(data.decode('utf-8'))
-        raise KeyboardInterrupt
-    except KeyboardInterrupt:
-        # If there is a pipe behind ovs-tcpdump (such as ovs-tcpdump
-        # -i eth0 | grep "192.168.1.1"), the pipe is no longer available
-        # after received Ctrl+C.
-        # If we write data to an unavailable pipe, a pipe error will be
-        # reported, so we turn off stdout to avoid subsequent flushing
-        # of data into the pipe.
-        try:
-            sys.stdout.close()
-        except IOError:
-            pass
+        sys.stdout.close()
+    except IOError:
+        pass
 
-        if pipes.poll() is None:
-            pipes.terminate()
-
-    sys.exit(0)
+    if pipes.poll() is None:
+        pipes.terminate()
 
 
 if __name__ == '__main__':
