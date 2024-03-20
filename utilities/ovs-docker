@@ -123,6 +123,8 @@ add_port () {
     ID=`uuidgen | sed 's/-//g'`
     PORTNAME="${ID:0:13}"
     ip link add "${PORTNAME}_l" type veth peer name "${PORTNAME}_c"
+    # Printing port name back for future flow rule installation
+    echo "{$PORTNAME}"
 
     # Add one end of veth to OVS bridge.
     if ovs_vsctl --may-exist add-port "$BRIDGE" "${PORTNAME}_l" \
