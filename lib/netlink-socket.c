@@ -205,6 +205,15 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         }
     }
 
+    /* Strict checking only supported for NETLINK_ROUTE. */
+    if (protocol == NETLINK_ROUTE
+        && setsockopt(sock->fd, SOL_NETLINK, NETLINK_GET_STRICT_CHK,
+                      &one, sizeof one) < 0) {
+        VLOG_RL(&rl, errno == ENOPROTOOPT ? VLL_DBG : VLL_WARN,
+                "netlink: could not enable strict checking (%s)",
+                ovs_strerror(errno));
+    }
+
     retval = get_socket_rcvbuf(sock->fd);
     if (retval < 0) {
         retval = -retval;

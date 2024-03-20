@@ -25,3 +25,67 @@ OVS_WAIT_UNTIL([test `ovs-appctl ovs/route/show | grep -c 'p1-route'` -eq 0 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl Checks that OVS doesn't use routes from non-standard tables.
+AT_SETUP([ovs-route - route tables])
+AT_KEYWORDS([route])
+OVS_TRAFFIC_VSWITCHD_START()
+
+dnl Create tap port.
+on_exit 'ip link del p1-route'
+AT_CHECK([ip tuntap add name p1-route mode tap])
+AT_CHECK([ip link set p1-route up])
+
+dnl Add ip address.
+AT_CHECK([ip addr add 10.0.0.17/24 dev p1-route], [0], [stdout])
+
+dnl Check that OVS catches route updates.
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local])
+
+dnl Add a route to the main routing table and check that OVS caches
+dnl this new route.
+AT_CHECK([ip route add 10.0.0.18/32 dev p1-route])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local
+Cached: 10.0.0.18/32 dev p1-route SRC 10.0.0.17])
+
+dnl Add a route to a custom routing table and check that OVS doesn't cache it.
+AT_CHECK([ip route add 10.0.0.19/32 dev p1-route table 42])
+AT_CHECK([ip route show table 42 | grep 'p1-route' | grep -q '10.0.0.19'])
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that OVS didn't learn this route.
+AT_CHECK([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [0], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local
+Cached: 10.0.0.18/32 dev p1-route SRC 10.0.0.17
+])
+
+dnl Delete a route from the main table and check that OVS removes the route
+dnl from the cache.
+AT_CHECK([ip route del 10.0.0.18/32 dev p1-route])
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local])
+
+dnl Delete a route from a custom routing table and check that the cache
+dnl dosn't change.
+AT_CHECK([ip route del 10.0.0.19/32 dev p1-route table 42])
+dnl Give the main thread a chance to act.
+AT_CHECK([ovs-appctl revalidator/wait])
+dnl Check that the cache is still the same.
+AT_CHECK([ovs-appctl ovs/route/show | grep 'p1-route' | sort], [0], [dnl
+Cached: 10.0.0.0/24 dev p1-route SRC 10.0.0.17
+Cached: 10.0.0.17/32 dev p1-route SRC 10.0.0.17 local
+])
+
+dnl Delete ip address.
+AT_CHECK([ip addr del 10.0.0.17/24 dev p1-route], [0], [stdout])
+dnl Check that routes were removed from OVS.
+OVS_WAIT_UNTIL([test $(ovs-appctl ovs/route/show | grep -c 'p1-route') -eq 0 ])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
