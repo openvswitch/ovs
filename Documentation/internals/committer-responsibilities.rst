@@ -73,14 +73,14 @@ If it is someone else's change, then you can ask the original submitter to
 address it. Regardless, you need to ensure that the problem is fixed in a
 timely way. The definition of "timely" depends on the severity of the problem.
 
-If a bug is present on master and other branches, fix it on master first, then
+If a bug is present on main and other branches, fix it on main first, then
 backport the fix to other branches. Straightforward backports do not require
-additional review (beyond that for the fix on master).
+additional review (beyond that for the fix on main).
 
-Feature development should be done only on master. Occasionally it makes sense
+Feature development should be done only on main. Occasionally it makes sense
 to add a feature to the most recent release branch, before the first actual
 release of that branch. These should be handled in the same way as bug fixes,
-that is, first implemented on master and then backported.
+that is, first implemented on main and then backported.
 
 Keep the authorship of a commit clear by maintaining a correct list of
 "Signed-off-by:"s. If a confusing situation comes up, as it occasionally does,
@@ -99,7 +99,7 @@ Pre-Push Hook
 -------------
 
 The following script can be helpful because it provides an extra
-chance to check for mistakes while pushing to the master branch of OVS
+chance to check for mistakes while pushing to the main branch of OVS
 or OVN.  If you would like to use it, install it as ``hooks/pre-push``
 in your ``.git`` directory and make sure to mark it as executable with
 ``chmod +x``.  For maximum utility, make sure ``checkpatch.py`` is in
@@ -118,7 +118,7 @@ in your ``.git`` directory and make sure to mark it as executable with
 
   while read local_ref local_sha1 remote_ref remote_sha1; do
       case $remote_ref in
-          refs/heads/master)
+          refs/heads/main)
               n=0
               while read sha
               do

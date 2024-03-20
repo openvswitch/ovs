@@ -49,7 +49,7 @@ required dependencies, run:
 
 or install `python3-netaddr` and `python3-pyparsing`.
 
-__ https://github.com/openvswitch/ovs/tree/master/python/ovs
+__ https://github.com/openvswitch/ovs/tree/main/python/ovs
 
 Third-Party Bindings
 --------------------

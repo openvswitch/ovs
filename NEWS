@@ -4,6 +4,9 @@ Post-v3.3.0
      * Conntrack now supports 'random' flag for selecting ports in a range
        while natting and 'persistent' flag for selection of the IP address
        from a range.
+   - The primary development branch has been renamed from 'master' to 'main'.
+     The OVS tree remains hosted on GitHub.
+     https://github.com/openvswitch/ovs.git
 
 
 v3.3.0 - 16 Feb 2024

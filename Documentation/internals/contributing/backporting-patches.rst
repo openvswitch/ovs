@@ -43,10 +43,10 @@ within Open vSwitch, but is broadly applied in the following fashion:
 - Maintainers backport changes from a development branch to release branches.
 
 With regards to Open vSwitch user space code and code that does not comprise
-the Linux datapath and compat code, the development branch is `master` in the
+the Linux datapath and compat code, the development branch is `main` in the
 Open vSwitch repository. Patches are applied first to this branch, then to the
 most recent `branch-X.Y`, then earlier `branch-X.Z`, and so on. The most common
-kind of patch in this category is a bugfix which affects master and other
+kind of patch in this category is a bugfix which affects main and other
 branches.
 
 For Linux datapath code, the primary development branch is in the `net-next`_
@@ -67,15 +67,15 @@ Changes to userspace components
 -------------------------------
 
 Patches which are fixing bugs should be considered for backporting from
-`master` to release branches. Open vSwitch contributors submit their patches
-targeted to the `master` branch, using the ``Fixes`` tag described in
-:doc:`submitting-patches`. The maintainer first applies the patch to `master`,
+`main` to release branches. Open vSwitch contributors submit their patches
+targeted to the `main` branch, using the ``Fixes`` tag described in
+:doc:`submitting-patches`. The maintainer first applies the patch to `main`,
 then backports the patch to each older affected tree, as far back as it goes or
 at least to all currently supported branches. This is usually each branch back
 to the oldest maintained LTS release branch or the last 4 release branches if
 the oldest LTS is newer.
 
-If the fix only affects a particular branch and not `master`, contributors
+If the fix only affects a particular branch and not `main`, contributors
 should submit the change with the target branch listed in the subject line of
 the patch. Contributors should list all versions that the bug affects. The
 ``git format-patch`` argument ``--subject-prefix`` may be used when posting the

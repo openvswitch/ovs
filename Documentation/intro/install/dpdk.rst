@@ -174,7 +174,7 @@ Additional information can be found in :doc:`general`.
   daemon will run as a non-root user.  This implies that you must have a
   working IOMMU.  Visit the `RHEL README`__ for additional information.
 
-__ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
+__ https://github.com/openvswitch/ovs/blob/main/rhel/README.RHEL.rst
 
 
 Possible issues when enabling AVX512

@@ -27,7 +27,7 @@ OVS Faucet Tutorial
 
 This tutorial demonstrates how Open vSwitch works with a general-purpose
 OpenFlow controller, using the Faucet controller as a simple way to get
-started.  It was tested with the "master" branch of Open vSwitch and version
+started.  It was tested with the "main" branch of Open vSwitch and version
 1.6.15 of Faucet.  It does not use advanced or recently added features in OVS
 or Faucet, so other versions of both pieces of software are likely to work
 equally well.
@@ -68,7 +68,7 @@ approaches:
      $ git clone https://github.com/openvswitch/ovs.git
      $ cd ovs
 
-   The default checkout is the master branch.  You will need to use the master
+   The default checkout is the main branch.  You will need to use the main
    branch for this tutorial as it includes some functionality required for this
    tutorial.
 
@@ -84,7 +84,7 @@ approaches:
 
      The default behaviour for some of the commands used in this tutorial
      changed in Open vSwitch versions 2.9.x and 2.10.x which breaks the
-     tutorial.  We recommend following step 3 and building master from
+     tutorial.  We recommend following step 3 and building main from
      source or using a system Open vSwitch that is version 2.8.x or older.
 
    If it is successful, you will find yourself in a subshell environment, which

@@ -37,7 +37,7 @@ repository, which you can clone into a directory named "ovs" with::
 
     $ git clone https://github.com/openvswitch/ovs.git
 
-Cloning the repository leaves the "master" branch initially checked
+Cloning the repository leaves the "main" branch initially checked
 out.  This is the right branch for general development.  If, on the
 other hand, if you want to build a particular released version, you
 can check it out by running a command such as the following from the

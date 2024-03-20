@@ -146,7 +146,7 @@ purpose.
 Refer to the `RHEL README`__ for additional usage and configuration
 information.
 
-__ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
+__ https://github.com/openvswitch/ovs/blob/main/rhel/README.RHEL.rst
 
 Reporting Bugs
 --------------

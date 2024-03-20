@@ -35,7 +35,6 @@ to match on the TCP segments from connection setup to connection tear down.
 It will use OVS with the Linux kernel module as the datapath for this
 tutorial. (The datapath that utilizes the openvswitch kernel module to do
 the packet processing in the Linux kernel)
-It was tested with the "master" branch of Open vSwitch.
 
 Definitions
 -----------
