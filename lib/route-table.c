@@ -26,6 +26,7 @@
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 
+#include "coverage.h"
 #include "hash.h"
 #include "netdev.h"
 #include "netlink.h"
@@ -43,6 +44,8 @@
 #define RTA_MARK 16
 
 VLOG_DEFINE_THIS_MODULE(route_table);
+
+COVERAGE_DEFINE(route_table_dump);
 
 struct route_data {
     /* Copied from struct rtmsg. */
@@ -79,7 +82,7 @@ static struct nln_notifier *name_notifier = NULL;
 
 static bool route_table_valid = false;
 
-static int route_table_reset(void);
+static void route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *);
 static int route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
@@ -152,26 +155,22 @@ route_table_wait(void)
     ovs_mutex_unlock(&route_table_mutex);
 }
 
-static int
-route_table_reset(void)
+static bool
+route_table_dump_one_table(unsigned char id)
 {
-    struct nl_dump dump;
-    struct rtgenmsg *rtgenmsg;
     uint64_t reply_stub[NL_DUMP_BUFSIZE / 8];
     struct ofpbuf request, reply, buf;
-
-    route_map_clear();
-    netdev_get_addrs_list_flush();
-    route_table_valid = true;
-    rt_change_seq++;
+    struct rtmsg *rq_msg;
+    bool filtered = true;
+    struct nl_dump dump;
 
     ofpbuf_init(&request, 0);
 
-    nl_msg_put_nlmsghdr(&request, sizeof *rtgenmsg, RTM_GETROUTE,
-                        NLM_F_REQUEST);
+    nl_msg_put_nlmsghdr(&request, sizeof *rq_msg, RTM_GETROUTE, NLM_F_REQUEST);
 
-    rtgenmsg = ofpbuf_put_zeros(&request, sizeof *rtgenmsg);
-    rtgenmsg->rtgen_family = AF_UNSPEC;
+    rq_msg = ofpbuf_put_zeros(&request, sizeof *rq_msg);
+    rq_msg->rtm_family = AF_UNSPEC;
+    rq_msg->rtm_table = id;
 
     nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
@@ -181,12 +180,43 @@ route_table_reset(void)
         struct route_table_msg msg;
 
         if (route_table_parse(&reply, &msg)) {
+            struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(&reply);
+
+            /* Older kernels do not support filtering. */
+            if (!(nlmsghdr->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
+                filtered = false;
+            }
             route_table_handle_msg(&msg);
         }
     }
     ofpbuf_uninit(&buf);
+    nl_dump_done(&dump);
 
-    return nl_dump_done(&dump);
+    return filtered;
+}
+
+static void
+route_table_reset(void)
+{
+    unsigned char tables[] = {
+        RT_TABLE_DEFAULT,
+        RT_TABLE_MAIN,
+        RT_TABLE_LOCAL,
+    };
+
+    route_map_clear();
+    netdev_get_addrs_list_flush();
+    route_table_valid = true;
+    rt_change_seq++;
+
+    COVERAGE_INC(route_table_dump);
+
+    for (size_t i = 0; i < ARRAY_SIZE(tables); i++) {
+        if (!route_table_dump_one_table(tables[i])) {
+            /* Got unfiltered reply, no need to dump further. */
+            break;
+        }
+    }
 }
 
 /* Return RTNLGRP_IPV4_ROUTE or RTNLGRP_IPV6_ROUTE on success, 0 on parse
@@ -201,6 +231,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         [RTA_OIF] = { .type = NL_A_U32, .optional = true },
         [RTA_GATEWAY] = { .type = NL_A_U32, .optional = true },
         [RTA_MARK] = { .type = NL_A_U32, .optional = true },
+        [RTA_TABLE] = { .type = NL_A_U32, .optional = true },
     };
 
     static const struct nl_policy policy6[] = {
@@ -208,6 +239,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         [RTA_OIF] = { .type = NL_A_U32, .optional = true },
         [RTA_MARK] = { .type = NL_A_U32, .optional = true },
         [RTA_GATEWAY] = { .type = NL_A_IPV6, .optional = true },
+        [RTA_TABLE] = { .type = NL_A_U32, .optional = true },
     };
 
     struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -229,6 +261,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 
     if (parsed) {
         const struct nlmsghdr *nlmsg;
+        uint32_t table_id;
         int rta_oif;      /* Output interface index. */
 
         nlmsg = buf->data;
@@ -244,6 +277,19 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
             rtm->rtm_type != RTN_LOCAL) {
             change->relevant = false;
         }
+
+        table_id = rtm->rtm_table;
+        if (attrs[RTA_TABLE]) {
+            table_id = nl_attr_get_u32(attrs[RTA_TABLE]);
+        }
+        /* Do not consider changes in non-standard routing tables. */
+        if (table_id
+            && table_id != RT_TABLE_DEFAULT
+            && table_id != RT_TABLE_MAIN
+            && table_id != RT_TABLE_LOCAL) {
+            change->relevant = false;
+        }
+
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->rd.rtm_dst_len = rtm->rtm_dst_len + (ipv4 ? 96 : 0);
         change->rd.local = rtm->rtm_type == RTN_LOCAL;
@@ -299,7 +345,9 @@ static void
 route_table_change(const struct route_table_msg *change OVS_UNUSED,
                    void *aux OVS_UNUSED)
 {
-    route_table_valid = false;
+    if (!change || change->relevant) {
+        route_table_valid = false;
+    }
 }
 
 static void

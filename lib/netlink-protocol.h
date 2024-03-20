@@ -155,6 +155,11 @@ enum {
 #define NLA_TYPE_MASK       ~(NLA_F_NESTED | NLA_F_NET_BYTEORDER)
 #endif
 
+/* Introduced in v4.4. */
+#ifndef NLM_F_DUMP_FILTERED
+#define NLM_F_DUMP_FILTERED 0x20
+#endif
+
 /* These were introduced all together in 2.6.14.  (We want our programs to
  * support the newer kernel features even if compiled with older headers.) */
 #ifndef NETLINK_ADD_MEMBERSHIP
@@ -166,6 +171,11 @@ enum {
  * kernel features even if compiled with older headers.) */
 #ifndef NETLINK_LISTEN_ALL_NSID
 #define NETLINK_LISTEN_ALL_NSID 8
+#endif
+
+/* Strict checking of netlink arguments introduced in Linux kernel v4.20. */
+#ifndef NETLINK_GET_STRICT_CHK
+#define NETLINK_GET_STRICT_CHK 12
 #endif
 
 /* These were introduced all together in 2.6.23.  (We want our programs to
