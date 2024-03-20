@@ -74,6 +74,17 @@ To run tests matching a keyword, e.g. ``ovsdb``, run::
 
     $ make check TESTSUITEFLAGS='-k ovsdb'
 
+To enable tests shell tracing, run::
+
+    $ make check TESTSUITEFLAGS='-x'
+
+To inhibit clean up (prevent clean up tasks from executing) and top-level 
+logging, run::
+
+    $ make check TESTSUITEFLAGS='-d'
+    
+This is a default option for debugging scripts.
+
 To see a complete list of test options, run::
 
     $ make check TESTSUITEFLAGS=--help
