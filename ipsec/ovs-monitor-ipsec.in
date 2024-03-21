@@ -457,14 +457,30 @@ conn prevent_unencrypted_vxlan
     CERTKEY_PREFIX = "ovs_certkey_"
 
     def __init__(self, libreswan_root_prefix, args):
+        # Collect version infromation
+        self.IPSEC = libreswan_root_prefix + "/usr/sbin/ipsec"
+        proc = subprocess.Popen([self.IPSEC, "--version"],
+                                stdout=subprocess.PIPE,
+                                encoding="latin1")
+        pout, perr = proc.communicate()
+
+        v = re.match("^Libreswan (.*)$", pout)
+        try:
+            version = int(v.group(1).split(".")[0])
+        except:
+            version = 0
+
+        if version >= 4:
+            ipsec_d = args.ipsec_d if args.ipsec_d else "/var/lib/ipsec/nss"
+        else:
+            ipsec_d = args.ipsec_d if args.ipsec_d else "/etc/ipsec.d"
+
         ipsec_conf = args.ipsec_conf if args.ipsec_conf else "/etc/ipsec.conf"
-        ipsec_d = args.ipsec_d if args.ipsec_d else "/etc/ipsec.d"
         ipsec_secrets = (args.ipsec_secrets if args.ipsec_secrets
                         else "/etc/ipsec.secrets")
         ipsec_ctl = (args.ipsec_ctl if args.ipsec_ctl
                         else "/run/pluto/pluto.ctl")
 
-        self.IPSEC = libreswan_root_prefix + "/usr/sbin/ipsec"
         self.IPSEC_CONF = libreswan_root_prefix + ipsec_conf
         self.IPSEC_SECRETS = libreswan_root_prefix + ipsec_secrets
         self.IPSEC_D = "sql:" + libreswan_root_prefix + ipsec_d
