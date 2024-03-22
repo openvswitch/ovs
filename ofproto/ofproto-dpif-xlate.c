@@ -5009,9 +5009,36 @@ put_controller_user_action(struct xlate_ctx *ctx,
                            bool dont_send, bool continuation,
                            uint32_t recirc_id, int len,
                            enum ofp_packet_in_reason reason,
+                           uint32_t provider_meter_id,
                            uint16_t controller_id)
 {
     struct user_action_cookie cookie;
+
+    /* If the controller action didn't request a meter (indicated by a
+     * 'meter_id' argument other than NX_CTLR_NO_METER), see if one was
+     * configured through the "controller" virtual meter.
+     *
+     * Internally, ovs-vswitchd uses UINT32_MAX to indicate no meter is
+     * configured. */
+    uint32_t meter_id;
+    if (provider_meter_id == UINT32_MAX) {
+        meter_id = ctx->xbridge->ofproto->up.controller_meter_id;
+    } else {
+        meter_id = provider_meter_id;
+    }
+
+    size_t offset;
+    size_t ac_offset;
+    if (meter_id != UINT32_MAX) {
+        /* If controller meter is configured, generate
+         * clone(meter,userspace) action. */
+        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_SAMPLE);
+        nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
+                       UINT32_MAX);
+        ac_offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_SAMPLE_ATTR_ACTIONS);
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
+    }
 
     memset(&cookie, 0, sizeof cookie);
     cookie.type = USER_ACTION_COOKIE_CONTROLLER;
@@ -5030,6 +5057,11 @@ put_controller_user_action(struct xlate_ctx *ctx,
     uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port);
     odp_put_userspace_action(pid, &cookie, sizeof cookie, ODPP_NONE,
                              false, ctx->odp_actions, NULL);
+
+    if (meter_id != UINT32_MAX) {
+        nl_msg_end_nested(ctx->odp_actions, ac_offset);
+        nl_msg_end_nested(ctx->odp_actions, offset);
+    }
 }
 
 static void
@@ -5074,32 +5106,6 @@ xlate_controller_action(struct xlate_ctx *ctx, int len,
     }
     recirc_refs_add(&ctx->xout->recircs, recirc_id);
 
-    /* If the controller action didn't request a meter (indicated by a
-     * 'meter_id' argument other than NX_CTLR_NO_METER), see if one was
-     * configured through the "controller" virtual meter.
-     *
-     * Internally, ovs-vswitchd uses UINT32_MAX to indicate no meter is
-     * configured. */
-    uint32_t meter_id;
-    if (provider_meter_id == UINT32_MAX) {
-        meter_id = ctx->xbridge->ofproto->up.controller_meter_id;
-    } else {
-        meter_id = provider_meter_id;
-    }
-
-    size_t offset;
-    size_t ac_offset;
-    if (meter_id != UINT32_MAX) {
-        /* If controller meter is configured, generate clone(meter, userspace)
-         * action. */
-        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_SAMPLE);
-        nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
-                       UINT32_MAX);
-        ac_offset = nl_msg_start_nested(ctx->odp_actions,
-                                        OVS_SAMPLE_ATTR_ACTIONS);
-        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
-    }
-
     /* Generate the datapath flows even if we don't send the packet-in
      * so that debugging more closely represents normal state. */
     bool dont_send = false;
@@ -5107,12 +5113,7 @@ xlate_controller_action(struct xlate_ctx *ctx, int len,
         dont_send = true;
     }
     put_controller_user_action(ctx, dont_send, false, recirc_id, len,
-                               reason, controller_id);
-
-    if (meter_id != UINT32_MAX) {
-        nl_msg_end_nested(ctx->odp_actions, ac_offset);
-        nl_msg_end_nested(ctx->odp_actions, offset);
-    }
+                               reason, provider_meter_id, controller_id);
 }
 
 /* Creates a frozen state, and allocates a unique recirc id for the given
@@ -5164,6 +5165,7 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         put_controller_user_action(ctx, false, true, recirc_id,
                                    ctx->pause->max_len,
                                    ctx->pause->reason,
+                                   ctx->pause->provider_meter_id,
                                    ctx->pause->controller_id);
     } else {
         if (ctx->recirc_update_dp_hash) {
