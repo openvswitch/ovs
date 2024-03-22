@@ -245,6 +245,7 @@ Jon Kohler                         jon@nutanix.com
 Jonathan Vestin                    jonavest@kau.se
 Jorge Arturo Sauma Vargas          jorge.sauma@hpe.com
 Jun Nakajima                       jun.nakajima@intel.com
+Jun Wang                           junwang01@cestc.cn
 JunhanYan                          juyan@redhat.com
 JunoZhu                            zhunatuzi@gmail.com
 Justin Pettit                      jpettit@ovn.org
