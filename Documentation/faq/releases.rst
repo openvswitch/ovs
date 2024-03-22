@@ -110,7 +110,7 @@ Q: Are all features available with all datapaths?
     Linux OVS tree
       The datapath implemented by the Linux kernel module distributed with
       the OVS source tree. This datapath is deprecated starting with OVS
-      2.15.x and support capped at Linux kernel version 5.8. As of OVS 3.0.x
+      2.15 and support capped at Linux kernel version 5.8.  As of OVS 3.0
       the Linux OVS tree is no longer supported.
 
     Userspace
@@ -256,8 +256,11 @@ Q: I get an error like this when I configure Open vSwitch:
       that one, because it may support the kernel that you are building
       against.  (To find out, consult the table in the previous FAQ.)
 
-    - The Open vSwitch "master" branch may support the kernel that you are
-      using, so consider building the kernel module from "master".
+    - For Open vSwitch releases prior to 3.0, the corresponding Open
+      vSwitch branch may support the kernel that you are using, so consider
+      building the kernel module from that branch.  For Open vSwitch 2.17,
+      the only non EOL release to which this applies, the branch is
+      "branch-2.17".
 
     All versions of Open vSwitch userspace are compatible with all versions of
     the Open vSwitch kernel module, so you do not have to use the kernel module
@@ -276,6 +279,9 @@ ships as part of the upstream Linux kernel?
     performance. If the ovs-vswitchd log file indicates that a feature is not
     supported, consider upgrading to a newer upstream Linux release or using
     the kernel module paired with the userspace distribution.
+
+    Please note that as of Open vSwitch 3.0 the kernel module is no longer
+    part of the Open vSwitch distribution.
 
 Q: Why do tunnels not work when using a kernel module other than the one
 packaged with Open vSwitch?
@@ -303,6 +309,9 @@ packaged with Open vSwitch?
     doing this, check to make sure that the module that is loaded is the one
     you expect.
 
+    Please note that as of Open vSwitch 3.0 the kernel module is no longer
+    part of the Open vSwitch distribution.
+
 Q: Why are UDP tunnel checksums not computed for VXLAN or Geneve?
 
     A: Generating outer UDP checksums requires kernel support that was not part
@@ -310,6 +319,9 @@ Q: Why are UDP tunnel checksums not computed for VXLAN or Geneve?
     Linux Open vSwitch module, you must use kernel 4.0 or newer. The
     out-of-tree modules from Open vSwitch release 2.4 and later support UDP
     checksums.
+
+    Please note that as of Open vSwitch 3.0 the kernel module is no longer
+    part of the Open vSwitch distribution.
 
 Q: What features are not available when using the userspace datapath?
 
