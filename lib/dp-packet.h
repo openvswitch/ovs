@@ -1300,6 +1300,14 @@ dp_packet_hwol_set_tunnel_vxlan(struct dp_packet *b)
     *dp_packet_ol_flags_ptr(b) |= DP_PACKET_OL_TX_TUNNEL_VXLAN;
 }
 
+/* Clears tunnel offloading marks. */
+static inline void
+dp_packet_hwol_reset_tunnel(struct dp_packet *b)
+{
+    *dp_packet_ol_flags_ptr(b) &= ~(DP_PACKET_OL_TX_TUNNEL_VXLAN |
+                                    DP_PACKET_OL_TX_TUNNEL_GENEVE);
+}
+
 /* Mark packet 'b' as a tunnel packet with outer IPv4 header. */
 static inline void
 dp_packet_hwol_set_tx_outer_ipv4(struct dp_packet *b)
