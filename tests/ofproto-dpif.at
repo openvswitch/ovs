@@ -6195,6 +6195,57 @@ AT_CHECK([test 1 = `$PYTHON3 "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - continuation with meters])
+AT_KEYWORDS([continuations pause meters])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+dnl Add meter with id=1.
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps bands=type=drop rate=1'])
+
+AT_DATA([flows.txt], [dnl
+table=0 dl_dst=50:54:00:00:00:0a actions=goto_table(1)
+table=1 dl_dst=50:54:00:00:00:0a actions=controller(pause,meter_id=1)
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows.txt])
+
+on_exit 'kill $(cat ovs-ofctl.pid)'
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in \
+                    --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 \
+          'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+
+OVS_WAIT_UNTIL([test $(wc -l < ofctl_monitor.log) -ge 2])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
+])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=1, n_bytes=14, dl_dst=50:54:00:00:00:0a actions=goto_table:1
+ table=1, n_packets=1, n_bytes=14, dl_dst=50:54:00:00:00:0a actions=controller(pause,meter_id=1)
+OFPST_FLOW reply (OF1.3):
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br0 | ofctl_strip | sort], [0], [dnl
+OFPST_METER_CONFIG reply (OF1.3):
+meter=1 pktps bands=
+type=drop rate=1
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:0 packet_in_count:1 byte_in_count:14 duration:0.0s bands:
+0: packet_count:0 byte_count:0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - continuation with patch port])
 AT_KEYWORDS([continuations pause resume])
 OVS_VSWITCHD_START(
