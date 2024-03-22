@@ -115,6 +115,7 @@ COVERAGE_DEFINE(datapath_drop_lock_error);
 COVERAGE_DEFINE(datapath_drop_userspace_action_error);
 COVERAGE_DEFINE(datapath_drop_tunnel_push_error);
 COVERAGE_DEFINE(datapath_drop_tunnel_pop_error);
+COVERAGE_DEFINE(datapath_drop_tunnel_tso_recirc);
 COVERAGE_DEFINE(datapath_drop_recirc_error);
 COVERAGE_DEFINE(datapath_drop_invalid_port);
 COVERAGE_DEFINE(datapath_drop_invalid_bond);
@@ -8912,6 +8913,34 @@ static void
 dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
                       struct dp_packet_batch *packets)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    size_t i, size = dp_packet_batch_size(packets);
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets) {
+        if (dp_packet_hwol_is_tunnel_geneve(packet) ||
+                dp_packet_hwol_is_tunnel_vxlan(packet)) {
+
+            if (dp_packet_hwol_is_tso(packet)) {
+                /* Can't perform GSO in the middle of a pipeline. */
+                COVERAGE_INC(datapath_drop_tunnel_tso_recirc);
+                dp_packet_delete(packet);
+                VLOG_WARN_RL(&rl, "Recirculating tunnel packets with "
+                                  "TSO is not supported");
+                continue;
+            }
+            /* Have to fix all the checksums before re-parsing, because the
+             * packet will be treated as having a single set of headers. */
+            dp_packet_ol_send_prepare(packet, 0);
+            /* This packet must not be marked with anything tunnel-related. */
+            dp_packet_hwol_reset_tunnel(packet);
+            /* Clear inner offsets.  Other ones are collateral, but they will
+             * be re-initialized on re-parsing. */
+            dp_packet_reset_offsets(packet);
+        }
+        dp_packet_batch_refill(packets, packet, i);
+    }
+
     dp_netdev_input__(pmd, packets, true, 0);
 }
 
