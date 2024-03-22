@@ -2,6 +2,7 @@ version: 1.0.{build}
 image: Visual Studio 2019
 branches:
   only:
+  - main
   - master
 configuration:
   - Debug
@@ -74,6 +75,6 @@ build_script:
          c:\OpenvSwitch-$env:CONFIGURATION.msi
 
 after_build:
-- ps: 7z a C:\ovs-master-$env:CONFIGURATION.zip C:\openvswitch
-- ps: Push-AppveyorArtifact C:\ovs-master-$env:CONFIGURATION.zip
+- ps: 7z a C:\ovs-main-$env:CONFIGURATION.zip C:\openvswitch
+- ps: Push-AppveyorArtifact C:\ovs-main-$env:CONFIGURATION.zip
 - ps: Push-AppveyorArtifact C:\OpenvSwitch-$env:CONFIGURATION.msi
