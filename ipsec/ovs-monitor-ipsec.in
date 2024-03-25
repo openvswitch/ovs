@@ -261,9 +261,14 @@ conn prevent_unencrypted_vxlan
             tunnel_name = line.split(":")
             if len(tunnel_name) < 2:
                 continue
-            m = re.match(r"(.*)(-in-\d+|-out-\d+|-\d+).*", tunnel_name[0])
+
+            m = re.match(r"(.*)(-in-\d+|-out-\d+)", conn)
+            if not m:
+                # GRE connections have format <iface>-<ver>
+                m = re.match(r"(.*)(-\d+)", conn)
             if not m:
                 continue
+
             ifname = m.group(1)
             if ifname not in conns:
                 conns[ifname] = {}
