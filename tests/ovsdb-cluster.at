@@ -536,6 +536,59 @@ for i in $(seq $n); do
 done
 
 AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - leadership change before replication while joining])
+AT_KEYWORDS([ovsdb server negative unix cluster join])
+
+n=5
+AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db dnl
+              $abs_srcdir/idltest.ovsschema unix:s1.raft], [0], [], [stderr])
+cid=$(ovsdb-tool db-cid s1.db)
+schema_name=$(ovsdb-tool schema-name $abs_srcdir/idltest.ovsschema)
+for i in $(seq 2 $n); do
+    AT_CHECK([ovsdb-tool join-cluster s$i.db $schema_name unix:s$i.raft unix:s1.raft])
+done
+
+on_exit 'kill $(cat *.pid)'
+on_exit "
+  for i in \$(ls $(pwd)/s[[0-$n]]); do
+    ovs-appctl --timeout 1 -t \$i cluster/status $schema_name;
+  done
+"
+
+dnl Starting servers one by one asking all exisitng servers to transfer
+dnl leadership right after starting to add a server.  Joining server will
+dnl need to find a new leader that will also transfer leadership.
+dnl This will continue until the same server will not become a leader
+dnl for the second time and will be able to add a new server.
+for i in $(seq $n); do
+    dnl Make sure that all already started servers joined the cluster.
+    for j in $(seq $((i - 1)) ); do
+        AT_CHECK([ovsdb_client_wait unix:s$j.ovsdb $schema_name connected])
+    done
+    for j in $(seq $((i - 1)) ); do
+        OVS_WAIT_UNTIL([ovs-appctl -t "$(pwd)"/s$j \
+                          cluster/failure-test \
+                            transfer-leadership-after-starting-to-add \
+                        | grep -q "engaged"])
+    done
+
+    AT_CHECK([ovsdb-server -v -vconsole:off -vsyslog:off \
+                           --detach --no-chdir --log-file=s$i.log \
+                           --pidfile=s$i.pid --unixctl=s$i \
+                           --remote=punix:s$i.ovsdb s$i.db])
+done
+
+dnl Make sure that all servers joined the cluster.
+for i in $(seq $n); do
+    AT_CHECK([ovsdb_client_wait unix:s$i.ovsdb $schema_name connected])
+done
+
+for i in $(seq $n); do
+    OVS_APP_EXIT_AND_WAIT_BY_TARGET([$(pwd)/s$i], [s$i.pid])
+done
+
+AT_CLEANUP
 
 
 OVS_START_SHELL_HELPERS
