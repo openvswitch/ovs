@@ -80,6 +80,7 @@ enum raft_failure_test {
     FT_STOP_RAFT_RPC,
     FT_TRANSFER_LEADERSHIP,
     FT_TRANSFER_LEADERSHIP_AFTER_SEND_APPEND_REQ,
+    FT_TRANSFER_LEADERSHIP_AFTER_STARTING_TO_ADD,
 };
 static enum raft_failure_test failure_test;
 
@@ -2690,15 +2691,22 @@ raft_become_follower(struct raft *raft)
      * new configuration.  Our AppendEntries processing will properly update
      * the server configuration later, if necessary.
      *
+     * However, since we're sending replies about a failure to add, those new
+     * servers has to be cleaned up.  Otherwise, they will stuck in a 'CATCHUP'
+     * phase in case this server regains leadership before they join through
+     * the current new leader.  They are not yet in 'raft->servers', so not
+     * part of the shared configuration.
+     *
      * Also we do not complete commands here, as they can still be completed
      * if their log entries have already been replicated to other servers.
      * If the entries were actually committed according to the new leader, our
      * AppendEntries processing will complete the corresponding commands.
      */
     struct raft_server *s;
-    HMAP_FOR_EACH (s, hmap_node, &raft->add_servers) {
+    HMAP_FOR_EACH_POP (s, hmap_node, &raft->add_servers) {
         raft_send_add_server_reply__(raft, &s->sid, s->address, false,
                                      RAFT_SERVER_LOST_LEADERSHIP);
+        raft_server_destroy(s);
     }
     if (raft->remove_server) {
         raft_send_remove_server_reply__(raft, &raft->remove_server->sid,
@@ -3959,6 +3967,10 @@ raft_handle_add_server_request(struct raft *raft,
                  "to cluster "CID_FMT, s->nickname, SID_ARGS(&s->sid),
                  rq->address, CID_ARGS(&raft->cid));
     raft_send_append_request(raft, s, 0, "initialize new server");
+
+    if (failure_test == FT_TRANSFER_LEADERSHIP_AFTER_STARTING_TO_ADD) {
+        failure_test = FT_TRANSFER_LEADERSHIP;
+    }
 }
 
 static void
@@ -5084,6 +5096,8 @@ raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
     } else if (!strcmp(test,
                        "transfer-leadership-after-sending-append-request")) {
         failure_test = FT_TRANSFER_LEADERSHIP_AFTER_SEND_APPEND_REQ;
+    } else if (!strcmp(test, "transfer-leadership-after-starting-to-add")) {
+        failure_test = FT_TRANSFER_LEADERSHIP_AFTER_STARTING_TO_ADD;
     } else if (!strcmp(test, "transfer-leadership")) {
         failure_test = FT_TRANSFER_LEADERSHIP;
     } else if (!strcmp(test, "clear")) {
