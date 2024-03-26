@@ -1250,10 +1250,30 @@ raft_transfer_leadership(struct raft *raft, const char *reason)
         return;
     }
 
-    struct raft_server *s;
+    struct raft_server **servers, *s;
+    uint64_t threshold = 0;
+    size_t n = 0, start, i;
+
+    servers = xmalloc(hmap_count(&raft->servers) * sizeof *servers);
+
     HMAP_FOR_EACH (s, hmap_node, &raft->servers) {
-        if (!uuid_equals(&raft->sid, &s->sid)
-            && s->phase == RAFT_PHASE_STABLE) {
+        if (uuid_equals(&raft->sid, &s->sid)
+            || s->phase != RAFT_PHASE_STABLE) {
+            continue;
+        }
+        if (s->match_index > threshold) {
+            threshold = s->match_index;
+        }
+        servers[n++] = s;
+    }
+
+    start = n ? random_range(n) : 0;
+
+retry:
+    for (i = 0; i < n; i++) {
+        s = servers[(start + i) % n];
+
+        if (s->match_index >= threshold) {
             struct raft_conn *conn = raft_find_conn_by_sid(raft, &s->sid);
             if (!conn) {
                 continue;
@@ -1269,7 +1289,10 @@ raft_transfer_leadership(struct raft *raft, const char *reason)
                     .term = raft->term,
                 }
             };
-            raft_send_to_conn(raft, &rpc, conn);
+
+            if (!raft_send_to_conn(raft, &rpc, conn)) {
+                continue;
+            }
 
             raft_record_note(raft, "transfer leadership",
                              "transferring leadership to %s because %s",
@@ -1277,6 +1300,23 @@ raft_transfer_leadership(struct raft *raft, const char *reason)
             break;
         }
     }
+
+    if (n && i == n && threshold) {
+        if (threshold > raft->commit_index) {
+            /* Failed to transfer to servers with the highest 'match_index'.
+             * Try other servers that are not behind the majority. */
+            threshold = raft->commit_index;
+        } else {
+            /* Try any other server.  It is safe, because they either have all
+             * the append requests queued up for them before the leadership
+             * transfer message or their connection is broken and we will not
+             * transfer anyway. */
+            threshold = 0;
+        }
+        goto retry;
+    }
+
+    free(servers);
 }
 
 /* Send a RemoveServerRequest to the rest of the servers in the cluster.
