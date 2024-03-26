@@ -280,6 +280,7 @@ struct raft {
     /* Used for joining a cluster. */
     bool joining;                 /* Attempting to join the cluster? */
     struct sset remote_addresses; /* Addresses to try to find other servers. */
+#define RAFT_JOIN_TIMEOUT_MS 1000
     long long int join_timeout;   /* Time to re-send add server request. */
 
     /* Used for leaving a cluster. */
@@ -1083,7 +1084,7 @@ raft_open(struct ovsdb_log *log, struct raft **raftp)
             raft_start_election(raft, false, false);
         }
     } else {
-        raft->join_timeout = time_msec() + 1000;
+        raft->join_timeout = time_msec() + RAFT_JOIN_TIMEOUT_MS;
     }
 
     raft_reset_ping_timer(raft);
@@ -2128,7 +2129,7 @@ raft_run(struct raft *raft)
     }
 
     if (raft->joining && time_msec() >= raft->join_timeout) {
-        raft->join_timeout = time_msec() + 1000;
+        raft->join_timeout = time_msec() + RAFT_JOIN_TIMEOUT_MS;
         LIST_FOR_EACH (conn, list_node, &raft->conns) {
             raft_send_add_server_request(raft, conn);
         }
@@ -2162,10 +2163,12 @@ raft_run(struct raft *raft)
         raft_reset_ping_timer(raft);
     }
 
+    uint64_t interval = raft->joining
+                        ? RAFT_JOIN_TIMEOUT_MS
+                        : RAFT_TIMER_THRESHOLD(raft->election_timer);
     cooperative_multitasking_set(
         &raft_run_cb, (void *) raft, time_msec(),
-        RAFT_TIMER_THRESHOLD(raft->election_timer)
-        + RAFT_TIMER_THRESHOLD(raft->election_timer) / 10, "raft_run");
+        interval + interval / 10, "raft_run");
 
     /* Do this only at the end; if we did it as soon as we set raft->left or
      * raft->failed in handling the RemoveServerReply, then it could easily
