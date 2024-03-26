@@ -386,6 +386,7 @@ static void raft_get_servers_from_log(struct raft *, enum vlog_level);
 static void raft_get_election_timer_from_log(struct raft *);
 
 static bool raft_handle_write_error(struct raft *, struct ovsdb_error *);
+static bool raft_has_uncommitted_configuration(const struct raft *);
 
 static void raft_run_reconfigure(struct raft *);
 
@@ -2848,6 +2849,18 @@ raft_become_leader(struct raft *raft)
     raft_reset_election_timer(raft);
     raft_reset_ping_timer(raft);
 
+    if (raft->joining) {
+        /* It is possible that the server committing this one to the list of
+         * servers lost leadership before the entry is committed but after
+         * it was already replicated to majority of servers.  In this case
+         * other servers will recognize this one as a valid cluster member
+         * and may transfer leadership to it and vote for it.  This way
+         * we're becoming a cluster leader without receiving reply for a
+         * join request and will commit addition of this server ourselves. */
+        VLOG_INFO_RL(&rl, "elected as leader while joining");
+        raft->joining = false;
+    }
+
     struct raft_server *s;
     HMAP_FOR_EACH (s, hmap_node, &raft->servers) {
         raft_server_init_leader(raft, s);
@@ -3006,12 +3019,12 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
     }
 
     while (raft->commit_index < new_commit_index) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
         uint64_t index = ++raft->commit_index;
         const struct raft_entry *e = raft_get_entry(raft, index);
 
         if (raft_entry_has_data(e)) {
             struct raft_command *cmd = raft_find_command_by_eid(raft, &e->eid);
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
             if (cmd) {
                 if (!cmd->index && raft->role == RAFT_LEADER) {
@@ -3055,6 +3068,35 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
              * reallocate raft->entries, which would invalidate 'e', so
              * this case must be last, after the one for 'e->data'. */
             raft_run_reconfigure(raft);
+        } else if (e->servers && !raft_has_uncommitted_configuration(raft)) {
+            struct ovsdb_error *error;
+            struct raft_server *s;
+            struct hmap servers;
+
+            error = raft_servers_from_json(e->servers, &servers);
+            ovs_assert(!error);
+            HMAP_FOR_EACH (s, hmap_node, &servers) {
+                struct raft_server *server = raft_find_server(raft, &s->sid);
+
+                if (server && server->phase == RAFT_PHASE_COMMITTING) {
+                    /* This server lost leadership while committing
+                     * server 's', but it was committed later by a
+                     * new leader. */
+                    server->phase = RAFT_PHASE_STABLE;
+                }
+
+                if (raft->joining && uuid_equals(&s->sid, &raft->sid)) {
+                    /* Leadership change happened before previous leader
+                     * could commit the change of a servers list, but it
+                     * was replicated and a new leader committed it. */
+                    VLOG_INFO_RL(&rl,
+                        "added to configuration without reply "
+                        "(eid: "UUID_FMT", commit index: %"PRIu64")",
+                        UUID_ARGS(&e->eid), index);
+                    raft->joining = false;
+                }
+            }
+            raft_servers_destroy(&servers);
         }
     }
 
