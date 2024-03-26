@@ -2120,7 +2120,7 @@ raft_run(struct raft *raft)
                 raft_start_election(raft, true, false);
             }
         } else {
-            raft_start_election(raft, true, false);
+            raft_start_election(raft, hmap_count(&raft->servers) > 1, false);
         }
 
     }
