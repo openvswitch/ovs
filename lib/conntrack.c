@@ -2477,7 +2477,9 @@ tuple_to_conn_key(const struct ct_dpif_tuple *tuple, uint16_t zone,
         key->src.icmp_type = tuple->icmp_type;
         key->src.icmp_code = tuple->icmp_code;
         key->dst.icmp_id = tuple->icmp_id;
-        key->dst.icmp_type = reverse_icmp_type(tuple->icmp_type);
+        key->dst.icmp_type = (tuple->ip_proto == IPPROTO_ICMP)
+                             ? reverse_icmp_type(tuple->icmp_type)
+                             : reverse_icmp6_type(tuple->icmp_type);
         key->dst.icmp_code = tuple->icmp_code;
     } else {
         key->src.port = tuple->src_port;
