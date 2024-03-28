@@ -6009,11 +6009,11 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:89:89:89:89:89])
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-in_port=1,tcp,action=ct(commit,zone=1,nat(src=10.1.1.240:34568,random)),2
-in_port=2,ct_state=-trk,tcp,tp_dst=34567,action=ct(table=0,zone=1,nat)
+in_port=1,tcp,action=ct(commit,zone=1,nat(src=10.1.1.240:34568)),2
 in_port=2,ct_state=-trk,tcp,tp_dst=34568,action=ct(table=0,zone=1,nat)
 in_port=2,ct_state=+trk,ct_zone=1,tcp,action=1
 dnl
@@ -6037,17 +6037,29 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 OVS_START_L7([at_ns1], [http])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 1 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl Send a valid SYN to make conntrack pick it up.
+dnl The source port used is 123 to prevent unwanted reuse in the next HTTP request.
+eth=8089898989898088888888880800
+ip4=4500002800000000400664cc0a0101010a010102
+tcp=007b005000000000000000005002000099130000
+syn_pkt=${eth}${ip4}${tcp}
+AT_CHECK([ovs-ofctl packet-out br0 "packet=${syn_pkt} actions=ct(commit,zone=1,nat(src=10.1.1.240:34568))"])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | uniq], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+])
 
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 1 -T 1 --retry-connrefused -v -o wget0.log], [4])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/' | uniq], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | uniq], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["dnl
 /Unable to NAT due to tuple space exhaustion - if DoS attack, use firewalling and\/or zone partitioning./d
-/Dropped .* log messages in last .* seconds \(most recently, .* seconds ago\) due to excessive rate/d"])
+/Dropped .* log messages in last .* seconds \(most recently, .* seconds ago\) due to excessive rate/d
+/|WARN|.* execute ct.* failed/d"])
 AT_CLEANUP
 
 AT_SETUP([conntrack - more complex SNAT])
