@@ -2562,7 +2562,10 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
 ])
 
-AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+AT_CHECK([ovs-appctl dpctl/flush-conntrack 'ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2'])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+])
 
 dnl Pings from ns1->ns0 should fail.
 NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
@@ -2701,6 +2704,11 @@ NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -W 2 fc00::2 | FORMAT_PING], [0], 
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 icmpv6,orig=(src=fc00::1,dst=fc00::2,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0)
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack 'ct_ipv6_src=fc00::1,ct_ipv6_dst=fc00::2'])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
