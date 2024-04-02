@@ -97,7 +97,22 @@ def open_spell_check_dict():
                           'debian', 'travis', 'cirrus', 'appveyor', 'faq',
                           'erspan', 'const', 'hotplug', 'addresssanitizer',
                           'ovsdb', 'dpif', 'veth', 'rhel', 'jsonrpc', 'json',
-                          'syscall', 'lacp', 'ipf', 'skb', 'valgrind']
+                          'syscall', 'lacp', 'ipf', 'skb', 'valgrind',
+                          'appctl', 'arp', 'asan', 'backport', 'backtrace',
+                          'chmod', 'ci', 'cpu', 'cpus', 'dnat', 'dns', 'dpcls',
+                          'eol', 'ethtool', 'fdb', 'freebsd', 'gcc', 'github',
+                          'glibc', 'gre', 'inlined', 'ip', 'ipfix', 'ipsec',
+                          'ixgbe', 'libbpf', 'libcrypto', 'libgcc',
+                          'libopenvswitch', 'libreswan', 'libssl', 'libxdp',
+                          'lldp', 'llvm', 'lockless', 'mcast', 'megaflows',
+                          'mfex', 'ncat', 'networkmanager', 'pcap', 'pedit',
+                          'pidfile', 'pps', 'rculist', 'rebalance', 'rebased'
+                          'recirculations', 'revalidators', 'rst', 'sed',
+                          'shrinked', 'snat', 'stderr', 'stdout', 'testpmd',
+                          'tftp', 'timeval', 'trie', 'tso', 'ubsan', 'ukey',
+                          'umask', 'unassociated', 'unixctl', 'uuid'
+                          'virtqueue', 'vms', 'vnet', 'vport', 'vports',
+                          'vtep', 'wc', 'wget', 'xenserver']
 
         global spell_check_dict
 
