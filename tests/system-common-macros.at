@@ -374,3 +374,7 @@ m4_define([OVS_CHECK_CT_CLEAR],
 # OVS_CHECK_GITHUB_ACTION
 m4_define([OVS_CHECK_GITHUB_ACTION],
     [AT_SKIP_IF([test "$GITHUB_ACTIONS" = "true"])])
+
+# OVS_CHECK_DROP_ACTION()
+m4_define([OVS_CHECK_DROP_ACTION],
+    [AT_SKIP_IF([! grep -q "Datapath supports explicit drop action" ovs-vswitchd.log])])

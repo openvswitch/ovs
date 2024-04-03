@@ -2231,6 +2231,37 @@ masks-cache:size:256
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - drop action])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_DROP_ACTION()
+AT_KEYWORDS(drop_action)
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Exceed the max number of resubmits.
+(echo "dl_type=0x806, actions=normal"
+for i in $(seq 1 64); do
+     j=$(expr $i + 1)
+     echo "in_port=$i, actions=resubmit:$j, resubmit:$j, local"
+ done
+ echo "in_port=65, actions=local"
+) > flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Generate some traffic.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 10 -i 0.1 -w 2 10.1.1.2], [1], [ignore])
+
+OVS_WAIT_UNTIL_EQUAL([ovs-appctl dpctl/dump-flows | grep "eth_type(0x0800)" | dnl
+                      strip_ptype | strip_eth | strip_recirc | strip_stats | dnl
+                      strip_used | sort], [dnl
+recirc_id(<recirc>),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:0.0s, actions:drop])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["/WARN/d"])
+AT_CLEANUP
+
 AT_SETUP([datapath - simulated flow action update])
 OVS_TRAFFIC_VSWITCHD_START()
 
