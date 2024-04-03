@@ -5694,47 +5694,46 @@ ct_zone_limit_protection_update(const char *datapath_type, bool protected)
 static void
 get_datapath_cap(const char *datapath_type, struct smap *cap)
 {
-    struct odp_support odp;
-    struct dpif_backer_support s;
+    struct dpif_backer_support *s;
     struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
                                                  datapath_type);
     if (!backer) {
         return;
     }
-    s = backer->rt_support;
-    odp = s.odp;
+    s = &backer->rt_support;
 
     /* ODP_SUPPORT_FIELDS */
     smap_add_format(cap, "max_vlan_headers", "%"PRIuSIZE,
-                    odp.max_vlan_headers);
-    smap_add_format(cap, "max_mpls_depth", "%"PRIuSIZE, odp.max_mpls_depth);
-    smap_add(cap, "recirc", odp.recirc ? "true" : "false");
-    smap_add(cap, "ct_state", odp.ct_state ? "true" : "false");
-    smap_add(cap, "ct_zone", odp.ct_zone ? "true" : "false");
-    smap_add(cap, "ct_mark", odp.ct_mark ? "true" : "false");
-    smap_add(cap, "ct_label", odp.ct_label ? "true" : "false");
-    smap_add(cap, "ct_state_nat", odp.ct_state_nat ? "true" : "false");
-    smap_add(cap, "ct_orig_tuple", odp.ct_orig_tuple ? "true" : "false");
-    smap_add(cap, "ct_orig_tuple6", odp.ct_orig_tuple6 ? "true" : "false");
-    smap_add(cap, "nd_ext", odp.nd_ext ? "true" : "false");
+                    s->odp.max_vlan_headers);
+    smap_add_format(cap, "max_mpls_depth", "%"PRIuSIZE, s->odp.max_mpls_depth);
+    smap_add(cap, "recirc", s->odp.recirc ? "true" : "false");
+    smap_add(cap, "ct_state", s->odp.ct_state ? "true" : "false");
+    smap_add(cap, "ct_zone", s->odp.ct_zone ? "true" : "false");
+    smap_add(cap, "ct_mark", s->odp.ct_mark ? "true" : "false");
+    smap_add(cap, "ct_label", s->odp.ct_label ? "true" : "false");
+    smap_add(cap, "ct_state_nat", s->odp.ct_state_nat ? "true" : "false");
+    smap_add(cap, "ct_orig_tuple", s->odp.ct_orig_tuple ? "true" : "false");
+    smap_add(cap, "ct_orig_tuple6", s->odp.ct_orig_tuple6 ? "true" : "false");
+    smap_add(cap, "nd_ext", s->odp.nd_ext ? "true" : "false");
 
     /* DPIF_SUPPORT_FIELDS */
-    smap_add(cap, "masked_set_action", s.masked_set_action ? "true" : "false");
-    smap_add(cap, "tnl_push_pop", s.tnl_push_pop ? "true" : "false");
-    smap_add(cap, "ufid", s.ufid ? "true" : "false");
-    smap_add(cap, "trunc", s.trunc ? "true" : "false");
-    smap_add(cap, "clone", s.clone ? "true" : "false");
-    smap_add(cap, "sample_nesting", s.sample_nesting ? "true" : "false");
-    smap_add(cap, "ct_eventmask", s.ct_eventmask ? "true" : "false");
-    smap_add(cap, "ct_clear", s.ct_clear ? "true" : "false");
-    smap_add_format(cap, "max_hash_alg", "%"PRIuSIZE, s.max_hash_alg);
-    smap_add(cap, "check_pkt_len", s.check_pkt_len ? "true" : "false");
-    smap_add(cap, "ct_timeout", s.ct_timeout ? "true" : "false");
+    smap_add(cap, "masked_set_action",
+             s->masked_set_action ? "true" : "false");
+    smap_add(cap, "tnl_push_pop", s->tnl_push_pop ? "true" : "false");
+    smap_add(cap, "ufid", s->ufid ? "true" : "false");
+    smap_add(cap, "trunc", s->trunc ? "true" : "false");
+    smap_add(cap, "clone", s->clone ? "true" : "false");
+    smap_add(cap, "sample_nesting", s->sample_nesting ? "true" : "false");
+    smap_add(cap, "ct_eventmask", s->ct_eventmask ? "true" : "false");
+    smap_add(cap, "ct_clear", s->ct_clear ? "true" : "false");
+    smap_add_format(cap, "max_hash_alg", "%"PRIuSIZE, s->max_hash_alg);
+    smap_add(cap, "check_pkt_len", s->check_pkt_len ? "true" : "false");
+    smap_add(cap, "ct_timeout", s->ct_timeout ? "true" : "false");
     smap_add(cap, "explicit_drop_action",
-             s.explicit_drop_action ? "true" :"false");
-    smap_add(cap, "lb_output_action", s.lb_output_action ? "true" : "false");
-    smap_add(cap, "ct_zero_snat", s.ct_zero_snat ? "true" : "false");
-    smap_add(cap, "add_mpls", s.add_mpls ? "true" : "false");
+             s->explicit_drop_action ? "true" :"false");
+    smap_add(cap, "lb_output_action", s->lb_output_action ? "true" : "false");
+    smap_add(cap, "ct_zero_snat", s->ct_zero_snat ? "true" : "false");
+    smap_add(cap, "add_mpls", s->add_mpls ? "true" : "false");
 
     /* The ct_tuple_flush is implemented on dpif level, so it is supported
      * for all backers. */
