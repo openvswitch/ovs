@@ -221,6 +221,7 @@ static void ct_zone_config_init(struct dpif_backer *backer);
 static void ct_zone_config_uninit(struct dpif_backer *backer);
 static void ct_zone_timeout_policy_sweep(struct dpif_backer *backer);
 static void ct_zone_limits_commit(struct dpif_backer *backer);
+static bool recheck_support_explicit_drop_action(struct dpif_backer *backer);
 
 static inline struct ofproto_dpif *
 ofproto_dpif_cast(const struct ofproto *ofproto)
@@ -389,6 +390,10 @@ type_run(const char *type)
 
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
+    }
+
+    if (recheck_support_explicit_drop_action(backer)) {
+        backer->need_revalidate = REV_RECONFIGURE;
     }
 
     if (backer->need_revalidate) {
@@ -855,7 +860,11 @@ ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto)
 bool
 ovs_explicit_drop_action_supported(struct ofproto_dpif *ofproto)
 {
-    return ofproto->backer->rt_support.explicit_drop_action;
+    bool value;
+
+    atomic_read_relaxed(&ofproto->backer->rt_support.explicit_drop_action,
+                        &value);
+    return value;
 }
 
 bool
@@ -1379,6 +1388,40 @@ check_ct_timeout_policy(struct dpif_backer *backer)
     return !error;
 }
 
+/* Tests whether backer's datapath supports the OVS_ACTION_ATTR_DROP action. */
+static bool
+check_drop_action(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    uint8_t actbuf[NL_A_U32_SIZE];
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    bool supported;
+
+    struct flow flow = {
+        .dl_type = CONSTANT_HTONS(0x1234), /* bogus */
+    };
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+
+    ofpbuf_use_stack(&actions, &actbuf, sizeof actbuf);
+    nl_msg_put_u32(&actions, OVS_ACTION_ATTR_DROP, XLATE_OK);
+
+    supported = dpif_may_support_explicit_drop_action(backer->dpif) &&
+                dpif_probe_feature(backer->dpif, "drop", &key, &actions, NULL);
+
+    VLOG_INFO("%s: Datapath %s explicit drop action",
+              dpif_name(backer->dpif),
+              (supported) ? "supports" : "does not support");
+
+    return supported;
+}
+
 /* Tests whether 'backer''s datapath supports the all-zero SNAT case. */
 static bool
 dpif_supports_ct_zero_snat(struct dpif_backer *backer)
@@ -1649,8 +1692,8 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
     backer->rt_support.check_pkt_len = check_check_pkt_len(backer);
     backer->rt_support.ct_timeout = check_ct_timeout_policy(backer);
-    backer->rt_support.explicit_drop_action =
-        dpif_supports_explicit_drop_action(backer->dpif);
+    atomic_store_relaxed(&backer->rt_support.explicit_drop_action,
+                         check_drop_action(backer));
     backer->rt_support.lb_output_action =
         dpif_supports_lb_output_action(backer->dpif);
     backer->rt_support.ct_zero_snat = dpif_supports_ct_zero_snat(backer);
@@ -1665,6 +1708,28 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
     backer->rt_support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
     backer->rt_support.odp.nd_ext = check_nd_extensions(backer);
+}
+
+/* TC does not support offloading the explicit drop action. As such we need to
+ * re-probe the datapath if hw-offload has been modified.
+ * Note: We don't support true --> false transition as that requires a restart.
+ * See netdev_set_flow_api_enabled(). */
+static bool
+recheck_support_explicit_drop_action(struct dpif_backer *backer)
+{
+    bool explicit_drop_action;
+
+    atomic_read_relaxed(&backer->rt_support.explicit_drop_action,
+                        &explicit_drop_action);
+
+    if (explicit_drop_action
+        && !dpif_may_support_explicit_drop_action(backer->dpif)) {
+        ovs_assert(!check_drop_action(backer));
+        atomic_store_relaxed(&backer->rt_support.explicit_drop_action, false);
+        return true;
+    }
+
+    return false;
 }
 
 static int
@@ -5714,6 +5779,7 @@ ct_zone_limit_protection_update(const char *datapath_type, bool protected)
 static void
 get_datapath_cap(const char *datapath_type, struct smap *cap)
 {
+    bool explicit_drop_action;
     struct dpif_backer_support *s;
     struct dpif_backer *backer = shash_find_data(&all_dpif_backers,
                                                  datapath_type);
@@ -5749,8 +5815,9 @@ get_datapath_cap(const char *datapath_type, struct smap *cap)
     smap_add_format(cap, "max_hash_alg", "%"PRIuSIZE, s->max_hash_alg);
     smap_add(cap, "check_pkt_len", s->check_pkt_len ? "true" : "false");
     smap_add(cap, "ct_timeout", s->ct_timeout ? "true" : "false");
+    atomic_read_relaxed(&s->explicit_drop_action, &explicit_drop_action);
     smap_add(cap, "explicit_drop_action",
-             s->explicit_drop_action ? "true" :"false");
+             explicit_drop_action ? "true" :"false");
     smap_add(cap, "lb_output_action", s->lb_output_action ? "true" : "false");
     smap_add(cap, "ct_zero_snat", s->ct_zero_snat ? "true" : "false");
     smap_add(cap, "add_mpls", s->add_mpls ? "true" : "false");
@@ -6279,7 +6346,7 @@ show_dp_feature_bool(struct ds *ds, const char *feature, const bool *b)
     ds_put_format(ds, "%s: %s\n", feature, *b ? "Yes" : "No");
 }
 
-static void OVS_UNUSED
+static void
 show_dp_feature_atomic_bool(struct ds *ds, const char *feature,
                             const atomic_bool *b)
 {
