@@ -717,6 +717,8 @@ close_dpif_backer(struct dpif_backer *backer, bool del)
 }
 
 static void check_support(struct dpif_backer *backer);
+static void copy_support(struct dpif_backer_support *dst,
+                         struct dpif_backer_support *src);
 
 static int
 open_dpif_backer(const char *type, struct dpif_backer **backerp)
@@ -837,7 +839,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
      * 'boottime_support' can be checked to prevent 'support' to be changed
      * beyond the datapath capabilities. In case 'support' is changed by
      * the user, 'boottime_support' can be used to restore it.  */
-    backer->bt_support = backer->rt_support;
+    copy_support(&backer->bt_support, &backer->rt_support);
 
     return error;
 }
@@ -1610,6 +1612,24 @@ CHECK_FEATURE__(ct_orig_tuple6, ct_orig_tuple6, ct_nw_proto, 1, ETH_TYPE_IPV6)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
+
+static void
+copy_support(struct dpif_backer_support *dst, struct dpif_backer_support *src)
+{
+#define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
+    if (!strcmp(#TYPE, "atomic_bool")) { \
+        bool value; \
+        atomic_read_relaxed((atomic_bool *) &src->NAME, &value); \
+        atomic_store_relaxed((atomic_bool *) &dst->NAME, value); \
+    } else { \
+        dst->NAME = src->NAME; \
+    }
+
+    DPIF_SUPPORT_FIELDS
+#undef DPIF_SUPPORT_FIELD
+
+    dst->odp = src->odp;
+}
 
 static void
 check_support(struct dpif_backer *backer)
@@ -6254,20 +6274,30 @@ ofproto_unixctl_dpif_dump_dps(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-show_dp_feature_bool(struct ds *ds, const char *feature, bool b)
+show_dp_feature_bool(struct ds *ds, const char *feature, const bool *b)
 {
-    ds_put_format(ds, "%s: %s\n", feature, b ? "Yes" : "No");
+    ds_put_format(ds, "%s: %s\n", feature, *b ? "Yes" : "No");
+}
+
+static void OVS_UNUSED
+show_dp_feature_atomic_bool(struct ds *ds, const char *feature,
+                            const atomic_bool *b)
+{
+    bool value;
+    atomic_read_relaxed((atomic_bool *) b, &value);
+    ds_put_format(ds, "%s: %s\n", feature, value ? "Yes" : "No");
 }
 
 static void
-show_dp_feature_size_t(struct ds *ds, const char *feature, size_t s)
+show_dp_feature_size_t(struct ds *ds, const char *feature, const size_t *s)
 {
-    ds_put_format(ds, "%s: %"PRIuSIZE"\n", feature, s);
+    ds_put_format(ds, "%s: %"PRIuSIZE"\n", feature, *s);
 }
 
 enum dpif_support_field_type {
     DPIF_SUPPORT_FIELD_bool,
     DPIF_SUPPORT_FIELD_size_t,
+    DPIF_SUPPORT_FIELD_atomic_bool,
 };
 
 struct dpif_support_field {
@@ -6284,12 +6314,12 @@ static void
 dpif_show_support(const struct dpif_backer_support *support, struct ds *ds)
 {
 #define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
-    show_dp_feature_##TYPE (ds, TITLE, support->NAME);
+    show_dp_feature_##TYPE (ds, TITLE, &support->NAME);
     DPIF_SUPPORT_FIELDS
 #undef DPIF_SUPPORT_FIELD
 
 #define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) \
-    show_dp_feature_##TYPE (ds, TITLE, support->odp.NAME );
+    show_dp_feature_##TYPE (ds, TITLE, &support->odp.NAME );
     ODP_SUPPORT_FIELDS
 #undef ODP_SUPPORT_FIELD
 }
@@ -6303,6 +6333,16 @@ display_support_field(const char *name,
     case DPIF_SUPPORT_FIELD_bool: {
         bool v = *(bool *)field->rt_ptr;
         bool b = *(bool *)field->bt_ptr;
+        ds_put_format(ds, "%s (%s) : [run time]:%s, [boot time]:%s\n", name,
+                      field->title, v ? "true" : "false",
+                      b ? "true" : "false");
+        break;
+    }
+    case DPIF_SUPPORT_FIELD_atomic_bool: {
+        bool b, v;
+
+        atomic_read_relaxed((atomic_bool *) field->rt_ptr, &v);
+        atomic_read_relaxed((atomic_bool *) field->bt_ptr, &b);
         ds_put_format(ds, "%s (%s) : [run time]:%s, [boot time]:%s\n", name,
                       field->title, v ? "true" : "false",
                       b ? "true" : "false");
