@@ -921,3 +921,15 @@ AT_CHECK([tc -d filter show dev ovs-p0 ingress | grep -q "csum (iph)"], [0])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([offloads - re-probe drop action])
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_DROP_ACTION()
+AT_KEYWORDS(drop_action)
+
+dnl Trigger a re-probe of the explicit drop action.
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+OVS_WAIT_UNTIL([grep -q "Datapath does not support explicit drop action" ovs-vswitchd.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
