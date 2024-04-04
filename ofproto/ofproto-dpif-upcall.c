@@ -59,6 +59,7 @@ COVERAGE_DEFINE(handler_duplicate_upcall);
 COVERAGE_DEFINE(revalidate_missed_dp_flow);
 COVERAGE_DEFINE(ukey_dp_change);
 COVERAGE_DEFINE(ukey_invalid_stat_reset);
+COVERAGE_DEFINE(ukey_replace_contention);
 COVERAGE_DEFINE(upcall_flow_limit_grew);
 COVERAGE_DEFINE(upcall_flow_limit_hit);
 COVERAGE_DEFINE(upcall_flow_limit_kill);
@@ -1449,8 +1450,6 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     }
 
     if (upcall.ukey && !ukey_install(udpif, upcall.ukey)) {
-        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 1);
-        VLOG_WARN_RL(&rll, "upcall_cb failure: ukey installation fails");
         error = ENOSPC;
     }
 out:
@@ -1948,15 +1947,15 @@ try_ukey_replace(struct umap *umap, struct udpif_key *old_ukey,
             transition_ukey(old_ukey, UKEY_DELETED);
             transition_ukey(new_ukey, UKEY_VISIBLE);
             replaced = true;
+            COVERAGE_INC(upcall_ukey_replace);
+        } else {
+            COVERAGE_INC(handler_duplicate_upcall);
         }
         ovs_mutex_unlock(&old_ukey->mutex);
+    } else {
+        COVERAGE_INC(ukey_replace_contention);
     }
 
-    if (replaced) {
-        COVERAGE_INC(upcall_ukey_replace);
-    } else {
-        COVERAGE_INC(handler_duplicate_upcall);
-    }
     return replaced;
 }
 
@@ -3009,6 +3008,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
             /* Handler threads could be holding a ukey lock while it installs a
              * new flow, so don't hang around waiting for access to it. */
             if (ovs_mutex_trylock(&ukey->mutex)) {
+                COVERAGE_INC(upcall_ukey_contention);
                 continue;
             }
             ukey_state = ukey->state;
