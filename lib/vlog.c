@@ -29,6 +29,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "async-append.h"
+#include "backtrace.h"
 #include "coverage.h"
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
@@ -1274,8 +1275,9 @@ vlog_fatal(const struct vlog_module *module, const char *message, ...)
     va_end(args);
 }
 
-/* Logs 'message' to 'module' at maximum verbosity, then calls abort().  Always
- * writes the message to stderr, even if the console destination is disabled.
+/* Attempts to log a stack trace, logs 'message' to 'module' at maximum
+ * verbosity, then calls abort().  Always writes the message to stderr, even
+ * if the console destination is disabled.
  *
  * Choose this function instead of vlog_fatal_valist() if the daemon monitoring
  * facility should automatically restart the current daemon.  */
@@ -1289,6 +1291,10 @@ vlog_abort_valist(const struct vlog_module *module_,
      * message written by the later ovs_abort_valist(). */
     module->levels[VLF_CONSOLE] = VLL_OFF;
 
+    /* Printing the stack trace before the 'message', because the 'message'
+     * will flush the async log queue (VLL_EMER).  With a different order we
+     * would need to flush the queue manually again. */
+    log_backtrace();
     vlog_valist(module, VLL_EMER, message, args);
     ovs_abort_valist(0, message, args);
 }
