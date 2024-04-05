@@ -230,7 +230,9 @@ AT_CHECK([ovstest test-util -voff -vfile:info '-vPATTERN:file:%c|%p|%m' --log-fi
   [$exit_status], [], [stderr])
 
 AT_CHECK([sed 's/\(opened log file\) .*/\1/
-s/|[[^|]]*: /|/' test-util.log], [0], [dnl
+s/|[[^|]]*: /|/
+/backtrace/d
+/|.*|/!d' test-util.log], [0], [dnl
 vlog|INFO|opened log file
 util|EMER|assertion false failed in test_assert()
 ])
