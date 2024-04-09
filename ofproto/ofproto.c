@@ -800,7 +800,7 @@ ofproto_type_set_config(const char *datapath_type, const struct smap *cfg)
     datapath_type = ofproto_normalize_type(datapath_type);
     class = ofproto_class_find__(datapath_type);
 
-    if (class->type_set_config) {
+    if (class && class->type_set_config) {
         class->type_set_config(datapath_type, cfg);
     }
 }
