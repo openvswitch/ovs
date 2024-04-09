@@ -95,7 +95,7 @@ def check_allowed(pif):
         macline = filter(lambda x: x.startswith("HWaddr:"), f.readlines())
         f.close()
         if len(macline) == 1:
-            p = re.compile(".*\s%(MAC)s\s.*" % pifrec, re.IGNORECASE)
+            p = re.compile(r".*\s%(MAC)s\s.*" % pifrec, re.IGNORECASE)
             if p.match(macline[0]):
                 log("Skipping PVS device %(device)s (%(MAC)s)" % pifrec)
                 return False
