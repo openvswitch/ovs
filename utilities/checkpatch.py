@@ -442,7 +442,8 @@ def check_spelling(line, comment):
     if not spell_check_dict or not spellcheck:
         return False
 
-    if line.startswith('Fixes: '):
+    is_name_tag = re.compile(r'^\s*([a-z-]+-by): (.*@.*)$', re.I | re.M | re.S)
+    if line.startswith('Fixes: ') or is_name_tag.match(line):
         return False
 
     words = filter_comments(line, True) if comment else line
