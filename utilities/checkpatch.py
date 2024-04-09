@@ -495,7 +495,7 @@ def __check_doc_is_listed(text, doctype, docdir, docfile):
         docre = re.compile(r'\n\+.*{}'.format(docfile.replace('.rst', '')))
     elif doctype == 'automake':
         beginre = re.compile(r'\+\+\+.*Documentation/automake.mk')
-        docre = re.compile(r'\n\+\t{}/{}'.format(docdir, docfile))
+        docre = re.compile(r'\n\+\t(?:{}/)?{}'.format(docdir, docfile))
     else:
         raise NotImplementedError("Invalid doctype: {}".format(doctype))
 
