@@ -8,4 +8,4 @@ set -ev
 #     https://github.com/pypa/pip/issues/10655
 pip3 install --disable-pip-version-check --user wheel
 pip3 install --disable-pip-version-check --user pyelftools
-pip3 install --user  'meson==0.53.2'
+pip3 install --user  'meson>=1.4,<1.5'
