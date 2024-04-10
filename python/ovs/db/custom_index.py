@@ -90,14 +90,21 @@ class IndexedRows(DictBase, object):
         index = self.indexes[name] = MultiColumnIndex(name)
         return index
 
+    def __getitem__(self, key):
+        return self.data[key][-1]
+
     def __setitem__(self, key, item):
-        self.data[key] = item
+        try:
+            self.data[key].append(item)
+        except KeyError:
+            self.data[key] = [item]
         for index in self.indexes.values():
             index.add(item)
 
     def __delitem__(self, key):
-        val = self.data[key]
-        del self.data[key]
+        val = self.data[key].pop()
+        if len(self.data[key]) == 0:
+            del self.data[key]
         for index in self.indexes.values():
             index.remove(val)
 
