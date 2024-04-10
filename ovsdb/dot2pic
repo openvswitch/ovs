@@ -17,6 +17,7 @@
 import getopt
 import sys
 
+
 def dot2pic(src, dst):
     scale = 1.0
     while True:
@@ -49,8 +50,8 @@ def dot2pic(src, dst):
                 dst.write("box at %f,%f wid %f height %f\n"
                           % (x, y, width, height))
         elif command == 'edge':
-            tail = words[1]
-            head = words[2]
+            # tail = words[1]
+            # head = words[2]
             n = int(words[3])
 
             # Extract x,y coordinates.
@@ -114,4 +115,3 @@ else:
 if font_scale:
     print(".ps %+d" % font_scale)
 print(".PE")
-
