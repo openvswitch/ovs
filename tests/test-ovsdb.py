@@ -434,7 +434,7 @@ def idl_set(idl, commands, step):
                 sys.stderr.write('"set" command requires 2 argument\n')
                 sys.exit(1)
 
-            s = txn.insert(idl.tables["simple"], new_uuid=args[0],
+            s = txn.insert(idl.tables["simple"], new_uuid=uuid.UUID(args[0]),
                            persist_uuid=True)
             s.i = int(args[1])
         elif name == "delete":
