@@ -1854,7 +1854,7 @@ class Transaction(object):
                 if row._data is None:
                     op["op"] = "insert"
                     if row._persist_uuid:
-                        op["uuid"] = row.uuid
+                        op["uuid"] = str(row.uuid)
                     else:
                         op["uuid-name"] = _uuid_name_from_uuid(row.uuid)
 
