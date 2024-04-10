@@ -29,3 +29,4 @@ ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd \
            ${OVS_USER_OPT} \
            --no-monitor restart $OPTIONS
+TimeoutSec=300
