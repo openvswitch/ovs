@@ -2713,7 +2713,7 @@ m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_C],
 
 m4_define([OVSDB_CHECK_IDL_PERS_UUID_INSERT_PY],
   [AT_SETUP([$1 - Python3])
-   AT_KEYWORDS([idl persistent uuid insert])
+   AT_KEYWORDS([idl python persistent uuid insert])
    OVSDB_START_IDLTEST([], ["$abs_srcdir/idltest.ovsschema"])
    AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [stderr])
