@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import date
 import getopt
-import os
 import sys
 import xml.dom.minidom
 
@@ -24,9 +22,12 @@ import ovs.json
 from ovs.db import error
 import ovs.db.schema
 
-from ovs_build_helpers.nroff import *
+from ovs_build_helpers.nroff import block_xml_to_nroff
+from ovs_build_helpers.nroff import escape_nroff_literal
+from ovs_build_helpers.nroff import text_to_nroff
 
 argv0 = sys.argv[0]
+
 
 def typeAndConstraintsToNroff(column):
     type = column.type.toEnglish(escape_nroff_literal)
@@ -37,6 +38,7 @@ def typeAndConstraintsToNroff(column):
     if column.unique:
         type += " (must be unique within table)"
     return type
+
 
 def columnGroupToNroff(table, groupXml, documented_columns):
     introNodes = []
@@ -49,7 +51,10 @@ def columnGroupToNroff(table, groupXml, documented_columns):
             if (columnNodes
                 and not (node.nodeType == node.TEXT_NODE
                          and node.data.isspace())):
-                raise error.Error("text follows <column> or <group> inside <group>: %s" % node)
+                raise error.Error(
+                    "text follows <column> or <group> inside <group>: %s"
+                    % node
+                )
             introNodes += [node]
 
     summary = []
@@ -65,15 +70,9 @@ def columnGroupToNroff(table, groupXml, documented_columns):
                 if node.hasAttribute('type'):
                     type_string = node.attributes['type'].nodeValue
                     type_json = ovs.json.from_string(str(type_string))
-                    # py2 -> py3 means str -> bytes and unicode -> str
-                    try:
-                        if type(type_json) in (str, unicode):
-                            raise error.Error("%s %s:%s has invalid 'type': %s" 
-                                              % (table.name, name, key, type_json))
-                    except:
-                        if type(type_json) in (bytes, str):
-                            raise error.Error("%s %s:%s has invalid 'type': %s" 
-                                              % (table.name, name, key, type_json))
+                    if type(type_json) in (bytes, str):
+                        raise error.Error("%s %s:%s has invalid 'type': %s"
+                                          % (table.name, name, key, type_json))
                     type_ = ovs.db.types.BaseType.from_json(type_json)
                 else:
                     type_ = column.type.value
@@ -91,10 +90,11 @@ def columnGroupToNroff(table, groupXml, documented_columns):
                     else:
                         if type_.type != column.type.value.type:
                             type_english = type_.toEnglish()
+                            typeNroff += ", containing "
                             if type_english[0] in 'aeiou':
-                                typeNroff += ", containing an %s" % type_english
+                                typeNroff += "an %s" % type_english
                             else:
-                                typeNroff += ", containing a %s" % type_english
+                                typeNroff += "a %s" % type_english
                         constraints = (
                             type_.constraintsToEnglish(escape_nroff_literal,
                                                        text_to_nroff))
@@ -121,6 +121,7 @@ def columnGroupToNroff(table, groupXml, documented_columns):
             raise error.Error("unknown element %s in <table>" % node.tagName)
     return summary, intro, body
 
+
 def tableSummaryToNroff(summary, level=0):
     s = ""
     for type, name, arg in summary:
@@ -131,6 +132,7 @@ def tableSummaryToNroff(summary, level=0):
             s += tableSummaryToNroff(arg, level + 1)
             s += ".RE\n"
     return s
+
 
 def tableToNroff(schema, tableXml):
     tableName = tableXml.attributes['name'].nodeValue
@@ -156,20 +158,17 @@ def tableToNroff(schema, tableXml):
 
     return s
 
+
 def docsToNroff(schemaFile, xmlFile, erFile, version=None):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
     doc = xml.dom.minidom.parse(xmlFile).documentElement
-
-    schemaDate = os.stat(schemaFile).st_mtime
-    xmlDate = os.stat(xmlFile).st_mtime
-    d = date.fromtimestamp(max(schemaDate, xmlDate))
 
     if doc.hasAttribute('name'):
         manpage = doc.attributes['name'].nodeValue
     else:
         manpage = schema.name
 
-    if version == None:
+    if version is None:
         version = "UNKNOWN"
 
     # Putting '\" p as the first line tells "man" that the manpage
@@ -194,7 +193,6 @@ def docsToNroff(schemaFile, xmlFile, erFile, version=None):
 .PP
 ''' % (manpage, schema.version, version, text_to_nroff(manpage), schema.name)
 
-    tables = ""
     introNodes = []
     tableNodes = []
     summary = []
@@ -237,8 +235,8 @@ Purpose
 """ % (name, text_to_nroff(title))
 
     if erFile:
-        s += """
-.\\" check if in troff mode (TTY)
+        s += r"""
+.\" check if in troff mode (TTY)
 .if t \{
 .bp
 .SH "TABLE RELATIONSHIPS"
@@ -248,8 +246,8 @@ database.  Each node represents a table.  Tables that are part of the
 ``root set'' are shown with double borders.  Each edge leads from the
 table that contains it and points to the table that its value
 represents.  Edges are labeled with their column names, followed by a
-constraint on the number of allowed values: \\fB?\\fR for zero or one,
-\\fB*\\fR for zero or more, \\fB+\\fR for one or more.  Thick lines
+constraint on the number of allowed values: \fB?\fR for zero or one,
+\fB*\fR for zero or more, \fB+\fR for one or more.  Thick lines
 represent strong references; thin lines represent weak references.
 .RS -1in
 """
@@ -262,6 +260,7 @@ represent strong references; thin lines represent weak references.
     for node in tableNodes:
         s += tableToNroff(schema, node) + "\n"
     return s
+
 
 def usage():
     print("""\
@@ -277,6 +276,7 @@ The following options are also available:
   -h, --help                  display this help message\
 """ % {'argv0': argv0})
     sys.exit(0)
+
 
 if __name__ == "__main__":
     try:
