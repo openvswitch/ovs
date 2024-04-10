@@ -307,7 +307,7 @@ jobs:
             MIN_DISTANCE=1000
             git remote add upstream https://github.com/openvswitch/ovs.git
             git fetch upstream
-            for upstream_head in $(git ls-remote --heads upstream main master dpdk-latest branch-2.17 branch-[3456789]* | cut -f 1); do
+            for upstream_head in $(git ls-remote --heads upstream main dpdk-latest branch-2.17 branch-[3456789]* | cut -f 1); do
               CURR_BASE=$(git merge-base ${upstream_head} HEAD 2>/dev/null)
               if [ ${CURR_BASE} ]; then
                 DISTANCE=$(git log --oneline ${CURR_BASE}..HEAD | wc -l);
