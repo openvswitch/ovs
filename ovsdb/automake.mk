@@ -120,6 +120,7 @@ ovsdb/ovsdb-doc: python/ovs/dirs.py
 
 # ovsdb-dot
 EXTRA_DIST += ovsdb/ovsdb-dot.in ovsdb/dot2pic
+FLAKE8_PYFILES += ovsdb/ovsdb-dot.in ovsdb/dot2pic
 noinst_SCRIPTS += ovsdb/ovsdb-dot
 CLEANFILES += ovsdb/ovsdb-dot
 OVSDB_DOT = $(run_python) $(srcdir)/ovsdb/ovsdb-dot.in
