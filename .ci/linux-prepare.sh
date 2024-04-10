@@ -26,7 +26,7 @@ cd ..
 #     https://github.com/pypa/pip/issues/10655
 pip3 install --disable-pip-version-check --user wheel
 pip3 install --disable-pip-version-check --user \
-    flake8 'hacking>=3.0' sphinx setuptools pyelftools
+    flake8 sphinx setuptools pyelftools
 pip3 install --user  'meson==0.53.2'
 
 if [ "$M32" ]; then
