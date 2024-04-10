@@ -27,7 +27,7 @@ cd ..
 pip3 install --disable-pip-version-check --user wheel
 pip3 install --disable-pip-version-check --user \
     flake8 sphinx setuptools pyelftools
-pip3 install --user  'meson==0.53.2'
+pip3 install --user  'meson>=1.4,<1.5'
 
 if [ "$M32" ]; then
     # Installing 32-bit libraries.
