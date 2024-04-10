@@ -1,14 +1,12 @@
 #! @PYTHON3@
 
-from datetime import date
 import ovs.db.error
 import ovs.db.schema
 import getopt
-import os
-import re
 import sys
 
 argv0 = sys.argv[0]
+
 
 def printEdge(tableName, type, baseType, label):
     if baseType.ref_table_name:
@@ -31,38 +29,42 @@ def printEdge(tableName, type, baseType, label):
         options['label'] = '"%s%s"' % (label, arity)
         if baseType.ref_type == 'weak':
             options['style'] = 'dotted'
-        print ("\t%s -> %s [%s];" % (
+        print("\t%s -> %s [%s];" % (
             tableName,
             baseType.ref_table_name,
-            ', '.join(['%s=%s' % (k,v) for k,v in options.items()])))
+            ', '.join(['%s=%s' % (k, v) for k, v in options.items()])))
+
 
 def schemaToDot(schemaFile, arrows):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
 
-    print ("digraph %s {" % schema.name)
-    print ('\trankdir=LR;')
-    print ('\tsize="6.5,4";')
-    print ('\tmargin="0";')
-    print ("\tnode [shape=box];")
+    print("digraph %s {" % schema.name)
+    print('\trankdir=LR;')
+    print('\tsize="6.5,4";')
+    print('\tmargin="0";')
+    print("\tnode [shape=box];")
     if not arrows:
-        print ("\tedge [dir=none, arrowhead=none, arrowtail=none];")
+        print("\tedge [dir=none, arrowhead=none, arrowtail=none];")
     for tableName, table in schema.tables.items():
         options = {}
         if table.is_root:
             options['style'] = 'bold'
-        print ("\t%s [%s];" % (
+        print("\t%s [%s];" % (
             tableName,
-            ', '.join(['%s=%s' % (k,v) for k,v in options.items()])))
+            ', '.join(['%s=%s' % (k, v) for k, v in options.items()])))
         for columnName, column in table.columns.items():
             if column.type.value:
-                printEdge(tableName, column.type, column.type.key, "%s key" % columnName)
-                printEdge(tableName, column.type, column.type.value, "%s value" % columnName)
+                printEdge(tableName, column.type, column.type.key,
+                          "%s key" % columnName)
+                printEdge(tableName, column.type, column.type.value,
+                          "%s value" % columnName)
             else:
                 printEdge(tableName, column.type, column.type.key, columnName)
-    print ("}");
+    print("}")
+
 
 def usage():
-    print ("""\
+    print("""\
 %(argv0)s: compiles ovsdb schemas to graphviz format
 Prints a .dot file that "dot" can render to an entity-relationship diagram
 usage: %(argv0)s [OPTIONS] SCHEMA
@@ -75,12 +77,13 @@ The following options are also available:
 """ % {'argv0': argv0})
     sys.exit(0)
 
+
 if __name__ == "__main__":
     try:
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                               ['no-arrows',
-                                               'help', 'version',])
+                                               'help', 'version'])
         except getopt.GetoptError as geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
@@ -92,7 +95,7 @@ if __name__ == "__main__":
             elif key in ['-h', '--help']:
                 usage()
             elif key in ['-V', '--version']:
-                print ("ovsdb-dot (Open vSwitch) @VERSION@")
+                print("ovsdb-dot (Open vSwitch) @VERSION@")
             else:
                 sys.exit(0)
 
