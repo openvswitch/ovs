@@ -3,7 +3,6 @@ image: Visual Studio 2019
 branches:
   only:
   - main
-  - master
 configuration:
   - Debug
   - Release
