@@ -4969,6 +4969,7 @@ raft_get_election_timer_from_log(struct raft *raft)
             break;
         }
     }
+    raft_update_probe_intervals(raft);
 }
 
 static void
