@@ -1007,8 +1007,13 @@ raft_conn_update_probe_interval(struct raft *raft, struct raft_conn *r_conn)
      * inactivity probe follower will just try to initiate election
      * indefinitely staying in 'candidate' role.  And the leader will continue
      * to send heartbeats to the dead connection thinking that remote server
-     * is still part of the cluster. */
-    int probe_interval = raft->election_timer + ELECTION_RANGE_MSEC;
+     * is still part of the cluster.
+     *
+     * While joining, the real value of the election timeout is not known to
+     * this server, so using the maximum. */
+    int probe_interval = (raft->joining ? ELECTION_MAX_MSEC
+                                        : raft->election_timer)
+                         + ELECTION_RANGE_MSEC;
 
     jsonrpc_session_set_probe_interval(r_conn->js, probe_interval);
 }
@@ -2770,6 +2775,13 @@ raft_send_heartbeats(struct raft *raft)
     raft_reset_ping_timer(raft);
 }
 
+static void
+raft_join_complete(struct raft *raft)
+{
+    raft->joining = false;
+    raft_update_probe_intervals(raft);
+}
+
 /* Initializes the fields in 's' that represent the leader's view of the
  * server. */
 static void
@@ -2816,7 +2828,7 @@ raft_become_leader(struct raft *raft)
          * we're becoming a cluster leader without receiving reply for a
          * join request and will commit addition of this server ourselves. */
         VLOG_INFO_RL(&rl, "elected as leader while joining");
-        raft->joining = false;
+        raft_join_complete(raft);
     }
 
     struct raft_server *s;
@@ -3051,7 +3063,7 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
                         "added to configuration without reply "
                         "(eid: "UUID_FMT", commit index: %"PRIu64")",
                         UUID_ARGS(&e->eid), index);
-                    raft->joining = false;
+                    raft_join_complete(raft);
                 }
             }
             raft_servers_destroy(&servers);
@@ -3985,7 +3997,7 @@ raft_handle_add_server_reply(struct raft *raft,
     }
 
     if (rpy->success) {
-        raft->joining = false;
+        raft_join_complete(raft);
 
         /* It is tempting, at this point, to check that this server is part of
          * the current configuration.  However, this is not necessarily the
