@@ -26,12 +26,12 @@ install:
     $URL = "https://raw.githubusercontent.com/slproweb/opensslhashes/master/win32_openssl_hashes.json"
     $webData = (Invoke-WebRequest -Uri $URL).content | ConvertFrom-Json
     $source = ($webData.files.PSObject.Properties | Where-Object {
-        $_.Value.basever   -match "3.0.*" -and
-        $_.Value.bits      -eq    "64"    -and
-        $_.Value.arch      -eq    "INTEL" -and
-        $_.Value.installer -eq    "exe"   -and
+        $_.Value.basever   -match "^3\.0\.[0-9]+" -and
+        $_.Value.bits      -eq    "64"            -and
+        $_.Value.arch      -eq    "INTEL"         -and
+        $_.Value.installer -eq    "exe"           -and
         -not $_.Value.light
-    } | Select-Object Value).PSObject.Properties.Value
+    } | Select-Object Value | Select -First 1).PSObject.Properties.Value
 
     Write-Host "Latest OpenSSL 3.0:" ($source | Format-List | Out-String)
 
