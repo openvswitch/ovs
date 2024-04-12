@@ -760,7 +760,7 @@ inet_open_passive(int style, const char *target, int default_port,
     }
 
     /* Listen. */
-    if (style == SOCK_STREAM && listen(fd, 10) < 0) {
+    if (style == SOCK_STREAM && listen(fd, 64) < 0) {
         error = sock_errno();
         VLOG_ERR("%s: listen: %s", target, sock_strerror(error));
         goto error;

@@ -620,7 +620,7 @@ class PassiveStream(object):
             raise Exception('Unknown connection string')
 
         try:
-            sock.listen(10)
+            sock.listen(64)
         except socket.error as e:
             vlog.err("%s: listen: %s" % (name, os.strerror(e.error)))
             sock.close()
