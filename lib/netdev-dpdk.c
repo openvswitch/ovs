@@ -2379,17 +2379,16 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         struct eth_addr mac;
 
         if (!dpdk_port_is_representor(dev)) {
-            VLOG_WARN_BUF(errp, "'%s' is trying to set the VF MAC '%s' "
-                          "but 'options:dpdk-vf-mac' is only supported for "
-                          "VF representors.",
-                          netdev_get_name(netdev), vf_mac);
+            VLOG_WARN("'%s' is trying to set the VF MAC '%s' "
+                      "but 'options:dpdk-vf-mac' is only supported for "
+                      "VF representors.",
+                      netdev_get_name(netdev), vf_mac);
         } else if (!eth_addr_from_string(vf_mac, &mac)) {
-            VLOG_WARN_BUF(errp, "interface '%s': cannot parse VF MAC '%s'.",
-                          netdev_get_name(netdev), vf_mac);
+            VLOG_WARN("interface '%s': cannot parse VF MAC '%s'.",
+                      netdev_get_name(netdev), vf_mac);
         } else if (eth_addr_is_multicast(mac)) {
-            VLOG_WARN_BUF(errp,
-                          "interface '%s': cannot set VF MAC to multicast "
-                          "address '%s'.", netdev_get_name(netdev), vf_mac);
+            VLOG_WARN("interface '%s': cannot set VF MAC to multicast "
+                      "address '%s'.", netdev_get_name(netdev), vf_mac);
         } else if (!eth_addr_equals(dev->requested_hwaddr, mac)) {
             dev->requested_hwaddr = mac;
             netdev_request_reconfigure(netdev);
