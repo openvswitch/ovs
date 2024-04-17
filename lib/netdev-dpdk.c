@@ -2425,8 +2425,8 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
             }
             err = 0; /* Not fatal. */
         } else {
-            VLOG_WARN("%s: Cannot get flow control parameters: %s",
-                      netdev_get_name(netdev), rte_strerror(err));
+            VLOG_WARN_BUF(errp, "%s: Cannot get flow control parameters: %s",
+                          netdev_get_name(netdev), rte_strerror(err));
         }
         goto out;
     }
