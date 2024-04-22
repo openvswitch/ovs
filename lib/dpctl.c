@@ -2168,13 +2168,20 @@ static int
 dpctl_ct_set_limits(int argc, const char *argv[],
                     struct dpctl_params *dpctl_p)
 {
-    struct dpif *dpif;
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
-    uint32_t default_limit;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
+    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct dpif *dpif = NULL;
+    uint32_t default_limit;
+    int error;
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, INT_MAX, &dpif);
+    if (i >= argc) {
+        ds_put_cstr(&ds, "too few arguments");
+        error = EINVAL;
+        goto error;
+    }
+
+    error = opt_dpif_open(argc, argv, dpctl_p, INT_MAX, &dpif);
     if (error) {
         return error;
     }
@@ -2261,11 +2268,17 @@ static int
 dpctl_ct_del_limits(int argc, const char *argv[],
                     struct dpctl_params *dpctl_p)
 {
-    struct dpif *dpif;
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    int error;
-    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
+    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct dpif *dpif = NULL;
+    int error;
+
+    if (i >= argc) {
+        ds_put_cstr(&ds, "too few arguments");
+        error = EINVAL;
+        goto error;
+    }
 
     error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
     if (error) {
