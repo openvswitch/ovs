@@ -101,6 +101,7 @@ Carlo Andreotti                    c.andreotti@m3s.it
 Casey Barker                       crbarker@google.com
 Chandan Somani                     csomani@redhat.com
 Chandra Sekhar Vejendla            csvejend@us.ibm.com
+Chris Riches                       chris.riches@nutanix.com
 Chris Wright                       chrisw@sous-sol.org
 Christoph Jaeger                   cj@linux.com
 Christophe Fontaine                cfontain@redhat.com
