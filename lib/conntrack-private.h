@@ -200,7 +200,7 @@ enum ct_ephemeral_range {
 
 struct conntrack {
     struct ovs_mutex ct_lock; /* Protects 2 following fields. */
-    struct cmap conns OVS_GUARDED;
+    struct cmap conns[UINT16_MAX + 1] OVS_GUARDED;
     struct rculist exp_lists[N_EXP_LISTS];
     struct cmap zone_limits OVS_GUARDED;
     struct cmap timeout_policies OVS_GUARDED;

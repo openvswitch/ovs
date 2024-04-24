@@ -254,7 +254,9 @@ conntrack_init(void)
 
     ovs_mutex_init_adaptive(&ct->ct_lock);
     ovs_mutex_lock(&ct->ct_lock);
-    cmap_init(&ct->conns);
+    for (unsigned i = 0; i < ARRAY_SIZE(ct->conns); i++) {
+        cmap_init(&ct->conns[i]);
+    }
     for (unsigned i = 0; i < ARRAY_SIZE(ct->exp_lists); i++) {
         rculist_init(&ct->exp_lists[i]);
     }
@@ -427,12 +429,14 @@ conn_clean__(struct conntrack *ct, struct conn *conn)
     }
 
     hash = conn_key_hash(&conn->key_node[CT_DIR_FWD].key, ct->hash_basis);
-    cmap_remove(&ct->conns, &conn->key_node[CT_DIR_FWD].cm_node, hash);
+    cmap_remove(&ct->conns[conn->key_node[CT_DIR_FWD].key.zone],
+                &conn->key_node[CT_DIR_FWD].cm_node, hash);
 
     if (conn->nat_action) {
         hash = conn_key_hash(&conn->key_node[CT_DIR_REV].key,
                              ct->hash_basis);
-        cmap_remove(&ct->conns, &conn->key_node[CT_DIR_REV].cm_node, hash);
+        cmap_remove(&ct->conns[conn->key_node[CT_DIR_REV].key.zone],
+                    &conn->key_node[CT_DIR_REV].cm_node, hash);
     }
 
     rculist_remove(&conn->node);
@@ -503,7 +507,9 @@ conntrack_destroy(struct conntrack *ct)
 
     ovs_mutex_lock(&ct->ct_lock);
 
-    cmap_destroy(&ct->conns);
+    for (unsigned i = 0; i < ARRAY_SIZE(ct->conns); i++) {
+        cmap_destroy(&ct->conns[i]);
+    }
     cmap_destroy(&ct->zone_limits);
     cmap_destroy(&ct->timeout_policies);
 
@@ -534,7 +540,7 @@ conn_key_lookup(struct conntrack *ct, const struct conn_key *key,
     struct conn *conn = NULL;
     bool found = false;
 
-    CMAP_FOR_EACH_WITH_HASH (keyn, cm_node, hash, &ct->conns) {
+    CMAP_FOR_EACH_WITH_HASH (keyn, cm_node, hash, &ct->conns[key->zone]) {
         if (keyn->dir == CT_DIR_FWD) {
             conn = CONTAINER_OF(keyn, struct conn, key_node[CT_DIR_FWD]);
         } else {
@@ -962,14 +968,16 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
             nat_packet(pkt, nc, false, ctx->icmp_related);
             uint32_t rev_hash = conn_key_hash(&rev_key_node->key,
                                               ct->hash_basis);
-            cmap_insert(&ct->conns, &rev_key_node->cm_node, rev_hash);
+            cmap_insert(&ct->conns[ctx->key.zone],
+                        &rev_key_node->cm_node, rev_hash);
         }
 
         ovs_mutex_init_adaptive(&nc->lock);
         atomic_flag_clear(&nc->reclaimed);
         fwd_key_node->dir = CT_DIR_FWD;
         rev_key_node->dir = CT_DIR_REV;
-        cmap_insert(&ct->conns, &fwd_key_node->cm_node, ctx->hash);
+        cmap_insert(&ct->conns[ctx->key.zone],
+                    &fwd_key_node->cm_node, ctx->hash);
         conn_expire_push_front(ct, nc);
         atomic_count_inc(&ct->n_conn);
         ctx->conn = nc; /* For completeness. */
@@ -2649,11 +2657,12 @@ conntrack_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
     if (pzone) {
         dump->zone = *pzone;
         dump->filter_zone = true;
+        dump->current_zone = dump->zone;
     }
 
     dump->ct = ct;
     *ptot_bkts = 1; /* Need to clean up the callers. */
-    dump->cursor = cmap_cursor_start(&ct->conns);
+    dump->cursor = cmap_cursor_start(&dump->ct->conns[dump->current_zone]);
     return 0;
 }
 
@@ -2665,20 +2674,26 @@ conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
     struct conn_key_node *keyn;
     struct conn *conn;
 
-    CMAP_CURSOR_FOR_EACH_CONTINUE (keyn, cm_node, &dump->cursor) {
-        if (keyn->dir != CT_DIR_FWD) {
-            continue;
-        }
+    while (true) {
+        CMAP_CURSOR_FOR_EACH_CONTINUE (keyn, cm_node, &dump->cursor) {
+            if (keyn->dir != CT_DIR_FWD) {
+                continue;
+            }
 
-        conn = CONTAINER_OF(keyn, struct conn, key_node[CT_DIR_FWD]);
-        if (conn_expired(conn, now)) {
-            continue;
-        }
+            conn = CONTAINER_OF(keyn, struct conn, key_node[CT_DIR_FWD]);
+            if (conn_expired(conn, now)) {
+                continue;
+            }
 
-        if (!dump->filter_zone || keyn->key.zone == dump->zone) {
             conn_to_ct_dpif_entry(conn, entry, now);
             return 0;
         }
+
+        if (dump->filter_zone || dump->current_zone == UINT16_MAX) {
+            break;
+        }
+        dump->current_zone++;
+        dump->cursor = cmap_cursor_start(&dump->ct->conns[dump->current_zone]);
     }
 
     return EOF;
@@ -2756,20 +2771,32 @@ conntrack_exp_dump_done(struct conntrack_dump *dump OVS_UNUSED)
     return 0;
 }
 
-int
-conntrack_flush(struct conntrack *ct, const uint16_t *zone)
+static int
+conntrack_flush_zone(struct conntrack *ct, const uint16_t zone)
 {
     struct conn_key_node *keyn;
     struct conn *conn;
 
-    CMAP_FOR_EACH (keyn, cm_node, &ct->conns) {
+    CMAP_FOR_EACH (keyn, cm_node, &ct->conns[zone]) {
         if (keyn->dir != CT_DIR_FWD) {
             continue;
         }
         conn = CONTAINER_OF(keyn, struct conn, key_node[CT_DIR_FWD]);
-        if (!zone || *zone == keyn->key.zone) {
-            conn_clean(ct, conn);
-        }
+        conn_clean(ct, conn);
+    }
+
+    return 0;
+}
+
+int
+conntrack_flush(struct conntrack *ct, const uint16_t *zone)
+{
+    if (zone) {
+        return conntrack_flush_zone(ct, *zone);
+    }
+
+    for (unsigned i = 0; i < ARRAY_SIZE(ct->conns); i++) {
+        conntrack_flush_zone(ct, i);
     }
 
     return 0;

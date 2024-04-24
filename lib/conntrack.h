@@ -112,6 +112,7 @@ struct conntrack_dump {
     };
     bool filter_zone;
     uint16_t zone;
+    uint16_t current_zone;
 };
 
 struct conntrack_zone_limit {
