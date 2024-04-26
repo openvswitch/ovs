@@ -2948,16 +2948,16 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
                                  struct tc_action *action,
                                  uint32_t action_pc)
 {
-    struct {
+    union {
         struct tc_pedit sel;
-        struct tc_pedit_key keys[MAX_PEDIT_OFFSETS];
-        struct tc_pedit_key_ex keys_ex[MAX_PEDIT_OFFSETS];
-    } sel = {
-        .sel = {
-            .nkeys = 0
-        }
-    };
+        uint8_t buffer[sizeof(struct tc_pedit)
+                       + MAX_PEDIT_OFFSETS * sizeof(struct tc_pedit_key)];
+    } sel;
+    struct tc_pedit_key_ex keys_ex[MAX_PEDIT_OFFSETS];
     int i, j, err;
+
+    memset(&sel, 0, sizeof sel);
+    memset(keys_ex, 0, sizeof keys_ex);
 
     for (i = 0; i < ARRAY_SIZE(flower_pedit_map); i++) {
         struct flower_key_to_pedit *m = &flower_pedit_map[i];
@@ -2992,8 +2992,8 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
                 return EOPNOTSUPP;
             }
 
-            pedit_key = &sel.keys[sel.sel.nkeys];
-            pedit_key_ex = &sel.keys_ex[sel.sel.nkeys];
+            pedit_key = &sel.sel.keys[sel.sel.nkeys];
+            pedit_key_ex = &keys_ex[sel.sel.nkeys];
             pedit_key_ex->cmd = TCA_PEDIT_KEY_EX_CMD_SET;
             pedit_key_ex->htype = m->htype;
             pedit_key->off = cur_offset;
@@ -3013,7 +3013,7 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
             }
         }
     }
-    nl_msg_put_act_pedit(request, &sel.sel, sel.keys_ex,
+    nl_msg_put_act_pedit(request, &sel.sel, keys_ex,
                          flower->csum_update_flags ? TC_ACT_PIPE : action_pc);
 
     return 0;
