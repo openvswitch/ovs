@@ -461,8 +461,7 @@ This does not result in a three server cluster that lacks quorum.
 .
 .IP "\fBcluster/kick \fIdb server\fR"
 Start graceful removal of \fIserver\fR from \fIdb\fR's cluster, like
-\fBcluster/leave\fR (without \fB\-\-force\fR) except that it can
-remove any server, not just this one.
+\fBcluster/leave\fR, except that it can remove any server, not just this one.
 .IP
 \fIserver\fR may be a server ID, as printed by \fBcluster/sid\fR, or
 the server's local network address as passed to \fBovsdb-tool\fR's

@@ -315,16 +315,11 @@ The above methods for adding and removing servers only work for healthy
 clusters, that is, for clusters with no more failures than their maximum
 tolerance.  For example, in a 3-server cluster, the failure of 2 servers
 prevents servers joining or leaving the cluster (as well as database access).
+
 To prevent data loss or inconsistency, the preferred solution to this problem
 is to bring up enough of the failed servers to make the cluster healthy again,
 then if necessary remove any remaining failed servers and add new ones.  If
-this cannot be done, though, use ``ovs-appctl`` to invoke ``cluster/leave
---force`` on a running server.  This command forces the server to which it is
-directed to leave its cluster and form a new single-node cluster that contains
-only itself.  The data in the new cluster may be inconsistent with the former
-cluster: transactions not yet replicated to the server will be lost, and
-transactions not yet applied to the cluster may be committed.  Afterward, any
-servers in its former cluster will regard the server to have failed.
+this is not an option, see the next section for `Manual cluster recovery`_.
 
 Once a server leaves a cluster, it may never rejoin it.  Instead, create a new
 server and join it to the cluster.
@@ -361,6 +356,40 @@ Clustered OVSDB does not support the OVSDB "ephemeral columns" feature.
 ``ovsdb-tool`` and ``ovsdb-client`` change ephemeral columns into persistent
 ones when they work with schemas for clustered databases.  Future versions of
 OVSDB might add support for this feature.
+
+Manual cluster recovery
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. important::
+
+   The procedure below will result in ``cid`` and ``sid`` change.  A *new*
+   cluster will be initialized.
+
+To recover a clustered database after a failure:
+
+1. Stop *all* old cluster ``ovsdb-server`` instances before proceeding.
+
+2. Pick one of the old members which will serve as a bootstrap member of the
+   to-be-recovered cluster.
+
+3. Convert its database file to the standalone format using ``ovsdb-tool
+   cluster-to-standalone``.
+
+4. Backup the standalone database file.
+
+5. Create a new single-node cluster with ``ovsdb-tool create-cluster``
+   using the previously saved standalone database file, then start
+   ``ovsdb-server``.
+
+6. Once the single-node cluster is up and running and serves the restored data,
+   new members should be created and added to the cluster, as usual, with
+   ``ovsdb-tool join-cluster``.
+
+.. note::
+
+   The data in the new cluster may be inconsistent with the former cluster:
+   transactions not yet replicated to the server chosen in step 2 will be lost,
+   and transactions not yet applied to the cluster may be committed.
 
 Upgrading from version 2.14 and earlier to 2.15 and later
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
