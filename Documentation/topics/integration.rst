@@ -191,7 +191,7 @@ contents. At all times, the data can be transacted only from the active server.
 When the active server dies for some reason, entire OVN operations will be
 stalled.
 
-`Pacemaker <http://clusterlabs.org/pacemaker.html>`__ is a cluster resource
+`Pacemaker <https://clusterlabs.org/pacemaker/>`__ is a cluster resource
 manager which can manage a defined set of resource across a set of clustered
 nodes. Pacemaker manages the resource with the help of the resource agents.
 One among the resource agent is `OCF
