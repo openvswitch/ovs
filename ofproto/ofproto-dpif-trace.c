@@ -102,7 +102,7 @@ oftrace_add_recirc_node(struct ovs_list *recirc_queue,
     node->flow = *flow;
     node->flow.recirc_id = recirc_id;
     node->flow.ct_zone = zone;
-    node->nat_act = ofn;
+    node->nat_act = ofn ? xmemdup(ofn, sizeof *ofn) : NULL;
     node->packet = packet ? dp_packet_clone(packet) : NULL;
 
     return true;
@@ -113,6 +113,7 @@ oftrace_recirc_node_destroy(struct oftrace_recirc_node *node)
 {
     if (node) {
         recirc_free_id(node->recirc_id);
+        free(node->nat_act);
         dp_packet_delete(node->packet);
         free(node);
     }
