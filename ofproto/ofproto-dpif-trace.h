@@ -73,7 +73,7 @@ struct oftrace_recirc_node {
     uint32_t recirc_id;
     struct flow flow;
     struct dp_packet *packet;
-    const struct ofpact_nat *nat_act;
+    struct ofpact_nat *nat_act;
 };
 
 /* A node within a next_ct_states list. */
