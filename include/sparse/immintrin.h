@@ -26,5 +26,9 @@
 #define _KEYLOCKERINTRIN_H_INCLUDED
 #define __AVX512FP16INTRIN_H_INCLUDED
 #define __AVX512FP16VLINTRIN_H_INCLUDED
+/* GCC >=14 changed the '__AVX512FP16INTRIN_H_INCLUDED' to have only single
+ * underscore.  We need both to keep compatibility between various GCC
+ * versions. */
+#define _AVX512FP16INTRIN_H_INCLUDED
 
 #include_next <immintrin.h>
