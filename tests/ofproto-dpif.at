@@ -818,6 +818,28 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - group with ct and dnat recirculation in action list])
+OVS_VSWITCHD_START
+add_of_ports br0 1 10
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 \
+    'group_id=1234,type=all,bucket=ct(nat(dst=10.10.10.7:80),commit,table=2)'])
+AT_DATA([flows.txt], [dnl
+table=0 ip,ct_state=-trk actions=group:1234
+table=2 ip,ct_state=+trk actions=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 '
+  in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,
+  nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,nw_frag=no,
+  icmp_type=8,icmp_code=0
+'], [0], [stdout])
+AT_CHECK([grep 'Datapath actions' stdout], [0], [dnl
+Datapath actions: ct(commit,nat(dst=10.10.10.7:80)),recirc(0x1)
+Datapath actions: 10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - group actions have no effect afterwards])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10
