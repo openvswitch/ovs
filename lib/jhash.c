@@ -96,18 +96,18 @@ jhash_words(const uint32_t *p, size_t n, uint32_t basis)
 uint32_t
 jhash_bytes(const void *p_, size_t n, uint32_t basis)
 {
-    const uint32_t *p = p_;
+    const uint8_t *p = p_;
     uint32_t a, b, c;
 
     a = b = c = 0xdeadbeef + n + basis;
 
     while (n >= 12) {
-        a += get_unaligned_u32(p);
-        b += get_unaligned_u32(p + 1);
-        c += get_unaligned_u32(p + 2);
+        a += get_unaligned_u32(ALIGNED_CAST(const uint32_t *, p));
+        b += get_unaligned_u32(ALIGNED_CAST(const uint32_t *, p + 4));
+        c += get_unaligned_u32(ALIGNED_CAST(const uint32_t *, p + 8));
         jhash_mix(&a, &b, &c);
         n -= 12;
-        p += 3;
+        p += 12;
     }
 
     if (n) {
