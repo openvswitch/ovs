@@ -35,9 +35,9 @@ ROW_CREATE = "create"
 ROW_UPDATE = "update"
 ROW_DELETE = "delete"
 
-OVSDB_UPDATE = 0
-OVSDB_UPDATE2 = 1
-OVSDB_UPDATE3 = 2
+OVSDB_UPDATE = "update"
+OVSDB_UPDATE2 = "update2"
+OVSDB_UPDATE3 = "update3"
 
 CLUSTERED = "clustered"
 RELAY = "relay"
@@ -77,7 +77,7 @@ class ColumnDefaultDict(dict):
         return item in self.keys()
 
 
-class Monitor(enum.IntEnum):
+class Monitor(enum.Enum):
     monitor = OVSDB_UPDATE
     monitor_cond = OVSDB_UPDATE2
     monitor_cond_since = OVSDB_UPDATE3
@@ -465,23 +465,18 @@ class Idl(object):
                 self.__parse_update(msg.params[2], OVSDB_UPDATE3)
                 self.last_id = msg.params[1]
             elif (msg.type == ovs.jsonrpc.Message.T_NOTIFY
-                    and msg.method == "update2"
-                    and len(msg.params) == 2):
-                # Database contents changed.
-                self.__parse_update(msg.params[1], OVSDB_UPDATE2)
-            elif (msg.type == ovs.jsonrpc.Message.T_NOTIFY
-                    and msg.method == "update"
+                    and msg.method in (OVSDB_UPDATE, OVSDB_UPDATE2)
                     and len(msg.params) == 2):
                 # Database contents changed.
                 if msg.params[0] == str(self.server_monitor_uuid):
-                    self.__parse_update(msg.params[1], OVSDB_UPDATE,
+                    self.__parse_update(msg.params[1], msg.method,
                                         tables=self.server_tables)
                     self.change_seqno = previous_change_seqno
                     if not self.__check_server_db():
                         self.force_reconnect()
                         break
                 else:
-                    self.__parse_update(msg.params[1], OVSDB_UPDATE)
+                    self.__parse_update(msg.params[1], msg.method)
             elif self.handle_monitor_canceled(msg):
                 break
             elif self.handle_monitor_cancel_reply(msg):
@@ -540,7 +535,7 @@ class Idl(object):
                 # Reply to our "monitor" of _Server request.
                 try:
                     self._server_monitor_request_id = None
-                    self.__parse_update(msg.result, OVSDB_UPDATE,
+                    self.__parse_update(msg.result, OVSDB_UPDATE2,
                                         tables=self.server_tables)
                     self.change_seqno = previous_change_seqno
                     if self.__check_server_db():
@@ -579,6 +574,11 @@ class Idl(object):
             elif msg.type == ovs.jsonrpc.Message.T_NOTIFY and msg.id == "echo":
                 # Reply to our echo request.  Ignore it.
                 pass
+            elif (msg.type == ovs.jsonrpc.Message.T_ERROR and
+                  self.state == self.IDL_S_SERVER_MONITOR_REQUESTED and
+                  msg.id == self._server_monitor_request_id):
+                self._server_monitor_request_id = None
+                self.__send_monitor_request()
             elif (msg.type == ovs.jsonrpc.Message.T_ERROR and
                   self.state == (
                       self.IDL_S_DATA_MONITOR_COND_SINCE_REQUESTED) and
@@ -912,7 +912,7 @@ class Idl(object):
         monitor_request = {"columns": columns}
         monitor_requests[table.name] = [monitor_request]
         msg = ovs.jsonrpc.Message.create_request(
-            'monitor', [self._server_db.name,
+            'monitor_cond', [self._server_db.name,
                              str(self.server_monitor_uuid),
                              monitor_requests])
         self._server_monitor_request_id = msg.id
