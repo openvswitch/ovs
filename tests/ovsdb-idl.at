@@ -1119,6 +1119,19 @@ OVSDB_CHECK_IDL_FETCH_COLUMNS([simple idl, initially populated],
 003: done
 ]])
 
+m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl monitor $4])
+   OVSDB_START_IDLTEST
+   AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
+
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $2],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
+            [0], [$3])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
 m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
   [AT_SETUP([$1 - Python3])
    AT_KEYWORDS([ovsdb server idl Python monitor $4])
@@ -1132,7 +1145,8 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
    AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND],
-   [OVSDB_CHECK_IDL_WO_MONITOR_COND_PY($@)])
+   [OVSDB_CHECK_IDL_WO_MONITOR_COND_C($@)
+    OVSDB_CHECK_IDL_WO_MONITOR_COND_PY($@)])
 
 
 OVSDB_CHECK_IDL_WO_MONITOR_COND([simple idl disable monitor-cond],
