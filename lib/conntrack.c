@@ -2302,7 +2302,9 @@ find_addr(const struct conn_key *key, union ct_addr *min,
           uint32_t hash, bool ipv4,
           const struct nat_action_info_t *nat_info)
 {
-    const union ct_addr zero_ip = {0};
+    union ct_addr zero_ip;
+
+    memset(&zero_ip, 0, sizeof zero_ip);
 
     /* All-zero case. */
     if (!memcmp(min, &zero_ip, sizeof *min)) {
@@ -2394,13 +2396,17 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
 {
     struct conn_key *fwd_key = &conn->key_node[CT_DIR_FWD].key;
     struct conn_key *rev_key = &conn->key_node[CT_DIR_REV].key;
-    union ct_addr min_addr = {0}, max_addr = {0}, addr = {0};
     bool pat_proto = fwd_key->nw_proto == IPPROTO_TCP ||
                      fwd_key->nw_proto == IPPROTO_UDP ||
                      fwd_key->nw_proto == IPPROTO_SCTP;
     uint16_t min_dport, max_dport, curr_dport;
     uint16_t min_sport, max_sport, curr_sport;
+    union ct_addr min_addr, max_addr, addr;
     uint32_t hash, port_off, basis;
+
+    memset(&min_addr, 0, sizeof min_addr);
+    memset(&max_addr, 0, sizeof max_addr);
+    memset(&addr, 0, sizeof addr);
 
     basis = (nat_info->nat_flags & NAT_PERSISTENT) ? 0 : ct->hash_basis;
     hash = nat_range_hash(fwd_key, basis, nat_info);
