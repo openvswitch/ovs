@@ -2171,7 +2171,9 @@ get_initial_addr(const struct conn_key *key, union ct_addr *min,
                  uint32_t hash, bool ipv4,
                  const struct nat_action_info_t *nat_info)
 {
-    const union ct_addr zero_ip = {0};
+    union ct_addr zero_ip;
+
+    memset(&zero_ip, 0, sizeof zero_ip);
 
     /* All-zero case. */
     if (!memcmp(min, &zero_ip, sizeof *min)) {
@@ -2287,13 +2289,17 @@ nat_get_unique_tuple(struct conntrack *ct, struct conn *conn,
 {
     struct conn_key *fwd_key = &conn->key_node[CT_DIR_FWD].key;
     struct conn_key *rev_key = &conn->key_node[CT_DIR_REV].key;
-    union ct_addr min_addr = {0}, max_addr = {0}, curr_addr = {0},
-                  guard_addr = {0};
+    union ct_addr min_addr, max_addr, curr_addr, guard_addr;
     bool pat_proto = fwd_key->nw_proto == IPPROTO_TCP ||
                      fwd_key->nw_proto == IPPROTO_UDP;
     uint16_t min_dport, max_dport, curr_dport;
     uint16_t min_sport, max_sport, curr_sport;
     uint32_t hash;
+
+    memset(&min_addr, 0, sizeof min_addr);
+    memset(&max_addr, 0, sizeof max_addr);
+    memset(&curr_addr, 0, sizeof curr_addr);
+    memset(&guard_addr, 0, sizeof guard_addr);
 
     hash = nat_range_hash(fwd_key, ct->hash_basis, nat_info);
     min_addr = nat_info->min_addr;
