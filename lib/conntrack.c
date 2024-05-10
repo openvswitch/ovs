@@ -893,6 +893,17 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
             nc->parent_key = alg_exp->parent_key;
         }
 
+        ovs_mutex_init_adaptive(&nc->lock);
+        fwd_key_node->dir = CT_DIR_FWD;
+        rev_key_node->dir = CT_DIR_REV;
+
+        if (zl) {
+            nc->admit_zone = zl->czl.zone;
+            nc->zone_limit_seq = zl->czl.zone_limit_seq;
+        } else {
+            nc->admit_zone = INVALID_ZONE;
+        }
+
         if (nat_action_info) {
             nc->nat_action = nat_action_info->nat_action;
 
@@ -918,19 +929,14 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
             cmap_insert(&ct->conns, &rev_key_node->cm_node, rev_hash);
         }
 
-        ovs_mutex_init_adaptive(&nc->lock);
-        fwd_key_node->dir = CT_DIR_FWD;
-        rev_key_node->dir = CT_DIR_REV;
         cmap_insert(&ct->conns, &fwd_key_node->cm_node, ctx->hash);
         atomic_count_inc(&ct->n_conn);
-        ctx->conn = nc; /* For completeness. */
+
         if (zl) {
-            nc->admit_zone = zl->czl.zone;
-            nc->zone_limit_seq = zl->czl.zone_limit_seq;
             zl->czl.count++;
-        } else {
-            nc->admit_zone = INVALID_ZONE;
         }
+
+        ctx->conn = nc; /* For completeness. */
     }
 
     return nc;
