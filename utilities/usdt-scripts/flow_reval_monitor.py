@@ -236,6 +236,11 @@ RevalResult = IntEnum(
     ],
     start=0,
 )
+
+#
+# The below FdrReasons and FdrReasonStrings definitions can be found in the
+# ofproto/ofproto-dpif-upcall.c file.  Please keep them in sync.
+#
 FdrReasons = IntEnum(
     "flow_del_reason",
     [
@@ -254,19 +259,19 @@ FdrReasons = IntEnum(
     start=0,
 )
 
-FdrReasonStrings = [
-    "No deletion reason",
-    "Cache avoidance flag set",
-    "Bad ODP flow fit",
-    "Idle flow timed out",
-    "Kill all flows condition detected",
-    "Mask too wide - need narrower match",
-    "No matching ofproto rules",
-    "Too expensive to revalidate",
-    "Purged with user action",
-    "Flow state inconsistent after updates",
-    "Flow translation error",
-]
+FdrReasonStrings = {
+    FdrReasons.FDR_NONE: "No delete reason specified",
+    FdrReasons.FDR_AVOID_CACHING: "Cache avoidance flag set",
+    FdrReasons.FDR_BAD_ODP_FIT: "Bad ODP flow fit",
+    FdrReasons.FDR_FLOW_IDLE: "Flow idle timeout",
+    FdrReasons.FDR_FLOW_LIMIT: "Kill all flows condition reached",
+    FdrReasons.FDR_FLOW_WILDCARDED: "Flow needs a narrower wildcard mask",
+    FdrReasons.FDR_NO_OFPROTO: "Bridge not found",
+    FdrReasons.FDR_PURGE: "User requested flow deletion",
+    FdrReasons.FDR_TOO_EXPENSIVE: "Too expensive to revalidate",
+    FdrReasons.FDR_UPDATE_FAIL: "Datapath update failed",
+    FdrReasons.FDR_XLATION_ERROR: "Flow translation error"
+}
 
 
 def err(msg, code=-1):
@@ -572,10 +577,10 @@ def print_expiration(event):
     """Prints a UFID eviction with a reason."""
     ufid_str = format_ufid(event.ufid)
 
-    if event.reason > len(FdrReasons):
-        reason = f"Unknown reason '{event.reason}'"
-    else:
+    try:
         reason = FdrReasonStrings[event.reason]
+    except KeyError:
+        reason = f"Unknown reason '{event.reason}'"
 
     print(
         "{:<10} {:<18.9f} {:<36} {:<17}".format(
