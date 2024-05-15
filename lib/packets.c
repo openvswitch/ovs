@@ -2011,6 +2011,9 @@ packet_tcp_complete_csum(struct dp_packet *p, bool inner)
         tcp_sz = dp_packet_l4_size(p);
     }
 
+    ovs_assert(tcp);
+    ovs_assert(ip_hdr);
+
     if (!inner && dp_packet_hwol_is_outer_ipv6(p)) {
         is_v4 = false;
     } else if (!inner && dp_packet_hwol_is_outer_ipv4(p)) {
@@ -2056,6 +2059,9 @@ packet_udp_complete_csum(struct dp_packet *p, bool inner)
         ip_hdr = dp_packet_l3(p);
         udp_sz = dp_packet_l4_size(p);
     }
+
+    ovs_assert(udp);
+    ovs_assert(ip_hdr);
 
     /* Skip csum calculation if the udp_csum is zero. */
     if (!udp->udp_csum) {
@@ -2108,6 +2114,8 @@ packet_sctp_complete_csum(struct dp_packet *p, bool inner)
         sh = dp_packet_l4(p);
         tp_len = dp_packet_l4_size(p);
     }
+
+    ovs_assert(sh);
 
     put_16aligned_be32(&sh->sctp_csum, 0);
     csum = crc32c((void *) sh, tp_len);
