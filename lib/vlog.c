@@ -411,10 +411,10 @@ vlog_set_log_file__(char *new_log_file_name)
 
     /* Close old log file, if any. */
     ovs_mutex_lock(&log_file_mutex);
+    async_append_destroy(log_writer);
     if (log_fd >= 0) {
         close(log_fd);
     }
-    async_append_destroy(log_writer);
     free(log_file_name);
 
     /* Install new log file. */
