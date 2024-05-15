@@ -395,8 +395,8 @@ vlog_set_log_file(const char *file_name)
     /* Close old log file, if any, and install new one. */
     ovs_mutex_lock(&log_file_mutex);
     if (log_fd >= 0) {
-        close(log_fd);
         async_append_destroy(log_writer);
+        close(log_fd);
     }
 
     free(log_file_name);
