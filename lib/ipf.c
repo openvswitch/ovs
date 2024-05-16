@@ -1061,6 +1061,9 @@ ipf_send_completed_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     struct ipf_list *ipf_list;
 
     LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_complete_list) {
+        if ((ipf_list->key.dl_type == htons(ETH_TYPE_IPV6)) != v6) {
+            continue;
+        }
         if (ipf_send_frags_in_list(ipf, ipf_list, pb, IPF_FRAG_COMPLETED_LIST,
                                    v6, now)) {
             ipf_completed_list_clean(&ipf->frag_lists, ipf_list);
@@ -1094,6 +1097,9 @@ ipf_send_expired_frags(struct ipf *ipf, struct dp_packet_batch *pb,
     size_t lists_removed = 0;
 
     LIST_FOR_EACH_SAFE (ipf_list, list_node, &ipf->frag_exp_list) {
+        if ((ipf_list->key.dl_type == htons(ETH_TYPE_IPV6)) != v6) {
+            continue;
+        }
         if (now <= ipf_list->expiration ||
             lists_removed >= IPF_FRAG_LIST_MAX_EXPIRED) {
             break;
@@ -1114,7 +1120,8 @@ ipf_send_expired_frags(struct ipf *ipf, struct dp_packet_batch *pb,
 /* Adds a reassmebled packet to a packet batch to be processed by the caller.
  */
 static void
-ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb)
+ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb,
+                       ovs_be16 dl_type)
 {
     if (ovs_list_is_empty(&ipf->reassembled_pkt_list)) {
         return;
@@ -1125,6 +1132,7 @@ ipf_execute_reass_pkts(struct ipf *ipf, struct dp_packet_batch *pb)
 
     LIST_FOR_EACH_SAFE (rp, rp_list_node, &ipf->reassembled_pkt_list) {
         if (!rp->list->reass_execute_ctx &&
+            rp->list->key.dl_type == dl_type &&
             ipf_dp_packet_batch_add(pb, rp->pkt, false)) {
             rp->list->reass_execute_ctx = rp->pkt;
         }
@@ -1233,7 +1241,7 @@ ipf_preprocess_conntrack(struct ipf *ipf, struct dp_packet_batch *pb,
     }
 
     if (ipf_get_enabled(ipf) || atomic_count_get(&ipf->nfrag)) {
-        ipf_execute_reass_pkts(ipf, pb);
+        ipf_execute_reass_pkts(ipf, pb, dl_type);
     }
 }
 
