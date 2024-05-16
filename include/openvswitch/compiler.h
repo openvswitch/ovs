@@ -63,6 +63,17 @@
 #define OVS_UNLIKELY(CONDITION) (!!(CONDITION))
 #endif
 
+/* Clang 17's implementation of ubsan enables checking that function pointers
+ * match the type of the called function.  This currently breaks ovs-rcu, which
+ * calls multiple different types of callbacks via a generic void *(void*)
+ * function pointer type.  This macro enables disabling that check for specific
+ * functions. */
+#if __clang__ && __has_feature(undefined_behavior_sanitizer)
+#define OVS_NO_SANITIZE_FUNCTION __attribute__((no_sanitize("function")))
+#else
+#define OVS_NO_SANITIZE_FUNCTION
+#endif
+
 #if __has_feature(c_thread_safety_attributes)
 /* "clang" annotations for thread safety check.
  *
