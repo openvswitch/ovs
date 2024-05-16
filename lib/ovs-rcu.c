@@ -326,7 +326,7 @@ ovsrcu_postpone__(void (*function)(void *aux), void *aux)
     cb->aux = aux;
 }
 
-static bool
+static bool OVS_NO_SANITIZE_FUNCTION
 ovsrcu_call_postponed(void)
 {
     struct ovsrcu_cbset *cbset;
