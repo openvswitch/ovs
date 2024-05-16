@@ -504,13 +504,15 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
 }
 
 /* Called when a frag list state transitions to another state. This is
- * triggered by new fragment for the list being received.*/
-static void
+* triggered by new fragment for the list being received. Returns a reassembled
+* packet if this fragment has completed one. */
+static struct reassembled_pkt *
 ipf_list_state_transition(struct ipf *ipf, struct ipf_list *ipf_list,
                           bool ff, bool lf, bool v6)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     enum ipf_list_state curr_state = ipf_list->state;
+    struct reassembled_pkt *ret = NULL;
     enum ipf_list_state next_state;
     switch (curr_state) {
     case IPF_LIST_STATE_UNUSED:
@@ -560,12 +562,15 @@ ipf_list_state_transition(struct ipf *ipf, struct ipf_list *ipf_list,
                 ipf_reassembled_list_add(&ipf->reassembled_pkt_list, rp);
                 ipf_expiry_list_remove(ipf_list);
                 next_state = IPF_LIST_STATE_COMPLETED;
+                ret = rp;
             } else {
                 next_state = IPF_LIST_STATE_REASS_FAIL;
             }
         }
     }
     ipf_list->state = next_state;
+
+    return ret;
 }
 
 /* Some sanity checks are redundant, but prudent, in case code paths for
@@ -797,7 +802,8 @@ ipf_is_frag_duped(const struct ipf_frag *frag_list, int last_inuse_idx,
 static bool
 ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
                  struct dp_packet *pkt, uint16_t start_data_byte,
-                 uint16_t end_data_byte, bool ff, bool lf, bool v6)
+                 uint16_t end_data_byte, bool ff, bool lf, bool v6,
+                 struct reassembled_pkt **rp)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     bool duped_frag = ipf_is_frag_duped(ipf_list->frag_list,
@@ -818,7 +824,7 @@ ipf_process_frag(struct ipf *ipf, struct ipf_list *ipf_list,
             ipf_list->last_inuse_idx++;
             atomic_count_inc(&ipf->nfrag);
             ipf_count(ipf, v6, IPF_NFRAGS_ACCEPTED);
-            ipf_list_state_transition(ipf, ipf_list, ff, lf, v6);
+            *rp = ipf_list_state_transition(ipf, ipf_list, ff, lf, v6);
         } else {
             OVS_NOT_REACHED();
         }
@@ -851,7 +857,8 @@ ipf_list_init(struct ipf_list *ipf_list, struct ipf_list_key *key,
  * to a list of fragemnts. */
 static bool
 ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
-                uint16_t zone, long long now, uint32_t hash_basis)
+                uint16_t zone, long long now, uint32_t hash_basis,
+                struct reassembled_pkt **rp)
     OVS_REQUIRES(ipf->ipf_lock)
 {
     struct ipf_list_key key;
@@ -920,7 +927,7 @@ ipf_handle_frag(struct ipf *ipf, struct dp_packet *pkt, ovs_be16 dl_type,
     }
 
     return ipf_process_frag(ipf, ipf_list, pkt, start_data_byte,
-                            end_data_byte, ff, lf, v6);
+                            end_data_byte, ff, lf, v6, rp);
 }
 
 /* Filters out fragments from a batch of fragments and adjust the batch. */
@@ -939,11 +946,17 @@ ipf_extract_frags_from_batch(struct ipf *ipf, struct dp_packet_batch *pb,
                           ||
                           (dl_type == htons(ETH_TYPE_IPV6) &&
                           ipf_is_valid_v6_frag(ipf, pkt)))) {
+            struct reassembled_pkt *rp = NULL;
 
             ovs_mutex_lock(&ipf->ipf_lock);
-            if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis)) {
+            if (!ipf_handle_frag(ipf, pkt, dl_type, zone, now, hash_basis,
+                                 &rp)) {
                 dp_packet_batch_refill(pb, pkt, pb_idx);
             } else {
+                if (rp && !dp_packet_batch_is_full(pb)) {
+                    dp_packet_batch_refill(pb, rp->pkt, pb_idx);
+                    rp->list->reass_execute_ctx = rp->pkt;
+                }
                 dp_packet_delete(pkt);
             }
             ovs_mutex_unlock(&ipf->ipf_lock);
