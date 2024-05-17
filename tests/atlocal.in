@@ -252,5 +252,6 @@ with pathlib.Path(os.path.join(os.getenv("REQUIREMENT_PATH"))).open() as reqs:
 case $? in
     0) HAVE_PYTEST=yes ;;
     2) HAVE_PYTEST=no ;;
-    *) echo "$0: unexpected error probing Python unit test requirements" >&2 ;;
+    *) HAVE_PYTEST=no
+       echo "$0: unexpected error probing Python unit test requirements" >&2 ;;
 esac
