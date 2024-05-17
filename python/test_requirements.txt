@@ -1,4 +1,5 @@
 netaddr
+packaging
 pyftpdlib
 pyparsing
 pytest
