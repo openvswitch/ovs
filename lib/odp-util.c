@@ -1820,8 +1820,8 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     } else if (ovs_scan_len(s, &n, "srv6(segments_left=%"SCNu8,
                             &segments_left)) {
         struct srv6_base_hdr *srh = (struct srv6_base_hdr *) (ip6 + 1);
+        union ovs_16aligned_in6_addr *segs;
         char seg_s[IPV6_SCAN_LEN + 1];
-        struct in6_addr *segs;
         struct in6_addr seg;
         uint8_t n_segs = 0;
 
@@ -1844,7 +1844,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             return -EINVAL;
         }
 
-        segs = ALIGNED_CAST(struct in6_addr *, srh + 1);
+        segs = (union ovs_16aligned_in6_addr *) (srh + 1);
         segs += segments_left;
 
         while (ovs_scan_len(s, &n, IPV6_SCAN_FMT, seg_s)
