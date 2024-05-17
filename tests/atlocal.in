@@ -239,15 +239,31 @@ export UBSAN_OPTIONS
 REQUIREMENT_PATH=$abs_top_srcdir/python/test_requirements.txt $PYTHON3 -c '
 import os
 import pathlib
-import pkg_resources
 import sys
 
+PACKAGING = True
+try:
+    from packaging import requirements
+    from importlib import metadata
+except ModuleNotFoundError:
+    PACKAGING = False
+    import pkg_resources
+
 with pathlib.Path(os.path.join(os.getenv("REQUIREMENT_PATH"))).open() as reqs:
-    for req in pkg_resources.parse_requirements(reqs):
-        try:
-            pkg_resources.require(str(req))
-        except pkg_resources.DistributionNotFound:
-            sys.exit(2)
+    if PACKAGING:
+        for req in reqs.readlines():
+            try:
+                r = requirements.Requirement(req.strip())
+                if metadata.version(r.name) not in r.specifier:
+                    raise metadata.PackageNotFoundError
+            except metadata.PackageNotFoundError:
+                sys.exit(2)
+    else:
+        for req in pkg_resources.parse_requirements(reqs):
+            try:
+                pkg_resources.require(str(req))
+            except pkg_resources.DistributionNotFound:
+                sys.exit(2)
 '
 case $? in
     0) HAVE_PYTEST=yes ;;
