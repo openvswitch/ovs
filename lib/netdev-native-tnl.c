@@ -828,9 +828,9 @@ netdev_srv6_build_header(const struct netdev *netdev,
                          const struct netdev_tnl_build_header_params *params)
 {
     const struct netdev_tunnel_config *tnl_cfg;
+    union ovs_16aligned_in6_addr *s;
     const struct in6_addr *segs;
     struct srv6_base_hdr *srh;
-    struct in6_addr *s;
     ovs_be16 dl_type;
     int nr_segs;
     int i;
@@ -874,8 +874,7 @@ netdev_srv6_build_header(const struct netdev *netdev,
         return EOPNOTSUPP;
     }
 
-    s = ALIGNED_CAST(struct in6_addr *,
-                     (char *) srh + sizeof *srh);
+    s = (union ovs_16aligned_in6_addr *) (srh + 1);
     for (i = 0; i < nr_segs; i++) {
         /* Segment list is written to the header in reverse order. */
         memcpy(s, &segs[nr_segs - i - 1], sizeof *s);
