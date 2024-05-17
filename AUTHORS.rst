@@ -52,6 +52,7 @@ Alin Serdean                       aserdean@ovn.org
 Amber Kumar                        kumar.amber@intel.com
 Ambika Arora                       ambika.arora@tcs.com
 Amit Bose                          bose@noironetworks.com
+Amit Prakash Shukla                amitprakashs@marvell.com
 Amitabha Biswas                    azbiswas@gmail.com
 Anand Kumar                        kumaranand@vmware.com
 Andrea Kao                         eirinikos@gmail.com
