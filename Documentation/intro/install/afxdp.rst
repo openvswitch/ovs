@@ -103,7 +103,7 @@ vSwitch with AF_XDP will require the following:
 
   * CONFIG_BPF_JIT=y (Performance)
 
-  * CONFIG_HAVE_BPF_JIT=y (Performance)
+  * CONFIG_HAVE_EBPF_JIT=y (Performance)
 
   * CONFIG_XDP_SOCKETS_DIAG=y (Debugging)
 
