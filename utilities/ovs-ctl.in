@@ -456,7 +456,7 @@ File location options:
 Options for "enable-protocol":
   --protocol=PROTOCOL  protocol to enable with iptables (default: gre)
   --sport=PORT       source port to match (for tcp or udp protocol)
-  --dport=PORT       ddestination port to match (for tcp or udp protocol)
+  --dport=PORT       destination port to match (for tcp or udp protocol)
 
 Option for "start-ovs-ipsec":
   --ike-daemon=IKE_DAEMON
