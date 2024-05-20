@@ -246,6 +246,7 @@ Joe Stringer                       joe@ovn.org
 Jon Kohler                         jon@nutanix.com
 Jonathan Vestin                    jonavest@kau.se
 Jorge Arturo Sauma Vargas          jorge.sauma@hpe.com
+Jun Gu                             jun.gu@easystack.cn
 Jun Nakajima                       jun.nakajima@intel.com
 Jun Wang                           junwang01@cestc.cn
 JunhanYan                          juyan@redhat.com
