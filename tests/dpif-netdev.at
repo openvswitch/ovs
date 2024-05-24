@@ -809,3 +809,66 @@ AT_CHECK_UNQUOTED([tail -n 1 p2.pcap.txt], [0], [${good_expected}
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([datapath - Actions Autovalidator Checksum])
+
+OVS_VSWITCHD_START(add-port br0 p0 -- set Interface p0 type=dummy \
+                   -- add-port br0 p1 -- set Interface p1 type=dummy)
+
+AT_CHECK([ovs-appctl odp-execute/action-impl-set autovalidator], [0], [dnl
+Action implementation set to autovalidator.
+])
+
+dnl Add flows to trigger checksum calculation.
+AT_DATA([flows.txt], [dnl
+  in_port=p0,ip,actions=mod_nw_src=10.1.1.1,p1
+  in_port=p0,ipv6,actions=set_field:fc00::100->ipv6_src,p1
+])
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flows br0 flows.txt])
+
+dnl Make sure checksum won't be offloaded.
+AT_CHECK([ovs-vsctl set Interface p0 options:ol_ip_csum=false])
+AT_CHECK([ovs-vsctl set Interface p0 options:ol_ip_csum_set_good=false])
+
+AT_CHECK([ovs-vsctl set Interface p1 options:pcap=p1.pcap])
+
+dnl IPv4 packet with values that will trigger carry-over addition for checksum.
+flow_s_v4="
+  eth_src=47:42:86:08:17:50,eth_dst=3e:55:b5:9e:3a:fb,dl_type=0x0800,
+  nw_src=229.167.36.90,nw_dst=130.161.64.186,nw_proto=6,nw_ttl=64,nw_frag=no,
+  tp_src=54392,tp_dst=5201,tcp_flags=ack"
+
+good_frame=$(ovs-ofctl compose-packet --bare "${flow_s_v4}")
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 ${good_frame}])
+
+dnl Checksum should change to 0xAC33 with ip_src changed to 10.1.1.1
+dnl by the datapath while processing the packet.
+flow_expected=$(echo "${flow_s_v4}" | sed 's/229.167.36.90/10.1.1.1/g')
+good_expected=$(ovs-ofctl compose-packet --bare "${flow_expected}")
+AT_CHECK([ovs-pcap p1.pcap > p1.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p1.pcap.txt], [0], [${good_expected}
+])
+
+dnl Repeat similar test for IPv6.
+flow_s_v6="
+  eth_src=8a:bf:7e:2f:05:84,eth_dst=0a:8f:39:4f:e0:73,dl_type=0x86dd,
+  ipv6_src=2f8a:2076:3926:9e7:2d47:4bc9:9c7:17f3,
+  ipv6_dst=7287:10dd:2fb9:41d5:3eb2:2c7a:11b0:6258,
+  ipv6_label=0x51ac,nw_proto=6,nw_ttl=142,nw_frag=no,
+  tp_src=20405,tp_dst=20662,tcp_flags=ack"
+
+good_frame_v6=$(ovs-ofctl compose-packet --bare "${flow_s_v6}")
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 ${good_frame_v6}])
+
+dnl Checksum should change to 0x59FD with ipv6_src changed to fc00::100
+dnl by the datapath while processing the packet.
+flow_expected_v6=$(echo "${flow_s_v6}" | \
+  sed 's/2f8a:2076:3926:9e7:2d47:4bc9:9c7:17f3/fc00::100/g')
+good_expected_v6=$(ovs-ofctl compose-packet --bare "${flow_expected_v6}")
+AT_CHECK([ovs-pcap p1.pcap > p1.pcap.txt 2>&1])
+AT_CHECK_UNQUOTED([tail -n 1 p1.pcap.txt], [0], [${good_expected_v6}
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
