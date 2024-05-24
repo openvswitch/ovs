@@ -334,6 +334,8 @@ avx512_get_delta(__m256i old_header, __m256i new_header)
     v_delta = _mm256_permutexvar_epi32(v_swap32a, v_delta);
 
     v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
+    v_delta = _mm256_shuffle_epi8(v_delta, v_swap16a);
+    v_delta = _mm256_hadd_epi32(v_delta, v_zeros);
     v_delta = _mm256_hadd_epi16(v_delta, v_zeros);
 
     /* Extract delta value. */
