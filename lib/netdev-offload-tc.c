@@ -400,6 +400,8 @@ get_next_available_prio(ovs_be16 protocol)
             return TC_RESERVED_PRIORITY_IPV4;
         } else if (protocol == htons(ETH_P_IPV6)) {
             return TC_RESERVED_PRIORITY_IPV6;
+        } else if (protocol == htons(ETH_P_8021Q)) {
+            return TC_RESERVED_PRIORITY_VLAN;
         }
     }
 
