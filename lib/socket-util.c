@@ -546,9 +546,15 @@ inet_parse_active(const char *target_, int default_port,
     if (!host) {
         VLOG_ERR("%s: host must be specified", target_);
         ok = false;
+        if (dns_failure) {
+            *dns_failure = false;
+        }
     } else if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
+        if (dns_failure) {
+            *dns_failure = false;
+        }
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
                                        target_, resolve_host, dns_failure);
@@ -671,6 +677,9 @@ inet_parse_passive(const char *target_, int default_port,
     if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
+        if (dns_failure) {
+            *dns_failure = false;
+        }
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
                                        target_, resolve_host, dns_failure);
