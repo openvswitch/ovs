@@ -1013,7 +1013,9 @@ class Idl(object):
             if not row:
                 raise error.Error('Modify non-existing row')
 
+            del table.rows[uuid]
             old_row = self.__apply_diff(table, row, row_update['modify'])
+            table.rows[uuid] = row
             return Notice(ROW_UPDATE, row, Row(self, table, uuid, old_row))
         else:
             raise error.Error('<row-update> unknown operation',
@@ -1044,9 +1046,10 @@ class Idl(object):
                 op = ROW_UPDATE
                 vlog.warn("cannot add existing row %s to table %s"
                           % (uuid, table.name))
+                del table.rows[uuid]
+
             changed |= self.__row_update(table, row, new)
-            if op == ROW_CREATE:
-                table.rows[uuid] = row
+            table.rows[uuid] = row
             if changed:
                 return Notice(ROW_CREATE, row)
         else:
@@ -1058,9 +1061,11 @@ class Idl(object):
                 # XXX rate-limit
                 vlog.warn("cannot modify missing row %s in table %s"
                           % (uuid, table.name))
+            else:
+                del table.rows[uuid]
+
             changed |= self.__row_update(table, row, new)
-            if op == ROW_CREATE:
-                table.rows[uuid] = row
+            table.rows[uuid] = row
             if changed:
                 return Notice(op, row, Row.from_json(self, table, uuid, old))
         return False
