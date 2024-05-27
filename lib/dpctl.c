@@ -1347,19 +1347,17 @@ static int
 dpctl_del_flow_dpif(struct dpif *dpif, const char *key_s,
                     struct dpctl_params *dpctl_p)
 {
-    struct dpif_flow_stats stats;
-    struct dpif_port dpif_port;
     struct dpif_port_dump port_dump;
-    struct ofpbuf key;
-    struct ofpbuf mask; /* To be ignored. */
-
-    ovs_u128 ufid;
-    bool ufid_generated;
-    bool ufid_present;
+    struct dpif_flow_stats stats;
+    bool ufid_generated = false;
+    struct dpif_port dpif_port;
+    bool ufid_present = false;
     struct simap port_names;
+    struct ofpbuf mask; /* To be ignored. */
+    struct ofpbuf key;
+    ovs_u128 ufid;
     int n, error;
 
-    ufid_present = false;
     n = odp_ufid_from_string(key_s, &ufid);
     if (n < 0) {
         dpctl_error(dpctl_p, -n, "parsing flow ufid");
