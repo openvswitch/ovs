@@ -2403,6 +2403,7 @@ static int
 netdev_linux_read_stringset_info(struct netdev_linux *netdev, uint32_t *len)
 {
     union {
+        struct ethtool_cmd ecmd;
         struct ethtool_sset_info hdr;
         struct {
             uint64_t pad[2];
