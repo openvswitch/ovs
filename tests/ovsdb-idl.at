@@ -148,8 +148,17 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY],
    OVSDB_START_IDLTEST
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?simple3:name,uset,uref?simple4:name?simple6:name,weak_ref?link1:i,k,ka,l2?link2:i,l1?singleton:name $3],
-            [0], [stdout], [ignore])
+   m4_define([REGISTER], m4_joinall([?], [],
+     [simple:b,ba,i,ia,r,ra,s,sa,u,ua],
+     [simple3:name,uset,uref],
+     [simple4:name],
+     [simple6:name,weak_ref],
+     [link1:i,k,ka,l2],
+     [link2:i,l1],
+     [indexed:i],
+     [singleton:name]))
+   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py -t10 idl $srcdir/idltest.ovsschema \
+                unix:socket REGISTER $3], [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
@@ -724,6 +733,31 @@ OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
 009: done
 ]])
 
+OVSDB_CHECK_IDL([indexed idl, modification and removal],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "indexed",
+       "row": {"i": 123 }}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "indexed",
+       "where": [["i", "==", 123]],
+       "row": {"i": 456}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "indexed",
+       "where": [["i", "==", 456]]}]']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: table indexed: i=123 uuid=<0>
+003: {"error":null,"result":[{"count":1}]}
+004: table indexed: i=456 uuid=<0>
+005: {"error":null,"result":[{"count":1}]}
+006: empty
+007: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['["idltest",
@@ -1235,6 +1269,33 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
 002: table simple: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
 002: table simple: updated columns: b
 003: done
+]])
+
+OVSDB_CHECK_IDL_TRACK([track, indexed idl, modification and removal],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "indexed",
+       "row": {"i": 123 }}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "indexed",
+       "where": [["i", "==", 123]],
+       "row": {"i": 456}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "indexed",
+       "where": [["i", "==", 456]]}]']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: table indexed: inserted row: i=123 uuid=<0>
+002: table indexed: updated columns: i
+003: {"error":null,"result":[{"count":1}]}
+004: table indexed: i=456 uuid=<0>
+004: table indexed: updated columns: i
+005: {"error":null,"result":[{"count":1}]}
+006: empty
+007: done
 ]])
 
 dnl This test creates database with weak references and checks that orphan
@@ -1983,6 +2044,36 @@ OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
 014: table simple: i=-1 r=125 b=false s=newstring u=<4> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<8>
 014: table simple: i=1 r=123.5 b=false s=mystring u=<5> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<6> <7>] uuid=<2>
 015: done
+]])
+
+OVSDB_CHECK_IDL_NOTIFY([indexed idl, modification and removal notify],
+  [['track-notify' \
+    '["idltest",
+      {"op": "insert",
+       "table": "indexed",
+       "row": {"i": 123 }}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "indexed",
+       "where": [["i", "==", 123]],
+       "row": {"i": 456}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "indexed",
+       "where": [["i", "==", 456]]}]']],
+  [[000: empty
+000: event:create, row={}, uuid=<0>, updates=None
+000: event:create, row={}, uuid=<1>, updates=None
+001: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
+002: event:create, row={i=123}, uuid=<2>, updates=None
+002: table indexed: i=123 uuid=<2>
+003: {"error":null,"result":[{"count":1}]}
+004: event:update, row={i=456}, uuid=<2>, updates={i=123}
+004: table indexed: i=456 uuid=<2>
+005: {"error":null,"result":[{"count":1}]}
+006: empty
+006: event:delete, row={i=456}, uuid=<2>, updates=None
+007: done
 ]])
 
 # Tests to verify the functionality of the one column compound index.
