@@ -2440,9 +2440,12 @@ netdev_linux_read_definitions(struct netdev_linux *netdev,
     int error = 0;
 
     error = netdev_linux_read_stringset_info(netdev, &len);
-    if (error || !len) {
+    if (error) {
         return error;
+    } else if (!len) {
+        return -EOPNOTSUPP;
     }
+
     strings = xzalloc(sizeof *strings + len * ETH_GSTRING_LEN);
 
     strings->cmd = ETHTOOL_GSTRINGS;
