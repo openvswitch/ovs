@@ -2728,6 +2728,7 @@ netdev_linux_get_speed_locked(struct netdev_linux *netdev,
                               uint32_t *current, uint32_t *max)
 {
     if (netdev_linux_netnsid_is_remote(netdev)) {
+        *current = *max = 0;
         return EOPNOTSUPP;
     }
 
@@ -2737,6 +2738,8 @@ netdev_linux_get_speed_locked(struct netdev_linux *netdev,
                    ? 0 : netdev->current_speed;
         *max = MIN(UINT32_MAX,
                    netdev_features_to_bps(netdev->supported, 0) / 1000000ULL);
+    } else {
+        *current = *max = 0;
     }
     return netdev->get_features_error;
 }
