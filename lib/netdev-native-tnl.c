@@ -963,7 +963,10 @@ netdev_srv6_pop_header(struct dp_packet *packet)
     }
 
     pkt_metadata_init_tnl(md);
-    netdev_tnl_ip_extract_tnl_md(packet, tnl, &hlen);
+    if (!netdev_tnl_ip_extract_tnl_md(packet, tnl, &hlen)) {
+        goto err;
+    }
+
     dp_packet_reset_packet(packet, hlen);
 
     return packet;
