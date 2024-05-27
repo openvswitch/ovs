@@ -626,8 +626,8 @@ netdev_ports_traverse(const char *dpif_type,
 struct netdev_flow_dump **
 netdev_ports_flow_dump_create(const char *dpif_type, int *ports, bool terse)
 {
+    struct netdev_flow_dump **dumps = NULL;
     struct port_to_netdev_data *data;
-    struct netdev_flow_dump **dumps;
     int count = 0;
     int i = 0;
 
@@ -638,7 +638,11 @@ netdev_ports_flow_dump_create(const char *dpif_type, int *ports, bool terse)
         }
     }
 
-    dumps = count ? xzalloc(sizeof *dumps * count) : NULL;
+    if (!count) {
+        goto unlock;
+    }
+
+    dumps = xzalloc(sizeof *dumps * count);
 
     HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (netdev_get_dpif_type(data->netdev) == dpif_type) {
@@ -650,6 +654,8 @@ netdev_ports_flow_dump_create(const char *dpif_type, int *ports, bool terse)
             i++;
         }
     }
+
+unlock:
     ovs_rwlock_unlock(&port_to_netdev_rwlock);
 
     *ports = i;
