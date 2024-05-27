@@ -2024,6 +2024,24 @@ print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
+print_idl_row_updated_indexed(const struct idltest_indexed *ind, int step)
+{
+    struct ds updates = DS_EMPTY_INITIALIZER;
+
+    for (size_t i = 0; i < IDLTEST_INDEXED_N_COLUMNS; i++) {
+        if (idltest_indexed_is_updated(ind, i)) {
+            ds_put_format(&updates, " %s", idltest_indexed_columns[i].name);
+        }
+    }
+    if (updates.length) {
+        print_and_log("%03d: table %s: updated columns:%s",
+                      step, ind->header_.table->class_->name,
+                      ds_cstr(&updates));
+        ds_destroy(&updates);
+    }
+}
+
+static void
 print_idl_row_updated_simple3(const struct idltest_simple3 *s3, int step)
 {
     struct ds updates = DS_EMPTY_INITIALIZER;
@@ -2173,6 +2191,21 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step, bool terse)
 }
 
 static void
+print_idl_row_indexed(const struct idltest_indexed *ind, int step, bool terse)
+{
+    struct ds msg = DS_EMPTY_INITIALIZER;
+
+    ds_put_format(&msg, "i=%"PRId64, ind->i);
+
+    char *row_msg = format_idl_row(&ind->header_, step, ds_cstr(&msg), terse);
+    print_and_log("%s", row_msg);
+    ds_destroy(&msg);
+    free(row_msg);
+
+    print_idl_row_updated_indexed(ind, step);
+}
+
+static void
 print_idl_row_simple3(const struct idltest_simple3 *s3, int step, bool terse)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
@@ -2252,6 +2285,7 @@ print_idl_row_singleton(const struct idltest_singleton *sng, int step,
 static void
 print_idl(struct ovsdb_idl *idl, int step, bool terse)
 {
+    const struct idltest_indexed *ind;
     const struct idltest_simple3 *s3;
     const struct idltest_simple4 *s4;
     const struct idltest_simple6 *s6;
@@ -2285,6 +2319,10 @@ print_idl(struct ovsdb_idl *idl, int step, bool terse)
         print_idl_row_simple6(s6, step, terse);
         n++;
     }
+    IDLTEST_INDEXED_FOR_EACH (ind, idl) {
+        print_idl_row_indexed(ind, step, terse);
+        n++;
+    }
     IDLTEST_SINGLETON_FOR_EACH (sng, idl) {
         print_idl_row_singleton(sng, step, terse);
         n++;
@@ -2297,6 +2335,7 @@ print_idl(struct ovsdb_idl *idl, int step, bool terse)
 static void
 print_idl_track(struct ovsdb_idl *idl, int step, bool terse)
 {
+    const struct idltest_indexed *ind;
     const struct idltest_simple3 *s3;
     const struct idltest_simple4 *s4;
     const struct idltest_simple6 *s6;
@@ -2327,6 +2366,10 @@ print_idl_track(struct ovsdb_idl *idl, int step, bool terse)
     }
     IDLTEST_SIMPLE6_FOR_EACH_TRACKED (s6, idl) {
         print_idl_row_simple6(s6, step, terse);
+        n++;
+    }
+    IDLTEST_INDEXED_FOR_EACH (ind, idl) {
+        print_idl_row_indexed(ind, step, terse);
         n++;
     }
 
