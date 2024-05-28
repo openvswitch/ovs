@@ -10,8 +10,8 @@ jobs:
     env:
       dependencies: gcc libbpf-dev libnuma-dev libpcap-dev ninja-build pkgconf
       CC: gcc
-      DPDK_GIT: https://dpdk.org/git/dpdk
-      DPDK_VER: 23.11
+      DPDK_GIT: https://dpdk.org/git/dpdk-stable
+      DPDK_VER: 23.11.1
     name: dpdk gcc
     outputs:
       dpdk_key: ${{ steps.gen_dpdk_key.outputs.key }}
