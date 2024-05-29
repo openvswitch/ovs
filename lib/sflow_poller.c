@@ -6,6 +6,7 @@
  */
 
 #include "sflow_api.h"
+#include "random.h"
 
 /*_________________--------------------------__________________
   _________________    sfl_poller_init       __________________
@@ -88,7 +89,7 @@ void sfl_poller_set_sFlowCpInterval(SFLPoller *poller, u_int32_t sFlowCpInterval
 	   Another smoothing factor is that the tick() function called here is usually
 	   driven from a fairly "soft" polling loop rather than a hard real-time event.
 	*/
-        poller->countersCountdown = 1 + (random() % sFlowCpInterval);
+        poller->countersCountdown = 1 + random_range(sFlowCpInterval);
     }
     else {
         /* Setting sFlowCpInterval to 0 disables counter polling altogether.  Thanks to
