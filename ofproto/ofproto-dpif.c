@@ -6097,7 +6097,7 @@ ofproto_unixctl_fdb_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
     const char *port_name = argv[2];
     uint16_t vlan = atoi(argv[3]);
     struct eth_addr mac;
-    int age;
+    time_t age;
 
     ofproto = ofproto_dpif_lookup_by_name(br_name);
     if (!ofproto) {
