@@ -863,7 +863,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct dp_packet *p)
                 rmp->num_health_ccm++;
                 if (cfm->demand) {
                     timer_set_duration(&cfm->demand_rx_ccm_t,
-                                       100 * cfm->ccm_interval_ms);
+                                       100LL * cfm->ccm_interval_ms);
                 }
             }
             rmp->recv = true;
