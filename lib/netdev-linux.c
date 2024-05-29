@@ -2922,8 +2922,8 @@ tc_add_matchall_policer(struct netdev *netdev, uint64_t kbits_rate,
     basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
     action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
     nl_msg_put_act_police(&request, 0, kbits_rate, kbits_burst,
-                          kpkts_rate * 1000, kpkts_burst * 1000, TC_ACT_UNSPEC,
-                          false);
+                          kpkts_rate * 1000ULL, kpkts_burst * 1000ULL,
+                          TC_ACT_UNSPEC, false);
     nl_msg_end_nested(&request, action_offset);
     nl_msg_end_nested(&request, basic_offset);
 
