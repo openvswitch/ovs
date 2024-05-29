@@ -97,7 +97,7 @@ typedef struct _SFLReceiver {
     struct _SFLReceiver *nxt;
     /* MIB fields */
     char *sFlowRcvrOwner;
-    time_t sFlowRcvrTimeout;
+    u_int32_t sFlowRcvrTimeout;
     u_int32_t sFlowRcvrMaximumDatagramSize;
     SFLAddress sFlowRcvrAddress;
     u_int32_t sFlowRcvrPort;
@@ -251,8 +251,8 @@ SFLSampler *sfl_agent_getSamplerByIfIndex(SFLAgent *agent, u_int32_t ifIndex);
 /* receiver */
 char *      sfl_receiver_get_sFlowRcvrOwner(SFLReceiver *receiver);
 void        sfl_receiver_set_sFlowRcvrOwner(SFLReceiver *receiver, char *sFlowRcvrOwner);
-time_t      sfl_receiver_get_sFlowRcvrTimeout(SFLReceiver *receiver);
-void        sfl_receiver_set_sFlowRcvrTimeout(SFLReceiver *receiver, time_t sFlowRcvrTimeout);
+u_int32_t   sfl_receiver_get_sFlowRcvrTimeout(SFLReceiver *receiver);
+void        sfl_receiver_set_sFlowRcvrTimeout(SFLReceiver *receiver, u_int32_t sFlowRcvrTimeout);
 u_int32_t   sfl_receiver_get_sFlowRcvrMaximumDatagramSize(SFLReceiver *receiver);
 void        sfl_receiver_set_sFlowRcvrMaximumDatagramSize(SFLReceiver *receiver, u_int32_t sFlowRcvrMaximumDatagramSize);
 SFLAddress *sfl_receiver_get_sFlowRcvrAddress(SFLReceiver *receiver);

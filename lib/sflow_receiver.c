@@ -102,10 +102,10 @@ void sfl_receiver_set_sFlowRcvrOwner(SFLReceiver *receiver, char *sFlowRcvrOwner
 	reset(receiver);
     }
 }
-time_t sfl_receiver_get_sFlowRcvrTimeout(SFLReceiver *receiver) {
+u_int32_t sfl_receiver_get_sFlowRcvrTimeout(SFLReceiver *receiver) {
     return receiver->sFlowRcvrTimeout;
 }
-void sfl_receiver_set_sFlowRcvrTimeout(SFLReceiver *receiver, time_t sFlowRcvrTimeout) {
+void sfl_receiver_set_sFlowRcvrTimeout(SFLReceiver *receiver, u_int32_t sFlowRcvrTimeout) {
     receiver->sFlowRcvrTimeout =sFlowRcvrTimeout;
 }
 u_int32_t sfl_receiver_get_sFlowRcvrMaximumDatagramSize(SFLReceiver *receiver) {
@@ -146,7 +146,8 @@ void sfl_receiver_tick(SFLReceiver *receiver)
     // if there are any samples to send, flush them now
     if(receiver->sampleCollector.numSamples > 0) sendSample(receiver);
     // check the timeout
-    if(receiver->sFlowRcvrTimeout && (u_int32_t)receiver->sFlowRcvrTimeout != 0xFFFFFFFF) {
+    if(receiver->sFlowRcvrTimeout
+       && receiver->sFlowRcvrTimeout != UINT32_MAX) {
 	// count down one tick and reset if we reach 0
 	if(--receiver->sFlowRcvrTimeout == 0) reset(receiver);
     }
