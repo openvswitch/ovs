@@ -7174,6 +7174,11 @@ netdev_linux_prepend_vnet_hdr(struct dp_packet *b, int mtu)
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV4;
         } else if (dp_packet_hwol_tx_ipv6(b)) {
             vnet->gso_type = VIRTIO_NET_HDR_GSO_TCPV6;
+        } else {
+            VLOG_ERR_RL(&rl, "Unknown gso_type for TSO packet. "
+                        "Flags: %#"PRIx64,
+                        (uint64_t) *dp_packet_ol_flags_ptr(b));
+            return EINVAL;
         }
     } else {
         vnet->hdr_len = 0;
